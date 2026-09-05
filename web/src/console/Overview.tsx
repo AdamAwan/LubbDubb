@@ -126,34 +126,17 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
       {standing.behind > 0 && !build.upgradable && build.blocked !== null && (
         <p className="cn-empty">{build.blocked}</p>
       )}
-      {/* The refusals — a dirty install, a build ahead of its upstream, a reading
-          nobody could take — are the *panel's* to word: they are the answer to
-          "why is the button off", and the button is not here to be off. This card
-          draws controls when there is something to take and none when there is
-          not. */}
+      {/* **No controls, and that is the change this card was rebuilt around.**
+          Upgrading is a request made of the operator, and it is asked on the rail
+          now — the surface that follows them across every tab, and the one whose
+          rows settle when they are answered. What is left here is what the card
+          was always best at: the changelog, which answers *why you would want it*
+          where the rail row can only say how far behind you are.
+          → `web/src/view/updateAsks.ts` */}
       {build.upgradable && (
-        <div className="cn-acts">
-          {/* The controls follow the *intent*, not the standing: a drain already
-              in progress is cancelled or applied, and offering to queue a second
-              one is a button whose own state says it has nothing to do. */}
-          {waiting ? (
-            <>
-              <AsyncButton tone="primary" onClick={() => actions.upgrade('apply')}>
-                Apply now
-              </AsyncButton>
-              <AsyncButton onClick={() => actions.upgrade('cancel')}>Cancel</AsyncButton>
-            </>
-          ) : (
-            <AsyncButton tone="primary" onClick={() => actions.upgrade('drain')}>
-              Queue upgrade
-            </AsyncButton>
-          )}
-          {/* Last, and **secondary**: interrupting is not lossy — every agent is
-              reaped, recorded and restored on the way back up — so the danger tone
-              put an alarm colour on an ordinary decision, beside the safe path it
-              is only a variant of. Weight separates the two here, never hue. */}
-          <AsyncButton onClick={() => actions.upgrade('apply', { interrupt: true })}>Force upgrade</AsyncButton>
-        </div>
+        <p className="cn-empty">
+          {waiting ? 'The upgrade is under way — Needs you carries it.' : 'Queue it on Needs you.'}
+        </p>
       )}
     </section>
   );
@@ -207,7 +190,17 @@ function Project({ view, actions }: { view: CockpitView; actions: CockpitActions
           checkout, a branch that is not the integration branch, a clone carrying
           its own commits — is the *reason* in its place, because "why is the
           button gone" is the only question a missing control ever raises. */}
-      {view.state.build.projectPull.can ? (
+      {/* The Pull control survives on exactly one deployment: the one that turned
+          `selfUpdate.projectAutoPull` off. With auto-pull on, a checkout that
+          *could* be pulled has been — so the button would spend its whole life
+          undrawable, and the case it is drawn in is the case where the harness has
+          been told to keep its hands off and somebody still wants a way to do it.
+
+          Every refusal stays here in its own words whichever way that key is set,
+          because "why is this three commits behind" is the question the card is
+          being read for. The rail asks about it too, and only where auto-pull was
+          supposed to have handled it — see `web/src/view/updateAsks.ts`. */}
+      {!view.state.build.projectAutoPull && view.state.build.projectPull.can ? (
         <div className="cn-acts">
           <AsyncButton tone="primary" onClick={() => actions.pullProject()}>
             Pull

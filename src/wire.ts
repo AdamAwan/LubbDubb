@@ -2468,7 +2468,7 @@ export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './surface
 // two readings would then disagree about quietly.
 export type { PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
-export type { BuildReading, UpgradeAction } from './selfUpdate/upgradePlan.js';
+export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';

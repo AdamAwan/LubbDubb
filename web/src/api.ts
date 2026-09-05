@@ -11,6 +11,7 @@ import type {
   StackLanding,
   StateSection,
   UpgradeAction,
+  SnoozeTarget,
 } from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
@@ -744,6 +745,10 @@ const realApi = {
   pullProject: () => post<{ ok: true; build: BuildReading }>('/api/project/pull'),
   upgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) =>
     post<{ ok: true; build: BuildReading }>('/api/upgrade', { action, ...opts }),
+  // Hide one of the two update asks on the rail for a while. Its own route rather
+  // than a fourth `action` above: that one drives the upgrade state machine, and a
+  // snooze changes nothing about the build.
+  snoozeUpdate: (target: SnoozeTarget) => post<{ ok: true; build: BuildReading }>('/api/upgrade/snooze', { target }),
   // The machine's one dev environment. `startLocalRun` is also the swap: there is
   // one environment, so starting another goal's is stopping this one — and the
   // server is where that transition lives, not in two calls from here.

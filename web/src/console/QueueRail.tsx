@@ -2,7 +2,7 @@ import { Fragment, useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
-import type { SetupCheck, SetupFix } from '../types.js';
+import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
@@ -31,6 +31,11 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   supply: 'Runway',
   dispatch: 'Refused',
   assigned: 'Assigned',
+  upgrade: 'Upgrade',
+  // Not 'Pull': what the row reports is that the *automatic* one is off, and a
+  // label reading `Pull` beside a row with nothing to press would name an act the
+  // harness is refusing rather than the state it is in.
+  project_pull: 'Auto-pull off',
 };
 
 /**
@@ -112,6 +117,15 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   // file a colleague's request beside a gate the fleet is stopped at, which is
   // the one reading the hue keeps apart.
   assigned: 'blue',
+  // Amber, on `permission`'s terms and for exactly its reason: nothing broke and
+  // nothing is parked — an act is waiting on a yes. Red would file "a newer build
+  // exists" beside a restart that orphaned six runs, and blue would file it with
+  // the plans and profiles, which are read rather than pressed.
+  upgrade: 'amber',
+  // Amber too, on `config_gap`'s terms: the harness works, and something of the
+  // operator's own — a local commit, an unclean tree — is stopping a thing it
+  // would otherwise do for them.
+  project_pull: 'amber',
 };
 
 /**
@@ -171,6 +185,10 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   // An inbox tray: the one row that came from outside the harness entirely, and
   // the glyph says where from. Text-presentation, like every other entry here.
   assigned: '\u2913',
+  // An upward arrow, which is the one glyph in this table nobody needs told. The
+  // project's is the same arrow barred: the same act, stopped.
+  upgrade: '\u2191',
+  project_pull: '\u21a5',
 };
 
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'
@@ -285,11 +303,14 @@ function Row({
   row,
   now,
   focus,
+  build,
   actions,
 }: {
   row: NeedRow;
   now: number;
   focus: string | null;
+  /** Read only by the two update asks, whose controls act on the build rather than on a goal. */
+  build: BuildReading;
   actions: CockpitActions;
 }): JSX.Element {
   const parked = row.group === 'blocking';
@@ -381,7 +402,27 @@ function Row({
 
   const ref = row.goalRef;
   const open =
-    row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
+    row.opens === 'build'
+      ? () => actions.openPanel('build')
+      : row.opens === 'goal' && ref !== null
+        ? () => actions.selectGoal(ref)
+        : () => actions.openPanel({ ask: row.id });
+
+  // An update ask, which takes the config row's shape for the config row's reason:
+  // its body is the way in to the changelog and its controls are acts on the build,
+  // so they cannot nest — one click may not have two destinations.
+  if (row.kind === 'upgrade' || row.kind === 'project_pull') {
+    return (
+      <div className={cls}>
+        <i className="cn-stripe" />
+        <button type="button" className="cn-qbody" onClick={open}>
+          <div className="cn-qin">{body}</div>
+        </button>
+        <i className="cn-stripe" />
+        <UpdateActs kind={row.kind} build={build} actions={actions} />
+      </div>
+    );
+  }
 
   // The card carries the way to what the row is about, and it sits **beside** the
   // body rather than in it: one click cannot have two destinations, so the body
@@ -406,6 +447,107 @@ function Row({
     <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
       {inner}
     </button>
+  );
+}
+
+/**
+ * The control strip under an update ask.
+ *
+ * **Three acts on the upgrade, and which three depends on the fleet.** With agents
+ * running there is a real choice — wait for them or stop them — and it is drawn as
+ * two buttons, the waiting one primary. With the fleet clear a drain is
+ * instantaneous, so `drain` and `apply` are the same act and drawing both would be
+ * two controls doing one thing.
+ *
+ * **Interrupting is weight, never hue.** Nothing is lost by it — every agent is
+ * reaped, recorded and resumed on the way back up — so it takes no danger tone and
+ * no confirm; it is simply the lighter of the two buttons beside the safe path it
+ * is a variant of.
+ *
+ * **The project ask has only Snooze**, and that is the honest shape rather than an
+ * omission: every refusal `projectPullability` returns is a refusal the *harness*
+ * cannot get past either — a dirty tree, a local commit, the wrong branch — so a
+ * "pull anyway" here would be a button whose only outcome is the error the row
+ * already quotes.
+ *
+ * An unsupervised deployment gets no controls at all on either: the process exits
+ * on apply and nothing would start it again. The row still draws, and the panel it
+ * opens says what to run instead.
+ */
+function UpdateActs({
+  kind,
+  build,
+  actions,
+}: {
+  kind: 'upgrade' | 'project_pull';
+  build: BuildReading;
+  actions: CockpitActions;
+}): JSX.Element {
+  const snooze = (
+    <Button ghost onClick={() => void actions.snoozeUpdate(kind === 'upgrade' ? 'upgrade' : 'projectPull')}>
+      Snooze
+    </Button>
+  );
+
+  if (kind === 'project_pull') return <div className="cn-fix">{snooze}</div>;
+
+  const { intent, live, supervised } = build;
+  if (!supervised)
+    return (
+      <div className="cn-fix">
+        {snooze}
+        <span className="cn-fixwhy">
+          No supervisor, so this build cannot restart itself — the panel says what to run.
+        </span>
+      </div>
+    );
+
+  // Applying is under way and there is nothing left to decide.
+  if (intent.state === 'applying') return <div className="cn-fix" />;
+
+  // A drain already asked for: the acts are what to do about *it*, and offering to
+  // queue a second one is a button whose own state says it has nothing to do.
+  if (intent.state === 'draining' || intent.state === 'ready')
+    return (
+      <div className="cn-fix">
+        {intent.state === 'ready' ? (
+          <Button tone="primary" onClick={() => void actions.upgrade('apply')}>
+            Apply now
+          </Button>
+        ) : (
+          <Button onClick={() => void actions.upgrade('apply', { interrupt: true })}>
+            Don&apos;t wait — interrupt {live}
+          </Button>
+        )}
+        <Button ghost onClick={() => void actions.upgrade('cancel')}>
+          Cancel
+        </Button>
+      </div>
+    );
+
+  if (live === 0)
+    return (
+      <div className="cn-fix">
+        <Button tone="primary" onClick={() => void actions.upgrade('drain')}>
+          Upgrade
+        </Button>
+        {snooze}
+        <span className="cn-fixwhy">Exits, takes the update and comes back. Nothing is interrupted.</span>
+      </div>
+    );
+
+  return (
+    <div className="cn-fix">
+      <Button tone="primary" onClick={() => void actions.upgrade('drain')}>
+        Queue
+      </Button>
+      <Button onClick={() => void actions.upgrade('apply', { interrupt: true })}>Now</Button>
+      {snooze}
+      <span className="cn-fixwhy">
+        Queue waits for {live} to finish; Now stops {live === 1 ? 'it' : 'them'} and restores{' '}
+        {live === 1 ? 'it' : 'them'} on the way back up.
+      </span>
+    </div>
   );
 }
 
@@ -583,7 +725,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
             <Fragment key={section.group}>
               <div className="cn-railsub">{GROUP_LABEL[section.group]}</div>
               {section.rows.map((row) => (
-                <Row key={row.id} row={row} now={view.now} focus={focus} actions={actions} />
+                <Row key={row.id} row={row} now={view.now} focus={focus} build={view.state.build} actions={actions} />
               ))}
             </Fragment>
           ))

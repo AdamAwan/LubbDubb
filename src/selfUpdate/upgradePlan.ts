@@ -47,6 +47,33 @@ export interface SelfUpdatePolicy {
    * interrupts what is left. Zero waits forever.
    */
   drainDeadlineMs: number;
+  /**
+   * Fast-forward the *worked* checkout on its own, whenever {@link projectPullability}
+   * says it can.
+   *
+   * Separate from {@link autoUpdate} and defaulting the other way, because they are
+   * different acts on different repositories: taking an update to the harness stops
+   * a fleet and restarts a process, where this is a fast-forward of somebody's
+   * clone that interrupts nothing. The reason it is worth doing unasked is that the
+   * project config layer arrives by exactly this pull, so a clone days behind is a
+   * harness running a policy the team has already changed.
+   * → [02](docs/spec/02-configuration.md#the-project-layer)
+   */
+  projectAutoPull: boolean;
+  /**
+   * How long the rail's Snooze buys on either update ask. One key for both, so the
+   * two cannot drift into meaning different lengths of "not now".
+   */
+  snoozeMs: number;
+}
+
+/**
+ * `1 commit` / `2 commits`. These sentences are drawn on the rail now as well as on
+ * the card, and `commit(s)` reads as a placeholder somebody left in on the surface
+ * an operator answers things from.
+ */
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 /** The resting intent — what a database with no row, and a finished upgrade, both read as. */
@@ -108,7 +135,7 @@ export function upgradability(standing: BuildStanding, project?: BuildStanding |
     return {
       can: false,
       blocked:
-        `this build carries ${standing.ahead} commit(s) of its own, so the update is not a fast-forward — ` +
+        `this build carries ${plural(standing.ahead, 'commit')} of its own, so the update is not a fast-forward — ` +
         'merge or rebase it by hand',
     };
   return { can: true, blocked: null };
@@ -152,8 +179,8 @@ export function projectPullability(standing: BuildStanding | null, branch: strin
     return {
       can: false,
       blocked:
-        `the project checkout carries ${standing.ahead} commit(s) of its own, so the pull is not a fast-forward — ` +
-        'merge or rebase it by hand',
+        `the project checkout carries ${plural(standing.ahead, 'commit')} of its own, so the pull is not a ` +
+        'fast-forward — merge or rebase it by hand',
     };
   return { can: true, blocked: null };
 }
@@ -200,7 +227,33 @@ export interface BuildReading {
    * server's verdict rather than re-deriving one from the standing beside it.
    */
   projectPull: Upgradability;
+  /**
+   * Whether the harness fast-forwards the worked checkout on its own —
+   * `selfUpdate.projectAutoPull`.
+   *
+   * The rail reads it to decide whether a blocked pull is worth an ask at all: a
+   * deployment that turned auto-pull off has said it pulls by hand, and telling it
+   * every day that auto-pull is disabled would be the harness reporting the
+   * operator's own decision back to them as news.
+   */
+  projectAutoPull: boolean;
+  /**
+   * When each update ask stops being hidden, or null when it is not snoozed.
+   *
+   * Held by the desk in memory rather than in the store, on `RuntimeControl`'s
+   * terms: a snooze is read only by the process that holds it, and thirty minutes
+   * of "not now" is not a decision worth carrying across a restart — a boot is a
+   * fresh look at the world, and the one restart this most often follows is the
+   * upgrade itself.
+   */
+  snoozedUntil: SnoozeStamps;
 }
+
+/** Which update ask a snooze is on. Two asks, one length — see `SelfUpdatePolicy.snoozeMs`. */
+export type SnoozeTarget = 'upgrade' | 'projectPull';
+
+/** When each ask comes back, ISO, or null for one that is not snoozed. */
+export type SnoozeStamps = Record<SnoozeTarget, string | null>;
 
 /**
  * Fold the reading, the fleet and the intent into what the gauge shows.
@@ -218,12 +271,25 @@ export function buildReading(opts: {
   project?: BuildStanding | null;
   /** The branch the project checkout is pulled onto — `config.defaultBranch`. */
   projectBranch?: string;
+  projectAutoPull?: boolean;
+  snoozedUntil?: SnoozeStamps;
 }): BuildReading {
   const { standing, intent, live, supervised } = opts;
   const project = opts.project ?? null;
   const { can, blocked } = upgradability(standing, project);
   const projectPull = projectPullability(project, opts.projectBranch ?? '');
-  const base = { live, upgradable: can, blocked, supervised, standing, intent, project, projectPull };
+  const base = {
+    live,
+    upgradable: can,
+    blocked,
+    supervised,
+    standing,
+    intent,
+    project,
+    projectPull,
+    projectAutoPull: opts.projectAutoPull ?? false,
+    snoozedUntil: opts.snoozedUntil ?? NO_SNOOZE,
+  };
 
   if (intent.state === 'draining')
     return {
@@ -240,6 +306,9 @@ export function buildReading(opts: {
   if (standing.behind === 0) return { ...base, state: 'current', label: 'current' };
   return { ...base, state: 'behind', label: `${standing.behind} behind` };
 }
+
+/** Nothing snoozed — what a desk that has never been asked to snooze reports. */
+const NO_SNOOZE: SnoozeStamps = { upgrade: null, projectPull: null };
 
 /** Either a transition was applied, or it was refused with a reason. */
 export type UpgradeTransition = { ok: true; intent: UpgradeIntent } | { ok: false; error: string };

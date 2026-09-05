@@ -3,6 +3,9 @@ import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { logUsage } from '../cockpit/usage.js';
+// The headline is the rail row's sentence too — one wording for one fact, said on
+// the surface that asks and on the surface that explains.
+import { upgradeHeadline } from '../view/updateAsks.js';
 
 /**
  * What the running build is, what is waiting for it, and how to take it.
@@ -35,7 +38,7 @@ export function BuildPanel({
     <div className="build-panel">
       <header className="build-head">
         <div>
-          <h3>{headline(build)}</h3>
+          <h3>{upgradeHeadline(build)}</h3>
           <p className="build-meta">
             {standing.head ? (
               <>
@@ -75,20 +78,6 @@ export function BuildPanel({
       {build.upgradable && <Controls build={build} onUpgrade={onUpgrade} />}
     </div>
   );
-}
-
-/** The one line at the top: what state this is in, in words rather than a status word. */
-function headline(build: BuildReading): string {
-  const { standing, intent, live } = build;
-  if (intent.state === 'applying') return 'Going down for the upgrade';
-  if (intent.state === 'ready') return 'Ready to upgrade — nothing is running';
-  if (intent.state === 'draining')
-    return live > 0
-      ? `Draining — waiting for ${live} agent${live === 1 ? '' : 's'} to finish`
-      : 'Draining — the fleet is clear';
-  if (standing.unavailable) return 'This build cannot be checked';
-  if (standing.behind === 0) return 'This build is current';
-  return `${standing.behind} commit${standing.behind === 1 ? '' : 's'} waiting`;
 }
 
 /**

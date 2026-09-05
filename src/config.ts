@@ -1105,11 +1105,21 @@ const DEFAULTS: Config = {
     enabled: true,
     remote: 'origin',
     branch: 'main',
-    checkIntervalMs: 60 * 60 * 1000,
+    // Fifteen minutes rather than an hour. The reading is what the rail's upgrade
+    // ask is raised from, and an ask up to an hour behind the world is one an
+    // operator learns to distrust; four `ls-remote`s an hour is not traffic worth
+    // saving to keep it.
+    checkIntervalMs: 15 * 60 * 1000,
     // Off by default: taking a build out from under a fleet is a decision, and the
     // deployment that wants it unattended is the one that says so.
     autoUpdate: false,
     drainDeadlineMs: 2 * 60 * 60 * 1000,
+    // On by default, unlike `autoUpdate` beside it, and the asymmetry is the point:
+    // this one interrupts nothing and restarts nothing — it is a fast-forward of a
+    // clean checkout — while what it prevents is a harness running a project config
+    // the team has already changed.
+    projectAutoPull: true,
+    snoozeMs: 30 * 60 * 1000,
   },
   validation: DEFAULT_VALIDATION,
   review: DEFAULT_PR_REVIEW,

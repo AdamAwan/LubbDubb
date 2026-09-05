@@ -20,6 +20,7 @@ import type {
   TicketsPayload,
   AppState,
   BuildReading,
+  SnoozeTarget,
   CockpitDecision,
   Decision,
   GoalWatch,
@@ -1283,6 +1284,22 @@ class DemoServer {
       build.projectPull = { can: false, blocked: 'the project checkout is up to date — there is nothing to pull' };
       this.dirty();
     }
+    return { ok: true, build };
+  }
+
+  /**
+   * Snoozing one of the rail's two update asks. Pure state, on `pullProject`'s
+   * terms: the row goes for as long as the clock says, and the demo's own clock is
+   * the browser's — so the ask comes back on the tick the age chips move on, which
+   * is the whole behaviour there is to show.
+   *
+   * Thirty minutes, matching `selfUpdate.snoozeMs`'s default rather than reading a
+   * config the demo has no server to serve.
+   */
+  async snoozeUpdate(target: SnoozeTarget): Promise<{ ok: true; build: BuildReading }> {
+    const build = this.state.build;
+    build.snoozedUntil = { ...build.snoozedUntil, [target]: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+    this.dirty();
     return { ok: true, build };
   }
 
@@ -4983,6 +5000,7 @@ export const demoApi = {
   // shows. What the demo has no way to do is move a file on disk — so the config
   // change the pull would have brought with it is the one part left unsaid.
   pullProject: () => getServer().pullProject(),
+  snoozeUpdate: (target: SnoozeTarget) => getServer().snoozeUpdate(target),
   // The local run, which the demo can model honestly because the *state* is the
   // whole feature and the process is not: starting moves the row onto another goal
   // and stopping ends it, exactly as the panel would see it live. What a visitor

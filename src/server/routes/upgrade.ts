@@ -46,6 +46,26 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     return { ok: true, build: result.build };
   });
 
+  // Hiding one of the two update asks on the rail for a while. A `POST` because it
+  // writes, and its own route rather than a fifth `action` on `/api/upgrade`
+  // below: that route drives the upgrade *state machine*, and a snooze changes
+  // nothing about the build — it is a statement about the queue.
+  const SnoozeBody = z.object({
+    target: z.enum(['upgrade', 'projectPull'], {
+      errorMap: () => ({ message: 'target must be upgrade or projectPull' }),
+    }),
+  });
+  app.post(
+    '/api/upgrade/snooze',
+    checked({ body: SnoozeBody }, async ({ body }) => {
+      updates.snooze(body.target);
+      // Every open cockpit: a snooze is a decision about the rail, and the rail is
+      // in all of them.
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, build: updates.reading() };
+    }),
+  );
+
   const UpgradeBody = z.object({
     action: z.enum(['drain', 'cancel', 'apply'], {
       errorMap: () => ({ message: 'action must be drain, cancel or apply' }),

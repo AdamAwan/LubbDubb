@@ -724,25 +724,36 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind         | Tag         | Tone  | Glyph | Why that tone                                                 |
-| ------------ | ----------- | ----- | ----- | ------------------------------------------------------------- |
-| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.           |
-| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.                   |
-| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
-| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
-| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.               |
-| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                                 |
-| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.                      |
-| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                              |
-| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.                   |
-| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.               |
-| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                                 |
-| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.                 |
-| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.           |
-| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it.          |
-| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.             |
-| `watch`      | Watch       | amber | `◎`   | The running system is answering outside what a goal declared. |
-| `dispatch`   | Refused     | red   | `⊠`   | The harness keeps trying this and keeps being told no.        |
+| Kind           | Tag           | Tone  | Glyph | Why that tone                                                 |
+| -------------- | ------------- | ----- | ----- | ------------------------------------------------------------- |
+| `recovery`     | Recovery      | red   | `↺`   | A restart left runs orphaned. Something went wrong.           |
+| `escalation`   | Escalation    | red   | `?`   | An agent hit a question it cannot get past.                   |
+| `permission`   | Permission    | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
+| `limit`        | Usage limit   | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
+| `burn`         | Spend         | amber | `▲`   | A heads-up on a run that carries on either way.               |
+| `plan`         | Plan          | blue  | `◇`   | A plan to read and decide on.                                 |
+| `reply`        | Reply         | amber | `↵`   | A drafted reply, held until you send it.                      |
+| `merge`        | Merge         | amber | `⊕`   | A merge waiting on your verdict.                              |
+| `shortfall`    | Shortfall     | blue  | `✗`   | Delivered work that did not reach its goal.                   |
+| `intake`       | Intake        | blue  | `◌`   | The appraisal could not say a goal is workable.               |
+| `profile`      | Profile       | blue  | `⊙`   | Which profile a goal runs on.                                 |
+| `placement`    | Backlog       | amber | `▣`   | Nothing is held; the ticket is off the board.                 |
+| `bench`        | Bench         | blue  | `◆`   | Work only a person can do. Informative, not broken.           |
+| `close_out`    | Close-out     | green | `⚑`   | A goal was **delivered**; this is the step after it.          |
+| `validate`     | Validate      | green | `✓`   | The other step after a delivery — run its checks.             |
+| `watch`        | Watch         | amber | `◎`   | The running system is answering outside what a goal declared. |
+| `dispatch`     | Refused       | red   | `⊠`   | The harness keeps trying this and keeps being told no.        |
+| `upgrade`      | Upgrade       | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.    |
+| `project_pull` | Auto-pull off | amber | `↥`   | Something is stopping a pull the harness would have done.     |
+
+**`upgrade` and `project_pull` are the two kinds derived from a _reading_ rather than from anything
+raised** — `web/src/view/updateAsks.ts`, off `state.build`. They are here for the membership test
+itself: no rule in the harness will ever answer either. Amber on `permission`'s and `config_gap`'s
+terms respectively — one is an act waiting on a yes, the other is something of the operator's own
+stopping a thing the harness would otherwise have done — and both are always `yours`, since nothing is
+parked and no slot is held. They are also the only rows whose controls act on a repository rather than
+on a piece of work, which is why the body opens the build panel and the acts sit in a strip beneath it,
+in the shape a `config` row already takes. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -2328,16 +2339,26 @@ it spent a full-width slot on ten rows of a feed nobody had come to the page for
 
 **Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
 process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
-read on one timer. Project is the only card that reports a git status on the glass, because that
-status is half the answer to why Build beside it has no buttons — and it carries the one control the
-cockpit offers on a repository the harness does not own, because the project config arrives by that
-pull. Both headers carry a refresh glyph beside the count and the time the reading was taken.
+read on one timer. Project is the only card that reports a git status on the glass, because that status
+is half the answer to why the upgrade ask on the rail is not there. Both headers carry a refresh glyph
+beside the count and the time the reading was taken.
 → [21](21-self-update.md#where-it-lands-in-the-cockpit)
 
-Build is a card rather than a rail row because being behind is a _standing condition_: true
-continuously, for weeks if nobody looks, and answerable only by upgrading. The rail is for asks that
-settle when they are answered, and a row that cannot be discharged is the furniture that teaches an
-operator to skim the whole queue. → [21](21-self-update.md#where-it-lands-in-the-cockpit)
+**Neither card carries the act any more.** Both were controls first and a changelog second, and the
+control was on the wrong surface: upgrading is a request made of the operator, and a card is a surface
+they _visit_. The asks are [rail rows](#the-queue-rail--needs-you) now, and what is left on the cards is
+what they were always best at — the changelog, which answers _why you would want it_ where a queue row
+can only say how far behind you are. Project keeps a `Pull` control on exactly one deployment: the one
+that turned `selfUpdate.projectAutoPull` off, since with it on a pullable checkout has already been
+pulled.
+
+This reverses what this document said, and the reason it said it still holds: **being behind is a
+standing condition** — true continuously, for weeks if nobody looks — and a row that cannot be
+discharged is the furniture that teaches an operator to skim the whole queue. What changed is not the
+rule but the trigger. The upgrade ask is raised on `upgradability`, settles by being taken or snoozed,
+and becomes the progress line while it applies; the project ask is raised only where an automatic pull
+was refused and clears itself when the obstruction moves. Each has two ends, which is the whole of what
+the rail asks of a row. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
 Two rules run through all of them. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a

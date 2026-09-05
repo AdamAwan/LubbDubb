@@ -12,6 +12,7 @@ import type {
   ViewerAssignment,
 } from '../types.js';
 import { goalIssue, goalOfPr, standsFor } from './goalPage.js';
+import { updateAskRows } from './updateAsks.js';
 import { watchBucket } from '../worldBuckets.js';
 
 /**
@@ -56,6 +57,20 @@ import { watchBucket } from '../worldBuckets.js';
  * `interrupted` on the way out, so a fleet stuck on one reads as a fleet with
  * nothing to do. → `docs/spec/09-execution.md#a-refusal-that-keeps-repeating`
  */
+/**
+ * `upgrade` and `project_pull` are the two update asks, and they are on this queue
+ * for the reason the queue exists: **no rule in the harness will ever answer
+ * them.** They lived on the Overview's Build and Project cards, which is a surface
+ * an operator visits rather than one that follows them — and being behind is a
+ * condition that persists for weeks if nobody looks.
+ *
+ * What earns them a place here, where a standing condition does not, is that both
+ * are raised at a *moment* and settle when answered: the upgrade ask appears when
+ * there is something to take, and Snooze or applying it puts it away; the
+ * project ask appears only when an auto-pull the harness would otherwise have done
+ * on its own is refused, and clears the moment whatever is in the way moves.
+ * → docs/spec/21-self-update.md
+ */
 export type NeedKind =
   | 'config'
   | 'config_gap'
@@ -77,7 +92,9 @@ export type NeedKind =
   | 'limit'
   | 'supply'
   | 'dispatch'
-  | 'assigned';
+  | 'assigned'
+  | 'upgrade'
+  | 'project_pull';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
@@ -206,15 +223,17 @@ function assignedLine(pr: OpenPullRequest): string {
  * key a config row is about — the row body is a way *there*, and the fix beside it
  * is a shortcut past it rather than the only road to it; `ask` is the ask on its own, for a row whose origin
  * is not a goal the console can draw — an escalation raised on a pull request, a
- * bench task with no ticket, a goal the world no longer carries. `null` is the
- * recovery hold alone, which is answered on the banner above the console.
+ * bench task with no ticket, a goal the world no longer carries. `build` is the two
+ * update asks, whose subject is a repository rather than anything in the world, and
+ * whose changelog the build panel already draws. `null` is the recovery hold alone,
+ * which is answered on the banner above the console.
  *
  * Decided in the derivation because only the derivation can tell a ref that *has*
  * a page from one that merely looks like it does. A rail that reads `goalRef`
  * instead draws a row whose click lands nowhere — which is indistinguishable, to
  * the operator, from a console that is broken.
  */
-type NeedDestination = 'goal' | 'ask' | 'config' | null;
+type NeedDestination = 'goal' | 'ask' | 'config' | 'build' | null;
 
 /** One row of the merged queue. */
 export interface NeedRow {
@@ -774,12 +793,20 @@ export function buildNeedsYou(
   state: AppState,
   setup: SetupPayload | null = null,
   applied: readonly AppliedFix[] = [],
+  /**
+   * Now, so a snooze that has run out is a row again without waiting for the next
+   * snapshot. Handed in rather than read off the clock here for the reason every
+   * other derivation takes it: a pure function of the state and the time is one a
+   * test can drive to a moment.
+   */
+  nowIso: string = new Date().toISOString(),
 ): NeedRow[] {
   const parts = state.planParts ?? [];
   const proposals = state.proposals ?? [];
   const rows: NeedRow[] = [];
 
   rows.push(...configRows(setup, applied));
+  rows.push(...updateAskRows(state, nowIso));
   rows.push(...refusedDispatchRows(state));
   rows.push(...assignedPrRows(state));
 

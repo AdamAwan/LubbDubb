@@ -440,6 +440,13 @@ test('notifySnapshot reduces a whole AppState to the four lists', () => {
           .filter((pr) => pr.attention.assignedToYou !== undefined)
           .map((pr) => `assigned:pr:${pr.number}`),
       )
+      // The two update asks, off `state.build` rather than off any list on the
+      // state — which is exactly why they belong in this diff: nothing about being
+      // behind arrives as an event, so without the rendered queue an operator is
+      // never told about it at all. The demo's build is behind and its project
+      // checkout cannot be fast-forwarded, so both are raised.
+      .concat(state.build.upgradable ? ['upgrade'] : [])
+      .concat(state.build.projectAutoPull && !state.build.projectPull.can ? ['project-pull'] : [])
       .sort(),
   );
 });

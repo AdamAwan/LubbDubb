@@ -149,6 +149,8 @@ export type {
   BuildReading,
   BuildStanding,
   UpgradeAction,
+  SnoozeStamps,
+  SnoozeTarget,
   ReliabilityInsights,
   RemedyCause,
   RemedyCauseTotal,
