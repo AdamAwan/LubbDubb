@@ -5,6 +5,7 @@ import type {
   IssueFiled,
   RecoveryVerdict,
   UpgradeAction,
+  SnoozeTarget,
   WorkNodeView,
 } from '../types.js';
 import type { Place } from './place.js';
@@ -377,6 +378,15 @@ export interface CockpitActions {
    * behind is a harness running a config the team has already changed.
    */
   pullProject(): Promise<void>;
+  /**
+   * Hide one of the rail's two update asks for `selfUpdate.snoozeMs`.
+   *
+   * A clock and nothing else: it records no opinion about *which* build was
+   * declined, so the ask returns at whatever is waiting by then. The alternative
+   * records a head, and a head declined on an active repository is superseded
+   * within the hour — which turns a considered "not now" into a very short one.
+   */
+  snoozeUpdate(target: SnoozeTarget): Promise<void>;
   /**
    * Start `issueNumber`'s work in the machine's one dev environment — **and stop
    * whatever was in it**, because there is only one. One method rather than a start

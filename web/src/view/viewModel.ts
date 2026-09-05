@@ -421,7 +421,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const interval = state.config.heartbeatIntervalMs;
   const sincePulse = now - input.lastPulseAt;
 
-  const needsYou = buildNeedsYou(state, input.setup, input.appliedFixes ?? []);
+  // The clock the view is already drawing to, so a snooze that has run out puts its
+  // row back on the same tick the ages move on.
+  const needsYou = buildNeedsYou(state, input.setup, input.appliedFixes ?? [], new Date(now).toISOString());
   const goalPage = input.selectedGoal
     ? buildGoalPage(state, input.selectedGoal, needsYou, input.goalAgents ?? null)
     : null;

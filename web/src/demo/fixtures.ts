@@ -2239,7 +2239,9 @@ export function buildDemoState(): DemoSeed {
         head: 'c18a6f30b94d27e5a0f3d81c6b52e9047fa13d6e',
         upstream: '5d9e0c41a7b8362fd05e1749cb3a806e2f4d91b7',
         behind: 3,
-        ahead: 0,
+        // One commit of this clone's own — somebody's local hotfix that never went
+        // up. It is what refuses the auto-pull below, and it refuses nothing else.
+        ahead: 1,
         commits: [
           {
             sha: '5d9e0c4',
@@ -2269,7 +2271,30 @@ export function buildDemoState(): DemoSeed {
       // fixture states it, because `web/src/` may name no server module but
       // `src/wire.ts`. It has to agree with the standing by hand, which is the
       // price of that rule and the reason the demo keeps the two adjacent.
-      projectPull: { can: true, blocked: null },
+      //
+      // Refused, and refused on `ahead` rather than on `dirty`, which is the one
+      // choice this fixture had to make carefully. Auto-pull is on, so a checkout
+      // that *could* be pulled is one the harness would have pulled already — the
+      // rail row only exists where something is in the way, and a demo showing no
+      // obstruction would show no row. Dirty is the obvious obstruction and is the
+      // one that cannot be used: `upgradability` refuses the whole upgrade over a
+      // dirty project checkout, so it would take the Upgrade ask away with it.
+      // A local commit blocks the pull and nothing else.
+      projectPull: {
+        can: false,
+        blocked:
+          'the project checkout carries 1 commit of its own, so the pull is not a fast-forward — ' +
+          'merge or rebase it by hand',
+      },
+      // On, which is what makes the refusal above worth a row: a deployment that
+      // pulls by hand has already said so, and telling it daily that auto-pull is
+      // off would be the harness reporting the operator's own decision as news.
+      projectAutoPull: true,
+      // Neither ask is snoozed, so the demo opens on the state the rail rows exist
+      // to be seen in. Snooze is the demo's one destructive-looking control that
+      // is not: it hides a row for thirty minutes and the fixture is reloaded on
+      // every visit.
+      snoozedUntil: { upgrade: null, projectPull: null },
     },
     // Left the tracker's open set — moved to Resolved in Azure — while the
     // harness still holds its run: the state that separates "the ticket is

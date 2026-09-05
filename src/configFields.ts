@@ -711,6 +711,19 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long an automatic drain waits before interrupting what is left. Zero waits forever.',
   },
   {
+    path: 'selfUpdate.projectAutoPull',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Fast-forward the worked checkout on its own whenever it cleanly can. Off asks on the rail instead.',
+  },
+  {
+    path: 'selfUpdate.snoozeMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long Snooze hides an update ask on the rail.',
+  },
+  {
     path: 'ci.checks',
     type: 'json',
     access: 'plain',

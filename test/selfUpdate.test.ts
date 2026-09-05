@@ -467,6 +467,173 @@ test('pulling the project fast-forwards it, and re-reads so the card stops sayin
   system.store.close();
 });
 
+/**
+ * `selfUpdate.projectAutoPull`, which is the answer to the question the Project
+ * card could only ever ask: a fast-forward of a clean checkout is not a decision
+ * anybody needs to make, and the project config layer arrives by exactly this
+ * pull — so a clone days behind is a harness running a policy the team has already
+ * changed.
+ */
+test('a pulse fast-forwards the project on its own when it cleanly can', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  let pulls = 0;
+  let caughtUp = false;
+  const desk = new UpdateDesk({
+    store: system.store,
+    runtimeControl: system.runtimeControl,
+    errors: system.errors,
+    remote: 'origin',
+    branch: 'release',
+    checkIntervalMs: 60_000,
+    autoUpdate: false,
+    drainDeadlineMs: 0,
+    supervised: true,
+    projectAutoPull: true,
+    project: { root: '/repo', remote: 'origin', branch: 'main' },
+    read: (opts) =>
+      Promise.resolve(opts.root === '/repo' ? standing({ behind: caughtUp ? 0 : 3, commits: [] }) : standing()),
+    pull: () => {
+      pulls++;
+      caughtUp = true;
+      return Promise.resolve({ ok: true as const });
+    },
+  });
+
+  await desk.run();
+  // Not awaited by the pulse — a fast-forward nobody is waiting on must not put
+  // the whole harness behind somebody's slow remote — so the assertion waits for
+  // the pull rather than the cycle.
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(pulls, 1);
+  assert.equal(desk.reading().project?.behind, 0);
+
+  // And it does not go round again on the next pulse: there is nothing to take.
+  await desk.run();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(pulls, 1);
+
+  system.store.close();
+});
+
+test('auto-pull leaves a checkout it cannot fast-forward alone, and records no fault for it', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const never = () => Promise.reject(new Error('the pull must not run'));
+  // Dirty is the common one and the one the rail's row was written for: nothing
+  // is broken, the harness simply will not walk over somebody's uncommitted work.
+  const desk = new UpdateDesk({
+    store: system.store,
+    runtimeControl: system.runtimeControl,
+    errors: system.errors,
+    remote: 'origin',
+    branch: 'release',
+    checkIntervalMs: 60_000,
+    autoUpdate: false,
+    drainDeadlineMs: 0,
+    supervised: true,
+    projectAutoPull: true,
+    project: { root: '/repo', remote: 'origin', branch: 'main' },
+    read: (opts) => Promise.resolve(opts.root === '/repo' ? standing({ dirty: true }) : standing()),
+    pull: never,
+  });
+
+  await desk.run();
+  await new Promise((r) => setImmediate(r));
+
+  // The refusal is not a fault. It is a thing to tell the operator once, on the
+  // rail, in the place they answer things.
+  assert.equal(system.store.listErrors().length, 0);
+  assert.equal(desk.reading().projectPull.can, false);
+  assert.match(desk.reading().projectPull.blocked ?? '', /uncommitted changes/);
+
+  system.store.close();
+});
+
+test('auto-pull off leaves the checkout to the operator', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = deskWithProject(system, { behind: 3, commits: [] }, () =>
+    Promise.reject(new Error('the pull must not run')),
+  );
+
+  await desk.run();
+  await new Promise((r) => setImmediate(r));
+
+  // `deskWithProject` leaves `projectAutoPull` unset, which is the shape an
+  // embedded harness and every older test have — and it must mean *off* rather
+  // than a pull nobody asked for.
+  assert.equal(desk.reading().projectAutoPull, false);
+  assert.equal(desk.reading().project?.behind, 3);
+
+  system.store.close();
+});
+
+/**
+ * Snooze, which is the whole of what makes the rail's update asks answerable
+ * rather than furniture: an ask you can put down is one you can be shown.
+ */
+test('a snooze hides one ask for its window, and never the other', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = new UpdateDesk({
+    store: system.store,
+    runtimeControl: system.runtimeControl,
+    errors: system.errors,
+    remote: 'origin',
+    branch: 'main',
+    checkIntervalMs: 60_000,
+    autoUpdate: false,
+    drainDeadlineMs: 0,
+    supervised: true,
+    snoozeMs: 30 * 60 * 1000,
+    read: () => Promise.resolve(standing()),
+  });
+  await desk.check(true);
+  assert.deepEqual(desk.reading().snoozedUntil, { upgrade: null, projectPull: null });
+
+  desk.snooze('upgrade');
+  const after = desk.reading().snoozedUntil;
+  assert.ok(after.upgrade !== null, 'the snoozed ask carries a stamp');
+  // The two are separate asks about separate repositories: putting one down says
+  // nothing about the other.
+  assert.equal(after.projectPull, null);
+  assert.ok(Date.parse(after.upgrade) - Date.now() > 29 * 60 * 1000);
+
+  system.store.close();
+});
+
+test('a snooze of zero is no snooze at all, so a misconfigured window cannot hide an ask forever', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  // `snoozeMs` unset reads as zero, which is the shape every older construction of
+  // this desk has. The stamp has to come back null rather than as a moment already
+  // past, because a surface reading "snoozed until a second ago" would be a row
+  // hidden by a clock nobody set.
+  const desk = deskFor(system);
+  await desk.check(true);
+  desk.snooze('upgrade');
+  assert.equal(desk.reading().snoozedUntil.upgrade, null);
+  system.store.close();
+});
+
 test('a pull is refused on a checkout that is not on the branch, dirty, or already current', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),

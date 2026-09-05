@@ -116,7 +116,28 @@ function stateWith(over: Partial<AppState>): AppState {
     issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),
     pullRequests: unassignedPrs(base),
   };
-  return { ...base, world, ...over };
+  return { ...base, world, build: currentBuild(base), ...over };
+}
+
+/**
+ * The demo's build reading, flattened to *current* with nothing in the way.
+ *
+ * The same reason the appraisals and the assigned pull request go: the demo ships
+ * a build fourteen commits behind and a project checkout that cannot be
+ * fast-forwarded, so every list here would assert two update asks it never set up.
+ * They are `test/updateAsks.test.ts`'s subject.
+ */
+function currentBuild(base: AppState): AppState['build'] {
+  return {
+    ...base.build,
+    state: 'current',
+    label: 'current',
+    upgradable: false,
+    blocked: 'this build is current — there is nothing to take',
+    standing: { ...base.build.standing, behind: 0, commits: [], upstream: base.build.standing.head },
+    project: base.build.project === null ? null : { ...base.build.project, behind: 0, commits: [] },
+    projectPull: { can: false, blocked: 'the project checkout is up to date — there is nothing to pull' },
+  };
 }
 
 /** The demo's pull requests minus the assigned one — see {@link stateWith}. */

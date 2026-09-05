@@ -10,6 +10,8 @@ import {
   upgradability,
   IDLE_INTENT,
   type BuildReading,
+  type SnoozeStamps,
+  type SnoozeTarget,
   type UpgradeAction,
   type UpgradeTransition,
 } from './upgradePlan.js';
@@ -39,6 +41,17 @@ export class UpdateDesk {
   private project: BuildStanding | null = null;
   private checking: Promise<void> | null = null;
   private lastCheckedMs = 0;
+  /**
+   * When each update ask stops being hidden, as epoch millis; zero for one that is
+   * not snoozed.
+   *
+   * In memory on `RuntimeControl`'s terms — see {@link BuildReading.snoozedUntil}.
+   * A map keyed on the target rather than two fields, because the two asks share
+   * one length and one route and would otherwise be the same code twice.
+   */
+  private snoozedUntilMs: Record<SnoozeTarget, number> = { upgrade: 0, projectPull: 0 };
+  /** Set while an auto-pull is in flight, so a slow pull cannot be started twice. */
+  private pulling: Promise<unknown> | null = null;
 
   /**
    * How this process is asked to go down for an upgrade. Set by `src/server/main.ts`,
@@ -62,6 +75,14 @@ export class UpdateDesk {
       autoUpdate: boolean;
       /** How long an automatic drain waits before it interrupts what is left. Zero waits forever. */
       drainDeadlineMs: number;
+      /**
+       * Whether the *worked* checkout is fast-forwarded without being asked —
+       * `selfUpdate.projectAutoPull`. Unlike `autoUpdate` this interrupts nothing
+       * and restarts nothing, which is why it defaults the other way.
+       */
+      projectAutoPull?: boolean;
+      /** How long a snooze hides an ask on the rail. */
+      snoozeMs?: number;
       /**
        * The *worked* repository, read on this same timer — `config.repoRoot`
        * against its own remote and `defaultBranch`.
@@ -109,6 +130,64 @@ export class UpdateDesk {
     await this.check(false);
     this.advanceDrain();
     this.advanceAuto();
+    this.advanceProjectPull();
+  }
+
+  /**
+   * `selfUpdate.projectAutoPull`: fast-forward the worked checkout, unasked.
+   *
+   * **Not awaited by the pulse.** A pull reaches the network and then re-reads both
+   * checkouts; blocking the cycle on it would put the whole harness behind
+   * somebody's slow remote for a fast-forward nobody is waiting on. `pulling` is
+   * what keeps a slow one from being started again on the next beat.
+   *
+   * Every refusal is silent, because {@link projectPullability} has already worded
+   * every one of them and the rail draws that sentence: a dirty checkout is not a
+   * fault, it is a thing to tell the operator about once, in the place they answer
+   * things. A pull that was *allowed* and then failed is different — the world said
+   * yes and git said no — and that is a fault.
+   */
+  private advanceProjectPull(): void {
+    if (!this.deps.projectAutoPull) return;
+    if (this.pulling) return;
+    const target = this.deps.project;
+    if (!target) return;
+    if (!projectPullability(this.project, target.branch).can) return;
+    this.pulling = this.pullProject()
+      .then((result) => {
+        if (result.ok) return;
+        this.deps.errors.record({
+          source: 'cycle',
+          message: `Project auto-pull failed: ${result.error}`,
+          detail: null,
+        });
+      })
+      .finally(() => {
+        this.pulling = null;
+      });
+  }
+
+  /**
+   * Hide one of the two update asks for `selfUpdate.snoozeMs`.
+   *
+   * The clock is the whole of it: a snooze says nothing about *which* build was
+   * declined, so the ask comes back at whatever is waiting by then rather than at
+   * the commit it was pressed on. That is deliberate — the alternative records a
+   * head, and a head declined on an active repository is superseded within the
+   * hour, which makes a considered "no" behave like a very short "later".
+   *
+   * @public called by the snooze route, which is the only way in.
+   */
+  snooze(target: SnoozeTarget): SnoozeStamps {
+    this.snoozedUntilMs[target] = Date.now() + (this.deps.snoozeMs ?? 0);
+    return this.snoozeStamps();
+  }
+
+  /** The two clocks as the wire carries them: an ISO stamp each, or null when clear. */
+  private snoozeStamps(): SnoozeStamps {
+    const nowMs = Date.now();
+    const stamp = (untilMs: number): string | null => (untilMs > nowMs ? new Date(untilMs).toISOString() : null);
+    return { upgrade: stamp(this.snoozedUntilMs.upgrade), projectPull: stamp(this.snoozedUntilMs.projectPull) };
   }
 
   /**
@@ -258,6 +337,8 @@ export class UpdateDesk {
       supervised: this.supervised,
       project: this.project,
       projectBranch: this.deps.project?.branch,
+      projectAutoPull: this.deps.projectAutoPull ?? false,
+      snoozedUntil: this.snoozeStamps(),
     });
   }
 

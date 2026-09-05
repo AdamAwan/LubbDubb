@@ -51,9 +51,15 @@ Two shapes, and which one runs is the whole of the network policy:
   object. So the steady state of an up-to-date deployment checking hourly is a single ref
   advertisement, and the expensive path costs what it costs once per upstream commit.
 
-`selfUpdate.checkIntervalMs` (default one hour) is a floor on **network traffic**, not on how fresh
-the served answer is: the standing is held in memory and served from there between checks, so opening
-the panel costs nothing and always has something to show.
+`selfUpdate.checkIntervalMs` (default **fifteen minutes**) is a floor on **network traffic**, not on
+how fresh the served answer is: the standing is held in memory and served from there between checks,
+so opening the panel costs nothing and always has something to show.
+
+It was an hour, and fifteen minutes is what the reading being an **ask** costs. A card an operator
+chooses to look at can carry an answer up to an hour old and be forgiven for it; a row on the queue
+they work through cannot — an ask that appears an hour after the thing it is about, or lingers an hour
+after somebody else took the update, is one they learn to distrust and then to skim past. Four ref
+advertisements an hour is not traffic worth saving to buy that.
 
 ### Why this is not on `GitObserver`
 
@@ -412,9 +418,95 @@ was to change the answer.
 Rate-limited harder than `/upgrade/check` — six a minute against thirty — because this one reaches the
 network _and writes_.
 
+### Pulling it without being asked
+
+`selfUpdate.projectAutoPull`, **on by default**, and `UpdateDesk.advanceProjectPull` on the pulse:
+whenever `projectPullability` says the checkout can be fast-forwarded, it is.
+
+**Why this defaults the other way from `autoUpdate` beside it.** They read as the same permission and
+are not. Taking an update to the harness stops a fleet, ends a process and brings the whole deployment
+back on different code — a decision, and the deployment that wants it unattended is the one that says
+so. This fast-forwards somebody's clone: it interrupts nothing, restarts nothing, and is refused
+outright on any checkout where it would not be a clean fast-forward. What it prevents is the thing the
+Pull button never could — a harness running a project config the team changed days ago, on exactly the
+deployment nobody is watching.
+
+**Never awaited by the pulse.** The pull reaches the network and then re-reads both checkouts; blocking
+the cycle on it would put the whole harness behind somebody's slow remote for a fast-forward nobody is
+waiting on. A pull already in flight is not started again.
+
+**A refusal is silent and an allowed pull that then failed is a fault.** The four refusals are already
+worded by `projectPullability` and are not faults — a dirty tree is a thing to tell the operator about
+once, on the rail, in the place they answer things. A pull the verdict allowed and git then declined is
+the world saying yes and the tool saying no, which is [18](18-observability.md#the-error-log)'s
+business.
+
+### Snoozing an ask
+
+`selfUpdate.snoozeMs` (default thirty minutes), `UpdateDesk.snooze`, `POST /api/upgrade/snooze`. One
+window for both asks, so the two cannot drift into meaning different lengths of "not now".
+
+**A clock, and deliberately not a verdict on a build.** The alternative — recording the head that was
+declined and bringing the ask back when upstream moves past it — sounds like the more considered answer
+and is the worse one: on an active repository something newer lands within the hour, so a "no" about
+_this_ build behaves like a very short "later" and stops meaning anything. Snoozing says nothing about
+which commits were declined; the ask comes back at whatever is waiting by then.
+
+**Held in memory, not in the store**, on `RuntimeControl`'s terms ([the intent](#the-intent) is the
+opposite case and says why it is persisted). A snooze is read only by the process that holds it, and
+thirty minutes of "not now" is not a decision worth carrying across a restart — the one restart it most
+often precedes is the upgrade itself. A `snoozeMs` of zero is no snooze at all rather than a stamp
+already in the past, so a misconfigured window cannot hide an ask behind a clock nobody set.
+
 ## Where it lands in the cockpit
 
-Two surfaces, and the split is between a standing and a decision.
+Three surfaces, and the split is between an **ask**, a **standing** and the detail behind both.
+
+### The asks are on the rail
+
+Two `Needs you` rows ([17](17-cockpit.md#needs-you)), derived in `web/src/view/updateAsks.ts`:
+`upgrade` when there is something takeable, and `project_pull` where an auto-pull the harness would
+otherwise have done was refused. Both amber, both `yours`, neither ever `blocking` — nothing is parked
+and no slot is held.
+
+**This queue is for asks no rule in the harness will ever answer**, and both of these are exactly that.
+They were cards only, and a card is a surface an operator _visits_: being behind persists for weeks if
+nobody looks, so the deployment furthest behind was the one whose card had been furniture the longest.
+
+The rail is right to refuse a standing condition, and the reason these are not one is that each is
+raised at a moment and settles when answered:
+
+- The **upgrade** ask appears when `upgradability` says there is something to take — never on
+  `behind > 0`, which is true of a build whose upgrade the server would refuse. It settles by being
+  taken or snoozed, and while an upgrade is under way it does not vanish: it becomes the progress,
+  because an ask that disappears the instant it is pressed leaves nobody able to tell whether the press
+  registered.
+- The **project** ask appears only where auto-pull is on, the checkout is behind, and the pull was
+  refused. It needs no answer at all: it clears itself the moment whatever is in the way moves. With
+  auto-pull off there is no row — that deployment has said it pulls by hand, and a daily row saying so
+  would be the harness reporting the operator's own decision back to them as news.
+
+**The row's age is how long the deployment has been behind**, taken from the oldest commit the reading
+carries, not from when the check ran. It is the one number that separates a morning behind from
+untouched since August, and it is the whole reason a row beats a count. The reading caps at ten, so on
+a long-neglected build this understates — which is the right direction: the row never claims an age the
+reading cannot show.
+
+**The controls follow the fleet.** With agents running there is a real choice — wait for them or stop
+them — drawn as `Queue` (primary) and `Now`. With the fleet clear a drain is instantaneous, so the two
+are one act and collapse to a single `Upgrade`; two buttons doing one thing is worse than one. `Snooze`
+is beside them at ghost weight. **The project row carries only `Snooze`**, and that is the honest shape
+rather than an omission: every refusal `projectPullability` returns is one the harness cannot get past
+either, so a "pull anyway" would be a button whose only outcome is the error the row already quotes.
+
+**The body of the row opens the build panel**, and the controls sit in a strip beneath it — the shape a
+config row already takes, for its reason: one click may not have two destinations. So the row asks, and
+the changelog that answers _why you would want it_ is one press away.
+
+An **unsupervised** deployment gets the rows and no controls: the process exits on apply and nothing
+would start it again, and the panel the row opens says what to run instead.
+
+### The cards carry the standing
 
 The **Build card** on the Overview ([17](17-cockpit.md#the-overview)) carries the standing: what is
 running, how far behind it is, and the newest five commits waiting — each with **who wrote it and how
@@ -431,11 +523,14 @@ The **Project card** sits beside it and is the same reading of the other checkou
 the integration branch that this clone has not got, and whether the checkout is clean. It answers the
 one thing the six cards above it cannot — _what changed in the project that the fleet did not do_,
 since every other card on that page is the fleet's own work. Its git status is on the glass rather
-than behind a marker, because it is half the answer to why the Build card beside it has no buttons.
+than behind a marker, because it is half the answer to why the upgrade ask on the rail is not there.
 It carries no controls: there is nothing the cockpit should do to the operator's own checkout.
 
-Its one control is **Pull**, drawn only when the server says it would work; every refusal is the
-reason in its place, because "why is the button gone" is the only question a missing control raises.
+Every refusal stays on it in its own words, because "why is this three commits behind" is what the card
+is being read for. Its **Pull** control survives on exactly one deployment: the one that set
+`selfUpdate.projectAutoPull` to false. With auto-pull on, a checkout that could be pulled has been — so
+the button would spend its whole life undrawable, and the case it is drawn in is the case where the
+harness was told to keep its hands off and somebody still wants a way to do it.
 
 **`Check now` is a refresh glyph in each card's header, beside the count it moves** — not a third
 button in the controls row. The row holds the acts that change something (queue the upgrade, pull the
@@ -445,15 +540,17 @@ both and they cannot disagree about when the harness last looked. Each header al
 reading was taken**, in the right-hand slot Fleet keeps its ended-shift count in — every number on
 these two cards is "as of" that stamp.
 
-**Force upgrade is secondary, not danger-toned.** Interrupting is not lossy — every agent is reaped,
-recorded and restored on the way back up — so an alarm colour put a warning on an ordinary decision
-beside the safe path it is only a variant of. Weight separates the two, never hue.
+**The Build card draws no controls at all.** Upgrading is asked on the rail now, and a card that also
+offered it would be the same ask twice — which is how an operator learns that neither surface is the
+real one. What is left is what the card was always best at: the changelog, which answers _why you would
+want it_ where a queue row can only say how far behind you are.
+
+**Interrupting is secondary, not danger-toned**, wherever it is drawn. It is not lossy — every agent is
+reaped, recorded and restored on the way back up — so an alarm colour put a warning on an ordinary
+decision beside the safe path it is only a variant of. Weight separates the two, never hue.
 
 The **panel** keeps everything the card is not for — the full ten and the worded refusals. A dirty install, a build ahead of its upstream and an unavailable reading are the answer to
 "why is the button off", and the card draws no controls at all rather than off ones.
-
-Note what does **not** go on the Needs you rail: being behind. That is a standing condition and the
-rail is for asks that settle when they are answered — see [17](17-cockpit.md#the-overview).
 
 ## The gauge
 

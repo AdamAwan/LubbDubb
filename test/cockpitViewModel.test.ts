@@ -27,6 +27,34 @@ function stateWith(over: Partial<AppState>): AppState {
     dispatchRules: [],
     jobs: [],
     world: { pullRequests: [], issues: [] },
+    // A build with nothing waiting. Every snapshot carries one — `AppState.build`
+    // is not optional — and a current one is the neutral answer: the two update
+    // asks are derived from this reading, so a fixture that left it out would put
+    // two rows nobody asked about into every assertion in this file.
+    build: {
+      state: 'current',
+      label: 'current',
+      live: 0,
+      upgradable: false,
+      blocked: 'this build is current — there is nothing to take',
+      supervised: true,
+      standing: {
+        head: 'abc1234',
+        upstream: 'abc1234',
+        behind: 0,
+        ahead: 0,
+        commits: [],
+        dirty: false,
+        branch: 'main',
+        checkedAt: '2026-01-01T00:00:00.000Z',
+        unavailable: null,
+      },
+      intent: { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false },
+      project: null,
+      projectPull: { can: false, blocked: 'no project checkout is being watched' },
+      projectAutoPull: true,
+      snoozedUntil: { upgrade: null, projectPull: null },
+    },
     ...over,
   } as unknown as AppState;
 }

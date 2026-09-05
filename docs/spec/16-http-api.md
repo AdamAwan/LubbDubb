@@ -418,6 +418,16 @@ this surface that reaches the network on request rather than on the pulse. Broad
 every open cockpit (a reading one operator took is a fact for the others) and returns
 `{ ok: true, build }`.
 
+#### `POST /api/upgrade/snooze`
+
+Body `{target: 'upgrade' | 'projectPull'}`; anything else is a 400. Hides that one update ask on the
+Needs you rail for `selfUpdate.snoozeMs`, broadcasts `dirty` and returns `{ ok: true, build }`.
+
+Its own route rather than a fourth `action` below, because it is not one: that route drives the upgrade
+state machine, and a snooze changes nothing about the build — it is a statement about the queue. The
+window is held in memory by the desk, so a restart clears it
+([21](21-self-update.md#snoozing-an-ask)).
+
 #### `POST /api/upgrade`
 
 Body `{action: 'drain' | 'cancel' | 'apply', interrupt?: boolean}`; anything else is a 400. Applies
