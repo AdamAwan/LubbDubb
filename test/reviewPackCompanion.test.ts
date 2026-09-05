@@ -150,6 +150,23 @@ test('an unwitnessed pack says so, and an unchecked one is drawn as itself', () 
   assert.match(html, /no reading order to give yet/);
 });
 
+test('an idea lists the scenarios its tests cover, above its claims and never as prose', () => {
+  const covered = renderReviewPackCompanion(
+    record(pack({ ideas: [idea({ coverage: ['b is exported', 'a is left alone'] })] })),
+  );
+  assert.match(covered, /Covered by/);
+  assert.match(covered, /<li>b is exported<\/li>/);
+  // Above the claims, so the reader who has just read the code learns there
+  // whether it is exercised. → docs/spec/31-review-packs.md#tests-are-never-an-idea
+  assert.ok(covered.indexOf('Covered by') < covered.indexOf('What the author claims'));
+
+  // Nothing at all where there is nothing to list: a heading over an empty list
+  // reads as tests that were looked for and not found. A pack written before the
+  // field existed reads it back undefined, and renders the same way.
+  const bare = renderReviewPackCompanion(record(pack({ ideas: [idea({ coverage: undefined })] })));
+  assert.doesNotMatch(bare, /Covered by/);
+});
+
 test('a pack stating a schema this build does not know is refused whole', () => {
   const html = renderReviewPackCompanion(record(pack({ schema: REVIEW_PACK_SCHEMA + 1 })));
   assert.match(html, /This pack cannot be shown/);

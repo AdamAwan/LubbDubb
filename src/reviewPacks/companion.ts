@@ -164,10 +164,27 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
       : '') +
     `<ol class="rp-walk">${idea.anchors.map((a, i) => step(a, i + 1)).join('')}</ol>` +
     (idea.anchors.length === 0 ? `<p class="rp-gap">This idea has no walk — the author gave it no anchors.</p>` : '') +
+    coveredBy(idea.coverage ?? []) +
     `<p class="rp-claims-head">What the author claims · checked by a second agent</p>` +
     `<ul class="rp-claims">${idea.claims.map((c) => `<li>${claimLine(c, findingIndex(wrong, idea, c))}</li>`).join('')}</ul>` +
     (idea.claims.length === 0 ? `<p class="rp-gap">The author made no claims for this idea.</p>` : '') +
     `</div></details>`
+  );
+}
+
+/**
+ * The scenarios the idea's tests cover, listed and never explained.
+ *
+ * Sits under the walk and above the claims because it answers the question the
+ * walk raises — is this exercised? — for the reader who has just read the code,
+ * rather than sending them to a tests section at the far end of the page.
+ * → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
+ */
+function coveredBy(coverage: readonly string[]): string {
+  if (coverage.length === 0) return '';
+  return (
+    `<p class="rp-covered-head">Covered by</p>` +
+    `<ul class="rp-covered">${coverage.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
   );
 }
 
@@ -443,6 +460,9 @@ a { color: var(--rp-accent); }
 .rp-why summary { cursor: pointer; color: var(--rp-dim); font-size: .8rem; }
 .rp-stamp { color: var(--rp-dim); }
 .rp-why-body { white-space: pre-wrap; color: var(--rp-dim); padding: .35rem 0 0 .75rem; }
+.rp-covered-head { font-weight: 600; margin: 1rem 0 .35rem; }
+.rp-covered { margin: 0; padding-left: 1.1rem; color: var(--rp-dim); }
+.rp-covered li { margin-bottom: .2rem; }
 .rp-claims-head { font-weight: 600; margin: 1rem 0 .35rem; }
 .rp-claims { list-style: none; margin: 0; padding: 0; }
 .rp-claims li { margin-bottom: .4rem; }

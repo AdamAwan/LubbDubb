@@ -362,6 +362,22 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /class="tag t-red tag-fill" title="the checker&#x27;s label">Read</);
 });
 
+test('an idea lists the scenarios its tests cover, between the walk and the claims', () => {
+  const pack = checkedPack();
+  pack.ideas[0]!.coverage = ['b is exported', 'a is left alone'];
+  const html = render(payload({ pack }), 'idea_a');
+  assert.match(html, /Covered by/);
+  assert.match(html, /<li>b is exported<\/li>/);
+  const walk = html.indexOf('class="rp-walk"');
+  const covered = html.indexOf('Covered by');
+  const claims = html.indexOf('What the author claims');
+  assert.ok(walk < covered && covered < claims, 'the scenarios sit under the code and above the claims');
+
+  // A pack written before the field existed reads it back undefined, and draws
+  // no heading: one over an empty list reads as tests looked for and not found.
+  assert.doesNotMatch(render(payload(), 'idea_a'), /Covered by/);
+});
+
 test('an unchecked pack says so and offers the ask; a pack being checked says that instead', () => {
   const unchecked = render(payload({ pack: { ...checkedPack(), order: [] }, checking: false }));
   assert.match(unchecked, /rp-band-unchecked/);

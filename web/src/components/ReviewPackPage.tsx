@@ -606,6 +606,7 @@ function IdeaRow({
           {idea.anchors.length === 0 && (
             <p className="rp-gap">This idea has no walk — the author gave it no anchors.</p>
           )}
+          <CoveredBy coverage={idea.coverage ?? []} />
           <p className="rp-claims-head">What the author claims · checked by a second agent</p>
           <ul className="rp-claims">
             {idea.claims.map((claim, i) => (
@@ -618,6 +619,29 @@ function IdeaRow({
         </div>
       )}
     </details>
+  );
+}
+
+/**
+ * The scenarios the idea's tests cover, listed and never explained.
+ *
+ * Under the walk and above the claims, so the reader who has just read the code
+ * learns whether it is exercised there rather than in a tests section at the far
+ * end of the page. Drawn nowhere when there is nothing to draw: a "Covered by"
+ * heading over an empty list reads as tests that were looked for and not found.
+ * → docs/spec/31-review-packs.md#tests-are-never-an-idea
+ */
+function CoveredBy({ coverage }: { coverage: readonly string[] }): JSX.Element | null {
+  if (coverage.length === 0) return null;
+  return (
+    <>
+      <p className="rp-covered-head">Covered by</p>
+      <ul className="rp-covered">
+        {coverage.map((scenario, i) => (
+          <li key={i}>{scenario}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 

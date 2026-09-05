@@ -7,7 +7,8 @@ import { loadConfig } from '../src/config.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from '../src/reviewPacks/origins.js';
-import { coverageRefusal, parseDiffHunks } from '../src/reviewPacks/hunks.js';
+import { coverageRefusal, ownsTestHunk, parseDiffHunks, testsOnlyIdea } from '../src/reviewPacks/hunks.js';
+import { assemblePack, type Commission } from '../src/reviewPacks/submission.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
@@ -216,6 +217,105 @@ test('coverage is decided mechanically: every hunk owned exactly once, plumbing 
     /h3 \(owned by idea_1 and plumbing\)/,
   );
   assert.match(coverageRefusal(hunks, new Map([['idea_1', ['h1', 'h2', 'h3', 'h4', 'h9']]])) ?? '', /no such hunk: h9/);
+});
+
+/** A diff with a test file in it, so the tests-are-never-an-idea rule has something to bite on. */
+const DIFF_WITH_TESTS = [
+  'diff --git a/src/a.ts b/src/a.ts',
+  '--- a/src/a.ts',
+  '+++ b/src/a.ts',
+  '@@ -1,2 +1,3 @@',
+  ' const a = 1;',
+  '+const b = 2;',
+  ' export { a };',
+  'diff --git a/test/a.test.ts b/test/a.test.ts',
+  '--- a/test/a.test.ts',
+  '+++ b/test/a.test.ts',
+  '@@ -1,1 +1,2 @@',
+  " test('a', () => {});",
+  "+test('b', () => {});",
+].join('\n');
+
+/** A commission over `DIFF_WITH_TESTS`, with no pads and a tree that answers every region. */
+function commission(diff = DIFF_WITH_TESTS): Commission {
+  return {
+    prNumber: 7,
+    headSha: HEAD,
+    hunks: parseDiffHunks(diff),
+    entries: [],
+    readRegion: () => ['a line'],
+  };
+}
+
+/** The submission arguments, with the ideas the test cares about. */
+function submission(ideas: unknown[]): Record<string, unknown> {
+  return { headline: 'It does a thing.', summary: '- It does **a thing**.', estimatedMinutes: 3, ideas };
+}
+
+const hunkAnchor = (hunk: string): Record<string, unknown> => ({ kind: 'hunk', hunk, gist: 'here' });
+
+test('a test hunk is never an idea of its own — it belongs to the idea it exercises', () => {
+  const hunks = parseDiffHunks(DIFF_WITH_TESTS);
+  // The predicate, both ways round.
+  assert.equal(testsOnlyIdea(hunks, ['h2']), true);
+  assert.equal(testsOnlyIdea(hunks, ['h1', 'h2']), false, 'an idea that owns real code as well is not a tests section');
+  assert.equal(testsOnlyIdea(hunks, []), false);
+  assert.equal(ownsTestHunk(hunks, ['h1']), false);
+  assert.equal(ownsTestHunk(hunks, ['h1', 'h2']), true);
+  // A pull request that is only tests is exempt: there is no other idea for them
+  // to belong to, and the rule would make such a pack impossible to write.
+  const onlyTests = parseDiffHunks(
+    [
+      'diff --git a/test/a.test.ts b/test/a.test.ts',
+      '--- a/test/a.test.ts',
+      '+++ b/test/a.test.ts',
+      '@@ -1,1 +1,2 @@',
+      " test('a', () => {});",
+      "+test('b', () => {});",
+    ].join('\n'),
+  );
+  assert.equal(testsOnlyIdea(onlyTests, ['h1']), false, 'a tests-only pull request is exempt');
+
+  // And through the submission, where the author actually hits it.
+  const refused = assemblePack(
+    commission(),
+    submission([
+      { claim: 'It adds b.', title: 'Adds b', anchors: [hunkAnchor('h1')] },
+      { claim: 'It is tested.', title: 'Tests', anchors: [hunkAnchor('h2')] },
+    ]),
+  );
+  assert.equal(refused.ok, false);
+  assert.match(refused.ok ? '' : refused.error, /owns nothing but test files/);
+});
+
+test('the idea that owns the tests must list the scenarios, and they are kept as written', () => {
+  const bare = assemblePack(
+    commission(),
+    submission([{ claim: 'It adds b.', title: 'Adds b', anchors: [hunkAnchor('h1'), hunkAnchor('h2')] }]),
+  );
+  assert.equal(bare.ok, false);
+  assert.match(bare.ok ? '' : bare.error, /owns the tests but lists no scenarios/);
+
+  const listed = assemblePack(
+    commission(),
+    submission([
+      {
+        claim: 'It adds b.',
+        title: 'Adds b',
+        anchors: [hunkAnchor('h1'), hunkAnchor('h2')],
+        coverage: ['b is exported', 'a is left alone'],
+      },
+    ]),
+  );
+  assert.equal(listed.ok, true);
+  assert.deepEqual(listed.ok ? listed.pack.ideas[0]!.coverage : null, ['b is exported', 'a is left alone']);
+});
+
+test('the summary is asked for as bullets, and the refusal says so rather than asking for a paragraph', () => {
+  const refused = assemblePack(commission(), { headline: 'x', estimatedMinutes: 1, ideas: [] });
+  assert.equal(refused.ok, false);
+  assert.match(refused.ok ? '' : refused.error, /bulleted list/);
+  assert.doesNotMatch(refused.ok ? '' : refused.error, /a paragraph, with/);
 });
 
 test("the author's origin and lease key name the pull request and the head, and nothing else parses as them", () => {

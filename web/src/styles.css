@@ -321,6 +321,7 @@ body {
 .rp-kicker,
 .rp-rule,
 .rp-claims-head,
+.rp-covered-head,
 .rp-code-cap,
 .rv-detail dt,
 .species-odd dt,
@@ -9349,6 +9350,23 @@ select:disabled {
   font-size: 10.5px;
   color: var(--blue);
   letter-spacing: 0.04em;
+}
+
+/* The test scenarios an idea's tests cover — listed, never explained. */
+.rp-covered-head {
+  margin: 12px 0 6px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.rp-covered {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.rp-covered li {
+  margin-bottom: 2px;
 }
 
 /* The claims. */

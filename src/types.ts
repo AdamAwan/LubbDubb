@@ -2155,6 +2155,21 @@ export interface ReviewIdea {
   anchors: ReviewAnchor[];
   /** The checkable statements this idea rests on. */
   claims: ReviewClaim[];
+  /**
+   * The test scenarios this idea is covered by, one short line each — never
+   * explained, only listed: a reader wants assurance the cases were thought of,
+   * and a paragraph about a test is a paragraph nobody reads.
+   *
+   * Why it lives on the idea rather than in an idea of its own: a "Tests" section
+   * separates a change from its evidence, so the reader who has just decided
+   * whether the code is right has to go somewhere else to find out whether it is
+   * exercised. `assemblePack` refuses an idea whose hunks are all test files for
+   * that reason. → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
+   *
+   * Optional because a pack written before this field existed reads it back as
+   * `undefined`; every renderer treats that as the empty list.
+   */
+  coverage?: string[];
   /** How hard to look. The checker's, never the author's; null until it has run. */
   attention: ReviewAttention | null;
 }

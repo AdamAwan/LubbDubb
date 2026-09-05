@@ -11,10 +11,7 @@ import type {
   ReviewRange,
   ScratchEntry,
 } from '../types.js';
-import { coverageRefusal, type DiffHunk } from './hunks.js';
-
-/** The reserved idea id — the one the author may name, where every other is minted here. */
-const PLUMBING_IDEA_ID = 'plumbing';
+import { coverageRefusal, ownsTestHunk, PLUMBING_IDEA_ID, testsOnlyIdea, type DiffHunk } from './hunks.js';
 
 /**
  * What the harness knows about the commission the author is submitting against:
@@ -64,7 +61,10 @@ export function assemblePack(
   if (headline === null) return refuse('headline is required — one plain sentence saying what the change does.');
   const summary = text(args.summary);
   if (summary === null)
-    return refuse('summary is required — a paragraph, with the one thing the reader most needs in bold.');
+    return refuse(
+      'summary is required — a short bulleted list, one line each, with the words that matter most in bold. ' +
+        'Not a paragraph: the opening is the part every reader reads, and a block of prose is the part they skim.',
+    );
   const estimatedMinutes = args.estimatedMinutes;
   if (typeof estimatedMinutes !== 'number' || !Number.isFinite(estimatedMinutes) || estimatedMinutes < 0) {
     return refuse('estimatedMinutes must be a number — how long you expect the read to take.');
@@ -118,12 +118,33 @@ export function assemblePack(
       if (!claim.ok) return refuse(claim.error);
       claims.push(claim.claim);
     }
+    const coverage: string[] = [];
+    if (raw.coverage !== undefined && !Array.isArray(raw.coverage)) return refuse(`${at}.coverage must be a list.`);
+    for (const [j, rawScenario] of ((raw.coverage ?? []) as unknown[]).entries()) {
+      const scenario = line(rawScenario);
+      if (scenario === null) {
+        return refuse(`${at}.coverage[${j}] must be one short line naming a scenario the tests cover.`);
+      }
+      coverage.push(scenario);
+    }
     // Owned twice *within* one idea is the same fault as across two, and the
     // coverage check below reads ownership per idea.
     const dup = hunkIds.find((h, k) => hunkIds.indexOf(h) !== k);
     if (dup !== undefined) return refuse(`${at} anchors hunk ${dup} twice.`);
+    if (id !== PLUMBING_IDEA_ID && testsOnlyIdea(commission.hunks, hunkIds)) {
+      return refuse(
+        `${at} ("${title}") owns nothing but test files, which makes it a tests section. Tests belong to the idea ` +
+          'they exercise: give these hunks to it, and list what they cover as `coverage` lines under it.',
+      );
+    }
+    if (id !== PLUMBING_IDEA_ID && ownsTestHunk(commission.hunks, hunkIds) && coverage.length === 0) {
+      return refuse(
+        `${at} ("${title}") owns the tests but lists no scenarios. Add \`coverage\`: one short line per case, ` +
+          'named and not explained — it is the only place the reader is shown what the tests cover.',
+      );
+    }
     owned.set(id, hunkIds);
-    ideas.push({ id, claim, title, cue: null, anchors, claims, attention: null });
+    ideas.push({ id, claim, title, cue: null, anchors, claims, coverage, attention: null });
   }
 
   const coverage = coverageRefusal(commission.hunks, owned);

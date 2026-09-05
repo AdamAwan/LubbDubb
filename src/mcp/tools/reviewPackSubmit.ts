@@ -27,7 +27,9 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     "idea's hunk anchor**; give the ones with nothing to review to the idea whose id is `plumbing`. Under each " +
     'idea, `claims`: sentences that can be shown false, each with its `provenance` — `witnessed` citing the log ' +
     'entry it comes from, `disputed` citing the entry the code contradicts, or `inferred` for your own reading. ' +
-    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. Write nothing the checker ' +
+    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. **Tests are never an idea ' +
+    "of their own**: give a test hunk to the idea it exercises, and list what it covers as that idea's `coverage` " +
+    'lines — one short scenario each, named and not explained. Write nothing the checker ' +
     'owns: no verdicts, no attention labels, no cues, no reading order. The refusal names the field.',
   inputSchema: {
     type: 'object',
@@ -36,7 +38,8 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       summary: {
         type: 'string',
         description:
-          'A paragraph in the same register, with the one thing the reader most needs in **bold**. Markdown.',
+          'A short bulleted list in the same register — `- ` per line, the words that matter most in **bold**, ' +
+          'and nothing that is not needed to decide whether to read on. Markdown. Not a paragraph.',
       },
       estimatedMinutes: { type: 'number', description: 'How long you expect the read to take.' },
       fake: {
@@ -101,6 +104,14 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
                 },
                 required: ['kind', 'gist'],
               },
+            },
+            coverage: {
+              type: 'array',
+              description:
+                'The scenarios the tests cover, one short line each — "an unwitnessed pull request still renders", ' +
+                'not a paragraph about the test. Required on the idea that owns the test hunks; the reader wants ' +
+                'assurance the cases were thought of, and nothing more.',
+              items: { type: 'string' },
             },
             claims: {
               type: 'array',
