@@ -225,9 +225,9 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
-      // The demo's tracker is a fake with no hierarchy to roll up, so the board is
-      // absent here exactly as it is on a GitHub deployment.
-      featureBoard: false,
+      // On: the demo serves a written-out board (`buildDemoFeatureBoard`), because
+      // the Features tab is the one surface a visitor cannot infer from the rest.
+      featureBoard: true,
       // The same fake, asked the other question — and the two now differ, which is
       // the point of separating them. `orphanGoal.test.ts` flips this one on and
       // leaves the tab off, which is exactly the deployment the band was never

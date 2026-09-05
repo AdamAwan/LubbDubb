@@ -9,6 +9,8 @@
 import type {
   AgentFilesPayload,
   AllowanceInsights,
+  FeatureBoardPayload,
+  FeatureRollup,
   GoalAgentsPayload,
   AgentTranscript,
   ConfigChange,
@@ -4620,6 +4622,346 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
+/**
+ * The demo's feature board — the same three strands of work the rest of the demo
+ * world is built from, read one tier up.
+ *
+ * Hand-written rather than folded out of the fixture: the demo's fake tracker has
+ * no hierarchy, so there is nothing to roll up, and a board is the only way a
+ * visitor sees what the tab is for. Every number here agrees with the goals the
+ * rest of the demo draws, which is what keeps the two readings from contradicting
+ * each other on screen.
+ */
+function buildDemoFeatureBoard(): FeatureBoardPayload {
+  const now = Date.now();
+  const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
+  const features: FeatureRollup[] = [
+    {
+      number: 310,
+      title: 'Signed downloads in the review console',
+      slot: 0,
+      workItemState: 'Active',
+      issueType: 'Feature',
+      counts: { delivered: 1, inFlight: 1, queued: 1, fellShort: 1, settled: 0, unwatched: 0, total: 4 },
+      briefing: {
+        working: [{ number: 395, title: 'Snapshot downloads 401 in the review console', since: ago(12) }],
+        workingTotal: 1,
+        delivered: [
+          {
+            number: 364,
+            title: 'Document the two-watcher requirement for maintenance jobs',
+            summary: 'The requirement is written up beside the job catalog, and the runbook links it.',
+            by: 'assessor',
+            at: ago(180),
+          },
+        ],
+        deliveredTotal: 1,
+        blocking: [
+          {
+            number: 395,
+            title: 'Snapshot downloads 401 in the review console',
+            kind: 'question',
+            summary: 'Should the capability expire with the review pack, or on a fixed TTL?',
+            since: ago(12),
+          },
+          {
+            number: 382,
+            title: 'Cluster gaps before filing questions',
+            kind: 'fellShort',
+            summary: 'Gap clustering merged unrelated questions into one gap.',
+            since: ago(4),
+          },
+        ],
+        blockingTotal: 2,
+      },
+      children: [
+        {
+          number: 395,
+          title: 'Snapshot downloads 401 in the review console',
+          issueType: 'Bug',
+          standing: 'inFlight',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: 2.4,
+          changedAt: ago(12),
+        },
+        {
+          number: 364,
+          title: 'Document the two-watcher requirement for maintenance jobs',
+          issueType: 'User Story',
+          standing: 'delivered',
+          outcome: 'delivered',
+          workItemState: 'Closed',
+          costUsd: 1.12,
+          changedAt: ago(180),
+        },
+        {
+          number: 382,
+          title: 'Cluster gaps before filing questions',
+          issueType: 'User Story',
+          standing: 'fellShort',
+          outcome: 'fell short',
+          workItemState: 'Active',
+          costUsd: 3.05,
+          changedAt: ago(4),
+        },
+        {
+          number: 341,
+          title: 'Resolve the download route’s session assumption',
+          issueType: 'User Story',
+          standing: 'queued',
+          outcome: null,
+          workItemState: 'Ready',
+          costUsd: null,
+          changedAt: ago(40),
+        },
+      ],
+      costUsd: 6.57,
+      reach: [
+        { environment: 'staging', status: 'partial', goals: 1, total: 2 },
+        { environment: 'prod', status: 'absent', goals: 0, total: 2 },
+      ],
+      summary: {
+        originRef: 'issue:310',
+        standing:
+          'The console can no longer download a snapshot without a session, which is the bug this Feature was opened for. The signer exists in plan only — nothing signed has shipped yet.',
+        usable: 'The two-watcher requirement is documented and live on staging.',
+        blocked: 'The plan for #395 is waiting on approval, and the agent has three questions on it.',
+        remaining: 'The signer, the route move, and pointing the console at the signed URL.',
+        standingKey: 'demo-310-a',
+        agentId: 'agent-demo-310',
+        taskId: 'task-demo-310',
+        createdAt: ago(600),
+        updatedAt: ago(14),
+      },
+      sequence: null,
+      lastLandingAt: ago(180),
+    },
+    {
+      number: 318,
+      title: 'Job payloads validated in the catalog',
+      slot: 3,
+      workItemState: 'Active',
+      issueType: 'Feature',
+      counts: { delivered: 0, inFlight: 2, queued: 1, fellShort: 0, settled: 1, unwatched: 0, total: 4 },
+      briefing: {
+        working: [
+          { number: 390, title: 'Validate job payloads in the catalog, not in each runner', since: ago(52) },
+          { number: 376, title: 'Read GitHub review decisions as proposal approval', since: ago(5) },
+        ],
+        workingTotal: 2,
+        delivered: [],
+        deliveredTotal: 0,
+        blocking: [
+          {
+            number: 376,
+            title: 'Read GitHub review decisions as proposal approval',
+            kind: 'question',
+            summary: 'Rebase hit a conflict in review-decision.ts — which side wins?',
+            since: ago(2),
+          },
+        ],
+        blockingTotal: 1,
+      },
+      children: [
+        {
+          number: 390,
+          title: 'Validate job payloads in the catalog, not in each runner',
+          issueType: 'User Story',
+          standing: 'inFlight',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: 8.9,
+          changedAt: ago(52),
+        },
+        {
+          number: 376,
+          title: 'Read GitHub review decisions as proposal approval',
+          issueType: 'User Story',
+          standing: 'inFlight',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: 4.31,
+          changedAt: ago(5),
+        },
+        {
+          number: 358,
+          title: 'Move the payload schemas out of the runners',
+          issueType: 'User Story',
+          standing: 'settled',
+          outcome: 'concluded',
+          workItemState: 'Closed',
+          costUsd: 2.2,
+          changedAt: ago(2600),
+        },
+        {
+          number: 349,
+          title: 'Give the watcher a catalog-backed intake',
+          issueType: 'User Story',
+          standing: 'queued',
+          outcome: null,
+          workItemState: 'Ready',
+          costUsd: null,
+          changedAt: ago(300),
+        },
+      ],
+      costUsd: 15.41,
+      reach: [
+        { environment: 'staging', status: 'reached', goals: 2, total: 2 },
+        { environment: 'prod', status: 'partial', goals: 1, total: 2 },
+      ],
+      summary: {
+        originRef: 'issue:318',
+        standing:
+          'Two of the three catalog stories have landed on staging; the third is written and waiting behind a merge verdict. Nothing here has reached production.',
+        usable: 'Payload validation runs from the catalog on staging, for every job the watcher files.',
+        blocked: 'Two merges are waiting on your verdict, and #376’s rebase stopped on a conflict.',
+        remaining: 'The watcher intake cutover, and a production release.',
+        standingKey: 'demo-318-a',
+        agentId: 'agent-demo-318',
+        taskId: 'task-demo-318',
+        createdAt: ago(2600),
+        updatedAt: ago(60),
+      },
+      sequence: null,
+      lastLandingAt: ago(200),
+    },
+    {
+      number: 302,
+      title: 'Retrieval inside the token budget',
+      slot: 6,
+      workItemState: 'Active',
+      issueType: 'Feature',
+      counts: { delivered: 1, inFlight: 2, queued: 0, fellShort: 0, settled: 0, unwatched: 1, total: 4 },
+      briefing: {
+        working: [
+          { number: 388, title: 'Cap the retrieval context at the token budget before ranking', since: ago(9) },
+          { number: 332, title: 'Give HTTP providers a bounded file-tool loop', since: ago(240) },
+        ],
+        workingTotal: 2,
+        delivered: [
+          {
+            number: 371,
+            title: 'Cache the tokenizer between index runs',
+            summary: 'Index runs no longer re-build the tokenizer; the cache is keyed on the model id.',
+            by: 'assessor',
+            at: ago(1400),
+          },
+        ],
+        deliveredTotal: 1,
+        blocking: [
+          {
+            number: 388,
+            title: 'Cap the retrieval context at the token budget before ranking',
+            kind: 'question',
+            summary: 'The reviewer asked whether the budget cut belongs before or after ranking.',
+            since: ago(1),
+          },
+        ],
+        blockingTotal: 1,
+      },
+      children: [
+        {
+          number: 388,
+          title: 'Cap the retrieval context at the token budget before ranking',
+          issueType: 'User Story',
+          standing: 'inFlight',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: 5.6,
+          changedAt: ago(9),
+        },
+        {
+          number: 332,
+          title: 'Give HTTP providers a bounded file-tool loop',
+          issueType: 'User Story',
+          standing: 'inFlight',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: 1.85,
+          changedAt: ago(240),
+        },
+        {
+          number: 371,
+          title: 'Cache the tokenizer between index runs',
+          issueType: 'User Story',
+          standing: 'delivered',
+          outcome: 'delivered',
+          workItemState: 'Closed',
+          costUsd: 2.75,
+          changedAt: ago(1400),
+        },
+        {
+          number: 407,
+          title: 'Spike: replace pg-boss with a LISTEN/NOTIFY worker loop',
+          issueType: 'User Story',
+          standing: 'unwatched',
+          outcome: null,
+          workItemState: 'New',
+          costUsd: null,
+          changedAt: ago(900),
+        },
+      ],
+      costUsd: 10.2,
+      reach: [
+        { environment: 'staging', status: 'reached', goals: 1, total: 1 },
+        { environment: 'prod', status: 'reached', goals: 1, total: 1 },
+      ],
+      summary: {
+        originRef: 'issue:302',
+        standing:
+          'The tokenizer cache is in production. The budget cut itself is in review with CI red, and the file-tool bound has been running quietly for four hours.',
+        usable: 'Index runs reuse the tokenizer cache in production.',
+        blocked: 'A reviewer is waiting on a reply on PR 412.',
+        remaining: 'Land the budget cut, and decide whether the pg-boss spike is worth watching.',
+        standingKey: 'demo-302-a',
+        agentId: 'agent-demo-302',
+        taskId: 'task-demo-302',
+        createdAt: ago(3000),
+        updatedAt: ago(30),
+      },
+      sequence: null,
+      lastLandingAt: ago(1400),
+    },
+  ];
+
+  return {
+    features,
+    orphans: {
+      counts: { delivered: 0, inFlight: 0, queued: 1, fellShort: 0, settled: 0, unwatched: 1, total: 2 },
+      briefing: { working: [], workingTotal: 0, delivered: [], deliveredTotal: 0, blocking: [], blockingTotal: 0 },
+      children: [
+        {
+          number: 415,
+          title: 'Retry the reconciliation sweep on a 429',
+          issueType: 'Bug',
+          standing: 'unwatched',
+          outcome: null,
+          workItemState: 'Active',
+          costUsd: null,
+          changedAt: ago(1440),
+        },
+        {
+          number: 341,
+          title: 'Resolve issue #341',
+          issueType: 'User Story',
+          standing: 'queued',
+          outcome: null,
+          workItemState: 'Ready',
+          costUsd: null,
+          changedAt: ago(35),
+        },
+      ],
+      costUsd: null,
+      lastLandingAt: null,
+    },
+    unresolved: 1,
+    environments: ['staging', 'prod'],
+    backfilling: false,
+    refUrls: {},
+  };
+}
+
 /** Why every obstacle control refuses in the demo: there is no board behind it. */
 const DEMO_NO_BOARD = 'the demo has no obstacle board to act on';
 
@@ -4634,18 +4976,10 @@ export const demoApi = {
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
-  // The demo's tracker is flat — `config.featureBoard` is false in the fixture, so
-  // no tab reaches this and the empty board is never drawn. It exists to keep the
-  // two API shapes interchangeable, exactly as the empty work graph above does.
-  getFeatures: () =>
-    Promise.resolve({
-      features: [],
-      orphans: null,
-      unresolved: 0,
-      environments: [],
-      backfilling: false,
-      refUrls: {},
-    }),
+  // The demo's tracker is flat, so there is nothing to fold: the board below is
+  // written out, and every count in it agrees with the goals the rest of the demo
+  // draws. `config.featureBoard` is true in the fixture, so the tab reaches this.
+  getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
   // Unreachable for the same reason: no Feature in the demo carries an order, so
   // there is no proposal to answer. Present so the two API shapes stay
   // interchangeable, and it refuses rather than pretending — a demo that answered
