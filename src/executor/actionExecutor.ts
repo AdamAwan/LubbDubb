@@ -43,6 +43,10 @@ import { featureRecords, featureReach, renderFeatureDossier } from '../summaries
 import { sequenceBriefing } from '../sequence/dossier.js';
 import { featureSequenceSubmitOrigin } from '../sequence/sequence.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
+import { deliveredWorkBriefing } from '../briefing/delivered.js';
+import { assessIssueNumber } from '../delivery/assessment.js';
+import { issueForPr } from '../prIssue.js';
+import { liveParts } from '../plans/parts.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
 import { dispatchFactScopes } from '../knowledge/block.js';
@@ -57,6 +61,7 @@ import type {
   PlanAmendment,
   Proposal,
   ProposalKind,
+  PullRequest,
   Task,
   WorldEvent,
 } from '../types.js';
@@ -1223,6 +1228,12 @@ export class ActionExecutor {
     // never both render it: `outstandingForOrigin` owns an agent's `more_work`
     // declaration on an exact origin match.
     const prior = priorWorkFor(action.originRef, store, outstanding !== null);
+    // Where this goal's pull requests are in the checkout, for the one agent that
+    // has to find them. Appended for the reason every note above it is, and scoped
+    // to the exact assess origin rather than the goal: it is an index into a run the
+    // harness believes is over, and in front of an agent still building that run it
+    // would be a stale reading of work in flight.
+    const delivered = deliveredWorkFor(action.originRef, store);
     // A retrospective agent has no worktree and no world of its own, so what it can
     // say is entirely what it is handed: the pad the working agents left, and the
     // record only the harness kept. Appended for the same reason as the two notes
@@ -1288,6 +1299,7 @@ export class ActionExecutor {
       guidance,
       outstanding,
       prior,
+      delivered,
       briefing,
       feature,
       sequence,
@@ -1540,6 +1552,53 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
     forPart: /^issue:\d+:part:/.test(ref),
   });
   return briefing || null;
+}
+
+/**
+ * The rows behind {@link deliveredWorkBriefing}, gathered for the goal an assessor
+ * has been dispatched on — or null for every other dispatch.
+ *
+ * **Keyed on the exact assess origin**, `retroBriefing`'s scoping and for its
+ * reason: this is an index into a run the harness believes is over, and in front of
+ * a part agent still writing that run's code it is a stale reading of work in
+ * flight — the widening `outstandingForOrigin` names. `assessIssueNumber` owns the
+ * ref shape, so nothing here re-spells it.
+ *
+ * **The archive is written first and the world's window second**, so the fresher of
+ * two readings of the same pull request wins. The two overlap by construction: a
+ * pull request that closed within `closedPrWindowMs` is in both, and everything the
+ * archive adds beyond the window is older than it and stale by construction, which
+ * is the whole of what the archive claims to be
+ * ([14](docs/spec/14-persistence.md)). Open pull requests are deliberately not
+ * unioned in: the rule fires only when the goal has none, and one appearing between
+ * the decision and this read is work in flight rather than something that landed.
+ *
+ * **Which pull requests are the goal's is `issueForPr`**, the harness's one answer
+ * to that question, plus the plan's own part rows. The part numbers are the arm
+ * `issueForPr` cannot supply — a part whose branch does not follow the convention,
+ * or whose pull request the provider never linked — and they are a stored field
+ * rather than a second reading of a branch name. The parts are read for their
+ * numbers and for nothing else: what each part was for is in the plan graph
+ * `world_read` already serves.
+ */
+function deliveredWorkFor(originRef: string | null | undefined, store: Store): string | null {
+  const issueNumber = assessIssueNumber(originRef ?? '');
+  if (issueNumber === null) return null;
+  const baseline = store.getWorldBaseline();
+  const plan = store.getPlanByOrigin(`issue:${issueNumber}`);
+  const partPrs = new Set(
+    (plan ? liveParts(store.listPlanParts(plan.id)) : []).flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
+  );
+  const byNumber = new Map<number, PullRequest>();
+  for (const pr of store.listArchivedPrs()) byNumber.set(pr.number, pr);
+  for (const pr of baseline?.closedPullRequests ?? []) byNumber.set(pr.number, pr);
+  const issues = baseline?.issues ?? [];
+  const prs = [...byNumber.values()]
+    .filter((pr) => partPrs.has(pr.number) || issueForPr(pr, issues)?.number === issueNumber)
+    // Newest close first, the archive's own order — restated because merging the two
+    // lists loses it, and an assessor reading a trimmed list wants the last merges.
+    .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '') || b.number - a.number);
+  return deliveredWorkBriefing(prs) || null;
 }
 
 /**

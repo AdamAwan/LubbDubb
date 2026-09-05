@@ -833,6 +833,13 @@ pickup with **no escalation**, because narrowing rule `issue-pickup` without tha
 permanently parked issue. A cooling assessor suppresses pickup for that cycle only and stays visible
 in the queue as `cooldown`.
 
+**It is told where the goal's merges are.** What was done is already `world_read`'s to serve — the
+plan graph and the work subtree, provenance and all. What that subtree cannot carry is the **merge
+commit**, which a squash leaves the branch no ancestry link to, and the **branch**; both are appended
+by `recordDispatchTask`, keyed on this exact origin, as an index into the checkout rather than a
+second account of the run.
+→ [09](09-execution.md#where-a-goals-merges-are-reaches-the-assessor)
+
 The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11-mcp-tools.md)):
 `delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule `issue-shortfall` routes. See
 [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends it.

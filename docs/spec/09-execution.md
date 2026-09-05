@@ -558,6 +558,54 @@ prompt.
   tighter still, because each of its lines carries a whole summary and is a pointer to work done
   somewhere else.
 
+## Where a goal's merges are reaches the assessor
+
+Rule `issue-assess` reads the story again against the code, from a read-only checkout of the default
+branch. **What was done for the goal it already has**: its template sends it to `world_read`, whose
+issue read carries the plan graph and the whole work subtree — every delivering pull request as a node
+with its title, its status and its `observed` / `inferred` provenance
+([11](11-mcp-tools.md#world_read)). Restating that in the prompt would be the second account of
+something the harness already says that the prior-work briefing refuses, and the staler one besides.
+
+Two fields are not in that subtree, and they are the two that turn a pull request number into
+something the agent can look at. `recordDispatchTask` appends them as
+`deliveredWorkBriefing(...)` (`src/briefing/delivered.ts`, pure): one line per pull request, the
+merge commit and the branch.
+
+- **The merge commit, because git cannot recover it.** A squash merge leaves the branch with no
+  ancestry link to its base ([24](24-environments.md#recording-a-landing)), so an assessor holding
+  `#40 (merged)` and standing on the default branch has no route from the number to the diff but to
+  search the log for it. The harness read the SHA once, when it saw the pull request close, and
+  `pr_archive` ([14](14-persistence.md)) keeps it.
+- **The branch**, as the fallback where no merge commit was reported and the only route for a pull
+  request that was abandoned.
+- **It is an index, not an account.** Every line is a stored field quoted back — a number, a commit, a
+  branch. No summary, no ranking, no titles: what each pull request was _for_ is the work graph's to
+  serve, and a block with an opinion about whether the story was met would answer the question the
+  assessor was sent to ask.
+- **The archive is read first and the world's window second**, so the fresher of two readings of one
+  pull request wins — the cockpit's ordering in `closedPrs`, for its reason. Open pull requests are
+  not unioned in: the rule fires only for a goal that has none, and one appearing between the decision
+  and the read is work in flight rather than something that landed.
+- **Which pull requests are the goal's is `issueForPr`** (`src/prIssue.ts`), the harness's one answer
+  to that question, plus the plan's part rows — the arm `issueForPr` cannot supply, for a part whose
+  branch follows no convention or whose pull request the provider never linked. The parts are read for
+  their numbers and nothing else.
+- **The outcome is three-valued**, `GitObserver.contains`' rule
+  ([24](24-environments.md#the-three-verdicts)): merged, closed without merging, and _the harness never
+  recorded how it ended_ for a row whose last reading was open. Folding the third into the second tells
+  an assessor that work which in fact shipped was abandoned, and it writes that up as a shortfall
+  against a delivered goal.
+- **Keyed on the exact assess origin**, `retroBriefing`'s scoping and for its reason: this is an index
+  into a run the harness believes is over, and in front of a part agent still writing that run's code
+  it is a stale reading of work in flight. `assessIssueNumber` (`src/delivery/assessment.ts`) owns the
+  ref shape, beside the `assessOrigin` that builds it.
+- **Appended, not filled in**, for the rejection note's reason, and **bounded**: over 25 pull requests
+  the oldest go and the count that went is stated, with `world_read` named as the whole subtree, or an
+  assessor concludes from the absence of a pull request that was merely trimmed. A goal the harness
+  recorded nothing for renders the empty string, so its prompt is byte-identical to one composed
+  before this existed.
+
 ## The operator's own instructions reach the agent
 
 The cockpit's **More work** control writes what the operator wants done on a goal, in their words —
