@@ -24,6 +24,21 @@ export function assessOrigin(issueNumber: number): string {
 }
 
 /**
+ * The issue an assess origin names, or null for every other ref.
+ *
+ * The reverse of {@link assessOrigin}, and here beside it because this module owns
+ * the assessor's ref vocabulary: a second regex elsewhere would be free to disagree
+ * about which refs are assessments, and the reader that got it wrong would hand an
+ * assessor's briefing to an agent working something else — a widening the briefing
+ * blocks in `recordDispatchTask` exist to refuse. Exact, never a prefix, for the
+ * same reason: `issue:12:assess` is one dispatch and nothing hangs beneath it.
+ */
+export function assessIssueNumber(ref: string): number | null {
+  const m = /^issue:(\d+):assess$/.exec(ref);
+  return m === null ? null : Number(m[1]);
+}
+
+/**
  * The branch an assessing agent works on, in a namespace of its own for the
  * reason `planBranch` has one: git stores refs as files, so `refs/heads/issue/12`
  * and `refs/heads/issue/12/assess` cannot coexist, and `issue/<n>` is exactly what
