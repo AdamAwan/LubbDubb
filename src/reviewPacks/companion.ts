@@ -172,7 +172,7 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
     (raised.length > 0
       ? `<div class="rp-raised">${raised.map((c) => claimLine(c, findingIndex(wrong, idea, c))).join('')}</div>`
       : '') +
-    `<ol class="rp-walk">${idea.anchors.map((a, i) => step(a, i + 1)).join('')}</ol>` +
+    `<ol class="rp-walk">${idea.anchors.map((a, i) => step(a, i + 1, number)).join('')}</ol>` +
     (idea.anchors.length === 0 ? `<p class="rp-gap">This idea has no walk — the author gave it no anchors.</p>` : '') +
     coveredBy(idea.coverage ?? []) +
     `<p class="rp-claims-head">What the author claims · checked by a second agent</p>` +
@@ -209,7 +209,7 @@ function attentionChip(attention: ReviewAttention | null): string {
     : `<span class="rp-att rp-att-${attention}">${ATTENTION_LABEL[attention]}</span>`;
 }
 
-function step(anchor: ReviewAnchor, index: number): string {
+function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
   const region = anchor.kind === 'region';
   const counts = diffCounts(anchor.code);
   const tag = region
@@ -226,7 +226,7 @@ function step(anchor: ReviewAnchor, index: number): string {
   const note = anchor.note;
   return (
     `<li class="rp-step${region ? ' rp-dashed' : ''}${anchor.mark !== null ? ` rp-mark-${anchor.mark}` : ''}">` +
-    `<div class="rp-step-head"><span class="rp-step-n">${index}</span>` +
+    `<div class="rp-step-head"><span class="rp-step-n">${pad(ideaNumber)}.${index}</span>` +
     `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}</div>` +
     `<p class="rp-gist">${esc(anchor.gist)}</p>` +
     codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
@@ -279,25 +279,41 @@ function codeBlock(
     split.map((l) => l.text),
     codeLanguage(path),
   );
-  const lines = split
-    .map(({ marker, text }, i) => {
-      const cls = !gutter ? '' : marker === '+' ? ' rp-add' : marker === '-' ? ' rp-del' : '';
-      const mark = gutter ? `<span class="rp-m" aria-hidden="true">${esc(marker ?? ' ')}</span>` : '';
-      const body = coloured[i] ?? [{ kind: 'plain' as const, text }];
-      const runs = body
-        .map((run) =>
-          run.kind === 'plain' ? esc(run.text) : `<span class="rp-hl-${run.kind}">${esc(run.text)}</span>`,
-        )
-        .join('');
-      return `<span class="rp-l${cls}">${mark}<span class="rp-t">${runs}</span>\n</span>`;
-    })
-    .join('');
+  const rendered = split.map(({ marker, text }, i) => {
+    const cls = !gutter ? '' : marker === '+' ? ' rp-add' : marker === '-' ? ' rp-del' : '';
+    const mark = gutter ? `<span class="rp-m" aria-hidden="true">${esc(marker ?? ' ')}</span>` : '';
+    const body = coloured[i] ?? [{ kind: 'plain' as const, text }];
+    const runs = body
+      .map((run) => (run.kind === 'plain' ? esc(run.text) : `<span class="rp-hl-${run.kind}">${esc(run.text)}</span>`))
+      .join('');
+    return `<span class="rp-l${cls}">${mark}<span class="rp-t">${runs}</span>\n</span>`;
+  });
+  // A block longer than this is scrolled past rather than read, and on this page
+  // one of them buries the two ideas under it. The tail is folded rather than
+  // dropped: everything the document carries is still in the file, still copyable,
+  // and the fold is a `<details>` because the companion runs no script.
+  const clip = rendered.length > HEAD_LINES + TAIL_MARGIN ? HEAD_LINES : rendered.length;
+  const head = rendered.slice(0, clip).join('');
+  const rest = rendered.slice(clip);
   return (
     `<div class="rp-code${dashed ? ' rp-dashed' : ''}${gutter ? ' rp-gutter' : ''}">` +
-    (caption !== null ? `<div class="rp-code-cap">${esc(caption)}</div>` : '') +
-    `<pre>${lines || `<span class="rp-l rp-gap">(no lines)</span>`}</pre></div>`
+    (caption !== null || rest.length > 0
+      ? `<div class="rp-code-cap">${esc(caption ?? '')}` +
+        (rest.length > 0 ? `<span class="rp-code-len">${rendered.length} lines</span>` : '') +
+        `</div>`
+      : '') +
+    `<pre>${head || `<span class="rp-l rp-gap">(no lines)</span>`}</pre>` +
+    (rest.length > 0
+      ? `<details class="rp-rest"><summary>${rest.length} more ${rest.length === 1 ? 'line' : 'lines'}</summary>` +
+        `<pre>${rest.join('')}</pre></details>`
+      : '') +
+    `</div>`
   );
 }
+
+/** How much of a code block is shown before the rest is folded, and the slack that stops a fold saving nothing. */
+const HEAD_LINES = 20;
+const TAIL_MARGIN = 6;
 
 /**
  * One claim, with its verdict, its evidence and where it came from. A `witnessed`
@@ -469,7 +485,8 @@ a { color: var(--rp-accent); }
 .rp-rule i { font-weight: 400; color: var(--rp-dim); font-size: .8rem; }
 .rp-idea { background: var(--rp-panel); border: 1px solid var(--rp-line); border-radius: 6px;
   margin-bottom: .6rem; padding: .6rem .85rem; }
-.rp-idea summary { cursor: pointer; list-style: none; }
+.rp-idea summary { cursor: pointer; list-style: none; position: sticky; top: 0; z-index: 2;
+  background: var(--rp-panel); padding: .5rem 0; margin: -.5rem 0 0; border-bottom: 1px solid var(--rp-line); }
 .rp-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: baseline; }
 .rp-n { color: var(--rp-dim); font-variant-numeric: tabular-nums; }
 .rp-meta, .rp-cue { color: var(--rp-dim); font-size: .82rem; }
@@ -496,7 +513,12 @@ a { color: var(--rp-accent); }
 .rp-gist { margin: .35rem 0; }
 .rp-code { border: 1px solid var(--rp-line); border-radius: 4px; background: var(--rp-code-bg); overflow: hidden; }
 .rp-code.rp-dashed { border-style: dashed; }
-.rp-code-cap { padding: .25rem .5rem; border-bottom: 1px solid var(--rp-line); color: var(--rp-dim); font-size: .78rem; }
+.rp-code-cap { display: flex; justify-content: space-between; gap: 1rem; padding: .25rem .5rem;
+  border-bottom: 1px solid var(--rp-line); color: var(--rp-dim); font-size: .78rem; }
+.rp-code-len { font-variant-numeric: tabular-nums; }
+.rp-rest > summary { cursor: pointer; padding: .25rem .5rem; border-top: 1px solid var(--rp-line);
+  color: var(--rp-dim); font-size: .78rem; }
+.rp-rest > pre { border-top: 1px solid var(--rp-line); }
 .rp-code pre { margin: 0; padding: .5rem; overflow-x: auto; }
 .rp-l { display: block; white-space: pre; }
 .rp-m { display: inline-block; width: 1ch; margin-right: .75ch; color: var(--rp-dim); user-select: none; }
