@@ -8,7 +8,17 @@ import type {
   ReviewRange,
   ReviewVerdict,
 } from '../types.js';
-import { falseClaims, ideaFlags, numberIdeas, packFacts, shortSha, type FalseClaim } from './derive.js';
+import {
+  codeBlockLines,
+  codeLanguage,
+  falseClaims,
+  highlightCode,
+  ideaFlags,
+  numberIdeas,
+  packFacts,
+  shortSha,
+  type FalseClaim,
+} from './derive.js';
 
 /**
  * The HTML companion: one self-contained file that draws the same page the
@@ -164,10 +174,27 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
       : '') +
     `<ol class="rp-walk">${idea.anchors.map((a, i) => step(a, i + 1)).join('')}</ol>` +
     (idea.anchors.length === 0 ? `<p class="rp-gap">This idea has no walk — the author gave it no anchors.</p>` : '') +
+    coveredBy(idea.coverage ?? []) +
     `<p class="rp-claims-head">What the author claims · checked by a second agent</p>` +
     `<ul class="rp-claims">${idea.claims.map((c) => `<li>${claimLine(c, findingIndex(wrong, idea, c))}</li>`).join('')}</ul>` +
     (idea.claims.length === 0 ? `<p class="rp-gap">The author made no claims for this idea.</p>` : '') +
     `</div></details>`
+  );
+}
+
+/**
+ * The scenarios the idea's tests cover, listed and never explained.
+ *
+ * Sits under the walk and above the claims because it answers the question the
+ * walk raises — is this exercised? — for the reader who has just read the code,
+ * rather than sending them to a tests section at the far end of the page.
+ * → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
+ */
+function coveredBy(coverage: readonly string[]): string {
+  if (coverage.length === 0) return '';
+  return (
+    `<p class="rp-covered-head">Covered by</p>` +
+    `<ul class="rp-covered">${coverage.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
   );
 }
 
@@ -202,7 +229,7 @@ function step(anchor: ReviewAnchor, index: number): string {
     `<div class="rp-step-head"><span class="rp-step-n">${index}</span>` +
     `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}</div>` +
     `<p class="rp-gist">${esc(anchor.gist)}</p>` +
-    codeBlock(anchor.code, anchor.caption, region, !region) +
+    codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
     (note === null
       ? ''
       : `<details class="rp-why"${anchor.mark === 'false' || anchor.mark === 'disputed' ? ' open' : ''}>` +
@@ -229,15 +256,44 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
-function codeBlock(code: readonly string[], caption: string | null, dashed: boolean, diff: boolean): string {
-  const lines = code
-    .map((line) => {
-      const cls = diff && line.startsWith('+') ? ' rp-add' : diff && line.startsWith('-') ? ' rp-del' : '';
-      return `<span class="rp-l${cls}">${esc(line)}\n</span>`;
+/**
+ * A code block: the caption, then the lines with their diff marker in a column of
+ * its own rather than as the first character of the code.
+ * → `docs/spec/31-review-packs.md#the-code-block`
+ *
+ * The marker span is `aria-hidden` and unselectable, so a reader who copies the
+ * block gets the code and not a diff — the tint and the gutter say which lines
+ * moved, and neither is part of the text. Where there is no gutter there is no
+ * tint either: every line is the same kind, the step's tag has already said which,
+ * and a screen of solid green reads worse than the code does.
+ */
+function codeBlock(
+  code: readonly string[],
+  caption: string | null,
+  dashed: boolean,
+  diff: boolean,
+  path: string,
+): string {
+  const { gutter, lines: split } = codeBlockLines(code, diff);
+  const coloured = highlightCode(
+    split.map((l) => l.text),
+    codeLanguage(path),
+  );
+  const lines = split
+    .map(({ marker, text }, i) => {
+      const cls = !gutter ? '' : marker === '+' ? ' rp-add' : marker === '-' ? ' rp-del' : '';
+      const mark = gutter ? `<span class="rp-m" aria-hidden="true">${esc(marker ?? ' ')}</span>` : '';
+      const body = coloured[i] ?? [{ kind: 'plain' as const, text }];
+      const runs = body
+        .map((run) =>
+          run.kind === 'plain' ? esc(run.text) : `<span class="rp-hl-${run.kind}">${esc(run.text)}</span>`,
+        )
+        .join('');
+      return `<span class="rp-l${cls}">${mark}<span class="rp-t">${runs}</span>\n</span>`;
     })
     .join('');
   return (
-    `<div class="rp-code${dashed ? ' rp-dashed' : ''}">` +
+    `<div class="rp-code${dashed ? ' rp-dashed' : ''}${gutter ? ' rp-gutter' : ''}">` +
     (caption !== null ? `<div class="rp-code-cap">${esc(caption)}</div>` : '') +
     `<pre>${lines || `<span class="rp-l rp-gap">(no lines)</span>`}</pre></div>`
   );
@@ -282,6 +338,7 @@ function finding(item: FalseClaim, index: number): string {
           `step ${stepNumber} — ${marked.range.path}:${marked.range.start}${marked.caption !== null ? ` — ${marked.caption}` : ''}`,
           marked.kind === 'region',
           marked.kind === 'hunk',
+          marked.range.path,
         )
       : `<p class="rp-gap">No step of the walk fits this claim; the code below is where the tree disagrees.</p>`) +
     (found?.counter != null
@@ -290,6 +347,7 @@ function finding(item: FalseClaim, index: number): string {
           `${found.counter.range.path}:${found.counter.range.start} — ${found.counter.caption}`,
           false,
           false,
+          found.counter.range.path,
         )
       : '');
   return (
@@ -376,6 +434,9 @@ const STYLE = `:root {
   --rp-panel: #ffffff; --rp-code-bg: #f5f3ef; --rp-accent: #3c5a8a;
   --rp-bad: #a33b34; --rp-bad-bg: #fdeceb; --rp-warn: #8a6a1f; --rp-ok: #3d6b46;
   --rp-add: #2f6b3d; --rp-del: #a33b34;
+  /* Syntax. Four kinds and no more: the parts a scanner without a parser can name
+     without ever being confidently wrong. */
+  --rp-hl-comment: #7a8a6f; --rp-hl-string: #7a5a2a; --rp-hl-number: #7a5a2a; --rp-hl-keyword: #6a4d8a;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -383,6 +444,7 @@ const STYLE = `:root {
     --rp-panel: #1e1e22; --rp-code-bg: #131316; --rp-accent: #8fb0e0;
     --rp-bad: #e8867d; --rp-bad-bg: #3a1f1e; --rp-warn: #d8b35e; --rp-ok: #86c294;
     --rp-add: #86c294; --rp-del: #e8867d;
+    --rp-hl-comment: #7f8f78; --rp-hl-string: #d3a76a; --rp-hl-number: #d3a76a; --rp-hl-keyword: #b79bd8;
   }
 }
 * { box-sizing: border-box; }
@@ -437,12 +499,21 @@ a { color: var(--rp-accent); }
 .rp-code-cap { padding: .25rem .5rem; border-bottom: 1px solid var(--rp-line); color: var(--rp-dim); font-size: .78rem; }
 .rp-code pre { margin: 0; padding: .5rem; overflow-x: auto; }
 .rp-l { display: block; white-space: pre; }
-.rp-add { color: var(--rp-add); }
-.rp-del { color: var(--rp-del); }
+.rp-m { display: inline-block; width: 1ch; margin-right: .75ch; color: var(--rp-dim); user-select: none; }
+.rp-t { white-space: pre; }
+.rp-hl-comment { color: var(--rp-hl-comment); font-style: italic; }
+.rp-hl-string { color: var(--rp-hl-string); }
+.rp-hl-number { color: var(--rp-hl-number); }
+.rp-hl-keyword { color: var(--rp-hl-keyword); }
+.rp-add { color: var(--rp-add); background: color-mix(in srgb, var(--rp-add) 12%, transparent); }
+.rp-del { color: var(--rp-del); background: color-mix(in srgb, var(--rp-del) 12%, transparent); }
 .rp-why { margin-top: .4rem; }
 .rp-why summary { cursor: pointer; color: var(--rp-dim); font-size: .8rem; }
 .rp-stamp { color: var(--rp-dim); }
 .rp-why-body { white-space: pre-wrap; color: var(--rp-dim); padding: .35rem 0 0 .75rem; }
+.rp-covered-head { font-weight: 600; margin: 1rem 0 .35rem; }
+.rp-covered { margin: 0; padding-left: 1.1rem; color: var(--rp-dim); }
+.rp-covered li { margin-bottom: .2rem; }
 .rp-claims-head { font-weight: 600; margin: 1rem 0 .35rem; }
 .rp-claims { list-style: none; margin: 0; padding: 0; }
 .rp-claims li { margin-bottom: .4rem; }

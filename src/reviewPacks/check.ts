@@ -12,6 +12,9 @@ interface CheckCommission {
   readRegion(range: ReviewRange): string[] | null;
 }
 
+/** How long a cue may be, the author's `gist` cap for the same reason it has one. */
+const CUE_LIMIT = 70;
+
 const ATTENTIONS: readonly ReviewAttention[] = ['read', 'decide', 'skim', 'split'];
 const VERDICTS: readonly ReviewVerdict[] = ['true', 'false', 'cant_tell'];
 
@@ -55,6 +58,14 @@ export function applyCheck(
     if (attention === undefined) return refuse(`${at}.attention must be one of read, decide, skim, split.`);
     const cue = line(raw.cue);
     if (cue === null) return refuse(`${at}.cue is required — one short line saying why the label is what it is.`);
+    // The author's caps, applied to the one field the checker writes for the
+    // person. → `docs/spec/31-review-packs.md#say-it-in-fewer-words`
+    if (cue.length > CUE_LIMIT) {
+      return refuse(
+        `${at}.cue is ${cue.length} characters and the limit is ${CUE_LIMIT}. Say it in fewer words: the ` +
+          `shortest plain wording, one idea, no clauses hung off dashes. Was: "${cue}"`,
+      );
+    }
     if (!Array.isArray(raw.claims)) return refuse(`${at}.claims must be a list — one entry per claim, by number.`);
     const answered = new Set<number>();
     for (const [j, rawClaim] of (raw.claims as unknown[]).entries()) {

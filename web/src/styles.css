@@ -68,6 +68,13 @@
   --diff-add-ink: color-mix(in srgb, var(--green) 72%, var(--text));
   --diff-del-fill: color-mix(in srgb, var(--red) 14%, var(--well));
   --diff-del-ink: color-mix(in srgb, var(--red) 68%, var(--text));
+  /* Syntax in a review pack's code. Four kinds and no more — the parts a scanner
+     without a parser can name without ever being confidently wrong — and each a
+     mix over the well, so a theme that moves its hues moves the code with them. */
+  --code-comment: color-mix(in srgb, var(--green) 34%, var(--muted));
+  --code-string: color-mix(in srgb, var(--amber) 62%, var(--text));
+  --code-number: color-mix(in srgb, var(--amber) 62%, var(--text));
+  --code-keyword: color-mix(in srgb, var(--blue) 62%, var(--text));
   /* The three values a reference is drawn from: the edge of its box, the fill of
      the one that stays in the cockpit, and its lettering. Their own tokens rather
      than reuses of `--blue-line-2` / `--blue-fill` — those mean "tinted border and
@@ -321,6 +328,7 @@ body {
 .rp-kicker,
 .rp-rule,
 .rp-claims-head,
+.rp-covered-head,
 .rp-code-cap,
 .rv-detail dt,
 .species-odd dt,
@@ -9322,6 +9330,37 @@ select:disabled {
   padding: 0 10px;
   white-space: pre;
 }
+/* The diff marker: a column of its own, never the first character of the code.
+   Unselectable, so copying the block gives code and not a diff. */
+.rp-m {
+  display: inline-block;
+  width: 1ch;
+  margin-right: 0.75ch;
+  color: var(--muted);
+  user-select: none;
+}
+
+.rp-t {
+  white-space: pre;
+}
+
+.rp-hl-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.rp-hl-string {
+  color: var(--code-string);
+}
+
+.rp-hl-number {
+  color: var(--code-number);
+}
+
+.rp-hl-keyword {
+  color: var(--code-keyword);
+}
+
 .rp-add {
   background: var(--diff-add-fill);
   color: var(--diff-add-ink);
@@ -9349,6 +9388,23 @@ select:disabled {
   font-size: 10.5px;
   color: var(--blue);
   letter-spacing: 0.04em;
+}
+
+/* The test scenarios an idea's tests cover — listed, never explained. */
+.rp-covered-head {
+  margin: 12px 0 6px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.rp-covered {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.rp-covered li {
+  margin-bottom: 2px;
 }
 
 /* The claims. */

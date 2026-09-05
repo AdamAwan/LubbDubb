@@ -42,7 +42,12 @@ export const reviewPackCheck: ToolFactory = ({ deps, agent, task, ok }) => ({
                 'How hard to look. read: needs reading. decide: a judgement call for the reviewer. skim: safe to ' +
                 'pass over. split: unrelated to the rest of the pull request and could be its own.',
             },
-            cue: { type: 'string', description: 'One short line: why this label, and where the risk is.' },
+            cue: {
+              type: 'string',
+              description:
+                'One short line: why this label, and where the risk is. At most 70 characters — plainest words, ' +
+                'one idea, no clauses hung off dashes.',
+            },
             claims: {
               type: 'array',
               description: 'One entry per claim under this idea, by number. Every claim must be answered.',

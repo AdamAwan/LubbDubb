@@ -21,6 +21,9 @@ import {
   ALL_IDEAS,
   falseClaims,
   ideaFlags,
+  codeBlockLines,
+  codeLanguage,
+  highlightCode,
   ideaOpen,
   KNOWN_REVIEW_PACK_SCHEMA,
   layMarks,
@@ -606,6 +609,7 @@ function IdeaRow({
           {idea.anchors.length === 0 && (
             <p className="rp-gap">This idea has no walk — the author gave it no anchors.</p>
           )}
+          <CoveredBy coverage={idea.coverage ?? []} />
           <p className="rp-claims-head">What the author claims · checked by a second agent</p>
           <ul className="rp-claims">
             {idea.claims.map((claim, i) => (
@@ -618,6 +622,29 @@ function IdeaRow({
         </div>
       )}
     </details>
+  );
+}
+
+/**
+ * The scenarios the idea's tests cover, listed and never explained.
+ *
+ * Under the walk and above the claims, so the reader who has just read the code
+ * learns whether it is exercised there rather than in a tests section at the far
+ * end of the page. Drawn nowhere when there is nothing to draw: a "Covered by"
+ * heading over an empty list reads as tests that were looked for and not found.
+ * → docs/spec/31-review-packs.md#tests-are-never-an-idea
+ */
+function CoveredBy({ coverage }: { coverage: readonly string[] }): JSX.Element | null {
+  if (coverage.length === 0) return null;
+  return (
+    <>
+      <p className="rp-covered-head">Covered by</p>
+      <ul className="rp-covered">
+        {coverage.map((scenario, i) => (
+          <li key={i}>{scenario}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -727,7 +754,7 @@ function Step({ anchor, index }: { anchor: ReviewAnchor; index: number }): JSX.E
         )}
       </div>
       <p className="rp-gist">{anchor.gist}</p>
-      <CodeBlock code={anchor.code} caption={anchor.caption} dashed={region} diff={!region} />
+      <CodeBlock code={anchor.code} caption={anchor.caption} dashed={region} diff={!region} path={anchor.range.path} />
       {anchor.note !== null && (
         <details className="rp-why" open={disputedOrFalse}>
           <summary>
@@ -760,26 +787,52 @@ function CodeBlock({
   caption,
   dashed,
   diff,
+  path,
 }: {
   code: readonly string[];
   caption: string | null;
   dashed: boolean;
   diff: boolean;
+  /** The file the lines came from — the only thing the highlighter reads. */
+  path: string;
 }): JSX.Element {
+  // The diff marker is a column of its own, never the first character of the
+  // code: inline it shifts the indentation, lands in anything the reader copies,
+  // and on a new file fills the screen with one character the step's tag already
+  // said. → docs/spec/31-review-packs.md#the-code-block
+  const { gutter, lines } = codeBlockLines(code, diff);
+  // Coloured here rather than in the browser, so this page and the HTML companion
+  // cannot disagree about what the code says.
+  const coloured = highlightCode(
+    lines.map((l) => l.text),
+    codeLanguage(path),
+  );
   return (
-    <div className={`rp-code ${dashed ? 'rp-dashed' : ''}`}>
+    <div className={`rp-code ${dashed ? 'rp-dashed' : ''} ${gutter ? 'rp-gutter' : ''}`}>
       {caption !== null && <div className="rp-code-cap">{caption}</div>}
       <pre>
-        {code.map((line, i) => (
-          <span
-            key={i}
-            className={`rp-l ${diff && line.startsWith('+') ? 'rp-add' : diff && line.startsWith('-') ? 'rp-del' : ''}`}
-          >
-            {line}
+        {lines.map(({ marker, text }, i) => (
+          <span key={i} className={`rp-l ${!gutter ? '' : marker === '+' ? 'rp-add' : marker === '-' ? 'rp-del' : ''}`}>
+            {gutter && (
+              <span className="rp-m" aria-hidden="true">
+                {marker ?? ' '}
+              </span>
+            )}
+            <span className="rp-t">
+              {(coloured[i] ?? [{ kind: 'plain' as const, text }]).map((run, k) =>
+                run.kind === 'plain' ? (
+                  run.text
+                ) : (
+                  <span key={k} className={`rp-hl-${run.kind}`}>
+                    {run.text}
+                  </span>
+                ),
+              )}
+            </span>
             {'\n'}
           </span>
         ))}
-        {code.length === 0 && <span className="rp-l rp-gap">(no lines)</span>}
+        {lines.length === 0 && <span className="rp-l rp-gap">(no lines)</span>}
       </pre>
     </div>
   );
@@ -901,6 +954,7 @@ function Finding({
                 caption={`step ${step} — ${marked.range.path}:${marked.range.start}${marked.caption !== null ? ` — ${marked.caption}` : ''}`}
                 dashed={marked.kind === 'region'}
                 diff={marked.kind === 'hunk'}
+                path={marked.range.path}
               />
             ) : (
               <p className="rp-gap">No step of the walk fits this claim; the code below is where the tree disagrees.</p>
@@ -911,6 +965,7 @@ function Finding({
                 caption={`${finding.counter.range.path}:${finding.counter.range.start} — ${finding.counter.caption}`}
                 dashed={false}
                 diff={false}
+                path={finding.counter.range.path}
               />
             )}
           </div>

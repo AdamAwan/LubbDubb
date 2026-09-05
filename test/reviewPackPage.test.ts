@@ -332,7 +332,7 @@ test('no gate when nothing is false, and the collapsed row still carries the fla
   assert.ok(finding > ideas, 'the finding box comes after the ideas');
   assert.match(html, /The deleted constant is still read\./);
   assert.match(html, /the surviving reader/);
-  assert.match(html, /const two = old;/);
+  assert.match(html, /class="rp-hl-keyword">const<\/span> two = old;/);
   assert.match(html, /step 1 — src\/b\.ts:9/);
   assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/);
 });
@@ -345,14 +345,22 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(html, /claim is false/);
   assert.match(html, /class="tag t-red tag-fill">False</);
   assert.match(html, /src\/unchanged\.ts:2 still reads old\./);
-  assert.match(html, /class="rp-l rp-del">-const old = 2;/);
+  assert.match(
+    html,
+    /<span class="rp-t"><span class="rp-hl-keyword">const<\/span> old = <span class="rp-hl-number">2<\/span>;<\/span>/,
+  );
+  assert.doesNotMatch(html, /<span class="rp-t">-const old = 2;<\/span>/, 'the marker is never part of the code');
+  assert.doesNotMatch(html, /rp-del/, 'a block of one kind is not tinted — the step’s tag already says which');
   assert.match(html, /Mark read/);
 
   const other = render(payload(), 'idea_a');
   assert.match(other, /rp-step rp-dashed/, 'a region is drawn dashed');
   assert.match(other, /not in this PR/);
   assert.match(other, /the important bit/);
-  assert.match(other, /class="rp-l rp-add">\+import y from &quot;y&quot;;/);
+  // Mixed markers, so the column is drawn — beside the code, never in front of it.
+  assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
+  assert.match(other, /class="rp-hl-keyword">import<\/span> y <span class="rp-hl-keyword">from<\/span>/);
+  assert.match(other, /class="rp-l rp-add"/);
   assert.match(other, /new import/);
   assert.match(other, /witness · /);
   assert.match(other, /added afterwards/);
@@ -360,6 +368,22 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /<strong> You decide\.<\/strong>/);
   assert.match(other, /cites pad entry <code>scr_1<\/code> — the pads have not loaded/);
   assert.match(other, /class="tag t-red tag-fill" title="the checker&#x27;s label">Read</);
+});
+
+test('an idea lists the scenarios its tests cover, between the walk and the claims', () => {
+  const pack = checkedPack();
+  pack.ideas[0]!.coverage = ['b is exported', 'a is left alone'];
+  const html = render(payload({ pack }), 'idea_a');
+  assert.match(html, /Covered by/);
+  assert.match(html, /<li>b is exported<\/li>/);
+  const walk = html.indexOf('class="rp-walk"');
+  const covered = html.indexOf('Covered by');
+  const claims = html.indexOf('What the author claims');
+  assert.ok(walk < covered && covered < claims, 'the scenarios sit under the code and above the claims');
+
+  // A pack written before the field existed reads it back undefined, and draws
+  // no heading: one over an empty list reads as tests looked for and not found.
+  assert.doesNotMatch(render(payload(), 'idea_a'), /Covered by/);
 });
 
 test('an unchecked pack says so and offers the ask; a pack being checked says that instead', () => {

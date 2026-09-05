@@ -687,11 +687,28 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Write for the person: the `title` of an idea and the `gist` of an anchor say what changed and why it ' +
       'matters the way a colleague would across a desk, with the identifiers in the code and not the prose; ' +
       'the `claim` is for the checker and is one sentence that can be shown false. "This is cleaner" is not a ' +
-      'claim; "these are the only two callers" is.\n\n' +
+      'claim; "these are the only two callers" is. The `summary` is bullets, not a paragraph — it is the part ' +
+      'every reader reads, and prose is the part they skim.\n\n' +
+      '**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ' +
+      'ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so ' +
+      'write short first rather than trimming afterwards. Shortest word that is still accurate; one idea per ' +
+      'sentence; no clauses hung off dashes; no word a reader would have to look up. Before and after:\n\n' +
+      "- *No:* \"Which pull requests are the goal's, and in what order. Archive first, the world's closed " +
+      'window second, so the fresher reading of the same PR wins."\n' +
+      '- *Yes:* "Get the relevant pull requests in the right order, use the latest."\n\n' +
+      'And a warning about the tree you are standing in: **this codebase is written in a dense house style**, ' +
+      'long sentences and dashes and all. Do not copy it. You will have just read a great deal of it, which is ' +
+      'exactly when it starts coming out in your own writing.\n\n' +
+      '**Tests are never an idea of their own.** A "Tests" section separates a change from its evidence, so the ' +
+      'reader who has just decided whether the code is right has to go elsewhere to learn whether it is ' +
+      "exercised. Give each test hunk to the idea it exercises, and list what it covers as that idea's " +
+      '`coverage`: one short line per scenario, named and not explained — "an unwitnessed pull request still ' +
+      'renders", never a paragraph about the test. The reader wants assurance the cases were thought of, and ' +
+      'nothing more. A pack whose idea owns test hunks and lists no scenarios is refused.\n\n' +
       'You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is ' +
       'read-only. Submit with `review_pack_submit` when you are done — that call is the pack, and a run that ' +
       'ends without it has written nothing.',
-    doc: 'Sent to a read-only agent when a reviewer asks for a review pack from a pull request’s row in the cockpit (31-review-packs). Outside the rule dispatcher: nothing dispatches this on its own. The diff’s hunks by id, both witness pads (the linked goal’s and the pull request’s own) and the note naming review_pack_submit are appended after this text rather than interpolated, so an override cannot silently drop any of them. Placeholders: {number} {title} {branch} {base} {headSha}.',
+    doc: 'Sent to a read-only agent when a reviewer asks for a review pack from a pull request’s row in the cockpit (31-review-packs). Outside the rule dispatcher: nothing dispatches this on its own. The diff’s hunks by id, both witness pads (the linked goal’s and the pull request’s own) and the note naming review_pack_submit are appended after this text rather than interpolated, so an override cannot silently drop any of them. Tests are never an idea of their own — a test hunk belongs to the idea it exercises, whose `coverage` lists the scenarios as bare lines — and `assemblePack` refuses a pack that breaks either half, so an override that drops this paragraph is caught rather than obeyed. Placeholders: {number} {title} {branch} {base} {headSha}.',
   },
   'review-pack-check': {
     placeholders: ['number', 'title', 'branch', 'base', 'headSha'],
@@ -719,8 +736,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'somewhere the walk never stopped, point at it by path and lines so the reader sees both halves.\n\n' +
       'Then, for each idea, say how hard to look: `read` — it needs reading; `decide` — it turns on a judgement ' +
       'only the reviewer can make; `skim` — safe to pass over; `split` — unrelated to the rest of the pull ' +
-      'request and could be its own. One line under it says why. Finish with the order to read the ideas in: ' +
-      'where the time should go first.\n\n' +
+      'request and could be its own. One line under it says why — the `cue`, capped at 70 characters, in the ' +
+      'plainest words you know: one idea, no clauses hung off dashes, nothing a reader would look up. Finish ' +
+      'with the order to read the ideas in: where the time should go first.\n\n' +
       'You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is ' +
       'read-only. Record everything with `review_pack_check` when you are done — that call is the check, and a ' +
       'run that ends without it has checked nothing.',

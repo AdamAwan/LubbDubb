@@ -191,6 +191,7 @@ sorting everything alphabetically by path.
 | `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is                                                                                            |
 | `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                                                                                                      |
 | `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                                                                                                          |
+| `coverage`  | the test scenarios this idea is covered by, one bare line each ([Tests are never an idea](#tests-are-never-an-idea))                                                                     |
 | `attention` | how much scrutiny it needs, set by the **checker** ([Attention](#attention))                                                                                                             |
 
 `claim` is for the checker; `title` and `cue` are for the person. The author writes the first two,
@@ -200,6 +201,39 @@ it is.
 An idea's walk crosses files freely and is expected to: a change in this repo is naturally vertical —
 domain type, wire type, store module, route, cockpit, spec, test — and reviewing those six files
 separately is how a whole class of the sharp edges gets missed.
+
+### Say it in fewer words
+
+_Built._ `LIMITS` in `src/reviewPacks/submission.ts`, and `CUE_LIMIT` in `src/reviewPacks/check.ts`.
+
+The reader is a developer with ten minutes and four other tabs open. Every prose field is therefore
+**capped in characters**, and the tool refuses one that runs over, naming the field, the limit and the
+count:
+
+| Field                    | Cap |
+| ------------------------ | --- |
+| `headline`               | 100 |
+| a `summary` bullet       | 100 |
+| an idea's `title`        | 60  |
+| an idea's `claim`        | 120 |
+| an anchor's `gist`       | 90  |
+| an anchor's `caption`    | 40  |
+| a `coverage` line        | 60  |
+| the checker's `cue`      | 70  |
+
+`claim` is the loosest because it is the checker's and has to stay falsifiable, which sometimes needs
+a clause the reader would not want.
+
+**The cap is what actually shortens the writing.** A prompt can ask for plain words and be obeyed for
+a paragraph; a number the author cannot argue with is what makes it choose. And the author has spent
+the whole run reading *this* repository, whose own prose runs long — which is exactly when that style
+starts coming out in its writing. So the prompt says, in as many words, not to copy it, and carries
+the one example that does more than any adjective:
+
+> _No:_ "Which pull requests are the goal's, and in what order. Archive first, the world's closed
+> window second, so the fresher reading of the same PR wins."
+>
+> _Yes:_ "Get the relevant pull requests in the right order, use the latest."
 
 ### An anchor
 
@@ -228,6 +262,24 @@ provenance the way a claim does: written by the witness at the time — `by: 'wi
 pad entry's id and stamped with its time — or added by the author afterwards, `by: 'author'`. The
 page shows which, because the reader weighs them differently.
 
+### The code block
+
+_Built._ `codeBlockLines` in `src/reviewPacks/derive.ts` and its cockpit twin decide it.
+
+A hunk's lines are embedded as git printed them, each carrying a leading `+`, `-` or space
+([The document carries its code](#the-document-carries-its-code)). Printed inline that marker **is
+the first character of the code**: it shifts every line one column out of true, it lands in anything
+the reader copies, and on a new file — where every line is an addition — it fills the screen with one
+character. So the marker is drawn in a column of its own, unselectable and `aria-hidden`, and the
+code beside it reads as code.
+
+**The column is dropped when every line carries the same marker** — a new file, a deleted one, a pure
+insertion. There is nothing to tell apart, the step's own tag has already said `changed +102`, and so
+has the caption. The tint goes with it: a screen of solid green reads worse than the code does. Both
+come back the moment a block mixes markers, which is when they carry something.
+
+A `region` anchor's lines are plain and never had a marker, so they are drawn plain.
+
 ### Coverage
 
 _Built_ — stage 3. `src/reviewPacks/hunks.ts` computes the hunks and decides coverage;
@@ -249,6 +301,31 @@ the line the deletion sits after — `d` is 0 and git's `c` names the line befor
 is `{c, c}`, clamped to line 1 for a deletion at the top of a file — and its code is the removed lines
 with their `-` prefixes; a deleted file keeps its old path, since the head has no new one. A binary
 file and a pure rename produce no hunk: there is nothing for an idea to own.
+
+### Tests are never an idea
+
+_Built._ `src/reviewPacks/hunks.ts` decides it; `test/reviewPackAuthor.test.ts` holds it.
+
+**A test hunk belongs to the idea it exercises, and the scenarios it covers are listed under that
+idea as `coverage`.** An idea whose whole subject is the tests is refused.
+
+A "Tests" section separates a change from its evidence. The reader has just worked through an
+idea's walk and decided whether the code is right; the very next question is whether it is
+exercised, and answering it at the far end of the page — after every other idea — means it is
+answered for nobody. Under the idea, it costs a glance.
+
+`coverage` is a list and never prose: one short line per scenario, named and not explained
+("a pull request nobody witnessed still renders", "over the cap the oldest go"). A reader wants
+assurance the cases were thought of, and a paragraph about a test is a paragraph they skip. Nothing
+is drawn where the list is empty — a heading over nothing reads as tests looked for and not found.
+
+Both halves are mechanical, because a rule that lives only in the author's prompt is one an
+operator override drops in silence ([05](05-dispatcher.md#prompt-templates)). `assemblePack`
+refuses an idea whose owned hunks are all test files, and refuses an idea that owns a test hunk and
+lists no scenario. Two exemptions, each because the rule is otherwise false: **a pull request that
+is only tests**, where there is no other idea for them to belong to, and **`plumbing`**, which owns
+the formatting sweep that happens to land in a test file — and whose claim that its hunks are
+semantically empty the checker verifies, so a whole test file hidden there fails the check instead.
 
 Two escape valves, because the invariant is otherwise false in practice:
 
@@ -691,8 +768,9 @@ words: the sentences on it say what changed and what could go wrong the way a co
 the identifiers live in the code blocks, not the prose. Top to bottom:
 
 1. **Masthead.** A kicker naming the pull request and its head; a `headline` that says what the
-   change does in one plain sentence; a `summary` paragraph in the same register, with the one thing
-   the reader most needs in bold; and a facts line — ideas, files, changes and whether every one is
+   change does in one plain sentence; a `summary` as a short bulleted list in the same register, the
+   words that matter most in bold — never a paragraph, since the opening is the part every reader
+   reads and prose is the part they skim; and a facts line — ideas, files, changes and whether every one is
    owned, the claim counts by verdict, and an `estimatedMinutes`. Both prose fields are the author's.
 2. **The gate.** A red band, first thing after the masthead and above the ideas, with the count of
    false claims and one sentence saying what is wrong and which idea it touches, linking to the
@@ -709,20 +787,25 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
    `caption` and diff lines coloured, and beneath it the folded reasoning: one fold per note, each
    stamped _witness · hh:mm_ or _added afterwards_. A fold with a false or disputed claim behind it
    is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
-5. **The claims.** Under the walk, "What the author claims · checked by a second agent": one line per
+   The diff marker is a **column of its own** and never the first character of the code
+   ([The code block](#the-code-block)).
+5. **Covered by.** Under the walk and above the claims, the idea's `coverage` as bare bullets — the
+   scenarios its tests cover, named and not explained. Absent where the list is empty. It sits here
+   rather than in a section of its own for [the reason tests are never an idea](#tests-are-never-an-idea).
+6. **The claims.** Under the walk, "What the author claims · checked by a second agent": one line per
    claim with its verdict as a chip, its evidence in the sentence, and a `cant_tell` ending with
    "You decide."
-6. **The finding.** After the ideas, a boxed section per false claim: a plain headline, the two
+7. **The finding.** After the ideas, a boxed section per false claim: a plain headline, the two
    pieces of code that disagree shown together with captions, the consequence worked out — a table
    where numbers make it concrete — and a closing paragraph that says how serious it is and whose
    call it is. Written by the checker from its evidence; the page's most important prose.
-7. **Where to spend the time.** A numbered list, one entry per idea, in the order the checker says to
+8. **Where to spend the time.** A numbered list, one entry per idea, in the order the checker says to
    read them, each with the reason. This is `attention` made actionable.
-8. **The colophon.** Folded: how the pack was made, what the dashed boxes mean, and what is fake if
+9. **The colophon.** Folded: how the pack was made, what the dashed boxes mean, and what is fake if
    anything is — the sentence a demo owes and a real pack states as "nothing".
 
 The document carries every field this needs and the renderer invents none: `headline`, `summary`,
-`estimatedMinutes` and the reading `order` are fields of the pack, `title` and `cue` of the idea,
+`estimatedMinutes` and the reading `order` are fields of the pack, `title`, `cue` and `coverage` of the idea,
 `caption` and `mark` of the anchor. A renderer that finds a field missing draws the gap, so a pack
 without a cue shows a row with no cue — the author's omission, visible, rather than a renderer's
 guess.

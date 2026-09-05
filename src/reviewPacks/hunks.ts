@@ -101,6 +101,56 @@ function stripPathPrefix(raw: string): string | null {
   return name.replace(/^[ab]\//, '');
 }
 
+/** The reserved idea id: the bucket for hunks that carry nothing to review. */
+export const PLUMBING_IDEA_ID = 'plumbing';
+
+/**
+ * Whether a path is a test file. The repo's two shapes — anything under a `test/`
+ * or `tests/` directory, and any `*.test.*` / `*.spec.*` file wherever it sits.
+ */
+function isTestPath(path: string): boolean {
+  return /(^|\/)tests?\//.test(path) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(path);
+}
+
+/**
+ * Whether an idea is a **tests section**: it owns hunks, and every one of them is
+ * a test file. → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
+ *
+ * Tests belong to the idea they exercise, listed as scenarios under it, because a
+ * reader deciding whether the code is right should not have to go somewhere else
+ * to find out whether it is exercised. Stated mechanically rather than only in the
+ * author's prompt, for the reason every rule in `CLAUDE.md` is: a template is
+ * operator-overridable, and a rule that lives only in one comes back as a pack
+ * with a "Tests" section and nothing red.
+ *
+ * **A pull request that is only tests is exempt**, because there is no other idea
+ * for them to belong to and the rule would make such a pack impossible to write.
+ * `plumbing` is exempt at the call site, where it owns a formatting sweep that
+ * happens to land in test files; the checker verifies that its hunks really are
+ * semantically empty, so a whole test file hidden there fails the check instead.
+ */
+export function testsOnlyIdea(hunks: readonly DiffHunk[], hunkIds: readonly string[]): boolean {
+  if (hunkIds.length === 0) return false;
+  if (hunks.every((h) => isTestPath(h.range.path))) return false;
+  const byId = new Map(hunks.map((h) => [h.id, h]));
+  return hunkIds.every((id) => {
+    const hunk = byId.get(id);
+    return hunk !== undefined && isTestPath(hunk.range.path);
+  });
+}
+
+/**
+ * Whether an idea owns a test hunk — the ideas that must list the scenarios those
+ * tests cover, since the reader is being shown the tests here and nowhere else.
+ */
+export function ownsTestHunk(hunks: readonly DiffHunk[], hunkIds: readonly string[]): boolean {
+  const byId = new Map(hunks.map((h) => [h.id, h]));
+  return hunkIds.some((id) => {
+    const hunk = byId.get(id);
+    return hunk !== undefined && isTestPath(hunk.range.path);
+  });
+}
+
 /**
  * The coverage rule, decided mechanically: every hunk has exactly one owning
  * idea. `owned` is, per idea, the hunk ids its `hunk` anchors name — `plumbing`

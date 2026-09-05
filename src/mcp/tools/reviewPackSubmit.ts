@@ -27,16 +27,25 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     "idea's hunk anchor**; give the ones with nothing to review to the idea whose id is `plumbing`. Under each " +
     'idea, `claims`: sentences that can be shown false, each with its `provenance` — `witnessed` citing the log ' +
     'entry it comes from, `disputed` citing the entry the code contradicts, or `inferred` for your own reading. ' +
-    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. Write nothing the checker ' +
-    'owns: no verdicts, no attention labels, no cues, no reading order. The refusal names the field.',
+    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. **Tests are never an idea ' +
+    "of their own**: give a test hunk to the idea it exercises, and list what it covers as that idea's `coverage` " +
+    'lines — one short scenario each, named and not explained. Write nothing the checker ' +
+    'owns: no verdicts, no attention labels, no cues, no reading order. **Every prose field is capped** — say ' +
+    'it in as few words as you can, in the plainest ones you know, and the refusal names the field and the ' +
+    'count. The refusal names the field.',
   inputSchema: {
     type: 'object',
     properties: {
-      headline: { type: 'string', description: 'What the change does, in one plain sentence — for the masthead.' },
+      headline: {
+        type: 'string',
+        description: 'What the change does, in one plain sentence — for the masthead. At most 100 characters.',
+      },
       summary: {
         type: 'string',
         description:
-          'A paragraph in the same register, with the one thing the reader most needs in **bold**. Markdown.',
+          'A short bulleted list in the same register — `- ` per line, the words that matter most in **bold**, ' +
+          'and nothing that is not needed to decide whether to read on. Markdown. Not a paragraph. Each bullet ' +
+          'at most 100 characters.',
       },
       estimatedMinutes: { type: 'number', description: 'How long you expect the read to take.' },
       fake: {
@@ -57,11 +66,12 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
             },
             claim: {
               type: 'string',
-              description: 'One falsifiable sentence stating what this idea does — for the checker.',
+              description:
+                'One falsifiable sentence stating what this idea does — for the checker. At most 120 characters.',
             },
             title: {
               type: 'string',
-              description: 'The same thing said across a desk, no identifiers — for the person.',
+              description: 'The same thing said across a desk, no identifiers — for the person. At most 60 characters.',
             },
             anchors: {
               type: 'array',
@@ -74,7 +84,10 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
                   path: { type: 'string', description: 'kind=region: the file, relative to the checkout root.' },
                   start: { type: 'integer', description: 'kind=region: first line, 1-based.' },
                   end: { type: 'integer', description: 'kind=region: last line, inclusive.' },
-                  gist: { type: 'string', description: 'One line, always shown: why the walk stops here.' },
+                  gist: {
+                    type: 'string',
+                    description: 'One line, always shown: why the walk stops here. At most 90 characters.',
+                  },
                   note: {
                     type: 'object',
                     description:
@@ -90,8 +103,8 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
                   caption: {
                     type: 'string',
                     description:
-                      'The one-line label on the code block: "new function", "existing code, unchanged — shown ' +
-                      'because you need it", "should this have changed? no — here is why".',
+                      'The one-line label on the code block: "new function", "unchanged, shown because you need ' +
+                      'it", "should this have changed? no". At most 40 characters.',
                   },
                   mark: {
                     type: 'string',
@@ -101,6 +114,14 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
                 },
                 required: ['kind', 'gist'],
               },
+            },
+            coverage: {
+              type: 'array',
+              description:
+                'The scenarios the tests cover, one short line each — "an unwitnessed pull request still renders", ' +
+                'not a paragraph about the test. Required on the idea that owns the test hunks; the reader wants ' +
+                'assurance the cases were thought of, and nothing more. Each at most 60 characters.',
+              items: { type: 'string' },
             },
             claims: {
               type: 'array',
