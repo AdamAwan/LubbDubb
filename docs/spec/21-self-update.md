@@ -390,7 +390,7 @@ itself as a failure of the harness's own build.
 
 ### Pulling it
 
-`UpdateDesk.pullProject`, `POST /api/project/pull`, and the Pull control on the Project card.
+`UpdateDesk.pullProject`, `POST /api/project/pull`, and the Pull control in the build panel's project section.
 
 **Why the cockpit has a button for a repository the harness does not own.** The project layer of the
 config — `lubbdubb.project.json`, the team's committed policy — is read from `repoRoot`
@@ -499,58 +499,54 @@ is beside them at ghost weight. **The project row carries only `Snooze`**, and t
 rather than an omission: every refusal `projectPullability` returns is one the harness cannot get past
 either, so a "pull anyway" would be a button whose only outcome is the error the row already quotes.
 
-**The body of the row opens the build panel**, and the controls sit in a strip beneath it — the shape a
-config row already takes, for its reason: one click may not have two destinations. So the row asks, and
-the changelog that answers _why you would want it_ is one press away.
+**The body of the row opens the build panel**, and the controls sit in the card's
+[action bar](17-cockpit.md#the-action-bar) beneath it — where every act on the rail sits, for the
+reason that shape exists: one click may not have two destinations. So the row asks, and the changelog
+that answers _why you would want it_ is one press away. The sentence that separates `Queue` from `Now`
+is in the bar beside them, and the primary is at its right edge; while the upgrade is applying the row
+draws no bar at all, because its title has become the progress.
 
 An **unsupervised** deployment gets the rows and no controls: the process exits on apply and nothing
 would start it again, and the panel the row opens says what to run instead.
 
-### The cards carry the standing
+### The panel carries the standing
 
-The **Build card** on the Overview ([17](17-cockpit.md#the-overview)) carries the standing: what is
-running, how far behind it is, and the newest five commits waiting — each with **who wrote it and how
-long ago**. The changelog is the whole reason the card beats a count. "10 behind" answers how far and
-never why you would want it, and the commits already arrive with the reading at no extra cost, so
-`%aN` (through `.mailmap`, so one person under two spellings stays one name) and `%aI` are two more
-fields on a `git log` that was already being run. The card's list is capped at five against the
-reading's ten, and says how many it is not showing; the rest are on the panel.
+The **build panel** ([17](17-cockpit.md#the-overview)) carries the standing: what is running, how far
+behind it is, and the commits waiting — each with **who wrote it**. The changelog is the whole reason
+this beats a count. "10 behind" answers how far and never why you would want it, and the commits
+already arrive with the reading at no extra cost, so `%aN` (through `.mailmap`, so one person under two
+spellings stays one name) and `%aI` are two more fields on a `git log` that was already being run. The
+list is capped at ten by the reading and says how many it is not showing.
 
-Empty still draws, muted, like every other card on that page: a build that is current is a line
-saying so, not an absence.
+**The project checkout is a section under it**, ruled off: the same reading of the other repository —
+what has landed on the integration branch that this clone has not got, and whether the checkout is
+clean. It answers the one thing no card on the overview can — _what changed in the project that the
+fleet did not do_, since every card there is the fleet's own work. Its git status is on the glass rather
+than behind a marker, because it is half the answer to why the upgrade above it has no controls.
 
-The **Project card** sits beside it and is the same reading of the other checkout: what has landed on
-the integration branch that this clone has not got, and whether the checkout is clean. It answers the
-one thing the six cards above it cannot — _what changed in the project that the fleet did not do_,
-since every other card on that page is the fleet's own work. Its git status is on the glass rather
-than behind a marker, because it is half the answer to why the upgrade ask on the rail is not there.
-It carries no controls: there is nothing the cockpit should do to the operator's own checkout.
-
-Every refusal stays on it in its own words, because "why is this three commits behind" is what the card
-is being read for. Its **Pull** control survives on exactly one deployment: the one that set
+Every refusal stays in its own words, because "why is this three commits behind" is what the section is
+being read for. The **Pull** control survives on exactly one deployment: the one that set
 `selfUpdate.projectAutoPull` to false. With auto-pull on, a checkout that could be pulled has been — so
 the button would spend its whole life undrawable, and the case it is drawn in is the case where the
 harness was told to keep its hands off and somebody still wants a way to do it.
 
-**`Check now` is a refresh glyph in each card's header, beside the count it moves** — not a third
-button in the controls row. The row holds the acts that change something (queue the upgrade, pull the
-project) and a button that only re-reads made them three of a kind. One act reached from two places
-rather than two controls: `check(true)` takes both readings in one pass, so either glyph refreshes
-both and they cannot disagree about when the harness last looked. Each header also carries **when the
-reading was taken**, in the right-hand slot Fleet keeps its ended-shift count in — every number on
-these two cards is "as of" that stamp.
+**`Check now` is one control for both readings.** `check(true)` takes the build's and the project's in
+a single pass, so there is one button and the two can never disagree about when the harness last
+looked. Each reading says **when it was taken** beside itself: every number here is "as of" that stamp.
 
-**The Build card draws no controls at all.** Upgrading is asked on the rail now, and a card that also
-offered it would be the same ask twice — which is how an operator learns that neither surface is the
-real one. What is left is what the card was always best at: the changelog, which answers _why you would
-want it_ where a queue row can only say how far behind you are.
+**Both of these were cards on the Overview**, and both left it for the same reason, one step at a time.
+The act went first — upgrading is a request made of the operator, and a card is a surface they _visit_,
+so it became [a rail row](#the-asks-are-on-the-rail). What that left was a changelog the panel already
+drew in full, and two readings that say `current` nearly all their life, holding two of the five slots
+on the page that answers _what is happening_. The panel was always where the full account lived; it is
+now the only place, and the rows that ask are the way in to it.
 
 **Interrupting is secondary, not danger-toned**, wherever it is drawn. It is not lossy — every agent is
 reaped, recorded and restored on the way back up — so an alarm colour put a warning on an ordinary
 decision beside the safe path it is only a variant of. Weight separates the two, never hue.
 
-The **panel** keeps everything the card is not for — the full ten and the worded refusals. A dirty install, a build ahead of its upstream and an unavailable reading are the answer to
-"why is the button off", and the card draws no controls at all rather than off ones.
+A dirty install, a build ahead of its upstream and an unavailable reading are the answer to "why is the
+button off", and the panel draws no controls at all rather than off ones.
 
 ## The gauge
 

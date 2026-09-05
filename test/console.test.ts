@@ -757,6 +757,48 @@ test('every row that opens something is a button; only the recovery hold is not'
 });
 
 /**
+ * **Every act a card carries is in the card's action bar**, and this is the rule
+ * the shape exists for. The acts had grown three placements — a config row's fix
+ * strip, an update ask's near-copy of it, and the assigned row's reference out in a
+ * third column beside the body — so *what can I do with this row?* was answered
+ * somewhere different on each kind.
+ *
+ * Asserted by position rather than by class, because the failure this pins is a
+ * control drawn back into the body: a card whose button sits above its bar reads
+ * fine and renders fine, and is exactly the drift that produced the three shapes.
+ * The nesting rule is the other half of it and `test/refLinks.test.ts` holds that
+ * one — a reference inside the body would be a second destination for one click.
+ * → docs/spec/17-cockpit.md#the-action-bar
+ */
+test('every act a rail card carries is in the card’s action bar', () => {
+  const html = render(view());
+  const rail = html.slice(html.indexOf('cn-rail'), html.indexOf('cn-sit'));
+  // The cards, cut at their own opening tags. `cn-q` is matched with its closing
+  // quote or a space after it, so `cn-qin`, `cn-qkind` and `cn-qfoot` — all inner
+  // elements sharing the prefix — do not start a card of their own.
+  const cards = rail.split(/(?=<(?:button|div)[^>]*class="cn-q(?: |"))/).filter((c) => /class="cn-q(?: |")/.test(c));
+  assert.ok(cards.length > 0, 'the demo snapshot must fill the rail');
+
+  // What counts as an act: a button of the app's one family, a reference, and the
+  // two controls a config fix draws that are neither.
+  const ACT = /class="btn btn|ref-pair|ref-goal|cn-copy|cn-inline/g;
+  let withActs = 0;
+  for (const card of cards) {
+    const acts = [...card.matchAll(ACT)].map((m) => m.index ?? 0);
+    if (acts.length === 0) continue;
+    withActs += 1;
+    const bar = card.indexOf('class="cn-qfoot');
+    assert.ok(bar !== -1, `a card carrying an act draws the bar to put it in: ${card.slice(0, 120)}`);
+    for (const at of acts) {
+      assert.ok(at > bar, `an act above the bar is an act back in the body: ${card.slice(at - 40, at + 40)}`);
+    }
+  }
+  // The fixtures carry the upgrade ask's three buttons, the auto-pull ask's one and
+  // the assigned row's reference, so this is three kinds of act and not one.
+  assert.ok(withActs >= 3, 'the demo must exercise the bar on more than one kind of card');
+});
+
+/**
  * The rail's two readings, and the one thing that keeps them from collapsing back
  * into each other: **hue is the kind, weight is the group**. The palette used to
  * spend both on the group — red blocking, amber yours — which meant every ask

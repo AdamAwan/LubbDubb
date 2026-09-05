@@ -9,6 +9,7 @@ import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 import { Overview, queueRow } from './Overview.js';
+import { projectName } from '../view/updateAsks.js';
 import { WorldSignals } from './WorldSignals.js';
 import { EnvironmentsPanel } from './EnvironmentsPanel.js';
 import { PanelRows } from './PanelRow.js';
@@ -644,9 +645,11 @@ function panelBody(
       return (
         <BuildPanel
           build={state.build}
+          project={projectName(state)}
           now={view.now}
           onUpgrade={(action, opts) => actions.upgrade(action, opts)}
           onCheck={() => actions.checkBuild()}
+          onPull={() => actions.pullProject()}
         />
       );
     case 'launch':

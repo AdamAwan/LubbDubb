@@ -68,8 +68,11 @@ export function upgradeHeadline(build: BuildReading): string {
  * what an operator typed to get there and what their terminal prompt says, and a
  * row that has to name a repository is better naming it wrongly-shortened than not
  * at all.
+ *
+ * @public the build panel names the same checkout in its project section, and two
+ * ways of shortening one path is two names for one thing.
  */
-function projectName(state: AppState): string {
+export function projectName(state: AppState): string {
   const segments = state.config.desktopFolder.split(/[\\/]/).filter((s) => s !== '');
   return segments[segments.length - 1] ?? 'the project';
 }

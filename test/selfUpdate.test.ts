@@ -688,7 +688,7 @@ test('the reading carries the project standing beside the build it gates', () =>
   assert.equal(reading.project, project);
   assert.equal(reading.upgradable, false);
   // The card beside it draws `blocked`, and it has to name the *other* checkout —
-  // a Build card with no buttons and no reason is the refusal the panel was built
+  // a build panel with no buttons and no reason is the refusal it was built
   // to word going missing.
   assert.match(reading.blocked!, /project checkout/);
   // Absent, nothing about the build changes.

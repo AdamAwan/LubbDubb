@@ -1,10 +1,10 @@
-import { Fragment, useState, type JSX } from 'react';
+import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
 import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
-import { Ref, refLabel } from '../components/refs.js';
+import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 
@@ -202,6 +202,14 @@ const GROUP_LABEL: Record<NeedGroup, string> = {
 const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
 
 /**
+ * The pull request a `pr:<n>` origin names. Anchored and digits-only, so
+ * `pr:412:thread:9` answers 412 and nothing else answers at all — a row whose
+ * origin is some other shape has no pull request to open, which is a destination
+ * the card must not draw.
+ */
+const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
+
+/**
  * What a row is about, in one token: its goal (`#12`) when it has one, else the
  * pull request it was raised on (`PR #142`). Null only for an ask with neither,
  * which is the one case a surface has nothing true to name.
@@ -214,7 +222,7 @@ const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
  */
 export function subjectLabel(row: NeedRow): string | null {
   if (row.goalRef !== null) return refLabel(row.goalRef);
-  const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
+  const pr = PR_ORIGIN.exec(row.originRef ?? '');
   return pr ? `PR #${pr[1]}` : null;
 }
 
@@ -230,26 +238,8 @@ export function subjectLabel(row: NeedRow): string | null {
  * cannot name is one the operator answers blind.
  */
 function subjectBeside(row: NeedRow): string | null {
-  // A row that draws its own reference has already said its subject, and better:
-  // as the way there rather than as a word. Two `PR #415`s on one row, one of them
-  // dead text beside a live link, is the same repetition this function exists to
-  // stop — the row's line just is not where the other one is said.
-  if (refBeside(row) !== null) return null;
   const subject = subjectLabel(row);
   return subject !== null && row.title.includes(subject) ? null : subject;
-}
-
-/**
- * The reference a row draws beside its body, or null for the rows that draw none.
- *
- * A pull request a person put on the operator is the one ask whose subject lives
- * outside the cockpit entirely — there is no PR page here — so a row that merely
- * *named* it left them to go and find it in the provider, which is the surface
- * this queue exists to replace. Every other kind is about something the cockpit
- * can open, and {@link NeedDestination} is already the way there.
- */
-function refBeside(row: NeedRow): string | null {
-  return row.kind === 'assigned' ? row.originRef : null;
 }
 
 /**
@@ -337,6 +327,14 @@ function Row({
           </span>
           {KIND_LABEL[row.kind]}
         </Tag>
+        {/* The card leaves the cockpit, so it says so where a token would: the
+            same arrow the vocabulary's arm carries, and `aria-hidden` because the
+            anchor around it already announces where it goes. */}
+        {row.opens === 'provider' && (
+          <i className="cn-qout" aria-hidden="true">
+            ↗
+          </i>
+        )}
         {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
       </div>
       <p className="cn-qtitle">{row.title}</p>
@@ -357,89 +355,128 @@ function Row({
     </>
   );
 
+  /**
+   * The card, for every row that carries something to press. One shape: the body
+   * is the control that opens the ask, and everything a row can *do* is in the bar
+   * below it — see {@link CardFoot}. A null foot draws neither the bar nor the
+   * stripe that would run beside it, which is the applying upgrade's case: the row
+   * has become the progress and there is nothing left to decide.
+   */
+  const carded = (onClick: () => void, foot: ReactNode, bodyNode: ReactNode = body): JSX.Element => (
+    <div className={cls}>
+      <i className="cn-stripe" />
+      <button type="button" className="cn-qbody" onClick={onClick} aria-current={current ? 'true' : undefined}>
+        <div className="cn-qin">{bodyNode}</div>
+      </button>
+      {foot !== null && (
+        <>
+          <i className="cn-stripe" />
+          {foot}
+        </>
+      )}
+    </div>
+  );
+
   if (row.opens === null) {
     return <div className={cls}>{inner}</div>;
   }
 
   // A config row carries a fix, and a control may not nest inside a control: one
   // click cannot have two destinations. So the card becomes a container, its body
-  // stays the button that opens the key on the config page, and the fix sits in a
-  // strip of its own beneath it — the same shape a row carrying both a name and
-  // refs already takes.
+  // stays the button that opens the key on the config page, and the fix goes in the
+  // card's action bar with every other act on the rail ({@link CardFoot}).
   if (row.check !== undefined) {
     const fix = row.check.fix;
     const group = fix?.kind === 'config' ? fix.group : fix?.kind === 'goto' ? fix.group : undefined;
-    return (
-      <div className={cls}>
-        <i className="cn-stripe" />
-        <button
-          type="button"
-          className="cn-qbody"
-          onClick={() => actions.openConfig({ configTab: 'values', configGroup: group ?? null })}
-        >
-          <div className="cn-qin">
-            <div className="cn-qkind">
-              <Tag>
-                <span className="cn-sym" aria-hidden="true">
-                  {KIND_SYMBOL[row.kind]}
-                </span>
-                {KIND_LABEL[row.kind]}
-              </Tag>
-            </div>
-            <p className="cn-qtitle">{row.title}</p>
-            {row.check.remedy !== undefined && <div className="cn-qmeta">{row.check.remedy}</div>}
-          </div>
-        </button>
-        <i className="cn-stripe" />
-        {row.applied === undefined ? (
-          <ConfigFix check={row.check} actions={actions} />
-        ) : (
-          <SettledFix applied={row.applied} actions={actions} />
-        )}
-      </div>
+    return carded(
+      () => actions.openConfig({ configTab: 'values', configGroup: group ?? null }),
+      row.applied === undefined ? (
+        <ConfigFix check={row.check} actions={actions} />
+      ) : (
+        <SettledFix applied={row.applied} actions={actions} />
+      ),
+      <>
+        <div className="cn-qkind">
+          <Tag>
+            <span className="cn-sym" aria-hidden="true">
+              {KIND_SYMBOL[row.kind]}
+            </span>
+            {KIND_LABEL[row.kind]}
+          </Tag>
+        </div>
+        <p className="cn-qtitle">{row.title}</p>
+        {row.check.remedy !== undefined && <div className="cn-qmeta">{row.check.remedy}</div>}
+      </>,
     );
   }
 
   const ref = row.goalRef;
-  const open =
-    row.opens === 'build'
-      ? () => actions.openPanel('build')
-      : row.opens === 'goal' && ref !== null
-        ? () => actions.selectGoal(ref)
-        : () => actions.openPanel({ ask: row.id });
+  /**
+   * Where one of the row's destinations goes. Written once because the assigned
+   * row has two — its body opens the pull request, its bar opens the ask — and two
+   * readings of `NeedDestination` is how they come to disagree about what `goal`
+   * means.
+   *
+   * Null for a destination this row cannot reach: `pr` with no number to read out
+   * of the origin, `goal` with no ref. The caller draws nothing rather than a
+   * control that lands nowhere.
+   */
+  const goTo = (dest: NeedRow['opens']): (() => void) | null => {
+    if (dest === 'build') return () => actions.openPanel('build');
+    if (dest === 'goal') return ref === null ? null : () => actions.selectGoal(ref);
+    if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
+    return null;
+  };
+  const open = goTo(row.opens) ?? (() => actions.openPanel({ ask: row.id }));
 
-  // An update ask, which takes the config row's shape for the config row's reason:
-  // its body is the way in to the changelog and its controls are acts on the build,
-  // so they cannot nest — one click may not have two destinations.
+  // An update ask, whose acts are on the build rather than on the row's subject —
+  // so they cannot nest in the body, which is the way in to the changelog. One
+  // click may not have two destinations.
   if (row.kind === 'upgrade' || row.kind === 'project_pull') {
+    return carded(open, <UpdateActs kind={row.kind} build={build} actions={actions} />);
+  }
+
+  // The assigned row, and the one card that leaves the cockpit: its body is the
+  // provider's own page for the pull request — the diff, the review and the checks,
+  // which is what a colleague is waiting for the operator to read and the one thing
+  // no page here draws. An anchor rather than a button, because a destination is
+  // what an `<a>` is for: it opens in a tab of its own and it middle-clicks like
+  // every other way out of this cockpit.
+  //
+  // Nothing the row used to reach is lost — the bar carries both: the ask it used to
+  // open, and the `<Ref>` onto the harness's own page for the pull request, which is
+  // the two-door token every other row names a PR with.
+  const details = row.details === undefined ? null : goTo(row.details);
+  const prNumber = Number(PR_ORIGIN.exec(row.originRef ?? '')?.[1]);
+  if (row.opens === 'provider' && !Number.isNaN(prNumber) && row.originRef !== null) {
     return (
       <div className={cls}>
         <i className="cn-stripe" />
-        <button type="button" className="cn-qbody" onClick={open}>
+        <PrLink number={prNumber} className="cn-qbody">
           <div className="cn-qin">{body}</div>
-        </button>
+        </PrLink>
         <i className="cn-stripe" />
-        <UpdateActs kind={row.kind} build={build} actions={actions} />
+        <CardFoot>
+          {details !== null && (
+            <Button size="small" onClick={details}>
+              Details
+            </Button>
+          )}
+          <span className="cn-refs">
+            <Ref to={row.originRef} />
+          </span>
+        </CardFoot>
       </div>
     );
   }
-
-  // The card carries the way to what the row is about, and it sits **beside** the
-  // body rather than in it: one click cannot have two destinations, so the body
-  // stays the control that opens the ask and the reference is its own target.
-  // Same shape as a config row's fix strip.
-  const prRef = refBeside(row);
-  if (prRef !== null) {
-    return (
-      <div className={`${cls} cn-qref`}>
-        <i className="cn-stripe" />
-        <button type="button" className="cn-qbody" onClick={open} aria-current={current ? 'true' : undefined}>
-          <div className="cn-qin">{body}</div>
-        </button>
-        <span className="cn-refs">
-          <Ref to={prRef} />
-        </span>
-      </div>
+  if (details !== null) {
+    return carded(
+      open,
+      <CardFoot>
+        <Button size="small" onClick={details}>
+          Details
+        </Button>
+      </CardFoot>,
     );
   }
 
@@ -451,7 +488,51 @@ function Row({
 }
 
 /**
- * The control strip under an update ask.
+ * **The card's action bar** — the one place on a rail card where anything
+ * pressable lives.
+ *
+ * The acts had grown three shapes: a config row's fix strip under the body, an
+ * update ask's controls under it in a near-copy of that strip, and the assigned
+ * row's reference out in a third column beside the body. Three placements for one
+ * question — *what can I do with this row?* — and an operator scanning the rail
+ * had to find the answer somewhere different on each kind.
+ *
+ * One bar answers it in one place. What varies inside it is only the two halves:
+ * the sentence that qualifies the act, and the acts themselves, which are pushed
+ * to the right edge so a column of cards puts every control on one vertical line.
+ *
+ * **The sentence comes first in the markup as well as on the glass.** It is what
+ * decides which control to press — *Queue waits for 3 to finish; Now stops them* —
+ * so reaching it after tabbing through the buttons it explains is reading the
+ * caption after the photograph.
+ *
+ * `wide` is for the one act that is not a control at all: a shell command is a
+ * line of text to be copied, and it takes the bar's full width with the sentence
+ * above it rather than being squeezed against the right edge.
+ */
+function CardFoot({
+  why = null,
+  wide = false,
+  settled = false,
+  children,
+}: {
+  why?: ReactNode;
+  wide?: boolean;
+  /** The green ground a fix wears after it is written. → {@link SettledFix} */
+  settled?: boolean;
+  children: ReactNode;
+}): JSX.Element {
+  const cls = ['cn-qfoot', wide ? 'cn-wide' : '', settled ? 'cn-settled' : ''].filter((c) => c !== '').join(' ');
+  return (
+    <div className={cls}>
+      {why !== null && <span className="cn-footwhy">{why}</span>}
+      <span className="cn-footacts">{children}</span>
+    </div>
+  );
+}
+
+/**
+ * What an update ask offers, in the card's action bar.
  *
  * **Three acts on the upgrade, and which three depends on the fleet.** With agents
  * running there is a real choice — wait for them or stop them — and it is drawn as
@@ -464,6 +545,10 @@ function Row({
  * no confirm; it is simply the lighter of the two buttons beside the safe path it
  * is a variant of.
  *
+ * **The primary sits at the right edge**, which is where the bar puts the act it
+ * expects: the buttons run outward from it in the order an operator would reach for
+ * them, and `Snooze` — the one that answers nothing — ends up furthest away.
+ *
  * **The project ask has only Snooze**, and that is the honest shape rather than an
  * omission: every refusal `projectPullability` returns is a refusal the *harness*
  * cannot get past either — a dirty tree, a local commit, the wrong branch — so a
@@ -473,6 +558,10 @@ function Row({
  * An unsupervised deployment gets no controls at all on either: the process exits
  * on apply and nothing would start it again. The row still draws, and the panel it
  * opens says what to run instead.
+ *
+ * Null while the upgrade is applying, and that is the one row on the rail with no
+ * bar: the title has become the progress, so a bar there would be an empty box
+ * under a sentence saying there is nothing to decide.
  */
 function UpdateActs({
   kind,
@@ -482,72 +571,78 @@ function UpdateActs({
   kind: 'upgrade' | 'project_pull';
   build: BuildReading;
   actions: CockpitActions;
-}): JSX.Element {
+}): JSX.Element | null {
   const snooze = (
-    <Button ghost onClick={() => void actions.snoozeUpdate(kind === 'upgrade' ? 'upgrade' : 'projectPull')}>
+    <Button
+      ghost
+      size="small"
+      onClick={() => void actions.snoozeUpdate(kind === 'upgrade' ? 'upgrade' : 'projectPull')}
+    >
       Snooze
     </Button>
   );
 
-  if (kind === 'project_pull') return <div className="cn-fix">{snooze}</div>;
+  if (kind === 'project_pull')
+    return <CardFoot why="Nothing to answer — the row clears when the checkout does.">{snooze}</CardFoot>;
 
   const { intent, live, supervised } = build;
   if (!supervised)
     return (
-      <div className="cn-fix">
+      <CardFoot why="No supervisor, so this build cannot restart itself — the panel says what to run.">
         {snooze}
-        <span className="cn-fixwhy">
-          No supervisor, so this build cannot restart itself — the panel says what to run.
-        </span>
-      </div>
+      </CardFoot>
     );
 
   // Applying is under way and there is nothing left to decide.
-  if (intent.state === 'applying') return <div className="cn-fix" />;
+  if (intent.state === 'applying') return null;
 
   // A drain already asked for: the acts are what to do about *it*, and offering to
   // queue a second one is a button whose own state says it has nothing to do.
   if (intent.state === 'draining' || intent.state === 'ready')
     return (
-      <div className="cn-fix">
+      <CardFoot why={intent.state === 'ready' ? 'The fleet is clear.' : `Waiting for ${live} to finish.`}>
+        <Button ghost size="small" onClick={() => void actions.upgrade('cancel')}>
+          Cancel
+        </Button>
         {intent.state === 'ready' ? (
-          <Button tone="primary" onClick={() => void actions.upgrade('apply')}>
+          <Button tone="primary" size="small" onClick={() => void actions.upgrade('apply')}>
             Apply now
           </Button>
         ) : (
-          <Button onClick={() => void actions.upgrade('apply', { interrupt: true })}>
+          <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
             Don&apos;t wait — interrupt {live}
           </Button>
         )}
-        <Button ghost onClick={() => void actions.upgrade('cancel')}>
-          Cancel
-        </Button>
-      </div>
+      </CardFoot>
     );
 
   if (live === 0)
     return (
-      <div className="cn-fix">
-        <Button tone="primary" onClick={() => void actions.upgrade('drain')}>
+      <CardFoot why="Exits, takes the update and comes back. Nothing is interrupted.">
+        {snooze}
+        <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
           Upgrade
         </Button>
-        {snooze}
-        <span className="cn-fixwhy">Exits, takes the update and comes back. Nothing is interrupted.</span>
-      </div>
+      </CardFoot>
     );
 
   return (
-    <div className="cn-fix">
-      <Button tone="primary" onClick={() => void actions.upgrade('drain')}>
+    <CardFoot
+      why={
+        <>
+          Queue waits for {live} to finish; Now stops {live === 1 ? 'it' : 'them'} and restores{' '}
+          {live === 1 ? 'it' : 'them'} on the way back up.
+        </>
+      }
+    >
+      {snooze}
+      <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
+        Now
+      </Button>
+      <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
         Queue
       </Button>
-      <Button onClick={() => void actions.upgrade('apply', { interrupt: true })}>Now</Button>
-      {snooze}
-      <span className="cn-fixwhy">
-        Queue waits for {live} to finish; Now stops {live === 1 ? 'it' : 'them'} and restores{' '}
-        {live === 1 ? 'it' : 'them'} on the way back up.
-      </span>
-    </div>
+    </CardFoot>
   );
 }
 
@@ -576,7 +671,7 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
 
   if (fix.kind === 'shell') {
     return (
-      <div className="cn-fix">
+      <CardFoot why={fix.why} wide>
         <div className="cn-shell">
           <span aria-hidden="true">$</span>
           <code>{fix.command}</code>
@@ -591,27 +686,26 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
             {copied ? 'Copied' : fix.label}
           </button>
         </div>
-        <span className="cn-fixwhy">{fix.why}</span>
-      </div>
+      </CardFoot>
     );
   }
 
   if (fix.kind === 'sheet') {
     return (
-      <div className="cn-fix">
-        <Button tone="primary" onClick={() => actions.openPanel('setup')}>
+      <CardFoot why={check.remedy ?? null}>
+        <Button tone="primary" size="small" onClick={() => actions.openPanel('setup')}>
           {fix.label}
         </Button>
-        {check.remedy !== undefined && <span className="cn-fixwhy">{check.remedy}</span>}
-      </div>
+      </CardFoot>
     );
   }
 
   if (fix.kind === 'goto') {
     return (
-      <div className="cn-fix">
+      <CardFoot why={check.remedy ?? null}>
         <Button
           tone="primary"
+          size="small"
           onClick={() =>
             fix.to === 'tickets'
               ? actions.openTab('tickets')
@@ -626,7 +720,7 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
         >
           {fix.label}
         </Button>
-      </div>
+      </CardFoot>
     );
   }
 
@@ -643,24 +737,23 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
   };
 
   return (
-    <div className="cn-fix">
+    <CardFoot why={editable ? null : (check.remedy ?? null)} wide={editable}>
       {editable ? (
         <div className="cn-fixline">
           <label className="cn-fixedit">
             Set <code>{only}</code> to
             <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
           </label>
-          <Button disabled={busy} onClick={write}>
+          <Button size="small" disabled={busy} onClick={write}>
             Write it
           </Button>
         </div>
       ) : (
-        <Button tone="primary" disabled={busy} onClick={write}>
+        <Button tone="primary" size="small" disabled={busy} onClick={write}>
           {fix.label}
         </Button>
       )}
-      {check.remedy !== undefined && !editable && <span className="cn-fixwhy">{check.remedy}</span>}
-    </div>
+    </CardFoot>
   );
 }
 
@@ -679,14 +772,22 @@ function coerce(text: string, like: unknown): unknown {
 /** The strip a fixed row wears until it is dismissed — what was written, and the way back. */
 function SettledFix({ applied, actions }: { applied: AppliedFix; actions: CockpitActions }): JSX.Element {
   return (
-    <div className="cn-fix cn-settled">
-      <span className="cn-settled-what">
-        <b>{applied.summary}</b>
-        <i className="cn-settled-file">→ {applied.file}</i>
-      </span>
-      <Button onClick={() => void actions.undoConfigFix(applied.checkId)}>Undo</Button>
-      <Button onClick={() => actions.dismissConfigFix(applied.checkId)}>Dismiss</Button>
-    </div>
+    <CardFoot
+      settled
+      why={
+        <span className="cn-settled-what">
+          <b>{applied.summary}</b>
+          <i className="cn-settled-file">→ {applied.file}</i>
+        </span>
+      }
+    >
+      <Button size="small" onClick={() => void actions.undoConfigFix(applied.checkId)}>
+        Undo
+      </Button>
+      <Button size="small" onClick={() => actions.dismissConfigFix(applied.checkId)}>
+        Dismiss
+      </Button>
+    </CardFoot>
   );
 }
 

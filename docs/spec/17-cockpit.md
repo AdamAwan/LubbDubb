@@ -693,12 +693,29 @@ being answered is what the harness makes of the PR. Which kind of reviewer they 
 metadata line instead (`Required reviewer` / `Optional reviewer`), read off `assignedToYou` — a real
 distinction, and a clause every row would carry and no two rows would differ by.
 
-**And it carries the way to the pull request.** A row that merely _named_ the pull request left the
-operator to go and find it, which is the surface this queue exists to replace; the `<Ref>` opens the
-pull request's own page, or the provider's where the world no longer carries it. The
-`<Ref>` sits **beside** the row body, never inside it: one click may not have two destinations, so the
-body stays the control that opens the ask and the reference is its own target — the same shape a config
-row's fix strip takes ([links](#links)).
+**The row _is_ the way to the pull request, on the provider.** It is the one card whose body leaves the
+cockpit: clicking it opens the PR where the colleague wrote it — the diff, the review, the checks, none
+of which any page here draws, and all of which are what "please review this" means. It carried a
+`<Ref>` to it instead, beside a body that opened the harness's own summary of a PR the operator was
+already on their way to: a stop on the road rather than the road.
+
+**An `<a>`, not a button** — `PrLink` (`web/src/components/refs.tsx`), which is the one lookup for a
+pull request's address on the provider. A destination is what an anchor is for: it opens in a tab of
+its own and it middle-clicks like every other way out of this cockpit. The card says so where a token
+would, with the same `↗` the references vocabulary gives the door that leaves.
+
+**Nothing it used to reach is lost — the card's [action bar](#the-action-bar) carries both.** `Details`
+opens what the body used to: the ask read in context, on the goal's page or in the ask panel — who
+asked, which kind of reviewer they made you, and the goal it belongs to. Beside it, in the `cn-refs`
+slot at the bar's right edge, is the ordinary `<Ref>` onto the pull request: the same two-door token
+every other row on the rail names a PR with, whose first door is the harness's own page for it. Three
+destinations, and one click may not have three, so two of them are controls of their own
+([links](#links)).
+
+**All of it is decided in the derivation** — `opens: 'provider'` and `details` — for
+`NeedDestination`'s own reason: only the derivation can tell a ref that has a page, or an address, from
+one that merely looks like it does. A pull request the provider gave no address for falls back to the
+ask, because a click that lands nowhere reads as a console that is broken.
 
 **It has no control either, and for `dispatch`'s reason turned around**: there is no verdict to record
 and no act to authorise, because the harness has no part in this one. The band says what the pull
@@ -752,8 +769,8 @@ itself: no rule in the harness will ever answer either. Amber on `permission`'s 
 terms respectively — one is an act waiting on a yes, the other is something of the operator's own
 stopping a thing the harness would otherwise have done — and both are always `yours`, since nothing is
 parked and no slot is held. They are also the only rows whose controls act on a repository rather than
-on a piece of work, which is why the body opens the build panel and the acts sit in a strip beneath it,
-in the shape a `config` row already takes. → [21](21-self-update.md#the-asks-are-on-the-rail)
+on a piece of work, which is why the body opens the build panel and the acts sit in the card's
+[action bar](#the-action-bar) beneath it. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -865,6 +882,10 @@ values are the cases where that is not possible:
   goal-shaped ref the world no longer carries. The panel closes itself — answering settles the row,
   the next snapshot drops it from `needsYou`, and a panel whose row is gone draws nothing rather than
   offering a second verdict on a settled ask.
+- **`'provider'` — the pull request on the provider**, and the assigned row alone. It is the one kind
+  whose subject is a pull request nobody in the fleet is working, so the thing the operator opened the
+  rail to reach is the PR as the person who assigned it sees it; the ask itself moves to the bar as
+  `details`, beside a `<Ref>` onto the cockpit's own page for it.
 - **`null` — the recovery hold alone**, which is harness-wide and is answered on the banner above the
   console. It renders as a `div` rather than a `button`, because it is the one row with nowhere to go.
 
@@ -938,6 +959,45 @@ screen.
 when quiet is indistinguishable from one that broke, and a column that came and went would reflow the
 whole shell every time the last ask was answered. A group with no rows draws no heading, though — an
 empty "Yours to do" under a full "Blocking" is furniture.
+
+### The action bar
+
+**Everything a card can _do_ is in one bar across the bottom of it.** `CardFoot`
+(`web/src/console/QueueRail.tsx`) draws it, and it is the whole of the card's pressable surface: a
+`config` row's fix, an update ask's controls, the two destinations the assigned row does not spend its
+body on. Nothing pressable is anywhere else.
+
+That is a rule about _finding_ things rather than about how a card looks. The acts had arrived one kind
+at a time and settled in three different places — the fix in a strip under the body, the update
+controls in a near-copy of that strip, a reference in a third grid column beside the body — so an
+operator scanning the rail answered "what can I do with this row?" somewhere different on every kind.
+Each placement was defensible on its own card; the set of them was not.
+
+**The body stays the control that opens the ask, and that is why the bar exists at all**: one click may
+not have two destinations, so a card carrying an act is a container whose body is a button and whose
+bar is everything else. The tone's stripe runs down the bar as well as the body, so the card is still
+one card.
+
+**Two halves, in this order: the sentence, then the acts.** The sentence is what decides which control
+to press — _Queue waits for 3 to finish; Now stops them and restores them on the way back up_ — so it
+comes first in the markup as well as on the glass, because reaching it after tabbing through the
+buttons it explains is reading the caption after the photograph. The acts are pushed hard against the
+right edge, which puts every control in a column of cards on one vertical line; the primary sits at
+that edge and the rest run outward from it, so `Snooze` — the one that answers nothing — ends up
+furthest from the hand.
+
+**A bar is drawn only where there is something to press.** Most rows carry no act at all: the whole
+card is the button and there is no bar. The one row that _has_ acts and draws none is an upgrade
+already applying — the title has become the progress, and a bar there would be an empty box under a
+sentence saying there is nothing left to decide.
+
+**The two exceptions take the bar's full width** (`cn-wide`) rather than being squeezed against the
+right edge, because neither is a control: a `shell` fix is a line of text to be copied, and an
+`assumed` config value is a field to type into. Both draw under the sentence at the bar's own width.
+
+`test/console.test.ts` pins the rule by position — every act in a card falls after that card's bar —
+because a control drawn back up into the body reads fine and renders fine, which is how the three
+shapes grew in the first place.
 
 ## The goal page
 
@@ -2320,8 +2380,8 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Build**, **Project**. The
+What the situation area shows when no goal is selected: three cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
 is out" and "what is behind them" are one thought — and for the same reason, so is
 [**Up next**](#the-queue-rides-the-fleet-card), which used to be the fourth card here.
@@ -2337,30 +2397,33 @@ surface here that was not about what is happening but about what happened to bri
 when a queued row, or an empty queue, wants explaining, and not glanced at on every pulse. As a card
 it spent a full-width slot on ten rows of a feed nobody had come to the page for.
 
-**Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
-process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
-read on one timer. Project is the only card that reports a git status on the glass, because that status
-is half the answer to why the upgrade ask on the rail is not there. Both headers carry a refresh glyph
-beside the count and the time the reading was taken.
+**Build and Project used to be the last two cards, and are [the build panel](21-self-update.md#the-panel-carries-the-standing)
+now.** They were the two not about the fleet's _work_ — one the process the fleet runs inside, the other
+the repository it is pointed at, two different checkouts read on one timer — and they went in two
+steps, for one reason each.
+
+First the act left them. Both were a control first and a changelog second, and the control was on the
+wrong surface: upgrading is a request made of the operator, and a card is a surface they _visit_, so the
+deployment furthest behind was the one whose card had been furniture the longest. The asks are
+[rail rows](#the-queue-rail--needs-you) now — raised at a moment, settled when answered.
+
+Then the readings followed. What was left on the cards was a changelog that the panel already drew in
+full, on a page that answers _what is happening_, spending two of its five slots on two readings that
+say `current` nearly all of the time. The panel carries both now — the harness's build, and the project
+checkout under it with its git status, its own changelog and the `Pull` control that survives on the
+one deployment that turned `selfUpdate.projectAutoPull` off. It is named in the bar menu and it is what
+both update asks open, so the surface that _asks_ and the surface that _explains_ are one press apart.
 → [21](21-self-update.md#where-it-lands-in-the-cockpit)
 
-**Neither card carries the act any more.** Both were controls first and a changelog second, and the
-control was on the wrong surface: upgrading is a request made of the operator, and a card is a surface
-they _visit_. The asks are [rail rows](#the-queue-rail--needs-you) now, and what is left on the cards is
-what they were always best at — the changelog, which answers _why you would want it_ where a queue row
-can only say how far behind you are. Project keeps a `Pull` control on exactly one deployment: the one
-that turned `selfUpdate.projectAutoPull` off, since with it on a pullable checkout has already been
-pulled.
-
-This reverses what this document said, and the reason it said it still holds: **being behind is a
-standing condition** — true continuously, for weeks if nobody looks — and a row that cannot be
-discharged is the furniture that teaches an operator to skim the whole queue. What changed is not the
+This reverses what this document said about the rail, and the reason it said it still holds: **being
+behind is a standing condition** — true continuously, for weeks if nobody looks — and a row that cannot
+be discharged is the furniture that teaches an operator to skim the whole queue. What changed is not the
 rule but the trigger. The upgrade ask is raised on `upgradability`, settles by being taken or snoozed,
 and becomes the progress line while it applies; the project ask is raised only where an automatic pull
 was refused and clears itself when the obstruction moves. Each has two ends, which is the whole of what
 the rail asks of a row. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
-Two rules run through all of them. **Nothing here re-decides what the server decided**: a PR's court is
+Two rules run through all three. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
@@ -6579,7 +6642,7 @@ muting rather than removing the rail, a group with no rows drawing no heading, a
 button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
-no measured spend drawing no `$0.00`, the overview's five cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
+no measured spend drawing no `$0.00`, the overview's three cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
 the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
 their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence

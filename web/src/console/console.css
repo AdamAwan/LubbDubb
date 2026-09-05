@@ -903,10 +903,12 @@
 .cn-qmeta .cn-hold {
   color: var(--cn-tone);
 }
-/* ---------- a config row's fix strip ----------
-   The row body is the control that opens the key on the config page, so the fix
-   cannot live inside it: one click may not have two destinations. It gets its own
-   strip under the body, inside the same card and the same tone. */
+/* ---------- the card's action bar ----------
+   The row body is the control that opens the ask, so nothing else may live inside
+   it: one click may not have two destinations. Everything a card can *do* is in
+   the bar below it instead — a config row's fix, an update ask's controls, the
+   reference on a pull request somebody put on the operator. One placement for one
+   question, inside the same card and the same tone. → `.cn-qfoot` */
 .cn-qbody {
   border: none;
   background: none;
@@ -920,21 +922,29 @@
 .cn-qbody:hover .cn-qtitle {
   color: var(--cn-tone-ink);
 }
-/* ---------- an assigned row's reference ----------
-   The pull request a person put on you is the one ask whose subject is outside
-   the cockpit, so the card carries the way there — beside the body, never inside
-   it, because one click may not have two destinations. A third column rather than
-   a strip beneath: the reference is what the row is *about*, so it reads on the
-   same line as the row rather than as an action taken on it. */
-.cn-q.cn-qref {
-  grid-template-columns: 3px 1fr auto;
+/* The one card whose body is a way *out* — the assigned row, whose subject is the
+   pull request as the provider draws it. An `<a>` gets none of the reset above for
+   free, and an underline across a two-line ask reads as prose rather than as a
+   card. */
+a.cn-qbody {
+  display: block;
+  text-decoration: none;
+  color: inherit;
 }
-.cn-q.cn-qref .cn-refs {
-  align-self: stretch;
-  min-width: 0;
-  padding-right: 12px;
+/* Said where a token would say it, in the arrow the references vocabulary already
+   uses for the door that leaves. Sized and coloured as the age beside it: this is
+   a property of the row, not a control. */
+.cn-qout {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
 }
-.cn-fix {
+/* With both, the age keeps the right edge and the arrow sits in against it. */
+.cn-qout + .cn-qage {
+  margin-left: 6px;
+}
+.cn-qfoot {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -943,10 +953,38 @@
   border-top: 1px solid var(--cn-line);
   background: var(--cn-panel);
 }
-.cn-fixwhy {
+/* The sentence that decides which control to press. First in the markup, because
+   reaching it after tabbing through the buttons it explains is the caption after
+   the photograph — and `1 1 150px` so it takes the slack and wraps before the
+   controls do. */
+.cn-footwhy {
   font-size: 11.5px;
   color: var(--cn-fg-faint);
   flex: 1 1 150px;
+  min-width: 0;
+}
+/* Every act, hard against the right edge, so a column of cards puts its controls
+   on one vertical line however long the sentence beside them runs. `auto` rather
+   than `space-between` on the bar: a bar with no sentence must still push its
+   controls right. */
+.cn-footacts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-left: auto;
+}
+/* The one act that is not a control: a shell command is a line to copy and an
+   editable value is a field to type in, and both take the bar's full width under
+   the sentence rather than being squeezed against the edge. */
+.cn-qfoot.cn-wide .cn-footacts {
+  flex: 1 1 100%;
+  margin-left: 0;
+}
+/* The reference a card carries. It is the row's *subject* rather than an act on
+   it, so it keeps the ruled slot it wears everywhere else — the rule reads as the
+   same "beyond here, you leave" it does on a work row. */
+.cn-qfoot .cn-refs {
   min-width: 0;
 }
 .cn-fixline {
@@ -988,6 +1026,7 @@
   gap: 8px;
   flex: 1 1 100%;
   min-width: 0;
+  width: 100%;
   font: 12px var(--cn-mono);
   background: var(--cn-bg);
   border: 1px solid var(--cn-line);
@@ -1026,7 +1065,7 @@
 /* An applied fix settles rather than vanishing. The reading re-fetches the moment
    the file lands, so without this the row a fix was applied from disappears under
    the click that applied it — and a write nobody saw is a write nobody can check. */
-.cn-fix.cn-settled {
+.cn-qfoot.cn-settled {
   background: var(--cn-green-fill);
   border-top-color: var(--cn-green-line);
 }
@@ -1034,7 +1073,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1 1 150px;
   min-width: 0;
   font-size: 12px;
   color: var(--cn-green-ink);
@@ -3562,7 +3600,7 @@ button.cn-grow {
    The confirm sheet that points the fleet at a project. Every colour here is a
    `--cn-*` token: a literal at a use site is a surface no theme can reach, and the
    failure only ever shows up on a theme nobody tested. The outstanding checks
-   themselves are rows on the rail now (`.cn-fix` below), not a reading of their
+   themselves are rows on the rail now (`.cn-qfoot` above), not a reading of their
    own. */
 .cn-setup {
   display: flex;

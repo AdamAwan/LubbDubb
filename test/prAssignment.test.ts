@@ -231,6 +231,51 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
   assert.equal(mine[0]?.raisedAt, '2026-07-20T09:00:00.000Z');
 });
 
+/**
+ * **The card goes to the pull request on the provider; the ask is a control beside
+ * it.** The row carried a `<Ref>` to the PR beside a body that opened the harness's
+ * summary of it, which put a stop on the road between the operator and the one
+ * thing a colleague is waiting for them to read — the diff, the review, the checks,
+ * none of which the cockpit draws. Both destinations are decided here rather than
+ * in the rail, for `NeedDestination`'s reason: only the derivation can tell a ref
+ * that has a page — or an address — from one that merely looks like it does.
+ * → docs/spec/17-cockpit.md#the-queue-rail--needs-you
+ */
+test('an assigned row opens the pull request on the provider, and carries the ask as its second destination', () => {
+  const base = buildDemoSeed().state;
+  const sample = base.world.pullRequests[0];
+  assert.ok(sample, 'the demo fixtures must carry a pull request');
+  const assigned = {
+    ...sample,
+    number: 9101,
+    attention: {
+      status: 'you' as const,
+      reasons: ['Priya Raman marked you as a reviewer'],
+      assignedToYou: 'reviewer-optional' as const,
+    },
+  };
+
+  const state = stateWithPrs([assigned]);
+  const row = buildNeedsYou({ ...state, refUrls: { 'pr:9101': 'https://example.test/pull/9101' } }).find(
+    (r) => r.kind === 'assigned',
+  );
+  assert.equal(row?.opens, 'provider', 'the body opens the pull request the person put on you, where they wrote it');
+  assert.ok(row?.details !== undefined, 'and the bar carries what the body used to open');
+  assert.ok(
+    row?.details === 'goal' || row?.details === 'ask',
+    'which is the ask read in context: the goal’s page where there is one, the ask panel otherwise',
+  );
+
+  // An address the provider never gave — the `fake` provider resolves nothing —
+  // leaves the body on the ask. A card whose click lands nowhere reads, to an
+  // operator, as a console that is broken.
+  const unaddressed = buildNeedsYou({ ...state, refUrls: {} }).find((r) => r.kind === 'assigned');
+  assert.ok(
+    unaddressed?.opens === 'goal' || unaddressed?.opens === 'ask',
+    'with no address for the pull request the card falls back to the ask',
+  );
+});
+
 test('an assigned row with no clock running draws no age', () => {
   const base = buildDemoSeed().state;
   const sample = base.world.pullRequests[0];
