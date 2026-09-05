@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from 'react';
+import { buttonClass, type ButtonLook } from './button.js';
 
 /**
  * An external link that opens safely in a new tab.
@@ -17,16 +18,28 @@ export function ExtLink({
   href,
   title,
   boxed,
+  look,
   children,
 }: {
   href: string;
   title?: string;
   boxed?: boolean;
+  /**
+   * Draw it as the shared button instead of as a reference.
+   *
+   * A handful of external links are not references at all — they are a surface's
+   * *control*, and the top bar's offline `Issue!` is one: the same offer as the
+   * compose button it stands in for, so it has to be the same control. Given a
+   * look, the anchor wears {@link buttonClass} and drops `ext-ref`, because the two
+   * are alternatives rather than layers. It stays an `ExtLink` so the `target` and
+   * `rel` pair is still written in exactly one place.
+   */
+  look?: ButtonLook;
   children: ReactNode;
 }): JSX.Element {
   return (
     <a
-      className={boxed ? 'ext-ref ref-out' : 'ext-ref'}
+      className={look === undefined ? (boxed === true ? 'ext-ref ref-out' : 'ext-ref') : buttonClass(look)}
       href={href}
       title={title}
       target="_blank"

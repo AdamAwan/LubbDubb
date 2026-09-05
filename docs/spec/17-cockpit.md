@@ -3754,9 +3754,7 @@ issue is created directly; offline it is `↗ Issue!`, the external link it has 
 with the readings rather than against the wordmark because that is where every control on this strip
 is — the wordmark's job is to say where you are — and because inheriting the ident's 600 read them as a
 second half of the product name. They move as a **group**, so the pair cannot come apart when the strip
-wraps: the cheaper offer is only offered first while it is beside the other one. `.cn-issue` sizes them
-out of the bar's own face through a console-owned wrapper and `.cn-issue-btn` takes the button's padding
-off, since `console.css` styling `.ext-ref` directly is what this stylesheet is tested not to do.
+wraps: the cheaper offer is only offered first while it is beside the other one.
 
 **Beside it is the Claude Code hand-off, which answers instead of filing.** Most of what reaches the tracker
 as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
@@ -3770,22 +3768,35 @@ question is about, and the skill routes on the words they type — a goal number
 job, none is the fleet one ([20](20-validation.md#the-skill)). Unsent for `Ask`'s reason one step
 further along: there is not even a subject yet.
 
+**It is also the one deep link that does not say _Open in Claude Code_.** It says **`Question?`**. The
+other five are drawn beside the thing they open, and naming the destination is what stops six sites
+inventing six verbs for one act ([below](#opening-the-operators-own-claude-code)) — but this one opens
+nothing in particular. Named for the destination it described the mechanism and left the offer unmade:
+a developer's control parked between `Issue!` and the usage meters, rather than the invitation to ask
+_why has this not been picked up_ that it is. The label is a **closed union of two**, not a string, so
+the drift it ends cannot come back one call site at a time; the questions it is for are in the title,
+which is the only place a label of one word can put them.
+
 It sits beside `Issue!` because the two are the same moment — something looks wrong — and the cheaper
 reading of it should be the one nearer to hand. Unconditional, like every other deep link, and with
 the command in its title for the operator whose machine the link cannot reach.
 
-**Both are drawn as chips, one word and a mark each** (`.cn-ident-act`, and `.cn-ident-ask` for the
-accent border the question wears). They were two sentences in one weight and one ink a hand's width
-apart, and read as a single run of small print — an operator scanning the bar saw neither, which is
-the whole failure for a control whose value is being noticed at the moment something looks wrong. The
-punctuation carries the difference between them, because that is the difference: one files, one asks.
-The chrome is on the **wrapper** and not the control, since the offline face is `ExtLink` and takes no
-class of its own — and a rule naming `.ext-ref` is the one thing this stylesheet is tested not to do.
-`.cn-ident-act` rather than [the tag](#the-tag): the tag is a reading, and borrowing it dressed the
-pair as verdicts — and, because a `<button>` does not take the inherited
-`text-transform` an `<a>` does, drew one of them in sentence case beside the other in capitals. The
-question's ink is set as `.cn .cn-ask-btn`, since the console's `.cn a` reset counts as (0,1,1) and
-beats a bare class.
+**Both are drawn as the shared button, one word and a mark each** — `Button` connected, `ExtLink` with a
+`look` offline, `DesktopLink` beside them, all three at `ghost small`, which is this bar's chip size to
+begin with. They were two sentences in one weight and one ink a hand's width apart, and read as a single
+run of small print: an operator scanning the bar saw neither, which is the whole failure for a control
+whose value is being noticed at the moment something looks wrong. The punctuation carries the difference
+between them, because that is the difference: one files, one asks.
+
+**The chrome was a wrapper rule and is now the button kit.** `console.css` dressed the pair itself
+(`.cn-issue`, `.cn-issue-btn`, `.cn-ident-act`, `.cn-ident-ask`) because the offline face is `ExtLink`,
+which took no class of its own — and a rule naming `.ext-ref` is the one thing this stylesheet is
+[tested not to do](#tokens). What that bought was a pill inside a pill the moment the question hand-off
+became a `DesktopLink` and arrived already wearing [the button](#the-button): two borders, two radii and
+two grounds on one control. The seam that replaced the wrapper is `ExtLink`'s `look` prop — the same
+bargain `DesktopLink` makes with `buttonClass` — so the group is layout and nothing else, and the
+accent edge the question wore is gone with it: a tone is the one thing `className` on a button may not
+carry.
 
 **Both faces of `Issue!` go to LubbDubb's own repository, and neither follows
 `github.owner`/`github.repo`** (issue #449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
@@ -5859,12 +5870,18 @@ board's story-order one, and the plan sheet's. They are all `<DesktopLink>`
 (`web/src/components/DesktopLink.tsx`), over the scheme and the prompt builders in
 `web/src/cockpit/desktopLink.ts`.
 
-**Every one of them says "Open in Claude Code ↗".** They said six different things — `Ask Claude Code`,
+**Five of them say "Open in Claude Code ↗".** They said six different things — `Ask Claude Code`,
 `run it locally`, `Question?`, `Run it in Claude Code` and `Discuss…` twice — and six names for one act
 is a vocabulary an operator learns per surface rather than once. The argument about which verb a given
 site deserves also has no end, because every site can make a case for its own; naming the destination
 ends it. What still differs between call sites is what the session **arrives with** (`prompt`) and what
 it **does** (`explain`), which is the pair that was always genuinely theirs.
+
+**The sixth says `Question?`, because the label varies by the _act_ and never by the surface.** Five of
+these are one act — _open the thing I am looking at_ — and the top bar's is not: it is drawn beside the
+wordmark, addresses nothing, and is an offer to ask ([above](#the-top-bar-and-the-panels)). That is the whole of the
+exception, and `label` is typed as a **union of those two strings** rather than as a `string` so a
+seventh name cannot be written at a call site, which is how the six came about in the first place.
 
 **They are anchors, never buttons.** A deep link is a destination.
 
