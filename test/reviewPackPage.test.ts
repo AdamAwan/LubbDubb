@@ -354,7 +354,7 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(html, /Mark read/);
 
   const other = render(payload(), 'idea_a');
-  assert.match(other, /rp-step rp-dashed/, 'a region is drawn dashed');
+  assert.match(other, /rp-step [^"]*rp-dashed/, 'a region is drawn dashed');
   assert.match(other, /not in this PR/);
   assert.match(other, /the important bit/);
   // Mixed markers, so the column is drawn — beside the code, never in front of it.
@@ -368,6 +368,63 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /<strong> You decide\.<\/strong>/);
   assert.match(other, /cites pad entry <code>scr_1<\/code> — the pads have not loaded/);
   assert.match(other, /class="tag t-red tag-fill" title="the checker&#x27;s label">Read</);
+});
+
+test('a mechanical stop is drawn quiet with its code folded, and a step carries its idea’s number', () => {
+  const pack = checkedPack();
+  // An import block beside the walk's real work: the same rule the companion draws.
+  // → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
+  pack.ideas[0]!.anchors = [
+    {
+      kind: 'hunk',
+      range: { path: 'src/a.ts', start: 1, end: 2 },
+      code: ['+import { b } from "./b.js";', '+import { c } from "./c.js";'],
+      gist: 'The imports the gather needs.',
+      note: null,
+      caption: 'imports',
+      mark: null,
+    },
+    {
+      kind: 'hunk',
+      range: { path: 'src/a.ts', start: 20, end: 24 },
+      code: ['+  if (a) return b;', '+  if (c) return d;', '+  return e;'],
+      gist: 'The logic.',
+      note: null,
+      caption: null,
+      mark: null,
+    },
+  ];
+  const html = render({ ...payload(), pack }, 'idea_a');
+  assert.match(html, /rp-step rp-w-minor/, 'the import block is drawn quiet');
+  assert.match(html, /rp-w-normal/, 'the stop beside it is drawn as it always was');
+  assert.match(html, />mechanical</);
+  // Folded, never dropped — the document carries its code.
+  assert.match(html, /show the 2\s*lines/);
+  assert.match(html, /b\.js/);
+  // A step number carries its idea's, because they restart per idea.
+  // idea_a is second in the checker's reading order, so its steps are 02.n.
+  assert.match(html, /class="rp-step-n">02\.1</);
+  assert.match(html, /class="rp-step-n">02\.2</);
+});
+
+test('a long code block shows its head and folds the rest, saying how many lines there are', () => {
+  const pack = checkedPack();
+  const long = Array.from({ length: 40 }, (_, i) => `+  const line${i} = ${i};`);
+  pack.ideas[0]!.anchors = [
+    {
+      kind: 'hunk',
+      range: { path: 'src/a.ts', start: 1, end: 40 },
+      code: long,
+      gist: 'The new module.',
+      note: null,
+      caption: 'new file',
+      mark: null,
+    },
+  ];
+  const html = render({ ...payload(), pack }, 'idea_a');
+  assert.match(html, /class="rp-code-len">40 lines</, 'the caption row carries the whole count');
+  assert.match(html, /20 more\s*lines/, 'and the tail is folded');
+  assert.match(html, /line39/, 'which does not mean dropped');
 });
 
 test('an idea lists the scenarios its tests cover, between the walk and the claims', () => {

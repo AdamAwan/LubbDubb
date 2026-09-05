@@ -210,23 +210,23 @@ The reader is a developer with ten minutes and four other tabs open. Every prose
 **capped in characters**, and the tool refuses one that runs over, naming the field, the limit and the
 count:
 
-| Field                    | Cap |
-| ------------------------ | --- |
-| `headline`               | 100 |
-| a `summary` bullet       | 100 |
-| an idea's `title`        | 60  |
-| an idea's `claim`        | 120 |
-| an anchor's `gist`       | 90  |
-| an anchor's `caption`    | 40  |
-| a `coverage` line        | 60  |
-| the checker's `cue`      | 70  |
+| Field                 | Cap |
+| --------------------- | --- |
+| `headline`            | 100 |
+| a `summary` bullet    | 100 |
+| an idea's `title`     | 60  |
+| an idea's `claim`     | 120 |
+| an anchor's `gist`    | 90  |
+| an anchor's `caption` | 40  |
+| a `coverage` line     | 60  |
+| the checker's `cue`   | 70  |
 
 `claim` is the loosest because it is the checker's and has to stay falsifiable, which sometimes needs
 a clause the reader would not want.
 
 **The cap is what actually shortens the writing.** A prompt can ask for plain words and be obeyed for
 a paragraph; a number the author cannot argue with is what makes it choose. And the author has spent
-the whole run reading *this* repository, whose own prose runs long — which is exactly when that style
+the whole run reading _this_ repository, whose own prose runs long — which is exactly when that style
 starts coming out in its writing. So the prompt says, in as many words, not to copy it, and carries
 the one example that does more than any adjective:
 
@@ -279,6 +279,40 @@ has the caption. The tint goes with it: a screen of solid green reads worse than
 come back the moment a block mixes markers, which is when they carry something.
 
 A `region` anchor's lines are plain and never had a marker, so they are drawn plain.
+
+**A block over twenty-six lines shows twenty and folds the rest**, with the whole count in the caption
+row. A screen and a half of one block is scrolled past rather than read, and it buries every idea
+under it — one pack's two new files were 300 of its 534 lines. The tail is **folded, never dropped**:
+the document [carries its code](#the-document-carries-its-code), all of it stays in the file and stays
+copyable, and the fold is a `<details>` because the companion runs no script.
+
+### How hard to look at one stop
+
+_Built._ `anchorWeight` in `src/reviewPacks/derive.ts` and its cockpit twin decide it.
+
+The idea carries the checker's [attention](#attention). Under it, a walk mixes an import block and a
+fifty-line function and draws them as equals, which is what makes a long walk unreadable: the reader
+spends the same on the stop that costs nothing as on the one the change turns on.
+
+So each stop is weighed, **from the code and never from a field**:
+
+| Weight   | What                                                                   | Drawn                            |
+| -------- | ---------------------------------------------------------------------- | -------------------------------- |
+| `key`    | the author's own `mark`, which nothing here second-guesses             | ruled in the accent, in the rail |
+| `minor`  | a hunk whose changed lines are all imports, or two short changed lines | dimmed, tagged, code folded      |
+| `normal` | everything else                                                        | as it always was                 |
+
+Three things the rule gets right on purpose. **A region is never `minor`** — it is in the pack because
+somebody decided the change could not be judged without it. **The author's `key` wins over every
+rule**, including a one-line hunk. And **few lines is not little to read**: one changed line can be a
+thousand characters of prompt or doc string, so the line count and the characters in them are both
+counted, and either one over the bar makes the stop ordinary.
+
+**Derived rather than authored, and the trade is stated rather than hidden.** A `weight` on the anchor
+would be more accurate — the author knows which forty lines are hairy and which are boilerplate, and no
+rule reading the text ever will — but it is a document change that every pack already written would
+lack, and this reaches the noisy majority for nothing. If the walk still reads flat once this is in,
+the answer is the field, not a cleverer regex.
 
 ### Coverage
 
@@ -781,11 +815,14 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
    line — steps, changes, and a red flag naming a false claim or a disputed one. Under the title,
    the `cue`. The row is collapsed; the marks on it survive a reader who opens nothing. The numbers
    carry the reading order the checker chose, which is why they are numbers.
-4. **The walk.** Opening an idea shows the anchors as numbered steps down a rule. Each step is the
-   path and line, a tag — _changed +n −m_, _not in this PR_ drawn dashed, _the important bit_,
-   _claim is false_, _witness disagrees_ — the gist in one sentence, the code block with its
-   `caption` and diff lines coloured, and beneath it the folded reasoning: one fold per note, each
-   stamped _witness · hh:mm_ or _added afterwards_. A fold with a false or disputed claim behind it
+4. **The walk.** Opening an idea shows the anchors as steps down a rule, each numbered with its
+   idea's — `01.3`, never `3`, because step numbers restart per idea and a bare one says nothing
+   about where in the page the reader is. Each step is the path and line, a tag — _changed +n −m_,
+   _not in this PR_ drawn dashed, _the important bit_, _mechanical_, _claim is false_, _witness
+   disagrees_ — the gist in one sentence, the code block with its `caption` and diff lines coloured,
+   and beneath it the folded reasoning: one fold per note, each stamped _witness · hh:mm_ or _added
+   afterwards_. A `minor` step is drawn quiet and its code is folded
+   ([How hard to look](#how-hard-to-look-at-one-stop)); a `key` one is ruled in the accent. A fold with a false or disputed claim behind it
    is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
    The diff marker is a **column of its own** and never the first character of the code
    ([The code block](#the-code-block)).
@@ -889,10 +926,29 @@ no server module but `src/wire.ts`, which carries no runtime, so there is no one
 reach. The arrangement is the one `KNOWN_REVIEW_PACK_SCHEMA` already has and the defence is the same
 — `test/reviewPackCompanion.test.ts` runs both over one pack and asserts they agree, so a rule
 changed on one side and not the other fails there rather than shipping two pages that disagree about
-which idea is number one. Two differences are deliberate and are the absence of a harness rather than
-a second design: every idea is open, because there is no address bar to hold which one is not; and a
+which idea is number one. Three differences are deliberate and are the absence of a harness rather than
+a second design: every idea is open, because there is no address bar to hold which one is not; a
 `witnessed` claim's pad entry is **said to have stayed behind** rather than drawn, because a shared
-pack carries the document and nothing else.
+pack carries the document and nothing else; and it carries **a contents rail** the cockpit has no need
+of ([The contents rail](#the-contents-rail)).
+
+### The contents rail
+
+_Built._ `contents` in `src/reviewPacks/companion.ts`, and only there.
+
+Every idea is open on the companion, for the reason above — and that costs the reader the one thing
+the cockpit's collapsed rows give them for free: **a screen with the whole change on it**. The rail is
+that screen, held beside the page rather than at the top of it, so a reader eighty lines into a walk
+can still see which idea they are in and jump to another.
+
+It lists every idea and every stop under it, and it draws each stop's
+[weight](#how-hard-to-look-at-one-stop) rather than only its name — a `key` stop marked, a `minor` one
+dimmed — so the map says where the time goes before the reader has scrolled far enough to find out.
+
+**The cockpit does not get one**, and that is not an omission: its rows already are the rail, its
+address bar holds which idea is open, and a second map inside a modal is a column it cannot spare.
+Below the width where the rail would leave the page too narrow to read, it folds to the top of the
+document — still a map, and costing no column.
 
 ## Sharing a pack
 

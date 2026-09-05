@@ -9312,10 +9312,48 @@ select:disabled {
   border-style: dashed;
 }
 .rp-code-cap {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   font-family: var(--font-mono);
   color: var(--muted);
   padding: 4px 10px;
   border-bottom: 1px solid var(--border);
+}
+/* The tail of a long block, folded rather than dropped. */
+.rp-rest > summary,
+.rp-minor-code > summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 4px 10px;
+}
+.rp-rest > summary {
+  border-top: 1px solid var(--border);
+}
+.rp-rest > pre {
+  border-top: 1px solid var(--border);
+}
+/* A mechanical stop: an import block, or a change of two lines or fewer. Drawn
+   quiet, because a walk that gives it the weight of a fifty-line function is one
+   nobody can read. → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop */
+.rp-step.rp-w-minor {
+  padding: 2px 0 6px;
+  opacity: 0.62;
+}
+.rp-step.rp-w-minor .rp-gist {
+  margin: 2px 0;
+  font-size: 12px;
+}
+.rp-step.rp-w-minor:hover,
+.rp-step.rp-w-minor:focus-within {
+  opacity: 1;
+}
+.rp-step.rp-w-key {
+  border-left: 2px solid var(--accent);
+  margin-left: -15px;
+  padding-left: 13px;
 }
 .rp-code pre {
   margin: 0;

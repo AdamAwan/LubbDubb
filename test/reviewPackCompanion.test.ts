@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderReviewPackCompanion, reviewPackCompanionPath } from '../src/reviewPacks/companion.js';
-import { codeBlockLines, falseClaims, numberIdeas, packFacts } from '../src/reviewPacks/derive.js';
+import { anchorWeight, codeBlockLines, falseClaims, numberIdeas, packFacts } from '../src/reviewPacks/derive.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
-import type { ReviewIdea, ReviewPack, ReviewPackRecord } from '../src/types.js';
+import type { ReviewAnchor, ReviewIdea, ReviewPack, ReviewPackRecord } from '../src/types.js';
 import {
+  anchorWeight as webAnchorWeight,
   codeBlockLines as webCodeBlockLines,
   falseClaims as webFalseClaims,
   numberIdeas as webNumberIdeas,
@@ -69,6 +70,13 @@ function pack(over: Partial<ReviewPack> = {}): ReviewPack {
 }
 
 const record = (p: ReviewPack): ReviewPackRecord => ({ pack: p, writtenAt: '2026-09-01T13:10:00Z' });
+
+const render = (p: ReviewPack): string => renderReviewPackCompanion(record(p));
+
+/** One assertion the whole file makes: this page says that. */
+function contains(html: string, needle: string): void {
+  assert.equal(html.includes(needle), true, `expected the companion to contain ${JSON.stringify(needle)}`);
+}
 
 /** Where each of these appears, so the order can be asserted as an order. */
 function positions(html: string, needles: string[]): number[] {
@@ -264,6 +272,82 @@ test('every embedded line is escaped, and a cited pad entry is said to have stay
   assert.match(html, /stayed on the fleet that wrote it/);
 });
 
+/**
+ * The stops the weight rule is asserted over, and the answer each must get.
+ * → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
+ */
+const WEIGHTS: [string, ReviewAnchor, 'key' | 'normal' | 'minor'][] = [
+  [
+    'an import block is mechanical',
+    hunk({ code: ['+import { a } from "./a.js";', '+import { b } from "./b.js";', ' const x = 1;'] }),
+    'minor',
+  ],
+  ['a one-line type import is mechanical', hunk({ code: ['+  PullRequest,'] }), 'minor'],
+  ['two short changed lines are mechanical', hunk({ code: ['-  const n = 1;', '+  const n = 2;'] }), 'minor'],
+  ['one enormous line is not', hunk({ code: [`+  doc: '${'a prompt that runs on and on. '.repeat(12)}',`] }), 'normal'],
+  ['a real change is not', hunk({ code: ['+  if (a) return b;', '+  if (c) return d;', '+  return e;'] }), 'normal'],
+  ['the author’s own mark wins over every rule', hunk({ code: ['+import { a } from "./a.js";'], mark: 'key' }), 'key'],
+  [
+    'a region is never mechanical — somebody put it there on purpose',
+    { ...hunk({ code: ['const x = 1;'] }), kind: 'region' },
+    'normal',
+  ],
+];
+
+function hunk(over: Partial<ReviewAnchor> = {}): ReviewAnchor {
+  return {
+    kind: 'hunk',
+    range: { path: 'src/a.ts', start: 1, end: 4 },
+    code: ['+const x = 1;'],
+    gist: 'A stop.',
+    note: null,
+    caption: null,
+    mark: null,
+    ...over,
+  } as ReviewAnchor;
+}
+
+test('how hard to look at one stop is derived from the code, and the author’s mark wins', () => {
+  for (const [what, anchor, want] of WEIGHTS) assert.equal(anchorWeight(anchor), want, what);
+});
+
+test('a mechanical stop is drawn quiet, with its code folded rather than dropped', () => {
+  const html = render(
+    pack({
+      ideas: [
+        idea({
+          anchors: [
+            hunk({ code: ['+import { b } from "./b.js";'], gist: 'The import lands here.' }),
+            hunk({ code: ['+  if (a) return b;', '+  if (c) return d;', '+  return e;'], gist: 'The logic.' }),
+          ],
+        }),
+      ],
+    }),
+  );
+  // Quiet, and named as such — a reader must be able to see why it is dimmed.
+  contains(html, 'rp-w-minor');
+  contains(html, 'mechanical');
+  // Folded, never dropped: the document carries its code and the reader can open it.
+  contains(html, 'show the 1 line');
+  // The lines themselves are still in the file, tokenised by the highlighter.
+  contains(html, 'b.js');
+  // The stop beside it is drawn as it always was.
+  contains(html, 'rp-w-normal');
+});
+
+test('the contents rail names every idea and every stop, and marks where the time goes', () => {
+  const html = render(pack({ ideas: [idea({ title: 'The first idea' })] }));
+  contains(html, 'class="rp-rail"');
+  // Every idea and every stop, by the number the page draws on them.
+  contains(html, 'href="#rp-i1"');
+  contains(html, 'href="#rp-s1-1"');
+  contains(html, 'id="rp-i1"');
+  contains(html, 'id="rp-s1-1"');
+  // The key stop is marked in the rail too, so the map says where the time goes
+  // before the reader has scrolled to find out.
+  contains(html, 'rp-c-key');
+});
+
 test('the companion and the cockpit agree on the derivations neither can share', () => {
   // Two statements of one set of rules, for the reason `KNOWN_REVIEW_PACK_SCHEMA`
   // is: `web/src/` may name no server module but `src/wire.ts`, which carries no
@@ -312,6 +396,7 @@ test('the companion and the cockpit agree on the derivations neither can share',
       webFalseClaims(p).map((f) => [f.idea.id, f.number, f.claimNumber]),
     );
     assert.deepEqual(packFacts(p), webPackFacts(p));
+    for (const [what, anchor] of WEIGHTS) assert.equal(anchorWeight(anchor), webAnchorWeight(anchor), what);
   }
 });
 
