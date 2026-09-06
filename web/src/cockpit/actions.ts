@@ -466,6 +466,16 @@ export interface CockpitActions {
     >,
   ): void;
   /**
+   * Move about the Features tab: which card is open, how the list is ordered, and
+   * which of the open card's pull requests are listed.
+   *
+   * One method taking a partial rather than three, for `setTicketQuery`'s reason:
+   * they are one place, and opening a card under a different ordering is a single
+   * move that must not push two history entries. On the seam at all — rather than a
+   * `useState` in the board — because a card held open is a link somebody sends.
+   */
+  setFeatureQuery(next: Partial<Pick<Place, 'featureCard' | 'featureSort' | 'featurePrs'>>): void;
+  /**
    * Fold a feature's children away in the tickets tab, or open them again. Every feature is
    * open until this closes one, so the argument is the state being *set* rather
    * than a bare toggle — the caller already knows which way the chevron points,

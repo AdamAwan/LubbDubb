@@ -204,9 +204,11 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
   );
   assert.ok(chips(noAsks).includes('blocked:amber'), 'a plain wait says so');
 
-  // The ranking itself: the waiting agent is *also* parked on the limit, and the
-  // row wears the park. Both are true; only one is what to do about it.
-  const ranked = chips({ ...noAsks, parkedOnLimit: [waiting.id] });
+  // The ranking itself: the waiting agents are *also* parked on the limit, and the
+  // row wears the park. Both are true; only one is what to do about it. Every
+  // waiting agent, because the demo carries more than one and any left unparked
+  // would wear the plain wait this asserts against.
+  const ranked = chips({ ...noAsks, parkedOnLimit: live.filter((a) => a.status === 'waiting').map((a) => a.id) });
   assert.ok(ranked.includes('limit:amber'), `the park outranks the wait — got ${ranked.join(', ')}`);
   assert.ok(!ranked.includes('blocked:amber'), 'and the row wears one word, not both');
 });

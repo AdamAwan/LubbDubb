@@ -8475,6 +8475,12 @@ select:disabled {
    → docs/spec/17-cockpit.md#tokens
    --------------------------------------------------------------------------- */
 
+/* ---------- The feature board (docs/spec/17-cockpit.md#the-feature-board) ----------
+   Shared-family: tokens only. One list of cards, each folded to a four-line brief
+   — the standing, the bar, the reach, the movement — with what is in the way and
+   who clears it counted beside the name. One card is open at a time, on `Place`.
+   Nothing here asserts that a Feature is late, at risk or slipping. */
+
 .cn-fb {
   display: flex;
   flex-direction: column;
@@ -8491,64 +8497,141 @@ select:disabled {
   font-size: 16px;
   font-weight: 600;
 }
-
-.cn-fb-legend {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin: 0;
-  font-size: 12px;
-  color: var(--cn-fg-dim);
-}
-.cn-fb-legend span {
+.cn-fb-sort {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
-.cn-fb-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex: none;
-}
+
+/* -- the card and its brief ------------------------------------------------ */
 
 .cn-fb-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
-/* A Feature with something waiting on a person is marked, never ranked: the
-   border says "read this one first" and the card says what and why. No card
-   here asserts that a Feature is late, at risk or slipping — see `wantsYou`. */
+/* A card with something in your court is marked, never ranked: the border says
+   "read this one first" and the chips say what. */
 .cn-fb-card.cn-fb-wants {
   border-color: var(--cn-amber-line);
   background: var(--cn-amber-fill);
 }
-.cn-fb-orphans {
+/* A goal promoted to stand on its own: dashed, as the tickets tab hatches "no
+   feature" — the frame says it answers to no container. */
+.cn-fb-promoted {
   border-style: dashed;
 }
-
+.cn-fb-brief {
+  display: flex;
+  gap: 12px;
+  padding: 13px 16px 12px;
+}
+.cn-fb-brief-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cn-fb-hue {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  flex: none;
+}
+.cn-fb-hue-none {
+  background: var(--cn-line-hi);
+}
 .cn-fb-top {
   display: flex;
-  align-items: baseline;
-  gap: 9px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .cn-fb-top h3 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
 }
-.cn-fb-hue {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex: none;
-  align-self: center;
+/* The name is the control that opens the card; the refs sit beside it in their
+   own group, because a reference never goes inside a button. */
+.cn-fb-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cn-fg);
+  text-align: left;
+  cursor: pointer;
+}
+.cn-fb-toggle:hover h3 {
+  color: var(--cn-blue-ink);
+}
+.cn-fb-presence {
+  display: inline-flex;
+  gap: 4px;
+}
+.cn-fb-courts {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+.cn-fb-standing {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+/* A card with no account says so in the summariser's slot, quietly: a Feature
+   nobody has summarised and a story the fleet never summarises are ordinary. */
+.cn-fb-noline {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-noline .cn-fb-said {
+  display: inline;
+  font-style: normal;
+}
+.cn-fb-stamp {
+  margin: 0;
+}
+/* A fact about the digest, in the ask's hue: the standing was written against a
+   Feature that has since moved. Not what moved — a digest does not say. */
+.cn-fb-moved {
+  color: var(--cn-amber-ink);
+}
+.cn-fb-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 22px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .cn-fb-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cn-fb-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cn-fb-move,
+.cn-fb-reading {
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+.cn-fb-never {
+  color: var(--cn-fg-faint);
+  font-style: italic;
 }
 
-/* -- the roll-up bar ------------------------------------------------------ */
+/* -- the roll-up bar -------------------------------------------------------- */
 
 .cn-fb-bar {
   display: flex;
@@ -8588,19 +8671,21 @@ select:disabled {
     var(--cn-line) 5px
   );
 }
-
 .cn-fb-counts {
   display: flex;
   gap: 13px;
   flex-wrap: wrap;
   margin: 0;
-  font-size: 12px;
+  font: 11.5px var(--cn-mono);
   color: var(--cn-fg-dim);
   font-variant-numeric: tabular-nums;
 }
 .cn-fb-count b {
   color: var(--cn-fg);
   font-weight: 500;
+}
+.cn-fb-total {
+  color: var(--cn-fg-faint);
 }
 .cn-fb-c-delivered b {
   color: var(--cn-green-ink);
@@ -8617,150 +8702,30 @@ select:disabled {
 
 .cn-fb-attn {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--cn-fg-dim);
 }
 .cn-fb-attn b {
   color: var(--cn-fg);
 }
-
-/* -- the summary ----------------------------------------------------------- */
-
-/* The one piece of prose on the card: what a developer would tell the person who
-   asked for the Feature. Above the briefing because it answers the question the
-   card is opened with, where the lists below are the evidence for it. Every colour
-   through a token, so a theme reaches it — see `Summary`. */
-.cn-fb-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  border-left: 2px solid var(--cn-accent);
-  padding: 2px 0 2px 11px;
-}
-.cn-fb-standing {
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--cn-fg);
-  overflow-wrap: anywhere;
-}
-.cn-fb-sum-block h4 {
-  margin: 0 0 3px;
-  color: var(--cn-fg-faint);
-}
-.cn-fb-sum-block p {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--cn-fg-dim);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-/* The one block that is a *state* rather than a section: something is waiting on a
-   person, and the heading carries that where four identical headings would not. */
-.cn-fb-sum-blocked h4 {
-  color: var(--cn-amber-ink);
-}
-.cn-fb-stamp {
-  margin: 0;
-}
-
-/* -- the briefing --------------------------------------------------------- */
-
-/* Three lists, in the order the questions get asked: what is in the way, what is
-   moving, what is done. Every line in them is a quotation — see `Briefing`. */
-.cn-fb-brief {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
-  border-top: 1px solid var(--cn-line-soft);
-  padding-top: 9px;
-}
-.cn-fb-brief-list {
-  flex: 1 1 260px;
+/* Refs inside the sentence stay in the sentence: the group's own right-packing and
+   rule are for a row's trailing column, and a line of prose has neither. */
+.cn-fb-attn .cn-refs,
+.cn-fb-hold-title .cn-refs {
+  display: inline-flex;
+  justify-content: flex-start;
+  border-left: 0;
+  padding-left: 0;
   min-width: 0;
-}
-.cn-fb-brief-list h4 {
-  margin: 0 0 4px;
-  color: var(--cn-fg-faint);
-}
-.cn-fb-brief-list h4 .cn-psub {
-  text-transform: none;
-  letter-spacing: 0;
-  margin-left: 5px;
-}
-.cn-fb-brief-list ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.cn-fb-brief-list li {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--cn-fg-dim);
-  min-width: 0;
+  vertical-align: baseline;
 }
 
-/* The sentence somebody actually wrote. Clamped rather than truncated at the
-   server, so the whole of it is in the DOM for a reader who wants it: an
-   assessor's shortfall is whatever length its author felt like. */
-.cn-fb-said {
-  display: block;
-  color: var(--cn-fg);
-  overflow-wrap: anywhere;
-}
-.cn-fb-goal {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  color: var(--cn-fg);
-  cursor: pointer;
-  text-align: left;
-}
-.cn-fb-goal:hover {
-  color: var(--cn-accent);
-  text-decoration: underline;
-}
+/* -- reach ------------------------------------------------------------------- */
 
-/* An agent is stopped against a question and nobody is stopped by a shortfall,
-   so the two never wear one colour: red asks for a reply, amber asks for a
-   decision. */
-.cn-fb-b-question {
-  color: var(--cn-red-ink);
-  border-color: var(--cn-red-line);
-  background: var(--cn-red-fill);
-}
-.cn-fb-b-fellShort {
-  color: var(--cn-amber-ink);
-  border-color: var(--cn-amber-line);
-  background: var(--cn-amber-fill);
-}
-
-/* -- the readings beside it ----------------------------------------------- */
-
-.cn-fb-side {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  align-items: center;
-  font-size: 12px;
-  color: var(--cn-fg-dim);
-}
-.cn-fb-reading b {
-  color: var(--cn-fg-faint);
-  font-weight: 500;
-  margin-right: 4px;
-}
-.cn-fb-never {
-  color: var(--cn-fg-faint);
-  font-style: normal;
-}
-
+/* Four values drawn four ways, and `unknown` never as `absent`: an expired
+   credential and work that has not shipped read identically otherwise.
+   → docs/spec/24-environments.md#the-three-verdicts */
 .cn-fb-reach {
   display: inline-flex;
   gap: 5px;
@@ -8784,10 +8749,6 @@ select:disabled {
   border-color: var(--cn-blue-line);
   background: var(--cn-blue-fill);
 }
-/* Dashed and amber, and never the same as `absent`: an expired credential and
-   work that genuinely has not shipped read identically otherwise, and only one
-   of them is about deployment.
-   → docs/spec/24-environments.md#the-three-verdicts */
 .cn-fb-r-unknown {
   color: var(--cn-amber-ink);
   border-color: var(--cn-amber-line);
@@ -8795,11 +8756,289 @@ select:disabled {
   background: var(--cn-amber-fill);
 }
 
-/* -- the order --------------------------------------------------------------
-   A proposal, drawn as a thing to answer rather than as a reading. Amber
-   throughout, which is this cockpit’s "awaiting you": the same tone the watch
-   digest and the signals card wear for a declaration nobody has ruled on.
-   → docs/spec/33-story-sequencing.md#proposing-it */
+/* -- the open card ------------------------------------------------------------ */
+
+/* Three columns from 1200px, one below: what the summariser wrote, what is in the
+   way, its stories and PRs. */
+.cn-fb-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  border-top: 1px solid var(--cn-line);
+}
+.cn-fb-detail-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+@media (max-width: 1200px) {
+  .cn-fb-detail,
+  .cn-fb-detail-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cn-fb-col + .cn-fb-col {
+    border-top: 1px solid var(--cn-line);
+  }
+}
+.cn-fb-col {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cn-fb-col + .cn-fb-col {
+  border-left: 1px solid var(--cn-line);
+}
+@media (max-width: 1200px) {
+  .cn-fb-col + .cn-fb-col {
+    border-left: 0;
+  }
+}
+.cn-fb-colhead {
+  margin: 0;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  font-weight: 500;
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-empty {
+  margin: 0;
+  font-style: italic;
+}
+
+/* -- what the summariser wrote --------------------------------------------- */
+
+.cn-fb-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.cn-fb-sum-block h4 {
+  margin: 0 0 3px;
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-sum-block p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The two blocks that are a *state* rather than a section: something is usable,
+   something is waiting on a person. The heading carries it. */
+.cn-fb-sum-usable h4 {
+  color: var(--cn-green-ink);
+}
+.cn-fb-sum-blocked h4 {
+  color: var(--cn-red-ink);
+}
+.cn-fb-brief-list h4 {
+  margin: 0 0 4px;
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-brief-list h4 .cn-psub {
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 5px;
+}
+.cn-fb-brief-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cn-fb-brief-list li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  min-width: 0;
+}
+/* The sentence somebody actually wrote — whole, in the DOM, for a reader who wants it. */
+.cn-fb-said {
+  display: block;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+.cn-fb-said-inline {
+  color: var(--cn-fg-dim);
+}
+.cn-fb-goal {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.cn-fb-goal:hover {
+  color: var(--cn-accent);
+  text-decoration: underline;
+}
+
+/* -- in the way --------------------------------------------------------------- */
+
+/* One row per hold, striped by court on the left: your court in the ask's amber
+   (red where an agent is stopped against it), the fleet's and the world's in the
+   neutral rule. The tag says the court, the sentence is its owner's. */
+.cn-fb-holds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cn-fb-hold {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 6px 0 8px 10px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  border-left: 3px solid var(--cn-line-hi);
+  font-size: 12.5px;
+}
+.cn-fb-hold:last-child {
+  border-bottom: 0;
+}
+.cn-fb-hold-you {
+  border-left-color: var(--cn-amber);
+}
+.cn-fb-hold-red {
+  border-left-color: var(--cn-red);
+}
+.cn-fb-hold-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cn-fb-hold-title {
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+.cn-fb-hold-title .cn-refs {
+  margin-left: 6px;
+  display: inline-flex;
+}
+
+/* -- its stories and PRs ------------------------------------------------------ */
+
+.cn-fb-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.cn-fb-kids-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cn-fb-kids-filter {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+.cn-fb-stories {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+}
+.cn-fb-story {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.cn-fb-story:last-child {
+  border-bottom: 0;
+}
+.cn-fb-story-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--cn-fg-dim);
+  min-width: 0;
+}
+.cn-fb-story-row .cn-fb-goal {
+  flex: 1;
+  min-width: 0;
+}
+.cn-fb-story-row .cn-refs {
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+}
+.cn-fb-story-end {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+}
+/* The wave header, and what a held story waits behind — rows in the one list the
+   card draws, not a second list of the same stories.
+   → docs/spec/33-story-sequencing.md#the-feature-page */
+.cn-fb-wave {
+  padding: 9px 0 3px;
+  color: var(--cn-fg-faint);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn-fb-waits {
+  padding: 2px 0 0 26px;
+}
+/* A pull request under its story: indented off a rule, bottom rung first, wearing
+   the marks every other pull request row wears. */
+.cn-fb-pr {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 0 6px;
+  padding: 3px 0 3px 12px;
+  border-left: 2px solid var(--cn-line);
+  color: var(--cn-fg-dim);
+  min-width: 0;
+}
+.cn-fb-pr-done {
+  color: var(--cn-fg-faint);
+}
+.cn-fb-pr-ref {
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+}
+.cn-fb-rung {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-fb-pr-said {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cn-fb-pr-marks {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.cn-fb-num {
+  font: 11px var(--cn-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-unresolved {
+  margin: 0;
+}
+
+/* -- the order its stories go in ---------------------------------------------- */
 
 .cn-fb-seq {
   display: flex;
@@ -8880,76 +9119,6 @@ select:disabled {
 }
 
 /* -- the children --------------------------------------------------------- */
-
-.cn-fb-kids {
-  border-top: 1px solid var(--cn-line-soft);
-  padding-top: 9px;
-  overflow-x: auto;
-}
-.cn-fb-kids table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 12.5px;
-}
-.cn-fb-kids td {
-  padding: 5px 10px 5px 0;
-  border-bottom: 1px solid var(--cn-line-soft);
-  color: var(--cn-fg-dim);
-  vertical-align: baseline;
-  white-space: nowrap;
-}
-/* The wave header, and what a held story waits behind. Both are rows in the
-   table the board already draws rather than a second list of the same stories:
-   two orderings of one set is two answers to what is under this Feature.
-   → docs/spec/33-story-sequencing.md#the-feature-page */
-.cn-fb-wave td {
-  padding-top: 9px;
-  color: var(--cn-fg-faint);
-  font-size: var(--label-size-sm);
-  letter-spacing: var(--label-track);
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--cn-line);
-}
-.cn-fb-wave:first-child td {
-  padding-top: 0;
-}
-.cn-fb-waits td {
-  padding-top: 0;
-  color: var(--cn-fg-faint);
-  font-size: 11.5px;
-  border-bottom: 0;
-}
-
-.cn-fb-kids tr:last-child td {
-  border-bottom: 0;
-}
-.cn-fb-kind {
-  color: var(--cn-fg-faint);
-  font-size: 11px;
-}
-.cn-fb-title {
-  width: 100%;
-  white-space: normal;
-}
-.cn-fb-title button {
-  background: none;
-  border: 0;
-  padding: 0;
-  text-align: left;
-  color: var(--cn-fg);
-  font: inherit;
-  cursor: pointer;
-}
-.cn-fb-title button:hover {
-  color: var(--cn-blue-ink);
-}
-.cn-fb-num {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.cn-fb-unresolved {
-  margin: 0;
-}
 
 /* ---------- The review pack (docs/spec/31-review-packs.md#the-page) ----------
    Shared-family: tokens only. The page is the two-layer read — one line per idea,

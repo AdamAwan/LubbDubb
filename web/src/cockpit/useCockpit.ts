@@ -413,6 +413,12 @@ export function useCockpit(): CockpitStatus {
         logUsage('ticket.filter');
         go(next);
       },
+      // One `go` for however many of the three moved, for `setTicketQuery`'s reason.
+      setFeatureQuery: (next) => {
+        // One seam for the card, the order and the filter, for `setTicketQuery`'s reason.
+        logUsage('feature.filter');
+        go(next);
+      },
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed
@@ -586,6 +592,9 @@ export function useCockpit(): CockpitStatus {
       ticketOrder: place.ticketOrder,
       ticketView: place.ticketView,
       ticketColumns: place.ticketColumns,
+      featureCard: place.featureCard,
+      featureSort: place.featureSort,
+      featurePrs: place.featurePrs,
     }),
   };
 }

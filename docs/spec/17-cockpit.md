@@ -470,6 +470,9 @@ once.
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                |
 | `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
 | `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                      |
+| `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
+| `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
+| `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -4245,59 +4248,94 @@ line of its own under the board. Folding them would tell a reader the tracker sa
 parent when the truth is that nobody could read the link — the same distinction the tickets tab draws
 by leaving unresolved rows [flush with no heading](#features-are-headings-not-rows).
 
-**The orphan card is the most valuable thing on the page and the most uncomfortable.** Work answering
-to no container is invisible at portfolio level by construction, and a board that quietly dropped it
-would report a fleet whose every hour rolls up somewhere. It carries its own spend for that reason:
-_this much was spent under no Feature_, which is also the sentence that says every roll-up above it
-understates its own.
+**A goal with no parent Feature is promoted to a card in the same list**, never swept into an "other
+work" pile. It draws only the parts that apply: no standing — the harness writes accounts of
+Features, and the card says `no account — the fleet summarises Features, not stories` rather than
+substituting the appraiser's summary, which is what the goal _asks for_ and not where it is; its own
+delivery or shortfall quotation where one stands; its reach off the snapshot's per-goal fold; its
+landings out of the bucket it came with; its holds and its agents from the same view module the
+Feature cards read. The frame is dashed, as the tickets tab hatches "no feature". There is no bar
+with a denominator of one dressed as progress — the standing chip says the one thing the bar would.
 
-### The briefing
+**The orphan bucket's money is the most uncomfortable reading on the page, and it moves to the
+header.** Work answering to no container is invisible at portfolio level by construction, and a board
+that quietly dropped it would report a fleet whose every hour rolls up somewhere. So the page says,
+once, beside its count of Features: _this much was spent under no Feature_ — which is also the
+sentence that says every roll-up below it understates its own.
 
-Under the bar, each card carries three short lists — **In the way**, **Being worked**, **Delivered** —
-which are the questions somebody outside the fleet asks in that order: _what is stopping this_, _is it
-moving_, _what of it is done_. The counts above answer none of them: `3 fell short` is a number, and
-what a person needs is the sentence saying what fell short.
+### Two questions, one card
 
-**Every line in it was written by somebody.** A delivered line is `IssueDelivery.summary` as its
-author wrote it, attributed to them; a blocked line is either the agent's own escalation prompt or the
-assessor's shortfall summary; a working line is a goal and the age of the run on it. Nothing in the
-briefing is composed, scored, summarised or forecast — which is the same discipline the attention line
-one row up keeps from the other side. That line **counts facts and phrases them**; this one **quotes
-sentences and phrases nothing**. A briefing that wrote its own sentence would be exactly the verdict
-about a Feature this surface refuses, wearing an agent's voice.
+The page answers two questions, in this order, and the card is shaped by them. **How is the work
+coming along** — the update a lead gives the product owner, quotable with no cockpit around it. And
+**where do the next twenty minutes go** — which Feature to open first, and what in it is theirs. The
+operator is the product owner _for_ the harness, so anything in prose here is read by them and quoted
+onward to people with no cockpit in front of them.
 
-**Blocked is two words, not one.** `asked` is an agent parked on an escalation nobody has answered —
-the fleet is stopped and what it needs is a reply. `fell short` is an assessor's verdict that the work
-did not reach the goal — nothing is stopped, and what it needs is a decision. Folded into one word a
-reader could not tell which of the two things they owe, so they are drawn in two colours and questions
-sort first: one has an agent waiting against it and the other has been waiting anyway.
+So every card **folds to a brief**, and the page opens with every card folded. The brief is four
+lines: the name, with who is on it and what is in the way counted beside it; the standing, quoted
+whole and stamped; the bar and the reach; the movement. One card is open at a time, on `Place`
+(`?card=<n>`, [the address bar](#the-address-bar)), so the back button steps out of it and a link
+somebody sends opens on it. **The name is the control** that opens and shuts the card, and the
+reference sits beside it in its own group — a reference never goes inside a button ([links](#links)).
 
-**A question counts only where the escalation names the goal.** One raised against a pull request
-(`pr:42:ci`) names no goal here, and it is counted under **no** Feature rather than attributed to a
-guess at which one the PR was for. It is still on the needs-you rail, which is where a parked agent is
-answered.
+The open card is three columns from 1200px and one below: **what the summariser wrote** (the three
+fields under the standing, the story order when there is one, and what was delivered, in its
+authors' words), **what is in the way, grouped by who clears it**, and **its stories and PRs**. The
+briefing's other two lists are gone as lists: what is being worked is the presence chips on the
+brief, and what is blocked is the middle column, which knows more than the two kinds the briefing
+had.
 
-**Only `open` escalations block**, never "unanswered": `dismissEscalation` stamps no `answeredAt`, so a
-briefing keyed on that field would leave a Feature reporting a question nobody is being asked any more.
+### In the way, grouped by who clears it
 
-**The outcome word decides the done and blocked lists, not the standing.** A re-picked goal is
-`inFlight` and still carries the verdict of its last attempt, and both readings are true at once —
-keying the delivered list off the standing would take finished work off the board for as long as an
-agent is on the goal.
+Three lists, in the order somebody with twenty minutes reads them: **you**, **fleet**, **world**.
+`featureHolds` (`web/src/view/featureHolds.ts`) is the fold, and it is a **lens in the browser**: it
+maps verdicts other modules already reached onto three buckets and writes no sentence of its own.
+Every row is its owner's wording — the rail row's own title, the pull request's own leading reason
+(`PrAttention.reasons[0]`), the pickup gate's, the environment gate's. The mapping is a total table
+over unions that already name a party:
 
-Each list is bounded (`FEATURE_BRIEFING_ROWS`, `src/features/featureBoard.ts`) and **says what it stood for**: `3 of 11`, never three
-rows and silence. Three of eleven blocked items read as three blocked items is the one number on this
-card somebody would act on being wrong about. The orphan card carries a briefing on the same terms —
-work answering to no container is still work, and a person asking what is in the way wants that answer
-too.
+| Bucket    | Reads                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **you**   | every needs-you row whose goal is one of the card's (or whose `pr:` origin belongs to one), and a pull request whose court is `you` that no such row already covers                         |
+| **fleet** | a goal whose pickup status is `cooldown`, `blocked` (the sequence hold), `planning`, `appraisal` or `obstacle`; an agent parked on the usage limit; a pull request whose court is `harness` |
+| **world** | a pull request whose court is `elsewhere` or `stalled`; a goal whose environment gate is holding (`gateHold`)                                                                               |
 
-A Feature with nothing worked, nothing delivered and nothing blocked draws **no briefing at all**. The
-bar has already said so, and three empty headings would be the loudest thing on the card saying
-nothing.
+`unwatched` is in none of them. An item nothing has read is neither queued nor held, and the brief's
+attention line already says so in the words that fit. `settled`, `done` and `unwatched` pull requests
+are skipped for the same reason: nobody's court.
+
+The three **counts** on the brief are the lengths of these lists, drawn only when non-zero — a row that
+always shows three chips is one the eye learns to skip, and `world 0` on every card says nothing about
+any of them. Your court is amber, and red where an agent is stopped against it (an escalation or a
+permission — the rail's own split). Fleet and world are neutral: nothing there is asking.
+
+**One control per row, and it is the rail's.** A row that is a needs-you row opens the same ask panel
+the rail opens; anything else opens the page its reference names. No merge or answer button is drawn
+here that is not already the rail's — a second set of verdict controls is two paths to keep in step,
+and a card-level "do this first" button is an opinion about which hold matters most.
+
+### Who is on it
+
+One `AgentOnIt` per live agent under the card's goals, on the brief beside the name: the pulsing green
+chip for one that is working, and the same chip **amber and still, with a pause glyph**, for one
+that is holding — parked on a question or on the account's limit. One mark with two states rather than
+a second mark: an operator counting agents down the page has to tell the two apart without reading,
+and a second glyph would be a second legend. Each opens the transcript. Nobody draws nothing.
+
+The join is the goal page's ("On this goal"): an agent's task origin read through `standsFor`, and a
+`pr:<n>` origin attributed to the goal that owns the pull request, so an agent fixing a story's CI is
+on the story.
+
+### Movement
+
+`3 landed in the last 7 days · last 3h ago`, or `never landed`. The lens ships **stamps**
+(`FeatureRollup.landings`, newest first, bounded by `FEATURE_LANDINGS`) and the cockpit counts them
+inside a window it names on the label. Nothing says whether three is many: how much movement is enough
+is a policy nobody has stated, and a rate shipped from the server would be the board's own opinion.
 
 ### The order its stories go in
 
-Between the summary and the briefing, when the Feature has one: a **proposal to answer** while nobody
+In the open card's first column, under the summary, when the Feature has one: a **proposal to answer** while nobody
 has, and one line once somebody has. It groups the children list already on the card rather than
 adding a second one, and the copy on the Goal page is folded shut. Both surfaces, and why the order
 is amended by talking to Claude Code rather than by dragging, are
@@ -4306,11 +4344,10 @@ which is the default.
 
 ### The feature summary
 
-Above the briefing, and above everything except the bar and its counts, a card draws **the one piece
-of prose on this board**: where the Feature actually is, written by an agent, in its own voice.
+On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice.
 
 The board answers every question about a Feature except the one it is opened with. A bar, six counts,
-three lists of quotations and a row per child are each true, and a reader assembles _where is this_
+three lists of holds and a row per child are each true, and a reader assembles _where is this_
 out of them themselves — which two readers do differently. The summary is that sentence, said once,
 by somebody who read the whole Feature.
 
@@ -4348,6 +4385,23 @@ record where the Feature stood before the run, so anything that moved during it 
 after and that Feature would never be summarised again — silently, and indistinguishably from a
 Feature at rest.
 
+#### The stamp says three facts, and never what moved
+
+Beside `written 1h ago` the brief draws one of three facts. Nothing, when the summary was written
+against the standing the Feature has now. **`moved since this was written`**, when the digest the rule
+compares (`FeatureRollup.standingKey`, `featureRecords`' answer, quoted) no longer matches the one the
+summary was stamped with — the same comparison rule `feature-summary` makes, so the marker appears
+exactly when a rewrite is coming. **`being rewritten`**, when a task at `issue:<n>:summary` is queued
+or running.
+
+A digest says _whether_, never what or how much. `2 things have changed since` and `since this was
+written, #376 hit a conflict` are both sentences the harness would be composing about a Feature, which
+is the verdict this surface refuses — so neither is drawn, and the marker is the whole of it.
+
+**An empty `standingKey` is "not digested", not "unchanged".** It never equals a real key, so a
+cockpit that compared it would mark every card on a deployment that produced no digest as moved. The
+brief draws no marker for it.
+
 #### Nothing gates on it
 
 A Feature is exactly as delivered with a summary as without one, so a missing summary is silence
@@ -4376,9 +4430,21 @@ old. How stale is too stale is a policy nobody has stated.
 **No sizing or forecast.** Extrapolating the remaining work from recent spend is the one reading that
 would make the board feel finished, and it is the one it has no honest basis for.
 
-The ordering — features wanting a person first, then the ones carrying the most work — is an
-**ordering and not a verdict**, the same distinction the queue rail draws. It says which card to read
-first and nothing about whether a Feature is in trouble.
+The ordering is an **ordering and not a verdict**, the same distinction the queue rail draws: every
+key is a count of facts, and none says a Feature is in trouble. The default — the absent value of
+`?sort=` — is **wants you**: the most in your court first, then the most held inside the fleet, then
+the most work. The alternatives are `moved` (newest landing first, `never landed` last), `done`
+(delivered over total) and `spend` (unmeasured last, because null is not a small number). "Closest to
+done" is offered and is **never the default**: it puts the Feature most blocked on the operator at the
+bottom of the page that exists to surface it. Promoted goals sort on the same keys. The server's own
+order on the payload (`byWantsYouThenSize`) is what the cockpit starts from; it re-sorts on read.
+
+The open card's stories carry a filter — `open` / `done` / `all`, on `Place` as `?prs=` — and under
+each story its **pull requests in stack order**, bottom rung first, each wearing the four marks every
+other pull request row wears (`CiMark`, `ReviewMark`, `PackMark`, `CommentsMark`), its rung position
+(`[2/3]`), its court's own leading reason, and `AgentOnIt` where a task names it. Which pull requests
+are a story's is `goalOfPr`'s answer and the rung order is `state.stacks`' — both readings the cockpit
+already holds, so `FeatureChildRow` carries no PR field.
 
 ### Reach folds with the same function, one tier up
 

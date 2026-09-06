@@ -195,7 +195,38 @@ export interface Place {
    * of being excluded by a list written before it existed.
    */
   ticketColumns: string[];
+  /**
+   * The Feature (or promoted goal) whose card on the Features tab is open, by issue
+   * number, or null for every card folded to its brief.
+   *
+   * One card at a time is the tab's shape, so a number rather than a list. A place
+   * rather than a `useState` for the reason every field here is one: stepping back
+   * out of a card has to fold it, and "look at what #812 is doing" is a link
+   * somebody sends. Validated like {@link pr}: a hand-typed `?card=abc` opens nothing.
+   */
+  featureCard: number | null;
+  /**
+   * How the Features tab's list is ordered. Defaults to `wants-you` — the cards
+   * asking for a decision first, which is what the tab is opened for.
+   */
+  featureSort: FeatureSort;
+  /**
+   * Which pull requests the open card lists. Defaults to `open` — the ones still in
+   * flight are the ones a card is opened to look at; the landed ones are history.
+   */
+  featurePrs: FeaturePrFilter;
 }
+
+/**
+ * The orderings the Features tab offers. `FEATURE_SORTS` is exported for the board
+ * to draw its buttons from, so the controls and the parser cannot disagree about
+ * which spellings exist.
+ */
+export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
+export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
+/** Which of an open card's pull requests are listed. */
+export type FeaturePrFilter = 'open' | 'done' | 'all';
+const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 
 /**
  * Every tab a `?tab=` may name — the parser's whole vocabulary, and wider than the
@@ -311,6 +342,9 @@ export const NOWHERE: Place = {
   ticketOrder: 'added',
   ticketView: 'table',
   ticketColumns: [],
+  featureCard: null,
+  featureSort: 'wants-you',
+  featurePrs: 'open',
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -485,6 +519,12 @@ export function readPlace(search: string): Place {
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
     ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
     ticketColumns: readStrings(param(query, 'hide')),
+    // `card`, `sort` and `prs`, not `feature`, `order` and `view`: the tickets tab
+    // owns those three, and two places reading one parameter is a place that opens
+    // showing whatever the other one was set to — `configGroup`'s reason exactly.
+    featureCard: readPrNumber(param(query, 'card')),
+    featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
+    featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
   };
 }
 
@@ -719,6 +759,11 @@ export function placeQuery(place: Place): string {
   if (place.ticketColumns.length > 0) {
     query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
   }
+  // Defaults omitted for the tickets tab's reason: a bare `?tab=features` is the
+  // board as it opens, not a second spelling of it.
+  if (place.featureCard !== null) query.set('card', String(place.featureCard));
+  if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
+  if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

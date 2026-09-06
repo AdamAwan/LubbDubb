@@ -3,6 +3,7 @@ import type { FeatureBoardPayload } from '../../wire.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
 import { buildSpendGoals } from '../../spendInsights.js';
+import { featureRecords } from '../../summaries/featureRecord.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
@@ -70,8 +71,21 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       // the tickets route assigns it.
       const featureSlots = store.ensureFeatureColors(items.flatMap((i) => (i.parent ? [i.parent.number] : [])));
 
+      // The digest rule `feature-summary` compares, from the same gather it reads,
+      // on the same facts `src/system.ts` hands it — never a second digest built
+      // here, which is one drift away from a card saying "moved" about a Feature
+      // the fleet will not re-summarise.
+      const standingKeys = new Map(
+        featureRecords(store, {
+          containerTypes: config.issueContainerTypes,
+          watchLabel: watchLabelFor(config.labelPrefix),
+          environments: config.environments,
+        }).map((f) => [f.number, f.key]),
+      );
+
       const board = buildFeatureBoard({
         items,
+        standingKeys,
         outcomes: ticketOutcomes({
           runs,
           conclusions: store.listIssueConclusions(),
