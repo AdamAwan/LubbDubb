@@ -4415,6 +4415,33 @@ The orphan card carries **no summary**, and the omission is the point rather tha
 says where a _Feature_ has got to; the orphan bucket is every item the tracker says answers to
 nothing, which share no goal for anybody to have got anywhere with.
 
+### A paused Feature rests, it does not leave
+
+Ten Features open at once is a board that answers nothing, and the fix an operator reaches for first is
+to un-watch the ones they are not on. That is the wrong instrument
+([06](06-issue-pickup.md#pausing-a-feature-which-is-not-un-watching-one)), so the card carries its own:
+a **Pause** control beside the court chips, writing `POST /api/features/:number/pause`.
+
+A paused card is **blurred, not hidden, and keeps its place in the list** — sunk to the end under every
+sort, including the ones that would otherwise pull it back up, because resting is the whole point of
+the button and a sort that outranks it hands back the crowded board the operator paused their way out
+of. Hidden would be worse than crowded: a Feature nobody is working and nobody can see is exactly the
+silent hold this codebase spends its sharp edges avoiding. So the card stays, faded, with the line
+saying what a pause means — nothing under it is picked up, and its tags are untouched — and the header
+counts them: `· N paused`.
+
+The fade lifts on `:hover`, on `:focus-within`, and whenever the card is **open**. All three, and all
+three lift the card **whole**: a CSS `filter` on an ancestor cannot be undone by a descendant, so
+nothing inside a rested card can opt out of the fade — the Resume control included. It stays clickable
+and tabbable while faded, because the fade is ink and nothing else; focusing it clears the fade before
+the click lands, which is what makes the keyboard path work. `focus-within` is not optional garnish
+here: without it the one control that undoes the state is unreadable to anybody not using a pointer.
+
+A paused card also drops the `cn-fb-wants` frame and its attention line. The amber border means _read
+this one first_, and the operator has just said the opposite; leaving it on would put the loudest ink
+on the page on the card they parked. What it does **not** drop is the count in the header — the frame
+is a ranking and the count is a fact.
+
 ### What it deliberately does not draw
 
 **No verdict about a Feature.** There is no _at risk_, no _on track_ and no forecast date, and their

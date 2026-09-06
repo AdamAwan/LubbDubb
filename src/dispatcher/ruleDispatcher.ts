@@ -3,6 +3,7 @@ import type { PrRefStyle } from '../prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import type { Decision, Issue, ValidationCheck } from '../types.js';
+import { pausedIssueNumbers } from '../goalPause.js';
 import {
   effectivePickupStates,
   isIssuePickupEligible,
@@ -248,7 +249,14 @@ export class RuleDispatcher implements Dispatcher {
 
     const profileOverrides = new Map((ctx.profileOverrides ?? []).map((o) => [o.origin, o.profile]));
 
-    const pickupStates = effectivePickupStates(this.pickup);
+    // The pause set is folded in per cycle, not at boot: a policy snapshotted once
+    // would go on dispatching under a Feature an operator paused ten minutes ago.
+    const pickup: IssuePickupPolicy = {
+      ...this.pickup,
+      pausedIssues: pausedIssueNumbers(ctx.goalPauses ?? [], ctx.world.issues, this.pickup.containerTypes),
+    };
+
+    const pickupStates = effectivePickupStates(pickup);
 
     const openPrs = ctx.hiddenPrs?.length ? [...ctx.world.pullRequests, ...ctx.hiddenPrs] : ctx.world.pullRequests;
 
@@ -257,7 +265,7 @@ export class RuleDispatcher implements Dispatcher {
     const deliveries = new Map((ctx.deliveries ?? []).map((d) => [d.originRef, d]));
     const deliveryParked = (issue: Issue): boolean =>
       deliveryHold(deliveries.get(issueOrigin(issue.number)) ?? null, issue, {
-        pickupStates: this.pickup.pickupStates,
+        pickupStates: pickup.pickupStates,
         signals: ctx.deliverySignals,
       }) !== null;
 
@@ -278,9 +286,9 @@ export class RuleDispatcher implements Dispatcher {
           !deliveryParked(i) &&
           !appraisalParked(i) &&
           !blocked.has(issueOrigin(i.number)) &&
-          isIssuePickupEligible(i, this.pickup).eligible,
+          isIssuePickupEligible(i, pickup).eligible,
       )
-      .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
+      .map((issue) => ({ issue, weight: issuePriority(issue.labels, pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
 
     const routes = new Map<number, PlanRouteVerdict>();
@@ -296,7 +304,7 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    const sequencing = this.pickup.sequencing ?? 'off';
+    const sequencing = pickup.sequencing ?? 'off';
     const sequences = new Map((ctx.featureSequences ?? []).map((s) => [s.originRef, s]));
     const edges =
       sequencing === 'off'
@@ -312,9 +320,9 @@ export class RuleDispatcher implements Dispatcher {
       sequencing === 'full'
         ? sequenceable(
             ctx.world.issues,
-            this.pickup.containerTypes,
-            (issue) => issueWatchGateReason(issue, this.pickup) === null,
-            this.pickup.sequenceMaxChildren ?? DEFAULT_SEQUENCE_MAX_CHILDREN,
+            pickup.containerTypes,
+            (issue) => issueWatchGateReason(issue, pickup) === null,
+            pickup.sequenceMaxChildren ?? DEFAULT_SEQUENCE_MAX_CHILDREN,
           )
         : [];
 
@@ -373,7 +381,7 @@ export class RuleDispatcher implements Dispatcher {
           },
         }),
       eligibleIssues,
-      parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
+      parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),
       routes,
       sequenceWaits,
       sequenceableFeatures,
@@ -384,7 +392,7 @@ export class RuleDispatcher implements Dispatcher {
       obstacles: ctx.obstacles ?? [],
       redBaseChecks: redBaseChecks(openPrs),
       consider,
-      pickup: this.pickup,
+      pickup,
       cooldown: this.cooldown,
       templates: this.templates,
       planning: this.planning,
@@ -404,12 +412,10 @@ export class RuleDispatcher implements Dispatcher {
       localValidation: this.localValidation(),
       validationClaimMinutes: this.validation.desktopClaimMinutes,
       workItemStates:
-        this.pickup.inReviewState && pickupStates?.length
-          ? { inReviewState: this.pickup.inReviewState, pickupStates }
-          : null,
+        pickup.inReviewState && pickupStates?.length ? { inReviewState: pickup.inReviewState, pickupStates } : null,
       workItemInProgress:
-        this.pickup.inProgressState && pickupStates?.length
-          ? { inProgressState: this.pickup.inProgressState, pickupStates }
+        pickup.inProgressState && pickupStates?.length
+          ? { inProgressState: pickup.inProgressState, pickupStates }
           : null,
     };
   }

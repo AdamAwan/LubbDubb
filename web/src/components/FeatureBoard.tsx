@@ -68,6 +68,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
 
   const cards = orderCards(buildCards(board, view), view.featureSort);
   const promoted = orphans?.counts.total ?? 0;
+  const paused = features.filter((f) => f.paused !== null).length;
 
   return (
     <div className="cn-fb">
@@ -75,6 +76,9 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
         <h2>Features</h2>
         <span className="cn-psub">
           {features.length} {features.length === 1 ? 'feature' : 'features'}
+          {/* A pause withholds work, so it is counted out loud. A rested card that
+              nothing says is resting is the silent version of this button. */}
+          {paused > 0 && ` · ${paused} paused`}
           {promoted > 0 && ` · ${promoted} ${promoted === 1 ? 'story' : 'stories'} with no Feature`}
           {/* The orphan bucket's money, said once about the page: this much was spent
               under no Feature, which is also the sentence that says every roll-up
@@ -142,6 +146,11 @@ function buildCards(board: FeatureBoardPayload, view: CockpitView): Card[] {
 }
 
 function orderCards(cards: Card[], sort: FeatureSort): Card[] {
+  // A paused Feature sinks under every sort, including the ones that would
+  // otherwise pull it back up: resting is the whole point of the button, and a
+  // sort that outranks it hands the operator back the crowded board they paused
+  // their way out of.
+  const resting = (c: Card): number => (c.kind === 'feature' && c.rollup.paused !== null ? 1 : 0);
   const counts = (c: Card): FeatureCounts => (c.kind === 'feature' ? c.rollup.counts : countOne(c.row.standing));
   const cost = (c: Card): number | null => (c.kind === 'feature' ? c.rollup.costUsd : c.row.costUsd);
   const latest = (c: Card): string | null =>
@@ -157,7 +166,7 @@ function orderCards(cards: Card[], sort: FeatureSort): Card[] {
     done: (a, b) => desc(share(counts(a)), share(counts(b))),
     spend: (a, b) => desc(cost(a) ?? -1, cost(b) ?? -1),
   };
-  return [...cards].sort((a, b) => by[sort](a, b) || number(a) - number(b));
+  return [...cards].sort((a, b) => resting(a) - resting(b) || by[sort](a, b) || number(a) - number(b));
 }
 
 function share(counts: FeatureCounts): number {
@@ -218,10 +227,13 @@ function FeatureCard({
   const { rollup: feature, holds } = card;
   const open = view.featureCard === feature.number;
   const attention = wantsYou(feature, view);
+  const rested = feature.paused !== null;
   return (
     <Panel
       density="flush"
-      className={`cn-fb-card${holds.you.length > 0 ? ' cn-fb-wants' : ''}${open ? ' cn-fb-open' : ''}`}
+      className={`cn-fb-card${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${open ? ' cn-fb-open' : ''}${
+        rested ? ' cn-fb-rested' : ''
+      }`}
     >
       <Brief
         hue={<i className={`cn-fb-hue f${feature.slot}`} aria-hidden="true" />}
@@ -237,8 +249,15 @@ function FeatureCard({
         costUsd={feature.costUsd}
         landings={feature.landings}
         now={view.now}
+        pause={<PauseToggle feature={feature} onChanged={onAnswered} />}
       >
-        {attention !== null && <p className="cn-fb-attn">{attention}</p>}
+        {feature.paused !== null && (
+          <p className="cn-fb-restednote">
+            Paused {relAge(feature.paused.since, view.now)} — nothing under it is picked up. Its watch tags are
+            untouched, so resuming puts the work back exactly as you left it.
+          </p>
+        )}
+        {attention !== null && !rested && <p className="cn-fb-attn">{attention}</p>}
       </Brief>
       {open && (
         <div className="cn-fb-detail">
@@ -372,6 +391,7 @@ function Brief({
   costUsd,
   landings,
   now,
+  pause,
   children,
 }: {
   hue: ReactNode;
@@ -387,6 +407,7 @@ function Brief({
   costUsd: number | null;
   landings: readonly FeatureLandingRow[];
   now: number;
+  pause?: ReactNode;
   children?: ReactNode;
 }): JSX.Element {
   return (
@@ -408,6 +429,7 @@ function Brief({
           {state !== null && <Tag>{state}</Tag>}
           <Presence agents={holds.agents} actions={actions} />
           <Courts holds={holds} />
+          {pause}
         </div>
         {standing}
         <div className="cn-fb-grid">
@@ -424,6 +446,29 @@ function Brief({
         {children}
       </div>
     </div>
+  );
+}
+
+function PauseToggle({ feature, onChanged }: { feature: FeatureRollup; onChanged: () => void }): JSX.Element {
+  const paused = feature.paused !== null;
+  return (
+    <AsyncButton
+      size="small"
+      ghost
+      className="cn-fb-pause"
+      aria-pressed={paused}
+      title={
+        paused
+          ? 'Resume: work under this Feature is picked up again.'
+          : 'Pause: no work under this Feature is picked up, and the card rests until you hover it.'
+      }
+      onClick={async () => {
+        await api.setFeaturePaused(feature.number, !paused);
+        onChanged();
+      }}
+    >
+      {paused ? 'Resume' : 'Pause'}
+    </AsyncButton>
   );
 }
 

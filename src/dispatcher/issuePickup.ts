@@ -36,6 +36,11 @@ export interface IssuePickupPolicy {
   parentedTypes?: string[];
   sequencing?: IssueSequencing;
   sequenceMaxChildren?: number;
+  pausedIssues?: ReadonlySet<number>;
+}
+
+function isGoalPaused(issue: Issue, policy: Pick<IssuePickupPolicy, 'pausedIssues'>): boolean {
+  return policy.pausedIssues?.has(issue.number) ?? false;
 }
 
 export function effectivePickupStates(
@@ -47,6 +52,8 @@ export function effectivePickupStates(
   if (!inProgress || states.includes(inProgress)) return states;
   return [...states, inProgress];
 }
+
+const PAUSED_REASON = 'paused — nothing is picked up until you resume it';
 
 export function issueBranch(number: number): string {
   return `issue/${number}`;
@@ -79,6 +86,7 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   }
   const unwatched = issueWatchReason(issue, policy);
   if (unwatched) reasons.push(unwatched);
+  if (isGoalPaused(issue, policy)) reasons.push(PAUSED_REASON);
   return { eligible: reasons.length === 0, reasons };
 }
 
@@ -103,6 +111,7 @@ type IssuePickupStatusKind =
   | 'active'
   | 'container'
   | 'unwatched'
+  | 'paused'
   | 'planning'
   | 'delivered'
   | 'appraisal'
@@ -213,6 +222,10 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
       status: 'obstacle',
       reasons: [`blocked behind ${block.obstacleId}: ${block.note}`],
     };
+  }
+
+  if (isGoalPaused(issue, ctx.policy)) {
+    return { eligible: false, status: 'paused', reasons: [PAUSED_REASON] };
   }
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);

@@ -54,6 +54,7 @@ import type {
   Escalation,
   GoalArrival,
   GoalAppraisalVerdict,
+  GoalPause,
   GoalEnvironmentReach,
   GoalReachStatus,
   HumanTask,
@@ -570,6 +571,7 @@ export interface FeatureRollup {
   lastLandingAt: string | null;
   landings: FeatureLandingRow[];
   standingKey: string;
+  paused: GoalPause | null;
 }
 
 export interface FeatureLandingRow {
@@ -582,7 +584,16 @@ export interface FeatureBoardPayload {
   features: FeatureRollup[];
   orphans: Omit<
     FeatureRollup,
-    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary' | 'sequence' | 'standingKey'
+    | 'number'
+    | 'title'
+    | 'slot'
+    | 'workItemState'
+    | 'issueType'
+    | 'reach'
+    | 'summary'
+    | 'sequence'
+    | 'standingKey'
+    | 'paused'
   > | null;
   unresolved: number;
   environments: string[];

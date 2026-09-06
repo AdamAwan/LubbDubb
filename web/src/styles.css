@@ -8522,6 +8522,43 @@ select:disabled {
 .cn-fb-promoted {
   border-style: dashed;
 }
+/* A paused Feature rests rather than leaves: the card keeps its place in the
+   list and its whole reading, softened until the pointer or the keyboard asks
+   for it. Blurred and not hidden, because a pause is a standing statement an
+   operator has to be able to find again — a card that vanished would be a
+   Feature nobody is working and nobody can see. */
+.cn-fb-card.cn-fb-rested {
+  border-color: var(--cn-line-soft);
+  background: none;
+}
+.cn-fb-card.cn-fb-rested > * {
+  filter: blur(2.5px);
+  opacity: 0.55;
+  transition:
+    filter 120ms ease,
+    opacity 120ms ease;
+}
+/* focus-within, not hover alone: the fade has to lift for a keyboard too. A
+   filter on the ancestor cannot be undone by a descendant, so nothing inside the
+   card can opt out — including the Resume button. That is why the whole card
+   clears at once, and why an opened card never fades: reading it is the ask.
+   Everything stays clickable and tabbable while faded; the fade is only ink. */
+.cn-fb-card.cn-fb-rested:hover > *,
+.cn-fb-card.cn-fb-rested:focus-within > *,
+.cn-fb-card.cn-fb-rested.cn-fb-open > * {
+  filter: none;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-fb-card.cn-fb-rested > * {
+    transition: none;
+  }
+}
+.cn-fb-restednote {
+  margin: 0;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
 .cn-fb-brief {
   display: flex;
   gap: 12px;

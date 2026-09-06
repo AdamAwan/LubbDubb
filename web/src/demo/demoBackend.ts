@@ -821,6 +821,13 @@ class DemoServer {
     return { ok: true, state };
   }
 
+  async setFeaturePaused(issueNumber: number, paused: boolean): Promise<{ ok: true; paused: boolean }> {
+    if (paused) DEMO_FEATURE_PAUSES.set(issueNumber, new Date().toISOString());
+    else DEMO_FEATURE_PAUSES.delete(issueNumber);
+    this.dirty();
+    return { ok: true, paused };
+  }
+
   async setGoalPriority(issueNumber: number, priority: boolean): Promise<{ ok: true; priority: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -4028,6 +4035,7 @@ export const demoApi = {
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setIssueState: (issueNumber: number, state: string) => getServer().setIssueState(issueNumber, state),
   setGoalPriority: (issueNumber: number, priority: boolean) => getServer().setGoalPriority(issueNumber, priority),
+  setFeaturePaused: (issueNumber: number, paused: boolean) => getServer().setFeaturePaused(issueNumber, paused),
   setIssueProfile: (issueNumber: number, profile: string | null) => getServer().setIssueProfile(issueNumber, profile),
   setIssueParent: (issueNumber: number, parent: number | null) => getServer().setIssueParent(issueNumber, parent),
   setIssueAreaPath: (issueNumber: number, areaPath: string | null) =>
@@ -4238,6 +4246,8 @@ function demoTickets(query: {
     refUrls: {},
   };
 }
+
+const DEMO_FEATURE_PAUSES = new Map<number, string>();
 
 function buildDemoFeatureBoard(): FeatureBoardPayload {
   const now = Date.now();
@@ -4571,6 +4581,9 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       lastLandingAt: landed[0]?.at ?? null,
       landings: landed,
       standingKey: extra.standingKey,
+      paused: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
+        DEMO_FEATURE_PAUSES.get(number),
+      ),
     };
   });
 

@@ -164,6 +164,8 @@ const realApi = {
   getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
   answerFeatureSequence: (number: number, answer: 'accepted' | 'declined', by: string) =>
     post<FeatureSequence>(`/api/features/${number}/sequence`, { answer, by }),
+  setFeaturePaused: (number: number, paused: boolean) =>
+    post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>
     authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) => json<RetrospectivePayload>(r)),
   getScratchpad: (ref: string) =>
