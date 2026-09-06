@@ -11,13 +11,19 @@ of them is wrong, unless the spec marks that behaviour as not yet built. The [RE
 covers what LubbDubb _is_ and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is
-the repo's one documentation rule; [`docs/README.md`](docs/README.md) says which owns what.
+the repo's one documentation rule, and it is not optional bookkeeping: the specs are where the
+_why_ of this codebase lives, so a change that lands without its spec update leaves the only
+written account of the behaviour wrong — and every later agent reads that account instead of the
+code. A spec left behind is worse than no spec, because it is trusted. Treat the spec edit as part
+of the change, not a follow-up: a diff that touches behaviour and no spec is incomplete.
+[`docs/README.md`](docs/README.md) says which spec owns what.
 
 ## Making a change
 
 1. Find the spec that owns the behaviour and read the invariants it states.
 2. Change the code.
-3. Update that spec in the same change.
+3. Update that spec in the same change — the invariants it states, not just the prose around
+   them. If the change makes a spec's statement false, the spec is part of the bug.
 4. Add or extend a test at the `buildSystem` seam, or a unit test for a pure function.
 5. `npm run check` — format:check, lint, typecheck, typecheck:web, knip, test. CI runs the same six.
 
@@ -32,7 +38,11 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 ## Conventions
 
 - **ESM with explicit `.js` import extensions**, even from `.ts` sources. TS `nodenext`.
-- **Comments explain _why_, not _what_.** Match the existing terse style.
+- **Explanation belongs in the spec, not in a comment.** The code is deliberately comment-light;
+  match that. Where a reader needs the _why_, the spec that owns the behaviour is the place for it —
+  a comment carrying reasoning is a second copy that nothing keeps true. Reach for an inline comment
+  only for something a spec cannot hold: a local non-obvious workaround at the exact line it applies
+  to. Terse, and never restating _what_ the code does.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses — keep event payloads typed.
 - **Domain types live in `src/types.ts`; the shapes the HTTP routes ship live in `src/wire.ts`**,
   which `web/src/types.ts` re-exports. A wire type either **is** a domain type or `extends` it —
