@@ -16,105 +16,48 @@ export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
 /**
  * One CI check as its provider names it — a GitHub check-run or commit status
- * context, an Azure blocking policy.
- *
- * {@link CiStatus} is the fold of these and stays the field every gate reads;
- * this is the detail the fold used to discard, kept so per-check policy can act
- * on *which* check went red (`src/ci/ciPolicy.ts`). Never `unknown`: a check
- * that has not reported is `pending`, and a check with no signal at all is not
- * in the list.
+ * context, an Azure blocking policy. {@link CiStatus} is the fold of these;
+ * this is the per-check detail, kept so policy can act on which check went red.
+ * Never `unknown`: an unreported check is `pending`, and a check with no signal at all is not in the list.
  */
 export interface CiCheck {
   name: string;
   status: Exclude<CiStatus, 'unknown'>;
   /**
    * False when the provider says this check does not block completion (an Azure
-   * "Optional" branch policy). Absent means blocking, so every provider and
-   * persisted row that predates this reads unchanged.
-   *
-   * Display and briefing only — nothing gates on it. Whether a *check* blocks and
-   * whether the *PR* can merge are different questions, and the second is
-   * {@link CiStatus}'s alone.
+   * "Optional" branch policy). Absent means blocking. Display/briefing only — nothing gates on it.
    */
   blocking?: boolean;
   /**
-   * Other names the provider shows for this same check. A `ci.checks` glob
-   * matches an alias exactly as it matches {@link name}, so an operator can write
-   * the rule against whichever name they can actually see.
-   *
-   * Azure's status policies are the case it exists for: the harness keys one by
-   * its `statusGenre/statusName` pair (`pr-agent-review/reviewed`), which is *not*
-   * the label the pull request page shows for it (`settings.defaultDisplayName`,
-   * e.g. `PR-Agent-Reviewed`). {@link name} stays the primary — it is what the
-   * cockpit renders and what a briefing names — so nothing an existing glob
-   * matched stops matching.
+   * Other names the provider shows for this same check; a `ci.checks` glob matches an alias exactly
+   * as it matches {@link name}. Exists for Azure status policies, which are keyed by
+   * `statusGenre/statusName` rather than the display name the PR page shows.
    */
   aliases?: string[];
   /**
-   * Reported for visibility only: `classifyCiFailures` never classifies it and
-   * `ciNeedsAttention` never counts it, so it cannot dispatch an agent, escalate,
-   * or be muted by a `ci.checks` rule.
-   *
-   * The Azure comment policy's mode. Surfacing it as an ordinary check would let
-   * rule `pr-ci-failing` outrank rule `pr-review-comment` and send the generic CI-fix prompt in place of one
-   * carrying the comment's author and body — the same work with strictly less
-   * information. Structural rather than configurational, so the correct behaviour
-   * cannot be lost by forgetting a line of config.
+   * The Azure comment policy's mode, reported for visibility only: `classifyCiFailures` never
+   * classifies it and `ciNeedsAttention` never counts it, so it cannot dispatch, escalate, or be
+   * muted by a `ci.checks` rule. Keeps rule `pr-ci-failing` from outranking `pr-review-comment`.
    */
   advisory?: boolean;
   /**
-   * The check is `pending` with **nothing in flight**: its last run is stale
-   * against the branch's current commits, so it never resolves until somebody
-   * queues a new one. Absent on every check whose provider does not report the
-   * distinction, which reads as "pending, and possibly still running".
-   *
-   * Only ever set alongside `status: 'pending'` — an expired result that has
-   * already been superseded by a verdict is that verdict, not a wait. Azure's
-   * build-validation policies are the case it exists for: they go `queued` with
-   * `context.isExpired` after a push, indistinguishable from a running build in
-   * `status` alone, and a pull request whose only obstacle is one sat unclaimed
-   * by every rule while `prAttentionStatus` reported "CI is still running".
-   *
-   * `CiStatus` is untouched by it — the check is not failing and the PR may still
-   * be completable — so it moves exactly one thing: `classifyWatchedChecks`
-   * watches it without a `ci.checks` rule having to name it
-   * (`src\ci\ciPolicy.ts`).
+   * The check is `pending` with nothing in flight — its last run is stale against the branch's
+   * current commits and needs a fresh queue. Only set alongside `status: 'pending'`; absent means
+   * the provider doesn't report the distinction. Exists for Azure build-validation policies, whose
+   * `queued`+`isExpired` state is otherwise indistinguishable from a running build.
    */
   expired?: boolean;
   /**
-   * How the provider that reported this check finds its **failure output** —
-   * a GitHub check-run id, an Azure build id (see `src/ci/ciEvidence.ts`).
-   *
-   * **Opaque above the integration that wrote it.** Nothing outside
-   * `src/integrations/<provider>/` parses it, compares it or renders it: it is
-   * handed straight back to the same provider's {@link CiEvidenceCapable} read,
-   * which is the only code entitled to know what its own string means. That is
-   * what lets two providers with entirely different job models — check runs and
-   * build timelines — share one field without a discriminated union that every
-   * reader would have to widen.
-   *
-   * Absent whenever there is nothing to fetch, which is a large and permanent
-   * set rather than a legacy gap: a GitHub **commit status** and an Azure
-   * **status policy** both name a third-party system the harness has no log API
-   * for. Absent therefore reads as "no evidence available", and the dispatch
-   * prompt is composed exactly as it was before this existed.
+   * How the provider that reported this check finds its failure output — a GitHub check-run id, an
+   * Azure build id. Opaque above the integration that wrote it: nothing outside
+   * `src/integrations/<provider>/` parses or renders it, only that provider's
+   * {@link CiEvidenceCapable} read. Absent means nothing to fetch.
    */
   evidenceRef?: string;
   /**
-   * How the provider that reported this check **queues a fresh run of it** — an
-   * Azure policy-evaluation id (`src/integrations/azure/sourceControl.ts`).
-   *
-   * Opaque above the integration that wrote it, exactly as {@link evidenceRef}
-   * is: nothing outside `src/integrations/<provider>/` parses or renders it, it
-   * is handed straight back to the same provider's `CiCheckRequeueCapable`
-   * write, and that is what lets a provider with an entirely different job model
-   * share the field later without a union every reader would have to widen.
-   *
-   * Only ever set alongside {@link expired}, which is the only state a requeue
-   * answers: a check that is genuinely running needs no second run, and a check
-   * with a verdict has already had one. Absent therefore reads as "nothing the
-   * harness can queue itself", which is where rule `pr-ci-gate` dispatches the
-   * agent it always did.
+   * How the provider that reported this check queues a fresh run of it — an Azure
+   * policy-evaluation id. Opaque above the integration that wrote it, like {@link evidenceRef}.
+   * Only ever set alongside {@link expired}; absent means the harness cannot requeue it itself.
    */
   requeueRef?: string;
 }
@@ -123,11 +66,9 @@ export interface CiCheck {
 export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
 
 /**
- * Where a pull request sits: still open, merged, or closed without merging.
- *
- * Absent on a PR from a provider (or persisted row) that predates closed-PR
- * visibility — read it through the pure `prState` helper in `prHealth.ts`, which
- * folds a missing value back onto the long-standing `merged` flag.
+ * Where a pull request sits: still open, merged, or closed without merging. Absent on a PR
+ * predating closed-PR visibility — read it through `prState` in `prHealth.ts`, which folds a
+ * missing value back onto the {@link PullRequest.merged} flag.
  */
 export type PrState = 'open' | 'merged' | 'closed';
 
@@ -138,34 +79,23 @@ export interface PullRequest {
   branch: string;
   ciStatus: CiStatus;
   /**
-   * The individual checks {@link ciStatus} folds. Optional: a provider that
-   * doesn't report per-check detail (and every PR persisted before it did)
-   * leaves it unset, which the CI policy reads as "no detail" and therefore as
-   * the pre-policy behaviour — act on the failure generically.
+   * The individual checks {@link ciStatus} folds. Absent when the provider (or a pre-existing
+   * row) reports no per-check detail; CI policy then acts on the aggregate generically.
    */
   ciChecks?: CiCheck[];
   /**
-   * The provider had per-check detail and was **configured** not to emit it —
-   * every check it could have reported was dropped by an `off` policy mode.
-   *
-   * A separate field because an empty {@link ciChecks} already means something
-   * else, and the two are opposite instructions. Empty-because-unreported is the
-   * pre-policy silence: a provider with nothing else to answer from, so a red
-   * aggregate still gets an agent. Empty-because-withheld is the operator saying
-   * this is not the fleet's to act on — and read as the first, `off` becomes the
-   * *most* actionable of the three modes rather than the strongest, dispatching a
-   * code agent on every red PR that names no check for it to look at.
+   * The provider had per-check detail and was configured not to emit it (an `off` policy mode) —
+   * distinct from an empty {@link ciChecks}, which means unreported. Withheld must not be read as
+   * unreported: that would make `off` dispatch on every red PR with no check to name.
    * → `docs/spec/02-configuration.md#azuredevopspolicychecks`
    */
   ciChecksWithheld?: boolean;
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
   /**
-   * The same threads with their replies and their state kept — what the cockpit
-   * draws, where {@link unresolvedComments} is what the rules read. Absent means
-   * the provider does not report threads (or the row predates this field), and is
-   * drawn as such rather than as a pull request nobody has reviewed.
-   * → `docs/spec/07-pull-requests.md#review-threads`
+   * The same threads with replies and state kept, for surfaces that show a person the review —
+   * {@link unresolvedComments} is what dispatch rules read. Absent means the provider does not
+   * report threads. → `docs/spec/07-pull-requests.md#review-threads`
    */
   reviewThreads?: PrReviewThread[];
   /**
@@ -186,132 +116,70 @@ export interface PullRequest {
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
   /**
-   * Open / merged / closed-unmerged. Populated by providers that report recently
-   * closed PRs; absent means "the provider only told us about open PRs", which
-   * `prState` reads back as open-or-merged from {@link merged}. This is the field
-   * that tells a merge apart from an abandoned PR — `merged` alone cannot.
+   * Open / merged / closed-unmerged. Absent means the provider only reports open PRs, which
+   * `prState` reads back as open-or-merged from {@link merged}; this field is what tells a merge
+   * apart from an abandoned PR.
    */
   state?: PrState;
   /** When the PR left the open set (ISO). Only set on a closed/merged PR. */
   closedAt?: string;
   /**
-   * The commit the merge produced on the base branch. Only ever set on a *merged*
-   * PR, and only by a provider that reports it.
-   *
-   * Read once, into a {@link GoalLanding}, because git cannot recover it: a squash
-   * merge leaves the branch with no ancestry link to its base, so every later
-   * question about where this work has got to is asked of this SHA rather than of
-   * the branch. → `docs/spec/24-environments.md#recording-a-landing`
+   * The commit the merge produced on the base branch. Only set on a merged PR, by a provider that
+   * reports it. Read once into a {@link GoalLanding} because git cannot recover it — a squash
+   * merge leaves no ancestry link to the base. → `docs/spec/24-environments.md#recording-a-landing`
    */
   mergeCommitSha?: string;
   /**
-   * The commit the checks on this pull request ran against — GitHub's `head.sha`,
-   * Azure's `lastMergeSourceCommit`.
-   *
-   * The one thing that tells a check *fixed* from a check that flaked: a red
-   * result followed by a green one is a push on a different commit and a flake on
-   * the same one, and nothing else in the snapshot separates them. Read by the
-   * knowledge base's notice desk (`src/knowledge/noticeDesk.ts`) and by nothing
-   * that dispatches.
-   *
-   * **Absent means the harness cannot say**, and every reader must stay silent
-   * rather than guess: a provider that does not report it leaves two consecutive
-   * snapshots indistinguishable, and a flake claimed on that basis would be the
-   * notice teaching the fleet to ignore a genuinely broken check.
+   * The commit the checks on this pull request ran against — GitHub's `head.sha`, Azure's
+   * `lastMergeSourceCommit`. The one signal that distinguishes a fixed check from a flaked one;
+   * absent means the harness cannot say and must not guess a flake.
    */
   headSha?: string;
   /**
-   * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
-   * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
-   * the PR carries no labels (or the provider/persisted row predates this field) —
-   * treat missing as `[]`.
+   * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR carrying
+   * `config.prExclusionLabel` is left alone by the dispatcher. Absent means treat as `[]`.
    */
   labels?: string[];
   /**
-   * That a **person** put this pull request on you, and how — resolved by the
-   * provider against `config.userId`, never inferred here.
-   *
-   * It is the one signal in a pull request that has no rule behind it. Everything
-   * else the world reports about a PR is something the harness acts on; this is an
-   * obligation a colleague handed the operator, and the harness will do nothing
-   * about it whatever it says. That is why it is a *court* input
-   * (`src/prAttention.ts`) and not a dispatch one — an assigned PR reaches the
-   * cockpit's queue and no rule ever sees it.
-   *
-   * **Absent means the provider does not resolve it**, which is indistinguishable
-   * from nothing being assigned and is meant to be: both draw no row. A provider
-   * that cannot answer costs the operator this feature silently, exactly as
-   * {@link Issue.labelsAddedByViewer} costs them pickup — so a new source-control
-   * provider resolves it or says in `15-integrations.md` that it cannot.
+   * That a person put this pull request on you, and how — resolved by the provider against
+   * `config.userId`. A court input (`src/prAttention.ts`), not a dispatch one: no rule acts on it.
+   * Absent means the provider does not resolve it, indistinguishable from nothing assigned — a
+   * provider that cannot answer costs the operator this feature silently, as
+   * {@link Issue.labelsAddedByViewer} costs pickup.
    * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
    */
   viewerAssignment?: ViewerAssignment;
   /**
-   * Who opened the pull request, as the provider names them **to a person** —
-   * Azure's `displayName`, GitHub's login.
-   *
-   * It is here for one surface: the row that says a colleague asked you for a
-   * review. "You are an optional reviewer" is a fact about a form field; who
-   * asked is what makes it an obligation the operator can act on, and a queue of
-   * rows nobody signed is a queue that reads as the harness talking to itself.
-   * Nothing dispatches on it — like {@link viewerAssignment}, it rides on the
-   * payload the snapshot already reads, so it costs no request.
-   *
-   * **Absent means the provider does not report it**, and every surface must
-   * still read without it: the sentence drops the name rather than inventing one.
+   * Who opened the pull request, as the provider names them to a person — Azure's `displayName`,
+   * GitHub's login. Used only to show who asked for a review; nothing dispatches on it. Absent
+   * means the provider does not report it — the sentence drops the name rather than inventing one.
    * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
    */
   author?: string;
   /**
-   * That **the credential the harness posts under** opened this pull request —
-   * resolved by the provider against the viewer identity the token actually is,
-   * never against `filters.prAuthor`, which is a *filter* and says only which pull
-   * requests were fetched.
-   *
-   * The gate that keeps the fleet off a colleague's work. `ownWorkOnly` widens the
-   * fetch to the pull requests a person *handed* the operator ({@link
-   * viewerAssignment}), so "it is in the world" stopped meaning "it is ours" — and
-   * without this field a review thread on somebody else's pull request reads to
-   * every rule exactly like one on the harness's own, which is a fleet answering
-   * another team's reviewers. → `src/prOwnership.ts`
-   *
-   * **Absent means the provider cannot say**, and every reader must then fall back
-   * to the branch shape rather than assuming either answer: `false` is a positive
-   * statement that somebody else opened this, and only `false` takes a pull
-   * request out of the dispatch world.
+   * That the credential the harness posts under opened this pull request — resolved against the
+   * viewer identity the token is, never against `filters.prAuthor` (a fetch filter). Keeps the
+   * fleet off a colleague's work; `ownWorkOnly` widens the fetch via {@link viewerAssignment}, so
+   * "in the world" stopped meaning "ours". Absent means the provider cannot say; only `false` is a
+   * positive statement that takes a PR out of the dispatch world.
    * → `docs/spec/07-pull-requests.md#whose-pull-request-is-it`
    */
   viewerAuthored?: boolean;
   /**
-   * That **you personally** have already given this pull request an approving
-   * verdict — your own vote in the reviewer list, never the fold in
-   * {@link approved}, which is any reviewer's.
-   *
-   * The one thing that ends an assignment. A review request is a question, and a
-   * question you have answered is not still yours: without this the row a
-   * colleague raised stands on the rail until the pull request merges, which
-   * teaches an operator that answering the rail changes nothing on it.
-   *
-   * **Absent means the provider did not say**, which is never read as a verdict:
-   * silence leaves the row exactly where it was. A provider that cannot resolve
-   * it costs the operator the clearing and nothing else.
-   * → `docs/spec/07-pull-requests.md#when-the-assignment-ends`
+   * That you personally gave this pull request an approving verdict — your own vote, never the
+   * fold in {@link approved} (any reviewer's). Ends an assignment: without it, a review request a
+   * colleague raised stays on the rail forever. Absent is never read as a verdict — silence leaves
+   * the row where it was. → `docs/spec/07-pull-requests.md#when-the-assignment-ends`
    */
   viewerApproved?: boolean;
   url?: string;
 }
 
 /**
- * How a pull request came to be yours. Three values rather than a boolean because
- * the providers mean different things by it and the operator has to be told
- * which: GitHub has one list (`assignees`), Azure has reviewers who are
- * *required* or *optional*, and "you are an optional reviewer" is not the same
- * news as "this is yours to drive".
- *
- * A **group** an operator belongs to is never one of these on either provider.
- * An identity resolved through a team is not a person being asked, and folding
- * the two would fill the queue with every pull request the operator's org has
- * open — which is the one way to make a queue stop being read.
+ * How a pull request came to be yours. Three values because providers mean different things by
+ * it: GitHub has one `assignees` list, Azure has `required`/`optional` reviewers, and those two
+ * are not the same obligation. A group the operator belongs to is never one of these on either
+ * provider — folding it in would fill the queue with every open PR in the org.
  */
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
 
@@ -322,38 +190,19 @@ export interface PrComment {
   /** True once the harness has handled (drafted a reply / fixed) this comment. */
   handled: boolean;
   /**
-   * The replies under the root, oldest first — the rest of the conversation the
-   * root started, carried on the fold rather than left behind on
-   * {@link PrReviewThread}.
-   *
-   * `body` is the thread's **root** and nothing else, and for a long time it was
-   * the whole of what an agent was handed: a reviewer's follow-up saying which
-   * finding actually mattered, or an operator's "fix this one, like so", was read
-   * off the provider, stored, drawn in the cockpit — and dropped on the way to the
-   * prompt. The agent answered the opening comment of a conversation it could not
-   * see the rest of, which reads exactly like it ignoring the person in it.
-   *
-   * Optional, and absent rather than empty on a thread nobody replied to, so a
-   * fixture or a provider that reports no replies is unchanged by this.
-   * → `docs/spec/07-pull-requests.md#the-thread-is-the-conversation`
+   * The replies under the root, oldest first — the rest of the conversation, carried alongside
+   * {@link PrReviewThread}. `body` is only the root; a reviewer's follow-up narrowing the finding
+   * must reach the agent too, so this must not be dropped on the way to the prompt. Absent (never
+   * empty) on a thread nobody replied to. → `docs/spec/07-pull-requests.md#the-thread-is-the-conversation`
    */
   replies?: PrThreadMessage[];
 }
 
 /**
- * Where a review thread stands — the same three-way answer the fleet acts on,
- * said out loud instead of folded into {@link PrComment.handled}.
- *
- * `handled` is one bit for two very different situations, and an operator reading
- * a count of it cannot tell them apart: a thread the reviewer closed is finished,
- * and a thread the fleet answered is *waiting on the reviewer* — the first needs
- * nobody, the second may need the reviewer nudged. Both are "handled" to the
- * dispatcher, which is right for dispatch and wrong for a person, so the two are
- * separated here and folded back where the rule reads them.
- *
- * `reopened` is the operator's own verdict and outranks the provider's: it says
- * *this is not settled, come back to it*, and the fleet reads it exactly as it
- * reads an unanswered thread. → `docs/spec/07-pull-requests.md#review-threads`
+ * Where a review thread stands — the three-way answer the fleet acts on, said out loud instead of
+ * folded into {@link PrComment.handled}, which conflates "reviewer closed it" (finished) with
+ * "fleet answered it" (waiting on the reviewer). `reopened` is the operator's own verdict,
+ * outranking the provider's, and reads like an unanswered thread. → `docs/spec/07-pull-requests.md#review-threads`
  */
 export type PrThreadState = 'open' | 'answered' | 'resolved' | 'reopened';
 
@@ -367,84 +216,49 @@ export interface PrThreadMessage {
 }
 
 /**
- * A review thread as the world carries it: the conversation, and where it stands.
- *
- * Beside {@link PullRequest.unresolvedComments} rather than instead of it, and
- * that is deliberate. The comment list is what every dispatch rule reads and its
- * shape is load-bearing there — one entry per thread, `handled` folding the four
- * states above into the one bit a rule needs. This is the same threads with the
- * replies and the state kept, for the surfaces that show a person what is
- * actually going on. The two are built from one derivation in each provider, so
- * they cannot come to disagree.
- *
- * **Optional**, because a provider that cannot report replies leaves it unset —
- * which the cockpit draws as *this provider does not say*, never as a pull request
- * with no review on it. → `docs/spec/07-pull-requests.md#review-threads`
+ * A review thread as the world carries it: the conversation, and where it stands. Kept beside
+ * {@link PullRequest.unresolvedComments} deliberately — that list is what dispatch rules read
+ * (`handled` folding the four {@link PrThreadState} values into one bit); this is the same threads
+ * with replies and state, for surfaces that show a person the review. Absent when the provider
+ * cannot report threads. → `docs/spec/07-pull-requests.md#review-threads`
  */
 export interface PrReviewThread {
-  /**
-   * The thread's id — the **same** id the matching {@link PrComment} carries, and
-   * the one a reply is threaded under. One thread, one id, whoever is asking.
-   */
+  /** The thread's id — the same id the matching {@link PrComment} carries, and the one a reply threads under. */
   id: string;
   author: string;
   body: string;
   state: PrThreadState;
   /** The replies under the root, oldest first. Empty on a thread nobody answered. */
   replies: PrThreadMessage[];
-  /**
-   * The file the thread hangs on, where the provider reports one. Absent on a
-   * thread that is not attached to the diff at all — a review's summary comment —
-   * and on a provider that does not say.
-   */
+  /** The file the thread hangs on, where the provider reports one. Absent on a summary comment or an unreporting provider. */
   path?: string;
   /** The line in {@link path} the thread was left on, where the provider reports one. */
   line?: number;
   /**
-   * When the operator reopened it (ISO). Only ever set on a `reopened` thread, and
-   * it is what tells a reopen apart from a thread nobody has answered yet — the
-   * two read identically to the dispatcher and mean different things to a person.
+   * When the operator reopened it (ISO). Only set on a `reopened` thread — distinguishes a reopen
+   * from a thread nobody has answered yet, which otherwise read identically to the dispatcher.
    */
   reopenedAt?: string;
   /**
-   * The provider's own key/value bag on the thread, flattened to strings, where
-   * the provider has one — Azure DevOps does, GitHub does not, and a provider that
-   * does not leaves this unset.
-   *
-   * It is how a thread the *harness's own toolchain* opened is recognised without
-   * a record: a poster that stamps a declared key on every thread it opens leaves
-   * a mark the next world read can see, on threads the harness never wrote a
-   * `pr_replies_sent` row for. `review.publishedThreadProperty` is the key that
-   * turns it into the second arm of {@link PrReviewState.addressed}; with no key
-   * declared nothing reads this and it is carried for the cockpit alone.
-   *
-   * **Absent, never empty, on a thread carrying none** — "this provider does not
-   * say" and "this thread was stamped with nothing" are the same answer to every
-   * reader, and neither is a mark to match against.
-   * → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
+   * The provider's own key/value bag on the thread, flattened to strings, where it has one (Azure
+   * DevOps does, GitHub does not). Lets the harness recognise a thread its own toolchain opened via
+   * a stamped key (`review.publishedThreadProperty`), the second arm of {@link PrReviewState.addressed}.
+   * Absent, never empty, on a thread carrying none. → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
    */
   properties?: Readonly<Record<string, string>>;
 }
 
 /**
- * What the fleet's own reviewer said about a diff — `clear` when it found nothing
- * worth a person's attention, `findings` when it did.
- *
- * Two values and no severity ladder, on purpose: the verdict gates nothing by
- * itself (see `reviewSatisfied`), so a scale would be a number nothing reads,
- * and the words that matter are in `summary` and `findings` where the person
- * approving the pull request sees them.
+ * What the fleet's own reviewer said about a diff — `clear` when it found nothing worth a
+ * person's attention, `findings` when it did. No severity ladder: the verdict gates nothing by
+ * itself (see `reviewSatisfied`); detail lives in `summary` and `findings`.
  */
 export type PrReviewVerdict = 'clear' | 'findings';
 
 /**
- * One recorded fleet review — the harness's own record of it, written by the
- * `review_report` tool and never inferred from a comment on the provider.
- *
- * Keyed on the pull request rather than on the commit it read, because the review
- * runs once (see `needsFleetReview`). `headSha` says what was in front of it and
- * decides nothing.
- * → `docs/spec/07-pull-requests.md#the-fleet-review`
+ * One recorded fleet review — the harness's own record, written by the `review_report` tool and
+ * never inferred from a provider comment. Keyed on the pull request, not the commit it read (the
+ * review runs once); `headSha` is display-only. → `docs/spec/07-pull-requests.md#the-fleet-review`
  */
 export interface PrReview {
   prNumber: number;
@@ -459,48 +273,30 @@ export interface PrReview {
   agentId: string | null;
   reviewedAt: string;
   /**
-   * The provider's id for the review thread the findings were **published** into,
-   * where the harness sent one and the provider named it. Null everywhere else —
-   * `review.publish` off, a provider whose pull-request comments are not threads
-   * (GitHub's are not), a send that returned no id, and every row written before
-   * the column existed.
-   *
-   * It is a record of what went out, never an inference from a thread's author,
-   * for `pr_replies_sent`' reason: the credential the harness posts under is the
-   * operator's own. What it buys is the one thing the findings list cannot say on
-   * its own — whether anybody has dealt with them — which is
+   * The provider's id for the review thread the findings were published into, where the harness
+   * sent one and the provider named it. Null when `review.publish` is off, the provider's PR
+   * comments aren't threads (GitHub's are not), the send returned no id, or the row predates this
+   * column. A record of what went out, never inferred from a thread's author; feeds
    * {@link PrReviewState.addressed}.
    */
   publishedThread: string | null;
 }
 
 /**
- * How the harness decided to read a pull request — the triage's verdict, naming
- * one of the modes the project declared.
- *
- * Its own row rather than a column on {@link PrReview}, and that separation is
- * load-bearing: the merge gate is satisfied by a `pr_reviews` row *existing*, so
- * a row written early to hold a route would report a pull request as reviewed by
- * the step that only decided how to review it.
- * → `docs/spec/07-pull-requests.md#choosing-how-to-review`
+ * How the harness decided to read a pull request — the triage's verdict, naming one of the modes
+ * the project declared. Kept as its own row rather than a column on {@link PrReview}: the merge
+ * gate is satisfied by a `pr_reviews` row existing, so a row written early to hold a route would
+ * report a PR as reviewed by the step that only decided how. → `docs/spec/07-pull-requests.md#choosing-how-to-review`
  */
 export interface PrReviewRoute {
   prNumber: number;
   /** The mode's key in `review.modes`, as the triage agent named it. Empty on a skip. */
   mode: string;
   /**
-   * The triage decided this pull request needs **no review at all** — the one
-   * answer it can give that waives the gate rather than sizing it, and available
-   * only where the project set `review.allowSkip`.
-   *
-   * Read by `needsFleetReview` (nothing is dispatched) *and* by `reviewSatisfied`
-   * (the merge is not held), because the two together are what makes a skip a
-   * decision rather than a wedge: a pull request nothing will review must not be
-   * a pull request nothing can merge. {@link reason} is the whole record of why,
-   * and it is why the tool refuses a skip without one.
-   *
-   * False on every row written before this existed, which is what those rows
-   * meant — so the column needs no backfill, only its `ColumnMigrations` entry.
+   * The triage decided this pull request needs no review at all — waives the gate rather than
+   * sizing it, available only where `review.allowSkip` is set. Read by both `needsFleetReview`
+   * and `reviewSatisfied`, so a skipped review does not also block the merge; {@link reason} is
+   * required. False on every pre-existing row, which needs no backfill.
    * → `docs/spec/07-pull-requests.md#skipping-a-review-altogether`
    */
   skipped: boolean;
@@ -513,11 +309,9 @@ export interface PrReviewRoute {
 /** A route as the tool hands it over; the store stamps the rest. */
 export type PrReviewRouteInput = Omit<PrReviewRoute, 'decidedAt'>;
 
-/** A review as the tool hands it over; the store stamps the rest. */
 /**
- * What `review_report` supplies. `publishedThread` is not part of it: the
- * reviewer reports first and publishes after, so the thread is written by the
- * send rather than by the report.
+ * What `review_report` supplies. `publishedThread` is not part of it: the reviewer reports first
+ * and publishes after, so the thread is written by the send rather than the report.
  */
 export type PrReviewInput = Omit<PrReview, 'reviewedAt' | 'publishedThread'>;
 
@@ -534,81 +328,56 @@ export interface Issue {
   body: string;
   labels: string[];
   /**
-   * The subset of `labels` the authenticated viewer added themselves, when the
-   * provider resolves tag authorship (GitHub timeline / Azure work-item revisions).
-   * `undefined` when authorship isn't tracked — the fake provider, or the ownership
-   * gate being off. The dispatcher consults this instead of `labels` only when
-   * `issuePickupRequireOwnLabel` is set, so a tag added by someone else can't get an
-   * item picked up.
+   * The subset of `labels` the authenticated viewer added themselves, when the provider resolves
+   * tag authorship (GitHub timeline / Azure work-item revisions). `undefined` when authorship
+   * isn't tracked. The dispatcher reads this instead of `labels` only when
+   * `issuePickupRequireOwnLabel` is set, so a tag added by someone else can't trigger pickup.
    */
   labelsAddedByViewer?: string[];
   state: IssueState;
   /**
-   * The provider's *native* workflow state, when it has a richer model than
-   * open/closed — e.g. an Azure DevOps work item's `System.State`
-   * ("New"/"Ready"/"Doing"/"In Review"/…). `state` above collapses this to
-   * open/closed; this preserves the raw value so the dispatcher can gate pickup on
-   * it and move an item to a review state once a PR is open. `undefined` for
-   * providers with no such model (GitHub issues, the fake), which leaves every
-   * state-based gate off for them.
+   * The provider's native workflow state, when it has a richer model than open/closed (e.g.
+   * Azure's `System.State`). `state` collapses this to open/closed; this preserves the raw value
+   * so the dispatcher can gate on it. `undefined` for providers with no such model.
    */
   workItemState?: string;
   /**
-   * The provider's *native* item type — an Azure DevOps work item's
-   * `System.WorkItemType` ("Feature", "User Story", "Bug", "Task"). `undefined`
-   * for trackers with one kind of item (GitHub issues, the fake), which leaves
-   * every type-based gate off for them. The dispatcher reads it to refuse
-   * picking up a *container* type (see `src/issueRelations.ts`).
+   * The provider's native item type (e.g. Azure's `System.WorkItemType`: "Feature", "User Story",
+   * "Bug", "Task"). `undefined` for trackers with one kind of item. The dispatcher reads it to
+   * refuse picking up a container type (see `src/issueRelations.ts`).
    */
   issueType?: string;
   /**
-   * The classification node the item sits on — an Azure DevOps `System.AreaPath`,
-   * which is what puts it on a team's board. `undefined` for trackers with no such
-   * concept (GitHub issues, the fake), which leaves every area-based reading off
-   * for them.
-   *
-   * **Never empty on a provider that has it.** An item nobody has classified sits
-   * on the project's *root* node, so "unclassified" is this equalling the root
-   * rather than this being absent — see `src/intake/placement.ts`, which is the
-   * one place that comparison is made.
+   * The classification node the item sits on — Azure's `System.AreaPath`. `undefined` for
+   * trackers with no such concept. Never empty on a provider that has it: an unclassified item
+   * sits on the project's root node, so "unclassified" is equal-to-root, not absent — see
+   * `src/intake/placement.ts`.
    */
   areaPath?: string;
   /**
-   * The item this one hangs off — an Azure DevOps hierarchy parent, typically the
-   * Feature a story or bug belongs to. Carries the parent's **description**,
-   * because that is where the overall goal of the feature is written and it is
-   * the context an agent planning one of its children needs.
-   *
-   * The three states are distinct and all three are read: `undefined` means the
-   * provider does not track hierarchy at all, `null` means it does and this item
-   * has no parent (an *orphan* — which the harness reports rather than invents a
-   * parent for), and an object is the parent itself.
+   * The item this one hangs off — an Azure hierarchy parent, typically the Feature a story
+   * belongs to. Carries the parent's description for planning context. Three distinct states:
+   * `undefined` means no hierarchy tracked, `null` means tracked with no parent (an orphan), and
+   * an object is the parent.
    */
   parent?: IssueRelative | null;
   /**
-   * The items hanging off this one — a Feature's stories. Empty for a leaf.
-   * `undefined` when the provider does not track hierarchy. Bodies are not
-   * carried: a child's own description is read when that child is worked, and
-   * carrying every one would put a whole feature's text on every snapshot.
+   * The items hanging off this one — a Feature's stories. Empty for a leaf, `undefined` when
+   * hierarchy isn't tracked. Bodies are not carried — a child's own description is read when that
+   * child is worked.
    */
   children?: IssueRelative[];
   /**
-   * The *other* children of {@link parent} — the sibling stories under the same
-   * feature. `undefined` when hierarchy isn't tracked or there is no parent;
-   * empty when this is the feature's only child. What makes a planning agent able
-   * to see the scope either side of the item it was handed.
+   * The other children of {@link parent} — sibling stories under the same feature. `undefined`
+   * when hierarchy isn't tracked or there is no parent; empty when this is the only child.
    */
   siblings?: IssueRelative[];
   /**
-   * The items this one **waits on** — Azure DevOps `System.LinkTypes.Dependency-Reverse`,
-   * a Predecessor. The order somebody already drew on their own board, which the
-   * harness reads and never writes (→ `docs/spec/33-story-sequencing.md`).
-   *
-   * `undefined` means the provider tracks no dependencies at all (GitHub, the
-   * fake), which every reader treats as "no order stated"; an empty list means the
-   * provider tracks them and this item waits on nothing. The distinction matters
-   * for the same reason {@link parent}'s three states do: a flat tracker must not
-   * read as a board on which every story is in the first wave *by statement*.
+   * The items this one waits on — Azure's `System.LinkTypes.Dependency-Reverse` (Predecessor).
+   * The order already drawn on the board, read but never written (→ `docs/spec/33-story-sequencing.md`).
+   * `undefined` means the provider tracks no dependencies (read as "no order stated"); an empty
+   * list means it tracks them and this item waits on nothing — the distinction matters as it does
+   * for {@link parent}.
    */
   dependsOn?: IssueRelative[];
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
@@ -617,13 +386,9 @@ export interface Issue {
 }
 
 /**
- * One end of a tracker relationship — the parent, child or sibling of an
- * {@link Issue}, as it is carried *on* that issue.
- *
- * Deliberately not an `Issue`: a relative is a summary, and typing it as the full
- * item would invite code to treat a related item as something the harness can act
- * on. Only the item the harness was handed is ever dispatched against; everything
- * here is context.
+ * One end of a tracker relationship — the parent, child or sibling of an {@link Issue}, as
+ * carried on that issue. Deliberately not an `Issue`: a relative is a summary only, so code
+ * cannot treat a related item as something the harness can act on directly.
  */
 export interface IssueRelative {
   number: number;
@@ -646,46 +411,26 @@ export interface IssueRelative {
 export interface WorldSnapshot {
   takenAt: string; // ISO
   /**
-   * **Open** pull requests, and only those. Every dispatcher rule and every PR
-   * predicate (`openPrForIssue`, `basePrOf`, `inheritedCiFailure`, `isStackedPr`)
-   * takes this list and trusts it to be open — recently-closed PRs are carried
-   * separately below so that stays true by construction.
+   * Open pull requests, and only those. Every dispatcher rule and PR predicate trusts this list
+   * to be open; recently-closed PRs are carried separately below so that stays true by construction.
    */
   pullRequests: PullRequest[];
   /**
-   * PRs that left the open set within `config.closedPrWindowMs` — a merge or an
-   * abandonment the harness would otherwise only ever see as a disappearance.
-   * Deliberately *not* merged into {@link pullRequests}: it exists so the world
-   * diff can emit a real `pr_merged`/`pr_closed`, plan reconciliation can tell a
-   * merge from an abandoned PR, and the cockpit can show what just happened —
-   * none of which are reasons to put a dead PR in front of a dispatch rule.
-   *
-   * Absent/empty when the provider doesn't report closed PRs or the window is
-   * disabled; every consumer must degrade to the old "absence means merged"
-   * inference rather than assuming this list is complete.
+   * PRs that left the open set within `config.closedPrWindowMs` — a merge or abandonment the
+   * harness would otherwise only see as a disappearance. Deliberately not merged into
+   * {@link pullRequests}: lets the world diff emit a real `pr_merged`/`pr_closed` without putting
+   * a dead PR in front of a dispatch rule. Absent/empty means the provider doesn't report closed
+   * PRs or the window is disabled — consumers must degrade to "absence means merged".
    */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
   /**
-   * The ids of the integrations whose slice of this snapshot is **last known
-   * good** rather than freshly read — a provider read that failed and fell back
-   * (`sourceControl:github` and friends). Absent or empty means every slice is
-   * current.
-   *
-   * The fallback itself is the right behaviour: a rate limit or a 5xx must not
-   * empty the world and make every open pull request look closed. What was
-   * missing is that it left no mark, so a cycle deciding against a world hours
-   * old was indistinguishable from one deciding against a world that had not
-   * changed — including in the decision log, which is the record an operator
-   * reads to understand why the harness did something odd. Recorded on the
-   * snapshot rather than only in the error log because the *decision* is what
-   * needs the caveat, and a reader of one is not looking at the other.
-   *
-   * Nothing in `decide` gates on it. A stale world is still the best available world, and a
-   * pulse that refused to decide on one would turn a provider blip into a stalled
-   * fleet — the failure mode the fallback exists to prevent. The one gate is the
-   * world-event baseline: `recordWorldChanges` takes no diff against, and does not move
-   * the baseline onto, a world any source reported stale.
+   * Ids of integrations whose slice of this snapshot is last-known-good rather than freshly read
+   * (a provider read that failed and fell back). Absent/empty means every slice is current.
+   * Recorded so a cycle deciding against a stale world is distinguishable from one against a
+   * fresh, unchanged world — including in the decision log. Nothing in `decide` gates on it
+   * (a stale world is still the best available one); the one gate is the world-event baseline,
+   * which does not diff or move against a world any source reported stale.
    */
   staleSources?: string[];
 }
@@ -762,22 +507,10 @@ type TaskStatus =
   | 'failed';
 
 /**
- * A task without the rendered prompt handed to its agent — every column of the
- * row except the one that holds the bulk text.
- *
- * The split exists because the prompt is **large and read by almost nothing**. A
- * rendered agent prompt is kilobytes of briefing, evidence and prior-work
- * context; on a real deployment the `tasks` table's prompts were 17.4 MB of a
- * 20.2 MB read, and `/api/state` shipped every one of them to the cockpit on
- * every refresh — where no surface reads a task's prompt at all. So the list
- * reading (`Store.listTasks`) and the wire shape ({@link Task} on
- * `CockpitState`) are this type, and the prompt is fetched per row, by id,
- * through {@link Store.getTask} — the same arrangement agent transcripts have.
- *
- * `Task` **extends** this rather than the two being declared side by side, so
- * every reader of a summary field goes on typechecking against one declaration
- * and a field added to a task lands on both by default. A caller that genuinely
- * needs the prompt asks for a `Task` and gets a single-row read.
+ * A task without the rendered prompt handed to its agent — every column except the bulk text.
+ * Split out because the prompt is large and read by almost nothing (it dominated a real
+ * deployment's state payload while no surface reads it); the prompt is fetched per row via
+ * {@link Store.getTask}. `Task` extends this so a field added here lands on both by default.
  */
 export interface TaskSummary {
   id: string;
@@ -799,104 +532,49 @@ export interface TaskSummary {
   originSummary: string | null;
   dispatchReason: string | null;
   /**
-   * The dispatcher rule that proposed this task (a `DISPATCH_RULES` id), captured
-   * at dispatch so an agent's cost can be read back against *what kind of work it
-   * was* — the "by task type" split in `src/taskTypeSpend.ts`.
-   *
-   * `decisions.rule` already records the same id, but a decision row has no link
-   * to the task it created, so it can say a rule fired and never what that firing
-   * cost. Typed as a plain string rather than `DispatchRuleId` because domain
-   * types must not reach into `src/dispatcher/`; an unknown id is rendered as
-   * itself rather than dropped, which is what keeps a rule renamed tomorrow
-   * visible instead of silently unbilled.
-   *
-   * Null for a task dispatched from outside the pulse (an accepted proposal,
-   * agent lifecycle), and on rows written before the column existed that the
-   * backfill could not place. **Optional**, for {@link PullRequest.ciChecks}'s
-   * reason: absent means "not recorded", so every persisted row that predates
-   * the column — and every caller that has no rule to give — reads unchanged.
+   * The dispatcher rule that proposed this task (a `DISPATCH_RULES` id), captured at dispatch so
+   * spend can be split "by task type" (`src/taskTypeSpend.ts`) since a decision row has no link
+   * back to its task. A plain string, not `DispatchRuleId` — domain types must not reach into
+   * `src/dispatcher/`, and an unknown id renders as itself rather than dropping silently. Null for
+   * a task dispatched outside the pulse; absent means not recorded (pre-existing rows).
    */
   rule?: string | null;
   /**
-   * The CI checks this task was dispatched to answer, as the provider names them
-   * (`dotnet test`, `Qodana`) — `null` for every task that is not a CI dispatch,
-   * and for a CI dispatch whose provider reported no per-check detail.
-   *
-   * Recorded structurally rather than left in {@link dispatchReason}'s sentence,
-   * which names them too. Re-reading that prose is the defect `ciStatusOf`'s
-   * one-matcher rule exists to prevent: a reader that re-derives the format
-   * reports zero, silently, the first time the wording changes.
-   *
-   * Optional for {@link rule}'s reason, and read through `?? null` everywhere —
-   * absent and null both mean "this run named no check".
+   * The CI checks this task was dispatched to answer, as the provider names them — null for a
+   * non-CI dispatch or one whose provider reported no per-check detail. Recorded structurally
+   * rather than parsed back out of {@link dispatchReason}'s prose. Absent and null both mean "no check named".
    */
   ciChecks?: string[] | null;
   /**
-   * MCP servers this launch carries **beside** the harness's own, or null for the
-   * every-other-task case of none.
-   *
-   * On the row rather than derived at spawn from {@link rule}, because
-   * `AgentManager.resume` rebuilds a launch from the row after a restart: an agent
-   * re-attached without the server it was launched with would come back holding a
-   * conversation full of tool calls it can no longer make. Recorded for the same
-   * reason {@link model} is — what a run *was* launched with stays auditable after
-   * the config that chose it has changed.
-   *
-   * Optional for {@link rule}'s reason: absent means "not recorded", so every row
-   * written before the column existed reads unchanged.
+   * MCP servers this launch carries beside the harness's own, or null for none. Stored on the row
+   * (not derived from {@link rule}) because `AgentManager.resume` rebuilds a launch from it after
+   * a restart — an agent reattached without the server it launched with loses tool calls it can no
+   * longer make. Absent means not recorded (pre-existing rows).
    */
   mcpServers?: ExtraMcpServer[] | null;
   /**
-   * The model this run launches on (`claude --model`), resolved from the
-   * operator's `agentModels` policy at dispatch — the rule's profile, or the
-   * policy default, or `null` for "pass no `--model`", which is every task on a
-   * deployment that configures none (issue #321).
-   *
-   * The resolved **string**, not the profile name, and resolved at dispatch
-   * rather than at spawn: an agent resumed after a restart re-launches on the
-   * model it started on rather than whatever config now says, and the run stays
-   * auditable after the fact. It also keeps `AgentManager` ignorant of both rules
-   * and profiles — it forwards this value.
-   *
-   * Optional for {@link rule}'s reason: absent means "not recorded", so every row
-   * written before the column existed reads unchanged.
+   * The model this run launches on (`claude --model`), resolved from `agentModels` policy at
+   * dispatch time — null means no `--model` was passed. Resolved at dispatch, not spawn, so a
+   * resumed agent keeps launching on the model it started on rather than whatever config now says.
+   * Absent means not recorded (pre-existing rows).
    */
   model?: string | null;
   /**
-   * The reasoning depth this run launches at (`claude --effort`), resolved from
-   * the same profile as {@link model} and at the same moment.
-   *
-   * Stored beside the model rather than folded into it because they are read
-   * back separately: two runs of one rule on one model can still cost very
-   * differently, and a spend figure that cannot say which depth produced it
-   * explains nothing. Null means the launch carried no `--effort` — which is the
-   * CLI's own default, not a low setting.
-   *
-   * A plain string for {@link rule}'s reason: a domain type does not reach into
-   * `src/agents/` for the level union, and a level the harness no longer knows
-   * still reads back as what the run actually used.
+   * The reasoning depth this run launches at (`claude --effort`), resolved from the same profile
+   * and moment as {@link model}. Stored separately because cost varies by depth even for one
+   * rule/model pair. Null means no `--effort` was passed (the CLI's own default).
    */
   effort?: string | null;
   /**
-   * The name of the profile {@link model} and {@link effort} came from — `fast`,
-   * `deep`, whatever this deployment calls them. Null for a run that resolved to
-   * no profile at all.
-   *
-   * A plain string for {@link effort}'s reason, and stored rather than looked up:
-   * profiles are re-pointed at new models as they ship, so the name is the only
-   * thing that stays legible about a finished run once its model string means
-   * something else.
+   * The name of the profile {@link model} and {@link effort} came from (e.g. `fast`, `deep`).
+   * Null for a run that resolved to no profile. Stored rather than looked up because profiles get
+   * re-pointed at new models over time.
    */
   profile?: string | null;
   /**
-   * Which level of the precedence chain named that profile: `pin` when the goal's
-   * tag or its plan's part chose it, `rule` when `byRule` did, `default` when
-   * neither did (issue #342).
-   *
-   * The whole point is `pin`. A run that cost three times its rule's price and
-   * reads as an ordinary one is the invisible half of pinning, and re-deriving
-   * this when the drawer is opened would answer against today's config rather
-   * than the config the run was dispatched under.
+   * Which level of the precedence chain named that profile: `pin` (the goal/part chose it), `rule`
+   * (`byRule` did), or `default`. The point is `pin` — without it, a run costing three times its
+   * rule's price reads as ordinary.
    */
   profileSource?: string | null;
   status: TaskStatus;
@@ -916,12 +594,10 @@ export interface Task extends TaskSummary {
 }
 
 /**
- * An operator-launched job: a prompt queued from the cockpit that the harness
- * turns into an agent. Unlike a {@link Task} (materialised the instant an agent
- * spawns), a job is a durable request that persists *ahead of* dispatch — so it
- * can sit in a queue when the fleet is at capacity and be dispatched in a later
- * cycle. The dispatcher drains queued jobs before any world-driven rule, so a
- * manual request takes priority for the next free slot.
+ * An operator-launched job: a prompt queued from the cockpit that the harness turns into an
+ * agent. Unlike a {@link Task} (materialised the instant an agent spawns), a job is a durable
+ * request that persists ahead of dispatch, so it can queue at capacity. The dispatcher drains
+ * queued jobs before any world-driven rule.
  */
 type JobStatus =
   | 'queued' // awaiting a free slot
@@ -940,16 +616,11 @@ export interface Job {
   branch: string | null;
   status: JobStatus;
   /**
-   * The origin whose work this job stands in for — `issue:41:retro` for a retro a
-   * crash recovery **requeued**, and null for the ordinary operator job, which
-   * stands in for nothing.
-   *
-   * A job's *own* origin is always `job:<id>`: that is what the dispatch is keyed
-   * on, what the executor marks dispatched, and what the work graph folds its PR
-   * onto. This field is the other half — the work being redone — and it exists
-   * because the gates that stop two agents landing on one piece of work read
-   * origins. Without it a requeued `issue:41:retro` is invisible to the rule that
-   * dispatches retros, which dispatches a second one while the first is running.
+   * The origin whose work this job stands in for — e.g. `issue:41:retro` for a retro a crash
+   * recovery requeued; null for an ordinary operator job. A job's own origin is always
+   * `job:<id>`; this field is the work being redone, needed so the gates that stop two agents
+   * landing on one piece of work can see it — otherwise a requeued retro is invisible and a
+   * second one dispatches while the first still runs.
    */
   originRef: string | null;
   /** The task this job was dispatched as, once it has been. Null while queued. */
@@ -959,15 +630,10 @@ export interface Job {
 }
 
 /**
- * A recurring brief: a prompt the operator wants run on a cron schedule, and
- * how far through that recurrence the harness has got.
- *
- * It is **intent, not work**. What a firing produces is an ordinary {@link Job},
- * queued exactly as a hand-launched one is and dispatched by the same rule — so a
- * schedule adds a way for work to arrive and no new way for it to be run. That is
- * what keeps a recurrence inside every gate the fleet already has: the cap, the
- * pause flag, the Up next queue and the cooldowns all see a job and neither know
- * nor care that a clock queued it.
+ * A recurring brief: a prompt the operator wants run on a cron schedule, and how far through
+ * that recurrence the harness has got. It is intent, not work — a firing produces an ordinary
+ * {@link Job}, queued and dispatched exactly as a hand-launched one, so every gate the fleet
+ * already has (cap, pause, Up next, cooldowns) applies unchanged.
  */
 export interface JobSchedule {
   id: string;
@@ -977,39 +643,28 @@ export interface JobSchedule {
   prompt: string;
   /** Whether firings run as a code agent (in a worktree) or a desk agent (scratch dir). */
   kind: TaskKind;
-  /**
-   * The five-field cron expression, read in the **harness process's local
-   * timezone** — see `src/schedules/cron.ts` for what that means on the two days
-   * a year it is not the same as any other clock.
-   */
+  /** The five-field cron expression, read in the harness process's local timezone. */
   cron: string;
   /** Off means the recurrence stands but nothing fires; `nextRunAt` is null while it is. */
   enabled: boolean;
   /**
-   * When the next firing is due. Null while the schedule is disabled, and null for
-   * an expression that matches no future minute at all (`0 0 30 2 *`), which is
-   * how a schedule that can never fire says so instead of being asked every pulse.
+   * When the next firing is due. Null while disabled, and null for an expression that matches no
+   * future minute at all (`0 0 30 2 *`) — a schedule that can never fire says so once.
    */
   nextRunAt: string | null;
   /** When it last fired — including a firing the operator asked for by hand. */
   lastFiredAt: string | null;
-  /**
-   * The job the last firing created, which is also how the next pulse asks whether
-   * that firing is still going on. Null until it has fired once.
-   */
+  /** The job the last firing created; also how the next pulse checks whether it's still running. Null until first fire. */
   lastJobId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 /**
- * An image an operator attached to a brief, as it arrives on the wire
- * (issue #249). `data` is base64 of the raw file — no data-URL prefix.
- *
- * There is deliberately **no `mime` field**: a client-declared type is
- * attacker-controlled, and the type an agent is told to trust is the one sniffed
- * from the decoded bytes (`src/jobs/attachments.ts`). `name` is a display label
- * only and is never used to build a path.
+ * An image an operator attached to a brief, as it arrives on the wire. `data` is base64 of the
+ * raw file, no data-URL prefix. Deliberately no `mime` field — a client-declared type is
+ * attacker-controlled, so the type an agent trusts is sniffed from the decoded bytes instead.
+ * `name` is display-only, never used to build a path.
  */
 export interface JobAttachmentInput {
   /** The operator's own filename, kept for display. Optional — a pasted screenshot has none. */
@@ -1019,11 +674,9 @@ export interface JobAttachmentInput {
 }
 
 /**
- * An attachment as stored: the file on disk, plus what an agent is told about it.
- *
- * Keyed on `targetRef` rather than on a job id, because the thing an attachment
- * belongs to outlives the row it arrived with — a code brief becomes a desk
- * filing job and then a ticket, and the image has to follow.
+ * An attachment as stored: the file on disk, plus what an agent is told about it. Keyed on
+ * `targetRef` rather than a job id because what an attachment belongs to outlives the row it
+ * arrived with — a code brief becomes a desk filing job and then a ticket.
  */
 export interface JobAttachment {
   id: string;
@@ -1047,21 +700,16 @@ export type WorkNodeKind = 'issue' | 'plan' | 'part' | 'pr' | 'concern' | 'job' 
 
 /**
  * How a PR node's terminal state was learned. `observed` means it was seen in
- * `closedPullRequests`; `inferred` means it left the open set and the window never
- * showed it. The distinction is kept because absence-means-merged is a deliberate
- * fallback, and a durable record has no reason to forget that it *was* one.
+ * `closedPullRequests`; `inferred` means it left the open set and the window never showed it —
+ * kept because absence-means-merged is a deliberate fallback worth remembering as such.
  */
 export type WorkNodeProvenance = 'observed' | 'inferred';
 
 /**
- * One node of the durable work graph: what the harness did for a work item, and
- * what it descended from. Keyed on the ref vocabulary that already exists
- * (`issue:12`, `issue:12:part:schema`, `pr:41`, `pr:41:ci`) so it joins to every
- * gate, override and proposal without a second naming scheme.
- *
- * `parentRef` follows *work lineage* — a PR's parent is the part that produced it.
- * Stacking is a different relation and lives on `baseRef`, which keeps the graph a
- * tree and stops it lying about what caused the work.
+ * One node of the durable work graph: what the harness did for a work item, and what it
+ * descended from. Keyed on the existing ref vocabulary (`issue:12`, `pr:41`, …) so it joins to
+ * every gate without a second naming scheme. `parentRef` follows work lineage (a PR's parent is
+ * the part that produced it); stacking is a different relation on `baseRef`, keeping the graph a tree.
  */
 export interface WorkNode {
   ref: string;
@@ -1078,30 +726,17 @@ export interface WorkNode {
 }
 
 /**
- * Where a work-item filing sits. Two statuses rather than one because filing is
- * *asynchronous*, the same reason {@link FindingStatus} splits them: the click
- * queues a desk job, and the ticket exists only once that job's agent has created
- * it and called `link_ticket`. `filing` is the honest reading in between, and
- * `filed` is the one that carries {@link WorkItemFiling.ticketRef}.
+ * Where a work-item filing sits. Two statuses because filing is asynchronous: the click queues a
+ * desk job, and the ticket exists only once that job's agent creates it and calls `link_ticket`.
+ * `filing` is the state in between; `filed` carries {@link WorkItemFiling.ticketRef}.
  */
 export type WorkItemFilingStatus = 'filing' | 'filed';
 
 /**
- * A tracker item the operator asked the harness to create for work it did that
- * nothing external accounts for — an operator job that produced commits and a PR
- * with no issue anywhere behind it (stage 3 of the work graph).
- *
- * Keyed on the node it is *for*, so one node has at most one filing. Once the ref
- * comes back it becomes that node's `parentRef` — written by the fold, never from
- * here, so the recorder stays the graph's only writer.
- *
- * `filing` is the **claim**, held for the moment between the operator's click and
- * the tracker answering: the harness files these itself (issue #394), so the two
- * statuses are one request apart rather than an agent's lifetime, and a claim whose
- * create failed is deleted rather than left standing.
- *
- * Deliberately not a {@link Finding}: a finding is an agent's testimony with
- * structural attribution, and this row has no agent behind it to attribute to.
+ * A tracker item the operator asked the harness to create for work with no issue behind it (an
+ * operator job that produced commits and a PR). Keyed on the node it is for, so one node has at
+ * most one filing; the ref becomes that node's `parentRef` once it comes back, written by the
+ * fold only. Deliberately not a {@link Finding} — this row has no agent to attribute to.
  */
 export interface WorkItemFiling {
   /** The unrecorded node this is filing a work item for (`job:job_abc`). */
@@ -1114,15 +749,9 @@ export interface WorkItemFiling {
 }
 
 /**
- * A bug the operator raised against a story from the cockpit, and what became of
- * it. Shares {@link WorkItemFilingStatus} because it is the same asynchrony —
- * though here it is the longer kind: the click queues a desk job, and the bug
- * exists only once that job's agent has written it up and handed the words to
- * `link_ticket` for the harness to file.
- *
- * Keyed on {@link BugFiling.jobId} rather than on the story, so one story can
- * carry several bugs over its life — see `src/store/bugFilings.ts` for why that
- * differs from {@link WorkItemFiling}.
+ * A bug the operator raised against a story from the cockpit, and what became of it. Shares
+ * {@link WorkItemFilingStatus}'s asynchrony. Keyed on `jobId` rather than the story, so one story
+ * can carry several bugs over its life. → `src/store/bugFilings.ts`
  */
 export interface BugFiling {
   /** The desk job doing the filing — how `link_ticket` finds its way back here. */
@@ -1149,11 +778,9 @@ export interface WorkNodeObservation {
 }
 
 /**
- * An operator priority override for the "Up next" queue (issue #128). Keyed on a
- * candidate's stable `origin` so it survives pulses and restarts while the queue
- * itself stays a per-pulse projection. `rank` is ascending — `0` means "do this
- * next" — and only orders *among* overridden origins; a lower rank never
- * un-holds a held item, it only re-orders.
+ * An operator priority override for the "Up next" queue. Keyed on a candidate's stable `origin`
+ * so it survives pulses and restarts while the queue itself stays a per-pulse projection. `rank`
+ * is ascending (`0` = next) and only orders among overridden origins — it never un-holds a held item.
  */
 export interface PriorityOverride {
   origin: string;
@@ -1161,52 +788,27 @@ export interface PriorityOverride {
 }
 
 /**
- * An operator override of which model profile one queued dispatch runs on
- * Keyed on the same stable `origin` {@link PriorityOverride} uses,
- * and for the same reason: the queue is a per-pulse projection with nothing in it
- * to mutate, so a statement about a queued row has to be written against what the
- * row *names*.
- *
- * The two are separate statements about one row because they answer different
- * questions — one is "do this sooner", the other "do this cheaper" — and an
- * operator who says one has said nothing about the other.
- *
- * **Standing, not one-shot.** It is not consumed by the dispatch it changes: the
- * pin chain is a pure function of the origin, so a retry of the run it priced
- * runs the same profile it did. It is cleared by the operator, or pruned once its
- * origin stops being tracked — the same `upNextOverrideTtlMs` that prunes a
- * priority override, and the same reasoning.
- *
- * It wins over the goal's tag and the plan's part profile. Those are standing
- * statements about work; this is a person looking at the queue as it is now, and
- * the later, narrower reading is the one to act on.
+ * An operator override of which model profile one queued dispatch runs on. Keyed on the same
+ * stable `origin` {@link PriorityOverride} uses, for the same reason. A separate statement from
+ * priority — "cheaper" vs "sooner". Standing, not one-shot: not consumed by the dispatch it
+ * changes, so a retry runs the same profile; cleared by the operator or pruned via
+ * `upNextOverrideTtlMs`. Wins over the goal's tag and the plan's part profile.
  */
 export interface ProfileOverride {
   origin: string;
   /**
-   * The profile's name. A plain string on {@link PlanPart.profile}'s terms — the
-   * route refuses a name this deployment does not configure, but config moves
-   * under a stored row, and `resolveAgentProfile` falls through to the rule for a
-   * name it cannot resolve rather than launching on nothing.
+   * The profile's name. A plain string, same terms as {@link PlanPart.profile}; `resolveAgentProfile`
+   * falls through to the rule for a name it cannot resolve rather than launching on nothing.
    */
   profile: string;
 }
 
 /**
- * A goal the operator has marked a priority: everything the harness dispatches
- * under `issue:<n>` — and against the pull requests that goal's branches opened —
- * is ranked ahead of the natural cross-rule order until the flag is cleared.
- *
- * A **boolean on a goal**, not a rank on an origin, and the two are deliberately
- * different objects. {@link PriorityOverride} arranges one pulse's queue and is
- * pruned when its origin stops being tracked; this is a standing statement about
- * a goal, which is why it survives the goal's work changing shape — an issue that
- * is picked up as `issue:<n>` this pulse is three `issue:<n>:part:<slug>` origins
- * and a `pr:<m>:ci` after its plan is approved, and an operator who said "this
- * one first" meant all of them.
- *
- * It orders and nothing more: a cooldown, a cap, an unapproved plan or an ignore
- * tag holds a flagged goal's work exactly as it holds anything else.
+ * A goal the operator has marked a priority: everything dispatched under `issue:<n>`, and
+ * against the pull requests it opened, is ranked ahead of the natural cross-rule order until
+ * cleared. A boolean on the goal, not a rank on an origin — unlike {@link PriorityOverride} it
+ * survives the goal's work changing shape (part/PR origins spun off it). Orders only — a
+ * cooldown, cap, unapproved plan or ignore tag still holds a flagged goal's work.
  */
 export interface GoalPriority {
   /** The goal's origin, `issue:<n>` — the same key every verdict on a goal is written against. */
@@ -1216,49 +818,30 @@ export interface GoalPriority {
 }
 
 /**
- * `crashed` is the one status no agent transition writes: it is stamped at boot on
- * a row that still claimed to be live when its process died, and it means only
- * that an operator's recovery verdict is outstanding (see
- * {@link file://./agents/recoveryDesk.ts}). It is deliberately *not* live — a
- * crashed agent stops counting toward the concurrency cap and stops reading as
- * running in the cockpit — and it is not terminal either, since `restore` puts the
- * same row back to `running`.
+ * `crashed` is the one status no agent transition writes: stamped at boot on a row that still
+ * claimed to be live when its process died, meaning only that an operator's recovery verdict is
+ * outstanding. Deliberately not live (stops counting toward the concurrency cap) nor terminal
+ * (`restore` puts it back to `running`).
  */
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed' | 'crashed';
 
 /**
- * What the executor is doing with an action it has picked up but not yet turned
- * into anything the fleet can see.
+ * What the executor is doing with an action it has picked up but not yet turned into anything
+ * the fleet can see — the awaited steps only, since `ActionExecutor.execute` walks the plan
+ * strictly serially and every other action waits behind whichever one is mid-await.
  *
- * The steps are the awaited ones and only those. `ActionExecutor.execute` walks
- * the plan strictly serially, so an action holds the loop for as long as its own
- * awaits take, and every other action in the plan waits behind it with nothing
- * anywhere saying so — which is the whole reason this type exists. The
- * synchronous steps between them never yield, so no reader can observe one and
- * none is named.
- *
- * - `picked-up` — the action is in hand and the executor has not reached an
- *   awaited step. The step every action starts on, and the one nothing ever
- *   sees for an action whose body does not await.
- * - `ci-evidence` — reading the failing output of the checks a CI dispatch
- *   answers, out of the provider.
- * - `slot-handover` — the worktree pool, handing a slot over
- *   ([09](../docs/spec/09-execution.md#handing-a-slot-over)). The `git clean -ffdx`
- *   and cold checkout, which on a large target repository is the minutes-long one.
- * - `authorizing` — asking whether an outbound act (a merge, a review reply) is
- *   already authorized, which reaches the tracker.
+ * - `picked-up` — in hand, no awaited step reached yet.
+ * - `ci-evidence` — reading a CI dispatch's failing check output from the provider.
+ * - `slot-handover` — the worktree pool handing a slot over (`git clean -ffdx` + cold checkout).
+ * - `authorizing` — checking whether an outbound act (merge, review reply) is already authorized.
  */
 export type ReadyingStep = 'picked-up' | 'ci-evidence' | 'slot-handover' | 'authorizing';
 
 /**
- * One action the executor is working on right now — in flight, and **not an
- * agent**: it holds no slot the cap counts, has no transcript, and there is
- * nothing to kill or inject into.
- *
- * In memory only, and deliberately (see {@link file://./executor/readying.ts}).
- * The record's whole lifetime is one stack frame of `ActionExecutor.execute`, so
- * a persisted row would outlive the process that could clear it and every crash
- * would leave a phantom the cockpit draws forever.
+ * One action the executor is working on right now — in flight and not an agent: no slot, no
+ * transcript, nothing to kill or inject into. In-memory only and deliberately so — its lifetime
+ * is one stack frame of `ActionExecutor.execute`, so a persisted row would outlive the process
+ * and leave a phantom on every crash.
  */
 export interface ReadyingAction {
   /** The row's key: the cycle it belongs to and the action's place in that plan. */
@@ -1295,88 +878,56 @@ export interface Agent {
   startedAt: string;
   endedAt: string | null;
   /**
-   * Cumulative Claude usage as last reported by the session's `result` events
-   * (stream runtime only — a PTY session reports none, so these stay null).
-   * `costUsd` is the session's total API cost so far; tokens/turns likewise
-   * accumulate across the whole session.
+   * Cumulative Claude usage as last reported by the session's `result` events (stream runtime
+   * only — a PTY session reports none, so these stay null). `costUsd` is the session's total API
+   * cost so far; tokens/turns likewise accumulate across the whole session.
    */
   costUsd: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   /**
-   * The cached share of {@link Agent.inputTokens} — a *part* of it, never a
-   * sibling total. `inputTokens` stays the gross figure (fresh + written + read),
-   * so nothing that already sums it changes meaning; fresh input is the
-   * subtraction. Both are null on a run that reported no usage at all, and zero
-   * on one that reported usage with no caching.
-   *
-   * They are stored because the cache is the one thing an operator can act on
-   * that the gross figure cannot show: a read bills at a fraction of a fresh
-   * token and a write at a premium, so a fleet at a 90% hit rate and one at 0%
-   * report identical `inputTokens` and wildly different bills. Without the split
-   * there is no reading that says which fleet this is.
+   * The cached share of {@link Agent.inputTokens} — a part of it, never a sibling total (`inputTokens`
+   * stays the gross fresh+written+read figure). Both null when no usage was reported, zero when
+   * usage was reported with no caching. Stored because cache hit rate is what a gross figure
+   * cannot show and cache pricing differs sharply from fresh tokens.
    */
   cacheReadTokens: number | null;
   cacheCreationTokens: number | null;
   numTurns: number | null;
   /**
-   * The agent's own one-line answer to "what are you doing right now", from the
-   * `note_progress` tool — a *current value*, replaced on each call, and null for
-   * an agent that never called it (which is a supported state, not a degraded
-   * one: the output tail is what the fleet card falls back to).
+   * The agent's own one-line answer to "what are you doing right now", from `note_progress` — a
+   * current value, replaced on each call, null for an agent that never called it (a supported
+   * state, not degraded).
    */
   note: string | null;
   /**
-   * When {@link Agent.note} was written. Display context only — it dates the note
-   * so a reader knows how current it is. **Nothing derives liveness or health from
-   * it**, by decision: the longest gaps between notes are the long test runs and
-   * big refactors, i.e. exactly the stretches where an agent is healthiest, so a
-   * staleness verdict would punish honest use and turn this into a heartbeat.
-   * Liveness is the process, the status transitions and the `waiting` park.
+   * When {@link Agent.note} was written. Display context only — nothing derives liveness or
+   * health from it, since the longest gaps between notes are long test runs, i.e. exactly when an
+   * agent is healthiest. Liveness is the process, status transitions, and the `waiting` park.
    */
   notedAt: string | null;
   /**
-   * When this agent was last seen *doing work after it parked on a human*, or null
-   * if that has not happened since its current park. It exists because the park is
-   * only ever a request: the `escalate` tool returns immediately, telling the agent
-   * to wait, and a model that carries on regardless leaves the row saying `waiting`
-   * with an open alert nobody needs to answer.
-   *
-   * What counts as work is runtime-specific and narrow — a **tool call**, observed
-   * on the legible transcript (see `AgentSession`'s `activity` event). Prose does
-   * not count: an agent that escalates and then writes one more sentence before
-   * ending its turn is still waiting, and reading that as "resumed" would clear
-   * alerts that genuinely need answering.
-   *
-   * Read as display context, never as a status. Nothing un-parks off it and nothing
-   * in the dispatcher reads it — it marks an alert stale so a human can dismiss it
-   * with confidence, which is the whole job.
+   * When this agent was last seen doing work after it parked on a human, or null if that hasn't
+   * happened since its current park. Exists because `escalate` only requests a wait — a model
+   * that carries on anyway leaves `waiting` with a stale alert. Counts only tool calls, not prose,
+   * on the transcript. Display context only — nothing un-parks off it or dispatches on it.
    */
   resumedAt: string | null;
   /**
-   * How many times the harness has re-attached to this agent after its process
-   * died mid-run (issue #318), bounded by `agentResumeAttempts`. Zero for an
-   * agent that has never crashed, and for every row written before the column
-   * existed.
-   *
-   * A budget rather than an observation, which is what keeps it off
-   * {@link Agent.resumedAt}: that one is about a *park* and is cleared the moment
-   * an escalation is answered, so a crash budget riding on it would refill every
-   * time somebody replied to a question. Never cleared, and persisted rather than
-   * counted in memory, because `spawn`/`resume` reuse one row across restarts —
-   * an in-memory counter would reset on every boot and a crash-looping agent
-   * would relaunch forever.
+   * How many times the harness has re-attached to this agent after its process died mid-run,
+   * bounded by `agentResumeAttempts`. Zero for an agent that never crashed or predates the
+   * column. A budget, not an observation — unlike {@link Agent.resumedAt} it is never cleared by
+   * answering an escalation, and persisted (not in-memory) since `spawn`/`resume` reuse one row
+   * across restarts.
    */
   resumeAttempts: number;
 }
 
 /**
  * An artifact an agent surfaced to the cockpit mid-run via the flag sentinel
- * (`@@LUBBDUBB_FLAG:…@@`) — a design doc, a report, a link. Generic on purpose:
- * `kind`/`label` are cosmetic and `ref` is either a worktree-relative path (served
- * through the confined artifact route) or an absolute http(s) URL. Deduped per
- * agent by `ref`, so an agent re-flagging the same doc as it evolves just refreshes
- * the timestamp rather than piling up duplicates.
+ * (`@@LUBBDUBB_FLAG:…@@`) — a design doc, a report, a link. Generic on purpose: `kind`/`label`
+ * are cosmetic and `ref` is a worktree-relative path or an absolute http(s) URL. Deduped per
+ * agent by `ref`.
  */
 export interface AgentFlag {
   id: string;
@@ -1391,11 +942,9 @@ export interface AgentFlag {
 export type AgentFlagInput = Pick<AgentFlag, 'kind' | 'label' | 'ref'>;
 
 /**
- * A file an agent wrote, captured by the file-events `PostToolUse` hook (not the
- * flag sentinel — so it needs no cooperation from the agent's prompt). Every
- * write is tracked as the "files changed" list; `promoted` ones are additionally
- * surfaced as an {@link AgentFlag} chip (a report/doc, per `classifyArtifact`).
- * Deduped per agent by `path`.
+ * A file an agent wrote, captured by the file-events `PostToolUse` hook (not the flag sentinel —
+ * needs no cooperation from the agent's prompt). Every write is tracked as "files changed";
+ * `promoted` ones are also surfaced as an {@link AgentFlag} chip. Deduped per agent by `path`.
  */
 export interface AgentFile {
   id: string;
@@ -1413,13 +962,9 @@ export interface AgentFile {
 export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 
 /**
- * One path a goal has been edited in, and the work that last wrote it — the
- * `agent_files` rows of a whole issue subtree, folded to one row per path.
- *
- * Deliberately narrower than {@link AgentFile}: no agent id, no tool and no
- * promotion flag, because the one reader is the prior-work briefing and a field
- * it does not render is a field a later reader would have to guess the meaning
- * of. → `Store.listGoalFiles`.
+ * One path a goal has been edited in, and the work that last wrote it — the `agent_files` rows
+ * of a whole issue subtree, folded to one row per path. Narrower than {@link AgentFile} (no
+ * agent id, tool, or promotion flag) since the only reader is the prior-work briefing.
  */
 export interface GoalFile {
   /** As the writing agent reported it — worktree-relative where the write landed inside its cwd. */
@@ -1431,22 +976,16 @@ export interface GoalFile {
 }
 
 /**
- * Another goal that has been in the same files as this one, and what its
- * retrospective said about the run.
- *
- * The neighbour is keyed on the **goal**, not the agent that did the writing:
- * `detectFileOverlaps` answers "who is editing this path right now" and this
- * answers "who has been here before", so the unit is the thing that has a
- * write-up. → `Store.listGoalNeighbours`.
+ * Another goal that has been in the same files as this one, and what its retrospective said
+ * about the run. Keyed on the goal, not the writing agent: `detectFileOverlaps` answers "who is
+ * editing this path now", this answers "who has been here before".
  */
 export interface GoalNeighbour {
   /** The neighbour goal, always the `issue:<n>` root — a retrospective's own key. */
   goalRef: string;
   /**
-   * The neighbour's retrospective summary, quoted whole. Carried rather than
-   * pointed at because no tool an agent has reaches another goal's write-up:
-   * `scratch_read` is scoped to the caller's own pad, and this is the only place
-   * the sentence is ever put in front of them.
+   * The neighbour's retrospective summary, quoted whole — carried rather than pointed at, since
+   * no tool an agent has can reach another goal's write-up.
    */
   retroSummary: string;
   /** The paths both goals have been in, the neighbour's most recent write first. */
@@ -1456,12 +995,9 @@ export interface GoalNeighbour {
 }
 
 /**
- * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
- * going red, or a review asking for changes.
- *
- * Resolved from the dispatch origin and never from an argument — see
- * `remedyOrigin` in `src/remedies/remedies.ts`, which is also where the copy for
- * every value below lives.
+ * Which kind of return to a pull request a {@link Remedy} accounts for: its CI going red, or a
+ * review asking for changes. Resolved from the dispatch origin, never from an argument.
+ * → `src/remedies/remedies.ts`
  */
 export type RemedyKind = 'ci' | 'review';
 
@@ -1493,19 +1029,10 @@ export type RemedyCause =
 export type RemedyGuard = 'local_check' | 'documented' | 'undocumented' | 'unpreventable';
 
 /**
- * One account of why the fleet had to come back to a pull request, written by the
- * agent that settled it.
- *
- * A **record, not a verdict**: nothing gates on it, no rule reads it, and a pull
- * request goes green whether or not one was ever filed. It has exactly two
- * readers — the Causes reading on the Yield panel, and the note appended to a
- * later dispatch on the same check (`src/remedies/priorRemedies.ts`).
- *
- * Why it is a table of its own rather than columns on `tasks`: a task is what was
- * dispatched, and this is what was found. One run can settle several reds and one
- * red can take several runs, so the two do not share a key — and a nullable
- * cause/guard pair on every task row would make "no remedy filed" and "not that
- * kind of task" the same reading.
+ * One account of why the fleet had to come back to a pull request, written by the agent that
+ * settled it. A record, not a verdict — nothing gates on it. Its own table rather than columns
+ * on `tasks` because one run can settle several reds and one red can take several runs, so the
+ * two do not share a key.
  */
 export interface Remedy {
   id: string;
@@ -1519,10 +1046,8 @@ export interface Remedy {
   /** One line: what was wrong, and what fixed it. Required — a bare pair of enums is not a reading. */
   summary: string;
   /**
-   * The checks that were red when this agent was dispatched, from
-   * {@link Task.ciChecks} rather than from the submission — the same rule the
-   * kind follows. Empty for a review remedy, and for a CI dispatch on a provider
-   * that reported no per-check detail.
+   * The checks that were red when this agent was dispatched, from {@link Task.ciChecks}, not the
+   * submission. Empty for a review remedy or a CI dispatch on a provider with no per-check detail.
    */
   checks: string[];
   /** The reporting agent and its task, from the credential. */
@@ -1536,68 +1061,29 @@ export interface Remedy {
 export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
- * Where a piece of work only a person can do has got to. Two terminals, and both
- * are settlements — there is no way for one to lapse, expire or be deleted.
- *
- * `declined` is not a failure state and not a tidy-up: it is the operator saying
- * *no, and here is why*, which is a fact the plan, the next agent and a later
- * replan all need. A task nobody will ever do that says nothing about why is the
- * shape this repo refuses everywhere else.
- *
- * Clearing a settled row off the bench is {@link HumanTask.dismissedAt}, not a
- * value here: what a person is owed and whether they have finished reading about
- * it are two questions, and one column cannot answer both.
+ * Where a piece of work only a person can do has got to. Two terminals, both settlements — no
+ * lapse, expiry, or deletion. `declined` is the operator saying "no, and here is why", a fact the
+ * plan and next agent need. Clearing a settled row off the bench is {@link HumanTask.dismissedAt},
+ * not a status here.
  */
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
 /**
- * Who a human task is *for the harness*, which is a different question from who
- * asked for it.
- *
- * `ask` is every task a person typed or an agent requested: the harness knows
- * nothing about it beyond the words, and only a person can say it is done.
- * `close_out` is one the harness files itself and can therefore also settle
- * itself — the ticket it names is a thing it watches every pulse. `burn` is the
- * same shape one step further in: the run it names is one the harness is
- * *watching spend*, so it both files and settles it, and the row is about an
- * agent rather than a tracker item (see `src/spendBurn.ts`). `validate` is the
- * third of that family: the goal it names is delivered with checks a person still
- * has to run, and the check rows it is waiting on are ones the harness reads
- * every pulse — so it settles itself as they are recorded (see
- * `src/validation/ready.ts`). `watch` is the fourth: a post-deploy watch whose
- * declared checks came back outside what was declared, filed **one row per window
- * and never one per reading** — 96 readings per check per environment is the rail
- * burying its own asks. The harness settles it itself when a later reading in the
- * same window comes back clean, so it is the family's shape exactly (see
- * `src/environments/watchFinding.ts`).
- *
- * A discriminator rather than a title match. The close-out sweep has to find its
- * own row again on the next pulse, and the alternative is recognising it by the
- * sentence it wrote — parsing prose the harness composed, which is the failure
- * mode `signalPolarity` and the reason plates already refuse.
+ * Who a human task is for the harness, distinct from who asked for it. `ask` is anything a
+ * person typed or an agent requested — only a person can close it. `close_out`, `burn`,
+ * `validate`, and `watch` are ones the harness both files and settles itself, watching a ticket,
+ * spend, validation checks, or a post-deploy window respectively. A discriminator rather than a
+ * title match, since the harness must re-find its own row on the next pulse without parsing prose.
  */
 export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch';
 
 /**
- * A unit of work only a person can do: flipping a setting in a console nobody
- * gave the fleet an account for, plugging something in, looking at a rendered
- * screen and saying whether it is right.
- *
- * **It is not an {@link Escalation}, and the difference is not a nuance.** An
- * escalation is a *question*: exactly one running agent is blocked on it, holding
- * a slot and a worktree; it is settled by typing an answer into that session, and
- * it dies with the agent. A human task is *work*: no agent is blocked on it, it
- * outlives every agent and every restart, and other work can be made to depend on
- * it. An agent that needs an answer to carry on escalates. An agent that needs a
- * person to *do something* — which may take until Tuesday — requests one of these
- * and gets on with, or concludes, what it can.
- *
- * Attribution is structural on the agent arm, as for a {@link Finding}:
- * `agentId`/`taskId`/`originRef` come from the credential the call arrived on,
- * never from an argument. A null `agentId` means no individual agent asked —
- * either an operator filed it from the cockpit, or a plan declared it as a step,
- * and {@link HumanTask.partId} is what tells those two apart. There is no
- * `requestedBy` column, so nothing can disagree with the ids beside it.
+ * A unit of work only a person can do — flipping a setting, plugging something in, judging a
+ * rendered screen. Not an {@link Escalation}: an escalation blocks one running agent and dies
+ * with it; a human task is work that outlives every agent and restart, and other work can depend
+ * on it. Attribution is structural: `agentId`/`taskId`/`originRef` come from the credential the
+ * call arrived on. A null `agentId` means an operator filed it or a plan declared it as a step
+ * ({@link HumanTask.partId} tells those apart).
  */
 export interface HumanTask {
   id: string;
@@ -1612,22 +1098,12 @@ export interface HumanTask {
   /** The work this belongs to — `issue:<n>`, `issue:<n>:part:<slug>`, `pr:<n>` — or null for a standalone ask. */
   originRef: string | null;
   /**
-   * The plan part this task *is*, when a planner declared a step for a person
-   * (`expectedKind: 'human'`). Null for every other human task.
-   *
-   * This is the only field through which a human task ever holds work off the
-   * fleet, and it is deliberately the only one: the part is the scheduling node
-   * that `dependsOn` and the reconciler's readiness pass already understand, so
-   * blocking needs no second mechanism beside them. A standalone human task
-   * blocks nothing — it is a visible obligation, not a gate.
+   * The plan part this task is, when a planner declared a step for a person (`expectedKind:
+   * 'human'`). Null otherwise. The only field through which a human task holds work off the
+   * fleet — a standalone human task blocks nothing.
    */
   partId: string | null;
-  /**
-   * What kind of obligation this is — see {@link HumanTaskKind}. `ask` for
-   * everything a person or an agent filed; `close_out` for the harness's own
-   * "the goal is delivered, close its ticket", and `validate` for its "the goal is
-   * delivered, run its checks" — both of which it files and settles.
-   */
+  /** What kind of obligation this is — see {@link HumanTaskKind}. */
   kind: HumanTaskKind;
   /** The agent that asked for it, from its credential. Null when an operator filed it themselves. */
   agentId: string | null;
@@ -1639,16 +1115,9 @@ export interface HumanTask {
   updatedAt: string;
   resolvedAt: string | null;
   /**
-   * When the operator cleared a **settled** row off the bench, or null while it is
-   * still on it.
-   *
-   * Deliberately not a fourth {@link HumanTaskStatus}: a status is the verdict on
-   * the work, and "I have read the record of it" is not a third answer to that
-   * question — the reconciler asking whether a part was declined must not have to
-   * learn a value that says nothing about the part. Only a settled row can carry
-   * one, so a dismissal can never lose an obligation; the row itself is kept for
-   * the reason a dismissed finding is, and because the close-out sweep finds its
-   * own settled row again by looking for it.
+   * When the operator cleared a settled row off the bench, or null while still on it.
+   * Deliberately not a fourth {@link HumanTaskStatus} — "I've read it" is not a verdict on the
+   * work. Only a settled row can carry one, so a dismissal can never lose an obligation.
    */
   dismissedAt: string | null;
 }
@@ -1657,15 +1126,10 @@ export interface HumanTask {
 export type HumanTaskInput = Pick<HumanTask, 'title' | 'detail'>;
 
 /**
- * What someone said about whether an issue is finished.
- *
- * `undeclared` is a value, not the absence of one, and that distinction is the
- * whole feature: a work item parked in a review state is genuinely ambiguous —
- * it sits there when work remains *and* when everything is delivered and it is
- * waiting on test — so folding "nobody said" into "not finished" is exactly the
- * assumption that had the harness re-pick merged work. Only
- * {@link IssueConclusionVerdict} is ever stored; `undeclared` is what the
- * resolver returns for a row that doesn't exist.
+ * What someone said about whether an issue is finished. `undeclared` is a value, not the
+ * absence of one — folding "nobody said" into "not finished" is the assumption that had the
+ * harness re-pick merged work. Only {@link IssueConclusionVerdict} is ever stored; `undeclared`
+ * is what the resolver returns for a row that doesn't exist.
  */
 export type IssueConclusionVerdict = 'done' | 'more_work';
 
@@ -1676,14 +1140,9 @@ export type IssueConclusionVerdict = 'done' | 'more_work';
 export type ConclusionAuthor = 'agent' | 'assessor' | 'operator';
 
 /**
- * One issue's standing conclusion — the `conclude_work` tool's row, or the
- * operator's override of it.
- *
- * Keyed on the `issue:<n>` origin rather than hung off an agent (the way a
- * `note_progress` note is) because a conclusion belongs to the **issue** and has
- * to outlive every agent that ever touched it — including across a replan, which
- * rewrites the plan row. One row per issue, overwritten per declaration, so the
- * standing verdict is a lookup rather than a fold over history.
+ * One issue's standing conclusion — the `conclude_work` tool's row, or the operator's override.
+ * Keyed on the `issue:<n>` origin, not hung off an agent, because it must outlive every agent
+ * that touched the issue. One row per issue, overwritten per declaration.
  */
 export interface IssueConclusion {
   /** The issue, as `issue:<n>` — the same origin every dispatch rule and gate keys on. */
@@ -1700,23 +1159,11 @@ export interface IssueConclusion {
 }
 
 /**
- * Something the operator has told the fleet to do on a goal, in their own words —
- * "change the button to primary", "the loading icon is broken, fix it".
- *
- * ## Why it is a row rather than a note on the verdict
- *
- * The operator's `more_work` toggle used to be a bare verdict: it bounced the
- * item back to pickup and carried not one word of *what* was wanted, so the next
- * agent re-read the same ticket that had already produced the thing the operator
- * was unhappy with. The words are the whole feature, and a verdict has nowhere to
- * put them — a conclusion is one overwritten row, so a second instruction would
- * silently replace the first while both were still outstanding.
- *
- * So instructions accumulate. Every one written since the last agent concluded
- * stands, they are appended to every dispatch on the goal in the order they were
- * written, and they are settled together by `conclude_work` — the agent's own
- * statement that it has dealt with what was in front of it. An operator can
- * withdraw one they did not mean.
+ * Something the operator has told the fleet to do on a goal, in their own words. A row rather
+ * than a note on the verdict because the old bare `more_work` toggle carried no words, so the
+ * next agent re-read the same ticket. Instructions accumulate: every one since the last
+ * conclusion stands, is appended to every dispatch on the goal in order, and is settled together
+ * by `conclude_work`. An operator can withdraw one they didn't mean.
  */
 export interface IssueInstruction {
   id: string;
@@ -1725,31 +1172,20 @@ export interface IssueInstruction {
   /** The operator's words, verbatim. Never rendered by the harness into anything else. */
   text: string;
   createdAt: string;
-  /**
-   * When it stopped standing: an agent concluded the goal, or the operator
-   * withdrew it. Null while it stands, which is the only state anything reads.
-   */
+  /** When it stopped standing: an agent concluded the goal, or the operator withdrew it. Null while it stands. */
   settledAt: string | null;
 }
 
 /**
- * A finished goal the operator has kept on the Goal Floor, until they dismiss it
- * (issue #203).
- *
- * The floor is built from the live world, so a completed goal drops off it the
- * moment the tracker stops returning the issue (a human closes the ticket) or its
- * watch tag comes off — and with it the one way in to the run's report. The row is
- * written while the goal is still live, so its `title` survives the world
- * forgetting the issue, and the floor draws a retained completion from it either
- * way until `dismissedAt` is set. Dismissal is one-way and persists across a
- * restart, so the same finished goals do not reappear.
+ * A finished goal the operator has kept on the Goal Floor, until they dismiss it. The floor is
+ * built from the live world, so a completed goal would otherwise drop off it the moment the
+ * tracker stops returning the issue; this row is written while the goal is still live so its
+ * `title` survives that. Dismissal is one-way and persists across a restart.
  */
 /**
- * How a run ended, stamped at the moment it is dismissed (issue #234): the
- * harness had judged the work, or the operator abandoned it. Derived from the
- * row rather than passed in — a run with a completion instant was judged, one
- * without was abandoned — so the two cannot be claimed independently of the
- * evidence.
+ * How a run ended, stamped at dismissal: the harness had judged the work, or the operator
+ * abandoned it. Derived from the row (a completion instant means judged) rather than passed in,
+ * so the two cannot be claimed independently of the evidence.
  */
 export type IssueRunOutcome = 'judged' | 'abandoned';
 

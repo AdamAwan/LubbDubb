@@ -37,271 +37,146 @@ import type { DispatchRuleId } from './rules.js';
 export interface DispatchContext {
   world: WorldSnapshot;
   /**
-   * Open PRs hidden from `world.pullRequests` — the ones carrying no watch tag, and
-   * the ones a colleague opened (`src/prOwnership.ts`). No rule *acts* on either:
-   * that is the whole of being unwatched, and the whole of the fleet staying off
-   * another person's pull request. But they are still open, so gates that must not
-   * read "absent from the world" as "merged" (issue pickup, the work-item state
-   * back-off) resolve against these too. Absent/empty = nothing hidden.
+   * Open PRs hidden from `world.pullRequests` — unwatched ones, and ones a colleague opened
+   * (`src/prOwnership.ts`). No rule acts on either, but gates that must not read "absent from the
+   * world" as "merged" (issue pickup, work-item state back-off) still resolve against these.
+   * Absent/empty = nothing hidden.
    */
   hiddenPrs?: PullRequest[];
   /**
-   * Which of `world.issues` are **retained runs** rather than the tracker's own
-   * answer (issue #234): a goal the harness has worked, whose ticket the tracker
-   * no longer returns, and which the operator has not dismissed. They are in the
-   * issue list so the two rules that come *after* a merge — `issue-assess` and
-   * `issue-retro` — can still finish once the delivering PR closed the ticket.
-   *
-   * **Every other rule must skip them, in its own body.** A retained issue reads
-   * `closed`, which most gates already refuse, and inheriting that would leave the
-   * safety of half the rule book resting on a filter none of them names. Absent or
-   * empty means every issue in the world came from the connector.
+   * Which of `world.issues` are retained runs rather than the tracker's own answer (issue #234):
+   * worked, ticket no longer returned, not dismissed. Kept in the issue list so `issue-assess`
+   * and `issue-retro` can still finish after the delivering PR closed the ticket. Every other
+   * rule must skip them itself — a retained issue reads `closed`, and inheriting that silently
+   * would rest half the rule book's safety on a filter none of them names. Absent/empty = none.
    */
   retainedIssues?: number[];
   /**
-   * What a dispatch needs to resolve its pinned profile (issue #342): the prefix
-   * the goal tags are derived from, and the profiles those tags may name.
-   *
-   * Absent — no `agentModels`, no `labelPrefix`, or a caller that has not wired
-   * it — means no dispatch is ever pinned and every one resolves on its rule,
-   * which is exactly the behaviour before pins existed. That is the safe absence:
-   * the other direction would have an unwired caller silently repricing the fleet.
+   * What a dispatch needs to resolve its pinned profile (issue #342): the label prefix and the
+   * profiles it may name. Absent means no dispatch is ever pinned — the safe absence, since the
+   * alternative is an unwired caller silently repricing the fleet.
    */
   modelPins?: { labelPrefix: string; models: AgentModels };
   /**
-   * The most recent accounts of why the fleet came back to a pull request, newest
-   * first — what `pr-ci-failing` and `pr-review-comment` append to a fresh
-   * dispatch's prompt (`src/remedies/priorRemedies.ts`).
-   *
-   * Read-only, and it changes **no** decision: the rules render it into a prompt
-   * and nothing gates on it. That is the whole of what it may be — a remedy is an
-   * agent's account of its own run, and a dispatch that turned on one would be
-   * the fleet deciding what to work from what it said about itself.
-   *
-   * Absent/empty means nothing has been accounted for yet, which is every
-   * deployment until an agent files the first one, and every prompt is then
-   * byte-identical to a build without the feature.
+   * The most recent accounts of why the fleet returned to a pull request, newest first —
+   * rendered into `pr-ci-failing`/`pr-review-comment` prompts. Read-only and gates nothing: a
+   * dispatch that gated on an agent's own account of its run would be self-referential.
+   * Absent/empty = nothing accounted for yet.
    */
   priorRemedies?: Remedy[];
   /**
-   * The fleet reviews already recorded (`Store.listPrReviews`), which is how rule
-   * `pr-review` knows a pull request has been read and how `pr-merge-ready` knows
-   * it may propose.
-   *
-   * Absent means no reading was wired, and it is the *safe* absence only because
-   * the rule is off by default: with `review.enabled` on and this unwired, every
-   * pull request would look unreviewed forever, which is a review dispatched
-   * every cycle. The composition root wires it beside every other store read for
-   * that reason; a caller building a context by hand and turning the review on
-   * has to as well.
+   * Recorded fleet reviews (`Store.listPrReviews`). Absent is safe only because `pr-review` is
+   * off by default — with review on and this unwired, every PR looks unreviewed forever.
    */
   prReviews?: PrReview[];
-  /**
-   * How the triage decided each pull request should be read
-   * (`Store.listPrReviewRoutes`). Absent means nothing was wired, and every
-   * review then runs the fail-open default mode — which is the safe direction,
-   * and the same one a triage that never answered produces.
-   */
+  /** How triage decided each PR should be read. Absent runs the fail-open default mode. */
   prReviewRoutes?: PrReviewRoute[];
-  /**
-   * Pull requests an external check reported already reviewed
-   * (`Store.prsReviewedElsewhere`). Absent reads as none, which is every
-   * deployment that configured no `review.reviewedElsewhere` command — and is the
-   * safe absence: the fleet reviews a pull request somebody else has read, which
-   * is a wasted agent rather than a diff nobody looked at.
-   */
+  /** PRs an external check reported already reviewed. Absent = none — the safe direction (a wasted agent, not a missed review). */
   prReviewedElsewhere?: ReadonlySet<number>;
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: TaskSummary[];
   agents: Agent[];
   openEscalations: Escalation[];
-  /**
-   * Operator-launched jobs still awaiting a slot, oldest first. Drained before
-   * any world-driven rule so a manual request takes priority for the next free
-   * slot; the rest stay queued when the fleet is at capacity.
-   */
+  /** Operator-launched jobs still awaiting a slot, oldest first, drained before any world-driven rule. */
   queuedJobs: Job[];
   /**
-   * Live jobs that stand in for another origin's work — a crash recovery's
-   * requeue, whose `originRef` is the `issue:41:retro` (or `pr:42:ci`) the
-   * original dispatch was keyed on. Folded into `activeOrigins`, so the rule that
-   * produced the original does not dispatch it again while the requeue redoes it.
-   * Absent/empty means nothing is being redone.
+   * Live jobs standing in for another origin's work (e.g. a crash recovery's requeue keyed on the
+   * original's origin). Folded into `activeOrigins` so the original rule does not double-dispatch.
+   * Absent/empty = nothing being redone.
    */
   standingJobs?: Job[];
-  /**
-   * Every persisted plan, keyed by its `issue:<n>` origin — the planning funnel's
-   * memory. Absent/empty means no issue has a verdict yet; with the funnel off it
-   * stays empty for good and every issue routes straight to pickup.
-   */
+  /** Every persisted plan, keyed by `issue:<n>` origin. Absent/empty = no verdict yet, or the funnel is off. */
   plans?: Plan[];
-  /**
-   * Every plan's parts — the scheduling graph rule `plan-part` walks. Reconciliation has
-   * already folded git and provider reality onto these rows *this* cycle, so a part
-   * that became ready during the pulse is dispatchable in the same pulse.
-   */
+  /** Every plan's parts — the scheduling graph `plan-part` walks, reconciled this cycle. */
   planParts?: PlanPart[];
-  /**
-   * Changes somebody has proposed to plans that are already running, still
-   * waiting on an operator (`plan_amendments`). Rule `plan-amendment` is the only
-   * reader; a plan with none — which is nearly all of them, nearly all the time —
-   * costs the rule one skipped loop. Absent/empty means nobody has proposed one.
-   */
+  /** Proposed changes to running plans still awaiting an operator (`plan_amendments`). Absent/empty = none proposed. */
   planAmendments?: PlanAmendment[];
   /**
-   * Every plan's validation checks — how anyone checks the *goal* was met. Rule
-   * `validate-check` is the only reader, and it reads exactly two things off a
-   * check: that the operator handed it to the fleet, and that nobody has
-   * recorded a reading against it. What a check *says* changes no dispatch, for
-   * `retrospectiveOrigins`' reason one line up. Absent/empty means nothing has
-   * been handed over, which is every deployment until somebody does.
+   * Every plan's validation checks. `validate-check` reads only whether the operator handed it
+   * over and whether a reading exists — not what the check says. Absent/empty = none handed over.
    */
   validationChecks?: ValidationCheck[];
   /**
-   * The local run that is up on the operator's machine, or absent for none.
-   *
-   * Read by rule `local-validation` and by nothing else. The dispatcher does not
-   * otherwise know local runs exist ([23](docs/spec/23-local-runs.md) says so in as
-   * many words), and this does not change that: it is here because a validation is
-   * pinned to a run, and whether that pin still holds is the only question the rule
-   * cannot answer from its own row.
+   * The local run up on the operator's machine, or absent for none. Read only by
+   * `local-validation`, since a validation is pinned to a run and this is how the rule checks the pin still holds.
    */
   localRun?: LocalRun | null;
-  /**
-   * Local validations the pipeline still has something to do about — the open ones
-   * and the failed ones with no fix yet. Absent/empty means nobody has pressed the
-   * button, which is every deployment until somebody does.
-   */
+  /** Local validations still needing action — open, or failed with no fix yet. Absent/empty = none. */
   localValidations?: LocalValidation[];
   /**
-   * Operator "Up next" priority overrides (issue #128), keyed on candidate
-   * origin. Applied ahead of the natural cross-rule ranking but behind rule `manual-job`
-   * and behind every `held` verdict, so an override changes *order* only —
-   * never whether a cooldown, cap, ignore tag or unapproved plan holds an item.
-   * Absent/empty means the natural ranking stands.
+   * Operator "Up next" priority overrides (issue #128), keyed on candidate origin. Ranks ahead of
+   * natural ordering but behind `manual-job` and every `held` verdict — order only, never a
+   * cooldown/cap/tag/plan hold. Absent/empty = natural ranking stands.
    */
   priorityOverrides?: PriorityOverride[];
   /**
-   * The goals the operator marked a priority. Every origin under a flagged goal —
-   * its pickup, its plan, its parts, its appraisal, its assessor, its validation checks
-   * and the pull requests its branches opened — ranks ahead of the natural order and
-   * ahead of a `priorityOverrides` drag, behind rule `manual-job` only.
-   *
-   * Ordering and nothing else, exactly as an override is: a cooldown, a cap, an
-   * unapproved plan or an ignore tag holds a flagged goal's work where it holds
-   * anything else's. Absent/empty means the natural ranking stands.
+   * Goals the operator marked a priority — every origin under one (pickup, plan, parts,
+   * appraisal, assessor, validation, PRs) ranks ahead of natural order, behind `manual-job` only.
+   * Ordering only, same as `priorityOverrides`. Absent/empty = natural ranking stands.
    */
   goalPriorities?: GoalPriority[];
   /**
-   * The operator's per-origin answer to "run this one on that profile"
-   * read from the queue rather than from a ticket. Highest
-   * precedence in the pin chain: it beats the goal's tag and the plan's part
-   * profile, because it is the narrowest and latest statement — somebody looking
-   * at this row, now.
-   *
-   * Pricing only, exactly as the two above are ordering only: an override never
-   * un-holds a held candidate and never lifts one over the headroom cut.
-   * Absent/empty means every dispatch resolves on its pin or its rule.
+   * The operator's per-origin profile pin from the queue, highest precedence in the pin chain
+   * (narrowest, latest statement). Pricing only — never un-holds or lifts a candidate over the
+   * headroom cut. Absent/empty = resolves on tag or rule.
    */
   profileOverrides?: ProfileOverride[];
   /**
-   * Standing "is this issue finished" verdicts, keyed on the `issue:<n>` origin —
-   * declared by the agent that worked the issue (`conclude_work`) or toggled by
-   * an operator. Read by rule `work-item-back-to-pickup`, which returns a reviewed item to pickup only on
-   * an explicit `more_work`. Absent/empty resolves every issue to `undeclared`,
-   * which holds the item rather than releasing it: a review state does not say
-   * whether the work is done, so silence must not read as "not done" (see
-   * `src/issueConclusion.ts`).
+   * Standing "is this issue finished" verdicts, keyed on `issue:<n>`. Read by
+   * `work-item-back-to-pickup`, which returns an item to pickup only on explicit `more_work`.
+   * Absent/empty resolves every issue to `undeclared`, which holds rather than releases — silence
+   * must not read as "not done" (see `src/issueConclusion.ts`).
    */
   conclusions?: IssueConclusion[];
   /**
-   * Standing `delivered` verdicts, keyed on the same `issue:<n>` origin — the
-   * harness's own park, written by the assessor or the operator. Unlike a
-   * conclusion this **gates pickup**: rule `issue-pickup` skips an issue whose verdict still
-   * stands. Absent/empty means nothing is parked, which is every deployment until
-   * an issue is assessed (see `src/delivery/delivery.ts`).
+   * Standing `delivered` verdicts, keyed on `issue:<n>`. Unlike a conclusion this gates pickup:
+   * `issue-pickup` skips an issue whose verdict still stands. Absent/empty = nothing parked.
    */
   deliveries?: IssueDelivery[];
   /**
-   * World transitions on the issues carrying a standing delivery verdict, since
-   * the oldest of them. What ends a park on a provider with no work-item states,
-   * narrowed by `deliverySignalQuery` so it is empty until an issue is assessed.
-   * Absent = nothing observed, which holds every verdict.
+   * World transitions on delivered issues since the oldest delivery, narrowed by
+   * `deliverySignalQuery`. Absent = nothing observed, which holds every verdict.
    */
   deliverySignals?: WorldEvent[];
   /**
-   * Standing "worked, and the goal is not reached" verdicts, keyed on the same
-   * `issue:<n>` origin — the assessor's negative arm (issue #159). Unlike a
-   * delivery this **gates nothing**: rule `issue-shortfall` is its one consumer,
-   * and what it does is route the failure the assessor named — a replan, a
-   * follow-up part, or a human. Absent/empty means nothing has fallen short, which
-   * is every deployment until an assessment says so.
+   * Standing "worked, goal not reached" verdicts (issue #159), keyed on `issue:<n>`. Gates
+   * nothing — `issue-shortfall` is the one consumer and routes the named failure. Absent/empty = none.
    */
   shortfalls?: IssueShortfall[];
   /**
-   * Standing goal-appraisal verdicts, keyed on the same `issue:<n>` origin — whether an
-   * issue's text can be worked from at all (issue #158). An `unclear` verdict gates
-   * the funnel in front of the issue: rules `issue-plan` and `issue-pickup` skip it while the verdict
-   * stands. Absent/empty means nothing has been appraised, which holds nothing — the
-   * fail-open that makes the gate safe (see `src/intake/appraisal.ts`).
+   * Standing goal-appraisal verdicts (issue #158), keyed on `issue:<n>`. An `unclear` verdict
+   * gates `issue-plan`/`issue-pickup` while it stands. Absent/empty holds nothing — the fail-open
+   * that makes the gate safe (see `src/intake/appraisal.ts`).
    */
   appraisals?: IssueAppraisal[];
   /**
-   * The issues that already have a retrospective — **origins only, never the
-   * writing**. Rule `issue-retro` needs to know whether to dispatch one and that is the whole
-   * of what it may know: a rule branching on retrospective prose would let one
-   * agent's account of a run change what the harness schedules next, which is the
-   * reason nothing reads the scratchpad at all. Absent/empty means none has been
-   * written, which holds nothing.
+   * Origins that already have a retrospective — origins only, never the writing. `issue-retro`
+   * may know only whether to dispatch one; branching on prose would let one agent's account
+   * change what the harness schedules next. Absent/empty holds nothing.
    */
   retrospectiveOrigins?: string[];
   /**
-   * Where every Feature's work stands right now, as `featureStandingKey` digests
-   * it — number, title and key, and **never a word of what anybody wrote**. Rule
-   * `feature-summary` compares the key to {@link featureSummaryKeys} and that is
-   * the whole of what it may know, `retrospectiveOrigins`' rule: a rule branching
-   * on summary prose would let one agent's account of a Feature change what the
-   * harness schedules next.
-   *
-   * Absent/empty means the deployment has no feature board — no flag, or a tracker
-   * with no hierarchy to roll up — and nothing is ever summarised, which is the
-   * safe absence: the whole feature is off rather than dispatching against a
-   * digest nobody built.
+   * Where every Feature's work stands, as `featureStandingKey` digests it — never a word of what
+   * anybody wrote, same rule as `retrospectiveOrigins`. `feature-summary` compares the key to
+   * {@link featureSummaryKeys}. Absent/empty = no feature board wired, nothing ever summarised.
    */
   featureStandings?: { number: number; title: string; key: string }[];
-  /**
-   * The key each Feature's standing summary was written against — origins and
-   * digests, on the same terms as the readings above. Absent/empty means none has
-   * been written, which holds nothing and summarises every Feature once.
-   */
+  /** The key each Feature's standing summary was written against. Absent/empty = none written, summarises once. */
   featureSummaryKeys?: { originRef: string; standingKey: string }[];
   /**
-   * Every story order on file (`Store.listFeatureSequences`) — the key rule
-   * `feature-sequence` compares against, and the edges the `accepted` ones hold
-   * work with. One list rather than two reads, so the rule that proposes an order
-   * and the gate that enforces one cannot disagree about what is on file.
-   *
-   * Absent/empty means no Feature has an order, which holds nothing and is the
-   * state every deployment is in until one is accepted.
-   * → `docs/spec/33-story-sequencing.md`
+   * Every story order on file — the key `feature-sequence` compares against and the edges
+   * `accepted` ones hold work with, one list so proposer and enforcer cannot disagree.
+   * Absent/empty = no Feature has an order. → `docs/spec/33-story-sequencing.md`
    */
   featureSequences?: FeatureSequence[];
   /**
-   * The obstacle board — every row with its keys, its voice count and the goals
-   * that reported it (`Store.obstacleBoard`).
-   *
-   * Read by rule `obstacle-repair`, which is the one rule this subsystem has, and
-   * by the priority expansion. Absent/empty means the board is empty or nothing
-   * wired it, and then no repair is ever proposed — the safe absence: the fleet
-   * works around obstacles, which is what it did before this existed.
+   * The obstacle board (`Store.obstacleBoard`), read by `obstacle-repair`. Absent/empty = no
+   * repair ever proposed — the fleet works around obstacles, as before this existed.
    */
   obstacles?: ObstacleStanding[];
   /**
-   * The goals parked behind an obstacle — the `blocked` verdict's rows
-   * (`Store.listObstacleBlocks`). **This gates pickup**: an issue whose block still
-   * stands is not eligible for the funnel, exactly as a delivered one is not.
-   * Absent/empty means nothing is parked, which is every deployment until an agent
-   * concludes `blocked`.
+   * Goals parked behind an obstacle (`Store.listObstacleBlocks`). Gates pickup: a blocked issue
+   * is not eligible for the funnel, like a delivered one. Absent/empty = nothing parked.
    */
   obstacleBlocks?: ObstacleBlock[];
   /** How many more agents may be started this cycle (concurrency headroom). */
@@ -309,27 +184,21 @@ export interface DispatchContext {
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */
   recentDecisions: Decision[];
   /**
-   * Acts already put to a human (issue #109), newest first. A rule that proposed
-   * an act must not propose it again while the human's verdict stands, or the
-   * inbox fills with duplicates of one question — see `proposalHold`. Absent/empty
-   * means nothing has been proposed, which is every deployment until one is.
+   * Acts already put to a human (issue #109), newest first. A rule must not re-propose an act
+   * while the human's verdict stands (see `proposalHold`). Absent/empty = nothing proposed.
    */
   proposals?: Proposal[];
   /**
-   * World transitions on the items a standing rejection concerns, since the
-   * oldest of those rejections (issue #109 phase 4). A "no" stands until its item
-   * changes, and this is what the gate reads to notice that it has — narrowed by
-   * `rejectionSignalQuery`, so it is empty until an operator rejects something.
-   * Absent = nothing observed, which holds every rejection: the direction that
-   * refuses rather than acts.
+   * World transitions on items a standing rejection concerns, since the oldest rejection
+   * (issue #109 phase 4) — narrowed by `rejectionSignalQuery`. Absent = nothing observed, which
+   * holds every rejection (the refuse-rather-than-act direction).
    */
   rejectionSignals?: WorldEvent[];
 }
 
 /**
- * One ranked agent-dispatch candidate from a cycle's plan — the "Up next" queue
- * (issue #69). A projection, not a persisted FIFO: the dispatcher recomputes it
- * from the world every cycle, so it's "what's next as of this pulse".
+ * One ranked agent-dispatch candidate from a cycle's plan — the "Up next" queue (issue #69). A
+ * projection, not a persisted FIFO: recomputed from the world every cycle.
  */
 export interface QueueItem {
   origin: string;
@@ -339,53 +208,29 @@ export interface QueueItem {
   kind: 'code' | 'desk';
   branch: string | null;
   /**
-   * Where the candidate sits relative to the headroom cut — dispatched this
-   * cycle, or held for one of the named reasons in `HeldReason`. Every
-   * reason a candidate can be held for appears here rather than causing it to
-   * vanish: a proposal held by something other than capacity used to be skipped
-   * silently, which made the thing holding it invisible.
+   * Where the candidate sits relative to the headroom cut — dispatched, or held for a reason in
+   * `HeldReason`. Every held reason appears here rather than vanishing the candidate, so what is
+   * holding it stays visible.
    */
   status: QueueStatus;
   reason: string;
   /**
-   * This row belongs to a goal the operator marked a priority, which is why it is
-   * where it is. Shipped as a fact rather than re-derived in the browser, and
-   * shipped at all because an ordering nothing explains is the same queue with a
-   * wrong-looking answer: the flag is set on a goal, the row names an origin, and
-   * without this nothing on the panel connects the two.
-   *
-   * Absent rather than `false` when it is not, so an unflagged row is the row it
-   * was before goal priority existed.
+   * This row belongs to a goal the operator marked a priority. Shipped as a fact (absent rather
+   * than `false` when not set) rather than re-derived in the browser.
    */
   expedited?: boolean;
   /**
-   * The `agentModels` profile this candidate would launch on, resolved by the
-   * same chain the dispatch itself is stamped from — so the queue names what will
-   * actually run rather than a second opinion about it.
-   *
-   * Null on a deployment with no `agentModels`, and on a rule with no entry and no
-   * `default`: both are "no `--model` flag at all", which is a fact about the run
-   * and not a profile. The cockpit draws no control where there is nothing to
-   * choose between.
+   * The `agentModels` profile this candidate would launch on, resolved by the same chain the
+   * dispatch is stamped from. Null on a deployment with no `agentModels`, or a rule with no entry
+   * and no `default` — both mean no `--model` flag at all.
    */
   profile?: string | null;
-  /**
-   * Which level of the chain named {@link QueueItem.profile}. Shipped rather than
-   * re-derived in the browser for the reason `expedited` is: the row is the only
-   * place an operator can see that this dispatch is priced by something other
-   * than its rule, and a pin that reads as ordinary policy is the invisible half
-   * of the feature.
-   */
+  /** Which level of the chain named {@link QueueItem.profile} — the only place a pin is visible as such. */
   profileSource?: ProfileSource;
   /**
-   * The operator's own standing override for this origin, when there is one — the
-   * value the cockpit's picker binds to, and the only one of the three pin levels
-   * a click on this row can clear.
-   *
-   * Separate from {@link QueueItem.profile} because they answer different
-   * questions: that one is "what will run", which an override may not even win
-   * (a name config no longer configures falls through to the rule). This one is
-   * "what did I say", which the control has to show to be clearable at all.
+   * The operator's own standing override for this origin, when there is one — the value the
+   * cockpit's picker binds to. Distinct from {@link QueueItem.profile}: that answers "what will
+   * run" (an override may not even win); this answers "what did I say".
    */
   override?: string;
 }
@@ -394,20 +239,17 @@ export interface DispatchResult extends ParseResult {
   /** Free-form reasoning the dispatcher produced, kept for the audit trail. */
   rationale: string;
   /**
-   * The full ordered pickup plan, including candidates below the headroom cut.
-   * Optional because a decision procedure need not rank what it did not pick;
-   * {@link RuleDispatcher} always materialises one, so `Harness.upcoming` is null
-   * only before the first cycle.
+   * The full ordered pickup plan, including candidates below the headroom cut. Optional because
+   * a decision procedure need not rank what it did not pick; {@link RuleDispatcher} always
+   * materialises one, so `Harness.upcoming` is null only before the first cycle.
    */
   upcoming?: QueueItem[];
 }
 
 /**
- * Decides what the harness should do this cycle: full state in, a validated,
- * bounded action plan out. {@link RuleDispatcher} is the one implementation —
- * deterministic and fully testable. This stays an interface because it is the
- * seam the whole pulse is written against: `Harness` takes a `Dispatcher`, never
- * the class, so what decides can be swapped without the cycle knowing.
+ * Decides what the harness should do this cycle: full state in, a validated, bounded action plan
+ * out. {@link RuleDispatcher} is the one implementation. This stays an interface because `Harness`
+ * takes a `Dispatcher`, never the class, so what decides can be swapped without the cycle knowing.
  */
 export interface Dispatcher {
   decide(ctx: DispatchContext): Promise<DispatchResult>;
