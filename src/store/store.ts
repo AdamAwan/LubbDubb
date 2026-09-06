@@ -39,6 +39,7 @@ import { ReviewWaitStore } from './reviewWaits.js';
 import { PrReviewStore, PR_REVIEW_COLUMNS } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
+import { PrSplitStore } from './prSplits.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
 import { PrReplyStore } from './prReplies.js';
 import { PrArchiveStore } from './prArchive.js';
@@ -161,6 +162,8 @@ import type {
   PrReviewInput,
   PrReviewRoute,
   PrReviewRouteInput,
+  PrSplitVerdict,
+  PrSplitVerdictInput,
   ValidationResource,
   WorkNode,
   WorkNodeObservation,
@@ -218,6 +221,7 @@ export class Store {
   private readonly prReviews: PrReviewStore;
   private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly prReviewExternals: PrReviewExternalStore;
+  private readonly prSplits: PrSplitStore;
   private readonly threadReopens: PrThreadReopenStore;
   private readonly prReplies: PrReplyStore;
   private readonly prArchive: PrArchiveStore;
@@ -324,6 +328,7 @@ export class Store {
     this.prReviews = new PrReviewStore(ctx);
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);
+    this.prSplits = new PrSplitStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
     this.prReplies = new PrReplyStore(ctx);
     this.prArchive = new PrArchiveStore(ctx);
@@ -1258,6 +1263,12 @@ export class Store {
   }
   listPrReviewRoutes(): PrReviewRoute[] {
     return this.prReviewRoutes.listPrReviewRoutes();
+  }
+  recordPrSplitVerdict(input: PrSplitVerdictInput): PrSplitVerdict {
+    return this.prSplits.recordPrSplitVerdict(input);
+  }
+  listPrSplitVerdicts(): PrSplitVerdict[] {
+    return this.prSplits.listPrSplitVerdicts();
   }
   recordPrReviewedElsewhere(prNumber: number, detail: string): void {
     this.prReviewExternals.recordPrReviewedElsewhere(prNumber, detail);

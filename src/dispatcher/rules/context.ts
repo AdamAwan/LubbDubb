@@ -23,6 +23,7 @@ import type {
   Plan,
   PrReview,
   PrReviewRoute,
+  PrSplitVerdict,
   PullRequest,
   TaskSummary,
   ValidationCheck,
@@ -75,6 +76,7 @@ export interface StageContext {
   reviewCharters: PrReviewCharters;
   prReviews: ReadonlyMap<number, PrReview>;
   prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
+  prSplits: ReadonlyMap<number, PrSplitVerdict>;
   prReviewedElsewhere: ReadonlySet<number>;
   defaultBranch: string;
   prRefStyle: PrRefStyle;

@@ -25,6 +25,7 @@ export type InjectableEvent =
   | { kind: 'pr_pushed'; prNumber: number; headSha: string }
   | { kind: 'pr_approved'; prNumber: number }
   | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean; mergeableState?: MergeableState }
+  | { kind: 'pr_size'; prNumber: number; changedFiles: number }
   | { kind: 'pr_closed'; prNumber: number; merged?: boolean; mergeCommitSha?: string }
   | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
   | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }

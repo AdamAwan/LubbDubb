@@ -377,6 +377,7 @@ export function buildStateSections(
   const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
     packStandingOf(packHeads().get(pr.number), pr.headSha, system.reviewPacks.writing(pr.number));
 
+  const splitVerdicts = once(() => new Map(store.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
   const openPullRequests = once((): OpenPullRequest[] =>
     world.pullRequests.map((pr) => ({
       ...pr,
@@ -385,6 +386,7 @@ export function buildStateSections(
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
       pack: packStandingFor(pr),
+      split: splitVerdicts().get(pr.number),
     })),
   );
   const prByBranch = once(() => {

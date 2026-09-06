@@ -68,6 +68,7 @@ export interface GhPullDetail {
   mergeable: boolean | null;
   mergeableState: string | null;
   merged: boolean;
+  changedFiles?: number | null;
 }
 
 export interface GhReview {

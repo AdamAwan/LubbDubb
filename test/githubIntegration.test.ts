@@ -443,6 +443,25 @@ test('an assignment carries who asked, and your own review is what ends it', asy
   assert.equal(stillApproved.viewerApproved, true);
 });
 
+test('the changed-file count rides on the detail the provider already fetches', async () => {
+  const { api } = fakeApi({
+    viewer: 'lubbdubb-bot',
+    pulls: [pull({ number: 7 }), pull({ number: 8 })],
+    detail: {
+      7: { mergeable: true, mergeableState: 'clean', merged: false, changedFiles: 48 },
+      8: { mergeable: true, mergeableState: 'clean', merged: false },
+    },
+  });
+  const sc = new GitHubSourceControlIntegration({ api });
+  const prs = (await sc.snapshot()).pullRequests!;
+  assert.equal(prs.find((p) => p.number === 7)!.changedFiles, 48);
+  assert.equal(
+    prs.find((p) => p.number === 8)!.changedFiles,
+    undefined,
+    'a provider that did not say leaves it unset, which reads as unknown rather than as narrow',
+  );
+});
+
 test("someone else's assignee is not yours", async () => {
   const { api } = fakeApi({
     viewer: 'lubbdubb-bot',

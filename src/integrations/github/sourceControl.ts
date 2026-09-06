@@ -58,6 +58,7 @@ interface CachedPullDetail {
   mergeable: boolean | null;
   mergeableState: MergeableState;
   merged: boolean;
+  changedFiles: number | null;
 }
 
 interface CachedPullCi {
@@ -146,6 +147,7 @@ export class GitHubSourceControlIntegration
           if (detail.viewerApproved) pr.viewerApproved = true;
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
+          if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
           return pr;
         }),
       );
@@ -186,6 +188,7 @@ export class GitHubSourceControlIntegration
       mergeable: detail.mergeable,
       mergeableState: normalizeMergeState(detail.mergeableState),
       merged: detail.merged,
+      changedFiles: detail.changedFiles ?? null,
     };
     if (p.updatedAt !== undefined && threads !== null) this.detailCache.set(p.number, fresh);
     return fresh;

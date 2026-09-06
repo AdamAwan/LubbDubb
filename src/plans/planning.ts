@@ -6,11 +6,13 @@ import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../d
 export interface PlanningPolicy {
   maxConcurrentPartsPerIssue: number;
   gitFetchIntervalMs: number;
+  fileBudget: number;
 }
 
 export const DEFAULT_PLANNING: PlanningPolicy = {
   maxConcurrentPartsPerIssue: 2,
   gitFetchIntervalMs: 60_000,
+  fileBudget: 20,
 };
 
 export function planOrigin(issueNumber: number): string {

@@ -1,4 +1,5 @@
 import { supersededReason } from '../admission.js';
+import { budgetNote } from '../../prSplit.js';
 import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { currentPlanSummary } from '../../plans/parts.js';
@@ -61,6 +62,7 @@ export function issuePlan(s: StageContext): void {
                 branch,
                 planFile: PLAN_FILE,
               })) +
+          budgetNote(s.planning.fileBudget) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
           s.watchNote,
         originRef: origin,

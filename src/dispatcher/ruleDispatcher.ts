@@ -46,6 +46,7 @@ import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
 import { prCiFailing } from './rules/prCiFailing.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
+import { prSplit } from './rules/prSplit.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
@@ -73,6 +74,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'manual-job': manualJob,
   'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
+  'pr-split': prSplit,
   'pr-ci-failing': prCiFailing,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
@@ -142,6 +144,7 @@ export class RuleDispatcher implements Dispatcher {
     this.planning = {
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
+      fileBudget: planning.fileBudget ?? DEFAULT_PLANNING.fileBudget,
     };
     this.templates = templates;
     this.pickup = {
@@ -400,6 +403,7 @@ export class RuleDispatcher implements Dispatcher {
       review: this.review,
       reviewCharters: this.reviewCharters,
       prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
+      prSplits: new Map((ctx.prSplits ?? []).map((v) => [v.prNumber, v])),
       prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
       prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
       defaultBranch: this.defaultBranch,

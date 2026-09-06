@@ -43,6 +43,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'pr_comment',
   'pr_approved',
   'pr_mergeable',
+  'pr_size',
   'pr_closed',
 ]);
 
@@ -98,6 +99,9 @@ export class FakeGitHubIntegration
             pr.mergeable = event.mergeable ?? true;
             if (event.mergeableState !== undefined) pr.mergeableState = event.mergeableState;
           });
+          break;
+        case 'pr_size':
+          mutatePr(world, event.prNumber, (pr) => (pr.changedFiles = event.changedFiles));
           break;
         case 'pr_comment':
           mutatePr(world, event.prNumber, (pr) => {

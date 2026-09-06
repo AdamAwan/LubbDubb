@@ -4,6 +4,8 @@ type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
 
 const DELIBERATION_SUFFIXES = ['plan', 'appraisal', 'sequence'];
 
+const DELIBERATION_SUFFIX_PREFIXES = ['split:'];
+
 const WORK_SUFFIX_PREFIXES = ['part:', 'validate-local-fix:'];
 
 const EVIDENCE_SUFFIXES = ['assess', 'retro'];
@@ -21,6 +23,7 @@ export function issueOriginRole(issueNumber: number, originRef: string | null): 
   if (EVIDENCE_SUFFIXES.includes(suffix)) return 'evidence';
   if (EVIDENCE_SUFFIX_PREFIXES.some((p) => suffix.startsWith(p))) return 'evidence';
   if (DELIBERATION_SUFFIXES.includes(suffix)) return 'deliberation';
+  if (DELIBERATION_SUFFIX_PREFIXES.some((p) => suffix.startsWith(p))) return 'deliberation';
   return 'unrecognised';
 }
 
