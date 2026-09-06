@@ -253,13 +253,20 @@ Implements both seams:
   reason — the two writes throw when nothing implements them, so a caller that wants to **offer** the
   operation has no other way to find out, and the cockpit draws no placement question where nothing
   could act on it.
-- **`canCreateIssues()` / `describeFilingTarget()`** — the two halves of "can I file, and where".
-  The predicate is the cheap cut, asked first by both filing routes; the probe delegates to the first
-  `IssueCreateCapable` and throws when there is none, exactly as `createIssue` does. They are kept
-  apart because the two answers are different things to show an operator — a provider that cannot
-  file is a **deployment shape**, and a provider that could not be reached is a **fault** — and
-  collapsing them would put "no tracker is configured" in the Errors panel of every fake deployment,
-  every time a compose modal opened.
+- **`createIssue(input)`** — the first `IssueCreateCapable`, throwing when there is none. It is the
+  composite's only filing verb: **"can I file, and where" is answered off the configuration rather
+  than off the connector.** `trackerCoordinates(config)` (`src/mcp/findings.ts`) is the cheap cut the
+  cockpit draws on as `canFileTickets`, and it is a **deployment shape** — a fake deployment has no
+  tracker, and asking a provider would put "no tracker is configured" in the Errors panel every time
+  a compose modal opened. A provider that could not be _reached_ is a **fault**, and so is reported
+  the other way, as a recorded error off the call that failed.
+  The cockpit's own "raise this against LubbDubb" pair is a **different seam entirely**: the two
+  routes that file upstream go through `system.upstream` (`UpstreamIssues`,
+  `src/tickets/upstream.ts`) — the `gh` CLI against `AdamAwan/LubbDubb` — and never through the
+  composite, because what they file is a ticket about the harness rather than work for this
+  deployment's fleet. `describeTarget()` is that seam's probe (the repo and the `gh` identity, under
+  an 8s deadline the route imposes), and `fleetWorksUpstream(config)` says whether this deployment's
+  own fleet would pick such a ticket up. → [16](16-http-api.md#get-apiissuesfiling-target)
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
   provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call
