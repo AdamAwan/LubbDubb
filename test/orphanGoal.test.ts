@@ -170,6 +170,7 @@ test('an unanswered orphan and a settled one are different readings', () => {
     goal.appraisal = {
       verdict: 'workable',
       summary: 'Two subsystems.',
+      missing: [],
       by: 'appraiser',
       decidedAt: '2026-01-01T00:00:00.000Z',
       commentRef: null,
@@ -185,6 +186,7 @@ test('an unanswered orphan and a settled one are different readings', () => {
     goal.appraisal = {
       verdict: 'workable',
       summary: 'Two subsystems.',
+      missing: [],
       by: 'appraiser',
       decidedAt: '2026-01-01T00:00:00.000Z',
       commentRef: null,
@@ -259,6 +261,7 @@ test('an answered orphan keeps a quiet note and a way back', () => {
     goal.appraisal = {
       verdict: 'workable',
       summary: 'Two subsystems.',
+      missing: [],
       by: 'appraiser',
       decidedAt: '2026-01-01T00:00:00.000Z',
       commentRef: null,

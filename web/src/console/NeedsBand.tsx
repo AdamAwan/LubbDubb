@@ -191,9 +191,16 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           verdict moves.
         </p>
         <p className="cn-tick">“{appraisal.summary}”</p>
+        {appraisal.missing.length > 0 && (
+          <ul className="cn-tick">
+            {appraisal.missing.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+        )}
         <p className="cn-tick">
-          The hold clears by itself when the goal&rsquo;s own text changes, so sharpening the ticket is the other answer
-          and costs no click here. Overriding says the brief is good enough as it stands.
+          The hold clears by itself when the goal&rsquo;s own text changes, so answering those on the ticket is the
+          other way out and costs no click here. Overriding says the brief is good enough as it stands.
         </p>
         <div className="cn-acts">
           <AsyncButton

@@ -350,9 +350,7 @@ export function readRunway(input: RunwayInput): RunwayReading {
     else if (status === 'appraisal') {
       // The split the status alone cannot make. A null hold is the pending arm —
       // the fleet has not got to it yet, which is what a queue *is*.
-      const hold = appraisalHold(appraisals.find((a) => a.originRef === `issue:${issue.number}`) ?? null, issue, {
-        signals: input.pickup.appraisalSignals ?? [],
-      });
+      const hold = appraisalHold(appraisals.find((a) => a.originRef === `issue:${issue.number}`) ?? null, issue);
       if (hold === null) queued += 1;
       else held += 1;
     } else if (HELD.has(status)) {
@@ -605,10 +603,7 @@ function humanHolds(input: RunwayInput): Map<string, Hold[]> {
     // `appraisalHold` would say so about every closed span alike. What it still rules
     // on is the release the re-implementation missed — a ticket rewritten since
     // the appraisal was never held by it.
-    if (
-      appraisalHold({ ...a, profileAnsweredAt: null }, issue, { signals: input.pickup.appraisalSignals ?? [] }) === null
-    )
-      continue;
+    if (appraisalHold({ ...a, profileAnsweredAt: null }, issue) === null) continue;
     add(a.originRef, a.decidedAt, a.profileAnsweredAt);
   }
   // A standing delivery: the harness believes it is finished and is waiting to be

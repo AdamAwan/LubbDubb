@@ -1,4 +1,9 @@
-import { GOAL_APPRAISAL_VERDICT_HELP, GOAL_APPRAISAL_VERDICTS, validateGoalAppraisal } from '../goalAppraisal.js';
+import {
+  GOAL_APPRAISAL_VERDICT_HELP,
+  GOAL_APPRAISAL_VERDICTS,
+  STORY_RUBRIC,
+  validateGoalAppraisal,
+} from '../goalAppraisal.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -20,14 +25,22 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
     description:
       'Say whether the ISSUE you were dispatched to appraise can be worked from at all. You are standing in ' +
       'front of the work, not doing it: nothing has been dispatched for this issue yet, and your verdict ' +
-      'decides whether anything is. Read the ticket against the repository you are in. Say "workable" ' +
-      'if there is an identifiable goal an agent could start on — the bar is *actionable*, not *good*, ' +
-      'and a large or opinionated ticket is still workable. Say "unclear" only when starting would be ' +
-      'guessing: nobody could tell what "done" means, the ticket contradicts itself or the repository, ' +
-      'or it refers to things that do not exist. An "unclear" verdict stops the harness scheduling ' +
-      'anything for this issue until the ticket is edited, someone comments on it, or a human overrides ' +
-      'you — so it is a question you are asking a person, and your summary is the whole of what they ' +
-      'have to answer. Do not implement anything and do not open a pull request.' +
+      'decides whether anything is. Read the ticket against the repository you are in. A story an agent ' +
+      'can start on always says: ' +
+      STORY_RUBRIC.always.join('; ') +
+      '. And, where the ticket implies it: ' +
+      STORY_RUBRIC.whenImplied.join('; ') +
+      '. Judge whether each is *answered*, in whatever words or layout the author used — never whether a ' +
+      'heading is present, since this project has no required template. Say "workable" if every item that ' +
+      'applies is answered well enough that an agent could start — the bar is *actionable*, not *good*, and ' +
+      'a large or opinionated ticket is still workable. Say "unclear" when one is not: starting would be ' +
+      'guessing at what "done" means, at which of two readings was meant, at what the screen or the data ' +
+      'should look like, or the ticket contradicts itself or the repository, or names things that do not ' +
+      'exist. Never mark a ticket unclear for lacking ' +
+      STORY_RUBRIC.neverRequired.join(' or ') +
+      '. An "unclear" verdict stops the harness scheduling anything for this issue until the ticket itself ' +
+      'is rewritten or a human overrides you — so it is a question you are asking a person, and "missing" ' +
+      'is the list they work through. Do not implement anything and do not open a pull request.' +
       (names.length > 0
         ? ' You also size the work: say which model profile the rest of this issue should run on. ' +
           'This deployment has, cheapest first — ' +
@@ -60,10 +73,20 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         summary: {
           type: 'string',
           description:
-            'For "unclear": precisely what you would need in order to start, phrased for the person who ' +
-            'wrote the ticket — the specific question, not "it is vague". For "workable": one sentence ' +
+            'For "unclear": why you could not start, in a sentence or two addressed to the person who ' +
+            'wrote the ticket — the specific gap, not "it is vague". For "workable": one sentence ' +
             'saying what you understood the goal to be, so a wrong reading is visible before an agent ' +
             'acts on it.',
+        },
+        missing: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Required with "unclear", ignored with "workable": one entry per thing the ticket has to say ' +
+            'before an agent could start, each phrased as the question the author has to answer — ' +
+            '"What should happen when the export is empty?", "Attach the mockup for the settings page", ' +
+            '"A sample row of the CSV you expect". It is rendered on the ticket as the checklist they ' +
+            'work through, so keep it to what actually blocks a start.',
         },
         ...(names.length > 0
           ? {
@@ -108,6 +131,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
       // appraisal at all: an agent already doing the work is refused rather than
       // scoped down, because it would be parking an issue it is mid-way through.
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
+        missing: parsed.missing,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
       });
@@ -116,6 +140,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         appraised: true,
         issue: result.issueOrigin,
         status: result.verdict,
+        missing: parsed.missing,
         profile: parsed.profile,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
@@ -133,9 +158,9 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
                   'until a human confirms which to use. That is one click and it is not a rejection.'
                 : '')
             : 'Recorded. Nothing is dispatched for this issue while the verdict stands. It ends by ' +
-              'itself the moment the ticket is edited or anything happens on it, and an operator can ' +
-              'clear it outright. The ticket is not closed and nothing is rejected — that stays a ' +
-              'human decision.',
+              'itself the moment the ticket is rewritten — your list is posted on it, with how to get ' +
+              'help filling it in — and an operator can clear it outright. The ticket is not closed and ' +
+              'nothing is rejected — that stays a human decision.',
       });
     },
   };

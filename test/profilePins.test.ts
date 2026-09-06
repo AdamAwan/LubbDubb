@@ -146,6 +146,7 @@ function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Splitting the store module by table group.',
+    missing: [],
     goalRef: goalFingerprint(ISSUE.title, ISSUE.body),
     by: 'appraiser',
     proposedProfile: null,

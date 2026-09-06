@@ -451,8 +451,7 @@ export class RuleDispatcher implements Dispatcher {
     // chip asks, so the two can never disagree about an issue.
     const appraisals = new Map((ctx.appraisals ?? []).map((a) => [a.originRef, a]));
     const appraisalParked = (issue: Issue): boolean =>
-      appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.appraisalSignals }) !==
-      null;
+      appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue) !== null;
 
     // The goals an agent concluded `blocked` on, still behind an obstacle that
     // reaches agents. A third park beside the delivery and the appraisal, and the

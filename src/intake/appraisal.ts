@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Issue, IssueAppraisal, TaskSummary, WorldEvent } from '../types.js';
+import type { Issue, IssueAppraisal, TaskSummary } from '../types.js';
 import { hasPriorWork } from '../delivery/assessment.js';
 
 /**
@@ -44,8 +44,8 @@ import { hasPriorWork } from '../delivery/assessment.js';
  * The cost is worth naming rather than discovering: with planning, assessment and
  * this all unconditional, a single issue can spend three agents before one line of
  * its work is written. What makes it bearable is that only an explicit `unclear`
- * holds anything, and that hold ends on the ticket's own text changing or anyone
- * commenting on it.
+ * holds anything, and that hold ends on the ticket's own text changing — which
+ * is the one thing that can actually answer it.
  *
  * A pure predicate was considered and is not sufficient: it can check length and
  * structure and nothing else, while every failure this exists to catch — *"this
@@ -93,8 +93,7 @@ export function appraisalBranch(issueNumber: number): string {
  *
  * This is the whole of issue #158's fourth decision — *"a ticket edited after a
  * failed appraisal must be re-appraised, or one bad verdict parks it for good"*. #122's
- * answer to the same problem is expiry on world signal, and that answer is
- * inherited (see {@link appraisalHold}'s second arm) but it cannot be the only one
+ * answer to the same problem is expiry on world signal, and it cannot be the answer
  * here: `worldDiff` emits `issue_opened`, `issue_closed` and `issue_linked` and
  * **nothing at all for an edit**, which is precisely the transition that answers
  * the appraiser's question. Adding an `issue_edited` event would make the verdict
@@ -119,25 +118,6 @@ export function goalFingerprint(title: string | null, body: string | null): stri
     .slice(0, 16);
 }
 
-/** What a hold is judged against: the ticket in front of us, and the world since the verdict. */
-interface AppraisalHoldContext {
-  /**
-   * World transitions covering at least {@link appraisalSignalQuery}'s window. Absent =
-   * nothing observed, so every verdict still stands — the direction that holds
-   * rather than acts, which is the one to take when a caller has not wired the read.
-   */
-  signals?: WorldEvent[];
-}
-
-/**
- * The world item an appraisal verdict is about. Not exported, for `proposalWorldRef`'s
- * reason: it is used both to *match* events and to *ask* for them, and those two
- * answering differently is the bug class this repo has fixed twice.
- */
-function appraisalWorldRef(originRef: string): string | null {
-  return /^issue:\d+$/.test(originRef) ? originRef : null;
-}
-
 /**
  * Why this issue is held out of the funnel by a standing appraisal, or null when it is
  * free. The string is operator-facing — the cockpit chip and the dispatcher's skip
@@ -145,7 +125,7 @@ function appraisalWorldRef(originRef: string): string | null {
  *
  * ## What ends a hold
  *
- * Three things, and **no timer**, which is #122's asymmetry preserved: an accepted
+ * Two things, and **no timer**, which is #122's asymmetry preserved: an accepted
  * act waits on the world to *reflect* something done, which is a duration; a
  * refused goal waits on it to *become* something else, which is an event. A verdict
  * that expired on a clock would re-ask a question whose answer has not changed —
@@ -154,19 +134,21 @@ function appraisalWorldRef(originRef: string): string | null {
  *
  * 1. **The goal text changed** ({@link goalFingerprint}). The direct answer: the
  *    verdict describes a ticket that no longer exists. This is the arm that makes
- *    the loop closable — an operator reads what the appraisal could not work out,
- *    edits the ticket, and it is re-appraised on the next pulse with no clearing
- *    step and nothing to remember.
- * 2. **Any transition on the issue since the verdict**, which is #109 phase 4's
- *    rejection expiry transferred whole. **Any**, not a filtered subset, for
- *    `expiringSignal`'s reason: a per-kind filter here is a second opinion about
- *    which changes matter, sitting nowhere near the rule it second-guesses. In
- *    practice the one that lands is a reopen or a link — and, importantly, this is
- *    the arm that covers a human who answers the appraisal's question in a **comment**
- *    rather than by editing the body.
- * 3. **The operator deleting the row**, which is why it is not an arm:
+ *    the loop closable — the author reads the checklist the appraisal left on the
+ *    ticket, rewrites it, and it is re-appraised on the next pulse with no clearing
+ *    step and nothing to remember. It is also the **only** arm that ends the hold
+ *    on the ticket's side, and deliberately: there used to be a second — any world
+ *    transition on the issue since the verdict — described as covering a human who
+ *    answers in a comment. It did not: `worldDiff` emits nothing for a comment,
+ *    so what it actually released on was a reopen or a link, neither of which
+ *    answers "what does done look like", and the release put the same unanswerable
+ *    text straight into the funnel with no re-appraisal. A gate that lets the
+ *    ticket through unchanged is not a gate; the answer has to land *in the
+ *    ticket*, where the next agent reads it.
+ * 2. **The operator deleting the row**, which is why it is not an arm:
  *    `Store.clearAppraisal` removes it, so "not appraised" keeps exactly one
- *    representation — the same reason clearing a conclusion is a delete.
+ *    representation — the same reason clearing a conclusion is a delete. And the
+ *    operator overriding it to `workable`, which is a write of the same row.
  *
  * Expiry lifts the hold; it does not retract the verdict. On a re-appraisal the row is
  * overwritten, so what the operator reads is always the latest thing said.
@@ -189,24 +171,17 @@ function appraisalWorldRef(originRef: string): string | null {
  * the question this arm asks is a two-field read, with no config threaded into
  * it and no caller able to forget a lookup and gate the whole fleet by accident.
  *
- * Unlike the first arm it does **not** expire on world signal. A comment or a
- * link is how a human answers "I could not act on this goal"; it is not how they
- * authorise spending more money than the rule allows, and treating it as one
- * would release the gate without anyone deciding anything. Three things end it:
- * the operator answering, the ticket being rewritten (a new fingerprint, so a
- * re-appraisal proposes against the current text), and the row being cleared.
+ * Three things end it: the operator answering, the ticket being rewritten (a new
+ * fingerprint, so a re-appraisal proposes against the current text), and the row
+ * being cleared.
  */
-export function appraisalHold(
-  appraisal: IssueAppraisal | null,
-  issue: Issue,
-  ctx: AppraisalHoldContext = {},
-): string | null {
+export function appraisalHold(appraisal: IssueAppraisal | null, issue: Issue): string | null {
   if (!appraisal) return null;
   // The ticket was rewritten: whatever the appraiser read, it is not this. Applies
   // to both arms — a proposal is a judgement about a text too.
   if (appraisal.goalRef !== goalFingerprint(issue.title, issue.body)) return null;
 
-  if (appraisal.verdict === 'unclear' && !expiringSignal(appraisal, ctx.signals ?? [])) return unclearHold(appraisal);
+  if (appraisal.verdict === 'unclear') return unclearHold(appraisal);
   // Asked after the refusal, so an issue that is both refused and unpriced reads
   // as refused: there is no point pricing work that is not going to start.
   if (appraisal.proposedProfile !== null && appraisal.profileAnsweredAt === null)
@@ -224,61 +199,6 @@ function unclearHold(appraisal: IssueAppraisal): string {
   // a reason is for. Nothing is lost: the panel puts the summary and a relative
   // time in the chip's title, and the ticket comment has the whole of it.
   return `${by} could not act on this goal`;
-}
-
-/**
- * The transition that ended a verdict's standing, or null while it still stands.
- *
- * Against {@link verdictCast} — when the verdict *standing now* was cast — never
- * against `decided_at`, which dates the first one. One rule with two copies:
- * `deliveryHold` measures the same thing the same way, and the two reading
- * different definitions of "after the verdict" is the drift to avoid.
- */
-function expiringSignal(appraisal: IssueAppraisal, signals: WorldEvent[]): WorldEvent | null {
-  const item = appraisalWorldRef(appraisal.originRef);
-  if (!item) return null;
-  const cast = verdictCast(appraisal);
-  return signals.find((e) => e.ref === item && e.createdAt > cast) ?? null;
-}
-
-/**
- * When the verdict that is standing *now* was cast. `decided_at` survives an
- * overwrite so the row keeps dating the first judgement; `updated_at` moves with
- * the re-cast, which is what "any transition after the verdict" is about.
- */
-function verdictCast(appraisal: IssueAppraisal): string {
-  return appraisal.updatedAt ?? appraisal.decidedAt;
-}
-
-/**
- * Which world events {@link appraisalHold} needs, as a query — the items to look at and
- * how far back.
- *
- * Bounded by *time and item* rather than by row count, mirroring
- * `deliverySignalQuery`/`rejectionSignalQuery` and for their reason: `listAppraisals`
- * is unbounded, so a count-bounded event read would judge an old verdict against
- * events it cannot see and hold it forever.
- *
- * Narrowed to the **`unclear`** rows, because they are the only arm of
- * {@link appraisalHold} that reads signal at all: an unanswered profile proposal is
- * ended by the operator answering it, never by a transition on the ticket, so
- * widening this would fetch events nothing consults. Null when none is standing,
- * which is every deployment until an issue is refused: no query, no read.
- */
-export function appraisalSignalQuery(appraisals: IssueAppraisal[]): { since: string; refs: string[] } | null {
-  const refs = new Set<string>();
-  let since: string | null = null;
-  for (const a of appraisals) {
-    if (a.verdict !== 'unclear') continue;
-    const item = appraisalWorldRef(a.originRef);
-    if (!item) continue;
-    refs.add(item);
-    // The instant the predicate compares against, so the window shrinks with a
-    // re-cast and the event that expired the previous verdict drops out of it.
-    const cast = verdictCast(a);
-    if (since === null || cast < since) since = cast;
-  }
-  return since !== null && refs.size > 0 ? { since, refs: [...refs] } : null;
 }
 
 /**

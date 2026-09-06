@@ -707,10 +707,17 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 ### The skill
 
 `/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
-`/lubbdubb fleet` — five jobs told apart by the argument, one file. The fifth is about the harness
-rather than about a goal and is
+`/lubbdubb fleet`, `/lubbdubb order 500`, `/lubbdubb clarify 284` — seven jobs told apart by the
+argument, one file. The fifth is about the harness rather than about a goal and is
 [owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
-question with no goal number in it is that job. The fourth settles nothing:
+question with no goal number in it is that job. The seventh is where the ticket comment a refused
+goal carries sends its author ([06](06-issue-pickup.md#the-comment-on-the-ticket)): the skill reads
+the verdict and its `missing` list through `goal_read`, states the story rubric in the skill's own
+words, works through the list with the author against the open repository, drafts the whole rewrite
+— title and body, because the hold ends on the description changing and the next agent reads the
+description — and gets it onto the ticket through the tracker's CLI where one is signed in, or hands
+it over to paste. It says plainly that a reply does not restart the goal, and it treats `goal_gate`'s
+`workable` as the override rather than the fix. The fourth settles nothing:
 [`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
 goal and the skill says what to do with it. Its longest section is about the one way a session with
 the repository open gets a question about a run wrong — reconstructing a plausible history from the

@@ -627,7 +627,8 @@ held goal read to anybody who did not open that tab as a goal that simply had no
 argument the profile gate is on the rail for, and the same fix.
 
 The row's line says which ask it is and which goal it is about; the **appraiser's sentence is quoted whole
-in the band**, never reworded and never clamped, because it is the only account of why the goal is held.
+in the band**, never reworded and never clamped, because it is the only account of why the goal is held,
+and its `missing` list is drawn under it as the same checklist the ticket comment carries.
 Its verdict is one button — `Override → workable`, through `setIssueAppraisal`, the call the tickets tab
 already used — because the hold's other two exits are not buttons: it expires when the goal's own text
 changes, and it is cleared in the tracker.

@@ -7,28 +7,22 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
-import {
-  appraisalHold,
-  appraisalSignalQuery,
-  goalFingerprint,
-  hasWorkStarted,
-  isAppraised,
-} from '../src/intake/appraisal.js';
+import { appraisalHold, goalFingerprint, hasWorkStarted, isAppraised } from '../src/intake/appraisal.js';
 import { AppraisalDesk, renderAppraisalComment } from '../src/intake/appraisalDesk.js';
 import { appraiserOrigin } from '../src/mcp/goalAppraisal.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import type { Agent, Decision, Issue, IssueAppraisal, Plan, Task, WorldEvent, WorldSnapshot } from '../src/types.js';
+import type { Agent, Decision, Issue, IssueAppraisal, Plan, Task, WorldSnapshot } from '../src/types.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { spentPlannerAttempts } from './support/plans.js';
 import { Store } from '../src/store/store.js';
 
 // Rule `issue-appraisal` — the goal appraisal. The one gate in front of an issue that asks about its
-// *content*. What makes it fire, what it must never do (park an issue for good),
-// and the two things that end a hold.
+// *content*. What makes it fire, what it must never do (park an issue with no way
+// out), and the one thing on the ticket's side that ends a hold: the ticket changing.
 
 const NOW = '2026-07-28T12:00:00.000Z';
 const EARLIER = '2026-07-28T10:00:00.000Z';
@@ -71,6 +65,7 @@ function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'Better how? There is no measure here I could tell "done" by.',
+    missing: ['Better by what measure? Name the number or the behaviour that says it is done.'],
     goalRef: goalFingerprint(i.title, i.body),
     by: 'appraiser',
     proposedProfile: null,
@@ -331,46 +326,20 @@ test('the title counts as much as the body, and moving words between them is a c
   assert.notEqual(a, b, 'a separator concatenation could produce would make an edit invisible');
 });
 
-test('any transition on the issue ends the hold — a comment answers the question too', () => {
-  const after: WorldEvent[] = [
-    { id: 'e1', kind: 'issue_linked', ref: 'issue:12', summary: 'linked', createdAt: '2026-07-28T11:00:00.000Z' },
-  ];
-  assert.equal(appraisalHold(appraisal(), issue(), { signals: after }), null);
-
-  const before: WorldEvent[] = [
-    { id: 'e0', kind: 'issue_linked', ref: 'issue:12', summary: 'linked', createdAt: '2026-07-28T09:00:00.000Z' },
-  ];
-  assert.ok(
-    appraisalHold(appraisal(), issue(), { signals: before }),
-    'a transition older than the verdict is not news',
-  );
-
-  const elsewhere: WorldEvent[] = [
-    { id: 'e2', kind: 'pr_opened', ref: 'pr:40', summary: 'opened', createdAt: '2026-07-28T11:00:00.000Z' },
-  ];
-  assert.ok(appraisalHold(appraisal(), issue(), { signals: elsewhere }), 'another item is not this one');
+test('nothing but the ticket changing ends the hold — a link, a reopen or a reply is not an answer', () => {
+  // There used to be a second arm, any world transition on the issue, described as
+  // covering a human who answers in a comment. `worldDiff` emits nothing for a
+  // comment, so what it released on was a reopen or a link — and the release put
+  // the same unanswerable text straight into the funnel with no re-appraisal.
+  const held = appraisal();
+  assert.ok(appraisalHold(held, issue()), 'stands on the unedited ticket');
+  assert.ok(appraisalHold(held, issue({ linkedPrNumber: 41 })), 'a link answers nothing about the goal');
+  assert.equal(appraisalHold(held, issue({ body: 'p99 of /search under 200ms' })), null, 'the rewrite ends it');
 });
 
 test('there is no timer arm — a verdict the world has not moved on still stands', () => {
   const ancient = appraisal({ decidedAt: '2020-01-01T00:00:00.000Z', updatedAt: '2020-01-01T00:00:00.000Z' });
   assert.ok(appraisalHold(ancient, issue()), 'age alone is not an answer, so it must not re-ask the question');
-});
-
-test('the signal query is bounded by item and time, and asks for nothing when nothing is refused', () => {
-  assert.equal(appraisalSignalQuery([]), null);
-  assert.equal(
-    appraisalSignalQuery([appraisal({ verdict: 'workable' })]),
-    null,
-    'a workable verdict holds nothing to expire',
-  );
-
-  const q = appraisalSignalQuery([
-    appraisal(),
-    appraisal({ originRef: 'issue:20', decidedAt: '2026-07-01T00:00:00.000Z' }),
-    appraisal({ originRef: 'issue:30', verdict: 'workable', decidedAt: '2020-01-01T00:00:00.000Z' }),
-  ]);
-  assert.deepEqual(q?.refs.sort(), ['issue:12', 'issue:20'], 'narrowed to the items actually carrying a refusal');
-  assert.equal(q?.since, '2026-07-01T00:00:00.000Z', 'back to the oldest standing one, never a row count');
 });
 
 // -- the cockpit chip cannot disagree with the rule --------------------------
@@ -486,12 +455,14 @@ test('a verdict is attributed from the credential and fingerprinted off the text
   const res = await callTool(system, agent, 'appraise_issue', {
     status: 'unclear',
     summary: 'Better how? Name the measure and I can start.',
+    missing: ['Better by what measure?', ' ', 'Which page?'],
   });
   assert.equal(res.isError, false);
 
   const stored = system.store.getAppraisal('issue:12');
   assert.equal(stored?.by, 'appraiser');
   assert.equal(stored?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
+  assert.deepEqual(stored?.missing, ['Better by what measure?', 'Which page?'], 'the list is kept, blanks dropped');
   assert.equal(
     stored?.goalRef,
     goalFingerprint(issue().title, issue().body),
@@ -506,7 +477,11 @@ test('a verdict cast against text the ticket no longer has holds nothing', async
   // The issue was edited while the appraiser was running: the fingerprint is of what
   // it read, so the hold simply does not apply to what is there now.
   const agent = spawnAgent(system, 'issue:12:appraisal', { originSummary: 'the old wording' });
-  await callTool(system, agent, 'appraise_issue', { status: 'unclear', summary: 'no measure here' });
+  await callTool(system, agent, 'appraise_issue', {
+    status: 'unclear',
+    summary: 'no measure here',
+    missing: ['Which measure?'],
+  });
   const stored = system.store.getAppraisal('issue:12');
   assert.ok(stored);
   assert.equal(appraisalHold(stored, issue()), null);
@@ -517,7 +492,11 @@ test('an agent doing the work cannot appraise it, and is pointed at what it can 
   const system = build();
   for (const origin of ['issue:12', 'issue:12:plan', 'issue:12:part:schema']) {
     const agent = spawnAgent(system, origin);
-    const res = await callTool(system, agent, 'appraise_issue', { status: 'unclear', summary: 'I do not get it' });
+    const res = await callTool(system, agent, 'appraise_issue', {
+      status: 'unclear',
+      summary: 'I do not get it',
+      missing: ['What?'],
+    });
     assert.equal(res.isError, true, `${origin} has answered the question by starting`);
   }
   const refusal = appraiserOrigin('issue:12');
@@ -543,15 +522,26 @@ test('the assessor and the appraiser are pointed at each other’s tools, not si
 test('a rejected appraisal writes nothing', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:appraisal');
-  assert.equal((await callTool(system, agent, 'appraise_issue', { status: 'unclear', summary: ' ' })).isError, true);
-  assert.equal((await callTool(system, agent, 'appraise_issue', { status: 'vague', summary: 'x' })).isError, true);
+  const call = (args: Record<string, unknown>) => callTool(system, agent, 'appraise_issue', args);
+  assert.equal((await call({ status: 'unclear', summary: ' ', missing: ['x'] })).isError, true);
+  assert.equal((await call({ status: 'vague', summary: 'x' })).isError, true);
+  // An unclear verdict with no list is a refusal with no next step — the exact
+  // shape that leaves an author stuck, so it is refused rather than posted.
+  const bare = await call({ status: 'unclear', summary: 'too vague' });
+  assert.equal(bare.isError, true);
+  assert.match(bare.text, /missing is required/);
+  assert.equal((await call({ status: 'unclear', summary: 'x', missing: [] })).isError, true);
   assert.equal(system.store.getAppraisal('issue:12'), null);
+  // A workable verdict never carries one, whatever the agent sent.
+  const ok = await call({ status: 'workable', summary: 'make search faster', missing: ['stray'] });
+  assert.equal(ok.isError, false);
+  assert.deepEqual(system.store.getAppraisal('issue:12')?.missing, []);
   system.store.close?.();
 });
 
 // -- the store ---------------------------------------------------------------
 
-test('a re-appraisal keeps the instant world signal is measured against', () => {
+test('a re-appraisal keeps the instant the first verdict was cast', () => {
   const system = build();
   const first = system.store.recordAppraisal({
     originRef: 'issue:12',
@@ -567,7 +557,7 @@ test('a re-appraisal keeps the instant world signal is measured against', () => 
     goalRef: 'aaaa',
     by: 'appraiser',
   });
-  assert.equal(second.decidedAt, first.decidedAt, 'refreshing it would keep moving the goalposts a signal must clear');
+  assert.equal(second.decidedAt, first.decidedAt, 'the row dates the first judgement, however often it is re-cast');
   assert.equal(system.store.listAppraisals().length, 1, 'one row per issue — a standing verdict is a lookup');
   assert.equal(system.store.clearAppraisal('issue:12'), true);
   assert.equal(system.store.getAppraisal('issue:12'), null, 'and "not appraised" has exactly one representation');
@@ -632,22 +622,29 @@ test('a refused goal asks its question on the ticket, once, and edits it thereaf
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'Better how? Name the measure.',
+    missing: ['Better by what measure — a number, or a behaviour someone could check?', 'Which page is this about?'],
     goalRef: goalFingerprint(issue().title, issue().body),
     by: 'appraiser',
   });
 
-  await desk.announce(world(), []);
+  await desk.announce(world());
   assert.equal(writes.length, 1, 'the question is asked');
   assert.equal(writes[0]?.commentRef, null, 'the first write creates it');
-  assert.match(writes[0]?.body ?? '', /Name the measure/);
-  assert.match(writes[0]?.body ?? '', /Nothing has been rejected/, 'a question, not a refusal');
+  const body = writes[0]?.body ?? '';
+  assert.match(body, /Name the measure/);
+  assert.match(body, /- \[ \] Better by what measure/, 'the list is a checklist the author works through');
+  assert.match(body, /- \[ \] Which page is this about\?/);
+  assert.match(body, /edit this item/i, 'the fix is named: the ticket, not a reply');
+  assert.match(body, /Replies here are not read/, 'and the thing that does not work is named too');
+  assert.match(body, /\/lubbdubb clarify 12/, 'with a way to get help doing it');
+  assert.match(body, /Nothing has been rejected/, 'a question, not a refusal');
   assert.equal(
     system.store.getAppraisal('issue:12')?.commentRef,
     'c_1',
     'and the ref is kept, so the next write edits',
   );
 
-  await desk.announce(world(), []);
+  await desk.announce(world());
   assert.equal(writes.length, 1, 'nothing changed, so nothing is said again — the thread is not a stream');
   system.store.close?.();
 });
@@ -663,9 +660,9 @@ test('a hold that ended is retracted on the thread, not left standing', async ()
     goalRef: goalFingerprint(issue().title, issue().body),
     by: 'appraiser',
   });
-  await desk.announce(world(), []);
+  await desk.announce(world());
 
-  await desk.announce(world({ body: 'p99 of /search under 200ms' }), []);
+  await desk.announce(world({ body: 'p99 of /search under 200ms' }));
   assert.equal(writes.length, 2);
   assert.match(writes[1]?.body ?? '', /No longer waiting/, 'leaving the question up makes people distrust a bot');
   assert.equal(writes[1]?.commentRef, 'c_1', 'edited in place');
@@ -682,7 +679,7 @@ test('nothing is said for a workable verdict', async () => {
     goalRef: goalFingerprint(issue().title, issue().body),
     by: 'appraiser',
   });
-  await new AppraisalDesk({ store: system.store, sink }).announce(world(), []);
+  await new AppraisalDesk({ store: system.store, sink }).announce(world());
   assert.deepEqual(writes, [], 'a yes is not news for the ticket');
   system.store.close?.();
 });
@@ -763,11 +760,10 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
   system.store.close?.();
 });
 
-test('a re-cast refusal holds against the transition that ended the last one', () => {
-  // The delivery park's ordering, on the appraisal: record → signal → record again,
-  // read through `appraisalSignalQuery` + `listWorldEventsSince` because the window
-  // is half the defect. The ticket text is left unedited throughout, so arm 1
-  // (`goalFingerprint`) cannot be what any of these answers turns on.
+test('a re-cast refusal on the unedited ticket still holds, whatever happened around it', () => {
+  // The ticket text is left unedited throughout, and world events land on the
+  // issue between verdicts. None of it moves the hold: the only thing that can
+  // answer the appraiser is the ticket, and the ticket has not changed.
   let clock = Date.parse('2026-08-01T00:00:00.000Z');
   const s = new Store(':memory:', () => new Date(clock).toISOString());
   const goal = issue();
@@ -776,33 +772,26 @@ test('a re-cast refusal holds against the transition that ended the last one', (
       originRef: 'issue:12',
       verdict: 'unclear',
       summary,
+      missing: ['Better by what measure?'],
       goalRef: goalFingerprint(goal.title, goal.body),
       by: 'appraiser',
     });
-  const held = (): string | null => {
-    const q = appraisalSignalQuery(s.listAppraisals());
-    const signals = q ? s.listWorldEventsSince(q.since, q.refs) : [];
-    return appraisalHold(s.getAppraisal('issue:12'), goal, { signals });
-  };
+  const held = (): string | null => appraisalHold(s.getAppraisal('issue:12'), goal);
 
   const first = write('Better how? There is no measure here.');
   assert.ok(held());
 
   clock += 60 * 60_000;
   s.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'Issue #12 linked to PR #41' }]);
-  assert.equal(held(), null);
+  assert.ok(held(), 'a link is not an answer');
 
-  // Re-refused an hour later, on the same unedited ticket. An `unclear` verdict
-  // costs an agent every time it is re-asked, which is the whole reason this arm
-  // must not evaporate the moment one has been overtaken.
   clock += 60 * 60_000;
   const second = write('Still no measure I could tell "done" by.');
   assert.equal(second.decidedAt, first.decidedAt, 'the row still dates the first judgement');
   assert.ok(second.updatedAt > first.updatedAt);
-  assert.ok(held(), 'the link predates this verdict — it cannot be what ends it');
+  assert.deepEqual(s.getAppraisal('issue:12')?.missing, ['Better by what measure?'], 'the list round-trips the store');
+  assert.ok(held());
 
-  clock += 60 * 60_000;
-  s.recordWorldEvents([{ kind: 'issue_opened', ref: 'issue:12', summary: 'Issue #12 reopened' }]);
-  assert.equal(held(), null);
+  assert.equal(appraisalHold(s.getAppraisal('issue:12'), { ...goal, body: 'p99 under 200ms' }), null);
   s.close();
 });

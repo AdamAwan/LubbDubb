@@ -312,7 +312,6 @@ export interface IssuePickupContext {
    * predicts them. Absent = nothing appraised, which holds nothing.
    */
   appraisals?: IssueAppraisal[];
-  appraisalSignals?: WorldEvent[];
   /**
    * The goals parked behind an obstacle and the board that lifts them — the same
    * two lists the `eligibleIssues` filter gates on, so the chip predicts it.
@@ -534,7 +533,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const origin = `issue:${issue.number}`;
   const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
-  const held = appraisalHold(stored, issue, { signals: ctx.appraisalSignals });
+  const held = appraisalHold(stored, issue);
   if (held) return held;
   // Same preconditions rule `issue-appraisal` applies, in its order.
   if (isAppraised(stored, issue)) return null;

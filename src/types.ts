@@ -1925,8 +1925,15 @@ export interface IssueAppraisal {
   /** The issue, as `issue:<n>` — the same origin every gate keys on. */
   originRef: string;
   verdict: GoalAppraisalVerdict;
-  /** What is missing, or why the goal is actionable. Required: a bare verdict is not reviewable. */
+  /** Why the goal is, or is not, actionable. Required: a bare verdict is not reviewable. */
   summary: string;
+  /**
+   * What the ticket has to say before an agent could start, one question per
+   * entry, addressed to whoever wrote it. Empty on every `workable` verdict and on
+   * an operator's. This is what turns a refusal into a next step: the ticket
+   * comment renders it as the checklist the author works through.
+   */
+  missing: string[];
   /**
    * A fingerprint of the goal text this verdict was cast against (see
    * `goalFingerprint`). The hold ends the instant the issue's current text
