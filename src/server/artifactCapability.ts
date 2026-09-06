@@ -54,7 +54,7 @@ export function verifyArtifactCapability(secret: Buffer, token: string, flagId: 
   if (!Number.isFinite(expiresAt) || now >= expiresAt) return false;
   const presented = Buffer.from(token.slice(dot + 1));
   const expected = Buffer.from(sign(secret, flagId, expiresAt));
-  // Length is checked first: timingSafeEqual throws on unequal-length buffers, and
+  // TECHDEBT: length is checked first: timingSafeEqual throws on unequal-length buffers, and
   // a base64url signature of the wrong length is not this signature regardless.
   if (presented.length !== expected.length) return false;
   return timingSafeEqual(presented, expected);

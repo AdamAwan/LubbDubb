@@ -172,7 +172,7 @@ export function partHolding(planId: string, slug: string, parts: readonly PlanPa
 function goalOf(ref: string | null | undefined, state: AppState): string | null {
   const origin = standsFor(state, ref ?? null);
   const m = /^(issue:\d+)/.exec(origin ?? '');
-  // noUncheckedIndexedAccess makes a capture group read as possibly undefined even once `m`
+  // TECHDEBT: noUncheckedIndexedAccess makes a capture group read as possibly undefined even once `m`
   // is non-null; the regex guarantees it's set when `m` matches.
   if (m?.[1]) return m[1];
   const pr = /^pr:(\d+)/.exec(origin ?? '');

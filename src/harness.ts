@@ -528,121 +528,32 @@ export class Harness extends EventEmitter {
       // → `docs/spec/24-environments.md#recording-a-landing`
       if (readWorld) await this.deps.environments?.run(world);
       // What the harness has seen for itself that the fleet would otherwise pay to
-      // rediscover: a check that went red and green on one commit, a check red on a
-      // branch other pull requests are based on — and the notices a green reading
-      // has since settled.
-      //
-      // **Above `decide` and above the executor, and that ordering is what it is
-      // for.** The block a dispatch carries is rendered at launch, a few lines
-      // below: run under that and a notice raised on this pulse is a notice the
-      // agents dispatched on this pulse are not told, and one settled on this pulse
-      // is one they are still told. Beside the other bookkeeping and not in the
-      // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing, and
-      // no rule reads a fact.
-      // Skipped on a local cycle, and not for the provider-traffic reason the
-      // others are: it is handed the *pair* the diff was taken from, and a local
-      // cycle takes no diff. Run with `previousWorld === world` it would read every
-      // notice as settled by a world that has not moved.
+      // rediscover. → `docs/spec/04-harness-cycle.md`
       if (readWorld) this.deps.notices?.run(previousWorld, world);
       // What became of the documentation pull requests an operator opened for a
-      // claim — and, for the ones that landed, the claim leaving every prompt
-      // because the repository now says it.
-      //
-      // **Below the graph record and above `decide`**, and both halves matter. It
-      // reads the graph, which is `environments`' reason for sitting where it does:
-      // run above that line and it reads a graph one pulse stale, so a merge is
-      // acted on a pulse late every time. And a fact it commits leaves the block,
-      // which is rendered at launch a few lines below — run under that and the
-      // agents dispatched on this pulse are still told a claim the repository
-      // states. Beside the other bookkeeping and not in the dispatcher for
-      // `notices`' reason: it staffs nobody and no rule reads a fact.
+      // claim. → `docs/spec/04-harness-cycle.md`
       this.deps.graduations?.run();
-      // Which proposals a machine thinks are one claim. Beside the two desks above
-      // and not in the dispatcher for their reason — it staffs nobody and no rule
-      // reads a suggestion — and its position in the pulse is not load-bearing at
-      // all: nothing waits on a cluster, it takes its own cadence, and the page an
-      // operator opens is the only thing that reads what it writes.
+      // Which proposals a machine thinks are one claim. Its position in the pulse
+      // is not load-bearing. → `docs/spec/04-harness-cycle.md`
       this.deps.clusters?.run();
-      // What the harness has seen for itself on the board the agents read: a check
-      // red on a branch other pull requests are based on, a check flapping
-      // red-then-green on one commit. **The harness is one of the two voices**, so
-      // a row it can see is standing from the first agent's report rather than the
-      // second — which is what makes the two-goal gate safe on a small fleet.
-      //
-      // **Skipped on a local cycle**, for the endings desk's reason rather than the
-      // provider-traffic one: it is handed the *pair* the diff was taken from, and
-      // a local cycle takes no diff. Run with `previousWorld === world` it would
-      // read every transition as new or as none.
-      //
-      // **Above the three desks below it**, and every half of that matters: a row
-      // filed here is one the notice desk may tell a running agent about, one the
-      // ownership desk may take up, and one the endings desk promises to watch a
-      // condition for — all on the pulse that saw it rather than the next.
+      // What the harness has seen for itself on the board the agents read — the
+      // harness being one of the two voices. → `docs/spec/04-harness-cycle.md`
       if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
       // What a model may decide about the rows the board has not had read since a
-      // voice last landed words on one — the keys in their prose, a merge the keys
-      // missed, what each is for, and the ticket written from the sightings.
-      //
-      // **Not awaited**, alone among the desks here, and that is the whole of what
-      // its position in the pulse means. A model round trip is not a provider's:
-      // nothing below waits on a reading, and a pulse that blocked on one would
-      // hold every dispatch behind a call this subsystem makes for its own
-      // convenience. What it writes is read by the pulse that finds it written,
-      // which for a suggestion nobody is bound by and a ticket nobody has filed yet
-      // is a pulse either way. It runs one pass at a time and never rejects.
+      // voice last landed words on one. **Not awaited**, alone among the desks
+      // here. → `docs/spec/04-harness-cycle.md`
       void this.deps.obstacleDesk?.run();
       // What has changed about an obstacle since the agents now running were
-      // dispatched — their own reports being taken up or settled, and what a
-      // second voice has since corroborated on the checks they are working.
-      //
-      // **Above `decide` and above the executor**, for `notices`' reason exactly:
-      // the block a dispatch carries is rendered at launch a few lines below, so
-      // an agent dispatched on this pulse reads what is on the board rather than
-      // being told it again a moment later. Beside the other bookkeeping and not
-      // in the dispatcher for `closeOuts`' reason — it staffs nobody, and no rule
-      // reads what it writes.
+      // dispatched. → `docs/spec/04-harness-cycle.md`
       this.deps.obstacleNotices?.run();
       // Who owns each of them, and which goals the board has let back out.
-      //
-      // **Above `decide`**, and both halves matter: a block cleared here is a goal
-      // rule `issue-pickup` sees this pulse rather than next, and a row owned here
-      // reads as owned in the prompt of every dispatch composed a few lines below
-      // — an agent told *do not fix it, #841 has it* on the pulse the ticket was
-      // filed rather than a pulse later. Below the notices for the same reason
-      // they sit above `decide`: an agent whose report was taken up is told so by
-      // the pulse that took it. Awaited but never blocking — every failure inside
-      // is recorded and non-fatal, and a tracker that will not answer costs the
-      // ticket and nothing else.
+      // → `docs/spec/04-harness-cycle.md`
       await this.deps.obstacleOwnership?.run(world);
-      // And how each of them ends: a condition the harness promised to watch, the
-      // owner landing, the reporter's clock, or nothing having said it for a week.
-      //
-      // **Skipped on a local cycle, and not for the provider-traffic reason most of
-      // the others are.** A resolution fires on two consecutive *real* world
-      // readings, and the resolving read is never one the local cycle served: a
-      // local cycle re-serves the snapshot the last real one read, so counting it
-      // would take one reading twice and close an obstacle that is still live —
-      // the fleet then pays for it again, and nothing is red.
-      //
-      // **Below the ownership desk**, because it reads the owner the desk above may
-      // have just written, and above `decide` for the notice desk's reason: a row
-      // resolved here has left the prompt of every dispatch composed a few lines
-      // below, rather than being told to one more agent and taken back a pulse
-      // later. Every failure inside is recorded and non-fatal.
+      // And how each of them ends. → `docs/spec/04-harness-cycle.md`
       if (readWorld) this.deps.obstacleEndings?.run(world);
-      // The distance above `fleet`: what other fleets have vouched for, landed here,
-      // and what this fleet has vouched for, sent out.
-      //
-      // **Above `decide` and above the executor**, for `notices`' reason exactly: an
-      // arrival that carries a local claim to `lookup` on this pulse must be a claim
-      // the agents dispatched on this pulse can be answered with. And below
-      // `graduations`, so a claim that left for the repository on this pulse is out
-      // of the document before it is derived rather than published one last time.
-      //
-      // Awaited but never blocking: every failure inside is recorded and non-fatal,
-      // a fetch that fails leaves the last-known-good mirror in place, and a publish
-      // that fails leaves the document dirty for the next pulse. A fleet with an
-      // unreachable pool works exactly as a fleet without one.
+      // The distance above `fleet`: what other fleets have vouched for, landed
+      // here, and what this fleet has vouched for, sent out.
+      // → `docs/spec/04-harness-cycle.md`
       if (readWorld) await this.deps.pool?.run();
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
@@ -682,11 +593,8 @@ export class Harness extends EventEmitter {
       // it returns are for a test to read rather than for the cycle.
       this.deps.fleet?.completeExpiredStalls();
       const tasks = store.listTasks();
-      // How long each open PR has been sitting on a reviewer. Folded here rather
-      // than derived on read because it is the one reading about a *span*: the
-      // moment a pull request becomes reviewable is observable only as it
-      // happens, and no provider reports it afterwards. Cheap — one short row per
-      // PR currently waiting, and none once it stops.
+      // How long each open PR has been sitting on a reviewer.
+      // → `docs/spec/07-pull-requests.md`
       store.foldReviewWaits(
         world.pullRequests
           .filter((pr) =>

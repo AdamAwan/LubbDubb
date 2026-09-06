@@ -69,7 +69,7 @@ interface HookableOctokit {
     wrap(
       name: 'request',
       hook: (
-        // Octokit types the wrapped call as possibly-synchronous; awaiting it
+        // TECHDEBT: Octokit types the wrapped call as possibly-synchronous; awaiting it
         // covers both, and the response is octokit's own generated shape rather
         // than anything this file has an opinion about.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

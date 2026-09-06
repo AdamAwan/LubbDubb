@@ -163,7 +163,7 @@ export async function readBuildStanding(opts: {
   let dirty: boolean;
   try {
     head = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
-    // `--quiet` exits 1 on a detached HEAD rather than printing garbage, and a
+    // TECHDEBT: `--quiet` exits 1 on a detached HEAD rather than printing garbage, and a
     // detached build is a legitimate thing to be running — it just has no branch.
     branch = await gitOrNull(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
     // `--untracked-files=no`, and the flag is the whole point of the line. The

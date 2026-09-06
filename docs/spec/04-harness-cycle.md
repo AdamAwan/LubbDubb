@@ -431,6 +431,83 @@ flowchart TD
    one settled under it would still reach them. It writes facts, staffs nobody, and no rule reads what
    it writes.
 
+   `environments.run(world)` sits **immediately below the graph record**, and that ordering is
+   load-bearing: merge attribution walks `parentRef` up to the goal, so a graph one pulse stale
+   resolves nothing for a pull request whose issue is already closed
+   ([24](24-environments.md#recording-a-landing)).
+
+   Then the rest of the bookkeeping desks, all of them **above `decide` and above the executor**,
+   and none of them in the dispatcher — for `closeOuts`' reason: each staffs nobody, holds nothing,
+   and no rule reads a fact any of them writes. Where a position below is called load-bearing, the
+   reason is one of two, and they recur:
+
+   - **The block a dispatch carries is rendered at launch**, a few steps below. A fact committed
+     above that line reaches the agents dispatched on this pulse; one committed under it does not,
+     and one settled under it is still told to them.
+   - **A desk that reads a diff is handed the pair step 2 took it from**, so it is **skipped on a
+     local cycle**: a local cycle takes no diff, and run with `previousWorld === world` it would read
+     every transition as new, or every one as none.
+
+   In order:
+
+   `graduations.run()` follows what became of the documentation pull requests an operator opened for
+   a claim, and takes a landed claim out of every prompt because the repository now says it. **Below
+   the graph record** — it reads the graph, so above that line it acts on a merge a pulse late every
+   time — and above the launch line, so no agent is still told a claim the repository states
+   ([31](31-review-packs.md)).
+
+   `clusters.run()` groups the proposals a machine thinks are one claim. Its position in the pulse is
+   **not** load-bearing at all: nothing waits on a cluster, it takes its own cadence, and the page an
+   operator opens is the only reader of what it writes.
+
+   `obstacleVoice.run(prev, world)` records what the harness has seen for itself on the board the
+   agents read — a check red on a branch other pull requests are based on, a check flapping
+   red-then-green on one commit. **The harness is one of the two voices**, so a row it files is
+   standing from the first agent's report rather than the second, which is what makes the two-goal
+   gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). Skipped on a local
+   cycle, and **above the three obstacle desks below it**: a row filed here is one the notice desk
+   may tell a running agent about, one the ownership desk may take up, and one the endings desk
+   promises to watch a condition for — all on the pulse that saw it rather than the next.
+
+   `obstacleDesk.run()` is what a model may decide about the rows the board has not had read since a
+   voice last landed words on one. It is **not awaited**, alone among these desks, and that is the
+   whole of what its position means: a model round trip is not a provider's, nothing below waits on a
+   reading, and a pulse that blocked on one would hold every dispatch behind a call this subsystem
+   makes for its own convenience. What it writes is read by the pulse that finds it written, which
+   for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse either way. It
+   runs one pass at a time and never rejects.
+
+   `obstacleNotices.run()` tells the agents now running what has changed about an obstacle since they
+   were dispatched — their own reports being taken up or settled, and what a second voice has since
+   corroborated. Above the launch line for `notices`' reason exactly.
+
+   `obstacleOwnership.run(world)` records who owns each row and which goals the board has let back
+   out. **Above `decide`**, and both halves matter: a block cleared here is a goal rule
+   `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in the prompt
+   of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the pulse the
+   ticket was filed. **Below the notices** for the same reason they sit above `decide`: an agent
+   whose report was taken up is told so by the pulse that took it. Awaited but never blocking — every
+   failure inside is recorded and non-fatal, and a tracker that will not answer costs the ticket and
+   nothing else.
+
+   `obstacleEndings.run(world)` is how each of them ends: a condition the harness promised to watch,
+   the owner landing, the reporter's clock, or nothing having said it for a week. **Skipped on a
+   local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
+   consecutive _real_ world readings, and the resolving read is never one a local cycle served — a
+   local cycle re-serves the snapshot the last real one read, so counting it would take one reading
+   twice and close an obstacle that is still live, the fleet pays for it again, and nothing is red.
+   **Below the ownership desk**, because it reads the owner that desk may have just written. Every
+   failure inside is recorded and non-fatal.
+
+   `pool.run()` is the distance above `fleet`: what other fleets have vouched for, landed here, and
+   what this fleet has vouched for, sent out ([28](28-cross-fleet-pool.md)). Above the launch line,
+   so an arrival that carries a local claim to `lookup` on this pulse is a claim the agents
+   dispatched on this pulse can be answered with; and **below `graduations`**, so a claim that left
+   for the repository on this pulse is out of the document before it is derived rather than published
+   one last time. Awaited but never blocking: a fetch that fails leaves the last-known-good mirror in
+   place, and a publish that fails leaves the document dirty for the next pulse. A fleet with an
+   unreachable pool works exactly as a fleet without one.
+
 9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent

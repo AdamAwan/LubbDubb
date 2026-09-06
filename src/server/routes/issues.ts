@@ -289,30 +289,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Tell the fleet what to do on a goal, in the operator's own words. The
-  // instruction is appended to every dispatch on the goal until one concludes it
-  // (see src/goalInstructions.ts).
-  //
-  // It writes the instruction and then **restarts the goal**, because the two states
-  // an operator presses this in are the two the funnel has already stopped in: a
-  // standing **delivery**, which holds the goal out of `eligibleIssues` entirely,
-  // and a **settled plan**, which `resolvePlanRoute` answers `parts` for whatever its
-  // status. Without the restart the words land, the cockpit draws them, and no agent
-  // is ever going to read them.
-  //
-  // The **conclusion** is written on a delivered goal too, clearing the delivery
-  // through `VERDICT_EXCLUSIONS.conclusion`: `delivered` and "there is more work
-  // here" are opposite answers to one question, and the operator outranks the
-  // assessor. `issue-retro`, `validate-check` and the close-out obligation all stop
-  // while the goal is back in play; a retrospective already written stays written.
-  //
-  // The **replan** is one status write — `shortfallArm`'s arm A through this door —
-  // so rule `issue-plan` routes the plan back to a planner and rule `issue-assess`
-  // skips on `planInFlight`. Nothing is torn down.
-  //
-  // The words are **not** appended to the plan's reason: they reach the replanning
-  // agent through `operatorInstructionsNote`, and one fact rendered twice in one
-  // prompt reads as two.
+  // Tell the fleet what to do on a goal, in the operator's own words.
+  // → `docs/spec/16-http-api.md#post-apiissuesnumberinstruction`
   const InstructionBody = z.object({
     text: z
       .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
@@ -494,18 +472,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   // Overrule a standing shortfall: the assessment is wrong, and here is the
-  // correction in the operator's own words. Neither accept nor reject says this —
-  // rejecting leaves the verdict standing, so a fresh assessor records the same
-  // shortfall, and nothing the operator types into that card reaches an agent.
-  //
-  // It writes two rows, `/instruction`'s arrangement and for its reason. The
-  // **delivery** is the verdict: it clears the shortfall through the exclusion
-  // matrix rather than a hand-rolled `DELETE`, parks the assessor, and releases the
-  // three things gated on `deliveryParked`. The **instruction** gets the correction
-  // into the record, in front of the retrospective agent the delivery dispatches.
-  // One text in both, so the two cannot drift.
-  //
-  // The **proposal is not settled here** — `/api/proposals/:id/reject` owns that.
+  // correction in the operator's own words. The proposal is **not** settled here —
+  // `/api/proposals/:id/reject` owns that.
+  // → `docs/spec/16-http-api.md#post-apiissuesnumbershortfalloverrule`
   const OverruleBody = z.object({
     text: z
       .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
@@ -527,18 +496,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // End a run. The only thing that ends one, and it persists across a restart: a
-  // dismissed run is not unioned back into the issue list, so nothing is scheduled
-  // for it again. Idempotent — a second dismissal is a 409, not an error state.
-  // One-way.
-  //
-  // **It is destructive, and the destruction is the point**: stopping the dispatcher
-  // governs only what is *started*, so `clearGoalWork` also ends the goal's live
-  // agents, queued jobs and standing instructions (`src/floor/endRun.ts`).
-  //
-  // **A flagged validation plan costs a sentence here.** It blocks nothing — the
-  // note is the whole requirement, kept on the run so what the goal owed and what
-  // was said about it survive together.
+  // End a run. The only thing that ends one, one-way, and destructive by design.
+  // → `docs/spec/16-http-api.md#post-apiissuesnumberdismiss-run`
   const DismissRunBody = z.object({ note: optionalText('note') });
   app.post(
     '/api/issues/:number/dismiss-run',

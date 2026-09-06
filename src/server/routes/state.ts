@@ -100,19 +100,9 @@ export function register(
     ),
   );
 
-  // The prompt book the rule dispatcher renders from — what the harness says to
-  // its agents, and which of those wordings the operator has replaced.
-  //
-  // Its own route, fetched on open rather than shipped on `/api/state`, for the
-  // work graph's reason inverted: the graph is too big to poll, this is too
-  // *static* to. `loadPromptTemplates` reads the override directory once at boot,
-  // so the book cannot change while the process is up and re-sending it every
-  // couple of seconds would be paying for a constant.
-  //
-  // Read-only on purpose. Editing stays a file drop into `promptTemplatesDir`:
-  // a write route would have to answer "when does this take effect", and the
-  // honest answer — at the next restart — is worse than not offering it. `dir`
-  // is what makes the panel actionable without one.
+  // The prompt book the rule dispatcher renders from — read-only, and its own
+  // route rather than part of `/api/state`.
+  // → `docs/spec/16-http-api.md#get-apiprompts`
   app.get(
     '/api/prompts',
     async () =>
@@ -123,20 +113,7 @@ export function register(
   );
 
   // The configuration this process is actually running on, for the cockpit's
-  // settings modal. Fetched on open rather than polled, for the prompt book's
-  // reason exactly: `loadConfig` runs once at boot and the result cannot change
-  // while the harness is up, so shipping it on every `/api/state` poll would be
-  // paying for a constant.
-  //
-  // Writable since #401, which is a narrower change than it reads as: what a
-  // save can promise is decided per field, not for the surface. A key with an arm
-  // in `configApply.ts` takes effect on save; every other key lands in the file
-  // and is reported as pending until a restart, rather than the route pretending
-  // either that it applied or that nothing can.
-  //
-  // `revision` and `pending` ride along because a form needs both to be honest:
-  // the first is what makes a stale save refusable, the second is what the
-  // cockpit says instead of implying a restart-only change is in force.
+  // config page. → `docs/spec/16-http-api.md#get-apiconfig`
   app.get(
     '/api/config',
     async () =>

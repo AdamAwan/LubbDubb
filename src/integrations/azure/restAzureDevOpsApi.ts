@@ -104,7 +104,7 @@ export async function azCliAccessToken(): Promise<string> {
     const { stdout } = await execFileAsync(
       'az',
       ['account', 'get-access-token', '--resource', AZURE_DEVOPS_RESOURCE, '--query', 'accessToken', '--output', 'tsv'],
-      // On Windows `az` is `az.cmd`; execFile won't resolve the extension without a
+      // TECHDEBT: On Windows `az` is `az.cmd`; execFile won't resolve the extension without a
       // shell, so it ENOENTs. All args here are hardcoded constants — no injection risk.
       { shell: true },
     );
