@@ -15,51 +15,23 @@ import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 /**
- * The digest arm: ninety UTC days of what this fleet spent and what coming back to
- * a pull request cost it.
- *
- * **Nothing here measures anything new.** `src/spendInsights.ts` already partitions
- * spend by phase, `src/remedyInsights.ts` already folds why the fleet came back and
- * what it cost, `src/remedies/remedies.ts` already holds the closed vocabularies
- * both are keyed by, and `src/usage/events.ts` already holds the one the operator
- * section is keyed by. This re-cuts what exists into UTC days and hands it to the
- * transport.
- *
- * Every dimension is a closed vocabulary that already exists, and none of them is a
- * provider identifier — except `byCheck`, which is a provider's own check name and
- * is therefore a **separate section** that only ever sums inside one project.
- *
+ * The digest arm: ninety UTC days of what this fleet spent and what coming back to a pull
+ * request cost it. Nothing here measures anything new — it re-cuts what `src/spendInsights.ts`,
+ * `src/remedyInsights.ts` and `src/usage/events.ts` already hold into UTC days. Every dimension
+ * is an existing closed vocabulary, never a provider identifier, except `byCheck`, a provider's
+ * own check name — a separate section that only ever sums inside one project.
  * → `docs/spec/28-cross-fleet-pool.md#the-digest-arm`
  */
 
 /**
- * How far back the document reaches. **A stated constant and never a config key**:
- * an operator tuning it would be tuning the answer rather than the thing measured,
- * and two deployments' figures would stop being comparable — which is the one thing
- * a shared page exists to make them.
- *
- * Ninety days covers a quarter, which is the longest question anyone asks of a page
- * like this, and it bounds the document. The bound matters more than it looks:
- * unbounded, a fleet running two years publishes some seven hundred days against
- * every live key combination, republished hourly — a large file rewritten
- * twenty-four times a day, per fleet, forever, with nothing about it visible until
- * it is.
- *
- * **Stated limitation: the pool answers questions about the last ninety days and
- * nothing older.** A year-over-year reading is not available. On the `git` transport
- * the older rows do survive in commit history, and that is deliberately not part of
- * the contract — a service has no such history.
+ * How far back the document reaches. A stated constant, never a config key: a tuned window
+ * makes two deployments' figures incomparable, and it bounds the document, which would
+ * otherwise be rewritten hourly at unbounded size. The pool answers nothing older than ninety
+ * days; the `git` transport's commit history is not part of the contract.
  */
 export const POOL_RETENTION_DAYS = 90;
 
-/**
- * The UTC day an instant falls in.
- *
- * **UTC, and this is the sharp edge of the digest.** Two fleets bucketing by local
- * midnight put one afternoon's work in two different days, and every company-wide
- * daily figure is then wrong by a sliver that nothing surfaces. Obvious once said,
- * invisible forever if not.
- */
+/** The UTC day an instant falls in. UTC always: two fleets bucketing by local midnight split one afternoon across two days, silently corrupting a company-wide daily figure. */
 export function utcDay(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -102,18 +74,7 @@ function retentionStart(now: string): string {
   return new Date(new Date(now).getTime() - POOL_RETENTION_DAYS * 86_400_000).toISOString();
 }
 
-/**
- * Cost and runs per phase per day.
- *
- * **There is no separate total.** `PHASE_ORDER` includes `other`, so the phases
- * partition the fleet's spend and the total is their sum — a total shipped beside
- * them would be a second statement of one number, free to disagree with the one
- * that adds up.
- *
- * The money is bucketed on the **dated delta**, which is the only date a cost has
- * that is not a guess; a run is bucketed on the day it ended, which is the day
- * `src/spendInsights.ts` already windows one by.
- */
+/** Cost and runs per phase per day. No separate total: `PHASE_ORDER` includes `other`, so the phases partition the spend and the total is their sum. Money bucketed on the dated delta, a run on the day it ended. */
 function byPhase(
   usage: readonly UsageEvent[],
   agents: readonly Agent[],
@@ -134,14 +95,7 @@ function byPhase(
   return rows.rows(today).filter((row) => PHASE_ORDER.includes(row.key as SpendPhase));
 }
 
-/**
- * Accounts and cost per `kind/cause/guard` per day.
- *
- * `RemedyCause` and `RemedyGuard` are resolved from the dispatch origin rather than
- * claimed, with the copy for every value in one place — so two fleets on two
- * providers produce comparable values by construction, and nobody had to agree on
- * anything.
- */
+/** Accounts and cost per `kind/cause/guard` per day. `RemedyCause` and `RemedyGuard` are resolved from the dispatch origin rather than claimed, so two fleets on two providers produce comparable values. */
 function byCause(remedies: readonly Remedy[], usage: readonly UsageEvent[], today: string): PoolDigestRow[] {
   const perAccount = costPerAccount(remedies, usage);
   const rows = new Bucket();
@@ -156,19 +110,10 @@ function byCause(remedies: readonly Remedy[], usage: readonly UsageEvent[], toda
 }
 
 /**
- * Accounts and cost per check name per day.
- *
- * **A normalised check bucket is refused.** Classifying every check into `lint` /
- * `unit` / `build` / `e2e` would let names cross projects, and it is rejected twice
- * over: it is a new measurement invented here rather than moved from what exists,
- * and it would be regex over provider names, silently misfiling every project whose
- * naming did not match whoever wrote the patterns.
- *
- * An account naming three reds contributes to all three, exactly as
- * `RemedyCauseTotal.topCheck` counts — so the figure is "accounts this check appears
- * on", never "reds it caused". The cost is **not** divided again between them: it is
- * the account's cost, and a reader summing this section is summing accounts, not
- * money that must add to the fleet's total.
+ * Accounts and cost per check name per day. A normalised check bucket is refused: it would be
+ * regex over provider names, silently misfiling every project named otherwise. An account
+ * naming three reds contributes to all three, so the figure is "accounts this check appears on",
+ * never "reds it caused"; cost is not divided again between them, so this section sums accounts, not money.
  */
 function byCheck(remedies: readonly Remedy[], usage: readonly UsageEvent[], today: string): PoolDigestRow[] {
   const perAccount = costPerAccount(remedies, usage);
@@ -181,18 +126,7 @@ function byCheck(remedies: readonly Remedy[], usage: readonly UsageEvent[], toda
   return rows.rows(today);
 }
 
-/**
- * Return dispatches that filed no account, per day.
- *
- * **Not optional.** Without it every share is a share of a minority and reads as
- * authoritative once summed across nine fleets — `src/remedyInsights.ts` already
- * refuses to draw the causes without it, and a company page has no reason to be
- * held to a lower standard than one laptop's.
- *
- * Counted by **membership** rather than arithmetic, for the local fold's reason: a
- * dispatch created just before a day boundary that filed its account just after
- * must not cancel a genuinely unaccounted one.
- */
+/** Return dispatches that filed no account, per day. Not optional — without it every share is a share of a minority that reads as authoritative. Counted by membership, so a dispatch straddling a day boundary can't cancel a genuinely unaccounted one. */
 function unaccounted(
   tasks: readonly { id: string; originRef: string | null; createdAt: string }[],
   remedies: readonly Remedy[],
@@ -208,14 +142,7 @@ function unaccounted(
   return rows.rows(today);
 }
 
-/**
- * Runs that reported no usage at all, per day.
- *
- * **Not optional either.** Without it, a fleet running on a PTY contributes real
- * work and no dollars and is drawn as a cheap fleet — and a window in which nothing
- * was measured answers null rather than `$0.00`, which is the same discipline one
- * level up.
- */
+/** Runs that reported no usage at all, per day. Not optional: without it a PTY fleet contributes real work and no dollars and is drawn as cheap. A window that measured nothing answers null, never `$0.00`. */
 function unmeasured(agents: readonly Agent[], since: string, today: string): PoolDigestRow[] {
   const rows = new Bucket();
   for (const agent of agents) {
@@ -228,36 +155,12 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
 }
 
 /**
- * What a person did, per `subject.verb` per day.
- *
- * **Keyed on the registry's two axes and on nothing else.** Both are closed
- * vocabularies `src/usage/events.ts` owns, so two fleets on two providers produce
- * comparable rows by construction and nobody had to agree on anything — the
- * standing rule for every section here, cleared without an exception. The row's
- * third column, the cockpit's **place key, stays local**: it is the console's own
- * layout, which a redesign moves, and a cross-fleet series keyed on it would break
- * at a release rather than at a change of behaviour. There is nothing else on a
- * `surface_reach` row, which is what makes this section publishable at all.
- *
- * **It carries the `ui` half of the registry, and that is a property of the
- * registry rather than a choice made here.** `surface_reach` is the only table that
- * stamps one act at a time; a `record` event is swept from the table that already
- * holds it, by a ledger that windows rather than buckets and whose rows do not map
- * onto `subject.verb` one-to-one — the validation *bench* and one validation
- * *check* are both `validation` settled by a person. So a `record` event is absent
- * here **by declaration**, with `EVENT_SOURCE` saying which and why, rather than by
- * an omission that would read as a fleet where nobody ever approved a plan.
- * → `docs/spec/34-usage-metrics.md#the-digest-section`
- *
- * `costUsd` stays null on every row: what a person did has no dollar figure
- * anywhere in the harness, and inventing one for the pool is the move the whole
- * digest arm refuses. The companion therefore draws no cost column, `byFault`'s
- * reason exactly.
- *
- * A pair the matrix does not have is dropped, `byCause`'s guard for its reason: a
- * cell withdrawn from `VERBS_BY_SUBJECT` leaves rows behind in a table that keeps
- * ninety days, and publishing them would put a key no other fleet's build has into
- * a cross-fleet series.
+ * What a person did, per `subject.verb` per day — keyed on the registry's two closed axes.
+ * The cockpit's place key stays local: a redesign moves it, and a cross-fleet series keyed
+ * on it would break at a release. Only the `ui` half of the registry appears; a `record` event
+ * is absent by declaration (`EVENT_SOURCE` says which and why), not by an omission that would
+ * read as a fleet where nobody approved anything. → `docs/spec/34-usage-metrics.md#the-digest-section`
+ * `costUsd` stays null on every row. A pair `VERBS_BY_SUBJECT` doesn't have is dropped.
  */
 function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[] {
   const rows = new Bucket();
@@ -269,25 +172,7 @@ function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[]
   return rows.rows(today);
 }
 
-/**
- * Faults per source per day.
- *
- * **The one section that measures the harness rather than the work**, and the only
- * one that carries no money: a fault has no cost figure anywhere in the harness, and
- * inventing one here would be a new measurement rather than a move of what exists.
- * `costUsd` therefore stays null on every row, which the companion draws as no
- * column at all — a column of dashes is worse than no column.
- *
- * The key is `ErrorLogEntry['source']` unchanged: five words, closed, and the same
- * five the Faults panel already draws, so nobody had to agree on a vocabulary and
- * there is no second spelling of one.
- *
- * **What it counts is the fault log as it stands, and the file says so.**
- * `Store.clearErrors` drops the whole table, so an operator who clears the log
- * republishes a fleet that had no faults this quarter. That is a reading and never a
- * trigger — nothing anywhere reads these rows back, and the section exists to be
- * read by a person in `digest.md`.
- */
+/** Faults per source per day — the one section measuring the harness rather than the work, carrying no money. The key is `ErrorLogEntry['source']` unchanged. Counts the fault log as it stands: `Store.clearErrors` drops the table, so a cleared log republishes a quarter with no faults. */
 function byFault(errors: readonly ErrorLogEntry[], today: string): PoolDigestRow[] {
   const rows = new Bucket();
   for (const error of errors) rows.add(utcDay(error.createdAt), error.source, { count: 1 });
@@ -299,17 +184,7 @@ function unmeasuredRun(agent: Agent): boolean {
   return agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null;
 }
 
-/**
- * What each account cost: its filing agent's in-window spend divided evenly across
- * the accounts that agent filed.
- *
- * **The existing per-account figure**, and re-using it is the point — it is the only
- * claim the data supports, it is already what the local panel states, and a second
- * derivation here is how a fleet's contribution to the company page and its own
- * panel come to disagree. Kept local to this file rather than exported from
- * `src/remedyInsights.ts` would be the same figure computed twice; it is exported
- * from there for exactly that reason.
- */
+/** What each account cost: its filing agent's in-window spend divided evenly across the accounts that agent filed — the existing per-account figure re-used, so the company page and local panel can't disagree. */
 function costPerAccount(remedies: readonly Remedy[], usage: readonly UsageEvent[]): Map<string, number> {
   const filedBy = new Map<string, string[]>();
   for (const r of remedies) filedBy.set(r.agentId, [...(filedBy.get(r.agentId) ?? []), r.id]);
@@ -326,13 +201,7 @@ function costPerAccount(remedies: readonly Remedy[], usage: readonly UsageEvent[
   return per;
 }
 
-/**
- * One section's rows as they accumulate, keyed on `(day, key)`.
- *
- * `costUsd` starts null and becomes a number only when something is actually added
- * to it, which is what keeps a day that measured nothing answering null rather than
- * `$0.00` — the digest's one rule that is easy to lose to a `?? 0` somewhere.
- */
+/** One section's rows as they accumulate, keyed on `(day, key)`. `costUsd` starts null and becomes a number only when something is added, so a day that measured nothing answers null rather than `$0.00`; do not `?? 0` it. */
 class Bucket {
   private readonly cells = new Map<string, { day: string; key: string; count: number; costUsd: number | null }>();
 
@@ -344,14 +213,7 @@ class Bucket {
     this.cells.set(id, cell);
   }
 
-  /**
-   * The rows, sorted, with the origin's current day marked partial.
-   *
-   * **The current day is marked partial**, because otherwise every average on the
-   * page is dragged down by a day that is not over — wrong by up to its whole width,
-   * silently, on the newest and most-read number. Marked, the rule is one line: a
-   * partial day counts in a total and never in an average.
-   */
+  /** The rows, sorted, with the origin's current day marked partial — otherwise every average is silently dragged down by a day that is not over. A partial day counts in a total, never an average. */
   rows(today: string): PoolDigestRow[] {
     return [...this.cells.values()]
       .sort((a, b) => a.day.localeCompare(b.day) || a.key.localeCompare(b.key))

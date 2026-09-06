@@ -12,11 +12,7 @@ import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { goalPrNumbers } from '../view/goalPage.js';
 
-/**
- * How long a refetch waits so a burst of live signals collapses into one request.
- * Short enough to read as immediate, long enough to swallow the four signals one
- * pulse emits and the per-file ones an agent's writes emit.
- */
+/** How long a refetch waits so a burst of live signals (a pulse's four, an agent's per-file writes) collapses into one request. */
 const REFRESH_COALESCE_MS = 200;
 
 type CockpitStatus =
@@ -25,26 +21,14 @@ type CockpitStatus =
   | { kind: 'ready'; view: CockpitView; actions: CockpitActions };
 
 /**
- * Everything between the harness and the drawn surface: the snapshot fetch, the
- * websocket, the coalescing refresh, and which drawer is open. The presentation
- * layer receives its output and never sees any of this — which is the point,
- * since it is the half that must behave identically whatever the cockpit looks
- * like.
+ * Everything between the harness and the drawn surface: the snapshot fetch, the websocket, the
+ * coalescing refresh, and which drawer is open. The presentation layer never sees any of this.
  */
 /**
- * The surface-reach writer: one `view` per place the operator lands on, and the
- * place every other `logUsage` call in the cockpit is attributed to.
- *
- * **Keyed on the reach, not on the place.** A place carries far more than a
- * surface — a collapsed card, a ticket filter, an open goal section — and an
- * effect keyed on the whole thing would log a fresh `view` every time an operator
- * folded a row on the page they were already on. The key is the surface plus how
- * it was arrived at, so a re-view is a genuine move.
- *
- * Fire-and-forget in full: {@link logUsage} cannot throw, and a lost flush costs
- * a row and nothing else.
- *
- * → `docs/spec/34-usage-metrics.md#surface-reach`
+ * The surface-reach writer: one `view` per place the operator lands on, and the place every other
+ * `logUsage` call is attributed to. **Keyed on the reach, not on the place** — a place carries far
+ * more than a surface, and keying on the whole thing would log a fresh `view` on every fold. Key is
+ * the surface plus how it was arrived at. → `docs/spec/34-usage-metrics.md#surface-reach`
  */
 function useSurfaceReach(place: Place, arrival: 'linked' | 'direct'): void {
   const reach = placeReach(place);
@@ -52,8 +36,7 @@ function useSurfaceReach(place: Place, arrival: 'linked' | 'direct'): void {
   useEffect(() => {
     notePlace(reach.key, arrival);
     if (reach.view !== null) logUsage(reach.view);
-    // `key` is the whole dependency on purpose — see the note above. `reach` is
-    // recomputed each render and would re-fire on every snapshot if it were one.
+    // `key` is the whole dependency on purpose; `reach` is recomputed each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 }
@@ -62,19 +45,14 @@ export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);
   const [denied, setDenied] = useState<UnauthorizedError | null>(null);
   const [connected, setConnected] = useState(false);
-  // What the harness says about its own configuration. Fetched rather than polled:
-  // the reading shells out to git and to the agent binary server-side, which is not
-  // a thing to do on a heartbeat, and it can only move when the config file does or
-  // when a cycle has read the world. So it is re-read on `config:changed` and on
-  // each snapshot the first time the world arrives — never on the second.
+  // What the harness says about its own configuration. Fetched, not polled — it shells out to git
+  // and the agent binary server-side. Re-read on `config:changed` and once per world arrival.
   const [setup, setSetup] = useState<SetupPayload | null>(null);
-  // Fixes written from the rail this session, and how to take each one back. The
-  // rows stay until dismissed: the reading re-fetches as soon as the file lands,
-  // so a fixed row would otherwise vanish under the click that fixed it.
+  // Fixes written from the rail this session, and how to take each one back. Rows stay until
+  // dismissed so a fixed row doesn't vanish under the click that fixed it.
   const [appliedFixes, setAppliedFixes] = useState<AppliedFix[]>([]);
   const undoable = useRef(new Map<string, { set?: Record<string, unknown>; clear?: string[] }>());
-  // Where the operator is, held in the address bar rather than in a state each —
-  // see `useNavigation`. Everything below reads off it; nothing else moves it.
+  // Where the operator is, held in the address bar rather than state — see `useNavigation`.
   const { place, go, arrival } = useNavigation();
   useSurfaceReach(place, arrival);
   const selected = place.agent;
@@ -96,12 +74,9 @@ export function useCockpit(): CockpitStatus {
   const refreshing = useRef(false);
   const refreshQueued = useRef(false);
   /**
-   * What the signals waiting to be coalesced actually touched.
-   *
-   * `null` means "everything" and is the safe value: a signal that cannot name its
-   * sections, and the first load, both ask for the lot. A set is the **union** of
-   * what the coalesced signals named, so collapsing a burst can only ever widen
-   * the request — never narrow it past something one of them said had moved.
+   * What the signals waiting to be coalesced actually touched. `null` means "everything" — the
+   * safe value for a signal that cannot name its sections, and the first load. A set is the
+   * **union** of the coalesced signals' sections, so collapsing a burst can only widen the request.
    * → `docs/spec/16-http-api.md#sections`
    */
   const pending = useRef<Set<StateSection> | null>(null);
@@ -110,44 +85,30 @@ export function useCockpit(): CockpitStatus {
     try {
       const patch = await api.getState(sections);
       setState((prev) => {
-        // A patch is merged over the snapshot we hold, which is what keeps the
-        // cockpit's state one complete `AppState`: `buildViewModel` and every
-        // surface under it go on receiving a whole object and never learn that
-        // anything arrived in parts. A full fetch carries every key, so the merge
-        // is a replacement in that case and the branch is not worth taking.
+        // A patch is merged over the held snapshot so the cockpit's state stays one complete
+        // `AppState`. A full fetch carries every key, so the merge is a replacement there.
         if (prev === null || sections === null) return patch as AppState;
-        // `refUrls` rides every response and is merged rather than replaced: a
-        // ref's URL is stable, so an entry can only go stale by being absent, and
-        // a ref learned in one patch has to survive the next.
+        // `refUrls` is merged, not replaced: an entry can only go stale by being absent.
         return { ...prev, ...patch, refUrls: { ...prev.refUrls, ...patch.refUrls } };
       });
       setDenied(null);
     } catch (err) {
-      // A refused credential is the one fetch failure that never resolves itself
-      // by retrying, so it gets a screen. Everything else is a transient the next
-      // poll fixes, and must not replace a working cockpit with an error page.
+      // A refused credential never resolves by retrying, so it gets a screen; everything else
+      // is a transient the next poll fixes.
       if (err instanceof UnauthorizedError) setDenied(err);
     }
   }, []);
 
   /**
-   * Refetch the whole snapshot, coalescing bursts into one request. Every live
-   * signal lands here, and the server pairs a coarse `dirty` with almost every
-   * specific frame — so one pulse alone is four signals, and `agents.on('files')`
-   * fires once *per file an agent writes*. Fetching per signal made the request
-   * rate a function of agent tool-call volume.
-   *
-   * At most one request in flight and at most one queued behind it, plus a short
-   * trailing window so a burst collapses. The queued one always runs: coalescing
-   * may merge the signals in between but must never drop the last, or the cockpit
-   * settles on a state older than what it was told about.
+   * Refetch the whole snapshot, coalescing bursts into one request. The server pairs a coarse
+   * `dirty` with almost every specific frame — one pulse alone is four signals, and
+   * `agents.on('files')` fires once per file an agent writes. At most one request in flight and one
+   * queued behind it, plus a short trailing window. The queued fetch always runs: coalescing may
+   * merge signals but must never drop the last.
    */
   const scheduleRefresh = useCallback(
     (sections?: readonly StateSection[]) => {
-      // Widen first, always — before any early return. A signal that arrives while
-      // a fetch is in flight or a timer is pending still has to be recorded, or the
-      // request that eventually goes out asks for less than it was told about and
-      // the cockpit settles on a surface that quietly stopped updating.
+      // Widen first, always — before any early return, so a signal arriving mid-fetch is recorded.
       if (sections === undefined) pending.current = null;
       else if (pending.current !== null) for (const section of sections) pending.current.add(section);
 
@@ -160,9 +121,7 @@ export function useCockpit(): CockpitStatus {
         refreshTimer.current = null;
         refreshing.current = true;
         const asked = pending.current;
-        // Reset before the fetch, not after: a signal that lands mid-flight is
-        // about state the in-flight request may already have read past, and it
-        // belongs to the queued fetch behind it.
+        // Reset before the fetch: a signal landing mid-flight belongs to the queued fetch behind it.
         pending.current = new Set();
         void refresh(asked).finally(() => {
           refreshing.current = false;
@@ -190,29 +149,21 @@ export function useCockpit(): CockpitStatus {
           cap?: number;
           paused?: boolean;
         };
-        // The cap or the pause moved, and the frame carries both — so it *is* the
-        // delivery, and there is nothing to fetch. `ControlState` is exactly
-        // `{cap, paused}`: pushing the cap used to cost a rebuild of all 48 keys
-        // of the snapshot, for two numbers the socket had already sent.
+        // The cap or the pause moved and the frame carries both, so there is nothing to fetch.
         if (e.type === 'control:changed' && typeof e.cap === 'number' && typeof e.paused === 'boolean') {
           const control = { cap: e.cap, paused: e.paused };
           setState((prev) => (prev === null ? prev : { ...prev, control }));
         }
-        // A `dirty` names the sections it touched, or names none — which means all
-        // of them, and is what a signal that cannot say should send.
+        // A `dirty` names the sections it touched, or none — which means all of them.
         else if (e.type === 'dirty') scheduleRefresh(e.sections);
         else if (e.type === 'world:changed' || e.type === 'world:events') scheduleRefresh();
-        // The config file moved — a save from another cockpit, or the watcher
-        // picking up an edit on disk. Re-broadcast as a DOM event rather than
-        // folded into `scheduleRefresh`: the config is not on `/api/state` (it is
-        // a constant this socket is the only news about), and the page that cares
-        // is the one place that should pay for re-reading it.
+        // The config file moved. Re-broadcast as a DOM event rather than folded into
+        // `scheduleRefresh`: config is not on `/api/state`, and only the page that cares should pay
+        // to re-read it.
         else if (e.type === 'config:changed') window.dispatchEvent(new Event('lubbdubb:config-changed'));
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
-          // Full output now only arrives for the subscribed (open) agent, so we
-          // keep a large scrollback (~1M chars) instead of the old 20k window —
-          // the watched session no longer loses history. Capped to bound memory.
+          // Full output only arrives for the subscribed (open) agent; kept scrollback is capped to bound memory.
           liveOutput.current.set(e.agentId, (cur + e.delta).slice(-1_000_000));
           forceRender((n) => n + 1);
         } else if (e.type === 'agent:tail' && e.agentId && e.line) {
@@ -233,40 +184,27 @@ export function useCockpit(): CockpitStatus {
     };
   }, [refresh, scheduleRefresh]);
 
-  // What the last snapshot held, for the notification diff. A ref rather than
-  // state: it must not itself cause a render, and the comparison has to survive
-  // the renders the snapshot does cause.
+  // What the last snapshot held, for the notification diff. A ref, not state, so it doesn't
+  // itself cause a render.
   const notified = useRef<ReturnType<typeof notifySnapshot> | null>(null);
 
   useEffect(() => {
     if (!state) return;
     const next = notifySnapshot(state, setup);
-    // Read the preference per fire rather than holding it: Settings writes it to
-    // `localStorage` directly, and a copy captured at mount would go on notifying
-    // for the rest of the session after the operator switched it off.
+    // Read the preference per fire, not held: Settings writes it to `localStorage` directly.
     fireNotifications(notifiableChanges(notified.current, next), loadNotifyPrefs());
     notified.current = next;
   }, [state, setup]);
 
   /**
-   * The open goal's whole run history, fetched when its page opens.
-   *
-   * On its own route rather than off `/api/state`, and here rather than in the
-   * page, for the transcript's and the files list's reason: the snapshot carries
-   * the fleet's live agents and a bounded tail of ended ones, because the all-time
-   * list grew for the life of the deployment and was re-serialised on every
-   * signal. One goal at a time is what the surface actually draws.
-   *
-   * Re-read when the goal's pull requests change and not on the state poll: the
-   * page merges this with the snapshot's own agents, so a run dispatched since the
-   * fetch is already drawn — what only this can add is history, and history does
-   * not move.
+   * The open goal's whole run history, fetched when its page opens. On its own route rather than
+   * off `/api/state`: the snapshot carries only the fleet's live agents and a bounded tail of ended
+   * ones. Re-read when the goal's pull requests change, not on the state poll — a run dispatched
+   * since the fetch is already drawn by the snapshot's own agents.
    */
   const [goalAgents, setGoalAgents] = useState<GoalAgentsPayload | null>(null);
   const goalRef = place.goal;
-  // A string, so the effect below compares by value: `goalPrNumbers` builds a new
-  // array on every render and an array in the dependency list would refetch on
-  // every poll.
+  // A string, so the effect compares by value — an array dependency would refetch on every poll.
   const goalPrs = state !== null && goalRef !== null ? goalPrNumbers(state, goalRef).join(',') : '';
   useEffect(() => {
     if (goalRef === null) {
@@ -279,9 +217,7 @@ export function useCockpit(): CockpitStatus {
       .then((payload) => {
         if (live) setGoalAgents(payload);
       })
-      // Drawn as nothing, recorded nowhere, for the setup reading's reason: the
-      // page still has the snapshot's own agents, so a failed history read is a
-      // shorter list rather than a broken page.
+      // Drawn as nothing, recorded nowhere: a failed history read is a shorter list, not a broken page.
       .catch(() => {});
     return () => {
       live = false;
@@ -296,17 +232,12 @@ export function useCockpit(): CockpitStatus {
     return () => ws.unsubscribe(selected);
   }, [selected]);
 
-  // The setup reading, on open and whenever the file moves. The same event the
-  // config page listens on, for the same reason: an edit made in an editor, a save
-  // from another cockpit and this cockpit's own write all land on one apply path,
-  // so one signal is the whole of keeping this honest.
+  // The setup reading, on open and whenever the file moves — same event the config page listens on.
   const readSetup = useCallback(() => {
     void api
       .getSetup()
       .then(setSetup)
-      // Recorded nowhere and drawn as nothing. A reading the harness could not take
-      // is not a fault to put in front of an operator — the surface it feeds simply
-      // does not appear, which is also what a fully-configured harness looks like.
+      // Recorded nowhere, drawn as nothing: the surface it feeds simply does not appear.
       .catch(() => setSetup(null));
   }, []);
   useEffect(() => {
@@ -317,11 +248,8 @@ export function useCockpit(): CockpitStatus {
   }, [readSetup]);
 
   const actions = useMemo<CockpitActions>(() => {
-    // An operator's own write is followed by a **full** refresh: a click can move
-    // anything (a watch toggle re-decides pickup, a job lands in the queue and on
-    // the graph), and unlike a socket signal there is nothing here that knows what
-    // it touched. Sections are for the fleet's own chatter, which is what there is
-    // a lot of.
+    // An operator's own write is followed by a **full** refresh: a click can move anything, and
+    // unlike a socket signal nothing here knows what it touched. Sections are for fleet chatter.
     const then = <T>(p: Promise<T>) => p.then(() => refresh(null));
     return {
       refresh: () => refresh(null),
@@ -331,8 +259,7 @@ export function useCockpit(): CockpitStatus {
 
       killAgent: (id) => then(api.killAgent(id)),
       completeAgent: (id) => then(api.completeAgent(id)),
-      // Interrupt and respond deliberately do not refetch: both are conversational
-      // and the `dirty` the server emits brings the new state along anyway.
+      // Interrupt and respond do not refetch: both are conversational and the server's `dirty` brings the state along.
       interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
       resumeAgent: (id) => then(api.resumeAgent(id)),
@@ -344,8 +271,7 @@ export function useCockpit(): CockpitStatus {
       decideProposal: (id, verdict, note, acknowledged) =>
         then(verdict === 'accept' ? api.acceptProposal(id, note, acknowledged) : api.rejectProposal(id, note)),
       backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
-      // No refetch: nothing on the glass changes until the operator sends the
-      // verdict, and the draft is the modal's own state until they do.
+      // No refetch: nothing changes until the operator sends the verdict.
       overruleShortfall: (issueNumber, proposalId, text) =>
         then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),
       releaseEnvironmentGate: (issueNumber, released, note) =>
@@ -355,9 +281,7 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
-      // Refetches like every other write, and hands the dry run's refusals back to
-      // the form that caused them: the check is saved either way, and what the
-      // environment could not answer about it is the operator's to act on.
+      // Refetches like every other write, and hands the dry run's refusals back to the form.
       saveWatchCheck: async (issueNumber, check) => {
         const { dryRun } = await api.saveWatchCheck(issueNumber, check);
         await refresh(null);
@@ -371,51 +295,36 @@ export function useCockpit(): CockpitStatus {
       viewRetro: (issueRef) => go({ retro: issueRef }),
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
-      // Closing the pack drops the idea with it: an idea is a fold on the page, and
-      // a place naming one with no page open is a place that does not exist.
+      // Closing the pack drops the idea with it: a place naming one with no page open doesn't exist.
       viewReviewPack: (prNumber) =>
         go(prNumber === null ? { reviewPack: null, reviewIdea: null } : { reviewPack: prNumber }),
       openReviewIdea: (id) => go({ reviewIdea: id }),
-      // One `go` for both: which row is unfolded
-      // and whether the terminal tail is open are one place, and two calls would
-      // push two history entries for a single move.
+      // One `go` for both fields — one history entry for a single move.
       setObstacleQuery: (next) => go(next),
       muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
       ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
       retireObstacle: (id) => then(api.retireObstacle(id)),
       writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
-      // One `go` for both halves: the tab and the window are one place, and two
-      // calls would push two history entries for a single change of question.
+      // One `go` for both halves — one history entry for a single change.
       openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
-      // The tab comes with it, narrowed to one that could have led here. Nothing
-      // that opens a goal moves the nav — the rail is on every tab and a `<Ref>`
-      // opens one from anywhere — so left alone the crumb names wherever the nav
-      // last was, and a goal opened while reading Insights draws a way out that
-      // leads to a page it is not on. → `homeTab`
+      // The tab comes with it, narrowed to one that could have led here, since a `<Ref>` opens a
+      // goal from anywhere and the crumb must lead back to a page the nav was actually on. → `homeTab`
       selectGoal: (ref) =>
         go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
-      // The goal underneath is left where it was: it is what the crumb names and
-      // what leaving the page lands on. The tab travels for `selectGoal`'s reason
-      // — a pull request is reached by a `<Ref>` from anywhere at all.
+      // The goal underneath is left where it was — the crumb's target. Tab travels for `selectGoal`'s reason.
       selectPr: (prNumber) =>
         go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
-      // One `go` for however many of the three moved: they are one place, and two
-      // calls would push two history entries for a single change of question.
+      // One `go` for however many fields moved — one history entry per change.
       setTicketQuery: (next) => {
-        // The one seam every filter, ordering and layout control on the tab funnels
-        // to, which is where this belongs for `collectActions`' reason: a `filter`
-        // logged at each of the nine controls counts only the ones somebody
-        // remembered, and silently stops counting the day a tenth arrives.
+        // The one seam every filter/ordering/layout control on the tab funnels through.
         logUsage('ticket.filter');
         go(next);
       },
-      // One `go` for however many of the three moved, for `setTicketQuery`'s reason.
       setFeatureQuery: (next) => {
-        // One seam for the card, the order and the filter, for `setTicketQuery`'s reason.
         logUsage('feature.filter');
         go(next);
       },
@@ -425,10 +334,8 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
-      // Written to *both* lists, always: a disclosure is the operator saying which
-      // way this card goes, and the default it is overriding moves as the goal does.
-      // Recording only the open half would leave "shut" meaning "whatever the goal's
-      // progress says", which is the card springing open under them a pulse later.
+      // Written to *both* lists, always: recording only the open half would leave "shut" meaning
+      // "whatever the goal's progress says", springing the card open under them later.
       openGoalSection: (section, open) =>
         go((current) => ({
           goalOpen: open
@@ -450,13 +357,10 @@ export function useCockpit(): CockpitStatus {
       // Conversational, like `respondAgent`: the server's `dirty` brings the echo.
       messageLocalRun: (text) => api.messageLocalRun(text).then(() => undefined),
       refreshLocalRun: () => then(api.refreshLocalRun()),
-      // Refetched, like `startLocalRun`: the write moves the local run and the goal
-      // at once, and the two are drawn on the same screen.
+      // Refetched: the write moves the local run and the goal at once, drawn on the same screen.
       validateLocally: (issueNumber, opts) => then(api.validateLocally(issueNumber, opts)),
       cancelLocalValidation: (issueNumber) => then(api.cancelLocalValidation(issueNumber)),
-      // Not wrapped in `then`: this one is a read, and refetching the whole
-      // snapshot to draw a log tail would make opening the panel cost what a pulse
-      // costs.
+      // Not wrapped in `then`: a read, so opening the panel doesn't cost a full snapshot refetch.
       localRunOutput: () => api.localRunOutput().then((r) => r.lines),
 
       openPet: (id) => then(api.openPet(id)),
@@ -484,15 +388,10 @@ export function useCockpit(): CockpitStatus {
       addInstruction: (n, text) => then(api.addInstruction(n, text)),
       withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
-      // A read, so no refetch — nothing about asking where a filing would land
-      // changes the world.
+      // A read, so no refetch.
       probeFilingTarget: () => api.probeFilingTarget(),
-      // Refetched like every other mutation, but the filed issue is handed back
-      // rather than swallowed: the modal's done state links to it. The refresh is
-      // awaited because on the deployment that works LubbDubb's own repo the report
-      // is in the world the cockpit draws, and it should be there before the modal
-      // says it exists; anywhere else it is one cheap read that finds nothing new,
-      // which is a smaller cost than a second code path (issue #449).
+      // Refetched like every other mutation, but the filed issue is handed back rather than
+      // swallowed, so the modal's done state can link to it (issue #449).
       raiseIssue: async (title, body, watch) => {
         const filed = await api.raiseIssue(title, body, watch);
         await refresh(null);
@@ -502,9 +401,7 @@ export function useCockpit(): CockpitStatus {
 
       applyConfigFix: async (checkId, set) => {
         const config = await api.getConfig();
-        // What the file said before, so the undo is a real restore rather than a
-        // guess: a key the operator's own file never set is cleared back out, not
-        // written with the default they were already getting.
+        // What the file said before, so the undo is a real restore: a key never set stays cleared.
         const paths = Object.keys(set);
         const previous: Record<string, unknown> = {};
         const clear: string[] = [];
@@ -540,8 +437,7 @@ export function useCockpit(): CockpitStatus {
         setAppliedFixes((rows) => rows.filter((row) => row.checkId !== checkId));
       },
 
-      // A read, so no refetch: the work graph rides its own route precisely
-      // because it must not be pulled along by the state poll.
+      // A read: the work graph rides its own route so it isn't pulled along by the state poll.
       fetchWorkSubtree: (ref) => api.getWorkSubtree(ref),
     };
   }, [refresh, go]);

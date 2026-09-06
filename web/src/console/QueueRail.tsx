@@ -8,7 +8,10 @@ import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 
-/** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
+/**
+ * One word per kind, shared with the goal page so a row and the band it opens name the ask
+ * the same.
+ */
 export const KIND_LABEL: Record<NeedKind, string> = {
   config: 'Config',
   config_gap: 'Config gap',
@@ -201,12 +204,7 @@ const GROUP_LABEL: Record<NeedGroup, string> = {
 };
 const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
 
-/**
- * The pull request a `pr:<n>` origin names. Anchored and digits-only, so
- * `pr:412:thread:9` answers 412 and nothing else answers at all — a row whose
- * origin is some other shape has no pull request to open, which is a destination
- * the card must not draw.
- */
+/** The pull request a `pr:<n>` origin names. */
 const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
 
 /**
@@ -227,30 +225,15 @@ export function subjectLabel(row: NeedRow): string | null {
 }
 
 /**
- * The subject as the *rail* draws it, which is the subject only when the row's
- * own line has not already said it. `askLine` (`web/src/view/needsYou.ts`) names
- * the goal wherever the world still carries it, and a row that then repeated
- * `#395` under a line ending in `#395 · Snapshot downloads 401…` would spend a
- * second line on the one thing already read.
- *
- * It stays for the rows the line cannot name — a pull request no ticket owns, a
- * goal-shaped ref the world has dropped — because an ask whose subject a surface
- * cannot name is one the operator answers blind.
+ * The subject as the *rail* draws it, which is the subject only when the row's own line has
+ * not already said it.
  */
 function subjectBeside(row: NeedRow): string | null {
   const subject = subjectLabel(row);
   return subject !== null && row.title.includes(subject) ? null : subject;
 }
 
-/**
- * What the rail says about a run whose task the snapshot no longer carries.
- *
- * The row still has an agent — that is what makes it blocking — so the metadata
- * line has to say *something*, and the id is what it used to say: `agent_ab4sc`
- * is minted, means nothing to anybody, and reads as a name the operator ought to
- * recognise. A phrase is the honest reading of the same fact, and the drawer,
- * which is where an id is the subject, is still one click away through the row.
- */
+/** What the rail says about a run whose task the snapshot no longer carries. */
 const UNNAMED_RUN = 'a run with no task on record';
 
 /**
@@ -265,29 +248,11 @@ export function holdingLabel(holding: number): string {
 }
 
 /**
- * One row, wearing two readings at once: **hue is the kind** ({@link KIND_TONE}),
- * **weight is the group**. `group === 'blocking'` means an agent is parked on
- * this rather than merely queued for the operator, and it draws as `cn-parked` —
- * a full-strength stripe and a filled tag, against the softened stripe and
- * outlined tag of a row that is only the operator's to get to.
- *
- * The two are deliberately separate channels. Spending the whole palette on the
- * group is what made every ask on the bench read as an alarm, and a delivered
- * goal's close-out is not an alarm; spending it on the kind alone would drop the
- * one bit the rail is sorted by. Weight carries the second without taking the
- * first.
- *
- * `focus` is the goal the situation area is currently drawing, when it is drawing
- * one. A row about that goal is marked `aria-current` and every other row is
- * dimmed, so the rail says which of its asks are the ones on screen — the rest
- * stay legible and clickable, because muting is a reading aid and a rail that
- * hid rows would hide the fleet's other blockers.
- *
- * **Where a click goes is `row.opens`, never `row.goalRef`** — the derivation
- * decides it, because it is the only place that can tell a goal with a page from
- * a ref that merely looks like one. Only the recovery hold opens nothing, and it
- * renders as a `div` rather than a `button` so that every button on this rail
- * leads somewhere.
+ * One row, wearing two readings at once: **hue is the kind** ({@link KIND_TONE}), **weight
+ * is the group**. **Where a click goes is `row.opens`, never `row.goalRef`** — the derivation
+ * is the only place that can tell a goal with a page from a ref that merely looks like one.
+ * Only the recovery hold opens nothing, and it renders as a `div` rather than a `button` so
+ * that every button on this rail leads somewhere.
  */
 function Row({
   row,
@@ -299,7 +264,10 @@ function Row({
   row: NeedRow;
   now: number;
   focus: string | null;
-  /** Read only by the two update asks, whose controls act on the build rather than on a goal. */
+  /**
+   * Read only by the two update asks, whose controls act on the build rather than on a
+   * goal.
+   */
   build: BuildReading;
   actions: CockpitActions;
 }): JSX.Element {
@@ -355,13 +323,7 @@ function Row({
     </>
   );
 
-  /**
-   * The card, for every row that carries something to press. One shape: the body
-   * is the control that opens the ask, and everything a row can *do* is in the bar
-   * below it — see {@link CardFoot}. A null foot draws neither the bar nor the
-   * stripe that would run beside it, which is the applying upgrade's case: the row
-   * has become the progress and there is nothing left to decide.
-   */
+  /** The card, for every row that carries something to press. */
   const carded = (onClick: () => void, foot: ReactNode, bodyNode: ReactNode = body): JSX.Element => (
     <div className={cls}>
       <i className="cn-stripe" />
@@ -412,13 +374,7 @@ function Row({
 
   const ref = row.goalRef;
   /**
-   * Where one of the row's destinations goes. Written once because the assigned
-   * row has two — its body opens the pull request, its bar opens the ask — and two
-   * readings of `NeedDestination` is how they come to disagree about what `goal`
-   * means.
-   *
-   * Null for a destination this row cannot reach: `pr` with no number to read out
-   * of the origin, `goal` with no ref. The caller draws nothing rather than a
+   * Where one of the row's destinations goes. The caller draws nothing rather than a
    * control that lands nowhere.
    */
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
@@ -487,29 +443,7 @@ function Row({
   );
 }
 
-/**
- * **The card's action bar** — the one place on a rail card where anything
- * pressable lives.
- *
- * The acts had grown three shapes: a config row's fix strip under the body, an
- * update ask's controls under it in a near-copy of that strip, and the assigned
- * row's reference out in a third column beside the body. Three placements for one
- * question — *what can I do with this row?* — and an operator scanning the rail
- * had to find the answer somewhere different on each kind.
- *
- * One bar answers it in one place. What varies inside it is only the two halves:
- * the sentence that qualifies the act, and the acts themselves, which are pushed
- * to the right edge so a column of cards puts every control on one vertical line.
- *
- * **The sentence comes first in the markup as well as on the glass.** It is what
- * decides which control to press — *Queue waits for 3 to finish; Now stops them* —
- * so reaching it after tabbing through the buttons it explains is reading the
- * caption after the photograph.
- *
- * `wide` is for the one act that is not a control at all: a shell command is a
- * line of text to be copied, and it takes the bar's full width with the sentence
- * above it rather than being squeezed against the right edge.
- */
+/** **The card's action bar** — the one place on a rail card where anything pressable lives. */
 function CardFoot({
   why = null,
   wide = false,
@@ -532,36 +466,8 @@ function CardFoot({
 }
 
 /**
- * What an update ask offers, in the card's action bar.
- *
- * **Three acts on the upgrade, and which three depends on the fleet.** With agents
- * running there is a real choice — wait for them or stop them — and it is drawn as
- * two buttons, the waiting one primary. With the fleet clear a drain is
- * instantaneous, so `drain` and `apply` are the same act and drawing both would be
- * two controls doing one thing.
- *
- * **Interrupting is weight, never hue.** Nothing is lost by it — every agent is
- * reaped, recorded and resumed on the way back up — so it takes no danger tone and
- * no confirm; it is simply the lighter of the two buttons beside the safe path it
- * is a variant of.
- *
- * **The primary sits at the right edge**, which is where the bar puts the act it
- * expects: the buttons run outward from it in the order an operator would reach for
- * them, and `Snooze` — the one that answers nothing — ends up furthest away.
- *
- * **The project ask has only Snooze**, and that is the honest shape rather than an
- * omission: every refusal `projectPullability` returns is a refusal the *harness*
- * cannot get past either — a dirty tree, a local commit, the wrong branch — so a
- * "pull anyway" here would be a button whose only outcome is the error the row
- * already quotes.
- *
- * An unsupervised deployment gets no controls at all on either: the process exits
- * on apply and nothing would start it again. The row still draws, and the panel it
- * opens says what to run instead.
- *
- * Null while the upgrade is applying, and that is the one row on the rail with no
- * bar: the title has become the progress, so a bar there would be an empty box
- * under a sentence saying there is nothing to decide.
+ * What an update ask offers, in the card's action bar. An unsupervised deployment gets no
+ * controls at all on either: the process exits on apply and nothing would start it again.
  */
 function UpdateActs({
   kind,
@@ -647,20 +553,10 @@ function UpdateActs({
 }
 
 /**
- * The control strip under a config row — the whole of "offer to fix it for me".
- *
- * Which control is drawn is the check's own `fix`, and the three kinds are three
- * honest positions ({@link SetupFix}): the harness writes it, the operator decides
- * it somewhere that already exists, or it is outside the harness entirely and gets
- * copied. **A `shell` command is never run**: these are the credential and billing
- * checks, and a button here that executed a shell string would put arbitrary
- * execution behind the most sensitive reading the cockpit draws.
- *
- * A `config` fix whose value is `assumed` rather than `confirmed` draws the value
- * in an editable field first. That is the answer to "what if the suggestion is
- * wrong": the values that could be wrong never get the one-click button, and the
- * one that can be wrong most expensively — `userId`, which gates pickup — is
- * resolved against the credential before anything offers to write it.
+ * The control strip under a config row — the whole of "offer to fix it for me". A `shell`
+ * command is never run — these are credential and billing checks, only copied. A `config`
+ * fix whose value is `assumed` draws it in an editable field first, so a value that could be
+ * wrong never gets the one-click button.
  */
 function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActions }): JSX.Element | null {
   const fix: SetupFix | undefined = check.fix;
@@ -757,12 +653,7 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
   );
 }
 
-/**
- * The typed value behind an edited field. The field is text, the key is not: a
- * boolean written as `"false"` is a truthy string, and the config loader would
- * take it — so the shape of the value the check proposed decides how the operator's
- * edit is read back.
- */
+/** The typed value behind an edited field. */
 function coerce(text: string, like: unknown): unknown {
   if (typeof like === 'boolean') return text === 'true';
   if (typeof like === 'number') return Number(text);
@@ -792,18 +683,10 @@ function SettledFix({ applied, actions }: { applied: AppliedFix; actions: Cockpi
 }
 
 /**
- * The merged rail: every kind `needsYou` carries, in the order the view model
- * already sorted them — recovery first, blocking before yours, most-holding
- * first, oldest first. This component only groups by `NeedGroup` for the
- * sub-headings; it never re-sorts, so the rail and the derivation stay one
- * reading.
- *
- * Renders even at zero rows (`cn-rail-empty`) — a rail that vanishes when
- * quiet is indistinguishable from one that broke.
- *
- * The focus is `goalPage`'s ref rather than `selectedGoal`, because a selected
- * ref the world does not carry draws no page: highlighting against it would mute
- * the whole rail in favour of a goal that is not on screen.
+ * The merged rail: every kind `needsYou` carries, in the order the view model already
+ * sorted them — recovery first, blocking before yours, most-holding first, oldest first.
+ * This component only groups by `NeedGroup` for the sub-headings; it never re-sorts, so the
+ * rail and the derivation stay one reading.
  */
 export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = view.needsYou;

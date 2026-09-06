@@ -50,40 +50,26 @@ interface BuildInput {
   /** Which hue each feature draws in — the store's persisted assignment. */
   featureSlots: ReadonlyMap<number, number>;
   /**
-   * Goals with a run the harness minted and has not finished, to when that run
-   * started — the `inFlight` standing, and the one reading here that is about
-   * *now* rather than about a verdict somebody reached.
-   *
-   * A map rather than a set because the briefing draws the age of the work, and
-   * the run's own `startedAt` is the only stamp that means "the harness has been
-   * on this since" — an agent's would restart on every re-dispatch.
+   * Goals with a run the harness minted and has not finished, to when that run started —
+   * the `inFlight` standing. A map, because the briefing draws the age: the run's
+   * `startedAt` is the only stamp that survives a re-dispatch.
    */
   running: ReadonlyMap<number, string>;
   /**
-   * The account rule `feature-summary` wrote of each Feature, keyed on the
-   * container's `issue:<n>` origin. Quoted whole and never re-derived, exactly as
-   * the verdicts below it are — a Feature with none simply ships null.
+   * The account rule `feature-summary` wrote of each Feature, keyed on the container's
+   * `issue:<n>` origin. Quoted whole, never re-derived; a Feature with none ships null.
    */
   summaries: ReadonlyMap<string, FeatureSummary>;
   /**
-   * The order each Feature's stories are worked in, on the same key and quoted the
-   * same way: whole, never re-derived, and null for a Feature with none. The lens
-   * forms no opinion about it — not even which wave a story is in, which is the
-   * cockpit's to derive from the edges.
+   * The order each Feature's stories are worked in, on the same key and quoted the same
+   * way. The lens forms no opinion about it — not even which wave a story is in.
    */
   sequences: ReadonlyMap<string, FeatureSequence>;
   /**
-   * `featureStandingKey`'s digest per Feature number — `featureRecords`' answer,
-   * quoted, and the same value rule `feature-summary` compares against
-   * `summary.standingKey`. A second digest built here would drift from the one the
-   * rule reads and the card would say "moved" about a Feature the fleet is not
-   * going to re-summarise.
-   *
-   * A Feature absent from the map ships `''`, which means **not digested**, not
-   * "nothing has moved": an empty key never equals a real one, so a cockpit that
-   * compared it to `summary.standingKey` would draw a "moved" marker on every card
-   * of a deployment that never produced a digest. The cockpit must treat `''` as
-   * no reading and draw no marker for it.
+   * `featureStandingKey`'s digest per Feature number, quoted — the same value rule
+   * `feature-summary` compares against `summary.standingKey`; a second digest here would
+   * drift. A Feature absent from the map ships `''`, which means **not digested** rather
+   * than "nothing has moved", and the cockpit must draw no marker for it.
    */
   standingKeys: ReadonlyMap<number, string>;
   /** The standing delivery verdicts — quoted for the briefing, never re-derived. */
@@ -103,27 +89,17 @@ interface BuildInput {
 }
 
 /**
- * The feature board: every container the mirror's items hang off, with the work
- * beneath it folded.
+ * The feature board: every container the mirror's items hang off, with the work beneath it
+ * folded.
  *
- * **A lens, and every reading in it is a quotation.** The outcome word is
- * `ticketOutcomes`', the money is `buildSpendGoals`', the watch bucket is
- * `src/watchLabels.ts`', which items are containers is `isContainerType`'s and the
- * environment fold is `rollUpReach`'s — the same function a goal's own landings
- * are folded with. Nothing here decides anything and no rule under
- * `src/dispatcher/` reads it, which is the rule the work graph, `buildStacks` and
- * `prAttentionStatus` are all held to.
- * → `docs/spec/17-cockpit.md#the-feature-board`
+ * **A lens, and every reading in it is a quotation** — the outcome word, the money, the
+ * watch bucket, the container test and the environment fold all come from the module that
+ * owns them. Nothing here decides anything and no rule under `src/dispatcher/` reads it.
+ * Pure, so no column can go stale against config.
  *
- * Pure, and the whole of the derivation, for `buildTicketPage`'s reason: neither
- * the watch bucket nor the cost is the table's to know, so a materialised column
- * would be a stale copy of config the moment the label prefix changed.
- *
- * **What it deliberately does not ship is a verdict about a Feature.** There is no
- * "at risk", no "on track" and no forecast date, because each would be a policy no
- * config file states and no module owns — and a board that invented one would be
- * the second opinion this whole file is arranged to avoid. It ships the facts and
- * the cockpit composes the sentence.
+ * **It ships no verdict about a Feature** — no "at risk", no forecast date: each would be
+ * a policy no config states and no module owns. It ships facts; the cockpit composes the
+ * sentence. → `docs/spec/17-cockpit.md#the-feature-board`
  */
 export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 'backfilling' | 'refUrls'> {
   const { items, outcomes, costs, featureSlots, running, containerTypes, watchLabel } = input;
@@ -143,9 +119,8 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
   let unresolved = 0;
 
   for (const item of items) {
-    // A container is never its own child. It is a statement of intent whose
-    // children are the work, and counting one in a parent Epic's bar would put a
-    // whole Feature's worth of stories in the denominator as a single item.
+    // A container is never its own child: counting one in a parent Epic's bar would put
+    // a whole Feature's worth of stories in the denominator as one item.
     // → `docs/spec/06-issue-pickup.md`
     if (isContainerType(item.issueType, containerTypes)) continue;
 
@@ -165,8 +140,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
     else groups.set(item.parent.number, { title: item.parent.title, rows: [row] });
   }
 
-  // The container's own mirrored row, where the tracker's filter happened to return
-  // it. Looked up rather than assumed: most deployments never see it.
+  // The container's own mirrored row, where the tracker's filter happened to return it.
   const containers = new Map<number, MirroredTicket>();
   for (const item of items) if (isContainerType(item.issueType, containerTypes)) containers.set(item.number, item);
 
@@ -239,19 +213,10 @@ function childRow(
 }
 
 /**
- * Which segment of the bar an item lands in, in strict precedence order.
- *
- * The order is the whole of this function and each step is load-bearing:
- *
- * 1. **`unwatched` first.** An item the fleet cannot see is not queued behind
- *    anything — nothing has read it, appraised it or spent on it. Drawn as
- *    `queued` it would report a fleet working through a backlog it has never
- *    looked at, which is the failure this board most has to refuse.
- * 2. **`inFlight` next**, above every outcome word, because a re-picked goal
- *    carries the verdict of its last attempt while an agent works its next one.
- *    The board is a reading of now.
- * 3. **Then the outcome words**, exactly as `ticketOutcomes` spelled them — never
- *    re-derived here, only mapped onto a segment.
+ * Which segment of the bar an item lands in, in strict precedence order — each step is
+ * load-bearing. `unwatched` first: an item the fleet cannot see is not queued behind
+ * anything. `inFlight` next, above every outcome word, because a re-picked goal carries
+ * its last attempt's verdict. Then the outcome words, as `ticketOutcomes` spelled them.
  */
 function standingOf(signals: { watched: boolean; running: boolean; outcome: string | null }): FeatureChildStanding {
   if (!signals.watched) return 'unwatched';
@@ -284,25 +249,14 @@ interface BriefingContext {
 }
 
 /**
- * The three lists a person outside the fleet reads first: what is being worked,
- * what was delivered, and what is stopping the rest.
+ * The three lists a person outside the fleet reads first: what is being worked, what was
+ * delivered, and what is stopping the rest.
  *
- * **Every sentence in it was written by somebody.** The delivery line is
- * `IssueDelivery.summary`, the shortfall line is `IssueShortfall.summary` and the
- * question is the escalation's own prompt — quoted, never reworded and never
- * assembled from the counts above. That is the whole discipline of this function:
- * the card ships no verdict about a Feature, and a briefing that composed its own
- * sentence would be that verdict in an agent's voice.
- *
- * The **outcome word** decides the done and blocked lists, not the standing — a
- * re-picked goal is `inFlight` and still carries the verdict of its last attempt,
- * and both readings are true at once. Dropping the delivery while an agent works
- * the next attempt would take finished work off the board for the duration.
- *
- * A question is only counted where the escalation names the goal itself
- * (`issue:<n>`). One raised against a pull request names no goal here and is
- * counted under no Feature rather than attributed to a guess — it is still on the
- * needs-you rail, which is where a parked agent is answered.
+ * **Every sentence in it was written by somebody** — quoted from the delivery, shortfall
+ * or escalation, never reworded and never assembled from the counts. The **outcome word**
+ * decides the done and blocked lists, not the standing, so a re-picked goal keeps its last
+ * verdict while an agent works the next attempt. A question counts only where the
+ * escalation names the goal itself (`issue:<n>`), never by a guess.
  */
 function briefingFor(rows: readonly FeatureChildRow[], ctx: BriefingContext): FeatureBriefing {
   const working: FeatureWorkingRow[] = [];
@@ -330,8 +284,7 @@ function briefingFor(rows: readonly FeatureChildRow[], ctx: BriefingContext): Fe
 
   working.sort((a, b) => b.since.localeCompare(a.since));
   delivered.sort((a, b) => b.at.localeCompare(a.at));
-  // A question outranks a shortfall of any age: one has an agent stopped against
-  // it, the other is a decision that has been waiting anyway.
+  // A question outranks a shortfall of any age: one has an agent stopped against it.
   blocking.sort((a, b) => blockRank(a) - blockRank(b) || b.since.localeCompare(a.since));
 
   return {
@@ -359,11 +312,9 @@ function byIssueNumber<T extends { originRef: string }>(rows: readonly T[]): Map
 }
 
 /**
- * The open escalations that name a goal, keyed on it.
- *
- * `open` and not "unanswered": an escalation dismissed without an answer has
- * `answeredAt` null for ever, and counting one as blocking would leave a Feature
- * reporting a question nobody is being asked any more.
+ * The open escalations that name a goal, keyed on it. `open` and not "unanswered": a
+ * dismissed escalation has `answeredAt` null for ever, and would block a Feature on a
+ * question nobody is being asked.
  */
 function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, Escalation[]> {
   const out = new Map<number, Escalation[]>();
@@ -384,12 +335,9 @@ function issueNumberOf(ref: string): number | null {
 }
 
 /**
- * Null where the fleet never ran on any of this Feature's children, and a number
- * — possibly `0` — where it ran on one and that one cost nothing measurable.
- *
- * The distinction is `TicketRow.costUsd`'s: PTY agents report no usage at all, so
- * a Feature worked entirely in that mode has no spend row anywhere, and drawing it
- * as `$0.00` would report free work where the truth is unmeasured work.
+ * Null where the fleet never ran on any of this Feature's children, and a number —
+ * possibly `0` — where it ran and cost nothing measurable. PTY agents report no usage, so
+ * `$0.00` would claim free work where the truth is unmeasured work.
  */
 function totalCost(rows: readonly FeatureChildRow[]): number | null {
   let total: number | null = null;
@@ -401,12 +349,9 @@ function totalCost(rows: readonly FeatureChildRow[]): number | null {
 }
 
 /**
- * The Feature's standing in each environment, folded from its goals'.
- *
- * Only goals `allGoalReach` produced a row for are counted, which is the same set
- * that module decides: a goal with nothing merged has been nowhere, and counting
- * it as `absent` here would put every never-started story in the denominator and
- * make a shipped Feature read as a third deployed for good.
+ * The Feature's standing in each environment, folded from its goals'. Only goals
+ * `allGoalReach` produced a row for are counted — counting a never-started story as
+ * `absent` would leave a shipped Feature reading as a third deployed for good.
  */
 function foldReach(
   rows: readonly FeatureChildRow[],
@@ -422,9 +367,8 @@ function foldReach(
       if (found === undefined) continue;
       total += 1;
       if (found.status === 'reached') reached += 1;
-      // `partial` and `unknown` are both unresolved one tier up: half a goal in an
-      // environment is not a goal in it, and a probe that could not answer must
-      // never fold to `absent`. `absent` falls through as neither.
+      // `partial` and `unknown` are both unresolved one tier up — a probe that could not
+      // answer must never fold to `absent`, which falls through as neither.
       else if (found.status === 'partial' || found.status === 'unknown') unresolved += 1;
     }
     return { environment, status: rollUpReach({ total, reached, unresolved }), goals: reached, total };
@@ -478,12 +422,9 @@ function landingRowsByGoal(landings: readonly GoalLanding[]): Map<number, Featur
 }
 
 /**
- * The children a reader most needs first: what is happening, then what is stuck,
- * then the rest — and the tracker's own order inside each band.
- *
- * The board ships a bounded slice ({@link FEATURE_CHILDREN}), so this decides
- * which rows a large Feature shows rather than merely how they sit. An arrival
- * order would show twenty delivered stories and cut the one that fell short.
+ * The children a reader most needs first: what is happening, then what is stuck, then the
+ * rest. The board ships a bounded slice ({@link FEATURE_CHILDREN}), so this decides *which*
+ * rows a large Feature shows, not merely how they sit.
  */
 const STANDING_ORDER: Record<FeatureChildStanding, number> = {
   inFlight: 0,
@@ -501,14 +442,9 @@ function orderChildren(rows: readonly FeatureChildRow[]): FeatureChildRow[] {
 }
 
 /**
- * Features that want a person, then the ones carrying the most work.
- *
- * **This is an ordering, not a verdict.** It says which card to read first and
- * nothing about whether a Feature is in trouble — the same distinction the queue
- * rail draws. What counts as wanting a person is deliberately narrow and is a
- * count of facts rather than a judgement: an item that fell short is a decision
- * somebody owes, and an item nothing can see is a gap somebody has to close.
- * Neither is inferred; both are counted.
+ * Features that want a person, then the ones carrying the most work. **An ordering, not a
+ * verdict**: it says which card to read first and nothing about whether a Feature is in
+ * trouble. What counts as wanting a person is a count of facts, never a judgement.
  */
 function byWantsYouThenSize(a: FeatureRollup, b: FeatureRollup): number {
   const wants = (f: FeatureRollup) => f.counts.fellShort + f.counts.unwatched;
@@ -516,20 +452,10 @@ function byWantsYouThenSize(a: FeatureRollup, b: FeatureRollup): number {
 }
 
 /**
- * Whether this deployment has a feature board at all — the operator's flag **and**
- * the provider's hierarchy, in that order.
- *
- * One predicate, exported, because it is asked in two places that must never
- * disagree: this route's refusal and the `config.featureBoard` the cockpit draws
- * its tab off. Two copies would drift into the cockpit's worst shape — a tab whose
- * every fetch 404s, or a route nothing can reach.
- *
- * The provider half is `canPlaceWorkItem`, asked of the connector and never
- * inferred from its name, for `canCloseIssue`'s reason: the one place that decides
- * is the one the route asks. It is the right predicate rather than a near one —
- * placing a work item *is* setting its parent, so a provider that can do it is
- * exactly a provider with the container hierarchy this board rolls up, and GitHub
- * answers false by design. → `src/sink/actionSink.ts`
+ * Whether this deployment has a feature board at all — the operator's flag **and** the
+ * provider's hierarchy. One exported predicate, because the route's refusal and the
+ * cockpit's tab must never disagree. The provider half is `canPlaceWorkItem`, asked of the
+ * connector and never inferred from its name. → `src/sink/actionSink.ts`
  */
 export function featureBoardOn(config: { featureBoard: boolean }, connector: { canPlaceWorkItem(): boolean }): boolean {
   return config.featureBoard && connector.canPlaceWorkItem();

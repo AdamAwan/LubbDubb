@@ -73,80 +73,46 @@ interface ExecutorDeps {
   worktrees: Worktrees;
   escalations: EscalationInbox;
   /**
-   * Where an action the executor is working on is visible while it is being worked
-   * on — the minutes between a plan naming a dispatch and an agent existing for it.
-   * Written here and read nowhere else in the harness: it is a reading, not a gate.
+   * Where an action is visible while the executor works it — the minutes between a plan
+   * naming a dispatch and an agent existing for it.
    */
   readying: ReadyingBoard;
-  /**
-   * The operator's standing authorizations over whole stacks. Asked whether a
-   * rung's merge is already authorized, and told when one it authorized failed.
-   */
+  /** The operator's standing authorizations over whole stacks. */
   landings: StackLandingDesk;
   /** Outbound seam for side-effectful actions the harness may auto-send. */
   sink: ActionSink;
   /**
-   * Whether the operator has said in their config that a drafted review reply
-   * goes out without being put to them (`sendPrRepliesWithoutApproval`).
-   *
-   * A thunk, not a boolean: the key is live-applied onto the running config
-   * object, so a copy taken here would keep sending replies until the harness was
-   * bounced — on the flip that matters, which is the one turning it *off*.
-   * Absent = off — not the config default, deliberately. Absent means an executor
-   * nobody wired this into, and an unwired seam that *sends* is the failure mode
-   * worth refusing; a deployment's actual default arrives through the thunk.
+   * Whether a drafted review reply goes out without being put to the operator
+   * (`sendPrRepliesWithoutApproval`). Absent = off, not the config default — an unwired
+   * seam that *sends* is the failure worth refusing.
    */
   autoSendReplies?: () => boolean;
-  /**
-   * Which model each kind of work runs on (issue #321), or undefined for a
-   * deployment that configures none. Consulted here, at dispatch, because this is
-   * where the rule that proposed the run is in hand and where the row that
-   * records what it launched on is written.
-   */
+  /** Which model each kind of work runs on, or undefined where none is configured. */
   agentModels?: AgentModels;
   deskRoot: string;
-  /**
-   * Base a *new* agent branch is cut from. Passed on every `ensure` so the base is
-   * explicit config rather than whatever `repoRoot` is checked out on.
-   */
+  /** Base a *new* agent branch is cut from. */
   defaultBranch: string;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
   /**
-   * The one error-recording path. Reached by the acts the executor performs
-   * itself rather than through a proposal: a decision row says an act did not
-   * happen, and the Errors panel is where a *provider* failure has to surface
-   * beside the others.
+   * The one error-recording path, reached by the acts the executor performs itself: a
+   * decision row says an act did not happen, and a *provider* failure has to surface in the
+   * Errors panel beside the others.
    */
   errors: ErrorRecorder;
   /**
-   * What the failing CI checks reported, fetched at dispatch (issue #334).
-   *
-   * Optional, and absent it changes nothing: a CI-fix dispatch is composed
-   * exactly as it was before this existed. Read **here** rather than in the
-   * dispatcher because the rule pipeline is synchronous and pure over the world
-   * snapshot, and rather than in the world read because that runs every pulse
-   * for every open pull request and would pay for a log nobody dispatches on.
+   * What the failing CI checks reported, fetched at dispatch. Optional, and absent changes
+   * nothing.
    */
   ciEvidence?: CiEvidenceReader;
   /**
-   * How an agent amends the goal's ticket, per issue number — the one thing a
-   * standing operator instruction needs that neither the store nor the origin
-   * carries, since it comes from the `issues` provider's config.
-   *
-   * A function of the number rather than a string, because the commands name the
-   * item; optional because a deployment with no tracker has no answer, and the
-   * note then tells the agent to say what changed in its conclusion instead.
+   * How an agent amends the goal's ticket, per issue number — the one thing a standing
+   * operator instruction needs that comes from the `issues` provider's config.
    */
   instructionTracker?: (issueNumber: number) => string | null;
   /**
-   * What a Feature's dossier is gathered with — the container types, the watch
-   * label and the environments, which are config rather than anything the store
-   * holds.
-   *
-   * Absent means this deployment has no feature board, and then a summary dispatch
-   * is composed with no dossier at all — which is safe because nothing dispatches
-   * one there: the same `featureBoardOn` conjunction gates both.
+   * What a Feature's dossier is gathered with — container types, watch label and
+   * environments, all config.
    */
   featureBoard?: FeatureBoardFacts;
 }
@@ -159,13 +125,9 @@ export interface ExecutionSummary {
 }
 
 /**
- * Turns a validated action plan into real effects, applying the guard rails the
- * design calls for: never start a second agent for work that's already in flight
- * (origin de-duplication), never put a second agent on a branch a live task holds
- * (the branch half of the same gate — see below), and never exceed the
- * concurrency cap. Every decision — executed, deferred, rejected, or skipped — is
- * written to the audit log with its reason, so "why did/didn't this happen" is
- * always answerable.
+ * Turns a validated action plan into real effects under three guard rails: never a second
+ * agent for work already in flight (origin de-duplication), never a second agent on a
+ * branch a live task holds, never above the concurrency cap.
  */
 export class ActionExecutor {
   constructor(private readonly deps: ExecutorDeps) {}
@@ -198,11 +160,9 @@ export class ActionExecutor {
         tally(outcome);
       };
 
-      // On the board for as long as the executor holds it, whatever it does with
-      // it — see {@link ReadyingBoard}. The `finally` is the point: an action that
-      // throws (an `ensure` that could not wipe a slot is the one that happens)
-      // must take its row with it, or the cockpit draws work nobody is doing until
-      // the harness is bounced.
+      // On the board for as long as the executor holds it — see
+      // {@link ReadyingBoard}. The `finally` is the point: an action that throws
+      // must take its row with it, or the cockpit draws work nobody is doing.
       const hold = this.deps.readying.pickUp({
         cycleId,
         title: readyingTitle(action),
@@ -214,37 +174,24 @@ export class ActionExecutor {
           case 'dispatch_code_agent':
           case 'dispatch_desk_agent': {
             const origin = action.originRef;
-            // Two ways the same work can already be in flight: a task dispatched on
-            // this origin, and a job standing in for it — a requeue, whose task says
-            // `job:<id>`. The second is what closes the window a requeue filed *after*
-            // the snapshot opens, which the dispatcher's `activeOrigins` cannot see
-            // because it was decided from a world that predates the requeue (#249).
+            // Two ways the same work can already be in flight: a task on this
+            // origin, and a job standing in for it. The second closes the window a
+            // requeue filed after the snapshot the dispatcher decided from.
             if (origin && (store.findActiveTaskByOrigin(origin) || store.findStandingJobByOrigin(origin))) {
               record('skipped', `Skipped: work for ${origin} is already in flight.`);
               break;
             }
-            // The branch half of the same gate (issue #116). For every world-driven
-            // rule origin and branch are 1:1 (`pr:<n>:*`→`pr.branch`,
-            // `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
-            // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`),
-            // so the origin check above already *is* a branch check and this one is a
-            // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
-            // that broke the 1:1 property would otherwise break it silently. Two paths
-            // can reach here with a branch the origin doesn't determine: rule `manual-job`, whose
-            // `job.branch` is a free string the operator supplies, and the LLM
-            // dispatcher, which names branches in prose. `WorktreeManager.ensure` is
-            // reuse-first, so letting either through puts two live claude processes in
-            // one worktree directory — the same files on disk, and no merge anywhere to
-            // reconcile them.
+            // The branch half of the same gate. For every world-driven rule, origin
+            // and branch are 1:1, so this is a no-op for them (asserted in
+            // test/jobQueue.test.ts, because a rule breaking that property would
+            // otherwise break it silently). Rule `manual-job` and the LLM dispatcher
+            // can name a branch the origin does not determine, and `ensure` is
+            // reuse-first — so letting either through puts two live claude processes
+            // in one worktree directory.
             //
-            // Deferred rather than skipped, deliberately. `skipped` is the origin
-            // gate's word and means "this work is already being done"; that is not what
-            // happened here — the job is a distinct request that merely names a busy
-            // branch. Every active task ends, so the collision is transient and the
-            // honest reading is "not yet": the job stays `queued` (nothing calls
-            // `markJobDispatched`) and the gate re-tests next cycle, exactly as the
-            // cap/pause deferrals below do, for one audit row a cycle. An operator who
-            // doesn't want to wait cancels it.
+            // **Deferred, not skipped**: `skipped` means "this work is already being
+            // done", where the collision here is transient. The job stays `queued`
+            // and the gate re-tests next cycle.
             if (action.type === 'dispatch_code_agent') {
               const held = store.findActiveTaskByBranch(action.branch);
               if (held) {
@@ -268,55 +215,43 @@ export class ActionExecutor {
             // behind — see {@link ActionExecutor.abandonUnstarted}.
             let task: Task | null = null;
             try {
-              // Fetched before the row is written so the prompt stored on the task
-              // is the prompt the agent gets — a later append would leave the
-              // cockpit showing something the agent never saw.
+              // Before the row is written, so the stored prompt is the prompt the
+              // agent gets.
               hold.at('ci-evidence');
               const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
-              // Whether this dispatch continues the last agent's conversation or starts
-              // cold (issue #333). Decided before the row is written, because the note it
-              // produces is part of the prompt the row stores.
+              // Whether this dispatch continues the last agent's conversation.
+              // Decided before the row, since its note is part of the stored prompt.
               const retry = retryResumeFor(origin, store);
               task = this.recordDispatchTask(action, evidence, retry);
-              // A desk retry keeps the previous scratch directory; every other dispatch
-              // gets the directory its own task names. A *code* retry still goes through
-              // `ensure` — the slot's lease was released when the previous agent was
-              // reaped — and reuse-first lands it back on the slot still checked out on
-              // the branch, so `--resume` finds the transcript where it left it.
+              // A desk retry keeps the previous scratch directory; a code retry goes
+              // through reuse-first `ensure`, which lands it back on the slot still
+              // checked out on the branch so `--resume` finds its transcript.
               //
-              // The step the row is on for nearly all of its life. `ensure` is
-              // reuse-first, so most dispatches return here at once — but the one
-              // handed a slot checked out on another branch pays a `git clean -ffdx`
-              // and a cold checkout, which is the minutes the whole board exists to
-              // account for. → `docs/spec/09-execution.md#handing-a-slot-over`
+              // The step the row is on for nearly all of its life: a slot handed over
+              // from another branch pays a `git clean -ffdx` and a cold checkout.
+              // → `docs/spec/09-execution.md#handing-a-slot-over`
               hold.at('slot-handover');
               const cwd =
                 retry && action.type === 'dispatch_desk_agent'
                   ? retry.previous.cwd
                   : await this.workingDirectory(task, action);
               // `claude --resume` resolves the transcript inside the *launch cwd's*
-              // project directory, so a retry that would land anywhere else has nothing
-              // to re-attach to. Checked rather than assumed: this is the one failure
-              // that costs a whole attempt and reports nothing but a cold-looking run.
+              // project directory, so a retry landing elsewhere has nothing to
+              // re-attach to — and the failure looks only like a cold run.
               const inherit = retry && retry.previous.cwd === cwd ? retry.previous.sessionId : null;
               const agent = this.deps.agents.spawn(task, cwd, inherit);
-              // Read back off the row rather than from the request: a non-resumable
-              // runtime silently declines the inheritance, and the audit line must say
-              // what happened rather than what was asked for.
+              // Read off the row, not the request: a non-resumable runtime silently
+              // declines the inheritance.
               const resumed = inherit !== null && agent.sessionId === inherit;
               liveCount += 1;
-              // An operator-launched job leaves the queue only once its agent is
-              // actually running — so a deferred (capped/paused) dispatch keeps it
-              // queued for a later cycle.
+              // A job leaves the queue only once its agent is running, so a
+              // capped/paused dispatch keeps it queued.
               if (action.jobId) store.markJobDispatched(action.jobId, task.id);
-              // Same rule as a job, for the same reason: a dispatch the cap/pause gate
-              // held must leave the part `ready` for a later cycle, not claim it started.
+              // Same rule: a dispatch the cap/pause gate held leaves the part `ready`.
               if (action.type === 'dispatch_code_agent' && action.partId)
                 store.markPartDispatched(action.partId, task.id, action.branch);
-              // The same rule again, and here it is what keeps one press of the
-              // button to one agent: the store's write is guarded on the row still
-              // being `pending`, so a dispatch the cap held leaves the row where the
-              // rule can propose it again next cycle.
+              // Same rule again, and here it keeps one press of the button to one
+              // agent: the store's write is guarded on the row still being `pending`.
               if (action.type === 'dispatch_code_agent' && action.localValidation) {
                 if (action.localValidation.as === 'fix')
                   store.markLocalValidationFix(action.localValidation.id, task.id);
@@ -361,22 +296,17 @@ export class ActionExecutor {
           case 'merge_pr': {
             hold.at('authorizing');
             const outbound = await this.authorize(cycleId, action);
-            // The authorized path audits itself, under this same cycle id and
-            // through the one function that performs an authorized act — so there
-            // is nothing left to write, only to count.
+            // The authorized path audits itself, so there is only counting left.
             if (outbound.recorded) tally(outbound.outcome);
             else record(outbound.outcome, outbound.detail);
             break;
           }
 
           case 'propose_plan': {
-            // The one proposal with no act to send (issue #109 phase 3). It is
-            // born here anyway, with the other two: proposals are created in one
-            // place, from a validated action, so "who may put something to a human"
-            // has a single answer. The hold is re-asked here for the same reason
-            // `authorize` re-asks about a merge — rule `plan-approval` suppresses itself, but
-            // every path that reaches the executor must be covered, not just the
-            // one that happens to check first.
+            // The one proposal with no act to send, born here with the others so
+            // "who may put something to a human" has a single answer. The hold is
+            // re-asked here because every path reaching the executor must be
+            // covered, not just the one that checks first.
             const ref = planProposalRef(action.originRef);
             const heldBy = planProposalHold(ref, store.listProposals());
             if (heldBy) {
@@ -386,9 +316,8 @@ export class ActionExecutor {
             const esc = this.deps.escalations.create({
               type: 'approve_change',
               prompt: action.prompt,
-              // The planner's diagnosis and approach ride in `detail`, not in the
-              // prompt, for `propose_shortfall`'s reason: the card renders it as its
-              // own labelled body, directly above the two buttons.
+              // Diagnosis and approach ride in `detail`, not the prompt: the card
+              // renders it as its own labelled body above the buttons.
               context: {
                 originRef: action.originRef,
                 planId: action.planId,
@@ -410,10 +339,8 @@ export class ActionExecutor {
           }
 
           case 'propose_plan_amendment': {
-            // Born here with the other proposals, from a validated action, for
-            // `propose_plan`'s reason — and the hold is re-asked here too, because
-            // every path that reaches the executor must be covered, not just the
-            // one that happens to check first.
+            // Born here with the other proposals, and the hold re-asked here, for
+            // `propose_plan`'s reason.
             const ref = planAmendmentProposalRef(action.amendmentId);
             const heldBy = planAmendmentHold(ref, store.listProposals());
             if (heldBy) {
@@ -421,10 +348,8 @@ export class ActionExecutor {
               break;
             }
             const amendment = store.getPlanAmendment(action.amendmentId);
-            // Settled between the rule and here — an operator answered the card
-            // from another tab, or the plan was replanned under it. Skipped rather
-            // than proposed: a card for a settled amendment is one no answer can act
-            // on.
+            // Settled between the rule and here. Skipped rather than proposed: a card
+            // for a settled amendment is one no answer can act on.
             if (!amendment || amendment.status !== 'pending') {
               record(
                 'skipped',
@@ -436,10 +361,8 @@ export class ActionExecutor {
             const esc = this.deps.escalations.create({
               type: 'approve_change',
               prompt: action.prompt,
-              // The body is built here rather than in the rule because it is a
-              // reading of the plan out of the store: which parts the amendment
-              // moves, against the plan *as it stands when the card is created*,
-              // and what applying it would leave running either way.
+              // Built here rather than in the rule, because it is a reading of the
+              // plan as it stands when the card is created.
               context: {
                 originRef: action.originRef,
                 planId: action.planId,
@@ -463,21 +386,14 @@ export class ActionExecutor {
           }
 
           case 'propose_shortfall': {
-            // Born here with the other three, from a validated action, for
-            // `propose_plan`'s reason: proposals are created in one place, so "who
-            // may put something to a human" has a single answer. The hold is asked
-            // here too — rule `issue-shortfall` suppresses itself, but every path
-            // that reaches the executor must be covered, not just the one that
-            // happens to check first.
+            // Born here with the other proposals, and the hold re-asked, for
+            // `propose_plan`'s reason.
             //
-            // Unlike a plan this uses the *full* `proposalHold`, all three arms. A
-            // plan proposal is made once per verdict and both settlements rewrite
-            // the row the gate reads; a shortfall is proposed off a row that
-            // persists until its arm is performed, so without the durable `rejected`
-            // arm one refusal would be re-asked every pulse. It expires on world
-            // signal like any other rejection, which it must: a replan refused
-            // because the issue needed one more look would otherwise be vetoed for
-            // good, and that is exactly the phase-4 failure.
+            // Unlike a plan this uses the *full* `proposalHold`, all three arms: a
+            // shortfall is proposed off a row that persists until its arm is
+            // performed, so without the durable `rejected` arm one refusal would be
+            // re-asked every pulse. It still expires on world signal, or a replan
+            // refused once would be vetoed for good.
             const ref = shortfallRef(action.issueNumber);
             const proposals = store.listProposals();
             const signals = this.rejectionSignals(proposals);
@@ -490,9 +406,8 @@ export class ActionExecutor {
             const esc = this.deps.escalations.create({
               type: 'approve_change',
               prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
-              // The assessor's write-up rides in `detail`, not in the prompt: the
-              // card renders it as its own labelled body, and a re-ask prepending
-              // to the prompt must not push it further from the buttons.
+              // The write-up rides in `detail`, not the prompt, so a re-ask
+              // prepending to the prompt cannot push it further from the buttons.
               context: {
                 originRef: action.originRef,
                 issueNumber: action.issueNumber,
@@ -517,21 +432,14 @@ export class ActionExecutor {
 
           case 'update_pr_branch': {
             // The `behind` arm of rule `pr-base-update`, performed rather than
-            // dispatched (issue #332). Not authorized and not proposed, for
-            // `set_work_item_state`'s reason and one more: this is a write to a
-            // branch the harness owns, of a merge the provider has already said is
-            // clean, and the agent path took it without asking anyone. Making the
-            // cheap path ask a human what the expensive one never did would be a new
-            // gate wearing an optimisation's clothes.
+            // dispatched. Neither authorized nor proposed: it is a write to a branch
+            // the harness owns, of a merge the provider has said is clean, and the
+            // agent path took it without asking anyone.
             //
-            // The branch gate again, for the reason the dispatch path re-checks it:
-            // every path reaching the executor must be covered, not only the one
-            // that checked first. An agent holding the branch has a worktree cut
-            // from a commit this merge would move out from under it — the rule
-            // proposes this only for a free branch, and this is what makes that
-            // true of the moment it runs. **Deferred, not skipped**: the collision
-            // is transient, and `skipped` is the word the next cycle reads as "the
-            // cheap path is unavailable here" and falls back to an agent on.
+            // The branch gate again, because every path reaching the executor must be
+            // covered: an agent holding the branch has a worktree cut from a commit
+            // this merge would move. **Deferred, not skipped** — `skipped` is what
+            // the next cycle reads as "fall back to an agent".
             const staffed = store.findActiveTaskByBranch(action.branch);
             if (staffed) {
               record(
@@ -544,11 +452,9 @@ export class ActionExecutor {
             }
             try {
               const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
-              // `ok: false` is the provider saying it has no such operation (Azure
-              // DevOps), which is a configuration rather than a failure — so it is
-              // audited and *not* recorded as an error. Either way the row is what
-              // the next cycle's rule reads to fall back to a code agent, so the PR
-              // is never left sitting behind its base.
+              // `ok: false` is the provider having no such operation — a
+              // configuration, not a failure, so audited and not recorded as an
+              // error. The row is what the next cycle falls back to an agent on.
               if (!res.ok) {
                 record(
                   'skipped',
@@ -578,16 +484,12 @@ export class ActionExecutor {
           }
 
           case 'requeue_ci_check': {
-            // The expired arm of rule `pr-ci-gate`, performed rather than dispatched
-            // (issue #395). Not authorized and not proposed, for `update_pr_branch`'s
-            // reasons: it is mechanical, and the agent path queued this same build
-            // without asking anyone.
+            // The expired arm of rule `pr-ci-gate`, performed rather than dispatched,
+            // for `update_pr_branch`'s reasons.
             //
-            // **No branch gate here, and that is not an omission.** A requeue writes
-            // to a policy evaluation, not to the branch: nothing an agent's worktree
-            // was cut from moves, so there is no collision to defer for. The rule
-            // only reaches this act for a free branch anyway — a staffed one gets the
-            // note — which makes the gate the base update needs redundant twice over.
+            // **No branch gate here, and that is not an omission**: a requeue writes
+            // to a policy evaluation, not the branch, so nothing an agent's worktree
+            // was cut from moves.
             const unperformed: string[] = [];
             try {
               for (const check of action.checks) {
@@ -596,10 +498,8 @@ export class ActionExecutor {
                   check: check.name,
                   requeueRef: check.requeueRef,
                 });
-                // `ok: false` is the provider saying nothing was queued — it has no
-                // such operation, or it has one and declined. A configuration rather
-                // than a failure either way, so it is audited and *not* recorded as
-                // an error.
+                // `ok: false` is the provider saying nothing was queued — no such
+                // operation, or it declined. Audited, never recorded as an error.
                 if (!res.ok) unperformed.push(check.name);
               }
             } catch (err) {
@@ -609,10 +509,8 @@ export class ActionExecutor {
                 message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
                 detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
               });
-              // Deliberately whole-act, even where earlier checks in the list were
-              // queued: the ones that took stop being expired and drop out of the
-              // gate by themselves, and the agent the next pulse dispatches is left
-              // with exactly the checks that did not.
+              // Deliberately whole-act: the checks that did queue stop being expired
+              // and drop out of the gate by themselves.
               record(
                 'rejected',
                 `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
@@ -636,10 +534,8 @@ export class ActionExecutor {
           }
 
           case 'set_work_item_state': {
-            // A mechanical bookkeeping transition (e.g. move a work item to "In
-            // Review" once its PR is open), not a publish-to-the-world action — so it
-            // runs directly rather than through the auto-send gate. Idempotent, so a
-            // repeat before the next snapshot reflects the change is harmless.
+            // Mechanical bookkeeping, not a publish-to-the-world action, so it runs
+            // directly rather than through the auto-send gate. Idempotent.
             try {
               const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
               record(
@@ -665,30 +561,8 @@ export class ActionExecutor {
   }
 
   /**
-   * The one place an outbound act is authorized (issue #109 phase 2). Both PR
-   * acts the harness can publish — a drafted reply and a merge — come through
-   * here, and every one of them is written as a `Proposal` first.
-   *
-   * **The harness authorizes nothing on its own.** Every authority here is the
-   * operator's, and there are two of them: a **stack landing** they clicked over a
-   * named set of pull request numbers, which authorizes those merges; and
-   * **`sendPrRepliesWithoutApproval`**, a config key that authorizes a *class* of
-   * act — every reply the fleet drafts — in advance. The second is the wider
-   * promise, which is why it is a switch they set deliberately and why it is
-   * scoped to replies. Otherwise the question goes to them.
-   *
-   * What is *not* here is the confidence gate that used to be: a
-   * dispatcher-reported number compared against a configured threshold, where the
-   * number was a hardcoded literal at its one emitter, so the threshold resolved
-   * between two constants and measured nothing. Neither authority above is a
-   * number, and nothing here is to become one again.
-   *
-   * The order matters and is the point: the **landing is asked after the hold**, so
-   * a standing verdict (a pending question, a rejection you made, an act just
-   * authorized) governs first. And an unauthorized act is emphatically **not** a
-   * `rejected` verdict — a rejection is durable and would suppress the human ask
-   * for good. Unauthorized means "not mine to authorize", which is exactly what a
-   * pending proposal says.
+   * The one place an outbound act is authorized. Neither is a number, and nothing here is
+   * to become one.
    */
   private async authorize(
     cycleId: string,
@@ -700,42 +574,24 @@ export class ActionExecutor {
     const ref = merge ? mergeProposalRef(action.prNumber) : replyProposalRef(action.prNumber, action.commentId);
     const subject = merge ? `merge of PR #${action.prNumber}` : `reply on PR #${action.prNumber}`;
 
-    // Rule `pr-merge-ready` suppresses itself while a merge proposal stands, so on the default
-    // path this is asked once — but it is repeated here because it must hold for
-    // *every* path that reaches the executor, including the human-authorized
-    // `reply_on_pr` included. One predicate, two call sites: the same discipline
-    // as the branch gate above.
-    //
-    // Re-read per action rather than hoisted: a proposal created earlier in this
-    // same plan is what stops a second identical action asking twice.
+    // Repeated here because the hold must cover *every* path reaching the executor,
+    // not only the one the rule checks. Re-read per action rather than hoisted: a
+    // proposal created earlier in this same plan stops a second identical ask.
     const proposals = store.listProposals();
     const signals = this.rejectionSignals(proposals);
     const heldBy = proposalHold(kind, ref, proposals, { rejectionSignals: signals });
     if (heldBy) return { outcome: 'skipped', detail: `Skipped ${subject}: ${heldBy}.`, recorded: false };
 
     // The operator's standing authorization over a whole chain, asked only of a
-    // merge — a stack landing says nothing about replies. It is the *only* thing
-    // that can authorize an act without a click on that act, and it is still the
-    // operator's own answer: "you authorized this chain in advance", given over the
-    // PR numbers it was clicked over.
-    //
-    // Asked after the hold, so a rejection you gave still governs; and asked
-    // *before* the escalation below, so an authorized chain does not fill the inbox
-    // with the questions it exists to answer. A rung the operator never authorized
-    // is not here, because the intent's scope is the PR numbers it covers.
+    // merge. Asked after the hold, so a rejection they gave still governs, and
+    // before the escalation, so an authorized chain does not fill the inbox with
+    // the questions it exists to answer.
     const landing = merge ? store.standingLandingForPr(action.prNumber) : null;
 
-    // The operator's other standing authority, and the wider one: a config key
-    // saying a drafted reply need not be put to them at all. Replies only — a
-    // merge has the landing above, which is scoped to the pull request numbers
-    // they clicked over, and a plan is always asked (`planning.requireApproval`
-    // is retired for that reason).
-    //
-    // Asked here, below the hold, for the landing's reason: a rejection they gave
-    // still governs, because "you do not need to ask me" is not "ignore what I
-    // said no to". And it can only ever *accept* — there is no arm below that
-    // refuses, because a machine "no" is durable and would mean the question is
-    // never put to anyone.
+    // The wider standing authority: a config key saying a drafted reply need not be
+    // put to them at all. Replies only. Below the hold, because "you need not ask
+    // me" is not "ignore what I said no to", and it can only ever *accept* — a
+    // machine "no" is durable and would mean the question is never put to anyone.
     const autoSend = !merge && (this.deps.autoSendReplies?.() ?? false);
 
     if (landing || autoSend) {
@@ -743,17 +599,14 @@ export class ActionExecutor {
         kind,
         ref,
         action: action as unknown as Action,
-        // No inbox item: nothing is being asked of anyone. An escalation appears
-        // only if the act then fails, which is the fallback `runAuthorized` owns.
+        // No inbox item: nothing is being asked. An escalation appears only if the
+        // act then fails, which `runAuthorized` owns.
         escalationId: null,
       });
       // The row was created `pending` one statement ago, so this compare-and-set
-      // always wins; `?? proposal` is the type narrowing, not a fallback path.
-      //
-      // The note names *which* authority, because that is the whole of what an
-      // audit trail over an act nobody watched can say: an operator reading this
-      // six weeks later has to be able to tell a reply they clicked from one their
-      // config sent, and the key's own name is the only thing that says the second.
+      // always wins; `?? proposal` is narrowing, not a fallback path. The note names
+      // *which* authority, so a reply they clicked reads apart from one their config
+      // sent.
       const note = landing
         ? `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`
         : 'you set "sendPrRepliesWithoutApproval", which sends a drafted reply without asking';
@@ -763,13 +616,9 @@ export class ActionExecutor {
       return { ...run, recorded: true };
     }
 
-    // Not the harness's to authorize: draft it and put it to a human as a
-    // proposal they can accept (which performs it) or reject.
-    //
-    // When this is a *re*-ask over a rejection the world has overtaken, the
-    // question names the refusal and what has happened since — otherwise the
-    // second ask is indistinguishable from the harness having forgotten the
-    // first, which is the duplicate-question failure the gate exists to prevent.
+    // Not the harness's to authorize: draft it and put it to a human. On a *re*-ask
+    // over a rejection the world has overtaken, the question names the refusal and
+    // what has happened since, or it reads as the harness having forgotten.
     const again = reaskContext(kind, ref, proposals, { rejectionSignals: signals });
     const preamble = again ? `${again}\n\n` : '';
     const esc = this.deps.escalations.create(
@@ -799,17 +648,12 @@ export class ActionExecutor {
    * Raise a review reply an agent handed to the harness, from outside the pulse.
    *
    * **The tool does not send anything.** `reply_to_review` builds the same
-   * `reply_on_pr` act a rule would and hands it here, so an agent's reply takes
-   * exactly the route a drafted one already took: the hold that suppresses a
-   * duplicate ask, the rejection the operator already gave, the re-ask that names
-   * it, the authority (theirs, either way), the signing on the way out, and the
-   * escalation if the send fails. An agent that posted the reply itself — with the
-   * tracker's CLI and the operator's credential, which is what the prompt used to
-   * leave it to do — got none of that, and the reply was not the harness's.
+   * `reply_on_pr` act a rule would and hands it here, so an agent's reply takes the
+   * whole route: hold, standing rejection, re-ask, authority, signing, and the
+   * escalation if the send fails.
    *
-   * The cycle id names the agent rather than a pulse, the way a human accept names
-   * its proposal: this decision belongs to the agent's call, not to whatever cycle
-   * happened to be running when it made it.
+   * The cycle id names the agent rather than a pulse — the decision belongs to the
+   * agent's call, not to whatever cycle was running.
    *
    * @public — reached from the MCP tool layer through `McpToolDeps.prReply`.
    */
@@ -838,9 +682,7 @@ export class ActionExecutor {
       admission: null,
     };
     const outbound = await this.authorize(cycleId, action);
-    // The authorized path audits itself, under this same cycle id — the executor's
-    // own rule, kept here rather than restated: `execute` writes the row only when
-    // `runAuthorized` did not.
+    // The authorized path audits itself: write the row only when it did not.
     if (!outbound.recorded) {
       this.deps.store.recordDecision({
         cycleId,
@@ -852,25 +694,7 @@ export class ActionExecutor {
     return { outcome: outbound.outcome, detail: outbound.detail };
   }
 
-  /**
-   * Perform an act that was authorized (issue #109). Lives here rather than in the
-   * route handler for one reason: this is where the harness's outbound acts
-   * happen, so the `ActionSink` keeps one caller and the outcome lands in the
-   * decision log in the same shape as everything else — with the authority named,
-   * which is the half of the audit trail that was missing.
-   *
-   * Who authorized it, where the row is grouped and how the operator reads it all
-   * come from {@link authorityOf}, which is the only thing that branches on the
-   * decider. A human accept is recorded outside the pulse as `human:<proposal
-   * id>`; a standing landing accepts *during* a cycle, so it keeps that cycle's id
-   * and stays grouped with the pulse that produced the action.
-   *
-   * The failure path is one path for both deciders (an `autoMergeFailed` context +
-   * a fresh escalation): an authorized act that can't be delivered must not
-   * evaporate. The proposal stays `accepted` — it *was*
-   * accepted — and once its settle window lapses the gate re-proposes the act if
-   * the world still warrants it. That is the recovery, and it needs no new state.
-   */
+  /** Perform an act that was authorized. */
   async runAuthorized(
     proposal: Proposal,
     pulseCycleId?: string,
@@ -885,22 +709,18 @@ export class ActionExecutor {
     const read = readProposedAct(proposal);
     if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
     const act = read.act;
-    // A plan act publishes nothing: accepting it releases rule `plan-part` onto the plan's
-    // parts. It runs here rather than in the desk so an approved decomposition
-    // lands in the decision log in the same shape, under the same authority, as
-    // an approved merge — the audit trail is the reason this function exists, and
-    // the sink is only what two of its three acts happen to need.
+    // A plan act publishes nothing: accepting it releases rule `plan-part` onto the
+    // plan's parts. Here so an approved decomposition lands in the decision log in
+    // the same shape, under the same authority, as an approved merge.
     if (act.kind === 'plan') {
       const settled = releasePlan(store, act.planId, act.originRef);
       return settled.ok
         ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
         : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
-    // An amendment publishes nothing either: accepting it ingests the amended
-    // document over a plan that stays released, so the parts that were being
-    // worked carry on and the new declaration is what the next dispatch reads. It
-    // runs here for the plan act's reason — one place where an accepted proposal
-    // becomes both its effect and its audit row.
+    // An amendment publishes nothing either: it ingests the amended document over a
+    // plan that stays released, so the parts being worked carry on. Here for the
+    // plan act's reason.
     if (act.kind === 'plan_amendment') {
       const settled = applyPlanAmendment(store, act.amendmentId);
       return settled.ok
@@ -910,17 +730,13 @@ export class ActionExecutor {
           )
         : audit('skipped', `Nothing to amend for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
-    // A shortfall publishes nothing either: accepting it either sends the plan
-    // back to a planner (rule `issue-plan` takes over) or appends one part for rule `plan-part` to
-    // schedule. It runs here for the plan act's reason — this is the one place an
-    // accepted proposal becomes both its effect and its audit row.
+    // A shortfall publishes nothing either: it sends the plan back to a planner or
+    // appends one part for rule `plan-part`. Here for the plan act's reason.
     if (act.kind === 'shortfall') {
       const settled = actOnShortfall(store, act);
-      // The row is consumed by the effect it drove, which is what "ends on" means
-      // for this table: leaving it standing would have the rule re-propose the arm
-      // the moment the settle window lapsed, on a plan already back with a planner.
-      // A *rejection* deliberately leaves it — the verdict is still true, the
-      // operator simply declined to act, and the cockpit chip should keep saying so.
+      // The row is consumed by the effect it drove; leaving it would re-propose the
+      // arm once the settle window lapsed. A *rejection* deliberately leaves it —
+      // the verdict is still true, the operator simply declined to act.
       if (settled.ok) store.clearShortfall(act.originRef);
       return settled.ok
         ? audit(
@@ -929,9 +745,7 @@ export class ActionExecutor {
           )
         : audit('skipped', `Nothing to act on for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
-    // The verdict's note is the decider's own reason — a human's comment, the
-    // landing they clicked, or the config key they set — so the audit line carries
-    // it verbatim rather than re-deriving why the act was allowed.
+    // The decider's own reason, carried verbatim rather than re-derived.
     const because = proposal.note ? ` (${proposal.note})` : '';
 
     try {
@@ -947,11 +761,9 @@ export class ActionExecutor {
         commentId: act.commentId,
         body: act.body,
       });
-      // The operator's reopen is spent the moment the fleet answers it, and this
-      // is the only place a reply the harness sends goes out. Without the clear
-      // the mark would hold the thread open against every later reading, and the
-      // rule would dispatch for it every pulse for as long as the pull request
-      // lived. A no-op on a thread nobody reopened.
+      // The operator's reopen is spent the moment the fleet answers it. Without the
+      // clear, the mark holds the thread open against every later reading and the
+      // rule dispatches for it every pulse. A no-op on a thread nobody reopened.
       // → `docs/spec/07-pull-requests.md#reopening-a-thread`
       if (act.commentId !== null) {
         this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
@@ -965,12 +777,9 @@ export class ActionExecutor {
       );
     } catch (err) {
       const message = (err as Error).message;
-      // A merge a standing intent authorized and that would not go through ends
-      // the intent. Otherwise the act is re-proposed once its settle window
-      // lapses, authorized again by the same intent, and retried every cycle
-      // behind an escalation nobody asked for. Only the intent that authorized
-      // *this* PR is touched, and the desk no-ops when there is none — a failed
-      // human-accepted merge stops nothing.
+      // A merge a standing intent authorized and that would not go through ends the
+      // intent; otherwise it is re-proposed, re-authorized and retried every cycle.
+      // Only that PR's intent is touched — a failed human-accepted merge stops nothing.
       if (act.kind === 'merge') this.deps.landings.stopForFailedMerge(act.prNumber, message);
       const esc =
         act.kind === 'merge'
@@ -992,22 +801,13 @@ export class ActionExecutor {
   }
 
   /**
-   * Write down that the harness sent this reply — the sole place attribution is
-   * ever recorded, because this is the sole place a reply goes out.
-   *
-   * The record replaces an identity test that could not work: the credential the
-   * harness posts under is the operator's own on a single-operator deployment, so
-   * reading "the last reply's author is us" off the provider marked the operator's
-   * own follow-up as the fleet's answer and dropped their comment before any rule
-   * saw it. → `docs/spec/07-pull-requests.md#review-threads`
-   *
-   * **A send the provider would not name is recorded as a failure, never guessed
-   * at.** Without an id there is nothing to match on the next read, so the thread
-   * keeps reading as work and the fleet answers it again — a re-dispatch, which is
-   * visible and cheap. Falling back to the author would settle the thread and lose
-   * the reviewer, which is neither. The `errors.record` is what stops that
-   * re-dispatch loop being silent: it names the provider that will not say what it
-   * created, which is the actual fault.
+   * Write down that the harness sent this reply — the sole place attribution is recorded,
+   * because this is the sole place a reply goes out. A record, never an identity test: the
+   * harness posts under the operator's own credential. →
+   * `docs/spec/07-pull-requests.md#review-threads` **A send the provider would not name is
+   * recorded as a failure, never guessed at.** Without an id the thread keeps reading as
+   * work and the fleet answers it again; falling back to the author would settle the thread
+   * and lose the reviewer. The `errors.record` stops that re-dispatch loop being silent.
    */
   private recordReplySent(prNumber: number, threadId: string, commentRef: string | undefined): void {
     if (commentRef !== undefined && commentRef !== '') {
@@ -1026,21 +826,9 @@ export class ActionExecutor {
   }
 
   /**
-   * Write down the thread the fleet's review published its findings into — the
-   * only thing that can later say whether anybody dealt with them.
-   *
-   * Attributed off the act's **origin**, not off what the comment says: the
-   * reviewer is dispatched at `pr:<n>:review` and its publication is the one
-   * reply that origin ever sends, where every other reply on the pull request
-   * comes from the comment origin or from a rule's draft. Recorded here for
-   * `recordReplySent`'s reason — this is the one place a reply goes out, and the
-   * one place the provider has just named what it created.
-   *
-   * Silent on the three ways it does not apply: another origin's reply, a reply
-   * into an existing thread (a publication opens one), and a provider that will
-   * not name the thread — GitHub's pull-request comments are not threads and
-   * cannot be resolved at all, so there is nothing there to record or to read.
-   * The mark then reads as it did before, which is findings that stand.
+   * Write down the thread the fleet's review published its findings into — the only thing
+   * that can later say whether anybody dealt with them. Attributed off the act's
+   * **origin**, never off what the comment says.
    */
   private recordReviewPublished(
     act: { kind: 'reply_draft'; prNumber: number; commentId: string | null; originRef: string | null },
@@ -1052,23 +840,8 @@ export class ActionExecutor {
   }
 
   /**
-   * Mark the thread resolved, when the agent that wrote the reply said it had
-   * dealt with it — and report what happened as a clause on the reply's own audit
-   * line rather than as a second decision row. One act was authorized; this is
-   * the rest of it.
-   *
-   * **Its failure is swallowed on purpose, and this is the sharp edge.** A throw
-   * here would land in `runAuthorized`'s catch, which reads every failure as "the
-   * send failed": the reply — already posted, visible in the thread — would be
-   * escalated for the operator to send by hand and re-proposed once its settle
-   * window lapsed, so the reviewer gets the same reply twice because the harness
-   * could not close a thread. An unresolved thread is the safe direction: the
-   * rule dispatches for it again, which is visible and cheap.
-   *
-   * Nothing is attempted without a thread to resolve (a reply on the pull request
-   * itself has none) or where no integration can resolve one — the second is a
-   * shape rather than a fault, and it is said in the line so an operator reading
-   * it back is not left wondering.
+   * Mark the thread resolved when the agent that wrote the reply said it had dealt with it,
+   * reporting what happened as a clause on the reply's own audit line.
    */
   private async resolveAnswered(act: {
     prNumber: number;
@@ -1093,49 +866,15 @@ export class ActionExecutor {
     }
   }
 
-  /**
-   * The world since each standing rejection, for the hold gate. The query is
-   * derived from the proposals themselves by the one predicate the harness also
-   * uses, so the two askers cannot disagree about what counts as having moved on.
-   */
+  /** The world since each standing rejection, for the hold gate. */
   private rejectionSignals(proposals: Proposal[]): WorldEvent[] {
     const query = rejectionSignalQuery(proposals);
     return query ? this.deps.store.listWorldEventsSince(query.since, query.refs) : [];
   }
 
   /**
-   * Settle a task row whose dispatch threw before its agent ever ran.
-   *
-   * **This is the whole reason the row is settled rather than left alone.**
-   * `queued` is deliberately an *active* status (`src/tasks.ts`), because the row
-   * is written before the worktree and the agent exist and must hold the claim
-   * across that window. So a row nothing ever started is not inert: it is a
-   * permanent claim on its origin (`findActiveTaskByOrigin`, the dispatcher's
-   * `activeOrigins`) and on its branch (`findActiveTaskByBranch`) — and the claim
-   * on `job:<id>` is what stops the job re-dispatching, which leaves it `queued`,
-   * which keeps it standing in for whatever *it* redoes (`STANDING_SQL` in
-   * `src/store/jobs.ts`), wedging a second piece of work behind the first. One
-   * transient `ensure` failure otherwise shuts a chain of work for the life of the
-   * database against an idle fleet, with the harness reporting "nothing
-   * actionable" every cycle.
-   *
-   * `interrupted` is the word a recovery `remove` verdict already writes for work
-   * that was claimed and never done (`src/agents/recoveryDesk.ts`), and it is
-   * terminal to all three gates, so nothing re-reads the row as in flight. The job
-   * or plan part behind the dispatch is untouched: `markJobDispatched` /
-   * `markPartDispatched` only run after the spawn, so both are still queued/ready
-   * and the next cycle re-dispatches them.
-   *
-   * Conditional on the row still being active, because
-   * {@link AgentManager.spawn} settles its own task as `failed` when the session
-   * fails to start — a more specific reading of the same failure, which this must
-   * not overwrite.
-   *
-   * **The worktree slot goes back too.** A dispatch that got past `ensure` and threw
-   * at the spawn holds a lease no `reaped` event will ever release, because no
-   * process ever ran; left alone the pool shrinks by one per such failure, silently,
-   * until every dispatch is rejected for want of a slot. Releasing a branch that was
-   * never leased (an `ensure` that threw is the common case here) is a no-op.
+   * Settle a task row whose dispatch threw before its agent ever ran. Releasing a branch
+   * never leased is a no-op.
    */
   private abandonUnstarted(task: Task): void {
     const current = this.deps.store.getTask(task.id);
@@ -1144,35 +883,12 @@ export class ActionExecutor {
   }
 
   /**
-   * Create the task row — and the one place a dispatch prompt picks up what an operator said
-   * when they refused an act for this exact origin (issue #109 phase 4).
-   *
-   * It happens here, not in the dispatcher that composed the prompt, for the
-   * reason the branch gate lives here: every dispatch passes through, whatever
-   * produced it. That is not a technicality in this case — a `reply_draft` is
-   * only ever proposed off a `reply_on_pr`, so the path where
-   * a rejected reply exists is precisely the one a rule-dispatcher-side hook
-   * would miss.
-   *
-   * It is appended to the rendered prompt rather than filled into it. Templates
-   * are operator-overridable and the loader only rejects *unknown* placeholders,
-   * so an override that simply omits a new `{rejection}` token would silently
-   * drop a human's words — and it would drop them on exactly the deployments that
-   * customised the prompt most. Appending has no fallback to get wrong.
+   * Create the task row — and the one place a dispatch prompt picks up what an operator
+   * said when they refused an act for this exact origin.
    */
   /**
-   * The failing output of the checks this dispatch is about, ready to append —
-   * or `''`, which composes the prompt exactly as it was before this existed.
-   *
-   * Scoped to `pr-ci-failing` and nothing else. Rule `pr-ci-gate` is deliberately
-   * out: a waiting check has produced no failure to excerpt, and an **expired**
-   * one's last run is against commits the branch has moved past, so its output
-   * would point an agent at code that no longer exists — worse than no excerpt.
-   *
-   * The checks come from the dispatch (names, decided by the CI policy) joined to
-   * the world baseline (refs, written by the provider). The baseline is this
-   * cycle's world — `recordWorldChanges` writes it before the dispatcher runs —
-   * so this is the same reading the decision was made on, not a second one.
+   * The failing output of the checks this dispatch is about, ready to append — or `''`,
+   * which composes the prompt as it was before this existed.
    */
   private async ciEvidenceFor(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
     const reader = this.deps.ciEvidence;
@@ -1191,8 +907,8 @@ export class ActionExecutor {
     try {
       return ciEvidenceNote(await reader.readCiFailureEvidence(prNumber, targets));
     } catch (err) {
-      // The reader is documented not to throw; this is the backstop that keeps
-      // that a documentation bug rather than a failed dispatch.
+      // The reader is documented not to throw; this keeps that a documentation bug
+      // rather than a failed dispatch.
       this.deps.errors.record({
         source: 'provider',
         message: `Could not read CI evidence for PR #${prNumber}: ${(err as Error).message}`,
@@ -1208,86 +924,56 @@ export class ActionExecutor {
     retry: RetryResume | null,
   ): Task {
     const { store } = this.deps;
-    // The origin *and* the signals folded under it: a review-comment dispatch
-    // names the PR's whole review, while a refused reply draft is filed against
-    // the single thread it answered. Both are exact refs — this is not a widening
-    // to the world item, which is the thing that must never happen here.
+    // The origin *and* the signals folded under it, both exact refs — never a
+    // widening to the world item, which must not happen here.
     const guidance = rejectionGuidance(
       [action.originRef, ...(action.type === 'dispatch_code_agent' ? (action.signalRefs ?? []) : [])],
       store.listProposals(),
     );
-    // What the last agent on this issue said was left. Appended for the same
-    // reason the rejection note is — a `{outstanding}` placeholder would be
-    // dropped silently by any operator template override that omitted it — and
-    // only on an exact origin match: a `more_work` verdict is about *this* issue,
-    // and putting it in front of an agent dispatched for anything else would be
-    // the same widening mistake as showing a merge refusal to a CI-fix agent.
+    // What the last agent on this issue said was left. Appended, and only on an
+    // exact origin match — a `more_work` verdict is about *this* issue.
     const outstanding = outstandingForOrigin(action.originRef, store);
-    // What the earlier agents on this goal worked out. Appended for the reason the
-    // two notes above are, and passed the outstanding note's own verdict so the two
-    // never both render it: `outstandingForOrigin` owns an agent's `more_work`
-    // declaration on an exact origin match.
+    // What the earlier agents on this goal worked out. Passed the outstanding
+    // note's verdict so the two never both render it.
     const prior = priorWorkFor(action.originRef, store, outstanding !== null);
-    // Where this goal's pull requests are in the checkout, for the one agent that
-    // has to find them. Appended for the reason every note above it is, and scoped
-    // to the exact assess origin rather than the goal: it is an index into a run the
-    // harness believes is over, and in front of an agent still building that run it
-    // would be a stale reading of work in flight.
+    // Where this goal's pull requests are in the checkout. Scoped to the exact
+    // assess origin, not the goal: it indexes a run the harness believes is over.
     const delivered = deliveredWorkFor(action.originRef, store);
-    // A retrospective agent has no worktree and no world of its own, so what it can
-    // say is entirely what it is handed: the pad the working agents left, and the
-    // record only the harness kept. Appended for the same reason as the two notes
-    // above, and the pad goes first — it is the half nothing else could supply.
+    // A retrospective agent has no worktree and no world, so what it can say is
+    // what it is handed. The pad goes first — nothing else could supply it.
     const briefing = retroBriefing(action.originRef, store);
-    // The same for a Feature: a summariser has no worktree and no world either, so
-    // every item under the Feature and the standing of each is appended here.
-    // Appended rather than interpolated for the reason each block above it is, and
-    // resolved here rather than in the rule because no rule may read prose — the
-    // summary on file rides in this block so a re-write revises rather than
-    // restarts. → `docs/spec/17-cockpit.md#the-feature-summary`
+    // The same for a Feature. Resolved here rather than in the rule, because no
+    // rule may read prose; the summary on file rides in this block so a re-write
+    // revises rather than restarts. → `docs/spec/17-cockpit.md#the-feature-summary`
     const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
-    // And the same again for a sequencer: the Feature’s goal and every story under
-    // it, with the order the board already states marked as the board’s own. Off the
-    // world baseline rather than the ticket mirror, because the Predecessor links
-    // are a hydration field and the mirror does not carry them.
+    // And the same for a sequencer. Off the world baseline rather than the ticket
+    // mirror, because Predecessor links are a hydration field the mirror lacks.
     const sequence = sequenceBriefing(
       action.originRef,
       store.getWorldBaseline()?.issues ?? [],
-      // The order on file rides in this block too, so a re-sequence revises rather
-      // than restarts — `currentPlanSummary`'s job on a replan, and for its reason.
+      // The order on file rides here too, so a re-sequence revises rather than restarts.
       sequenceFeatureOrigin(action.originRef, store),
     );
-    // The images the operator attached to this goal (issue #249). Appended for the
-    // reason the four notes above are, and scoped to the *goal* rather than the
-    // exact origin — see `attachmentsFor`.
+    // The images the operator attached, scoped to the *goal* rather than the exact
+    // origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
-    // The retry note when this dispatch inherits the last agent's conversation
-    // (issue #333), and it is the one block that goes *ahead* of the rendered
-    // prompt: the agent must know it is on ground it has covered before it reads
-    // the restatement, or the restatement is simply a second task. A code retry
-    // says the worktree was recreated; a desk retry keeps its scratch dir, so it
-    // does not.
+    // The retry note, the one block that goes *ahead* of the rendered prompt: the
+    // agent must know it is on covered ground before it reads the restatement, or
+    // the restatement is simply a second task.
     const note = retry ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent') : null;
-    // What the operator has asked for on this goal since anyone last concluded it.
-    // Appended for the reason the four notes above are, scoped to the *goal* like
-    // the attachments rather than to the exact origin, and placed first among the
-    // appended blocks: it is the only one of them that changes what the work is.
+    // What the operator has asked for since anyone last concluded the goal. Scoped
+    // to the *goal*, and first among the appended blocks — the only one that
+    // changes what the work is.
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
-    // What the fleet has already run into on the checks and files in front of
-    // this dispatch (`docs/spec/27-obstacles.md`). Appended for the reason every
-    // block above it is — a `{obstacles}` placeholder would be dropped in silence
-    // by any operator template override written before this existed — and here
-    // rather than in a rule, for the attachments' reason: every dispatch passes
-    // through this method whatever composed it.
+    // What the fleet has already run into on these checks and files
+    // (`docs/spec/27-obstacles.md`). Here rather than in a rule, because every
+    // dispatch passes through this method.
     //
-    // **There is no fleet-wide block here and there never will be.** Everything
-    // on the board is keyed, and a keyed thing is delivered to the dispatches it
-    // is about.
+    // **There is no fleet-wide block here and there never will be**: everything on
+    // the board is keyed, and a keyed thing goes to the dispatches it is about.
     const obstacles = obstaclesFor(action, store);
     // The witness log's one standing instruction: record the forks. Code agents
-    // only — a desk agent moves no head, and a pack is written from the forks
-    // behind one. Appended for the reason every block above it is, and last,
-    // because it is about how to work rather than what the work is.
+    // only, and last, because it is about how to work rather than what the work is.
     // → docs/spec/31-review-packs.md#the-witness-log
     const witness = action.type === 'dispatch_code_agent' ? WITNESS_INSTRUCTION : null;
     const prompt = [
@@ -1308,15 +994,10 @@ export class ActionExecutor {
     ]
       .filter(Boolean)
       .join('\n\n');
-    // The model this kind of work runs on and the depth it runs at, resolved once
-    // as one profile and stored — so a resumed agent re-launches on what it
-    // started on rather than on whatever config says by then, and so the run's
-    // cost is readable against what it ran on.
-    //
-    // `action.profile` is the origin's pin, stamped by the dispatcher from the
-    // goal's tag or the plan's part (issue #342). It beats the rule's entry and
-    // is still a pure function of the dispatch, so a retry, a re-dispatch and a
-    // boot-resume all land on the same profile they did the first time.
+    // The model and depth, resolved once as one profile and stored, so a resumed
+    // agent re-launches on what it started on. `action.profile` is the origin's pin
+    // and beats the rule's entry, and stays a pure function of the dispatch — so a
+    // retry, a re-dispatch and a boot-resume all land on the same profile.
     const profile = resolveAgentProfile(this.deps.agentModels, action.rule, action.profile);
     if (action.type === 'dispatch_code_agent')
       return store.createTask({
@@ -1328,15 +1009,13 @@ export class ActionExecutor {
         originTitle: action.originTitle,
         originSummary: action.originSummary,
         dispatchReason: action.reason,
-        // What kind of work this is, and which checks it answers — recorded on
-        // the task because a decision row carries the rule but nothing links it
-        // to the agent, so it can say a rule fired and never what that cost.
+        // What kind of work this is and which checks it answers — on the task,
+        // because a decision row carries the rule but nothing links it to the agent.
         rule: action.rule,
         ciChecks: action.ciChecks ?? null,
-        // The MCP servers this dispatch brought with it, recorded for `model`'s
-        // reason: `AgentManager.resume` rebuilds the launch from this row, and an
-        // agent re-attached without the browser it was launched with comes back
-        // holding a conversation full of tool calls it can no longer make.
+        // `AgentManager.resume` rebuilds the launch from this row, and an agent
+        // re-attached without the browser it was launched with holds a conversation
+        // full of tool calls it can no longer make.
         mcpServers: action.mcpServers?.length ? action.mcpServers : null,
         model: profile?.model ?? null,
         effort: profile?.effort ?? null,
@@ -1361,27 +1040,16 @@ export class ActionExecutor {
   }
 
   /**
-   * The directory the agent will run in: the branch's worktree for code, a
-   * per-task scratch directory for desk.
-   *
-   * Split from {@link ActionExecutor.recordDispatchTask} so the two steps a
-   * dispatch can fail at — writing the row, and preparing the place — are
-   * separately observable at the one call site. That is what lets the caller hold
-   * the created task and settle it when this throws; a single method that did both
-   * has nothing to hand back on the failing path, which is how a transient
-   * `ensure` failure (an `EBUSY` rmdir on Windows) left a live `queued` row
-   * wedging its origin and branch for good.
+   * The directory the agent will run in: the branch's worktree for code, a per-task scratch
+   * directory for desk.
    */
   private async workingDirectory(
     task: Task,
     action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
   ): Promise<string> {
-    // A stacked plan part names the branch it forks from; everything else takes
-    // the configured integration branch.
-    //
-    // **`readOnly` picks the shape, and nothing else does.** A dispatch that only
-    // reads gets a detached checkout leased under its name rather than a branch cut
-    // for it (issue #396) — one call site, so no rule can arrange its own.
+    // A stacked plan part names the branch it forks from; everything else takes the
+    // configured integration branch. **`readOnly` picks the shape, and nothing else
+    // does** — one call site, so no rule can arrange its own.
     if (action.type === 'dispatch_code_agent') {
       const at = action.base ?? this.deps.defaultBranch;
       return action.readOnly
@@ -1395,58 +1063,18 @@ export class ActionExecutor {
 }
 
 /**
- * The previous agent's "there is more to do here" note, for an issue being
- * dispatched again — or null when there is none to carry.
- *
- * Only ever the **agent's own** verdict, and only `more_work`. A `done` verdict
- * reaching a dispatched agent would be nonsense (nothing should have dispatched),
- * and an *operator's* `more_work` toggle deliberately carries no note into the
- * prompt: the operator has the cockpit, the tracker and the job queue to say what
- * they want done, whereas this channel exists because an agent has nowhere else
- * to leave a handover.
+ * The previous agent's "there is more to do here" note — or null when there is none to
+ * carry.
  */
-/**
- * The images attached to the goal being dispatched for — or null when there are
- * none, which is every dispatch that did not come from a brief carrying one.
- *
- * In the executor, and for the branch gate's reason: every dispatch passes
- * through here whatever composed it.
- *
- * **The lookup is by goal, not by exact origin** (issue #249). Once a brief
- * has been filed as a ticket its images are keyed `issue:<n>`, while the agents
- * that go on to work it are dispatched for `issue:<n>:plan`, `:appraisal`, `:assess`,
- * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
- * the filing agent alone — the one agent that writes no code — so the whole point
- * of the ticket surviving would be lost. `goalOriginFor` is the harness's own
- * spelling of "which goal is this origin inside" — the issue half of the pad's
- * resolution, so the answer here and there cannot drift; an origin outside any
- * issue subtree (a `job:<id>` brief that dispatched directly, a PR concern)
- * falls back to itself, which is an exact match.
- *
- * The scoping is deliberately unconditional within a goal: a part agent working
- * something the screenshot has nothing to do with is still shown it. That is the
- * same trade the prior-work briefing already makes, and the alternative — guessing
- * which part an image is "about" — is a guess the harness has no basis for.
- */
+/** The images attached to the goal being dispatched for, or null. */
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   return attachmentsNote(store.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
 }
 
 /**
- * What the obstacle board has to say about this dispatch — or null when it says
- * nothing about these checks or these files, which is most dispatches.
- *
- * **The scopes are `dispatchFactScopes`' and never a second computation of
- * them.** That is the existing reading of which scopes a dispatch matches, so the
- * scope a row is delivered on and the scope it is judged against cannot drift;
- * the paths are `listGoalFiles`, which is the list the intake grounds a key
- * against for the same reason. Both are read for the **goal**, not the concern:
- * `pr:412:ci` and `pr:412:comments` are two origins of one goal.
- *
- * **Only rows that reach agents.** `obstaclesForDispatch` asks the lifecycle,
- * which answers *standing or owned* — a `sighted` row reaches nobody, because one
- * report is not evidence.
+ * What the obstacle board has to say about this dispatch, or null. Both are read for the
+ * **goal**, never the concern.
  */
 function obstaclesFor(
   action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
@@ -1463,23 +1091,7 @@ function obstaclesFor(
   return renderObstacleNote(obstaclesForDispatch({ rows, scopes, paths })) || null;
 }
 
-/**
- * The operator's standing instructions on the goal being dispatched for — or null
- * when it carries none, which is every dispatch on a goal nobody has written on.
- *
- * **Scoped by `goalOriginFor`**, the attachments' rule for the attachments' reason:
- * an instruction is about the *goal*, and the agents that go on to work it are
- * dispatched for `issue:<n>:plan`, `:appraisal`, `:assess` and `:part:<slug>`. An
- * exact match would put "change the button to primary" in front of nobody at all
- * on a decomposed goal — the one shape where it matters most. Everything outside
- * a goal's subtree (a PR concern, a job) resolves to null, which is
- * `outstandingForOrigin`'s widening rule: an agent fixing CI on `pr:42` cannot act
- * on it and cannot tell it apart from its own task.
- *
- * The retro origin is deliberately *not* excluded the way the prior-work briefing
- * excludes it: a retrospective that did not know what the operator asked for
- * mid-run would be writing up a different run from the one that happened.
- */
+/** The operator's standing instructions on the goal being dispatched for, or null. */
 function instructionsFor(
   originRef: string | null | undefined,
   store: Store,
@@ -1501,36 +1113,9 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
 }
 
 /**
- * The rows behind {@link priorWorkBriefing}, gathered for the goal this dispatch
- * belongs to — or null for every dispatch that is not on one.
- *
- * **Scoped by `goalOriginFor`, not by a fresh predicate.** That is already the
- * harness's answer to "which goal is this agent working", the issue half of the
- * pad's resolution and asked here for the same population: the `issue:<n>` root
- * plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>` arms. Everything
- * else — a PR concern, a job, a filing — resolves to null and is handed nothing, which is
- * `outstandingForOrigin`'s widening rule at the level of a whole goal: an agent
- * fixing CI on `pr:42` has no use for a planner's write-up about `issue:12` and
- * cannot tell it apart from its own task.
- *
- * **The retro origin is excluded**, though `goalOriginFor` accepts it: a
- * retrospective is handed the pad and the whole dossier by {@link retroBriefing},
- * and would otherwise read its own goal's testimony twice in one prompt.
- *
- * The file list is the one input that is not a lookup by this ref but a join across
- * the whole subtree, and it is scoped by the same `issue:<n>` root for that reason —
- * `Store.listGoalFiles` takes the goal, never the dispatching origin, because where
- * a *sibling* has been is the half of that list worth having.
- *
- * The neighbour list is that join asked once more with the goal on the far side of
- * it: which *other* goals have a retrospective and have been in the same paths
- * (issue #354). It is gathered here rather than inside the briefing for the reason
- * every other input is — the briefing is pure, and this is two reads — and it is the
- * one input seeded by another, so `neighbourSeedPaths` owns which paths are asked
- * about rather than the call site assembling them a second way.
- *
- * In the executor, and for the branch gate's reason: every dispatch passes through
- * here whatever composed it, an accepted proposal's included.
+ * The rows behind {@link priorWorkBriefing}, gathered for the goal this dispatch belongs to
+ * — or null for every dispatch that is not on one. Everything else resolves to null and is
+ * handed nothing.
  */
 function priorWorkFor(originRef: string | null | undefined, store: Store, outstandingShown: boolean): string | null {
   const ref = originRef ?? '';
@@ -1555,31 +1140,10 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
 }
 
 /**
- * The rows behind {@link deliveredWorkBriefing}, gathered for the goal an assessor
- * has been dispatched on — or null for every other dispatch.
- *
- * **Keyed on the exact assess origin**, `retroBriefing`'s scoping and for its
- * reason: this is an index into a run the harness believes is over, and in front of
- * a part agent still writing that run's code it is a stale reading of work in
- * flight — the widening `outstandingForOrigin` names. `assessIssueNumber` owns the
- * ref shape, so nothing here re-spells it.
- *
- * **The archive is written first and the world's window second**, so the fresher of
- * two readings of the same pull request wins. The two overlap by construction: a
- * pull request that closed within `closedPrWindowMs` is in both, and everything the
- * archive adds beyond the window is older than it and stale by construction, which
- * is the whole of what the archive claims to be
- * ([14](docs/spec/14-persistence.md)). Open pull requests are deliberately not
- * unioned in: the rule fires only when the goal has none, and one appearing between
- * the decision and this read is work in flight rather than something that landed.
- *
- * **Which pull requests are the goal's is `issueForPr`**, the harness's one answer
- * to that question, plus the plan's own part rows. The part numbers are the arm
- * `issueForPr` cannot supply — a part whose branch does not follow the convention,
- * or whose pull request the provider never linked — and they are a stored field
- * rather than a second reading of a branch name. The parts are read for their
- * numbers and for nothing else: what each part was for is in the plan graph
- * `world_read` already serves.
+ * The rows behind {@link deliveredWorkBriefing}, gathered for the goal an assessor has been
+ * dispatched on — or null for every other dispatch. Keyed on the exact assess origin, since
+ * the archive is written before the world's window and the fresher reading wins
+ * ([14](docs/spec/14-persistence.md)).
  */
 function deliveredWorkFor(originRef: string | null | undefined, store: Store): string | null {
   const issueNumber = assessIssueNumber(originRef ?? '');
@@ -1595,39 +1159,19 @@ function deliveredWorkFor(originRef: string | null | undefined, store: Store): s
   const issues = baseline?.issues ?? [];
   const prs = [...byNumber.values()]
     .filter((pr) => partPrs.has(pr.number) || issueForPr(pr, issues)?.number === issueNumber)
-    // Newest close first, the archive's own order — restated because merging the two
-    // lists loses it, and an assessor reading a trimmed list wants the last merges.
+    // Newest close first: merging the two lists loses the archive's own order, and a
+    // trimmed list should keep the last merges.
     .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '') || b.number - a.number);
   return deliveredWorkBriefing(prs) || null;
 }
 
 /**
- * Everything a retrospective agent is given beyond its prompt: the issue's
- * scratchpad, then the record the harness kept — or null for every other dispatch.
- *
- * It lives in the executor for the branch gate's reason: every dispatch passes
- * through here, so nothing can route around it. Keyed on the **exact** retro
- * origin, because this is a briefing about one finished goal and putting a whole
- * run's audit trail in front of an agent dispatched to fix CI is the widening
- * mistake `outstandingForOrigin` names.
- *
- * The lists are read here rather than threaded through the action: the action is
- * validated data and this is a page of prose assembled at dispatch time, which is
- * also why it is appended to the rendered prompt rather than interpolated into it.
+ * Everything a retrospective agent is given beyond its prompt: the issue's scratchpad, then
+ * the record the harness kept — or null for every other dispatch.
  */
 /**
- * Everything a feature-summary agent is given beyond its prompt: every item under
- * the Feature, where each one stands, the sentence whoever ruled on it wrote, and
- * the summary on file if there is one.
- *
- * Keyed on the **exact** summary origin, `retroBriefing`'s rule: `issue:29857`
- * and `issue:29857:summary` are different dispatches, and a working agent on the
- * container itself has no business being handed the whole Feature's standing as
- * its brief.
- *
- * Null where the deployment has no feature board — the same absence that stops
- * anything dispatching a summariser in the first place, so this is only ever
- * reached by a hand-built origin.
+ * Everything a feature-summary agent is given beyond its prompt: every item under the
+ * Feature, where each stands, and the summary on file if there is one.
  */
 function featureBriefing(
   originRef: string | null | undefined,
@@ -1641,8 +1185,8 @@ function featureBriefing(
   const previous = store.getFeatureSummary(target.featureOrigin);
   return renderFeatureDossier(
     record,
-    // Read here and not in the gather: this is the one caller that draws it, and
-    // the pulse's own gather must not pay for a reading nothing compares.
+    // Read here, not in the gather: the pulse must not pay for a reading nothing
+    // compares.
     featureReach(store, board),
     previous
       ? [
@@ -1661,9 +1205,8 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
   const target = originRef ? retroSubmitOrigin(originRef) : { ok: false as const, error: '' };
   if (!target.ok) return null;
   const issueOriginRef = target.issueOrigin;
-  // The reading is `goalRecord`'s and the rendering is this call's — the one
-  // account of a run, so a retrospective and the operator's own Claude answering
-  // a question about the same goal cannot be looking at two different histories.
+  // The reading is `goalRecord`'s and the rendering is this call's, so a
+  // retrospective and the operator's own Claude cannot see two different histories.
   const dossier = retroDossier(goalRecord(store, issueOriginRef));
   return [retroPad(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }
@@ -1677,27 +1220,12 @@ function safeJson(v: unknown): string {
 }
 
 /**
- * What a readying row says it is for.
- *
- * The dispatcher's own `title` wherever there is one, so the row and the agent
- * that follows it name the work the same way — a row whose wording changed at the
- * moment the agent appeared would read as a second piece of work. The three acts
- * that carry no title are worded here, from what they are: an action nobody can
- * name is a row an operator cannot place.
+ * What a readying row says it is for — the dispatcher's own `title` where there is one, so
+ * the row and the agent that follows it name the work the same way.
  */
 /**
- * The body of an amendment card: the author's reason, what the change does to the
- * plan, and what it leaves running whatever the answer.
- *
- * Built at card-creation time out of the store rather than carried on the action,
- * because both halves are readings of the plan *now* — the diff is against the
- * revision the plan currently stands at, and the warnings are about the part rows
- * as they currently are. An amendment written before a part opened its pull
- * request must not tell an operator that dropping it stops nothing.
- *
- * Degrades to the note alone rather than throwing: a document that no longer
- * validates is refused where it would be applied, and a card with no diff on it is
- * far better than a pulse that dies building one.
+ * The body of an amendment card: the author's reason, what the change does to the plan, and
+ * what it leaves running whatever the answer.
  */
 function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
   let document: unknown;
@@ -1743,12 +1271,7 @@ function readyingTitle(action: ValidatedAction): string {
   }
 }
 
-/**
- * The order on file for the Feature this dispatch is sequencing, or null.
- *
- * Beside `featureBriefing` and on its terms: the origin decides whether there is
- * anything to look up at all, so a dispatch that is not a sequencer costs no read.
- */
+/** The order on file for the Feature this dispatch is sequencing, or null. */
 function sequenceFeatureOrigin(originRef: string | null | undefined, store: Store): FeatureSequence | null {
   const target = originRef ? featureSequenceSubmitOrigin(originRef) : { ok: false as const, error: '' };
   return target.ok ? store.getFeatureSequence(target.featureOrigin) : null;

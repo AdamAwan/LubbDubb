@@ -26,43 +26,17 @@ import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag } from '../components/tag.js';
 
 /**
- * What is shown when no goal is selected: three cards, rows rather than pictures.
+ * What is shown when no goal is selected: three cards, rows rather than pictures —
+ * Fleet, Goals in flight, Pull requests, in DOM/reading order.
  *
- * Document order is reading order — Fleet, Goals in flight, Pull requests — and no
- * card carries a CSS `order`, so the DOM and the page agree at every width. The
- * arrangement across tracks is `.cn-grid`'s business alone.
+ * Up next, World signals, Environments, Build and Project are not separate cards
+ * any more: Up next is a band on Fleet, and the rest moved to the bar/panels
+ * (`WorldSignals`, `TopBar`'s `Environments`, `BuildPanel`).
  *
- * **Up next is not among them any more**: the queue is a band on the Fleet card,
- * because it is the same list one stage further back. → {@link Fleet}
- *
- * **World signals is not among them either.** It was the fourth card and it was
- * a page's worth of room spent at the wrong altitude: this page answers *what is
- * happening*, and the feed is the log an operator reaches for when a queued row
- * — or an empty queue — needs explaining. It is a panel now, named in the bar
- * menu and reached from the Up next band it explains. → `WorldSignals`
- *
- * **Environments is not among them any more either.** Health is a fact about the
- * world the work ships into rather than about anything on this page, and the
- * answer is *well* nearly all of the time: a card spending a sixth of the overview
- * to say so was the page's quietest surface in the room where "what is happening"
- * is asked. It is a chip on the bar now, drawn only while something out there is
- * not well, beside the fleet cap it belongs with. → `TopBar`'s `Environments`
- *
- * **Build and Project are not among them any more.** They were a pair, and last,
- * because neither was about the fleet's *work*: one was the process the fleet runs
- * inside and the other the repository it is pointed at. Both are readings that say
- * `current` nearly all the time, and once upgrading became a request made on the
- * rail — where it is asked at a moment and settles when answered — what the cards
- * had left was a changelog the build panel already draws in full. They are that
- * panel now, project standing and all, named in the bar menu and opened by the two
- * update asks. → `BuildPanel`, `web/src/view/updateAsks.ts`
- *
- * Two rules run through all three. **Nothing here re-decides what the server
- * decided**: a PR's court is `attention.status`, its checks are `ciVerdict`, a
- * queued item's hold is the queue's own sentence, and a goal's state is its
- * `pickup.status` — every one quoted, none parsed. And **an empty card still
- * draws**, muted, because a surface that vanishes when quiet is indistinguishable
- * from one that broke.
+ * Two rules run through all three cards: nothing here re-decides what the server
+ * decided (a PR's court is `attention.status`, its checks are `ciVerdict`, a
+ * queued item's hold is the queue's own sentence, a goal's state is `pickup.status`
+ * — every one quoted, none parsed), and an empty card still draws, muted.
  */
 export function Overview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
@@ -77,48 +51,30 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
 /**
  * Who is out, what they are on, and what it has cost so far.
  *
- * The lamp is red on an agent `escalationByAgent` names, which is a stronger
- * reading than `status === 'waiting'`: an agent can be parked with nothing asked
- * of the operator, and only the first of those belongs in the rail. The two
- * disagree in exactly that case, and the ask wins.
+ * The lamp reads red on an agent `escalationByAgent` names, which is stronger
+ * than `status === 'waiting'`; the two disagree when an agent is parked with
+ * nothing asked of the operator, and the ask wins.
  *
- * Ended shifts are behind a disclosure rather than a second card. They are the
- * same rows read for a different question — what happened — and the count stays
- * in the header at zero, muted, so the way in does not move.
+ * Ended shifts are behind a disclosure rather than a second card, counted at
+ * zero, muted, so the way in does not move.
  *
- * **The queue is a band on this card**, on the same argument the readying rows
- * are here: the list is ordered by *dispatch stage*, and Up next is one stage
- * further back than an action the executor already has in hand. As its own card
- * it was fourth in reading order, three cards below the one an operator looks at
- * to find out what is happening — so the reading "what is out, and what is behind
- * it" was one every operator assembled themselves, from two surfaces that never
- * agreed on what counted as work.
+ * **The queue is a band on this card**, one dispatch stage behind the readying
+ * rows, so "what is out, and what is behind it" reads as one card rather than
+ * two that never agreed on what counted as work.
  *
  * **Nothing folds.** The card's rows are a budget the two bands share
- * ({@link FLEET_ROWS}), so the queue shows what the agents left of it and the
- * rest is on the `upnext` panel behind the band's own control. A fold would have
- * been the cheaper build and it costs the reading: what the harness would do next
- * is half of "what is happening", and a card that hides it until pressed is a
- * card that answers the other half.
+ * ({@link FLEET_ROWS}); the queue shows what the agents left of it and the rest
+ * is on the `upnext` panel.
  *
  * → docs/spec/17-cockpit.md#the-queue-rides-the-fleet-card
  */
 /**
  * How many rows the Fleet card draws, across both of its bands.
  *
- * A **budget**, not a pair of caps, because the two lists answer one question
- * between them: what the fleet is doing, and what it would do next. The agents
- * spend it first — they are the card's subject and there are never more of them
- * than the cap allows — and the queue takes what is left, so a card gains a
- * queued row exactly when an agent finishes and loses one when a dispatch goes
- * out. The card is therefore the same height whatever the fleet is doing, which
- * is the whole reason the number is one number: two caps would make the card two
- * lists that happen to sit together, and it would grow and shrink again on every
- * pulse.
- *
- * At a full fleet the queue draws no rows at all and keeps its band, its count
- * and its way to the panel — which is the honest reading. Nothing is queued
- * *next* when nothing is free.
+ * A **budget**, not a pair of caps: agents spend it first (bounded by the fleet
+ * cap), and the queue takes what is left, so the card is the same height
+ * whatever the fleet is doing. At a full fleet the queue draws no rows but keeps
+ * its band — nothing is queued *next* when nothing is free.
  */
 const FLEET_ROWS = 7;
 
@@ -127,35 +83,26 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const ended = view.past;
   const desk = view.deskRuns;
   const readying = view.readying;
-  // The queue as it stands *now*, not as the last pulse projected it: a candidate
-  // this pulse dispatched is in `state.upcoming` as `dispatching` and in `live` as
-  // an agent, and the card would draw it on both bands until the next pulse
-  // recomputed the plan. → `CockpitView.upNext`
+  // The queue as it stands now: a candidate this pulse dispatched is in both
+  // `state.upcoming` as `dispatching` and in `live` as an agent until the next
+  // pulse recomputes the plan. → `CockpitView.upNext`
   const queued = view.upNext;
-  // Counted on the glass rather than left behind the disclosure: `unapproved` is
-  // the one queue status that is the operator's move rather than the harness
-  // stopped, and a row nobody can see is a row nobody answers.
+  // `unapproved` is the queue status that is the operator's move.
   const asking = queued.filter((item) => item.status === 'unapproved').length;
-  // The count is the fleet's own, not the list's: the snapshot carries a bounded
-  // tail of ended agents, so a number read off `ended` would settle at the cap and
-  // report it forever on a deployment that had run twenty thousand shifts.
+  // The fleet's own count, not the list's: the snapshot's `ended` tail is bounded.
   const endedTotal = view.state.endedAgents;
 
-  // What is out, in the order the harness answers "what is happening" in: what it
-  // sent, what it is sending, and what nobody sent at all.
   const out = [
     ...view.live.map((agent) => agentRow(agent, view, actions)),
     ...readying.map((action) => readyingRow(action, view)),
     ...desk.map((run) => deskRow(run, view)),
     ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
   ];
-  // What the agents left of the budget. Ended shifts are not counted against it:
-  // they are history and an explicit expansion the operator asked for, so they
-  // scroll the card rather than pushing the queue out of it.
+  // Ended shifts don't count against the budget — they're an explicit expansion
+  // that scrolls the card rather than pushing the queue out of it.
   const room = Math.max(0, FLEET_ROWS - (view.live.length + readying.length + desk.length));
   const queueRows = queued.slice(0, room).map((item) => queueRow(item, view, actions));
-  // One rail for the card, measured from every row on it — the two calls are one
-  // card, and its columns have to line up across the band. → `PanelRows`
+  // One rail across both calls so the card's columns line up. → `PanelRows`
   const rail = [...out, ...queueRows];
 
   return (
@@ -164,12 +111,8 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
         Fleet{' '}
         <i className="cn-n">
           {view.live.length} out
-          {/* Stated beside the count rather than added to it: nobody dispatched
-              these and they take no slot, so "out" would be the wrong word and
-              a bigger number would be the wrong reading. */}
-          {/* Beside the count for the same reason and a second one: these are on
-              their way to being out, so folding them in would make the number
-              jump twice for one dispatch. */}
+          {/* Beside the count, not folded in: nobody has dispatched these yet and
+              they take no slot, so "out" would be the wrong word. */}
           {readying.length > 0 && ` · ${readying.length} being readied`}
           {desk.length > 0 && ` · ${desk.length} at a keyboard`}
         </i>
@@ -187,33 +130,24 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
         <p className="cn-empty">Nobody is out.</p>
       )}
       {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
-      {/* Said rather than left to be noticed: the list is the recent tail and the
-          count above is all of them, so a disclosure that opened on 200 rows under
-          a heading reading 4,000 would be lying by omission. A goal's own older
-          runs are on its page, which fetches them. */}
+      {/* The list is a recent tail; say so rather than let the count above mislead. */}
       {showEnded && endedTotal > ended.length && (
         <p className="cn-empty">
           The {ended.length} most recent, of {endedTotal}. Older runs are on the goal they were dispatched for.
         </p>
       )}
       <PanelRows rows={out} rail={rail} />
-      {/* The head of the queue, under a band of its own, in the same list as the
-          agents: nothing is folded, so there is no way in to find and nothing
-          moves when it is used. The band always draws — a queue that is empty is a
-          line saying so, on the rule the whole page keeps. */}
+      {/* The head of the queue, in the same list as the agents — nothing folded,
+          nothing moves when opened. Always draws, even empty. */}
       <GroupHead
         group={{
           key: 'upnext',
           label: 'Up next',
-          // Pinned to the card's foot, because its size is what the rows above it
-          // left over: floated up against them, a quiet fleet draws the queue
-          // halfway up the card with a field of empty panel underneath.
+          // Pinned to the card's foot — floated up, a quiet fleet would draw the
+          // queue halfway up the card with empty panel underneath.
           foot: true,
-          // The whole size of the queue, beside three of its rows, so the band
-          // never passes off its head as all of it — and how much of that is
-          // waiting on a *person*: `unapproved` is the one `QueueStatus` that is
-          // the operator's move rather than the harness stopped, and the rows
-          // carrying it are as likely to be below the cut as above it.
+          // The queue's full size beside its shown rows, and how much is on a
+          // person (`unapproved`).
           note: (
             <>
               {queued.length === 0 ? 'nothing queued' : `${queued.length} queued`}
@@ -227,23 +161,10 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
                   All {queued.length} →
                 </button>
               )}
-              {/* The queue's *cause*, one click from the queue itself, and the
-                  control says which of the two it is. What the harness would do
-                  next is decided off what the world just did, so the questions
-                  this band raises — why is that queued, why is nothing — are
-                  answered on the signal feed; a control reading `Signals 5 →`
-                  put the feed beside the queue and left the relation between
-                  them to be guessed, which on the one band where it is the whole
-                  point is a caption worth the width. It is the only place in the
-                  cockpit that way in is drawn, and it draws at every size of
-                  queue including none: an empty band is exactly when an operator
-                  wants to know whether the world moved at all.
-
-                  **It carries no count**, unlike every other control on a band.
-                  The number is not what this one is for — the sentence is — and
-                  a figure on the end would read as *how much of the queue*,
-                  which is the one thing it does not count. The feed's size is on
-                  the bar menu's row, which is the other way to the same panel.
+              {/* The queue's *cause*: what the harness does next is decided off
+                  what the world just did, so this links to the signal feed
+                  rather than repeating the queue. No count — the sentence is
+                  the point, not a figure. Always drawn, even on an empty queue.
                   → `WorldSignals` */}
               <button
                 type="button"
@@ -259,40 +180,21 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
       />
       {queueRows.length > 0 && <PanelRows rows={queueRows} rail={rail} />}
       {queued.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
-      {/* The card's foot, under everything it is about — who is out, and then what
-          is behind them. */}
       <RunwayBand view={view} />
     </section>
   );
 }
 
 /**
- * What is behind the agents above — the fleet's runway, along the foot of the
- * card the agents are on.
+ * What is behind the agents above — the fleet's runway, at the foot of the card.
  *
- * **The placement is the sentence.** Who is out, then what is queued behind
- * them, in that order and in one card: a fleet reading that leaves out "and then
- * what" is the reading an operator has to assemble themselves, every time, from
- * two cards that never agreed on what counted as work. The foot rather than the
- * head because the agents are the card's subject and this is its consequence,
- * and it costs nothing to reach — Fleet's rows are bounded by the agent cap, so
- * this line never travels far down the page.
- *
- * **Nothing here re-decides what the server decided**, the rule the other five
- * cards keep: the state, the wording and every count are quoted from
- * `state.runway`, which is the same function's answer as the bench row's. The
- * band draws no control for the same reason the row carries no button — the
- * reading is a statement about the fleet, and a "watch something" shortcut here
- * would make it a prompt for the quickest fix rather than the truest one.
- *
- * **And it always draws**, muted when healthy, on the empty-card rule: a band
- * that vanished when the queue was full would be indistinguishable from one that
- * broke, on exactly the deployment where nobody has seen it before.
+ * Nothing here re-decides what the server decided: state, wording and every
+ * count are quoted from `state.runway`. No control is drawn — the band is a
+ * statement, not a shortcut. Always draws, muted when healthy.
  */
 function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
   const r = view.state.runway;
-  // Paused is not idleness and must not wear the alarm: the fleet is stopped
-  // because somebody stopped it, and `idleSlots` is already zero for them.
+  // Paused is not idleness — the fleet is stopped because somebody stopped it.
   const tone = view.state.control.paused ? 'grey' : RUNWAY_TONE[r.state];
   const total = r.inflight + r.queued + r.reservoir;
   return (
@@ -302,8 +204,7 @@ function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
       </span>
       <Tag>{RUNWAY_LABEL[r.state]}</Tag>
       <span className="cn-runway-say">{view.state.control.paused ? 'Dispatch is paused.' : r.headline}</span>
-      {/* The same four buckets whatever the state, so a glance across a week
-          reads as one shape changing rather than as several different bands. */}
+      {/* Same four buckets whatever the state, so a glance reads as one shape. */}
       <span className="cn-runway-bar" aria-hidden="true">
         <i className="cn-seg-inflight" style={{ flexGrow: r.inflight }} />
         <i className="cn-seg-queued" style={{ flexGrow: r.queued }} />
@@ -318,17 +219,11 @@ function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
 }
 
 /**
- * The reading itself, and it changes unit rather than lying.
- *
- * With nothing queued there is no runway to state — a duration would be a
- * forecast about a queue that does not exist — so the band counts idle slots
- * instead, which is the fact that has replaced it.
- *
- * The duration is **fleet time**: the hours a person was the next mover are out
- * of the median it is built from
- * ([25](../../../docs/spec/25-supply.md#the-lead-time-is-fleet-time)). The band
- * is one line and cannot say so, which is what {@link runwayTitle} is for — the
- * bench row and its notification carry it in the sentence.
+ * The reading itself; with nothing queued there is no duration to state, so it
+ * counts idle slots instead. The duration is **fleet time**: hours a person was
+ * the next mover are excluded from the median it is built from
+ * ([25](../../../docs/spec/25-supply.md#the-lead-time-is-fleet-time)). See
+ * {@link runwayTitle} for the fuller account.
  */
 function runwayReading(r: CockpitView['state']['runway']): string {
   if (r.runwayMinutes !== null) return fmtRunway(r.runwayMinutes);
@@ -337,13 +232,8 @@ function runwayReading(r: CockpitView['state']['runway']): string {
 }
 
 /**
- * What the one-line reading had to leave out, on hover: which quantity it is, and
- * the calendar span it came from.
- *
- * A tooltip rather than a second line because the band's whole placement argument
- * is that it costs nothing to reach; a figure that dropped by two thirds with no
- * account of why anywhere on the card reads as a gauge that broke, though.
- * Composed here from quoted figures only — the sentence itself stays the server's.
+ * What the one-line reading leaves out, on hover: which quantity it is, and the
+ * calendar span it came from. Composed from quoted figures only.
  */
 function runwayTitle(r: CockpitView['state']['runway']): string | undefined {
   if (r.runwayMinutes === null || r.medianLeadMinutes === null) return undefined;
@@ -361,10 +251,9 @@ function fmtRunway(minutes: number): string {
 }
 
 /**
- * Total over {@link SupplyState} for `KIND_TONE`'s reason: a state added to the
- * lens fails the typecheck here rather than drawing in whatever the last rule in
- * the sheet said. `unknown` is grey deliberately — it is not a mild warning, it
- * is the absence of a reading.
+ * Total over {@link SupplyState} — a state added to the lens fails the typecheck
+ * here rather than drawing incorrectly. `unknown` is grey deliberately: absence
+ * of a reading, not a mild warning.
  */
 const RUNWAY_TONE: Record<SupplyState, 'green' | 'amber' | 'grey'> = {
   healthy: 'green',
@@ -386,19 +275,11 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
 /**
  * One agent: what it is on, and the way to each of the things it names.
  *
- * **The name is the button, and the refs sit beside it** — the backlog row's
- * shape, for its reason: a link inside a button is a second destination for one
- * click, and the row's own destination is the transcript. Before that split this
- * card said "Fix failing CI on PR #412" under "#212" with neither of them a way
- * anywhere, so the two questions a fleet row raises — *what is it working on* and
- * *what is that* — could only be answered somewhere else.
- *
- * **Two refs, not one.** The origin is what was dispatched at (`pr:412` for a CI
- * task, `issue:212:part:writes` for a part), and it is a pull request as often as
- * a goal. So the goal is resolved separately through {@link goalOfPr} — the
- * server's own three-way match, read backwards — and drawn as well whenever it is
- * not already what the origin says. A ticketless pull request resolves to no goal
- * and draws none, which is the honest answer rather than an invented one.
+ * The name is the button; the refs sit beside it (a link inside a button would be
+ * a second destination for one click). Two refs, not one: the origin (what was
+ * dispatched at) plus the goal resolved separately through {@link goalOfPr},
+ * drawn whenever it differs from the origin. A ticketless pull request draws no
+ * goal.
  */
 function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const task = view.taskFor(agent);
@@ -418,22 +299,17 @@ function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): Pan
     title: task?.title ?? agent.id,
     open: () => actions.select(agent.id),
     openTitle: "Open this agent's drawer",
-    // Two refs where there are two: the origin it was dispatched at, and the goal
-    // behind it when that origin is a pull request some ticket owns.
     refs: <OnWhat origin={origin} view={view} />,
     facts: [
-      // A limit park says so where the note would be. The note underneath is
-      // whatever the agent last said it was doing, which on a parked row reads as
-      // though it still is.
+      // A limit park says so in place of the note, which otherwise reads as
+      // though the agent were still doing what it last said.
       { label: 'doing', value: limited ? 'Out of account limit' : (agent.note ?? agent.status), alarm: limited },
       { label: 'for', value: elapsed(agent.startedAt, agent.endedAt, view.now) },
       ...(agent.costUsd !== null ? [{ label: 'cost', value: fmtUsd(agent.costUsd) }] : []),
     ],
-    // What is going on with this row, as a word, with the harness's own sentence
-    // behind it.
     ...agentState(agent, view),
-    // The way out of the park, where the park is shown — beside the name rather
-    // than inside it, since the row's own click opens the transcript.
+    // The way out of the park, beside the name rather than inside it — the row's
+    // own click opens the transcript.
     action: limited ? (
       <AsyncButton
         onClick={() => actions.resumeAgent(agent.id)}
@@ -448,24 +324,15 @@ function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): Pan
 }
 
 /**
- * Why a fleet row is not moving, as one word and the sentence behind it.
- *
- * The four states are the harness's own and are read from four different facts,
- * because they are four different things — an escalation naming the agent, the
- * limit park, the stall park, and a plain wait. They are ranked rather than
- * merged: an agent that is asking you something and also parked is your move
- * first, and a row can only wear one word.
- *
- * A running agent wears none. That is the point of the column: on a fleet of five
- * the two words in it are the two rows worth looking at, where five `?` markers
- * were five rows to hover.
+ * Why a fleet row is not moving, as one word and the sentence behind it. The four
+ * states — escalation, limit park, stall park, plain wait — are ranked rather
+ * than merged: an escalation wins even when also parked, since a row wears only
+ * one word. A running agent wears none.
  */
 function agentState(agent: Agent, view: CockpitView): Pick<PanelRowModel, 'why' | 'whyLabel' | 'whyTone'> {
   const escalation = view.escalationByAgent.get(agent.id);
   if (escalation !== undefined) {
-    // The ask itself, not a summary of it: the rail carries the same sentence, and
-    // two surfaces wording one question differently is the drift the refs rule
-    // exists to stop one layer down.
+    // The ask itself, verbatim — the rail carries the same sentence.
     return { whyLabel: 'question', whyTone: 'ask', why: escalation.prompt };
   }
   if (view.limitParked.has(agent.id)) {
@@ -490,9 +357,7 @@ function agentState(agent: Agent, view: CockpitView): Pick<PanelRowModel, 'why' 
   if (agent.status === 'waiting') {
     return { whyLabel: 'blocked', whyTone: 'hold', why: agent.waitingReason };
   }
-  // How a shift ended, on the rows behind the disclosure. `done` is the ordinary
-  // ending and wears nothing — a word on every ended row would say only that the
-  // row has ended, which the list it is in already says.
+  // `done` is the ordinary ending and wears nothing — the list already says so.
   if (ENDED_BADLY[agent.status] !== undefined) {
     return { whyLabel: ENDED_BADLY[agent.status], whyTone: 'quiet', why: agent.waitingReason };
   }
@@ -508,32 +373,22 @@ const ENDED_BADLY: Partial<Record<Agent['status'], string>> = {
 };
 
 /**
- * What a dispatch was aimed at, as ways there: the origin itself, what that
- * origin stands in for when it is a job redoing somebody else's work, and the
- * goal behind whichever of those is a pull request some ticket owns.
- *
- * Shared by the fleet rows and nothing else so far, and a component rather than
- * two lines inline because "which refs does this row carry" is the decision that
- * keeps getting made differently on each surface that lists work.
- *
- * A dispatch with no origin still draws the group, empty: `cn-refs` is a ruled
- * slot in the row, and a slot that disappears on the rows that have nothing to put
- * in it leaves the list ragged rather than columned.
+ * What a dispatch was aimed at: the origin itself, what a `job:<id>` origin
+ * stands in for, and the goal behind whichever of those is a pull request some
+ * ticket owns. A dispatch with no origin still draws the (empty) `cn-refs` slot
+ * so the list stays columned.
  */
 function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }): JSX.Element {
-  // A `job:<id>` origin is opaque on its own, so what the job stands in for is
-  // drawn beside it — see {@link standsFor}. Every other origin is its own answer
-  // and comes back unchanged, so there is no second ref and nothing to skip.
+  // A `job:<id>` origin is opaque on its own — what it stands in for is drawn
+  // beside it. See {@link standsFor}. Every other origin comes back unchanged.
   const stood = standsFor(view.state, origin);
   const pr = stood === null ? null : /^pr:(\d+)/.exec(stood);
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
     <>
       {origin !== null && <Ref to={origin} />}
-      {/* The relation is the pair's position, not a word between them: on a rail
-          this narrow the word cost more room than the two refs it joined, and the
-          refs group overran the reading slot beside it. Each ref keeps its own
-          hover, which is where the relation is said. */}
+      {/* Position says the relation, not a word between them — each ref's own
+          hover carries the sentence. */}
       {stood !== null && stood !== origin && (
         <Ref to={stood} title={`Open the work this job is standing in for — ${refLabel(stood)}`} />
       )}
@@ -545,12 +400,9 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
 }
 
 /**
- * What each step of the readying is called on the row.
- *
- * The words are the spec's, not new ones: `docs/spec/09-execution.md` calls the
- * slow one *handing a slot over*, so that is what the cockpit says it is doing.
- * Totalled over {@link ReadyingStep}, so a step added to the executor fails the
- * typecheck rather than drawing as an empty chip.
+ * What each step of the readying is called on the row, using the spec's own
+ * words (`docs/spec/09-execution.md`). Totalled over {@link ReadyingStep}, so a
+ * step added to the executor fails the typecheck rather than drawing empty.
  */
 const READYING_STEP: Record<ReadyingStep, string> = {
   'picked-up': 'picked up',
@@ -572,36 +424,16 @@ const READYING_WHY: Record<ReadyingStep, string> = {
 
 /**
  * An action the executor is working on, in the window before it is an agent.
+ * `ActionExecutor.execute` walks a plan serially and each dispatch waits on the
+ * worktree pool before spawning, so without this row a multi-appraisal cycle
+ * would show "all dispatched" in the queue while the fleet card showed just one
+ * agent — nothing wrong, nothing said so.
  *
- * **Why the card has to say this at all.** `ActionExecutor.execute` walks a plan
- * strictly serially, and each dispatch waits on the worktree pool before it
- * spawns. A cycle that planned three appraisals with full headroom started them
- * two minutes apart, and for those four minutes the Up next queue said all three
- * had been dispatched while this card showed one agent. Nothing was wrong and
- * nothing said so — which reads, correctly and unhelpfully, as a fleet that picked
- * up one of three.
- *
- * It borrows {@link deskRow}'s grammar wholesale, because it is making the same
- * distinction — in flight, and *not an agent* — and a second vocabulary for one
- * idea is how a card stops being readable:
- *
- * - **A `div`, not a button.** There is no transcript to open, nothing to kill and
- *   nothing to inject into: there is no process yet. A row wearing an agent's
- *   affordances with none of them working is worse than one that never offered them.
- * - **A hollow lamp and a dashed edge.** No dispatch cut this row — it is what a
- *   dispatch is being made out of.
- * - **No cost column.** Nothing has been spent; a `$0.00` would read as a cheap
- *   agent rather than as no agent.
- *
- * Its own tint rather than the desk run's violet, because the two rows differ in
- * exactly the thing an operator is reading them for: a desk run is somebody at a
- * keyboard and takes no fleet slot ever, while this is the harness itself, on its
- * way to taking one.
- *
- * The hover carries the two facts a glance cannot: that it holds no slot the cap
- * counts *yet*, and that it leaves the list on its own — the row is drawn off a
- * record the executor holds for the length of one `await`, released in a
- * `finally`, so a dispatch that fails takes its row with it.
+ * Borrows {@link deskRow}'s grammar (in flight, not an agent): a `div` not a
+ * button (no transcript, nothing to kill), a hollow lamp and dashed edge (no
+ * dispatch cut this row yet), no cost column. Own tint, distinct from a desk
+ * run's violet. Drawn off a record held for one `await`, released in a `finally`
+ * — a failed dispatch takes its row with it.
  */
 function readyingRow(action: ReadyingAction, view: CockpitView): PanelRowModel {
   return {
@@ -617,33 +449,16 @@ function readyingRow(action: ReadyingAction, view: CockpitView): PanelRowModel {
     whyTone: 'quiet',
     why:
       `${READYING_WHY[action.step]} Nothing has been dispatched for this yet: it holds no fleet slot and ` +
-      'has no transcript, and it leaves this list the moment the agent starts — or, if the dispatch fails, ' +
-      'with the failure.',
+      'has no transcript, and it leaves this list once the agent starts, or the dispatch fails.',
     readying: true,
   };
 }
 
 /**
- * A validation check somebody is running at their own keyboard.
- *
- * It is in flight and it is not an agent, and every difference between the two
- * is drawn rather than left to be inferred:
- *
- * - **A `div`, not a button.** There is no transcript to open, nothing to kill
- *   and nothing to inject into — so the row offers no way in at all. A card
- *   wearing an agent's affordances with none of them working is worse than one
- *   that never offered them.
- * - **A hollow lamp**, where an agent's is filled. The harness is not running
- *   this and cannot report on it; what it knows is that somebody said they were.
- * - **No cost column.** Nothing here is billed to the fleet, and a `$0.00` would
- *   read as "cheap" rather than "not ours to count".
- * - **A dashed edge**, the same grammar the lamp uses: this entry was not cut
- *   from a dispatch.
- *
- * The hover carries the two things a glance cannot: that it takes no slot, and
- * that it ends on its own. It leaves the list by itself when the reading lands,
- * when the session closes, or when the claim ages out — the entry is drawn off a
- * claim the server has already put through `claimIsLive`, so it goes at the same
+ * A validation check somebody is running at their own keyboard. In flight but
+ * not an agent: a `div` not a button (no transcript, nothing to kill), a hollow
+ * lamp (the harness isn't running this), no cost column, a dashed edge. Drawn
+ * off a claim already passed through `claimIsLive`, so it leaves the list the
  * instant the claim stops blocking `validate-check`.
  */
 function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
@@ -657,10 +472,6 @@ function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
       { label: 'who', value: run.label },
       { label: 'for', value: elapsed(run.claimedAt, null, view.now) },
     ],
-    // The desk run's own state, in the same column the agents wear theirs: this is
-    // what is going on with the row, and it is not a dispatch. The two things a
-    // glance cannot carry are behind it — that it takes no slot, and that it ends
-    // on its own.
     whyLabel: 'at a keyboard',
     whyTone: 'quiet',
     why:
@@ -673,57 +484,34 @@ function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
 
 /**
  * The statuses that mean the harness has a goal in hand *now*. Read off
- * `pickup.status`, which is the dispatcher's own answer to "what am I doing with
- * this", rather than re-inferred from agents, plans and pull requests — three
- * inputs the server has already folded into one word.
+ * `pickup.status`, the dispatcher's own answer, rather than re-inferred from
+ * agents, plans and pull requests.
  */
 const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
 
 /**
- * Every goal with work in flight, each a way into its own page.
- *
- * The row's track is folded by {@link buildGoalTrack} off the very page the click
- * opens, so what a segment counts and what the plan draws underneath cannot
- * disagree — that is the whole reason the helper exists rather than a second
- * pass over `PlanPart.status` here.
- *
- * The court is read off `needsYou`, the rail's own queue: a goal is in your court
- * exactly when the rail is holding an ask about it. Anything else would let the row
- * say "you" with nothing to answer, or the rail hold a row the overview marks as
- * the harness's business — and it is said once, as the alarmed `asking you` count,
- * rather than a second time as a chip whose only reading was that count being
- * non-zero.
+ * Every goal with work in flight, each a way into its own page. The row's track
+ * is folded by {@link buildGoalTrack} off the same page the click opens, so a
+ * segment can't disagree with the plan drawn underneath. The court is read off
+ * `needsYou`, the rail's own queue, and said once as the alarmed `asking you`
+ * count.
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showKept, setShowKept] = useState(false);
-  // A retained run rides the same list *while there is still work on it*, marked
-  // rather than dropped: a goal whose ticket left the tracker's open set —
-  // resolved, closed, or its watch tag gone — may still have parts to run, an
-  // agent on it and money going onto it, and a list that lost the row the moment
-  // the tracker did was how a goal with all of that went unfindable except by
-  // address. `stale` is the marking, and it is the only difference between those
-  // rows and the live ones.
-  //
-  // A retained run with *nothing* left in flight is a different reading, and it
-  // was the one drowning this card: a finished run on a closed ticket is not a
-  // goal in flight, it is a record waiting to be dismissed, and every deployment
-  // accumulates them forever. They go behind the header's disclosure — reachable
-  // in one click, out of the way of the goals the fleet is actually working, and
-  // counted at zero so the way in never moves.
+  // A retained run rides this list while there's still work on it, even after its
+  // ticket left the tracker's open set — `stale` marks it, the only difference
+  // from a live row. One with nothing left in flight is a finished run waiting to
+  // be dismissed; those go behind the header's disclosure, counted at zero.
   const retained = view.state.retainedRuns ?? [];
   const working = retained.filter((issue) => retainedWorkInFlight(issue, view));
   const kept = retained.filter((issue) => !retainedWorkInFlight(issue, view));
   const goals = [...view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status)), ...working];
-  // Beside the count and not folded into it, for the fleet card's reason: these
-  // goals are in flight *and* missing from the backlog, so a single larger number
-  // would be the wrong reading of both. Zero draws nothing — the ordinary case on
-  // every deployment, and a muted "0 with no Feature" on every card would teach an
-  // operator to stop reading the header.
+  // Beside the count, not folded in: these goals are in flight *and* missing
+  // from the backlog. Zero draws nothing.
   const orphans = orphanCount(view.state, goals);
 
   return (
-    // `cn-lamp-mark` for the same reason the pull-request rack carries it: the
-    // agent-on-it chip rides this card's lamp column too.
+    // `cn-lamp-mark`: the agent-on-it chip rides this card's lamp column too.
     <section className="cn-card cn-span2 cn-lamp-mark">
       <h3>
         Goals in flight <i className="cn-n">{goals.length}</i>
@@ -749,8 +537,7 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
       <PanelRows
         rows={[
           ...goals.map((issue) => goalRow(issue, view, actions)),
-          // Below the goals in flight, for the fleet card's order: what the harness
-          // is working, then what it is only holding on to.
+          // Below what's being worked: what's only being held on to.
           ...(showKept ? kept.map((issue) => goalRow(issue, view, actions)) : []),
         ]}
       />
@@ -759,17 +546,10 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
 }
 
 /**
- * Whether a retained run still has work in flight — the gate that keeps this card
- * a list of goals being worked rather than a pile of closed tickets.
- *
- * Three ways it can be true, and they are the three ways any goal is somebody's
- * business now: an agent is on it, the rail is holding an ask about it, or its
- * plan has parts that are not finished. The parts are read through the same
- * `buildGoalTrack` fold the row draws its track from, so what puts the row in the
- * list and what the row then says about itself cannot disagree.
- *
- * A merged-out plan, or no plan at all, means the closed ticket is exactly what it
- * looks like: a run to dismiss, not a goal in flight.
+ * Whether a retained run still has work in flight: an agent is on it, the rail
+ * is holding an ask about it, or its plan has unfinished parts (read through the
+ * same `buildGoalTrack` fold the row draws its track from). Otherwise the closed
+ * ticket is a run to dismiss, not a goal in flight.
  */
 function retainedWorkInFlight(issue: Issue, view: CockpitView): boolean {
   const ref = `issue:${issue.number}`;
@@ -783,8 +563,7 @@ function retainedWorkInFlight(issue: Issue, view: CockpitView): boolean {
 
 function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const ref = `issue:${issue.number}`;
-  // No fetched history: the row draws the track, which is a fold over the plan's
-  // parts, and every agent it needs is a live one.
+  // No fetched history: the row's track folds over the plan's parts, off live agents.
   const page = buildGoalPage(view.state, ref, view.needsYou, null);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
@@ -795,14 +574,11 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
   return {
     key: String(issue.number),
     title: `#${issue.number} ${issue.title}`,
-    // The tint is the half of the warning the chip cannot carry. A chip is read
-    // once the eye is already on the row; a tinted ground is what makes the row
-    // one of the two an operator stops at while scanning past four.
+    // The tint catches the eye during a scan; the chip only reads once it has.
     className: `cn-goal-row ${orphan === null ? '' : 'cn-row-orphan'}`,
     open: () => actions.selectGoal(ref),
     openTitle: `Open goal #${issue.number} — its plan, its pull requests and anything it is asking you`,
-    // The row *is* the way to this goal, so it names nothing else: a ref beside
-    // the title would be a second token for the destination the row already is.
+    // The row *is* the way to this goal, so no ref beside the title.
     refs: null,
     facts: [
       ...(track !== null && track.total > 0
@@ -813,36 +589,22 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
         : []),
       ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
     ],
-    // The pickup status *is* the row's state, so it wears the state column rather
-    // than sitting as a fact with a bare `?` beside it holding its own reasons.
-    // Two readings of one verdict, and the marker was the half that said nothing
-    // until you hovered it. In the operator's words, not the enum's: `has_pr` is a
-    // value the dispatcher passes to itself.
+    // Pickup status *is* the row's state, so it wears the state column, in the
+    // operator's words rather than the enum's (`has_pr` is dispatcher-internal).
     whyLabel: PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status,
     whyTone: PICKUP_TONE[issue.pickup.status] ?? 'quiet',
-    // The dispatcher's own account of what it is doing with this goal — most
-    // actionable first, and until now on no overview surface at all.
     why: issue.pickup.reasons.join(' '),
     reading: track !== null ? <Track track={track} /> : undefined,
-    // Somebody's hands on this goal as you read it, off the dispatch's own origin
-    // rather than off the track: `now` counts `in_review` too, and a pull request
-    // sitting open is nobody working.
+    // Off the dispatch's own origin, not the track: `now` counts `in_review` too,
+    // and a pull request sitting open is nobody working.
     live: onIt !== undefined,
-    // At the head of the row, in the lamp slot, exactly as the pull-request rack
-    // draws it — the two racks sit one above the other and a mark that means the
-    // same thing on both has to be in the same place on both. It rode the chips
-    // group before, which put it at a different distance along every row depending
-    // on whether the environment and the orphan chip beside it had anything to say.
-    //
-    // A goal's track survives it, unlike a pull request's checks: the track is how
-    // far the plan got, which an agent working does not make untrue.
+    // Lamp slot, matching the pull-request rack's placement for the same mark.
+    // The track survives an agent working it, unlike a pull request's checks.
     lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     chips: (
       <>
-        {/* Where the work actually got to, on the row rather than a page deeper.
-            Only ever drawn for an environment holding the goal *whole* — `partial`
-            has no furthest anything, and a chip claiming one would be the boolean
-            rollup the reach fold exists to refuse. */}
+        {/* Only drawn for an environment holding the goal *whole* — `partial` has
+            no furthest anything. */}
         {furthest !== null && (
           <Tag tone="green" fill>
             {furthest}
@@ -850,10 +612,7 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
         )}
         {/* A retained run: the tracker's copy is stale, the harness's record is not. */}
         {issue.stale !== undefined && <StaleChip stale={issue.stale} now={view.now} />}
-        {/* Not a `<Ref>` and not a button: the row's title already opens this goal,
-            and a second destination inside a row that is itself a control is the
-            one thing the link rule forbids outright. The way to fix it is the band
-            on the page the row opens. */}
+        {/* Not a `<Ref>` or button: the row's title already opens this goal. */}
         {orphan !== null && (
           <Tag tone="amber" fill title="This goal hangs off no Feature — open it to place it">
             ▲ no Feature
@@ -865,13 +624,9 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
 }
 
 /**
- * `IssuePickupStatusKind` in the words the page is written in. The kind is an
- * identifier the dispatcher passes between its own rules, and every one of them
- * that reached the glass did so unedited — `has_pr` is the shape of that, and it
- * asks the operator to know the enum before the row means anything.
- *
- * A status with no entry falls through as itself, so a kind added server-side
- * degrades to the old reading rather than to a blank.
+ * `IssuePickupStatusKind` in the words the page is written in — `has_pr` etc are
+ * dispatcher-internal identifiers otherwise. A status with no entry falls
+ * through as itself.
  */
 const PICKUP_WORD: Record<string, string> = {
   has_pr: 'in review',
@@ -883,10 +638,9 @@ const PICKUP_WORD: Record<string, string> = {
 };
 
 /**
- * `hold` is the harness stopped and waiting on something: no capacity, no watch
- * label, a cooldown to sit out. `ask` is the one status parked on a person by
- * design. Everything else is the harness getting on with it, and quiet — the tone
- * is about whether the row wants anything, not about how far along it is.
+ * `hold` is the harness stopped waiting on something (no capacity, no watch
+ * label, cooldown); `ask` is parked on a person by design; everything else is
+ * quiet — the tone is whether the row wants anything, not how far along it is.
  */
 const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
   escalated: 'ask',
@@ -897,10 +651,8 @@ const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
 };
 
 /**
- * One segment per part, in the four groups the goal page draws its waves in and
- * wearing the same tones: green landed, blue moving, red stuck, bare not started.
- * A goal with no plan has no segments — a single empty bar would claim a part
- * that does not exist.
+ * One segment per part, in the goal page's four groups and tones: green landed,
+ * blue moving, red stuck, bare not started. A goal with no plan has no segments.
  */
 function Track({ track }: { track: GoalTrack }): JSX.Element {
   const segs = [
@@ -919,11 +671,9 @@ function Track({ track }: { track: GoalTrack }): JSX.Element {
 }
 
 /**
- * What the segments mean, in words, on hover. Four colours with no legend is a
- * reading only somebody who has read this file can take, and a legend on the card
- * would cost more room than the track itself — so the bar keeps the shape and the
+ * What the segments mean, in words, on hover — the bar keeps its shape, the
  * hover carries the key. Only the groups this goal actually has, most advanced
- * first, so the sentence is about *this* goal rather than the vocabulary.
+ * first.
  */
 function trackTitle(track: GoalTrack): string {
   const parts = [
@@ -937,14 +687,10 @@ function trackTitle(track: GoalTrack): string {
 
 /**
  * Every open pull request, and the toggle that takes one off the harness's books.
- *
- * The toggle is **disabled rather than absent** with no ignore label configured:
- * the gate being off is a fact about the deployment worth seeing, and a control
- * that comes and goes with a config key reads as a bug in the page.
- *
- * The merged count is drawn only where the snapshot carries a closed list at all.
- * Absent means the retention window is off — nothing was counted, which is not
- * the same claim as none merged.
+ * The toggle is **disabled rather than absent** with no ignore label configured
+ * — the gate being off is worth seeing. The merged count draws only when the
+ * snapshot carries a closed list; absent means the retention window is off,
+ * which is not the same claim as none merged.
  */
 function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { config } = view.state;
@@ -952,38 +698,26 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
   const { watchLabel } = config;
-  // Yours first, then the fleet's — and only where there is a *yours* to put
-  // first. With nothing assigned, a band over the whole list is a heading that
-  // separates nothing and a column of identical hollow marks beside it, so the
-  // card takes back exactly the shape it had before the split existed.
+  // Yours first, then the fleet's — only when there is a yours to put first.
   const yours = open.filter(isYours);
   const theirs = open.filter((pr) => !isYours(pr));
   const grouped = yours.length > 0;
   const ordered = grouped ? [...yours, ...theirs] : open;
 
   return (
-    // `cn-lamp-mark` widens the lamp column: the rack's lamp is an 8px dot
-    // everywhere else, and this card puts a chip in it. `cn-read-marks` widens the
-    // reading column, which is the one slot on the cockpit holding three marks —
-    // both are the card's own, see `console.css`.
+    // `cn-lamp-mark` widens the lamp column (this card puts a chip in it);
+    // `cn-read-marks` widens the reading column, which holds three marks.
     <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
       <h3>
         Pull requests <i className="cn-n">{open.length} open</i>
-        {/* Quiet at zero rather than absent. "Nothing merged in the window" and
-            "no window is kept" are two different claims and the second is already
-            said by the line not being drawn at all — but a zero at the card's
-            top-right corner, at the weight of a reading, is the loudest thing on
-            a card whose whole subject is the rows underneath. */}
+        {/* Quiet at zero rather than absent, so a bare zero doesn't dominate the
+            corner of a card whose subject is the rows underneath. */}
         {merged !== null && <span className={merged === 0 ? 'cn-more cn-quiet' : 'cn-more'}>{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
       <PanelRows
         layout="stacked"
-        // The court on the glass rather than behind a `?`. Taking the state word
-        // off the rack left the marker saying only *there is something to know
-        // here*, which is the reading the word was removed for being worse than —
-        // and the court's sentence is a clause, so it fits under the title where
-        // the word did not fit beside it. → `RowWords`
+        // Court on the glass, under the title (a clause fits there). → `RowWords`
         words="subline"
         rows={ordered.map((pr) => {
           const row = prRow(pr, view, actions, watchLabel);
@@ -996,26 +730,20 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * A pull request somebody handed you, off the server's verdict rather than off
- * the court.
- *
- * `attention.status === 'you'` is the wrong predicate and reads almost right: a
- * pending merge proposal and a conflict put a pull request in your court too,
- * and neither is a colleague asking. `assignedToYou` is set on exactly the arm
- * where an assignment *is* the court — which is the same field the queue rail
- * keys on, so the two surfaces cannot come to disagree about whose it is.
- * → [07](docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you)
+ * A pull request somebody handed you, off the server's verdict rather than the
+ * court. `attention.status === 'you'` is the wrong predicate — a pending merge
+ * or conflict also puts a PR in your court with no colleague asking.
+ * `assignedToYou` is the field the queue rail keys on too, so the two surfaces
+ * cannot disagree. → [07](docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you)
  */
 function isYours(pr: OpenPullRequest): boolean {
   return pr.attention.assignedToYou !== undefined;
 }
 
 /**
- * Whose mark the row wears: the person who asked, or nobody.
- *
- * The author is only drawn on a row that is *yours*. On the fleet's own rows it
- * would be the harness's login on every one of them — one repeated name, in a
- * column whose whole job is to tell rows apart.
+ * Whose mark the row wears: the person who asked, or nobody. Only drawn on a
+ * row that is *yours* — on the fleet's own rows it would be the harness's login
+ * repeated on every one.
  */
 function whoAsked(pr: OpenPullRequest): string | null {
   const author = pr.author?.trim() ?? '';
@@ -1023,17 +751,10 @@ function whoAsked(pr: OpenPullRequest): string | null {
 }
 
 /**
- * The two bands, with their counts. The counts are the reading the heading adds:
- * "is anything mine" is answered by the band existing, and "how much" by the
- * number, without the operator counting rows.
- *
- * The band says **what the operator is being asked for**, not whose the rows are.
- * `Yours` was a claim of ownership over pull requests the fleet wrote and the
- * fleet will land — the one thing they are not — and it read as a second word for
- * the same thing the band under it says by being called `The fleet's`. What is
- * actually true of every row here is `attention.assignedToYou`: somebody put the
- * operator on the reviewer list. `Assigned to review` is that, and it is the
- * obligation rather than the possession.
+ * The two bands, with their counts. The band says **what the operator is being
+ * asked for**, not whose the rows are — `attention.assignedToYou` means somebody
+ * put the operator on the reviewer list, so "Assigned to review" (obligation)
+ * replaces the old "Yours" (a false claim of ownership over fleet-written PRs).
  */
 function band(mine: boolean, yours: number, theirs: number): RowGroup {
   return mine
@@ -1047,123 +768,59 @@ function band(mine: boolean, yours: number, theirs: number): RowGroup {
  */
 function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
   // The server's verdict, not a second reading of the labels: `unwatched` is the
-  // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
-  // Drawn as a spent row for the reason the backlog dims an unwatched goal — the
-  // chip alone leaves a row the harness will never touch sitting at the same
-  // weight as the ones it is working.
+  // first arm `prAttentionStatus` takes. Drawn as a spent row so the harness's
+  // untouched rows don't sit at the same weight as the ones it's working.
   const unwatched = pr.attention.status === 'unwatched';
-  // The goal this PR is delivering, joined the server's own three ways rather
-  // than through the plan parts alone: a goal worked whole has no parts at all,
-  // which is most finished goals, and the rack drew no goal for any of them.
+  // Joined the server's own three ways, not through plan parts alone — a goal
+  // worked whole has no parts.
   const goal = goalOfPr(view.state, pr.number);
   const onIt = view.agentOnBranch.get(pr.branch);
   return {
     key: String(pr.number),
     title: pr.title,
-    // The pull request's own number moves out of the title and into the refs
-    // slot, where every other card keeps what a row names: as a prefix it was a
-    // way somewhere that only this card put there.
-    //
-    // Both ways to the pull request are one token now (`<Ref>` draws the arm), not
-    // two tokens carrying the same number: the row raises two questions — what the
-    // harness makes of this, and what the diff says — but they are two doors onto
-    // one thing, and drawn apart they read as a repeat.
-    //
-    // The goal sits beside it as a second token rather than behind a word: the
-    // pair is always drawn in that order — the pull request, then what it
-    // delivers — and on a half-width card the word between them was the slot's
-    // widest thing, pushing the group over the reading column beside it. The
-    // relation is said in the goal ref's own hover.
+    // The PR's number lives in the refs slot, not the title, matching every other
+    // card. Both ways to the PR are one `<Ref>` token. The goal sits beside it as
+    // a second token; the relation is said in its own hover.
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
         {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
-    // The name is the way onto the pull request's page — its review threads, its
-    // checks and the work on its branch — which the rack named and offered no way
-    // to until the page existed. Every other card that names a thing with a page
-    // opens it from the title, and this is that.
     open: () => actions.selectPr(pr.number),
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
-    // Nothing under the title on a pull request the harness is leaving alone. Both
-    // halves of the sub-line are answers to *why is this not moving*, and the
-    // struck eye has already given the only one that matters: nobody asked it to.
-    // A row nothing will happen to spending a second line on what it is waiting for
-    // is the same mistake the state word made, one line lower — and it is drawn on
-    // the rows that are already the least worth reading.
+    // Nothing under the title on a PR the harness is leaving alone — the struck
+    // eye already says why it isn't moving.
     facts: unwatched ? undefined : prFacts(pr, view.now),
-    // Whose court it is in, behind the marker and **without the word**.
-    //
-    // The word was the rack's own worst column. Four of five rows read
-    // `unwatched`, which the struck eye and the spent dimming had each already
-    // said — so the card spent 104px, a mono uppercase run and the loudest ink on
-    // the row restating the one thing an operator could not miss. A state column
-    // earns its width when the rows disagree; a column that says the same word
-    // down its whole length is a caption, and it drowned `you` — the one arm that
-    // is actually somebody's move — in four repetitions of a word that is not.
-    //
-    // So the court is a `?` on the rail's narrow rung with the server's own
-    // sentence behind it, and what stays *on the glass* is the state each row
-    // already carries in a mark: the eye for the watch, the checks chip for a
-    // stall, the Yours band for the pull requests somebody put on you.
+    // Court behind the marker, without the word: four of five rows used to read
+    // `unwatched`, already said by the struck eye and spent dimming, drowning the
+    // one arm (`you`) that's actually somebody's move. So the state stays in a
+    // `?` with the server's sentence behind it; what's on the glass is the marks
+    // (eye, checks chip, Yours band).
     why: unwatched ? null : pr.attention.reasons.join(' '),
-    // **In the lamp slot, at the head of the row.** It stood in the reading slot,
-    // third of three glyphs, which put it a different distance along the card on
-    // every row depending on what the two beside it had to draw — the one mark on
-    // this rack that says *something is happening to this right now* was the one an
-    // eye could not find twice in the same place. The lamp column is what that
-    // grammar is for: `PanelRow` holds it open on every row once any row fills it,
-    // so the mark is either there or visibly not, always at the same x.
-    //
-    // The column is absent altogether while no agent is out, so a quiet rack pays
-    // no gutter for it.
+    // Lamp slot: the one mark saying something is happening *right now*, held
+    // open at a fixed x by `PanelRow` once any row fills it. Absent column when
+    // no agent is out.
     lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
-    // What is happening to this pull request *now* beats what its checks last
-    // said: an agent on the branch is about to change them, so the chip is a
-    // reading of a commit that is being replaced. Only while one is actually on
-    // it — every other row keeps its checks.
-    // **Checks first, and the two marks always reserved.** The strip is a short
-    // run of boxes and its raggedness is the whole of how busy the card looks, so
-    // the reading a pull request nearly always has leads it: a provider reports
-    // checks on almost every one, a fleet review on most, a pack on a handful.
-    // The marks behind it hold their boxes on every row of the rack rather than
-    // only where some row fills them — `reserve` asked whether the column exists
-    // *on this card*, which made a rack of unread pull requests a different shape
-    // from a rack of read ones, and neither shape was wrong to look at alone.
+    // Checks first (an agent on the branch is about to replace them, so the chip
+    // reads a commit being superseded), then review, then comments, then pack —
+    // the order the conversation about a diff happens in. All four reserve their
+    // box on every row so the rack keeps one shape.
     reading: (
       <>
         {onIt === undefined ? <CiMark pr={pr} reserve onOpen={() => actions.selectPr(pr.number)} /> : <CiSlot />}
-        {/* The fleet's own reading of the diff, beside whatever the row's checks
-            are saying — it survives an agent taking the chip's place, because
-            what was already read does not change when a branch moves. */}
+        {/* The fleet's own reading of the diff; survives an agent taking the
+            chip's place since what was already read doesn't change on a move. */}
         <ReviewMark review={pr.review} now={view.now} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether anybody is waiting on an answer, which is the fourth verdict
-            and the one the row used to say as a fact. `comments 1` sat on the
-            sub-line beside `waiting 3d` as though the two were the same kind of
-            thing: one is how long something has been true and the other is a
-            question nobody has answered.
-
-            **Beside the review and ahead of the pack**, which is the one place the
-            run departs from ordering by how often a reading exists. The three
-            before it are the conversation about this diff in the order it happens
-            — the machine read it, the fleet read it, a person asked something —
-            and a reader following that sequence finds the unanswered question
-            where the sequence puts it. The pack is not in that sequence at all. */}
+        {/* Whether anybody is waiting on an answer — a verdict, not a fact like
+            an age, so it left the sub-line for its own mark. */}
         <CommentsMark comments={pr.unresolvedComments} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether there is a pack to read, which is none of the three verdicts
-            beside it: those are about the pull request, and this is about a
-            document somebody wrote about it. The ask and the reading are both on
-            the page this opens. */}
+        {/* Whether there is a pack to read — about a document, not the PR itself. */}
         <PackMark pack={pr.pack} reserve onOpen={() => actions.selectPr(pr.number)} />
       </>
     ),
-    // At the **head of the readings**, where the row's other one-glance answers
-    // are. It stood ahead of the title, between the agent lamp and the author —
-    // the row's only control marooned among its marks, with the three readings it
-    // belongs beside a column away. The question it answers is theirs: the checks
-    // say whether the branch is sound, the review whether anybody has read it, and
-    // this whether the harness is looking at all. → `PanelRowModel.toggle`
+    // Head of the readings, beside the row's other one-glance answers.
+    // → `PanelRowModel.toggle`
     toggle: (
       <AsyncButton
         className="cn-eye"
@@ -1181,30 +838,18 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
       </AsyncButton>
     ),
     spent: unwatched,
-    // And the row itself says so, which is the reading that carries across a card:
-    // the marker above is where to *go*, this is what is *happening*.
     live: onIt !== undefined,
   };
 }
 
 /**
- * What is true of this pull request that the ladder and the court do not say.
- *
- * `branch` used to be the only one, and it is the row's least useful fact: the
- * title says what the work is, the refs say where it is, and a slug repeats both
- * in a form nothing here is asked in. These three are each a *reason a pull
- * request is not merged yet*, which is the question a rack of open pull requests
- * exists to answer — and each is drawn only where it is true, so a row with none
- * of them is visibly a pull request with nothing in its way.
- *
- * `comments` was the third and has left: an unanswered thread is not a quantity
- * about the pull request the way an age is, it is a verdict on it, and it wears
- * {@link CommentsMark} beside the three verdicts it belongs with.
+ * What is true of this pull request that the ladder and the court do not say —
+ * each a reason it's not merged yet, drawn only where true. `comments` moved
+ * out to {@link CommentsMark}: an unanswered thread is a verdict, not a fact.
  */
 function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
   const facts: { label: string; value: string; alarm?: boolean }[] = [];
-  // Only the real conflict: `behind` is a base the harness updates by itself, and
-  // an alarm on it would be an alarm on every pull request open while main moves.
+  // Only the real conflict: `behind` updates itself and would alarm on every PR.
   if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
   const since = pr.attention.reviewWaitingSince;
   if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
@@ -1212,14 +857,10 @@ function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
 }
 
 /**
- * The watch switch, as the state it is in rather than as the word for the other
- * one.
- *
- * `watch` / `unwatch` was a verb that changed under the pointer: a row said
- * `unwatch` precisely when it *was* watched, so the card's own text contradicted
- * every row it appeared on until you worked out it was an instruction. An open eye
- * says the harness is looking at this; a struck one says it is not. The verb
- * survives in the hover, where an instruction belongs.
+ * The watch switch, as the state it is in rather than the verb for the other
+ * one — `watch`/`unwatch` text contradicted itself until read as an
+ * instruction. An open eye means watched; struck means not. The verb survives
+ * in the hover.
  */
 function Eye({ open }: { open: boolean }): JSX.Element {
   return (
@@ -1237,22 +878,14 @@ function Eye({ open }: { open: boolean }): JSX.Element {
 }
 
 /**
- * A queued dispatch, as a way to what it is queued against — the origin is a goal
- * ref as often as a pull request, so it goes through `Ref` rather than out to the
- * provider unconditionally, and the reason it quotes carries `#n` mentions of its
- * own.
+ * A queued dispatch, as a way to what it is queued against — the origin goes
+ * through `Ref` since it's a goal ref as often as a PR. Drawn further back than
+ * a readying row: same tint (harness work, not a keyboard), but dotted not
+ * dashed, one stage behind. Not a button. The state word keeps its own tone
+ * (`unapproved` ask, `capped` hold) rather than the row's colour.
  *
- * **Drawn as further back than a readying row, not as an agent.** It takes the
- * readying tint — this is the harness's own work, not somebody at a keyboard —
- * but dotted where that row is dashed, because it is one stage behind it: nothing
- * has been handed to the executor yet. It is not a button for the reason those
- * rows are not either. What it does *not* borrow is the tint on its state word:
- * `unapproved` is a real ask and `capped` a real hold, so the chip keeps the tone
- * the verdict earns rather than the row's own colour.
- *
- * Exported for `test/panelRows.test.ts`, which asserts the queue's sentence
- * reaches the model verbatim — the band is collapsed by default, so a test that
- * scraped the rendered card would be asserting against markup nobody rendered.
+ * Exported for `test/panelRows.test.ts`, since the collapsed-by-default band
+ * has no rendered markup to scrape.
  */
 export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const config = view.state.config;
@@ -1264,40 +897,25 @@ export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitAct
     title: item.title,
     refs: <Ref to={item.origin} />,
     facts: [{ label: 'rule', value: item.rule }],
-    // `QueueStatus` *is* the row's state — dispatching, or one of the named
-    // reasons it is not — so it wears the state column rather than sitting as a
-    // fact beside a bare `?`. Same duplication the rack and the goals card had:
-    // the word and the sentence that expands it were a column apart, and the one
-    // with the width said nothing until hovered.
+    // `QueueStatus` *is* the row's state, so it wears the state column.
     whyLabel: item.status,
-    // `unapproved` is the one held reason that is *your* move — a decomposition
-    // nobody has accepted waits on a person, not on the harness. The rest are the
-    // harness stopped: a throttle to sit out, a per-plan cap, an earlier rule
-    // holding the issue, no headroom.
+    // `unapproved` is the one held reason that is your move; the rest are the
+    // harness stopped (throttle, per-plan cap, an earlier hold, no headroom).
     whyTone: item.status === 'unapproved' ? 'ask' : held ? 'hold' : 'quiet',
-    // The queue's own sentence, verbatim and unre-worded — the direct answer to
-    // "are we working on the right thing". Behind the marker rather than on the
-    // glass: it is a paragraph on the rows that are held, and the word that says
-    // *which* rows those are is now the marker's own label.
+    // The queue's own sentence, verbatim, behind the marker rather than on the glass.
     why: item.reason,
     chips:
-      // Why this row is where it is. Without it a flagged goal's parts sit at the
-      // top of the panel with nothing anywhere connecting the order to the click
-      // that caused it.
+      // Why this row is where it is — connects a flagged goal's ranking to its cause.
       item.expedited === true ? (
         <Tag title="Its goal is marked a priority, so everything under it is ranked first">priority</Tag>
       ) : undefined,
-    // What this row will run on, and the one place it can be changed before it
-    // runs. The queue is where the judgement is available — an operator reading
-    // "resolve the conflict on issue/390/watcher" knows it is mechanical work, and
-    // the row is in front of them.
+    // What this row will run on, changeable here before it runs.
     action: (
       <ProfilePicker
         profiles={config.profiles}
         value={item.override ?? null}
-        // Only meaningful while nothing is overridden: with an override standing,
-        // `item.profile` *is* the override, and naming it as the fallback would
-        // promise that clearing the control changes nothing.
+        // Only meaningful while nothing is overridden — with one standing,
+        // `item.profile` *is* the override.
         defaultProfile={item.override === undefined ? (item.profile ?? null) : null}
         inheritLabel={item.profileSource === 'pin' && item.override === undefined ? 'Pinned' : 'Auto'}
         onPick={(profile) => void actions.setUpNextProfile(item.origin, profile)}

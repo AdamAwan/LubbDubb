@@ -3,12 +3,9 @@ import { prRef, type PrRefStyle } from '../prRef.js';
 import type { PartOutcomeKind, Plan, PlanPart, PullRequest } from '../types.js';
 
 /**
- * Scheduling a multi-PR plan's parts, as pure functions over the part rows.
- *
- * The store holds intent and the reconciler folds reality onto it; everything
- * here — readiness, base selection, ordering, the prompt's "what else is going
- * on" context — is derived, so the dispatcher and the cockpit can't disagree
- * about a plan the way two independent readings would.
+ * Scheduling a multi-PR plan's parts, as pure functions over the part rows. The
+ * store holds intent and the reconciler folds reality onto it; everything here is
+ * derived, so the dispatcher and the cockpit cannot disagree about a plan.
  */
 
 /** The origin a part's agent is dispatched against — per-part, so every origin-keyed mechanism works unchanged. */
@@ -17,10 +14,9 @@ export function partOrigin(issueNumber: number, slug: string): string {
 }
 
 /**
- * The branch a part works on. Note this is why the planner lives on `plan/issue/<n>`
- * and why an issue that was ever worked as `single` blocks its own parts: git stores
- * refs as files, so `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot
- * coexist — the second needs the first to be a directory.
+ * The branch a part works on. Git stores refs as files, so `refs/heads/issue/12`
+ * and `refs/heads/issue/12/<slug>` cannot coexist — why the planner lives on
+ * `plan/issue/<n>` and an issue ever worked as `single` blocks its own parts.
  */
 export function partBranch(issueNumber: number, slug: string): string {
   return `issue/${issueNumber}/${slug}`;
@@ -38,18 +34,10 @@ export function bySlug(parts: PlanPart[]): Map<string, PlanPart> {
 }
 
 /**
- * A part's declared dependencies, in declared order, skipping any slug the index
- * doesn't hold — an amendment may have retired a part something else still names,
- * and a dangling slug is not a dependency anything can wait for.
- *
- * `dependsOn` used to be capped at one entry at the zod boundary, as the static
- * form of "a part may stack on at most one *open* dependency" (issue #170). The
- * rule it approximated is real; the approximation refused something safe. A part
- * with several prerequisites is a **rejoin**: it starts only once all of them have
- * settled, at which point *none* is open and its base is unambiguously the
- * integration branch. The dangerous case — two dependencies still in flight, with
- * no single branch to cut from — is still refused, but dynamically, by
- * `PlanReconciler.readiness`, which is where the rule was always true.
+ * A part's declared dependencies, in declared order, skipping any slug the
+ * index doesn't hold. Several prerequisites is a rejoin, allowed because it
+ * starts only once all have settled; two still in flight is refused by
+ * `PlanReconciler.readiness`.
  */
 export function dependenciesOf(part: PlanPart, index: Map<string, PlanPart>): PlanPart[] {
   const deps: PlanPart[] = [];
@@ -61,18 +49,10 @@ export function dependenciesOf(part: PlanPart, index: Map<string, PlanPart>): Pl
 }
 
 /**
- * How deep in a stack a part sits — 0 for a part with no dependency. Bottoms are
- * dispatched first, so the branch a dependent will base on exists sooner.
- *
- * **Longest path, not the first prerequisite that happens to be listed.** A part
- * waiting on several must never sort ahead of something it waits on, and
- * `dependsOn[0]` gets exactly that wrong the first time a plan rejoins. Cycle-
- * guarded by the walking set: ingestion refuses cycles, but this runs against
- * whatever the store happens to hold, and a dispatch-order heuristic must not spin.
- *
- * (`layoutFloor` on the cockpit's Goal Floor computes the same longest-path
- * depth for a *column*. Deliberately not shared: the two answer for different
- * purposes, and `test/workGraph.test.ts` asserts `src/` and `web/` stay apart.)
+ * How deep in a stack a part sits — 0 for a part with no dependency. Bottoms
+ * are dispatched first. Longest path, not `dependsOn[0]`, or a rejoin sorts
+ * ahead of something it waits on; cycle-guarded, since this runs against
+ * whatever the store holds.
  */
 export function partDepth(part: PlanPart, index: Map<string, PlanPart>): number {
   const depths = new Map<string, number>();
@@ -92,12 +72,10 @@ export function partDepth(part: PlanPart, index: Map<string, PlanPart>): number 
 }
 
 /**
- * Has a part produced a branch a dependent could actually base on? `merged` is
- * unconditional; otherwise the branch has to carry commits beyond the integration
- * branch, which is the whole reason `dispatched` isn't enough on its own — a
- * dispatched part's branch exists the moment its worktree does, and basing on an
- * empty branch gains nothing. `pushed` is the git observer's answer (the only
- * source that sees a branch before a PR exists).
+ * Has a part produced a branch a dependent could actually base on? Settled is
+ * unconditional; otherwise the branch must carry commits beyond the
+ * integration branch. `pushed` is the git observer's answer, the only source
+ * that sees a branch before a PR exists.
  */
 export function dependencySatisfied(dep: PlanPart, pushed: (part: PlanPart) => boolean): boolean {
   if (partSettled(dep)) return true;
@@ -106,24 +84,11 @@ export function dependencySatisfied(dep: PlanPart, pushed: (part: PlanPart) => b
 }
 
 /**
- * The base a part's branch is cut from: the branch of its one **unsettled**
- * dependency while that dependency is still in flight (this is the stack), the
- * integration branch once every dependency has reached a terminal or when there are
- * none. So a rejoin — a part naming several prerequisites — bases on the
- * integration branch, because it is only ever asked once all of them have settled.
- *
- * It is never asked to choose between two in-flight dependencies:
- * `PlanReconciler.readiness` holds a part `pending` while more than one is
- * unsettled, which is the dynamic form of the arity cap ingestion used to enforce.
- * Declared order decides if it somehow is, rather than throwing — a base that is
- * merely the wrong one of two is a rebase; a throw here takes the pulse's whole
- * dispatch down.
- *
- * `partSettled` rather than `merged` is load-bearing here, not tidiness. A
- * *concluded* dependency produced no pull request and may never have pushed its
- * branch at all, so returning that branch would hand `WorktreeManager.ensure` a ref
- * it cannot resolve — which throws, deliberately, rather than falling back to an
- * incidental base.
+ * The base a part's branch is cut from: its one unsettled dependency's branch
+ * while that is in flight, the integration branch otherwise. Declared order
+ * decides rather than throwing on two in flight — a wrong base is a rebase, a
+ * throw takes the pulse's whole dispatch down. `partSettled`, not `merged`, is
+ * load-bearing: a concluded dependency may never have pushed its branch.
  */
 export function partBase(
   part: PlanPart,
@@ -146,32 +111,18 @@ export function liveParts(parts: readonly PlanPart[]): PlanPart[] {
 }
 
 /**
- * Is this plan still scheduling something for its issue?
- *
- * The one reading of "the plan owns this issue", asked by the conclusion resolver
- * and by rule `issue-assess`. Purely a question about the plan's **lifecycle**,
- * which is what it always should have been: a plan that has not completed and has
- * not been abandoned is still working its issue, and how many parts it cut the
- * work into has no bearing on that.
- *
- * It briefly had to consult the parts as well, because a plan delivering one pull
- * request carried *no* parts and was scheduled by rule `issue-pickup` instead — so
- * an `active` plan could genuinely be scheduling nothing. Now that every plan has
- * parts and rule `plan-part` schedules all of them, the shape question is gone and
- * so is the second reading.
+ * Is this plan still scheduling something for its issue? The one reading of "the
+ * plan owns this issue", asked by the conclusion resolver and rule `issue-assess`.
+ * Purely a question about the plan's lifecycle — the parts have no bearing on it.
  */
 export function planInFlight(plan: Plan): boolean {
   return plan.status === 'active' || plan.status === 'planning' || plan.status === 'awaiting_approval';
 }
 
 /**
- * Has this part reached a terminal?
- *
- * `merged` and `concluded` both mean finished, and this is the one place that says
- * so. Every roll-up, progress count, dependency test and sibling description asks
- * it rather than comparing to `merged` — which is what stops those sites drifting
- * into disagreeing about what "done" is, the way two independent readings always
- * eventually do.
+ * Has this part reached a terminal? `merged` and `concluded` both mean finished,
+ * and this is the one place that says so — every roll-up, count, dependency test
+ * and sibling description asks it rather than comparing to `merged`.
  */
 export function partSettled(part: PlanPart): boolean {
   return part.status === 'merged' || part.status === 'concluded';
@@ -179,27 +130,18 @@ export function partSettled(part: PlanPart): boolean {
 
 /**
  * Is this part work a person does by hand rather than work an agent is dispatched
- * for? The one predicate that says so, asked by rule `plan-part` (which produces
- * no candidate for one), by the reconciler (which neither folds a PR onto one nor
- * stalls it), and by `partOutcomeNote` (which has no prompt to append to).
- *
- * It reads the *declaration*, not the backing `human_tasks` row, deliberately:
- * a part with no agent, no branch and no PR must be recognisable as such from the
- * part alone, including on the paths that never load the task — otherwise a human
- * part whose row failed to write would quietly be dispatched to an agent, which is
- * the one outcome the whole feature exists to prevent.
+ * for? The one predicate that says so. It reads the *declaration*, never the
+ * backing `human_tasks` row: a human part whose row failed to write must still be
+ * recognisable from the part alone, or it is quietly dispatched to an agent.
  */
 export function partIsHuman(part: PlanPart): boolean {
   return part.expectedKind === 'human';
 }
 
 /**
- * What a part produced, or null while it is still in flight.
- *
- * `code` is **derived from `merged`, never stored**: a part that merged a pull
- * request has said what it produced by producing it, and writing the column too
- * would put a second answer inside `observePartPr`'s path — one more thing the PR
- * fold could get wrong, for nothing.
+ * What a part produced, or null while it is still in flight. `code` is **derived
+ * from `merged`, never stored** — storing it would put a second answer inside
+ * `observePartPr`'s path.
  */
 export function partOutcomeKind(part: PlanPart): PartOutcomeKind | null {
   if (part.status === 'merged') return 'code';
@@ -216,26 +158,13 @@ export function planProgress(parts: PlanPart[]): { settled: number; total: numbe
 /**
  * What the world says about one part's pull request — the pure core of
  * `PlanReconciler.foldPr`. Returns the patch to apply, or null for "nothing
- * observable, the caller's other folds get a turn".
- *
- * The readings, in the order they're allowed to fire:
- *
- * 1. **An open PR on the branch** — the part is in review. Unchanged.
- * 2. **A merged PR** in the closed window, matched by branch *or* number. Merged
- *    is terminal and idempotent, so the looser match is safe and catches a part
- *    whose PR opened and merged between two pulses.
- * 3. **A closed-unmerged PR**, matched by **number only**, and only when this
- *    part was tracking that number. It goes back to `ready` with `prNumber`
- *    cleared, so the plan re-does the work instead of quietly completing on an
- *    abandoned PR. Matching by *branch* here would be a trap: a dead PR sits in
- *    the retention window for hours, so the part would be yanked back to `ready`
- *    on every pulse — including the ones after it was re-dispatched. Clearing the
- *    number is what makes the transition fire exactly once.
- * 4. **Absence** — the pre-existing inference, and still the fallback: a part
- *    that *was* in review whose PR is in neither list merged, out of sight. It
- *    has to stay, or a PR that merged before the retention window would read as
- *    un-merged and its plan would reopen days of finished work. The observed
- *    signals above replace the inference only *within* the window.
+ * observable". Four readings, in the order they may fire: an open PR on the
+ * branch (in review); a merged PR matched by branch *or* number (terminal,
+ * idempotent, safe to match loosely); a closed-unmerged PR matched by
+ * **number only** and only when this part tracked it (back to `ready`,
+ * clearing the number so the transition fires exactly once); or absence — a
+ * part that *was* in review whose PR merged out of the retention window,
+ * which must still read as merged rather than reopening finished work.
  */
 export function observePartPr(
   part: PlanPart,
@@ -273,16 +202,9 @@ export function partHasWork(part: PlanPart): boolean {
 
 /**
  * Amending a plan: which existing parts the new declaration retires.
- * `upsertPlanParts` merges on slug and never deletes, so without this a part
- * dropped from an amended plan simply lingers, indistinguishable from one still
- * to come.
- *
- * A part the planner no longer declares is retired **only when nothing was
- * started for it**. One with an agent on it, a branch, or an open/merged PR is
- * left exactly as it is: retiring it would strand a PR that the reconciler still
- * folds reality onto, and a human reviewing that PR would have no idea the
- * harness had written it off. Un-declaring in-flight work is a request to *stop*,
- * which is a kill, not a plan edit.
+ * `upsertPlanParts` merges on slug and never deletes, so without this a
+ * dropped part lingers. Retired only when nothing was started for it —
+ * retiring in-flight work would strand a PR the reconciler still folds onto.
  */
 export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPart[] {
   const keep = new Set(declared);
@@ -290,11 +212,9 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
 }
 
 /**
- * The current plan, rendered for a *replanning* agent — the state the `issue-plan`
- * template has no placeholder for, and the whole reason a replan is more than a
- * re-run. It has to carry each part's slug (the merge key an amendment turns on)
- * and each part's real-world position, because what the planner may still change
- * depends entirely on whether work has left the harness.
+ * The current plan, rendered for a *replanning* agent. It has to carry each part's
+ * slug (the merge key an amendment turns on) and its real-world position, since
+ * what the planner may still change depends on whether work has left the harness.
  */
 export function currentPlanSummary(plan: Plan, parts: PlanPart[], style: PrRefStyle): string {
   const live = liveParts(parts);
@@ -306,19 +226,16 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[], style: PrRefSt
         : p.prNumber !== null
           ? `PR ${prRef(p.prNumber, style)}`
           : (p.branch ?? 'no branch yet');
-    // Every declared prerequisite, not the first: an amendment turns on slugs, so a
-    // summary naming one of a rejoin's two would invite the replanner to drop the other.
+    // Every declared prerequisite, not the first — naming one of a rejoin's two
+    // would invite the replanner to drop the other.
     const stacks = p.dependsOn.length === 0 ? '' : `, stacks on ${p.dependsOn.map((d) => `"${d}"`).join(' + ')}`;
-    // Only when it says something: every other part is expected to produce code,
-    // and saying so on each line would bury the two that don't.
+    // Only when it says something — every other part expects code.
     const expects = partIsHuman(p)
       ? ', a step for a person'
       : p.expectedKind && p.expectedKind !== 'code'
         ? `, planned as a ${p.expectedKind}`
         : '';
-    // The declaration fields an amendment has to re-state to keep: a replanner
-    // shown only the prose scope re-declares the part without them, and `touches`
-    // silently empties on a part nobody meant to change.
+    // A replanner silently empties `touches` on an unchanged part otherwise.
     const owns = p.touches.length === 0 ? '' : `\n  touches: ${p.touches.join(', ')}`;
     const size = p.size === null ? '' : `\n  size: ${p.size}`;
     const done = p.acceptance === null ? '' : `\n  done when: ${p.acceptance}`;
@@ -329,11 +246,9 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[], style: PrRefSt
 }
 
 /**
- * What a part agent is told about its siblings — goal 3 of the design, and the
- * thing a second agent on the same issue has never had. Split by whether the work
- * exists yet, because the two halves mean different things to the agent: the first
- * is code it may find on its branch and must not redo, the second is work that is
- * explicitly *not* its to do.
+ * What a part agent is told about its siblings, split by whether the work exists
+ * yet: the first half is code it may find on its branch and must not redo, the
+ * second is work that is explicitly not its to do.
  */
 export function siblingContext(
   parts: PlanPart[],
@@ -371,20 +286,6 @@ function describe(parts: PlanPart[], empty: string, style: PrRefStyle): string {
     .join('\n');
 }
 
-/**
- * What a part expected to produce no code is told, appended to its rendered prompt.
- *
- * **Appended, never filled into the template.** Prompt templates are
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so a `{kind}` token would be silently dropped by exactly the
- * deployments that customised most — and this is the instruction without which the
- * part cannot finish at all. Appending has no fallback to get wrong. Same reason
- * `outstandingWorkNote` and the rejection note append.
- *
- * Empty for a `code` or unstated part: its prompt already tells it to open a pull
- * request, and a part that turns out to need no code learns `conclude_part` from
- * the tool list, where a tool belongs.
- */
 /** One thing a part is done when, and whether a reviewer has said it is true. */
 export interface AcceptanceCriterion {
   text: string;
@@ -392,17 +293,10 @@ export interface AcceptanceCriterion {
 }
 
 /**
- * A part's `acceptance` as the checklist the sheet draws.
- *
- * Split on lines rather than sentences: a planner asked for what makes a part done
- * answers with either one sentence or a bulleted list, and splitting prose on `.`
- * would cut `src/store/plans.ts` in half. A single-line acceptance is one
- * criterion, which is the truthful reading of it.
- *
- * Derived on the server and shipped, rather than split again in the browser: the
- * tick is stored against the criterion's own **text**, so a second implementation
- * of this split is a second opinion about what the key is — and the failure would
- * be a tick that silently never matches.
+ * A part's `acceptance` as the checklist the sheet draws. Split on lines rather
+ * than sentences (splitting prose on `.` would cut a path in half). Derived on the
+ * server and shipped: the tick is stored against the criterion's own **text**, so a
+ * second implementation of this split is a tick that silently never matches.
  */
 export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
   if (part.acceptance === null) return [];
@@ -411,9 +305,8 @@ export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
     .split('\n')
     .map((line) =>
       line
-        // The markers a planner writes a list with, and nothing else: the text is
-        // the key, so anything stripped here has to be stripped identically
-        // forever or every stored tick is orphaned at once.
+        // List markers only: the text is the key, so anything stripped here must
+        // be stripped identically forever or every stored tick is orphaned.
         .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
         .trim(),
     )
@@ -422,18 +315,9 @@ export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
 }
 
 /**
- * The two things a part's own declaration says that its rendered prompt does not:
- * the paths it was given, and what its planner said "done" means.
- *
- * Appended for {@link partOutcomeNote}'s reason, and worth appending at all
- * because both are *checked* afterwards: `touches` is what a merged part's writes
- * are compared against (`partScopeDrift`), and `acceptance` is what the plan sheet
- * puts in front of a reviewer as a checklist. An agent that is judged on a
- * criterion should be shown the criterion.
- *
- * Empty when the planner declared neither, which is every plan written before the
- * fields existed — so a prompt that gains nothing is unchanged rather than gaining
- * an empty heading.
+ * The two things a part's own declaration says that its rendered prompt does
+ * not: the paths it was given, and what "done" means. Appended, never
+ * interpolated. Empty when the planner declared neither.
  */
 export function partDeclarationNote(part: PlanPart): string {
   if (part.touches.length === 0 && part.acceptance === null) return '';
@@ -454,6 +338,11 @@ export function partDeclarationNote(part: PlanPart): string {
   return `\n\n---\n\n${lines.join('\n\n')}`;
 }
 
+/**
+ * What a part expected to produce no code is told, appended to its rendered
+ * prompt, never interpolated. Empty for a `code` or unstated part.
+ * → `docs/spec/09-execution.md`
+ */
 export function partOutcomeNote(part: PlanPart): string {
   // A human part never reaches an agent — `partIsHuman` keeps it out of the
   // candidate list entirely — so there is no prompt for this to be appended to.

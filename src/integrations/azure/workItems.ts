@@ -47,21 +47,18 @@ interface AzureWorkItemsOpts {
   /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
   assignedTo?: string;
   /**
-   * When set, resolve tag authorship for work items carrying this tag and expose the
-   * viewer-added subset as `labelsAddedByViewer`, so the dispatcher's ownership gate
-   * (`issuePickupRequireOwnLabel`) can ignore a tag a third party added. Unset =
-   * don't track authorship (no per-item revision fetch). Keyed on the tag so the
-   * extra `listWorkItemUpdates` call only fires for items that actually carry it.
+   * When set, resolve tag authorship for items carrying this tag and expose the viewer-added
+   * subset as `labelsAddedByViewer`, so the ownership gate can ignore a tag a third party
+   * added. Unset means no authorship tracking and no per-item revision fetch.
    */
   ownershipTag?: string;
 }
 
 /**
- * The real `issues` provider for Azure DevOps: reads the work items the harness
- * resolves into PRs from the Azure Boards / Work Item Tracking API. A drop-in for
- * {@link GitHubIssuesIntegration}, reading from the network instead of an injected
- * fake world (so it is *not* `Injectable`). Work-item tags map onto issue
- * `labels`, so the provider-agnostic pickup/priority gates work unchanged.
+ * The real `issues` provider for Azure DevOps, reading the Work Item Tracking API. A drop-in
+ * for {@link GitHubIssuesIntegration} that reads the network rather than an injected world,
+ * so it is *not* `Injectable`. Work-item tags map onto issue `labels`, which is what keeps
+ * the provider-agnostic pickup and priority gates working unchanged.
  */
 export class AzureDevOpsWorkItemsIntegration
   implements
@@ -79,22 +76,18 @@ export class AzureDevOpsWorkItemsIntegration
   readonly id = 'issues:azure';
   readonly capability: WorldCapability = 'issues';
   /**
-   * Work item descriptions and discussion comments are HTML fields — Azure stores
-   * and renders them as markup, so Markdown sent to one arrives as its own
-   * punctuation. The *pull request* side of the same provider renders Markdown,
-   * which is why this rides on the integration rather than on the provider family.
+   * Work item descriptions and comments are HTML fields, so Markdown sent to one arrives as
+   * its own punctuation. The pull-request side of the same provider renders Markdown, which
+   * is why this rides on the integration rather than the provider family.
    */
   readonly bodyFormat = 'html' as const;
 
   private lastGood: Issue[] | null = null;
   /**
-   * Tag authorship per work item, gated on the revision the answer was derived
-   * from. The one per-item read this provider makes, and the one whose change
-   * token is exact — see {@link viewerAddedTagsFor}.
-   *
-   * Distinct from {@link lastGood} in the way that matters: that is the *failure*
-   * path, replaying a world of unknown age and saying so with `stale: true`; this
-   * is a current answer that cost no request, and never touches that flag.
+   * Tag authorship per work item, gated on the revision the answer was derived from — the one
+   * per-item read this provider makes ({@link viewerAddedTagsFor}). Unlike {@link lastGood},
+   * which replays a world of unknown age as `stale`, this is a current answer that cost no
+   * request and never touches that flag.
    */
   private readonly tagAuthorship = new HydrationCache<{ token: string; tags: string[] }>();
 
@@ -106,16 +99,10 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * The mirror's read: work items in either state changed since `since` (issue #329).
-   *
-   * Under the same `workItemTag` / `assignedTo` narrowing {@link snapshot} applies —
-   * this provider's whole assignment filter — so the mirror holds the population the
-   * harness works and not a wider one.
-   *
-   * Neither the hierarchy nor the tag-authorship revisions are hydrated, unlike the
-   * snapshot: a history row is read and ordered, never dispatched from, and those
-   * two reads are per-item. Paying them across a month of backfill would make the
-   * first sweep cost a request per ticket.
+   * The mirror's read: work items in either state changed since `since`, under the same
+   * `workItemTag` / `assignedTo` narrowing {@link snapshot} applies, so the mirror holds the
+   * population the harness works. Neither the hierarchy nor the tag-authorship revisions are
+   * hydrated — both are per-item, and a month of backfill would cost a request per ticket.
    */
   async listTicketHistory(since: string): Promise<TrackerItem[]> {
     const { api, workItemTag, assignedTo } = this.opts;
@@ -125,9 +112,8 @@ export class AzureDevOpsWorkItemsIntegration
       title: w.title,
       labels: w.tags,
       state: normalizeState(w.state),
-      // The raw System.State kept alongside the open/closed collapse, exactly as
-      // the snapshot keeps it — and the only place a *closed* item's own word is
-      // ever read, since the live overlay only ever sees the open set.
+      // The raw System.State beside the open/closed collapse, as the snapshot keeps it — and
+      // the only place a closed item's own word is read, since the overlay sees only the open set.
       workItemState: w.state,
       url: w.url,
       createdAt: w.createdAt,
@@ -143,8 +129,8 @@ export class AzureDevOpsWorkItemsIntegration
       const hierarchy = await this.hydrateHierarchy(raw);
       const issues = await Promise.all(
         raw.map(async (w): Promise<Issue> => {
-          // Only pay the per-item revision fetch when the ownership gate is on and
-          // the item actually carries the gate tag — others can't be picked up anyway.
+          // Only pay the per-item revision fetch when the gate is on and the item carries
+          // the gate tag — others cannot be picked up anyway.
           const tracksOwner = viewer !== null && ownershipTag !== undefined && w.tags.includes(ownershipTag);
           const labelsAddedByViewer = tracksOwner
             ? await this.viewerAddedTagsFor(w, viewer, hydrationMaxAgeMs(plan, issueReadRef(w.id)))
@@ -160,17 +146,16 @@ export class AzureDevOpsWorkItemsIntegration
             issueType: w.workItemType,
             areaPath: w.areaPath,
             ...hierarchy(w),
-            // Preserve the raw System.State alongside the open/closed collapse so the
-            // dispatcher's state-based pickup gate and "in review" back-off can see it.
+            // The raw System.State, which the state-based pickup gate and "in review"
+            // back-off both read.
             workItemState: w.state,
             linkedPrNumber: linkedPrFromRelations(w.relationUrls),
             url: w.url,
           };
         }),
       );
-      // Anything that has left the open set — or been filtered out of it — will
-      // never be asked about again, so its authorship entry is dead weight. Done
-      // after the fan-out so a hit this pulse is not evicted before it is read.
+      // Anything out of the open set is never asked about again. After the fan-out, so a hit
+      // this pulse is not evicted before it is read.
       this.tagAuthorship.retain(raw.map((w) => w.id));
       this.lastGood = issues;
       return { issues };
@@ -179,8 +164,8 @@ export class AzureDevOpsWorkItemsIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      // No successful read yet — nothing to degrade to. An empty slice would make
-      // every watched work item look gone; fail the pulse instead.
+      // Nothing to degrade to: an empty slice would make every watched work item look gone,
+      // so fail the pulse instead.
       if (this.lastGood === null) throw err;
       return { issues: this.lastGood, stale: true };
     }
@@ -190,20 +175,11 @@ export class AzureDevOpsWorkItemsIntegration
    * The tags **this viewer** added to `w`, from its revision history — the
    * `labelsAddedByViewer` the dispatcher's ownership gate reads.
    *
-   * Change-gated on `(viewer, System.ChangedDate)`, which is the rare token that
-   * covers the answer *exactly* rather than approximately. Tag authorship is a
-   * fold over the item's revisions; a revision is the only thing that can add,
-   * remove or re-author a tag; and Azure stamps `System.ChangedDate` on every
-   * revision it accepts. So an item whose `changedAt` has not moved cannot have
-   * a different answer, and the `listWorkItemUpdates` call is pure cost. That
-   * holds for the harness's own writes too: `setWorkItemTag` is a revision, so
-   * the next list read carries a new `changedAt` and the next fold is paid for.
-   *
-   * The care here is not incidental. `labelsAddedByViewer` gates pickup fleet
-   * wide, and a wrong empty answer resolves every issue's labels to `[]` — at
-   * which point nothing is ever picked up and *nothing is red*. So an item Azure
-   * reported without a `changedAt` is never gated and never stored: it is read
-   * afresh every pulse, which costs a request and can only be right.
+   * Change-gated on `(viewer, System.ChangedDate)`, which covers the answer exactly: every
+   * revision Azure accepts stamps `ChangedDate`, and only a revision can change tag
+   * authorship. A wrong empty answer here resolves every issue's labels to `[]`, at which
+   * point nothing is ever picked up and nothing is red — so an item reported without a
+   * `changedAt` is never gated and never stored, and is read afresh every pulse.
    * → [06](../../../docs/spec/06-issue-pickup.md)
    */
   private async viewerAddedTagsFor(w: AzWorkItem, viewer: string, maxAgeMs: number): Promise<string[]> {
@@ -218,25 +194,16 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * Resolve the relations around the snapshot's work items — the parent Feature,
-   * the children, the siblings under the same parent, and the Predecessors each
-   * item waits on — into the relation fields of {@link Issue}.
+   * Resolve the relations around the snapshot's work items — parent, children, siblings and
+   * Predecessors — into the relation fields of {@link Issue}.
    *
-   * Two batched reads at most, whatever the size of the board. The first fetches
-   * every id the snapshot's own items point at (parents and children); the second
-   * fetches the *other* children of those parents, which is where siblings come
-   * from and which nothing in the first round names. Both are skipped entirely
-   * when there is nothing to fetch, so a flat board costs no request at all.
+   * Two batched reads at most: the ids the snapshot's items point at, then the *other*
+   * children of those parents (the siblings), which nothing in the first round names. Both
+   * are skipped when there is nothing to fetch, so a flat board costs no request.
    *
-   * The listed items are narrowed by tag/assignee, so a parent Feature is almost
-   * never among them — reading the relations off the item without hydrating them
-   * would leave an id and no title, which is not context an agent can use.
-   *
-   * A failure here is recorded and then **dropped**: the returned mapper yields no
-   * relation fields, which reads downstream as "this provider doesn't track
-   * hierarchy" — the same shape GitHub has. Losing the hierarchy costs the note
-   * appended to a prompt; faulting would cost the whole snapshot, and the world is
-   * worth more than the annotation.
+   * A failure is recorded and then **dropped** — the mapper yields no relation fields, which
+   * reads downstream as a provider that does not track hierarchy. Losing the hierarchy costs
+   * a note on a prompt; faulting would cost the whole snapshot.
    */
   private async hydrateHierarchy(raw: AzWorkItem[]): Promise<(w: AzWorkItem) => Partial<Issue>> {
     const none = (): Partial<Issue> => ({});
@@ -247,15 +214,13 @@ export class AzureDevOpsWorkItemsIntegration
       for (const w of raw) {
         if (w.parentId !== null) wanted.add(w.parentId);
         for (const id of w.childIds) wanted.add(id);
-        // Predecessors ride in the same batch rather than a pass of their own: a
-        // dependency is almost always a sibling under the same Feature, so the ids
-        // are usually already listed and the round costs no extra request.
+        // Predecessors ride in this batch: a dependency is almost always a sibling under
+        // the same Feature, so the ids are usually listed already.
         for (const id of w.dependsOnIds) wanted.add(id);
       }
       for (const w of await this.fetch([...wanted], known)) known.set(w.id, w);
 
-      // Round two: a parent's *other* children. Only nameable once the parents
-      // themselves have been read, which is why this cannot fold into round one.
+      // Round two: a parent's *other* children, only nameable once the parents are read.
       const siblings = new Set<number>();
       for (const w of raw) {
         const parent = w.parentId === null ? undefined : known.get(w.parentId);
@@ -265,19 +230,17 @@ export class AzureDevOpsWorkItemsIntegration
 
       return (w: AzWorkItem): Partial<Issue> => {
         const parent = w.parentId === null ? null : (known.get(w.parentId) ?? null);
-        // An unreadable parent is *unknown*, not absent: reporting `null` here
-        // would tell the orphan check this item belongs to no feature, which is a
-        // different — and wrong — thing to say about a link we simply couldn't read.
+        // An unreadable parent is *unknown*, not absent: `null` would tell the orphan check
+        // this item belongs to no feature.
         if (w.parentId !== null && parent === null) {
           return { children: relatives(w.childIds, known), dependsOn: relatives(w.dependsOnIds, known) };
         }
         return {
           parent: parent === null ? null : relative(parent, { withBody: true }),
           children: relatives(w.childIds, known),
-          // Always present on this provider, empty included: an empty list is
-          // "this board tracks dependencies and this item waits on nothing",
-          // which is a different statement from the `undefined` a flat tracker
-          // leaves — and the sequence gate reads the difference.
+          // Always present, empty included: an empty list says this board tracks
+          // dependencies and this item waits on none, which the sequence gate reads
+          // differently from a flat tracker's `undefined`.
           dependsOn: relatives(w.dependsOnIds, known),
           ...(parent === null
             ? {}
@@ -310,14 +273,10 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * The work item's side of "every pull request has a work item".
-   *
-   * On the `issues` provider rather than the source-control one because the write
-   * is a work-item PATCH — Azure derives a pull request's `workItemRefs` from these
-   * relations and offers no way to set them from the pull request. The next snapshot
-   * reads the relation straight back out as `linkedPrNumber`, which is what closes
-   * the loop: the desk's own idempotence check is the provider's answer, not a
-   * belief the harness holds separately.
+   * The work item's side of "every pull request has a work item". On the `issues` provider
+   * because the write is a work-item PATCH — Azure offers no way to set it from the pull
+   * request. The next snapshot reads it back as `linkedPrNumber`, so the desk's idempotence
+   * check is the provider's answer rather than a belief the harness holds.
    */
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
     await this.opts.api.linkWorkItemToPull(input.number, input.prNumber);
@@ -325,10 +284,8 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * The plan's status comment on the work item's discussion: created once, then
-   * edited in place by the id the create returned — one living comment per plan
-   * rather than a stream. Azure addresses an edit by (work item, comment), so both
-   * ride in.
+   * The plan's status comment on the work item's discussion: created once, then edited in
+   * place by the id the create returned — one living comment per plan, not a stream.
    */
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     const existing = input.commentRef === null ? null : Number(input.commentRef);
@@ -340,25 +297,16 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * File a new work item (issue #394).
-   *
-   * Both halves of a correct filing happen here, which is the whole point of the
-   * seam: the item is created **as** its type and carrying its tags — Azure refuses
-   * an untyped create outright, and an item that appears untagged is one the pickup
-   * gate can miss — and then, where the caller named one, the `related` link is hung
-   * off it. Two writes, because Azure has no way to create a work item already
-   * related to another; one call, because a caller that could forget the second is
-   * the failure this replaced.
-   *
-   * The relation failing does **not** cost the item. It exists, the operator asked
-   * for it, and a link the caller can add by hand is a smaller loss than a filing
-   * that came back empty — so the throw carries the id of what was created.
+   * File a new work item. Both halves of a correct filing happen here: the item is created
+   * **as** its type and carrying its tags — an untagged item is one the pickup gate can miss
+   * — and then the `related` link is hung off it where the caller named one. Two writes,
+   * because Azure cannot create an already-related item; one call, so no caller can forget
+   * the second. A failed relation does not cost the item: the throw carries its id.
    */
   async createIssue(input: IssueCreateInput): Promise<SendResult> {
     const created = await this.opts.api.createWorkItem({
-      // Null never reaches here from a filing caller, and `Task` is the historical
-      // default rather than a guess: it is what the prompt hardcoded before the
-      // harness chose types at all.
+      // Null never reaches here from a filing caller; `Task` is the historical default,
+      // what the prompt hardcoded before the harness chose types.
       type: input.type ?? 'Task',
       title: input.title,
       description: input.body,
@@ -379,23 +327,17 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * The project's area tree, straight from the provider.
-   *
-   * Not cached here: `AreaPathDirectory` (`src/intake/areaPaths.ts`) owns how
-   * often this is asked, because it is the thing that knows who is asking and
-   * how stale an answer may be. An integration that cached as well would be a
-   * second policy about the same read, and the two would disagree the day either
-   * moved.
+   * The project's area tree, straight from the provider. Not cached here:
+   * `AreaPathDirectory` (`src/intake/areaPaths.ts`) owns how often it is asked, and a second
+   * cache would be a second policy free to disagree with it.
    */
   async listAreaPaths(): Promise<AreaPathTree> {
     return this.opts.api.listAreaPaths();
   }
 
   /**
-   * Hang this item off its container. The relation is
-   * `System.LinkTypes.Hierarchy-Reverse`, which is what a rollup and a board
-   * position are actually made of — unlike the `related` edge `createIssue` hangs
-   * for a bug, which is deliberately neither.
+   * Hang this item off its container, via `System.LinkTypes.Hierarchy-Reverse` — what a
+   * rollup and a board position are made of, unlike the `related` edge `createIssue` hangs.
    */
   async setWorkItemParent(input: WorkItemParentInput): Promise<SendResult> {
     await this.opts.api.setWorkItemParent(input.number, input.parentNumber);
@@ -416,12 +358,9 @@ export class AzureDevOpsWorkItemsIntegration
 }
 
 /**
- * One work item as the summary carried on another — a parent, child or sibling.
- *
- * The body rides only on a parent (`withBody`), because a Feature's description is
- * the goal its children serve and is the one piece of related text an agent needs;
- * carrying every sibling's description would put a whole feature's worth of text
- * on every issue in the snapshot for no reader.
+ * One work item as the summary carried on another — a parent, child or sibling. The body
+ * rides only on a parent (`withBody`): a Feature's description is the goal its children
+ * serve, where every sibling's would be a feature's worth of text with no reader.
  */
 function relative(w: AzWorkItem, opts: { withBody: boolean } = { withBody: false }): IssueRelative {
   return {
@@ -458,12 +397,10 @@ export function parseTags(raw: string | undefined): string[] {
 }
 
 /**
- * Which tags the viewer added, folded from a work item's revision updates. Each
- * update carries System.Tags before/after that revision; a tag in `tagsNew` but not
- * `tagsOld` was added by that revision's author. Later revisions win: a tag re-added
- * by someone else transfers ownership away, a removal clears it. A revision that
- * didn't touch tags (no System.Tags diff) leaves ownership untouched. Pure —
- * unit-testable without the network.
+ * Which tags the viewer added, folded from a work item's revision updates: a tag in `tagsNew`
+ * but not `tagsOld` was added by that revision's author. Later revisions win — a re-add by
+ * someone else transfers ownership away, a removal clears it, a revision that did not touch
+ * tags leaves it alone. Pure, so it is testable without the network.
  */
 export function viewerAddedTags(updates: AzWorkItemUpdate[], viewer: string): Set<string> {
   const owned = new Set<string>();
@@ -491,10 +428,9 @@ export function normalizeState(state: string): IssueState {
 }
 
 /**
- * The PR that resolves a work item, read from its ArtifactLink relations: Azure
- * links a PR as `vstfs:///Git/PullRequestId/{project}%2F{repoId}%2F{prId}`. The
- * trailing segment is the PR id. Returns the most recently listed link, or `null`
- * when nothing links a PR. Pure so it stays unit-testable without the network.
+ * The PR that resolves a work item, from its ArtifactLink relations
+ * (`vstfs:///Git/PullRequestId/{project}%2F{repoId}%2F{prId}` — the trailing segment is the
+ * PR id). The most recently listed link, or `null` when nothing links a PR. Pure.
  */
 export function linkedPrFromRelations(relationUrls: string[]): number | null {
   let linked: number | null = null;

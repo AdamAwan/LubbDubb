@@ -4,16 +4,10 @@ import { ALLOWED_MCP_TOOLS } from '../mcp/names.js';
 import { DONE_SENTINEL } from './sentinels.js';
 
 /**
- * How a real Claude Code session is made to speak the harness's status protocol.
- *
- * The harness reads two sentinels — a "waiting" one (needs a human) and a "done"
- * one (finished). `claude` emits neither on its own, so these instructions are
- * injected as an appended system prompt. The agent then *announces* its own state
- * instead of the harness guessing it from the shape of its output, which is the
- * whole reason status is readable at all.
- *
- * Tool-permission prompts (a separate CLI concern, not something the model
- * prints) are handled by `--permission-mode`, not by reading output.
+ * How a real Claude Code session is made to speak the harness's status protocol:
+ * two sentinels — waiting and done — that `claude` emits only because this appended
+ * system prompt asks for them. Tool-permission prompts are `--permission-mode`'s
+ * business, never read out of output. → `docs/spec/10-agent-runtimes.md`
  */
 export const PROTOCOL_SYSTEM_PROMPT = [
   'You are running as an autonomous agent inside the LubbDubb harness, driven over a terminal.',
@@ -38,25 +32,12 @@ export const PROTOCOL_SYSTEM_PROMPT = [
 ].join('\n');
 
 /**
- * Appended when the launch carries the MCP tool channel (issue #108).
- *
- * The sentinels are **not** withdrawn here, and that is the design, not caution.
- * They are the degradation floor: the tool channel can be absent (no config, a
- * refused socket, a `claude` that ignores the server) and an agent must still be
- * able to park and finish, which only stdout guarantees. So the prompt states a
- * preference — richer channel first — and the *same* park transition backs both,
- * so an agent that does both, or neither-but-one, is never in a wrong state.
- *
- * `plan_submit` is stated as replacing the `.lubbdubb/plan.json` write; that file
- * path stays wired and stays documented in the planner's own prompt template, so
- * a planner that never sees the tool behaves exactly as it does today.
- *
- * This is also the *only* place several of these tools are named. A tool an agent
- * has to decide to call, and that no dispatch prompt mentions at its point of use,
- * is discoverable from `tools/list` alone — which in practice means an agent shells
- * out to `gh`/`az` instead. `test/mcpChannel.test.ts` classifies every entry of
- * `MCP_TOOL_NAMES` as named here or named at its point of use, so a new tool cannot
- * be added without that decision being made.
+ * Appended when the launch carries the MCP tool channel. The sentinels are **not**
+ * withdrawn — they are the degradation floor when the channel is absent, and the
+ * same park transition backs both. This is also the *only* place several of these
+ * tools are named; `test/mcpChannel.test.ts` classifies every entry of
+ * `MCP_TOOL_NAMES` as named here or at its point of use.
+ * → `docs/spec/11-mcp-tools.md`
  */
 export const MCP_PROTOCOL_ADDENDUM = [
   '',
@@ -106,20 +87,10 @@ export const MCP_PROTOCOL_ADDENDUM = [
 ].join('\n');
 
 /**
- * The reminder a *terminal* tool folds into its success response — the tools whose
- * call is the whole of what an agent was dispatched to do (`assess_issue`,
- * `conclude_work`, `conclude_part`).
- *
- * The sentinel is stated once, in the system prompt, thousands of tokens before the
- * moment it matters, and these tools' responses read as the end of the job
- * ("Recorded. The harness will schedule nothing further"). So an agent that records
- * its verdict, narrates it and stops has done everything asked of it and still ends
- * its turn with no sentinel in it — which {@link StreamJsonSession} can only read as
- * a park, the done/waiting decision having no third branch. Saying it here puts the
- * instruction at the point of use instead of resting on recall.
- *
- * It does **not** make the call imply done: an agent may have more to do after one,
- * so this states the condition rather than announcing the end.
+ * The reminder a *terminal* tool folds into its success response (`assess_issue`,
+ * `conclude_work`, `conclude_part`) — the sentinel restated at the point of use,
+ * because a turn ending without one can only be read as a park. It states the
+ * condition rather than announcing the end: the call does not imply done.
  */
 export const DONE_REMINDER =
   'Nothing else is needed from this call. When you have finished everything your task asked for, print ' +
@@ -128,26 +99,10 @@ export const DONE_REMINDER =
   'turn ending without it parks you as waiting for a human who has nothing to answer.';
 
 /**
- * What the harness types into an agent whose turn ended with **no** sentinel in it
- * — the unannounced stop.
- *
- * The stop itself is not evidence of anything: the commonest causes are an agent
- * that finished the job and narrated it instead of printing {@link DONE_SENTINEL},
- * and one that kicked off a build, a test run or a CI check and stopped as if
- * something would wake it when that finished. The second is two cases wearing one
- * face, and the wording separates them: a command the agent started is one it can
- * wait for, while CI on a pushed pull request is the *harness's* to watch — the
- * pulse dispatches again when it turns red, so an agent holding a worktree open to
- * poll it is doing worse, for a slot, what happens for free. Neither wants a human, and both used
- * to get one — an inbox item saying only that the agent stopped, which the operator
- * could answer only by reading the transcript to work out what had actually
- * happened. Asking the agent first costs one turn and answers it from the only
- * party that knows.
- *
- * It states the three exits rather than any one of them, because guessing which
- * applies is the thing the harness cannot do: an agent told "carry on" that had
- * genuinely finished would invent work, and one told "you are done" that had not
- * would abandon it.
+ * What the harness types into an agent whose turn ended with **no** sentinel — the
+ * unannounced stop. It states all three exits rather than guessing one: an agent
+ * told "carry on" that had finished invents work, and one told "you are done" that
+ * had not abandons it.
  */
 export const STALL_NUDGE = [
   'Your turn ended without a status sentinel, so the harness cannot tell whether you finished, are',
@@ -167,17 +122,10 @@ export const STALL_NUDGE = [
 const LAST_WORDS_MAX = 240;
 
 /**
- * The park reason for an unannounced stop, once the nudges are spent.
- *
- * It quotes the agent rather than describing it, and quotes the **end** of the turn
- * specifically: "Waiting for CI to go green on #412" is the whole diagnosis, and it
- * is always the last thing said rather than the first. The generic sentence this
- * replaces sent the operator to the transcript every time to learn something the
- * agent had already written down.
- *
- * The blank line is load-bearing — the cockpit's escalation card splits a prompt on
- * the first one into a headline and a body, so the quote reads as evidence under
- * the claim rather than as part of it.
+ * The park reason for an unannounced stop, once the nudges are spent. It quotes the
+ * **end** of the turn, which is where the diagnosis always is. The blank line is
+ * load-bearing: the cockpit's escalation card splits the prompt on the first one
+ * into a headline and a body.
  */
 export function stallReason(lastWords: string): string {
   const head = 'Stopped without finishing, and without saying why — it may only need telling to carry on.';
@@ -189,13 +137,8 @@ export function stallReason(lastWords: string): string {
 
 /**
  * The park reason for an agent that has produced no output at all for
- * `agentSilenceParkMs`.
- *
- * It has no last words to quote — that is the whole of what happened — so it states
- * the span instead, which is the only fact about the wedge the harness holds. The
- * blank line is load-bearing for the same reason it is in {@link stallReason}: the
- * cockpit's escalation card splits the prompt on the first one into a headline and
- * a body.
+ * `agentSilenceParkMs`. No last words to quote, so it states the span. The blank
+ * line is load-bearing for {@link stallReason}'s reason.
  */
 export function silenceReason(ms: number): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
@@ -209,14 +152,10 @@ export function silenceReason(ms: number): string {
 }
 
 /**
- * The system prompt for a launch: the protocol, and the tool addendum when tools
- * are wired.
- *
- * Each part is appended, never interpolated, and each is omitted entirely when it
- * does not apply — so a deployment with no tool channel gets the same bytes it got
- * before one existed. Nothing fleet-wide is injected here any more: everything the
- * obstacle board holds is keyed, and a keyed thing rides the task prompt of the
- * dispatches it is about (`docs/spec/27-obstacles.md#delivery`).
+ * The system prompt for a launch: the protocol, plus the tool addendum when tools
+ * are wired. Appended, never interpolated, and omitted entirely when it does not
+ * apply. Nothing fleet-wide is injected here — a keyed obstacle rides the task
+ * prompt of the dispatches it is about (`docs/spec/27-obstacles.md#delivery`).
  */
 function protocolPrompt(opts: ClaudeArgsOptions): string {
   const parts = [PROTOCOL_SYSTEM_PROMPT];
@@ -229,149 +168,55 @@ interface ClaudeArgsOptions {
   permissionMode?: string;
   /** Any additional operator-supplied args appended after ours. */
   extraArgs?: string[];
-  /**
-   * The model this launch runs on (`--model`), resolved from the operator's
-   * `agentModels` policy at *dispatch* and carried on the task (issue #321).
-   * Unset leaves the flag off entirely, which is what a deployment configuring no
-   * policy gets — argv identical to before the option existed.
-   *
-   * Pushed **before** {@link extraArgs} for the reason `--allowedTools` is: an
-   * operator's `claudeArgs` are appended last and still have the last word.
-   * Never validated here — only the installed `claude` knows the valid set, so a
-   * bad alias fails at spawn as a failed agent, not at boot.
-   */
+  /** The model this launch runs on (`--model`), resolved at dispatch. Pushed before {@link extraArgs} so an operator's `claudeArgs` has the last word. Unset leaves the flag off; unvalidated. */
   model?: string;
-  /**
-   * The reasoning depth this launch runs at (`--effort`), from the same profile
-   * as {@link model} and carried the same way. Unset leaves the flag off, and the
-   * CLI applies its own default — which is the top of the ladder, so "unset" is
-   * the expensive end rather than the middle.
-   *
-   * Pushed before {@link extraArgs} for {@link model}'s reason, and unvalidated
-   * for it too: the levels a model accepts are the installed CLI's business, and
-   * the smaller models refuse the flag outright.
-   */
+  /** The reasoning depth (`--effort`). Unset leaves the flag off and the CLI defaults to the top of the ladder — the expensive end. Unvalidated. */
   effort?: string;
-  /**
-   * The session id to run under. Chosen up front (`--session-id`) so we *own* the
-   * id and can re-attach to this exact conversation after a restart — no scraping
-   * an id out of the terminal. Both real runtimes pass one; only the `raw` runtime,
-   * which speaks no protocol at all, omits it.
-   */
+  /** The session id to run under, chosen up front so the harness can re-attach after a restart. Only the `raw` runtime omits it. */
   sessionId?: string;
-  /**
-   * Re-attach to {@link sessionId} (`--resume <id>`) instead of starting a fresh
-   * session. Used only when an orphaned agent is restored.
-   */
+  /** Re-attach to {@link sessionId} (`--resume <id>`) instead of starting fresh. Used only when an orphaned agent is restored. */
   resume?: boolean;
-  /**
-   * Wire the file-events `PostToolUse` hook in (`--settings`), so files an agent
-   * writes surface as artifacts without the agent's prompt knowing the flag
-   * protocol. Both runtimes — hooks fire in headless stream mode too.
-   */
+  /** Wire the file-events `PostToolUse` hook in (`--settings`), so written files surface as artifacts. */
   fileEvents?: boolean;
-  /**
-   * Path to this launch's `--mcp-config`, wiring the harness's tool channel in
-   * (issue #108). Per-agent, because the file carries the credential that gives
-   * the launch its identity. Unset (or null) leaves the agent on the sentinels
-   * alone, which is the fail-open floor — never a broken state.
-   */
+  /** Path to this launch's `--mcp-config`, per-agent since the file carries the launch's credential. Unset leaves the agent on the sentinels alone — the fail-open floor. */
   mcpConfigPath?: string | null;
   /**
-   * Operator-configured tool allow rules (`agentAllowedTools`), e.g.
-   * `Bash(npm:*)` / `Bash(git:*)` — the mechanical validate/commit/push commands
-   * a headless agent must run unattended (issue #130). They ride in a
-   * `permissions.allow` fragment inside `--settings`, **not** in `--allowedTools`:
-   * that flag carries the `mcp__lubbdubb__*` grants, and letting a Bash rule share
-   * it is exactly the drift `src/mcp/names.ts` exists to prevent — an operator
-   * adjusting Bash access could silently drop the MCP grants. Two different flags,
-   * two different concerns. `acceptEdits` still governs everything not listed here;
-   * anything outside the list falls through to the permission backstop (#130
-   * phase B) rather than hanging.
+   * Operator-configured tool allow rules (`agentAllowedTools`), e.g. `Bash(npm:*)`.
+   * Ride in `permissions.allow` inside `--settings`, never in `--allowedTools` (which
+   * carries the `mcp__lubbdubb__*` grants — sharing the flag would silently drop them
+   * on an operator's Bash edit). Unlisted calls fall through to the permission backstop.
    */
   allowedTools?: string[];
-  /**
-   * Directories outside the agent's cwd it may read (`permissions.additionalDirectories`
-   * in the same `--settings` fragment as {@link allowedTools}). One entry today:
-   * the attachment root (issue #249), where a brief's images live — outside
-   * every worktree, so without this grant the path in the agent's prompt is one it
-   * cannot open.
-   *
-   * In `--settings` rather than `--allowedTools` for that flag's stated reason: an
-   * operator adjusting one must not be able to clobber the MCP grants.
-   */
+  /** Directories outside the agent's cwd it may read, same `--settings` fragment as {@link allowedTools}, never `--allowedTools`. One entry today: the attachment root. */
   additionalDirectories?: string[];
-  /**
-   * The qualified MCP tool name for `--permission-prompt-tool` — the permission
-   * backstop (issue #130 phase B). When a tool call is covered by neither the
-   * allow-list nor the permission mode, Claude Code calls this tool instead of
-   * denying, and it routes the request to the operator. Only takes effect when
-   * {@link mcpConfigPath} is also set, since the tool lives on the MCP server.
-   */
+  /** The qualified MCP tool name for `--permission-prompt-tool`, called instead of denying when neither the allow-list nor permission mode covers a call. Only takes effect alongside {@link mcpConfigPath}. */
   permissionPromptTool?: string;
-  /**
-   * Permission rules for the MCP servers this launch carries **beside** the
-   * harness's own, from `extraMcpGrants` — a server-level `mcp__<key>` each.
-   *
-   * On `--allowedTools` beside our own grants rather than in `--settings` with
-   * {@link allowedTools}, and that is the opposite of the rule the Bash rules
-   * follow, for the reason that rule states: `--allowedTools` is *the MCP flag*,
-   * and the drift it exists to prevent is an operator's Bash edit dropping a tool
-   * grant. These are tool grants. Keeping them here is what makes them one list
-   * with one derivation in `src/mcp/names.ts`.
-   *
-   * Only meaningful alongside {@link mcpConfigPath}, since that is the document the
-   * servers are declared in.
-   */
+  /** Permission rules for MCP servers beside the harness's own, on `--allowedTools` for {@link allowedTools}'s reason. Only meaningful alongside {@link mcpConfigPath}. */
   extraAllowedTools?: string[];
 }
 
 /**
- * Append the MCP tool channel to a launch, when one was minted for it.
- *
- * Two flags, both load-bearing, both verified empirically against `claude`
- * 2.1.220 rather than assumed:
- *
- * - `--mcp-config` is **additive**: launched alongside a target repo's own
- *   `.mcp.json`, both servers appear (`mcp_servers: [{theirs}, {ours}]`). That
- *   is why `--strict-mcp-config` is deliberately *not* passed — it would suppress
- *   the user's own servers in their own checkout. Same coexistence property the
- *   `--settings` hook merge has.
- * - `--allowedTools` is **required**, not belt-and-braces. An `--mcp-config`
- *   server connects with no approval step (a project `.mcp.json` server instead
- *   sits at `pending`), but its tool *calls* are still permission-gated and
- *   `--permission-mode acceptEdits` does not cover them: every call comes back
- *   `"Claude requested permissions to use mcp__lubbdubb__…, but you haven't
- *   granted it yet."` with no human at the prompt to grant it. The flag is
- *   additive rather than restrictive — an agent launched with it still uses
- *   Bash/Write normally — so this grants our tools and nothing else changes.
- *
- * Operator `claudeArgs` are appended *after* these, so an explicit
- * `--allowedTools` there still has the last word.
+ * Append the MCP tool channel to a launch, when one was minted for it. `--mcp-config`
+ * is additive and coexists with a repo's own `.mcp.json` (so `--strict-mcp-config` is
+ * deliberately not passed); `--allowedTools` is required, since the server connects
+ * without approval but its calls are still permission-gated with no human to grant them.
+ * → `docs/spec/11-mcp-tools.md#launch-flags`
  */
 function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.mcpConfigPath) return;
   args.push('--mcp-config', opts.mcpConfigPath);
-  // Ours first, then whatever this dispatch brought. Additive in both directions:
-  // an agent launched with these still uses Bash and Write normally, and an extra
-  // server's grant takes nothing away from the fleet's.
+  // Ours first, then whatever this dispatch brought. Additive in both directions.
   args.push('--allowedTools', [...ALLOWED_MCP_TOOLS, ...(opts.extraAllowedTools ?? [])].join(','));
-  // The permission backstop lives on this same server, so it's only wirable when
-  // the channel is (issue #130 phase B). Claude Code then calls it — rather than
-  // denying — for any tool the allow-list and permission mode don't resolve.
+  // The backstop lives on this same server, so it is only wirable when the channel is.
   if (opts.permissionPromptTool) args.push('--permission-prompt-tool', opts.permissionPromptTool);
 }
 
 /**
  * Pin the conversation this launch runs as — the one piece of argv that makes an
- * agent re-attachable (issue #318).
- *
- * `--session-id` (mint this id) and `--resume` (re-open it) are **mutually
- * exclusive**, and not merely as a style rule: `claude` refuses `--session-id` on
- * an id that already has a transcript, exiting 1 with a plain-stderr
- * `Session ID … is already in use.` and no stream event at all — so a relaunch
- * that carried the stored id down the mint arm would look, to the harness, like a
- * process that died for no reason. A resume must never also try to mint.
+ * agent re-attachable. `--session-id` and `--resume` are **mutually exclusive**:
+ * `claude` refuses `--session-id` on an id that already has a transcript, exiting 1
+ * with no stream event, which reads to the harness as a process that died for no
+ * reason. → `docs/spec/10-agent-runtimes.md#launch-arguments`
  */
 function appendSessionFlags(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.sessionId) return;
@@ -388,9 +233,8 @@ function appendSessionFlags(args: string[], opts: ClaudeArgsOptions): void {
 function collectSettings(opts: ClaudeArgsOptions): string | null {
   const settings: Record<string, unknown> = {};
   if (opts.fileEvents) Object.assign(settings, FILE_EVENTS_SETTINGS);
-  // One `permissions` object, however many of its halves were asked for: the
-  // allow-list and the extra readable directories are separate concerns that share
-  // a key, and writing it twice would drop whichever was written first.
+  // One `permissions` object however many halves were asked for: writing it twice
+  // would drop whichever was written first.
   const permissions: Record<string, unknown> = {};
   if (opts.allowedTools?.length) permissions.allow = opts.allowedTools;
   if (opts.additionalDirectories?.length) permissions.additionalDirectories = opts.additionalDirectories;
@@ -410,29 +254,15 @@ export function buildResumeMessage(): string {
 
 /**
  * Build the argv for the unattended streaming runtime: headless print mode with
- * bidirectional stream-JSON. No TUI, structured events, stays alive across turns
- * so the waiting/answer loop works. This is the production agent launch.
- *
- * It carries a `--session-id` / `--resume` pair, verified against `claude` 2.1.223
- * rather than assumed (issue #318): headless honours a
- * pinned id (every event echoes it, and the transcript lands under
- * `~/.claude/projects/<slug>/<id>.jsonl`), `--resume` re-opens *that* file and
- * appends to it rather than forking a new id, and a resumed headless session stays
- * alive across turns exactly as a fresh one does. Crucially it also **replays
- * nothing**: a resume emits `system`/`init`, the assistant turn for the new input,
- * then `result` — no prior-turn events — so {@link StreamJsonSession} needs no
- * swallow and the drawer's transcript continues instead of repeating.
+ * bidirectional stream-JSON, staying alive across turns so the waiting/answer loop
+ * works. A resume re-opens the pinned id's transcript and **replays nothing**, so
+ * {@link StreamJsonSession} needs no swallow.
  */
 /**
  * The stream transport itself, with nothing about the fleet's protocol in it.
- *
- * Exported because the local run (`src/localRun/`) speaks the same transport to the
- * same {@link StreamJsonSession} and must **not** carry
- * {@link PROTOCOL_SYSTEM_PROMPT}: it has no MCP tools, no task and nothing to
- * conclude, so a prompt telling it to print sentinels and conclude work is an
- * instruction it can only follow wrongly. One definition of the flags either way —
- * a second copy of them somewhere else would go stale the next time the transport
- * changed, and the symptom would be a session that connects and says nothing.
+ * Exported because the local run (`src/localRun/`) speaks the same transport and
+ * must **not** carry {@link PROTOCOL_SYSTEM_PROMPT} — it has no tools, no task and
+ * nothing to conclude. One definition of the flags either way.
  */
 export const STREAM_TRANSPORT_ARGS: readonly string[] = [
   '-p',
@@ -446,8 +276,7 @@ export const STREAM_TRANSPORT_ARGS: readonly string[] = [
 export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const args: string[] = [...STREAM_TRANSPORT_ARGS, '--append-system-prompt', protocolPrompt(opts)];
   appendSessionFlags(args, opts);
-  // PostToolUse hooks and permission rules apply headless, so file-events capture
-  // and the operator allow-list are wired here.
+  // PostToolUse hooks and permission rules apply headless, so both are wired here.
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);

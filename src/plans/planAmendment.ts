@@ -7,39 +7,17 @@ import type { PlanDiff } from './planDiff.js';
 import { liveParts, partHasWork, partSettled } from './parts.js';
 
 /**
- * Changing a plan that is **already running**, without stopping it.
+ * Changing a plan that is **already running**, without stopping it: a proposal
+ * against a live plan, held in `plan_amendments`. Three properties:
  *
- * The funnel's one answer to "this plan is wrong" used to be a replan: flip the
- * row back to `planning`, spend a planning agent re-deriving the whole
- * decomposition, and put every part of it back through the approval gate. That is
- * the right answer when the *shape* of the work was wrong and the wrong one for
- * everything else — a part whose scope drifted, a dependency that turned out to be
- * the other way round, a step nobody needs any more. An agent halfway through the
- * work is the reader most likely to notice one of those, and had nowhere to put it.
+ * - **Nothing here touches `plans` or `plan_parts`** — the plan keeps scheduling
+ *   while the question is open.
+ * - **Nobody but an operator applies it**, whichever author proposed it.
+ * - **Applying it is the ordinary ingestion** ({@link ingestPlanDocument}), which
+ *   merges on slug and spares any part work was started for.
  *
- * So an amendment is a **proposal against a live plan**, and the three properties
- * that makes it worth having are all properties of *not* writing:
- *
- * - **The plan keeps scheduling while the question is open.** Nothing here touches
- *   `plans` or `plan_parts`; the amended document sits in `plan_amendments` and the
- *   parts that were dispatchable stay dispatchable. A replan's cost is that the
- *   whole goal waits on a planner and then on a human; an amendment's cost is one
- *   card in the inbox.
- * - **Nobody but an operator applies it.** Both authors — an agent through the
- *   fleet's `plan_correct`, an operator's own Claude Code through `plan_amend` —
- *   reach the same pending row. A plan under way that rewrote itself on an agent's
- *   say-so would change what other agents were dispatched against mid-flight, which
- *   is precisely what the approval gate exists to stop happening once.
- * - **Applying it is the ordinary ingestion.** {@link ingestPlanDocument} merges on
- *   slug, so a part with a branch, a pull request or an outcome keeps all three and
- *   only its declaration is refreshed, and `partsToRetire` spares any part work was
- *   started for. There is no second write path here that could disagree with the
- *   one every other plan takes.
- *
- * What it is *not* is a way around the plan gate. An `awaiting_approval` plan is
- * not amended through here — it is amended in place, because nothing is scheduled
- * off it yet and the card the operator is about to answer is the card that should
- * carry the change (`plan_amend`, → [08](../../docs/spec/08-planning.md)).
+ * An `awaiting_approval` plan is **not** amended through here — it is amended in
+ * place via `plan_amend`. → [08](../../docs/spec/08-planning.md)
  */
 
 /** The outcome of proposing, applying or withdrawing an amendment, in the shape every caller audits. */
@@ -61,22 +39,9 @@ interface ProposedAmendment {
  * Record a change somebody wants made to a running plan.
  *
  * **Refuses on anything but `active`**, and each refusal names the route that does
- * apply, because a caller told only "no" writes its correction into a comment
- * nobody reads:
- *
- * - `awaiting_approval` — nothing is scheduled yet, so the amendment belongs *in*
- *   the plan the operator is about to answer for, not beside it.
- * - `planning` — a planner already has it, and its document is about to be
- *   replaced wholesale.
- * - `complete` / `abandoned` — there is no schedule left to keep running, which is
- *   the whole thing this holds open. More work on a delivered goal is an
- *   instruction on the goal ([16](../../docs/spec/16-http-api.md)).
- *
- * **One pending amendment per plan.** A second would put two cards in front of an
- * operator, each describing the plan as if the other did not exist, and accepting
- * both would apply the older one's document over the newer one's — the plan the
- * second author corrected would silently come back. The refusal names the standing
- * one so the author can fold their change into it.
+ * apply ({@link wrongStatus}). **One pending amendment per plan**: accepting two
+ * would apply the older document over the newer one, silently restoring the plan
+ * the second author corrected.
  */
 export function proposePlanAmendment(
   store: Store,
@@ -105,9 +70,8 @@ export function proposePlanAmendment(
     };
   }
 
-  // Before anything is written, for `plan_submit`'s reason: a rejected document
-  // leaves the plan graph — and this table — exactly as it was, and the retry is
-  // against an unchanged plan.
+  // Before anything is written: a rejected document must leave the plan graph and
+  // this table exactly as they were.
   const parsed = validatePlanDocument(input.document);
   if (!parsed.ok) return { ok: false, error: `Amendment rejected: ${parsed.error}` };
 
@@ -125,8 +89,8 @@ export function proposePlanAmendment(
   const amendment = store.recordPlanAmendment({
     planId: plan.id,
     originRef: plan.originRef,
-    // Serialized as submitted and re-validated where it is applied, so what the
-    // operator approved and what is ingested are one document.
+    // Serialized as submitted, re-validated where applied: what the operator approved
+    // and what is ingested are one document.
     document: JSON.stringify(parsed.document),
     note,
     author: input.author,
@@ -151,18 +115,11 @@ function pendingAmendmentFor(store: Store, planId: string): PlanAmendment | null
 }
 
 /**
- * Apply an approved amendment: the document is ingested exactly as a planner's
- * would be, and the plan stays **released**.
- *
- * `approved: true` is the whole of the difference, and it is not a shortcut past
- * the gate — the gate was the card the operator just answered. Without it the
- * ingestion writes `awaiting_approval` back over a running plan and stops every
- * part of it, which is the failure this surface exists to avoid.
- *
- * Compare-and-set twice, against the amendment row *and* the plan's status, for
- * `releasePlan`'s reason: a verdict that arrives after the world moved — a replan
- * started with the card still open — must not write a document nobody was shown
- * over a plan that is no longer the one it amends.
+ * Apply an approved amendment: ingested exactly as a planner's document would be,
+ * with the plan staying **released**. `approved: true` is not a shortcut past the
+ * gate — without it the ingestion writes `awaiting_approval` over a running plan
+ * and stops every part. Compare-and-set against the amendment row *and* the plan's
+ * status, so a verdict arriving after the world moved writes nothing.
  */
 export function applyPlanAmendment(store: Store, amendmentId: string): AmendmentResult {
   const amendment = store.getPlanAmendment(amendmentId);
@@ -173,9 +130,8 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
   const plan = store.getPlan(amendment.planId);
   if (!plan) return { ok: false, detail: `the plan for ${amendment.originRef} no longer exists` };
   if (plan.status !== 'active') {
-    // Settled rather than left pending: the plan it amends has moved on, so
-    // nothing will ever apply it, and a row that cannot be settled is one an
-    // operator is asked about for good.
+    // Settled rather than left pending: the plan moved on, so nothing will ever apply
+    // it and the operator would be asked about it for good.
     store.settlePlanAmendment(
       amendmentId,
       'superseded',
@@ -187,8 +143,7 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
     };
   }
 
-  // Re-validated rather than trusted: the row may have been written by an older
-  // build, and a document the schema has since moved past must be refused whole
+  // Re-validated rather than trusted: an older build's row must be refused whole
   // rather than ingested in halves.
   const parsed = validatePlanDocument(JSON.parse(amendment.document) as unknown);
   if (!parsed.ok) {
@@ -214,13 +169,9 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
 }
 
 /**
- * Decline one: the amendment is settled and **the plan is untouched**.
- *
- * The one settlement in the funnel with no effect on the goal at all, and
- * deliberately so. A refused *plan* has to leave the issue a route, because a plan
- * is the only thing that schedules work for a planned issue; a refused amendment
- * leaves the plan that was already scheduling it, which is the route. Saying no to
- * a correction is saying "carry on as planned".
+ * Decline one: the amendment is settled and **the plan is untouched** — the one
+ * settlement in the funnel with no effect on the goal, because the plan that was
+ * already scheduling the work is the route.
  */
 export function declinePlanAmendment(store: Store, amendmentId: string, note?: string | null): AmendmentResult {
   const settled = store.settlePlanAmendment(
@@ -234,14 +185,9 @@ export function declinePlanAmendment(store: Store, amendmentId: string, note?: s
 
 /**
  * Withdraw whatever is pending for a plan the world has overtaken — a replan, a
- * refusal, a back-out.
- *
- * Every one of those replaces the document an amendment was written against, so
- * the question it puts to an operator is about a plan that no longer exists.
- * Leaving it standing would either sit in the inbox for good (the apply above
- * refuses outside `active`) or be answered "yes" to no effect, which is worse:
- * an operator who approved a change and saw nothing happen learns not to trust the
- * card.
+ * refusal, a back-out. Each replaces the document the amendment was written
+ * against, so leaving it standing would sit in the inbox for good or be approved
+ * to no effect.
  */
 export function supersedePlanAmendments(store: Store, planId: string, reason: string): PlanAmendment[] {
   const settled: PlanAmendment[] = [];
@@ -255,35 +201,19 @@ export function supersedePlanAmendments(store: Store, planId: string, reason: st
 
 /**
  * What applying this amendment would leave standing that its author may not have
- * meant — the half of the reading a diff cannot give, because it is about the
- * plan's *rows* rather than its declarations.
- *
- * All three warnings are consequences of the merge that makes an amendment safe in
- * the first place. A dropped part that work was started for is spared by
- * `partsToRetire`, so the amendment does not stop it — the agent on it carries on,
- * and only the operator can end that run. A re-declared part that has already
- * settled has its *declaration* rewritten while the work it produced stays exactly
- * as it was, so the plan would then describe delivered work in terms nobody
- * delivered it under. And a re-declared part still **in flight** — an agent on it,
- * or a pull request open against the declaration it was dispatched under — has its
- * declaration rewritten under work that is neither stopped nor re-dispatched: the
- * merge refreshes the row, rule `plan-part` produces no candidate for a part that
- * is already dispatched, and the agent or the reviewer carries on to the old
- * specification. That third one is what this surface was silent about while the
- * warnings turned on `partSettled` alone, and it is the one an operator is least
- * able to reconstruct from the diff — the diff says what the plan will say, not
- * that somebody is already building the other thing.
+ * meant — the half a diff cannot give, because it is about the plan's *rows*.
+ * Three consequences of the merge: a dropped part work has started on is spared and
+ * keeps running; a re-declared settled part has its declaration rewritten while the
+ * delivered work stands; and a re-declared part still **in flight** is neither
+ * stopped nor re-dispatched, so the agent carries on to the old specification.
  */
 export function amendmentWarnings(existing: PlanPart[], declared: PlanPartInput[]): string[] {
   const keep = new Map(declared.map((p) => [p.slug, p]));
   const warnings: string[] = [];
   for (const part of liveParts(existing)) {
     const redeclared = keep.get(part.slug);
-    // At most one warning per part, and the branches are ordered by what is true of
-    // it rather than by what is interesting: a settled part must not also draw the
-    // in-flight warning, because "neither stopped nor re-dispatched" is nonsense
-    // about a part that has finished — and two lines about one part read as two
-    // parts.
+    // At most one warning per part, ordered by what is true of it: a settled part must
+    // not also draw the in-flight warning, and two lines read as two parts.
     if (redeclared === undefined) {
       if (partHasWork(part))
         warnings.push(
@@ -316,36 +246,14 @@ export function amendmentWarnings(existing: PlanPart[], declared: PlanPartInput[
 
 /**
  * Which of an in-flight part's declared fields this amendment actually moves.
- *
  * "Material" is **what the work in flight was built to**, not everything a diff can
- * name, and the narrowing is the point rather than an economy: a warning that fires
- * on every amendment is one an operator learns to click past, and then the single
- * amendment that reverses an open pull request's design reads exactly like the four
- * before it that renamed a part.
+ * name: `title`/`scope`/`acceptance` (the part's prompt), `touches`, `dependsOn`
+ * (which chose the base branch) and `expectedKind`. Deliberately not material:
+ * `seq`, `rationale`, `size` and `profile` (read once, at dispatch).
  *
- * So the fields are the ones that reach the running work. `title`, `scope` and
- * `acceptance` are rendered into the part's prompt (`plan-part`, plus
- * `partDeclarationNote` for the last two), `touches` is the path claim that same
- * note hands the agent and that a merged part's writes are checked against,
- * `dependsOn` chose the branch the work was cut from (`partBase`), and
- * `expectedKind` says what the part is meant to produce at all. Every one is
- * something an agent or a reviewer is acting on *now*.
- *
- * Deliberately not material:
- *
- * - `seq` — it moves whenever anything is inserted above a part, which is
- *   `changedFields`' reason for keeping it out of the diff as well.
- * - `rationale` — why this is its own pull request rather than folded into a
- *   sibling. Read by whoever judges the decomposition; it never reaches the agent.
- * - `size` — an estimate of how big the part is to review.
- * - `profile` — read once, at dispatch. A part already dispatched keeps the agent
- *   it got, so re-declaring it says nothing about the work in flight.
- *
- * And two normalisations, both the same point — a re-declaration that says what the
- * row already said is not a change: prose is compared with runs of whitespace
- * collapsed, because a re-wrapped paragraph is a re-wrap and not a rewrite; and a
- * null `expectedKind` is compared as `code`, which is what null *means*, so a
- * planner spelling out the default does not read as reversing it.
+ * Two normalisations, both saying a re-declaration of what the row already said is
+ * not a change: prose is compared with whitespace collapsed, and a null
+ * `expectedKind` compares as `code`, which is what null means.
  */
 function materialChanges(part: PlanPart, declared: PlanPartInput): string[] {
   const changed: string[] = [];
@@ -355,9 +263,8 @@ function materialChanges(part: PlanPart, declared: PlanPartInput): string[] {
   compare('title', prose(part.title), prose(declared.title));
   compare('scope', prose(part.scope), prose(declared.scope));
   compare('acceptance', prose(part.acceptance), prose(declared.acceptance));
-  // Order is not a difference in either list: `touches` is a claim on a set of
-  // paths and `dependsOn` is a set to the scheduler, so a re-ordered declaration
-  // means nothing to anybody — the reading `changedFields` already takes.
+  // Order is not a difference in either list — both are sets, the reading
+  // `changedFields` already takes.
   compare('paths', unordered(part.touches), unordered(declared.touches));
   compare('dependencies', unordered(part.dependsOn), unordered(declared.dependsOn));
   compare('expected outcome', part.expectedKind ?? 'code', declared.expectedKind ?? 'code');
@@ -377,12 +284,9 @@ function unordered(values: readonly string[]): string | null {
 }
 
 /**
- * The card's body: why, then what changes, then what it will not change.
- *
- * The author's own words lead, for `planApprovalDetail`'s reason — it is the one
- * thing the diff cannot show, and the operator is being asked whether the *reason*
- * is good. The diff is named rather than rendered field by field: which parts moved
- * is the reading a decision is taken on, and the full text is one click away on the
+ * The card's body: why, then what changes, then what it will not change. The
+ * author's own words lead — the operator is being asked whether the reason is good.
+ * The diff is named rather than rendered field by field; the full text is on the
  * plan sheet.
  */
 export function describeAmendment(input: { note: string; diff: PlanDiff | null; warnings: string[] }): string {

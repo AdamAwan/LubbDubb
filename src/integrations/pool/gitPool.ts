@@ -24,27 +24,16 @@ import type { PoolDocument } from '../../types.js';
 
 /**
  * The pool on a git repository: clone, pull, write your own file under the
- * configured prefix, push.
+ * configured prefix, push. Provider-neutral by construction, so one implementation
+ * covers Azure DevOps, GitHub and any bare repository.
  *
- * **Provider-neutral by construction**, which is the whole reason it is the only
- * real transport worth writing first: one implementation covers Azure DevOps with a
- * wiki, Azure DevOps without one, GitHub, and any bare repository — and, because
- * the prefix means the repository need not be the pool's, a folder inside a team's
- * existing wiki is a first-class home rather than a workaround. A provider-specific
- * wiki transport is an optional extra that may never be worth writing; an `http`
- * service later is one factory line with nothing above it changing.
- *
- * **Its clone lives under its own root and never under `worktreeRoot`.** The
- * worktree pool counts every registered worktree under that root as a slot whatever
- * the directory is called, so a pool clone in there would be leased to an agent and
- * wiped with `git clean -ffdx`. Exactly the hazard `localRunRoot` exists to avoid,
- * and the same answer: a separate root, touched by nothing else.
+ * Its clone lives under its own root and never under `worktreeRoot` — the worktree
+ * pool counts every registered worktree under that root as a slot, so a clone in
+ * there would be leased to an agent and wiped with `git clean -ffdx`.
  * → `docs/spec/09-execution.md#exhaustion`, `docs/spec/23-local-runs.md#the-checkout`
  *
- * Three rules follow from the repository not being the pool's, and each of them is
- * a way to damage somebody else's work — see {@link publish} and {@link fetch}.
- *
- * → `docs/spec/28-cross-fleet-pool.md#living-in-somebody-elses-repository`
+ * The repository need not be the pool's; the rules that follow from that are on
+ * {@link publish} and {@link fetch}. → `docs/spec/28-cross-fleet-pool.md#living-in-somebody-elses-repository`
  */
 export class GitPoolTransport implements PoolTransport {
   readonly id = 'pool:git';
@@ -65,28 +54,20 @@ export class GitPoolTransport implements PoolTransport {
   ) {}
 
   /**
-   * Write this fleet's document and push it.
+   * Write this fleet's document and push it. The write set is exactly
+   * `<path>/fleets/<fleetId>/`, staged by name — never `git add -A`, never `git add
+   * .`, never `git clean` anywhere in the clone, which in a shared wiki would commit
+   * whatever else is in the tree.
    *
-   * **The write set is exactly `<path>/fleets/<fleetId>/`.** Each file is staged
-   * by name and those paths committed — never `git add -A`, never `git add
-   * .`, and never `git clean` anywhere in the clone. In a dedicated repository a
-   * broad stage is untidy; in a wiki it commits whatever else happens to be in the
-   * tree, under the harness's name, on a schedule, with nobody having asked.
-   *
-   * **A rejected push is pulled and retried, never forced.** Other fleets push here
-   * and, in a shared repository, so do people; `--force` on somebody's wiki is the
-   * worst outcome this design can produce. The rebase is safe by construction rather
-   * than by luck — one writer per namespace means the incoming changes cannot touch
-   * the file this fleet is writing, so there is nothing for a rebase to conflict
-   * over. Retries are bounded, and a push that keeps being rejected is thrown for
-   * the desk to record and left for the next pulse like any other failure.
+   * A rejected push is pulled and retried, never forced: one writer per namespace
+   * makes the rebase conflict-free by construction; retries are bounded and a
+   * persistent rejection is thrown for the desk to record.
    */
   async publish(document: PoolDocument): Promise<void> {
     await this.ensureClone();
-    // The document and its companion, written together and committed as one. The
-    // markdown is derived from the same document and never read back — `fetch`
-    // names the `.json` by name — so it cannot become a second grammar for one
-    // fact. → `docs/spec/28-cross-fleet-pool.md#the-human-readable-companion`
+    // The document and its companion, committed as one. The markdown is derived and
+    // never read back, so it cannot become a second grammar for one fact.
+    // → `docs/spec/28-cross-fleet-pool.md#the-human-readable-companion`
     const companion = poolCompanion(document);
     const files = [
       { relative: this.prefixed(poolDocumentAddress(document)), text: serialisePoolDocument(document) },
@@ -103,17 +84,9 @@ export class GitPoolTransport implements PoolTransport {
 
   /**
    * Clear what a retired kind left in this fleet's own namespace, and hand back the
-   * paths so the publish's own commit records the removal.
-   *
-   * **Only paths that are actually there.** `git add` on a path that never existed
-   * is a fatal pathspec error, which would turn every publish from a deployment that
-   * predates nothing into a failure — so the removal rides along on the one publish
-   * that finds the file, and afterwards this returns nothing and costs a pair of
-   * `existsSync` calls.
-   *
-   * Its own namespace and no other: one writer per namespace means another fleet's
-   * leftovers are not this fleet's to delete, and each clears its own as it upgrades.
-   * → `docs/spec/28-cross-fleet-pool.md#what-a-retired-kind-leaves-behind`
+   * paths so the publish's own commit records the removal. Only paths that are
+   * actually there — `git add` on a path that never existed is a fatal pathspec
+   * error. Its own namespace and no other. → `docs/spec/28-cross-fleet-pool.md#what-a-retired-kind-leaves-behind`
    */
   private clearRetired(): string[] {
     const cleared: string[] = [];
@@ -127,14 +100,9 @@ export class GitPoolTransport implements PoolTransport {
   }
 
   /**
-   * Remove this fleet's shared pack for a pull request, and its companion.
-   *
-   * The same write set rule as {@link publish}, one level narrower: two paths
-   * inside this fleet's own directory, staged by name, and a commit that names
-   * only them. Removing what is not there is a success — the commit finds nothing
-   * staged and returns — because a prune is the inverse of a whole-document put
-   * and must be as retryable as one.
-   * → `docs/spec/31-review-packs.md#sharing-a-pack`
+   * Remove this fleet's shared pack for a pull request, and its companion — the
+   * same write-set rule as {@link publish}, staged by name. Removing what is not
+   * there is a success, so a prune is as retryable as a put. → `docs/spec/31-review-packs.md#sharing-a-pack`
    */
   async unpublish(pack: PoolPackRef): Promise<void> {
     await this.ensureClone();
@@ -155,13 +123,9 @@ export class GitPoolTransport implements PoolTransport {
   }
 
   /**
-   * Stage exactly these paths, commit if anything moved, and push.
-   *
-   * **By name, and only these.** Never `git add -A`, never `git add .`, and never
-   * `git clean` anywhere in the clone — see the class note. `git add` on a path
-   * that is gone records the removal, which is what makes a prune the same two
-   * commands as a publish. Nothing staged means the repository already holds what
-   * this fleet meant to write, and an empty commit is never the right answer to that.
+   * Stage exactly these paths, commit if anything moved, and push. By name, and
+   * only these — never `git add -A`, `git add .`, or `git clean` anywhere in the
+   * clone. Nothing staged means the repository already holds what was meant.
    */
   private async commit(paths: string[], message: string): Promise<void> {
     await runGit(this.deps.root, ['add', '--', ...paths]);
@@ -171,15 +135,7 @@ export class GitPoolTransport implements PoolTransport {
     await this.push();
   }
 
-  /**
-   * Everybody's documents, this fleet's included.
-   *
-   * **The read is scoped to `<path>/fleets/`** rather than to the tree. A pool
-   * sharing a wiki is a pool whose sibling directories are full of documents that
-   * are not documents in this sense, and a fetch that walked the repository would
-   * try to parse the team's meeting notes and record an error for each one, every
-   * pulse.
-   */
+  /** Everybody's documents, this fleet's included. The read is scoped to `<path>/fleets/` rather than the tree: a fetch that walked a shared wiki would try to parse the team's notes and record an error for each, every pulse. */
   async fetch(): Promise<PoolFetchedDocument[]> {
     await this.ensureClone();
     await runGit(this.deps.root, ['pull', '--ff-only', 'origin', this.deps.branch]);
@@ -189,9 +145,8 @@ export class GitPoolTransport implements PoolTransport {
       for (const kind of POOL_CLOCK_KINDS) {
         const file = join(fleetsDir, fleetId, `${kind}.json`);
         const text = readIfFile(file);
-        // The directory name is the address, which is what the body's `fleetId` is
-        // checked against one layer up: a document under `alice@api/` naming
-        // `bob@api` is the one thing that can break one writer per namespace.
+        // The directory name is the address, checked against the body's `fleetId`
+        // one layer up — the one thing that can break one writer per namespace.
         if (text !== null) out.push({ addressedTo: fleetId, text });
       }
     }
@@ -204,30 +159,14 @@ export class GitPoolTransport implements PoolTransport {
   }
 
   /**
-   * The clone, made once and reused.
+   * The clone, made once and reused. The guard must establish that the repository
+   * it found is this root's own: `git rev-parse` walks up, so in the default layout
+   * every pool root would read as an existing clone and publishes would commit into
+   * the operator's own checkout; `--show-toplevel` compared against the root is the
+   * exact question.
    *
-   * **The guard must establish that the repository it found is _this root's own_.**
-   * `git rev-parse --git-dir` walks *up* the directory tree, so in the default
-   * configuration — `poolRoot` is `<deskRoot>/pool` and `deskRoot` resolves against
-   * `repoRoot` — it reports the **target repository's** git dir and every pool root
-   * reads as an existing clone. Nothing is ever cloned, and `publish` then writes
-   * its document into a plain directory inside the operator's checkout and stages it
-   * there. Where that path happens to be ignored the `git add` fails loudly; where it
-   * does not, the harness commits a pool document into somebody's repository under
-   * their name, on a schedule, with nobody having asked. `--show-toplevel` compared
-   * against the root is the exact question, and the walk stops mattering.
-   *
-   * Still not a plain directory check, for the reason it never was: the root may
-   * exist and be empty from a failed earlier attempt, and cloning into a directory
-   * that is already a repository is the failure mode that would strand a pool.
-   *
-   * **Anything at the root that is not that clone is removed before cloning.** The
-   * root is the transport's alone, so what is there is either nothing, or the stray
-   * document tree an affected deployment's earlier publishes wrote — and a stray
-   * document is re-derivable by construction, since the put is a whole replace. It
-   * is also what makes the recovery automatic: `git clone` refuses a non-empty
-   * directory, so a deployment that has already hit this would otherwise fail
-   * forever on a directory only an operator could clear.
+   * Anything at the root that is not that clone is removed before cloning — a stray
+   * document tree is re-derivable, and `git clone` refuses a non-empty directory.
    * → `docs/spec/28-cross-fleet-pool.md#the-clone-and-its-root`
    */
   private async ensureClone(): Promise<void> {
@@ -260,14 +199,9 @@ export class GitPoolTransport implements PoolTransport {
 
   /**
    * The clone's `origin` is the configured remote, checked before anything is
-   * written into it.
-   *
-   * A clone left behind by an earlier `pool.remote` is a real repository at the
-   * right path, so every check above it passes and the only thing wrong is *which*
-   * repository the fleet's documents, commits and pushes land in. Refused rather
-   * than re-cloned: wiping a repository on the strength of a config edit is the more
-   * expensive way to be wrong, and the throw is recorded by the desk like any other
-   * pool failure and names both URLs.
+   * written into it — a clone left by an earlier `pool.remote` passes every other
+   * check and only lands the documents in the wrong repository. Refused rather than
+   * re-cloned: wiping a repository on the strength of a config edit is worse.
    */
   private async assertOrigin(): Promise<void> {
     let origin: string | null = null;
@@ -295,8 +229,8 @@ export class GitPoolTransport implements PoolTransport {
         return;
       } catch (error) {
         last = error;
-        // Safe by construction rather than by luck: one writer per namespace means
-        // the incoming changes cannot touch the file this fleet just wrote.
+        // Conflict-free by construction: one writer per namespace, so incoming
+        // changes cannot touch the file this fleet just wrote.
         await runGit(this.deps.root, ['pull', '--rebase', 'origin', this.deps.branch]);
       }
     }
@@ -311,24 +245,13 @@ function listDirectories(path: string): string[] {
       .map((entry) => entry.name)
       .sort();
   } catch {
-    // A pool nobody has published to yet has no `fleets/` at all, which is an empty
-    // read rather than a failure — and the difference matters: a throw here would be
-    // recorded every pulse for a pool that is simply new.
+    // A pool nobody has published to yet has no `fleets/` at all: an empty read
+    // rather than a failure recorded every pulse.
     return [];
   }
 }
 
-/**
- * One document's bytes, or null when there is nothing readable there.
- *
- * **Read first and ask afterwards**, rather than `statSync().isFile()` and then a
- * read. The pair is a check-then-use over a path other fleets and people are
- * pushing to: the file can be replaced by a directory — or vanish — between the two
- * calls, so the stat answers about one thing and the read touches another. Reading
- * straight through has no window at all, and it costs nothing here because every
- * way of not being a readable file already throws: `ENOENT` for a document that is
- * not there, `EISDIR` for a directory wearing a document's name.
- */
+/** One document's bytes, or null when there is nothing readable there. Read first and ask afterwards: a stat-then-read is a check-then-use over a path other fleets and people are pushing to, and every way of not being a readable file already throws. */
 function readIfFile(path: string): string | null {
   try {
     return readFileSync(path, 'utf8');
@@ -338,11 +261,9 @@ function readIfFile(path: string): string | null {
 }
 
 /**
- * Whether two paths name the same directory. `git` answers `--show-toplevel` with
- * forward slashes on every platform and with symlinks resolved, so both sides are
- * put through `resolve` and `realpath` before they are compared — otherwise a root
- * under macOS's `/var` -> `/private/var` reads as somebody else's repository and is
- * re-cloned on every pulse.
+ * Whether two paths name the same directory. Both sides go through `resolve` and
+ * `realpath` because `git` answers `--show-toplevel` with symlinks resolved —
+ * otherwise a root under macOS's `/var` -> `/private/var` is re-cloned every pulse.
  */
 function samePath(a: string, b: string): boolean {
   const canonical = (path: string): string => {
@@ -358,11 +279,9 @@ function samePath(a: string, b: string): boolean {
 }
 
 /**
- * Whether a clone's `origin` is the configured remote. String equality over the URL
- * as both sides spell it, with a trailing slash ignored and a local path compared as
- * a path — deliberately nothing cleverer, because the cost of a false *match* is
- * writing into the wrong repository and the cost of a false mismatch is a recorded
- * error naming both URLs.
+ * Whether a clone's `origin` is the configured remote: string equality with a
+ * trailing slash ignored and a local path compared as a path. Deliberately nothing
+ * cleverer — a false match writes into the wrong repository.
  */
 function sameRemote(origin: string, configured: string): boolean {
   const trimmed = (url: string): string => url.replace(/\/+$/, '');

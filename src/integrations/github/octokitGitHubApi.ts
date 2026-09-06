@@ -83,60 +83,34 @@ interface GqlReviewThreadPage {
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Extra attempts after the first for a request GitHub itself said to retry —
- * a secondary (abuse) limit, a 5xx, a dropped socket.
- *
- * The same budget as Azure's `MAX_RETRIES`, and for the same reason: the snapshot
- * is re-taken every heartbeat anyway, so the retry only has to cover a blip that
- * would otherwise cost a whole cycle's world. Chasing a limit for longer than that
- * spends the pulse waiting instead.
+ * Extra attempts after the first for a request GitHub said to retry. The snapshot is
+ * re-taken every heartbeat, so the retry only has to cover a blip; chasing a limit
+ * for longer spends the pulse waiting.
  */
 const MAX_RETRIES = 3;
 
 /**
- * The longest primary-rate-limit wait worth sitting through, in seconds.
- *
- * The primary limit is not the blip {@link MAX_RETRIES} was sized for, and
- * treating it as one is actively harmful. Its `retryAfter` is time-until-the-hour-
- * window-resets, so it arrives in the hundreds of seconds; the snapshot fans out
- * with `Promise.all`, so *every* request in flight parks for that long and the
- * pulse is held for it; and they then all fire again the instant the window
- * reopens, re-exhausting the budget they were waiting on. Meanwhile the thing the
- * wait buys is already available for free: a failed snapshot degrades to
- * `lastGood` with `stale: true`, and the next pulse tries again.
- *
- * So the wait is capped at a value that can only be a genuine blip — a window
- * about to turn over anyway — and anything longer is refused rather than absorbed.
- * The secondary limit keeps the full budget: it is burst-triggered, it clears in
- * seconds, and backing off *is* the correct response to it.
+ * The longest primary-rate-limit wait worth sitting through, in seconds. A primary
+ * limit's `retryAfter` is time-until-the-hour-window-resets, and the snapshot fans
+ * out with `Promise.all`, so waiting it out parks every request in flight and holds
+ * the pulse — while a failed snapshot already degrades to `lastGood` for free.
+ * Anything longer is refused. The **secondary** limit keeps the full budget: it is
+ * burst-triggered and backing off is the correct response.
  */
 const MAX_PRIMARY_LIMIT_WAIT_S = 60;
 
-/**
- * Whether to sit out a **primary** rate limit, given what GitHub said the wait is
- * and how many attempts this request has already spent. Pure, so the policy above
- * is testable without a clock or a socket.
- */
+/** Whether to sit out a **primary** rate limit. Pure, so the policy above is testable without a clock. */
 export function waitOutRateLimit(retryAfterS: number, retryCount: number): boolean {
   if (retryAfterS > MAX_PRIMARY_LIMIT_WAIT_S) return false;
   return retryCount < MAX_RETRIES;
 }
 
 /**
- * Octokit with the two plugins that make a rate limit survivable.
- *
- * Without them a snapshot is one 403 away from failing whole, and the failure is
- * quiet in the way that matters: the integration catches it, records it, and
- * serves `lastGood` — so the dispatcher decides this cycle against a world that
- * may be hours old, and "nothing changed" and "GitHub refused us" look identical
- * from every surface downstream. Azure has retried 429/5xx since it landed; this
- * is the same guarantee on the provider that fans out hardest, since the world
- * read is O(open issues + open PRs) requests per pulse and secondary limits are
- * triggered by exactly that shape of burst.
- *
- * Retrying is the second line, though, not the first: see
- * {@link installConditionalRequests}, which is what keeps the fleet under the
- * budget rather than surviving the moment it is gone.
+ * Octokit with the two plugins that make a rate limit survivable. Without them a
+ * snapshot is one 403 from failing whole, and the failure is quiet: the integration
+ * serves `lastGood`, so "nothing changed" and "GitHub refused us" look identical
+ * downstream. Retrying is the second line — {@link installConditionalRequests} is
+ * what keeps the fleet under the budget in the first place.
  */
 const ResilientOctokit = Octokit.plugin(retry, throttling);
 
@@ -151,13 +125,10 @@ interface ResolvePullOpts {
 }
 
 /**
- * Re-poll a PR's detail until GitHub reports a concrete merge state, or the
- * retry budget is spent. GitHub returns `mergeable: null` (state 'unknown') while
- * it (re-)computes lazily — and it re-invalidates every time the base branch
- * moves — so a single read races the background compute and often reads
- * 'unknown', hiding real conflicts (issue #35). Pure over an injected fetch/sleep
- * so it's unit-testable without HTTP. Bounded: on exhaustion it returns the last
- * (still-`null`) detail and the next heartbeat tries again.
+ * Re-poll a PR's detail until GitHub reports a concrete merge state, or the budget is
+ * spent. GitHub computes `mergeable` lazily and returns null while it does, so a
+ * single read often reads 'unknown' and hides a real conflict. Bounded: on
+ * exhaustion it returns the still-`null` detail and the next heartbeat tries again.
  */
 export async function resolvePullDetail(
   fetchDetail: () => Promise<GhPullDetail>,
@@ -187,9 +158,8 @@ export class OctokitGitHubApi implements GitHubApi {
 
   /**
    * `log` is the diagnostic sink for retry notices, wired to the error log in
-   * production and silent by default — Azure's arrangement exactly. A limit the
-   * retry absorbs still costs the pulse its latency and still says the fleet is
-   * reading GitHub too hard, so it is recorded even though nothing failed.
+   * production and silent by default. A limit the retry absorbs is still recorded:
+   * it says the fleet is reading GitHub too hard.
    */
   static fromToken(
     token: string,
@@ -203,10 +173,9 @@ export class OctokitGitHubApi implements GitHubApi {
       throttle: {
         onRateLimit: (retryAfter, options, _octokit, retryCount) => {
           const wait = waitOutRateLimit(retryAfter, retryCount);
-          // Recorded either way, and worded by which of the two this is, because
-          // they say different things to an operator: a window about to turn over,
-          // or a read that has outgrown its budget and will not be fixed by
-          // waiting. → {@link MAX_PRIMARY_LIMIT_WAIT_S}
+          // Recorded either way, and worded by which of the two it is: a window about
+          // to turn over, or a read that has outgrown its budget.
+          // → {@link MAX_PRIMARY_LIMIT_WAIT_S}
           const where = `GitHub ${options.method} ${options.url}`;
           log(
             wait
@@ -215,9 +184,8 @@ export class OctokitGitHubApi implements GitHubApi {
           );
           return wait;
         },
-        // The secondary limit is the one this fleet actually provokes: it is
-        // triggered by burst concurrency rather than by an hourly budget, and the
-        // snapshot's per-PR and per-issue fan-out is a burst by construction.
+        // The secondary limit is the one this fleet provokes: burst concurrency, which
+        // the snapshot's per-PR and per-issue fan-out is by construction.
         onSecondaryRateLimit: (retryAfter, options, _octokit, retryCount) => {
           log(
             `GitHub ${options.method} ${options.url}: secondary rate limit, retry ${retryCount + 1}/${MAX_RETRIES} in ${retryAfter}s`,
@@ -226,10 +194,8 @@ export class OctokitGitHubApi implements GitHubApi {
         },
       },
     });
-    // Every GET this client makes now carries the ETag of the reading it already
-    // holds, so an unchanged resource answers 304 and costs no rate-limit budget
-    // at all. The bulk of the world read is exactly that: one timeline per open
-    // issue, per pulse, for issues that mostly have not moved.
+    // Every GET carries the ETag of the reading already held, so an unchanged
+    // resource answers 304 and costs no rate-limit budget.
     installConditionalRequests(octokit, new EtagCache());
     return new OctokitGitHubApi(octokit, owner, repo);
   }
@@ -265,11 +231,9 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async listRecentlyClosedPulls(since: string): Promise<GhClosedPull[]> {
-    // Sorted by `updated`, descending: GitHub cannot filter the list endpoint by
-    // close time, but `updated_at >= closed_at` always holds (closing *is* an
-    // update), so the first entry whose `updated_at` predates the window proves
-    // every later entry is out of it too — and the iterator stops there instead
-    // of walking the repo's entire closed-PR history.
+    // Sorted by `updated` descending: GitHub cannot filter by close time, but
+    // `updated_at >= closed_at` always holds, so the first entry predating the window
+    // proves every later one is out of it and the iterator stops there.
     const out: GhClosedPull[] = [];
     const pages = this.octokit.paginate.iterator(this.octokit.pulls.list, {
       ...this.base,
@@ -299,10 +263,8 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async getPull(number: number): Promise<GhPullDetail> {
-    // GitHub computes `mergeable` lazily: the first read after the value is
-    // invalidated returns null/'unknown' and only *triggers* the compute. Re-poll
-    // behind this seam so callers get the concrete 'dirty'/'clean'/... instead of
-    // a transient 'unknown' (issue #35).
+    // Re-poll behind this seam so callers get a concrete state rather than the
+    // transient 'unknown' GitHub's lazy compute returns.
     return resolvePullDetail(async () => {
       const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
       return { mergeable: data.mergeable, mergeableState: data.mergeable_state ?? null, merged: data.merged };
@@ -334,24 +296,17 @@ export class OctokitGitHubApi implements GitHubApi {
       body: c.body,
       inReplyToId: c.in_reply_to_id ?? null,
       path: c.path,
-      // `line` is null on a comment whose lines the diff has since moved past;
-      // `original_line` is where it was left, which is the honest answer for a
-      // surface that only names the place. Neither is a fallback for the other
-      // being *absent* — an outdated thread genuinely has no current line.
+      // `line` is null once the diff moves past a comment; `original_line` is where
+      // it was left. An outdated thread genuinely has no current line.
       line: c.line ?? c.original_line ?? null,
     }));
   }
 
   /**
-   * The one GraphQL read in this file, and it is not a preference: thread
-   * resolution has no REST representation at all, so `octokit.pulls` cannot
-   * answer whether a reviewer marked their comment resolved.
-   *
-   * Only the node id, `isResolved` and the root comment's `databaseId` are
-   * selected — the comment bodies keep coming from REST, so this query stays
-   * small and a GraphQL outage costs the resolution verdict rather than the
-   * comments themselves. Paginated by hand because `octokit.graphql` has no
-   * `paginate`.
+   * The one GraphQL read in this file, and not a preference: thread resolution has no
+   * REST representation. Only the node id, `isResolved` and the root comment's
+   * `databaseId` are selected, so a GraphQL outage costs the resolution verdict
+   * rather than the comments. Paginated by hand — `octokit.graphql` has no `paginate`.
    */
   private async reviewThreadNodes(number: number): Promise<GqlThread[]> {
     const threads: GqlThread[] = [];
@@ -366,9 +321,8 @@ export class OctokitGitHubApi implements GitHubApi {
       if (!connection) break;
       for (const node of connection.nodes ?? []) {
         if (!node) continue;
-        // A thread always has a first comment; a null databaseId would be a
-        // thread we cannot join to the REST read, so it is dropped rather than
-        // guessed at — it degrades to the reply arm, which is the safe direction.
+        // A null databaseId cannot be joined to the REST read, so the thread is
+        // dropped rather than guessed at — degrading to the reply arm, the safe way.
         const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
         if (typeof rootCommentId !== 'number' || typeof node.id !== 'string') continue;
         threads.push({ nodeId: node.id, rootCommentId, isResolved: node.isResolved === true });
@@ -380,21 +334,13 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async listPullReviewThreads(number: number): Promise<GhReviewThread[]> {
     const threads = await this.reviewThreadNodes(number);
-    // The node id stays in this file: everything outside it joins a thread to the
-    // REST read by its root comment, and a second identifier crossing the seam
-    // would be one more thing every fixture has to know about GitHub.
+    // The node id stays in this file: outside it a thread is joined by its root comment.
     return threads.map(({ rootCommentId, isResolved }) => ({ rootCommentId, isResolved }));
   }
 
   /**
-   * The one GraphQL *write*, for the read's reason: `resolveReviewThread` is a
-   * mutation with no REST equivalent, and it takes the thread's node id — which
-   * is why the lookup above is shared rather than the caller being handed an id
-   * it has no other use for.
-   *
-   * A thread already resolved returns without mutating: the act is idempotent
-   * either way, but a second mutation on a thread a reviewer resolved themselves
-   * would post nothing and cost a request.
+   * The one GraphQL *write*, for the read's reason: no REST equivalent, and it takes
+   * the thread's node id. A thread already resolved returns without mutating.
    */
   async resolveReviewThread(number: number, rootCommentId: number): Promise<boolean> {
     const thread = (await this.reviewThreadNodes(number)).find((t) => t.rootCommentId === rootCommentId);
@@ -444,10 +390,8 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async getJobLog(jobId: number): Promise<string> {
-    // Octokit follows the 302 to the blob and hands back the body. Typed `unknown`
-    // because the generated types call this endpoint's response `never` — it is
-    // declared as a redirect rather than as content, so the string it actually
-    // resolves to has to be asserted here rather than inferred.
+    // Octokit follows the 302 and hands back the body. The generated types call the
+    // response `never` (it is declared as a redirect), so the string is asserted here.
     const res = await this.octokit.actions.downloadJobLogsForWorkflowRun({ ...this.base, job_id: jobId });
     return typeof res.data === 'string' ? res.data : String(res.data ?? '');
   }
@@ -463,15 +407,10 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   /**
-   * The same endpoint with `state: 'all'` and a `since` — the one call that can
-   * see a closed issue.
-   *
-   * `sort`/`direction` are pinned to `updated` ascending rather than left to the
-   * endpoint's `created` default: the sweep records the newest `changedAt` it saw
-   * as its high-water mark, and a page order unrelated to that instant makes a
-   * partial read (a rate limit, a dropped connection mid-pagination) leave a mark
-   * ahead of items it never fetched. Ascending, the mark only ever moves over
-   * ground actually covered.
+   * The same endpoint with `state: 'all'` and a `since` — the one call that can see a
+   * closed issue. `sort`/`direction` are pinned to `updated` **ascending**: the sweep
+   * marks the newest `changedAt` it saw, so any other order lets a partial read leave
+   * the mark ahead of items it never fetched.
    */
   async listIssuesChangedSince(since: string, label?: string): Promise<GhIssue[]> {
     const issues = await this.octokit.paginate(this.octokit.issues.listForRepo, {
@@ -493,15 +432,13 @@ export class OctokitGitHubApi implements GitHubApi {
       per_page: 100,
     });
     return events.map((ev) => {
-      // A "cross-referenced" event carries a `source.issue`; when that issue is
-      // itself a PR (`pull_request` present) its number is the linking PR.
+      // A "cross-referenced" event's `source.issue` is the linking PR when it is one.
       let sourcePrNumber: number | null = null;
       if (ev.event === 'cross-referenced' && 'source' in ev) {
         const issue = ev.source.issue;
         if (issue && issue.pull_request) sourcePrNumber = issue.number;
       }
-      // A `labeled`/`unlabeled` event carries the label and the actor who set it —
-      // the "who tagged this" signal. Cast past octokit's broad timeline union.
+      // The "who tagged this" signal. Cast past octokit's broad timeline union.
       let label: string | null = null;
       let actorLogin: string | null = null;
       if (ev.event === 'labeled' || ev.event === 'unlabeled') {
@@ -590,21 +527,16 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   /**
-   * GitHub's own base merge. Answers 202 with a job message rather than a commit —
-   * the merge is queued, and the next snapshot is what reports the branch no longer
-   * behind, so there is nothing here worth returning. A 422 (the head moved, or the
-   * merge is not in fact clean) throws, which is the fallback's signal.
+   * GitHub's own base merge. Answers 202 with a job message rather than a commit, so
+   * there is nothing worth returning; a 422 throws, which is the fallback's signal.
    */
   async updatePullBranch(number: number): Promise<void> {
     await this.octokit.pulls.updateBranch({ ...this.base, pull_number: number });
   }
 
   /**
-   * Delete a branch ref. A 404 (or 422 "Reference does not exist") means the branch
-   * is already gone — the common case on a repository with "automatically delete
-   * head branches" on, where GitHub removed it at merge time. Reported as `false`
-   * rather than thrown: the reap wants "the branch is not there", and both answers
-   * satisfy it.
+   * Delete a branch ref. A 404 or 422 means it is already gone, reported as `false`
+   * rather than thrown: the reap wants "the branch is not there".
    */
   async deleteBranch(branch: string): Promise<boolean> {
     try {
@@ -619,8 +551,7 @@ export class OctokitGitHubApi implements GitHubApi {
 
   /** Shared labels-API write — PRs and issues are the same endpoint on GitHub. */
   private async setLabel(number: number, label: string, present: boolean): Promise<void> {
-    // addLabels is additive and idempotent; removeLabel 404s when the label isn't
-    // set, which is a no-op for our purposes.
+    // addLabels is additive and idempotent; removeLabel 404s when unset, a no-op here.
     if (present) {
       await this.octokit.issues.addLabels({ ...this.base, issue_number: number, labels: [label] });
     } else {
@@ -634,10 +565,8 @@ export class OctokitGitHubApi implements GitHubApi {
 }
 
 /**
- * One issue row, from either listing. Written once because the two callers must
- * agree field for field: the mirror joins its rows to the world's by number, and a
- * `state` or a label list spelled differently on the two paths would present as a
- * ticket that changes shape depending on which read last touched it.
+ * One issue row, from either listing. Written once because the two callers must agree
+ * field for field — the mirror joins its rows to the world's by number.
  */
 function mapIssue(i: {
   number: number;

@@ -181,23 +181,15 @@ import type {
 } from '../types.js';
 
 /**
- * The single persistence surface. Everything else talks to the store; nothing
- * else touches SQLite. Reads return plain domain objects; writes are synchronous
- * (better-sqlite3) which keeps the harness logic simple and race-free.
+ * The single persistence surface. Everything else talks to the store; nothing else touches
+ * SQLite. Reads return plain domain objects; writes are synchronous (better-sqlite3), which
+ * is what keeps the harness logic race-free.
  *
- * **The rule is about SQLite access, not about one class** (issue #221). The
- * bodies live in domain modules beside this file — each holding one group of
- * related tables, taking nothing but `{db, now}`, and owning the row mappers and
- * the `ensureColumns` entries for its own tables — and this is the composition
- * root that instantiates them and delegates. Nothing outside `src/store/` gains a
- * `better-sqlite3` import, which `test/storeModules.test.ts` asserts structurally
- * rather than trusting.
- *
- * Method names and signatures are exactly what they have always been, so every
- * call site is unchanged. What a delegation costs is one line; what it buys is
- * that a related set of invariants — the issue-verdict exclusion matrix on
- * {@link IssueVerdictStore} being the clearest — sits in one readable scope instead of
- * hundreds of lines apart, joined only by prose.
+ * The rule is about SQLite access, not about one class: the bodies live in domain modules
+ * beside this file, each owning one group of tables and taking nothing but `{db, now}`, and
+ * this is the composition root that instantiates them and delegates.
+ * `test/storeModules.test.ts` asserts structurally that nothing outside `src/store/` imports
+ * `better-sqlite3`. → `docs/spec/14-persistence.md#shape`
  */
 
 export class Store {
@@ -254,22 +246,18 @@ export class Store {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    // Before the schema, because `CREATE TABLE IF NOT EXISTS` would otherwise stand
-    // an empty table up under the new name beside the full one under the old, and
-    // leave every row that predates the rename invisible with nothing red.
+    // Before the schema: `CREATE TABLE IF NOT EXISTS` would otherwise stand an empty table
+    // up under the new name and leave every pre-rename row invisible, with nothing red.
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
-    // And what a retired arm left behind: deleting a `CREATE TABLE IF NOT EXISTS`
-    // stops a table being made and never removes one, so without this a database
-    // from before the retirement keeps the table for ever while a fresh one has
-    // never heard of it. Only rows that are derived or worthless — see the function.
+    // Deleting a `CREATE TABLE IF NOT EXISTS` stops a table being made and never removes
+    // one, so a retired table lives forever without this. Derived or worthless rows only.
     dropRetiredTables(this.db, POOL_RETIRED_TABLES);
-    // Before the schema, and around it: a table whose *key* changed is renamed
-    // out of the way so `SCHEMA`'s own definition creates the new shape, then its
-    // rows are copied across resolving the old key into the new one. All in one
-    // transaction — a crash halfway leaves the old table exactly as it was.
+    // Around the schema: a table whose *key* changed is renamed aside so `SCHEMA` creates
+    // the new shape, then rows are copied across. One transaction, so a crash halfway
+    // leaves the old table exactly as it was.
     rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
-    // Before any module is constructed, let alone reads: a domain module reading
-    // a migrated column on a database created by an older build reads `undefined`.
+    // Before any module is constructed: a module reading a migrated column on an older
+    // database reads `undefined`.
     const addedColumns: string[] = [];
     for (const columns of [
       TASK_COLUMNS,
@@ -297,43 +285,30 @@ export class Store {
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
-    // The one migration that has to know a column was *just* added rather than
-    // merely being present: `pets.opened_at` null means "still an egg", so every
-    // pet from before the shell existed is stamped as already opened, once. Run on
-    // every boot instead, it would open the eggs an operator was saving.
+    // Gated on the column being *just* added: `pets.opened_at` null means "still an egg", so
+    // pre-shell pets are stamped opened once. On every boot it would open eggs operators
+    // were saving.
     if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
-    // The second, and the same shape again: `local_runs.interrupted_at` null means
-    // nobody stamped this row, which a resume reads as "unknown, do not bring it
-    // back". Right for a hard crash and wrong for the row this very boot is upgrading
-    // over — left live by a fast stop a moment ago — so a live row is dated to now,
-    // once. Ungated it would re-date every stale row on every boot and resume it for
-    // ever, which is the thing the stamp exists to stop.
+    // Same shape: `local_runs.interrupted_at` null reads to a resume as "do not bring it
+    // back", which is wrong for the row this boot is upgrading over, so a live row is dated
+    // to now, once. Ungated it would re-date stale rows every boot and resume them forever.
     if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(this.db, clock());
-    // The migrations that are not columns, here for the same reason the pass above
-    // is — before any module is constructed, let alone reads. #203's
-    // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
-    // standing dismissals, which is what stops every cleared card coming back; and
-    // the two halves of the retired `single` plan shape are put back together —
-    // the status is absorbed into `active`, and the plan that carried no parts
-    // because "one pull request" *meant* no parts gets the one part it always was.
-    // Ordered: the backfill reads the status, so it must see the absorbed one.
+    // The non-column migrations, before any module is constructed. `floor_completions`
+    // becomes `issue_runs`, carrying standing dismissals so cleared cards stay cleared; the
+    // retired `single` plan shape is put back together. Ordered: the backfill reads the
+    // status, so it must see the absorbed one.
     adoptFloorCompletions(this.db);
     absorbSinglePlanStatus(this.db);
     backfillWholePlanParts(this.db, clock());
-    // What kind of work each historical task was, so the by-task-type and
-    // by-check spend tables can speak about the runs that predate the columns.
-    // The one place a dispatch reason is ever parsed — see the function.
+    // What kind of work each historical task was, so the spend tables can speak about runs
+    // predating the columns. The one place a dispatch reason is ever parsed.
     backfillTaskDispatchKind(this.db);
-    // The environment rows a part-ref goal was filed under. The attribution walk
-    // stopped on any `issue:`-prefixed ref, which a part is, so a planned goal's
-    // landings were labelled with the part that opened the pull request — a ref
-    // nothing else asks about. The landings are relabelled and the arrivals
-    // discarded for the desk to re-derive; see the function for why those are
-    // opposite answers.
+    // The attribution walk stopped on any `issue:`-prefixed ref, so a planned goal's
+    // landings were labelled with the part that opened the PR. Landings are relabelled and
+    // arrivals discarded for the desk to re-derive.
     repairPartRefGoals(this.db);
-    // The old reach denominator counted only landed work, so a partial planned
-    // goal could be recorded as arrived. Discard those claims; the fixed desk
-    // re-derives the real arrival once every owed part is confirmed.
+    // The old reach denominator counted only landed work, so a partial planned goal could be
+    // recorded as arrived. Discard those claims; the desk re-derives once every part is in.
     const partialGoalRefs = this.db
       .prepare(
         `SELECT DISTINCT plans.origin_ref AS goal_ref
@@ -398,9 +373,8 @@ export class Store {
   }
 
   /**
-   * Is the handle still open? Asked by anything that fires on a timer rather than
-   * on a call — a cycle that arrives after the store was closed throws from inside
-   * a `void` call, where there is nothing left to record it with.
+   * Is the handle still open? Asked by anything firing on a timer: a cycle arriving after
+   * the store closed throws inside a `void` call, where nothing is left to record it.
    */
   get open(): boolean {
     return this.db.open;
@@ -989,25 +963,18 @@ export class Store {
     return this.agents.recordAgentNote(id, note);
   }
   /**
-   * What this deployment has spent since `sinceIso` — **every** source of it.
-   *
-   * Two tables hold dated cost deltas: `usage_events` for the fleet's agents, and
-   * `local_run_cost_deltas` for the sessions holding the machine's dev environment
-   * up. Both are money on the same account, so both belong in the one figure the
-   * gauges draw and the pets' beats are earned from — and this addition is the one
-   * place they are added. A third source of spend is added here, or it is money the
-   * cockpit states nowhere while claiming to state all of it.
+   * What this deployment has spent since `sinceIso` — **every** source of it: `usage_events`
+   * for the fleet's agents and `local_run_cost_deltas` for the dev-environment sessions.
+   * This addition is the one place they are added, so a third source of spend goes here or
+   * the cockpit states it nowhere while claiming to state all of it.
    */
   sumUsageCostSince(sinceIso: string): number {
     return this.agents.sumUsageCostSince(sinceIso) + this.localRuns.sumLocalRunCostSince(sinceIso);
   }
   /**
-   * The agents' dated deltas alone, for the reader that needs to know **whose**.
-   *
-   * Deliberately not the merged list: the reliability breakdown joins these to agents
-   * by id to price a pull request's CI, and a local run's delta is a row it can never
-   * match. {@link Store.listCostDeltasSince} is the one to reach for when the question
-   * is "what went out, and when".
+   * The agents' dated deltas alone, for the reader that needs to know **whose** — the
+   * reliability breakdown joins these to agents by id, which a local run's delta can never
+   * match. {@link Store.listCostDeltasSince} answers "what went out, and when".
    */
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
     return this.agents.listUsageEventsSince(sinceIso);
@@ -1519,23 +1486,16 @@ export class Store {
   }
 
   /**
-   * Queue the documentation job a note is written up by, and record the write-up
-   * against it in the same transaction.
+   * Queue the documentation job a note is written up by, and record the write-up against it
+   * in the same transaction — either alone leaves a job nothing settles a note from, or a
+   * note on its way somewhere nothing is taking it.
    *
-   * One write for both, `exitFact`'s shape and for its reason: a job with no
-   * write-up is a documentation change nothing will ever settle a note from, and a
-   * write-up naming no job is a note the board shows as on its way somewhere
-   * nothing is taking it.
-   *
-   * The job carries **no origin**. A note is about the repository rather than about
-   * a world item, and the graph adopts a job by its origin — so attributing this
-   * one to whichever goal happened to hit the note first would file the work under
-   * somebody else's issue.
+   * The job carries **no origin**: the graph adopts a job by its origin, so attributing this
+   * one to whichever goal hit the note first would file the work under somebody else's issue.
    */
   writeUpObstacle(obstacleId: string, work: { title: string; prompt: string }): Job {
     const write = this.db.transaction((): Job => {
-      // A `code` job: it writes files in a tree, so it needs a worktree and a
-      // branch to open the pull request from.
+      // A `code` job: it writes files in a tree, so it needs a worktree and a branch.
       const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code' });
       this.obstacles.recordObstacleWriteUp(obstacleId, job.id);
       return job;

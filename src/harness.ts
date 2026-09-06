@@ -45,27 +45,12 @@ import { needsFleetReview, reviewReading } from './review/prReview.js';
 import type { ReviewProber } from './review/reviewedElsewhere.js';
 
 /**
- * How many accounts of each kind the dispatch context carries.
- *
- * Read on **every** pulse, and it feeds a prompt block that renders at most a
- * handful of lines — so this is the read's bound rather than the block's, which
- * `priorRemedies.ts` keeps for itself. Wider than that block's cap on purpose:
- * the CI arm filters to the checks that are red now, so a fetch of exactly six
- * would routinely arrive with none of them relevant.
+ * How many accounts of each kind the dispatch context carries — the read's bound, not the
+ * prompt block's (`priorRemedies.ts` keeps that).
  */
 const PRIOR_REMEDY_ROWS = 40;
 
-/**
- * How many recent `world_events` the lane split reads to answer "what has moved
- * lately".
- *
- * Bounded rather than windowed because this is a **cost hint** and not a verdict:
- * an entity whose transition fell off the end of this list is one the other hot
- * rules almost certainly already name (the fleet is on it, its build is
- * unsettled), and the worst case if none of them do is that it is re-read on the
- * slow lane instead of the fast one. A window with no bound would put an unbounded
- * read in front of every world fetch to save a handful of requests behind it.
- */
+/** How many recent `world_events` the lane split reads to answer "what has moved lately". */
 const READ_PLAN_EVENTS = 200;
 
 interface HarnessDeps {
@@ -74,11 +59,7 @@ interface HarnessDeps {
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
-  /**
-   * The pulse while nothing is moving. Never shorter than
-   * {@link HarnessDeps.heartbeatIntervalMs} — clamped rather than refused, since a
-   * slow lane faster than the fast one is a setting with no meaning.
-   */
+  /** The pulse while nothing is moving. */
   idleHeartbeatIntervalMs: number;
   /** The hot/cold hydration backstops handed down to the world read each pulse. */
   readLanes: ReadLanes;
@@ -87,346 +68,228 @@ interface HarnessDeps {
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
   /**
-   * Only PRs carrying this label (`${labelPrefix}-watch`) are dispatched at — pull
-   * requests are opt-in exactly as issues are. Empty = the gate is off and every PR
-   * is worked, which is the no-prefix and test posture.
+   * Only PRs carrying this label (`${labelPrefix}-watch`) are dispatched at — pull requests
+   * are opt-in exactly as issues are.
    */
   prWatchLabel: string;
   /**
-   * The fleet review's policy — held here for one thing only: the pass below that
-   * asks the operator's `review.reviewedElsewhere` command which of this pulse's
-   * would-be reviews have already happened. Everything else about the review is
-   * decided in the rules, off the dispatch context's own copy.
+   * The fleet review's policy — held here for one thing only: the pass below that asks the
+   * operator's `review.reviewedElsewhere` command which of this pulse's would-be reviews
+   * have already happened.
    */
   review: PrReviewPolicy;
   /**
-   * Asks something outside the harness whether a pull request has already been
-   * reviewed (`review.reviewedElsewhere`).
-   *
-   * Optional, unlike {@link review} itself, and the asymmetry is deliberate: the
-   * intake stamp is a store write the dispatcher *depends* on, so a harness that
-   * could be built without it would review nothing. This is a shell-out to an
-   * operator's command, and absent it simply asks nobody — which is exactly what
-   * every deployment that configured no command does, and what a test must do
-   * rather than spawn a shell on the developer's machine.
+   * Asks something outside the harness whether a pull request has already been reviewed
+   * (`review.reviewedElsewhere`).
    */
   reviewProber?: ReviewProber;
   /**
-   * What a dispatch needs to resolve the profile its origin is pinned to (issue
-   * #342) — passed straight through to the dispatch context. Absent = no
-   * `agentModels`, no `labelPrefix`, or a test that does not care, and then no
-   * dispatch is ever pinned.
+   * What a dispatch needs to resolve the profile its origin is pinned to (issue #342) —
+   * passed straight through to the dispatch context. Absent = no `agentModels`, no
+   * `labelPrefix`, or a test that does not care, and then no dispatch is ever pinned.
    */
   modelPins?: { labelPrefix: string; models: AgentModels };
   /**
-   * Where every Feature's work stands right now, digested — what rule
-   * `feature-summary` compares against the summaries on file.
-   *
-   * A thunk rather than the mirror, on `modelPins`' terms: the harness asks one
-   * question and gets the answer, and stays as ignorant of container types, watch
-   * labels and environments as it is of the board that draws them. It is also
-   * where the *cost* is gated — the gather is several full-table reads, so the
-   * wiring returns an empty list on a deployment with no feature board and this
-   * pulse then does no read at all.
-   *
-   * Absent = a caller that has not wired it, and then no Feature is ever
-   * summarised: the safe absence, since the other direction would dispatch against
-   * a digest nobody built.
+   * Where every Feature's work stands right now, digested — what rule `feature-summary`
+   * compares against the summaries on file. Absent = no Feature is ever summarised, which
+   * is the safe absence.
    */
   featureStandings?: () => { number: number; title: string; key: string }[];
-  /** How long an operator "Up next" priority override survives after its origin stops being tracked (issue #128; 0 disables pruning). */
+  /**
+   * How long an operator "Up next" priority override survives after its origin stops being
+   * tracked (issue #128; 0 disables pruning).
+   */
   upNextOverrideTtlMs: number;
   /**
-   * Folds git + provider reality onto the plan-part rows, next to the world diff.
-   * Absent = no plan tracking (and it no-ops anyway with the funnel off).
+   * Folds git + provider reality onto the plan-part rows, next to the world diff. Absent =
+   * no plan tracking (and it no-ops anyway with the funnel off).
    */
   plans?: PlanReconciler;
   /**
-   * Asks the goal appraisal's question on the ticket itself. Absent = no comment (and
-   * it no-ops anyway with the appraisal off).
+   * Asks the goal appraisal's question on the ticket itself. Absent = no comment (and it
+   * no-ops anyway with the appraisal off).
    */
   appraisals?: AppraisalDesk;
   /**
    * The project's area tree, kept fresh enough for the appraisal tool and the state
-   * snapshot to read synchronously. Absent = never read, and then every item
-   * reads as classified — which is the correct answer for a tracker that has no
-   * such tree, and the reason the directory itself distinguishes "no tree" from
-   * "not read yet".
+   * snapshot to read synchronously. Absent = never read, and then every item reads as
+   * classified — correct for a tracker with no such tree.
    */
   areaPaths?: AreaPathDirectory;
   /** Keeps open pull requests on the naming convention. Absent = no renaming. */
   naming?: PrNamingDesk;
   /**
-   * Tags the pull requests the harness opened, so its own work is watched without
-   * an operator clicking anything. Absent = no seeding, and then only what `open_pr`
-   * tagged at creation is worked.
+   * Tags the pull requests the harness opened, so its own work is watched without an
+   * operator clicking anything. Absent = no seeding, and then only what `open_pr` tagged at
+   * creation is worked.
    */
   prWatch?: PrWatchDesk;
   /**
    * Links the pull requests the harness opened to their work items, so Azure's
-   * linked-work-items policy is satisfied without an agent being spent working out
-   * a number the harness already holds. Absent = no linking, and then only what
-   * `open_pr` linked at creation carries a link.
+   * linked-work-items policy is satisfied without an agent being spent working out a number
+   * the harness already holds. Absent = no linking, and then only what `open_pr` linked at
+   * creation carries a link.
    */
   prWorkItems?: PrWorkItemDesk;
   /**
-   * Files the "close the ticket" obligation on a delivered goal, and settles it
-   * when the tracker stops listing the item open. Absent = no close-out (tests
-   * that do not care). It writes `human_tasks` rows and decides no dispatch.
+   * Files the "close the ticket" obligation on a delivered goal, and settles it when the
+   * tracker stops listing the item open. Absent = no close-out (tests that do not care).
    */
   closeOuts?: DeliveryCloseOutDesk;
   /**
-   * Files the ask for a validation resource a delivered goal's plan says it needs
-   * and could not produce. Absent = no resource asks (tests that do not care). It
-   * writes `human_tasks` rows and decides no dispatch.
+   * Files the ask for a validation resource a delivered goal's plan says it needs and could
+   * not produce. Absent = no resource asks (tests that do not care).
    */
   validationAsks?: ValidationAskDesk;
   /**
-   * Files the "this goal is ready to be validated" obligation on a delivered goal,
-   * and settles it once nothing is left for a person to run. Absent = no validate
-   * rows (tests that do not care). It writes `human_tasks` rows and decides no
-   * dispatch.
+   * Files the "this goal is ready to be validated" obligation on a delivered goal, and
+   * settles it once nothing is left for a person to run. Absent = no validate rows (tests
+   * that do not care).
    */
   validationReady?: ValidationReadyDesk;
   /**
-   * Surfaces a live run spending far past what its kind of work costs. Absent =
-   * no burn watch (tests that do not care). It writes `human_tasks` rows, decides
-   * no dispatch, and stops nothing.
+   * Surfaces a live run spending far past what its kind of work costs. Absent = no burn
+   * watch (tests that do not care).
    */
   burn?: SpendBurnDesk;
   /**
-   * Says when the queue of work is running out. Absent = no runway watch (tests
-   * that do not care). It writes `human_tasks` rows, decides no dispatch and
-   * holds nothing — and it needs {@link HarnessDeps.issuePickup} to read the same
-   * gate the dispatcher reads.
+   * Says when the queue of work is running out. Absent = no runway watch (tests that do not
+   * care).
    */
   runway?: RunwayDesk;
   /**
-   * The pickup gate's own policy, so the runway watch can ask
-   * `issuePickupStatus` the question rule `issue-pickup` asks. Read here rather
-   * than off the dispatcher because {@link Dispatcher} is an interface and only
-   * one implementation happens to carry a policy — a lens reaching through it
-   * would be reading a private field of one dispatcher.
+   * The pickup gate's own policy, so the runway watch asks `issuePickupStatus` the question
+   * rule `issue-pickup` asks.
    */
   issuePickup?: IssuePickupPolicy;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
   /**
-   * Attributes each merge to the goal it was for, and asks the configured
-   * environments where those commits have got to. Absent = tests that do not care;
-   * with no `environments` configured it records landings and probes nothing.
+   * Attributes each merge to the goal it was for, and asks the configured environments
+   * where those commits have got to. Absent = tests that do not care; with no
+   * `environments` configured it records landings and probes nothing.
    */
   environments?: EnvironmentDesk;
   /**
-   * Queues the job behind every recurrence that has come due. Absent = no
-   * schedules (tests that do not care). It writes `jobs` rows through the same
-   * store call the launch route uses and decides no dispatch.
+   * Queues the job behind every recurrence that has come due. Absent = no schedules (tests
+   * that do not care).
    */
   schedules?: ScheduleDesk;
   /**
-   * Reconciles the operator's standing stack-landing authorizations with the
-   * world. Absent = no landings (tests that do not care).
+   * Reconciles the operator's standing stack-landing authorizations with the world. Absent
+   * = no landings (tests that do not care).
    */
   landings?: StackLandingDesk;
-  /**
-   * Writes the durable work graph each pulse. Absent = no graph (tests that do not
-   * care). Stage 1 is a lens: nothing reads what it writes.
-   */
+  /** Writes the durable work graph each pulse. Absent = no graph (tests that do not care). */
   graph?: WorkGraphRecorder;
   /**
-   * Keeps the ticket mirror current (issue #329). Absent = no mirror, which is
-   * every test that does not name one and every deployment whose issues provider
-   * cannot list history.
+   * Keeps the ticket mirror current (issue #329). Absent = no mirror, which is every test
+   * that does not name one and every deployment whose issues provider cannot list history.
    */
   tickets?: { run(): Promise<void> };
   /**
    * The local run, asked once a beat to date the environment it is holding. Absent =
-   * nothing is dated, which is every test that does not name one.
-   *
-   * A pass on the pulse rather than a timer of its own because the pulse *is* this
-   * process's proof of life, and that is the whole of what the stamp records. It runs
-   * **above the recovery hold**: a harness held for three hours is a harness that was
-   * up for three hours, and a run dated at the last cycle that did work would read as
-   * stale on the boot after a kill. → [23](../docs/spec/23-local-runs.md)
+   * nothing is dated. → [23](../docs/spec/23-local-runs.md)
    */
   localRun?: { noteAlive(): void };
   /**
-   * The local-validation desk's sweep: settles the rows nobody will ever answer —
-   * the environment went away, or the agent ended without reporting.
-   *
-   * On the pulse rather than a timer of its own because what it reads is the store,
-   * and it runs **above the dispatch** so the rule never proposes an agent for a row
-   * this beat is about to abandon. Absent = nothing is swept, which is every test
-   * that does not name one. → [32](../docs/spec/32-local-validation.md)
+   * The local-validation desk's sweep: settles the rows nobody will ever answer. **Above
+   * the dispatch**, so the rule never proposes an agent for a row this beat is about to
+   * abandon. → [32](../docs/spec/32-local-validation.md)
    */
   localValidations?: { sweep(): void };
   /**
-   * Watches the harness's own build, and advances a drain that has run dry. Absent
-   * = the watch is off, which is a supported configuration and every test that does
-   * not name one. It decides no dispatch: what it can pause is the same `paused`
-   * flag the operator's own pause writes, and it writes that only when asked.
+   * Watches the harness's own build, and advances a drain that has run dry. Absent = the
+   * watch is off, which is a supported configuration and every test that does not name one.
    */
   updates?: { run(): Promise<void> };
   /**
-   * The crash-recovery gate: how many agents orphaned by the previous run are
-   * still waiting on an operator's verdict. Any at all holds the pulse — see
-   * {@link Harness.runCycle}.
+   * The crash-recovery gate: how many agents orphaned by the previous run are still waiting
+   * on an operator's verdict.
    */
   recovery?: { pendingCount(): number };
   /**
-   * Ends the usage-limit parks whose window has turned over. Absent = no
-   * auto-resume (tests that do not care), and then a park waits for the cockpit's
-   * Resume as it did before. It staffs nobody and no rule reads what it writes: the
-   * agent it wakes is one already holding its slot.
+   * Ends the usage-limit parks whose window has turned over. Absent = no auto-resume, and a
+   * park waits for the cockpit's Resume.
    */
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   /**
-   * Raises the notices the harness can see for itself, and ends the ones the world
-   * has settled. Absent = no harness notices (tests that do not care), and then
-   * the only expiring facts are the ones agents raise. It writes `knowledge_facts`
-   * rows, decides no dispatch, and nothing but a prompt reads what it writes.
+   * Raises the notices the harness can see for itself, and ends the ones the world has
+   * settled. Absent = no harness notices.
    */
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   /**
-   * Ends the graduations the world has settled: a documentation pull request
-   * merged takes its claim to `committed` and out of every prompt, and one closed
-   * unmerged leaves the claim exactly where it was. Absent = nothing sweeps (tests
-   * that do not care), and then a committed claim only ever gets there through the
-   * operator's own answer on the page. It writes `knowledge_graduations` and
-   * `knowledge_facts` rows, decides no dispatch, and nothing but a prompt reads
-   * what it writes.
+   * Ends the graduations the world has settled: a merged documentation pull request takes
+   * its claim to `committed` and out of every prompt; one closed unmerged leaves it where
+   * it was. Absent = nothing sweeps.
    */
   graduations?: { run(): void };
   clusters?: { run(): void };
   /**
-   * Sends the obstacle notices owed to running agents. Absent = no mid-session
-   * channel (tests that do not care), and then an obstacle reaches an agent only
-   * through its own dispatch prompt or its own call to the tool.
-   *
-   * It writes `obstacle_notices` rows and types into live sessions. It staffs
-   * nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/27-obstacles.md#delivery`
+   * Sends the obstacle notices owed to running agents. Absent = no mid-session channel. →
+   * `docs/spec/27-obstacles.md#delivery`
    */
   obstacleNotices?: { run(): void };
   /**
-   * Records the harness's own voice on the obstacle board: a check going red on a
-   * branch other pull requests are based on, a check flapping red-then-green on
-   * one `headSha`. Absent = the harness never speaks (tests that do not care), and
-   * then every row waits for two *agents* to hit it — which a fleet running four
-   * agents does not have.
-   *
-   * It writes `obstacles`, `obstacle_keys` and `obstacle_sightings` rows. It
-   * staffs nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
+   * Records the harness's own voice on the obstacle board. Absent = the harness never
+   * speaks, and every row waits for two *agents* to hit it. →
+   * `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   /**
-   * Reads what a model may decide about the rows nobody has read since somebody
-   * last said something about one: the keys in their prose, a merge the keys
-   * missed, what each row is *for*, and the ticket written from the sightings.
-   * Absent = nothing calls a model at all (tests, and every deployment with no
-   * reader wired), and then extraction stays the mechanical reading and the ticket
-   * the mechanical composition.
-   *
-   * It writes `obstacle_keys`, `obstacle_suggestions` and `obstacle_readings` rows
-   * and the one column that says which door a row is at. It moves no state, takes
-   * no owner and resolves nothing — it is the harness's secretary and deliberately
-   * not its judge.
-   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   * What a model may decide about the obstacle rows nobody has read lately. Absent =
+   * nothing calls a model, and extraction stays mechanical. →
+   * `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
    */
   obstacleDesk?: { run(): Promise<void> };
   /**
-   * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
-   * `obstacle-repair` has already made — and lets a goal parked behind one back
-   * into pickup once the board stops reaching agents with it. Absent = nothing
-   * owns anything (tests that do not care), and then an obstacle two goals
-   * corroborated sits on the board for ever.
-   *
-   * It writes `obstacles` and `obstacle_blocks` rows and files tracker items. It
-   * staffs nobody: the repair dispatch is a rule's, proposed through the candidate
-   * list and subject to the headroom cut, and this desk only records that it
-   * happened. → `docs/spec/27-obstacles.md#ownership`
+   * Gives a standing obstacle an owner and lets a goal parked behind one back into pickup.
+   * Absent = nothing owns anything. → `docs/spec/27-obstacles.md#ownership`
    */
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   /**
-   * Ends an obstacle: a condition the harness watches met on two consecutive real
-   * readings, the owner landing, the reporter's clock running out, or nothing
-   * having said it for `obstacleDormantMs`. Absent = nothing ever ends (tests that
-   * do not care), and then a row stands where its sightings put it for ever.
-   *
-   * It writes `obstacles`, `obstacle_conditions` and `obstacle_writeups` rows, and
-   * queues one documentation job at a time for a standing note. It staffs nobody
-   * else and no rule reads what it writes.
-   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   * Ends an obstacle: a watched condition met on two consecutive real readings, the owner
+   * landing, the reporter's clock, or dormancy. Absent = nothing ever ends. →
+   * `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   obstacleEndings?: { run(world: WorldSnapshot): void };
   /**
-   * The cross-fleet pool's one desk: polls everybody else's documents into the
-   * mirror, and publishes this fleet's when they have moved. Absent = no pool
-   * (tests that do not care, and every deployment on the `fake` default), and then
-   * nothing is published and nothing arrives.
-   *
-   * It writes `pool_*` rows and — through the ordinary proposal path — `knowledge_facts`
-   * ones. It decides no dispatch and no rule reads what it writes, which is why it
-   * sits beside the other bookkeeping rather than in the dispatcher.
-   * → `docs/spec/28-cross-fleet-pool.md#the-clocks`
+   * The cross-fleet pool's one desk: polls everybody else's documents into the mirror and
+   * publishes this fleet's when they have moved. Absent = no pool. →
+   * `docs/spec/28-cross-fleet-pool.md#the-clocks`
    */
   pool?: PoolDesk;
   /**
-   * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
-   * do not care), and then only the terminal-state listeners tidy. It settles
-   * inbox rows, decides no dispatch, and no rule reads what it writes.
+   * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that do not
+   * care), and then only the terminal-state listeners tidy.
    */
   escalations?: { tidyDeadAgents(): unknown[] };
   /**
-   * What an inbound delivery has said is stale since the last plan was built,
-   * drained into this pulse's read plan. Absent = no ingress, which is every
-   * deployment that has set no webhook secret and every test that does not name one
-   * — and then the plan carries an empty fresh set and the lanes decide alone,
-   * exactly as they did before. → `docs/spec/30-ingress.md#invalidating-precisely`
+   * What an inbound delivery has said is stale since the last plan was built, drained into
+   * this pulse's read plan. Absent = no ingress, and the lanes decide alone. →
+   * `docs/spec/30-ingress.md#invalidating-precisely`
    */
   freshReads?: { drain(): string[] };
 }
 
 /**
- * Where a cycle came from. `timer`, `manual` and `boot` each begin with a fresh
- * `connector.getState()`; **`local` does not** — it runs the same decide/execute
- * sequence against the world the last real cycle already read, which is what makes
- * it cheap enough to fire on something that happened *inside* the harness (an agent
- * finishing) rather than on a clock.
- * → `docs/spec/04-harness-cycle.md#the-local-cycle`
- *
- * `ingress` is a real read like the first three, and is named apart from them for
- * what it says rather than what it does: a verified webhook delivery announced that
- * something outside moved, so this pulse carries an invalidation the timer's does
- * not. A local cycle would be no use to it — the thing it came to see is precisely
- * the world a local cycle does not read.
- * → `docs/spec/30-ingress.md#triggering-a-pulse`
+ * Where a cycle came from. → `docs/spec/04-harness-cycle.md#the-local-cycle` `ingress` is a
+ * real read like the first three, and is named apart from them for what it says rather than
+ * what it does: a verified webhook delivery announced that something outside moved, so this
+ * pulse carries an invalidation the timer's does not. A local cycle would be no use to it —
+ * the thing it came to see is precisely the world a local cycle does not read. →
+ * `docs/spec/30-ingress.md#triggering-a-pulse`
  */
 type CycleSource = 'timer' | 'manual' | 'boot' | 'local' | 'ingress';
 
 export interface CycleReport {
   cycleId: string;
   source: CycleSource;
-  /**
-   * Whether this cycle read the outside world. False for a `local` cycle, and for
-   * the three refusals below, where no cycle ran at all. Carried explicitly rather
-   * than derived from `source` at each reader, because "was this decided against a
-   * fresh reading" is the question a reader actually has — and a second world-less
-   * source added later must not depend on every one of them remembering to widen a
-   * comparison.
-   */
+  /** Whether this cycle read the outside world. */
   readWorld: boolean;
   /**
-   * How long the heartbeat will wait before the next timer cycle, as this cycle's
-   * outcome left it — the fast interval while the fleet is doing something, the
-   * idle one while it is not.
-   *
-   * On the report rather than only inside the timer because it is the one
-   * observable that says which cadence the harness is actually running at: a
-   * fleet stuck on the slow interval with work queued is a bug with no other
-   * symptom. A refusal carries the interval as it stands, unchanged by a cycle
-   * that did not run. → `docs/spec/04-harness-cycle.md#the-adaptive-cadence`
+   * How long the heartbeat will wait before the next timer cycle, as this cycle left it. →
+   * `docs/spec/04-harness-cycle.md#the-adaptive-cadence`
    */
   nextIntervalMs: number;
   rationale: string;
@@ -434,23 +297,15 @@ export interface CycleReport {
   at: string;
 }
 
-/**
- * Did a cycle actually run? The three refusals — the recovery hold, the coalescing
- * guard, and a local cycle with no baseline to decide against — each return a report
- * with a fixed non-`cyc_` id and emit neither `cycle:start` nor `cycle:end`, so the
- * id is where the distinction lives. Exported because the local-cycle trigger has to
- * tell a refusal from a run: a refused local cycle is one whose freed slot is still
- * unfilled, and it is the only caller that will try again.
- */
+/** Did a cycle actually run? */
 export function cycleRan(report: CycleReport): boolean {
   return report.cycleId.startsWith('cyc_');
 }
 
 /**
- * The heart of the system: each pulse takes a snapshot of the world and the
- * fleet, asks the dispatcher what to do, and runs the result through the
- * executor. It records the dispatcher's free-form rationale to the audit log so
- * every cycle — even an idle one — is explainable after the fact.
+ * The heart of the system: each pulse snapshots the world and the fleet, asks the
+ * dispatcher what to do, and runs the result through the executor, recording the rationale
+ * so every cycle is explainable afterwards.
  */
 interface HarnessEvents {
   'cycle:start': [{ cycleId: string; source: string }];
@@ -462,21 +317,8 @@ export class Harness extends EventEmitter {
   private readonly heartbeat: Heartbeat;
   private cycleInFlight = false;
   /**
-   * An operator's cycle that arrived while one was already running, waiting for it
-   * to end — the trailing edge of the coalescing guard below.
-   *
-   * Every other out-of-band source owns a `CycleTrigger` (`src/cycleTrigger.ts`), which retries a
-   * refusal a second later; `manual` is the one that does not, because it is a route
-   * awaiting a report inline. So a refused `manual` used to be simply *lost*, and
-   * the write behind it — "more work" on a goal, a watch, an unblock — waited for
-   * the next heartbeat: thirty seconds on a busy fleet, five minutes on an idle one,
-   * which is the shape issue #688 reports as "sometimes it just doesn't pick it up".
-   * A cycle in flight is not rare, either: it is most of a real pulse's duration on
-   * anything that talks to a provider.
-   *
-   * One flag rather than a queue, for the guard's own reason: what the operator
-   * needs is a cycle that starts *after* their write, and one does for any number of
-   * refusals.
+   * An operator's cycle that arrived while one was already running — the trailing edge of
+   * the coalescing guard below.
    */
   private pendingManual = false;
   /** Stopped, so a trailing cycle is never fired into a store on its way closed. */
@@ -504,12 +346,8 @@ export class Harness extends EventEmitter {
   }
 
   /**
-   * The gap before the next timer cycle: the fast interval while the fleet is
-   * doing something, the idle one while it is not.
-   *
-   * Starts busy, so a harness that has not cycled yet takes the fast interval —
-   * boot is the least idle moment there is, and the first cycle's own reading
-   * replaces this immediately.
+   * The gap before the next timer cycle: fast while the fleet is doing something, idle
+   * while it is not.
    */
   private busy = true;
 
@@ -529,24 +367,15 @@ export class Harness extends EventEmitter {
   }
 
   async runCycle(source: CycleSource = 'manual'): Promise<CycleReport> {
-    // Before the hold, and before anything that can refuse to run: this writes down
-    // that the harness was alive on this beat, which is true of a held pulse too. It
-    // is the only thing that dates a run through a force close — a kill runs no
-    // shutdown — so a beat that skipped it would be a beat the next boot reads as
-    // absence. One `UPDATE` on one row, and only while this process holds a run.
+    // Before the hold and anything that can refuse to run: a held pulse is still a
+    // beat the harness was alive for, and this is the only thing that dates a run
+    // through a force close.
     this.deps.localRun?.noteAlive();
-    // The crash-recovery hold, asked before anything else — including the world
-    // fetch, which is the point: while agents orphaned by the last run are
-    // undecided, the harness's own model of its fleet is wrong (rows saying
-    // `running` with no process behind them), so *every* verdict a pulse would
-    // reach is reached against a fiction, not just the dispatch ones. Work already
-    // in flight gets its decision before anything new is queued in front of it.
-    //
-    // Held rather than stopped: the timer keeps ticking and this is re-asked each
-    // beat, so the pulse resumes on its own the moment the last decision lands —
-    // no restart, and no separate "un-hold" anyone has to remember to call. The
-    // shape mirrors the coalesced return below, and emits nothing for the same
-    // reason: no cycle ran.
+    // The crash-recovery hold, asked before anything else including the world fetch:
+    // while orphaned agents are undecided the harness's model of its fleet is wrong,
+    // so every verdict a pulse would reach is reached against a fiction. Held rather
+    // than stopped — re-asked each beat, so the pulse resumes on its own. Emits
+    // nothing, because no cycle ran.
     const awaiting = this.deps.recovery?.pendingCount() ?? 0;
     if (awaiting > 0) {
       const rationale = `held: ${awaiting} agent(s) from the previous run await a recovery decision`;
@@ -561,11 +390,9 @@ export class Harness extends EventEmitter {
       };
     }
     if (this.cycleInFlight) {
-      // Refused, and remembered. The cycle already running read the world before
-      // this call's write landed, so it cannot be the cycle that answers it — see
-      // {@link Harness.pendingManual}. Only `manual`: `local` and `ingress` are
-      // fired by triggers that retry a refusal themselves, and queueing a second
-      // retry behind those would be two.
+      // Refused, and remembered: the running cycle read the world before this call's
+      // write landed, so it cannot answer it (see {@link Harness.pendingManual}).
+      // Only `manual` — the other sources' triggers retry a refusal themselves.
       if (source === 'manual') this.pendingManual = true;
       return {
         cycleId: 'coalesced',
@@ -577,12 +404,9 @@ export class Harness extends EventEmitter {
         at: new Date().toISOString(),
       };
     }
-    // The local cycle's own precondition, in the shape of the two guards above and
-    // for the same reason: there is nothing to decide *against* until a real cycle
-    // has read the world once. Resolved here rather than inside the body so a
-    // refusal emits nothing, exactly as the hold and the coalesce do — and never
-    // synthesized as an empty world, which every rule would read as a tracker that
-    // has just gone dark.
+    // The local cycle's precondition: nothing to decide *against* until a real cycle
+    // has read the world once. Never synthesized as an empty world, which every rule
+    // would read as a tracker gone dark.
     const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.getWorldBaseline()) : null;
     if (source === 'local' && cached === null) {
       return {
@@ -596,8 +420,8 @@ export class Harness extends EventEmitter {
         at: new Date().toISOString(),
       };
     }
-    // Hoisted above the body so the failure path below can report it too: a cycle
-    // that threw still has to say whether it was deciding against a fresh reading.
+    // Hoisted so the failure path can report it: a cycle that threw still has to say
+    // whether it was deciding against a fresh reading.
     const readWorld = cached === null;
     this.cycleInFlight = true;
     const cycleId = `cyc_${nanoid(8)}`;
@@ -605,23 +429,15 @@ export class Harness extends EventEmitter {
     try {
       const { store } = this.deps;
       // **The whole of what a local cycle changes is here and in the `readWorld`
-      // guards below.** It decides against the snapshot the last real cycle stored,
-      // and skips every pass whose subject is that snapshot: each of those already
-      // ran against this exact world on the cycle that read it, and each is
-      // idempotent, so re-running them can produce provider traffic and never a new
-      // verdict. What is left is everything derived from the *store* — which is what
-      // has moved since, and what a local cycle exists to react to.
+      // guards below**: it decides against the last real cycle's snapshot and skips
+      // every pass whose subject is that snapshot, since each already ran against it
+      // and is idempotent. What is left is everything derived from the *store*. With
+      // the executor's one exception, every awaited call below talks to the world.
       //
-      // The line is easy to hold: with the executor's one exception, every awaited
-      // call in the body below talks to the outside world, and every synchronous one
-      // does not.
-      // Which entities this read is prepared to pay a per-entity fan-out for, and
-      // how stale a hydration it will reuse for the rest. A **cost** hint and never
-      // a filter: the world that comes back is the same population either way,
-      // because the dispatcher reasons over all of it. Built from the last reading
-      // and the fleet as it stands *before* the desks below run — a task this pulse
-      // creates is one the next pulse's plan names, which is a beat of lag on a
-      // hint and nothing else. → `docs/spec/04-harness-cycle.md#hot-and-cold`
+      // The read plan is a **cost** hint and never a filter: the same population
+      // comes back either way. Built from the fleet as it stands before the desks
+      // below run, which is a beat of lag on a hint and nothing else.
+      // → `docs/spec/04-harness-cycle.md#hot-and-cold`
       const readPlan = readWorld
         ? buildReadPlan({
             previous: this.prevWorld ?? store.getWorldBaseline(),
@@ -629,126 +445,87 @@ export class Harness extends EventEmitter {
             events: store.listWorldEvents(READ_PLAN_EVENTS),
             now: Date.now(),
             lanes: this.deps.readLanes,
-            // Drained here, on the one path that builds a plan — so a delivery that
-            // arrives while a cycle is in flight is picked up by the next one rather
-            // than by the read that was already underway when it landed.
+            // Drained on the one path that builds a plan, so a delivery arriving
+            // mid-cycle is picked up by the next one rather than by the read already
+            // underway.
             fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
       const observed = cached ?? (await this.deps.connector.getState(readPlan));
-      // Read before the diff records it, because the notice desk below needs the
-      // same *pair* the diff is taken from — and `recordWorldChanges` moves the
-      // baseline on. Seeded from the persisted baseline for its reason too: a
-      // restart that read null here would go blind to every transition that
-      // straddled it.
+      // Read before the diff records it: the notice desk below needs the same *pair*
+      // the diff is taken from, and `recordWorldChanges` moves the baseline on.
+      // Seeded from the persisted baseline, or a restart goes blind to every
+      // transition that straddled it.
       const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : observed;
-      // No new observation on a local cycle, so nothing to diff and — the important
-      // half — nothing to re-stamp: moving the baseline onto itself would be a write
-      // per local cycle saying the world was read when it was not.
-      // The baseline is the **provider's own reading**, kept as it was read: it is
-      // the record the next diff is taken against, and folding the operator's
-      // overrides into it would leave the harness unable to say what the provider
-      // last said — so taking a reopen back could not put the thread's real state
-      // back either.
+      // Nothing to diff on a local cycle, and nothing to re-stamp: moving the
+      // baseline onto itself would claim the world was read when it was not. The
+      // baseline stays the **provider's own reading** — folding the operator's
+      // overrides in would leave the harness unable to say what the provider said.
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       // The operator's reopened review threads, laid over that reading before
-      // anything decides against it — so every desk, the dispatcher and the
-      // attention court below see one world. The cockpit applies the same fold
-      // over the same marks when it serves the snapshot (`stateSnapshot.ts`), which
-      // is what keeps a reopen visible between pulses: `runCycle` coalesces while a
-      // cycle is in flight, so a click that lands during one is followed by no
-      // world read at all. → `docs/spec/07-pull-requests.md#reopening-a-thread`
+      // anything decides against it, so every desk and the dispatcher see one world.
+      // The cockpit applies the same fold when it serves the snapshot.
+      // → `docs/spec/07-pull-requests.md#reopening-a-thread`
       const world = applyThreadReopens(observed, store.prThreadReopens());
-      // Fold observed reality onto the plan-part rows before anything reads them:
-      // the store holds intent, the outside world stays the source of truth, and a
+      // Fold observed reality onto the plan-part rows before anything reads them: a
       // part this moves to `ready` is dispatchable in this same cycle.
       if (readWorld) await this.deps.plans?.reconcile(world);
-      // The harness's own pull requests, tagged as watched. Before the naming desk
-      // only because it belongs with the other per-pulse bookkeeping; a pull request
-      // tagged here is worked from the *next* pulse, since the snapshot below was
-      // read before the label landed. That lag is the same one the retarget and the
-      // reap accept, and it costs nothing on the path that matters: `open_pr` tags a
-      // pull request as it creates it, so this is only ever catching the strays.
+      // The harness's own pull requests, tagged as watched. A pull request tagged
+      // here is worked from the *next* pulse, since this snapshot predates the label
+      // — `open_pr` tags at creation, so this only catches strays.
       if (readWorld) await this.deps.prWatch?.run(world);
-      // Beside the tagging and on its terms: the tracker link the harness can supply
-      // from a row, so the linked-work-items policy is cleared without a dispatch.
-      // Idempotent, so a world already linked writes nothing — and the same one-pulse
-      // lag applies, since `open_pr` links a pull request as it opens one and this is
-      // only ever catching the strays.
+      // Beside the tagging: the tracker link the harness can supply from a row, so
+      // the linked-work-items policy clears without a dispatch. Idempotent, with the
+      // same one-pulse lag.
       if (readWorld) await this.deps.prWorkItems?.run(world);
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
       if (readWorld) await this.deps.naming?.run(world);
-      // The same register, one step later in a pull request's life: a merged branch
-      // is deleted locally and on the remote. It reads the same snapshot the
-      // retarget above was decided from, so a rung the retarget has just moved still
-      // reads as based on its merged parent here and holds that parent's branch for
-      // one more pulse. That lag is the safe direction, and deliberately not closed
-      // by re-reading the world: reaping a branch an open PR is still based on
-      // destroys the stack.
+      // One step later in a pull request's life: a merged branch is deleted locally
+      // and on the remote. A rung the retarget just moved holds its parent's branch
+      // one more pulse — the safe direction, and deliberately not closed by
+      // re-reading: reaping a branch an open PR is based on destroys the stack.
       if (readWorld) await this.deps.branchReaps?.run(world);
-      // What the world has made of the operator's standing stack landings: a chain
-      // fully merged is finished, and a rung that has gone red since it was
-      // authorized stops the chain and surfaces. Before `decide`, so a stopped
-      // intent cannot authorize a merge in the very cycle it stopped — the executor
-      // reads the same rows a few lines later. It settles rows and raises inbox
-      // items; it decides no dispatch, and it deliberately does not rebuild the
-      // stack model to do it (see `src/stacks/landing.ts`).
+      // What the world has made of the operator's standing stack landings. Before
+      // `decide`, so a stopped intent cannot authorize a merge in the very cycle it
+      // stopped — the executor reads the same rows a few lines later. It decides no
+      // dispatch and does not rebuild the stack model (see `src/stacks/landing.ts`).
       this.deps.landings?.settle(world);
-      // What a delivered goal owes a person: the fixtures and accounts its
-      // validation plan says it needs and could not produce. Beside the close-out
-      // below and against the same gate — a check runs against the delivered goal,
-      // so this is the first pulse on which the ask is one anybody can act on. It
-      // writes `human_tasks` rows and nothing else.
+      // What a delivered goal owes a person: the fixtures and accounts its validation
+      // plan needs and could not produce. It writes `human_tasks` rows and nothing else.
       this.deps.validationAsks?.run();
       // And the obligation those resources are for: a delivered goal with checks a
-      // person still has to run says so on the bench, where the rest of their work
-      // is, rather than only on a sheet somebody has to think to open. It writes
-      // `human_tasks` rows, blocks nothing, and settles itself as the results are
-      // recorded.
+      // person still has to run says so on the bench. It writes `human_tasks` rows,
+      // blocks nothing, and settles itself as results are recorded.
       this.deps.validationReady?.run(world);
-      // The step after the launch: a delivered goal whose ticket is still open owes
-      // a person one close, and the tracker is where that is observed. Beside the
-      // other bookkeeping rather than in the dispatcher, because it is not a
-      // dispatch — nothing here staffs anything, and no rule reads what it writes.
+      // A delivered goal whose ticket is still open owes a person one close. Staffs
+      // nothing, and no rule reads what it writes.
       //
-      // **Below the validation desk, and that ordering is load-bearing.** The
-      // close-out waits on the goal's `validate` row being settled, so run above
-      // this line it would read a bench that has not been filed yet and ask for the
-      // close on the very pulse the delivery landed — the two rows arriving
-      // together, which is the thing the sequence exists to stop.
+      // **Below the validation desk, and that ordering is load-bearing**: the
+      // close-out waits on the goal's `validate` row being settled, and above this
+      // line it would ask for the close on the pulse the delivery landed.
+      // → `docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time`
       this.deps.closeOuts?.run(world);
-      // The operator's standing "every weekday at 09:00": a recurrence that has
-      // come due queues its job here, a few lines above the `listQueuedJobs` the
-      // dispatcher decides from — so a firing is dispatched on the pulse it fires
-      // rather than waiting for the next one. Beside the other bookkeeping and not
-      // in the dispatcher for `closeOuts`' reason: it staffs nothing and no rule
-      // reads what it writes. What it queues is an ordinary job, so the cap, the
-      // pause flag and rule `manual-job` see exactly what a hand-launched one is.
+      // A recurrence that has come due queues its job here, above the
+      // `listQueuedJobs` the dispatcher decides from, so a firing is dispatched on
+      // the pulse it fires. What it queues is an ordinary job, so the cap, the pause
+      // flag and rule `manual-job` see a hand-launched one.
       this.deps.schedules?.run();
-      // The harness reading its own build, beside the other bookkeeping for the
-      // same reason and one more: it is the only pass here about *this process*
-      // rather than the world, so nothing it writes is derived from `world` and
-      // nothing downstream reads it. Awaited but never blocking — a check that is
-      // not due returns the reading it already has, and one that fails records
-      // itself rather than throwing into the cycle.
+      // The harness reading its own build — the only pass about *this process*
+      // rather than the world, so nothing downstream reads it. Awaited but never
+      // blocking: a check that fails records itself rather than throwing.
       if (readWorld) await this.deps.updates?.run();
-      // Record what the world and the store now say happened, after the reconciler
-      // so part→PR observations are fresh, and before `decide` so stage 2 can read
-      // it. Never deleting is the point: `closedPullRequests` forgets a merge after
-      // `closedPrWindowMs` and the graph must not.
+      // Record what the world and the store now say happened: after the reconciler so
+      // part→PR observations are fresh, before `decide` so stage 2 can read it.
+      // Never deletes — `closedPullRequests` forgets a merge and the graph must not.
       this.deps.graph?.record(world);
-      // Where that work has actually got to: the commit each merged pull request
-      // landed as, attributed to the goal it was for, and what the operator's
-      // environment probes say about those commits.
+      // Where that work has got to: the commit each merged pull request landed as,
+      // attributed to its goal, and what the environment probes say.
       //
-      // **Immediately below the graph record, and that ordering is load-bearing.**
-      // Attribution walks `parentRef` from a PR node up to its goal, so run above
-      // this line it would read a graph one pulse stale and fall back to the
-      // world's own `issueForPr` for every merge on the pulse it happened —
-      // which resolves nothing for a pull request whose issue the tracker has
-      // already closed. Beside the other bookkeeping and not in the dispatcher for
-      // `closeOuts`' reason: it staffs nothing and no rule reads what it writes.
+      // **Immediately below the graph record, and that ordering is load-bearing** —
+      // attribution walks `parentRef` up to the goal, so a graph one pulse stale
+      // resolves nothing for a pull request whose issue is already closed.
+      // → `docs/spec/24-environments.md#recording-a-landing`
       if (readWorld) await this.deps.environments?.run(world);
       // What the harness has seen for itself that the fleet would otherwise pay to
       // rediscover: a check that went red and green on one commit, a check red on a
@@ -1341,31 +1118,16 @@ export class Harness extends EventEmitter {
 
   /**
    * Diff this cycle's world against the previous snapshot, persist every observed
-   * transition, and stream them to the cockpit. The very first cycle over a fresh
-   * store has no baseline → it only records the baseline (no diff, no spurious
-   * "everything is new" flood).
-   *
-   * `prev` is passed in rather than read here because the pulse has a second
-   * reader of the same pair — the knowledge notice desk — and this call moves the
-   * baseline on. One read, handed to both, so the two cannot come to be looking at
-   * different pulses.
+   * transition, and stream them to the cockpit. → it only records the baseline (no diff, no
+   * spurious "everything is new" flood). `prev` is passed in rather than read here because
+   * the pulse has a second reader of the same pair — the knowledge notice desk — and this
+   * call moves the baseline on. One read, handed to both, so the two cannot come to be
+   * looking at different pulses.
    */
   /**
-   * Ask the operator's check which of this pulse's would-be reviews have already
-   * happened elsewhere, and record the ones that have.
-   *
-   * **Only the pull requests a review is otherwise due for**, which is the whole
-   * of the cost control: the reading is built the way the rules build it, so a
-   * pull request already reviewed, skipped, outside the intake or standing down
-   * behind a human thread is never asked about. `reviewed` is stored and the pull
-   * request is never asked again; the other two verdicts are not, because a gate
-   * that has not passed yet may pass later.
-   *
-   * A verdict that said **nothing** goes on the error log and leaves the fleet
-   * reviewing. Recorded rather than swallowed because a check that has been
-   * failing since the day it was configured is otherwise indistinguishable from
-   * one that keeps answering "no" — the feature quietly doing nothing, which is
-   * the shape this whole change is about.
+   * Ask the operator's check which of this pulse's would-be reviews have already happened
+   * elsewhere, and record the ones that have. A verdict that said **nothing** goes on the
+   * error log and leaves the fleet reviewing.
    */
   private async askReviewedElsewhere(store: HarnessDeps['store'], world: WorldSnapshot): Promise<void> {
     const prober = this.deps.reviewProber;

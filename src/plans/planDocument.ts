@@ -5,15 +5,10 @@ import type { PlanNarrative, PlanPartInput } from '../types.js';
 
 /**
  * The planner's side channel: `.lubbdubb/plan.json`, written into its worktree.
- *
- * There is no new sentinel and no network coupling from the agent to the server —
- * the file-events `PostToolUse` hook already reports every written path, so a
- * reserved filename is all the protocol needed. (A `@@LUBBDUBB_PLAN:<json>@@`
- * sentinel would be more consistent, but a real plan bumps into `MAX_SENTINEL_HOLD`.)
- *
- * `.lubbdubb/` is gitignored, so this is deliberately *not* a committed artefact:
- * the plan graph lives only in the store, which is the cost the design's "Why
- * local" section already accepts.
+ * The file-events `PostToolUse` hook already reports every written path, so a
+ * reserved filename is the whole protocol (a sentinel would bump into
+ * `MAX_SENTINEL_HOLD`). `.lubbdubb/` is gitignored: the plan graph lives only in
+ * the store, never as a committed artefact.
  */
 export const PLAN_FILE = '.lubbdubb/plan.json';
 
@@ -29,12 +24,7 @@ export function isPlanFile(path: string): boolean {
  */
 export const MAX_PLAN_DOCUMENT_CHARS = 60_000;
 
-/**
- * How many citations are kept. A planner asked for evidence occasionally answers
- * with a file listing; trimmed rather than refused, for {@link
- * MAX_PLAN_DOCUMENT_CHARS}'s reason — the verdict must not be sunk by its
- * footnotes.
- */
+/** How many citations are kept. Trimmed rather than refused, as the write-up is. */
 const MAX_EVIDENCE = 24;
 
 /** Same bound, same argument, for a part's declared paths. */
@@ -57,9 +47,8 @@ const PartSchema = z.object({
   /** Files/areas this part owns — what substitutes for a human holding the split in their head. */
   scope: z.string().min(1),
   /**
-   * The same ownership claim as paths. Beside `scope` rather than replacing it:
-   * only this form can be compared to what the part's agent actually wrote, and
-   * only the prose form survives work whose scope is not a set of files.
+   * The same ownership claim as paths, beside `scope` rather than replacing it:
+   * only this form can be compared to what the part's agent actually wrote.
    */
   touches: z.array(z.string().min(1)).max(MAX_TOUCHES).default([]),
   /** How big this part is to review. Absent means the planner did not say. */
@@ -70,133 +59,55 @@ const PartSchema = z.object({
   /** What makes this part done. */
   acceptance: z.string().min(1).optional(),
   /**
-   * What this part produces. Optional, and defaulted at *read* time rather than
-   * here: an older plan, and an operator override that never learned the field,
-   * must keep validating — and `code` is the assumption everything else already
-   * made. `determination` is what lets a planner decompose investigative work
-   * honestly instead of inventing a pull request for it.
-   *
-   * `human` is the step no agent runs: a person flips the setting in a console
-   * nobody gave the fleet an account for, plugs the thing in, or looks at the
-   * rendered screen and says whether it is right. Ingestion backs such a part
-   * with a `human_tasks` row and rule `plan-part` never dispatches it, so a
-   * sibling naming it in `dependsOn` waits for a person exactly the way it would
-   * otherwise wait for a merge — no second blocking mechanism, and none needed.
+   * What this part produces. Optional, defaulted to `code` at read time so an
+   * older plan still validates. `human` is a step no agent runs — backed by a
+   * `human_tasks` row, never dispatched, so a sibling depending on it waits for a
+   * person the way it would wait for a merge.
    */
   expectedKind: z.enum(['code', 'report', 'determination', 'human']).optional(),
-  /**
-   * The model profile this part's own work should run on (issue #342). Absent
-   * means the planner did not single this part out, and it inherits the goal's
-   * pin — which is what most parts should do, and what every plan written before
-   * this existed does.
-   *
-   * Not enumerated here, for {@link expectedKind}'s reason pointed at a different
-   * problem: the valid names are the operator's `agentModels.profiles`, which
-   * this schema cannot see, and an override template or an older plan naming a
-   * profile since renamed must still validate rather than failing a whole
-   * decomposition over one word. An unrecognised name falls through to the
-   * goal's pin at dispatch (`resolveAgentProfile`), which is the same place a
-   * mistyped tag lands.
-   */
+  /** The model profile this part runs on. Absent inherits the goal's pin. Not enumerated — validated names live in `agentModels.profiles`, unseen here. */
   profile: z.string().min(1).optional(),
 });
 
 /**
- * Validated at the boundary like every other agent-authored payload (see
- * `src/dispatcher/actions.ts`). The structural checks below are integrity, not
- * scheduling: unique slugs and resolvable, non-self dependencies are what make the
- * persisted graph meaningful at all. Dependency *ordering* — readiness, base
- * selection, the at-most-one-open-dependency rule — belongs to the scheduler.
+ * Validated at the boundary like every other agent-authored payload. The checks
+ * below are integrity only — unique slugs, resolvable non-self dependencies;
+ * dependency *ordering* and readiness belong to the scheduler.
  */
 const PlanDocumentSchema = z
   .object({
     version: z.literal(1),
     reason: z.string().min(1),
-    /**
-     * The root cause, and what is going to be done about it. Optional for the
-     * reason every field added after v1 is: an older plan, and an operator
-     * override that never learned them, must keep validating — the alternative is
-     * a schema bump that fails every submission from a customised deployment.
-     *
-     * Separate from {@link reason} rather than folded into it because they answer
-     * different questions, and the field that had to answer all three answered
-     * whichever one the planner reached for. `diagnosis` is also legitimately
-     * absent on work that is not a defect; `approach` is not.
-     */
+    /** The root cause, and what is going to be done about it. Optional, like every field added after v1, so an older plan still validates. */
     diagnosis: z.string().min(1).optional(),
     approach: z.string().min(1).optional(),
     /** What could go wrong with this split. */
     risks: z.string().min(1).optional(),
     /** What the planner deliberately left out. */
     outOfScope: z.string().min(1).optional(),
-    /**
-     * What was considered and rejected, what the planner is least sure about, and
-     * how anyone will know the whole thing worked.
-     *
-     * All three were already asked for — inside `document`, where they are prose in
-     * a write-up nobody opens while deciding. As fields they can be put in front of
-     * the verdict, and `openQuestions` can be what a discussion opens on.
-     */
+    /** What was considered and rejected, least sure about, and how anyone will know it worked — fields, not prose in `document`, so they can front the verdict. */
     alternatives: z.string().min(1).optional(),
     openQuestions: z.string().min(1).optional(),
     verification: z.string().min(1).optional(),
-    /**
-     * Where in the code the diagnosis comes from. Trimmed to {@link MAX_EVIDENCE}
-     * rather than refused, like the write-up: a plan is not worth rejecting over
-     * the length of its footnotes.
-     */
+    /** Where in the code the diagnosis comes from. Trimmed to {@link MAX_EVIDENCE}, never refused. */
     evidence: z
       .array(EvidenceSchema)
       .default([])
       .transform((list) => (list.length > MAX_EVIDENCE ? list.slice(0, MAX_EVIDENCE) : list)),
-    /**
-     * The full narrative, markdown. Stored on the plan row rather than surfaced
-     * as an artifact chip: `GET /artifacts/:id` serves out of the agent's
-     * worktree, and `system.ts` removes that worktree on a `done` reap — so a
-     * write-up surfaced that way 404s exactly when the plan is ready to approve.
-     * Trimmed rather than refused for the same reason `MAX_PLAN_DOCUMENT_CHARS`
-     * exists at all — an over-long write-up must not sink the whole submission.
-     */
+    /** The full narrative, markdown. Stored on the plan row, never as an artifact chip — those serve from the worktree, removed on reap, so it would 404 exactly when ready to approve. */
     document: z
       .string()
       .min(1)
       .transform((s) => (s.length > MAX_PLAN_DOCUMENT_CHARS ? s.slice(0, MAX_PLAN_DOCUMENT_CHARS) : s))
       .optional(),
     parts: z.array(PartSchema).default([]),
-    /**
-     * How anyone checks the *goal* was met, as steps rather than as a paragraph —
-     * {@link verification}'s executable form. Optional for the reason every field
-     * added after v1 is. A goal delivered as one part needs validating exactly as
-     * much as one delivered as eight.
-     * → `src/validation/checkDocument.ts`
-     */
+    /** How anyone checks the goal was met, as steps — {@link verification}'s executable form. → `src/validation/checkDocument.ts` */
     validation: ValidationSchema.optional(),
-    /**
-     * What a running system would have to show, once this work is deployed, for
-     * it to have done what it claimed — the layer above `validation`, which asks
-     * whether the goal was met, and above `src/environments/`, which asks only
-     * whether the work got there.
-     *
-     * Optional for the reason every field added after v1 is, and **declaring
-     * nothing is a legitimate answer**: a refactor, a docs change and a build fix
-     * have nothing running to watch, and a goal that declares no checks reads
-     * null rather than clean.
-     * → `src/validation/watchDocument.ts`
-     */
+    /** What a deployed system would have to show for this work to have done what it claimed — the layer above `validation`. A goal with no checks reads null, never clean. → `src/validation/watchDocument.ts` */
     watch: WatchSchema.optional(),
   })
   .superRefine((doc, ctx) => {
-    // **Every plan declares parts**, and that is the whole shape of the schema:
-    // there is no `single` verdict beside a `parts` one, because a goal delivered
-    // as one pull request is a plan with one part and nothing else about it is
-    // different. The verdict field it replaced encoded "one PR" as *zero parts*,
-    // which made the commonest plan the one with no rows — no branch of its own,
-    // no acceptance criteria, no scope to drift from, and a second scheduling path
-    // (rule `issue-pickup` on the flat `issue/<n>` branch) for every consumer to
-    // remember. A document still carrying `verdict` is not refused for carrying it
-    // — zod strips it — but one carrying no parts is, with the sentence below, so
-    // an operator override written against the old shape is corrected on its first
-    // submission rather than silently accepted as something else.
+    // Every plan declares parts, so there is no second scheduling path; zero parts is refused.
     if (doc.parts.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -212,13 +123,7 @@ const PlanDocumentSchema = z
       }
       slugs.add(part.slug);
     }
-    // `dependsOn` is deliberately *not* capped at one entry (issue #170). The cap was
-    // the static form of "a part may stack on at most one *open* dependency", and that
-    // rule is real — but it does not bite on a rejoin, where several prerequisites all
-    // have to have settled before the part starts, leaving nothing open and the
-    // integration branch as the unambiguous base. The dangerous case is refused
-    // dynamically instead, by `PlanReconciler.readiness`, which is the only place that
-    // can see whether a dependency is still in flight *now*.
+    // dependsOn is not capped at one: "at most one open dependency" is enforced dynamically by PlanReconciler.readiness.
     for (const part of doc.parts) {
       for (const dep of part.dependsOn) {
         if (dep === part.slug) {
@@ -232,9 +137,7 @@ const PlanDocumentSchema = z
         }
       }
     }
-    // A cycle deadlocks every part in it — none is ever ready, and the issue
-    // silently stops progressing. Reject the document instead: the planner is
-    // retried and eventually fails the issue open to unplanned pickup.
+    // A cycle deadlocks every part in it — none is ever ready. Reject instead; the planner retries and eventually fails open to unplanned pickup.
     const cycle = findDependencyCycle(doc.parts);
     if (cycle) {
       ctx.addIssue({
@@ -245,15 +148,7 @@ const PlanDocumentSchema = z
     }
   });
 
-/**
- * The slugs of one dependency cycle, or null when the graph is acyclic.
- *
- * A depth-first walk over **every** edge, not down a single chain. While arity was
- * capped at one a chain walk was the whole graph; the moment a part may name several
- * prerequisites (issue #170) a cycle reachable only through the second one — `a`
- * depends on `[x, b]`, `b` on `[a]` — is a cycle a chain walk cannot see, and one
- * that survives ingestion deadlocks every part in it silently.
- */
+/** The slugs of one dependency cycle, or null when acyclic. Walks every edge, not one chain, so a cycle reachable only through a second dependency is still caught. */
 function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): string[] | null {
   const deps = new Map(parts.map((p) => [p.slug, p.dependsOn]));
   const settled = new Set<string>();
@@ -297,10 +192,9 @@ export function parsePlanDocument(raw: string): PlanParseResult {
 }
 
 /**
- * Validate an already-decoded document. The `plan_submit` MCP tool arrives with
- * arguments the client already parsed, so it enters here rather than through
- * {@link parsePlanDocument} — but both reach the same schema, which is the point:
- * the two transports must accept and reject exactly the same plans.
+ * Validate an already-decoded document — the entry point for the `plan_submit`
+ * MCP tool, whose arguments the client already parsed. Both transports must reach
+ * this same schema.
  */
 export function validatePlanDocument(value: unknown): PlanParseResult {
   const result = PlanDocumentSchema.safeParse(value);
@@ -329,11 +223,8 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
 
 /**
  * The plan-level prose of a document, as the shape a revision stores and the plan
- * row carries.
- *
- * One function so the two writes cannot disagree about what "the narrative" is:
- * {@link ingestPlanDocument} passes it to `upsertPlan` and to `recordPlanRevision`
- * in the same breath, and a field added to the document reaches both or neither.
+ * row carries. One function so `upsertPlan` and `recordPlanRevision` cannot
+ * disagree about what "the narrative" is.
  */
 export function planNarrative(doc: PlanDocument): PlanNarrative {
   return {

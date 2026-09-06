@@ -10,37 +10,13 @@ import type {
 import { reachesAgents } from './lifecycle.js';
 
 /**
- * How an obstacle ends: the four endings, as the readings behind each of them.
- *
- * A row that only ever arrives is a board that only ever grows, and a board that
- * only grows is read past — which is the failure the store this replaces died of
- * from the other direction (`docs/spec/27-obstacles.md#what-went-wrong-last-time`).
- * The four are deliberately unlike each other, because each covers what the others
- * cannot see:
- *
- * - **A condition the harness can evaluate**, written by the harness and never by
- *   an agent. Settling one means reading a world object pulse after pulse, and the
- *   only party that can promise to do that is the one already reading it.
- * - **The owner landing**, read off the existing landing sweep and never off the
- *   merge itself — the merge SHA has a `closedPrWindowMs` shelf life, so a hook on
- *   the transition loses the landing to any restart that straddles it
- *   (`docs/spec/24-environments.md#recording-a-landing`).
- * - **A clock, as a backstop and never as the mechanism.** A timer alone either
- *   drops an obstacle while it is still true, and the fleet rediscovers it, or
- *   keeps one alive after the fix landed, which teaches every agent to disbelieve a
- *   check that is now genuinely broken. Both silent.
- * - **Decay**, for everything no reading and no owner ever settled.
- *
- * Pure — no I/O, no clock, no store: the world, the landings and the instant all
- * arrive as arguments. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+ * How an obstacle ends: a condition the harness can evaluate, the owner
+ * landing (read off the landing sweep, never the merge), a clock as backstop
+ * only, and decay for everything else. Pure.
+ * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 
-/**
- * A condition the harness is about to promise to watch, before it has an id.
- *
- * Not exported: the desk hands one straight to `Store.watchObstacleCondition` and
- * nothing else names the shape.
- */
+/** A condition the harness is about to promise to watch, before it has an id. */
 interface ConditionToWatch {
   obstacleId: string;
   kind: 'check-green';
@@ -50,20 +26,8 @@ interface ConditionToWatch {
 
 /**
  * The conditions the harness can promise to watch for this board, right now.
- *
- * One kind to start: **the named check going green on the named branch.** Both
- * halves come from the harness's own reading and neither from a sentence — the
- * check is a *binding* `check` key of the row, and the branch is one the world says
- * that check is failing on this minute. A condition naming a branch nothing is red
- * on would be a condition met the instant it was written.
- *
- * The binding half is the suggestion rule arriving here rather than a second
- * policy: a key that may not resolve an obstacle may not decide that one is over
- * either, or "does not bind" would mean *binds when convenient*.
- *
- * Only rows that reach agents, and only obstacles. A `sighted` row reaches nobody,
- * so there is nothing to end; a **note** is not a thing a check clears, and it ends
- * by being written down instead.
+ * One kind: the named check going green on the named branch. Only rows that
+ * reach agents, and only obstacles — a note ends by being written down.
  */
 export function conditionsToWatch(
   board: readonly ObstacleStanding[],
@@ -85,27 +49,11 @@ export function conditionsToWatch(
 }
 
 /**
- * Whether one condition is met by this reading of the world.
- *
- * Three ways to meet it, and they are one question rather than three special
- * cases: *is this check still failing on that branch?*
- *
- * - **It went green.** The condition as written.
- * - **It stopped being reported.** A check the branch no longer runs is not a
- *   check that is red on it.
- * - **The pull request left the open set.** A branch nothing has open is a branch
- *   nothing is waiting on.
- *
- * **`pending` does not meet it**, and that is the case worth stating: a re-run in
- * flight is not a green one, and reading it as one would resolve an obstacle on
- * precisely the reading that says nobody knows yet.
- *
- * A provider reporting no per-check detail at all (`ciChecks` absent) also does not
- * meet it. That is the three-verdict discipline
- * (`docs/spec/24-environments.md#the-three-verdicts`) arriving here: *no detail*
- * and *no longer reported* fail the same way and only the second is about this
- * check, so folding them together would resolve every condition on the board of a
- * deployment that has per-check detail switched off.
+ * Whether one condition is met: is this check still failing on that branch?
+ * Met by going green, by no longer being reported, or by the PR leaving the
+ * open set. `pending` does not meet it, nor does `ciChecks` absent — no
+ * detail and no longer reported must not fold together.
+ * (`docs/spec/24-environments.md#the-three-verdicts`)
  */
 export function conditionMet(condition: ObstacleCondition, openPrs: readonly PullRequest[]): boolean {
   const pr = openPrs.find((candidate) => candidate.branch === condition.branch);
@@ -117,32 +65,19 @@ export function conditionMet(condition: ObstacleCondition, openPrs: readonly Pul
 }
 
 /**
- * Whether every condition on a row is met — and there is at least one.
- *
- * **Every**, not any. An obstacle red on two branches is not over when one of them
- * goes green, and a row resolved on a partial reading is one the fleet pays for
- * again the next time an agent hits the branch nobody looked at.
+ * Whether every condition on a row is met, and there is at least one. Every,
+ * not any — an obstacle red on two branches is not over when one goes green.
  */
 export function conditionsSettled(conditions: readonly ObstacleCondition[], openPrs: readonly PullRequest[]): boolean {
   return conditions.length > 0 && conditions.every((condition) => conditionMet(condition, openPrs));
 }
 
 /**
- * Whether the row's own owner has landed.
- *
- * **Off the landing sweep, never off the merge.** `unrecordedLandings` already
- * attributes every merge it can see to the goal it was for, and it is a *sweep*
- * precisely because the merge SHA has a `closedPrWindowMs` shelf life: a hook on
- * the transition loses the landing to any restart that straddles it, or to a person
- * merging in the web UI between two pulses. Asking the recorded landings instead
- * means any pulse inside the window ends the obstacle, and the row is not left
- * `owned` for ever by a ticket that shipped while nothing was watching.
- *
- * Only the **ticket** door is reachable this way, and that is a property of the
- * sweep rather than an omission here: it files a landing under the goal root the
- * work graph walks to, which is a bare `issue:<n>`. A repair dispatch owns a row as
- * `obstacle:<id>`, which is no goal, so its own ending is the condition it was
- * dispatched against — or, failing that, the clock and the decay below.
+ * Whether the row's own owner has landed — off the landing sweep, never the
+ * merge, since the merge SHA has a `closedPrWindowMs` shelf life. Only
+ * ticket owners are reachable this way; a repair dispatch owns as
+ * `obstacle:<id>`, which is no goal, and ends on its condition, the clock or
+ * decay. (`docs/spec/24-environments.md#recording-a-landing`)
  */
 export function ownerLanded(obstacle: Obstacle, landings: readonly GoalLanding[]): boolean {
   if (obstacle.ownerRef === null) return false;
@@ -150,20 +85,10 @@ export function ownerLanded(obstacle: Obstacle, landings: readonly GoalLanding[]
 }
 
 /**
- * Whether the reporter's own clock has run out on a row nothing else settled.
- *
- * **A backstop and never the mechanism.** The intake's `until` is an agent saying
- * *I expect what I saw to last about this long*, and nothing else in the harness
- * reads that field. It expires a row no condition and no owner settled; it cannot
- * resolve one early, which is why an owned row is exempt — something is fixing it,
- * and a clock that could take the row out from under its own repair would tell
- * every agent the thing is over while the fix was still in review.
- *
- * **A row said again after its deadline has outlived the estimate**, and the clock
- * stops applying to it. The alternative is worse than useless: the deadline is
- * stamped once, from the first report, so a row that reopens after it — which is
- * exactly the fleet hitting the thing again — would be expired by the very next
- * pulse, and the re-report an agent paid a session to make would buy nothing.
+ * Whether the reporter's own `until` has run out on a row nothing else
+ * settled. A backstop, never the mechanism: an owned row is exempt, and a
+ * row re-reported after its deadline has outlived the estimate, so the
+ * clock stops applying — stamped once, from the first report.
  */
 export function clockExpired(obstacle: Obstacle, now: number): boolean {
   if (obstacle.until === null || obstacle.ownerRef !== null) return false;
@@ -174,16 +99,9 @@ export function clockExpired(obstacle: Obstacle, now: number): boolean {
 
 /**
  * Whether nothing has re-reported this row inside `obstacleDormantMs`.
- *
- * `lastSeenAt` and never `updatedAt`: the store stamps it on **every** sighting,
- * including the ones that move no state, so a row re-reported daily and never
- * promoted is not dormant — and a row whose state has not changed is not a row
- * nothing has said. An owned row never decays: something is fixing it, and the
- * fleet not having hit it again is what a repair in progress looks like.
- *
- * **The keys survive**, which is the whole of why decay is safe: a matching report
- * reopens the row at `standing` with its history rather than filing a second one,
- * so a fix that did not stick is visible as a recurrence.
+ * `lastSeenAt`, never `updatedAt` — every sighting stamps it, including ones
+ * that move no state. An owned row never decays. Keys survive decay, so a
+ * matching report reopens the row at `standing` with its history.
  */
 export function decayed(obstacle: Obstacle, now: number, dormantMs: number): boolean {
   if (obstacle.ownerRef !== null) return false;
@@ -192,18 +110,10 @@ export function decayed(obstacle: Obstacle, now: number, dormantMs: number): boo
 }
 
 /**
- * The notes owed a documentation change: `standing`, and never written up before.
- *
- * A note is not something a fix ends — it is something true of the repository that
- * the repository does not say — so it ends by being **written into the tree**, and
- * on merge it is `resolved` and leaves every prompt, because from then on an agent
- * reads it where it belongs. Keeping it delivered after that pays for one sentence
- * twice.
- *
- * `standing` and not `sighted`, for the reason `sighted` reaches nobody at all: one
- * report is not evidence, and committing one agent's reading to the repository
- * through an agent would be the auto-promotion this design refuses, arriving
- * through the one door that ends outside the harness.
+ * The notes owed a documentation change: `standing`, never written up
+ * before. A note ends by being written into the tree; on merge it's
+ * `resolved` and leaves every prompt. `standing` not `sighted` — one report
+ * is not evidence enough to commit to the repository.
  */
 export function notesToWriteUp(board: readonly ObstacleStanding[], written: ReadonlySet<string>): ObstacleStanding[] {
   return board.filter(
@@ -212,30 +122,19 @@ export function notesToWriteUp(board: readonly ObstacleStanding[], written: Read
 }
 
 /**
- * What became of one note's documentation change, read from the **work graph**.
- *
- * The graph and never the world, for the sweep's own reason one step further on:
- * `closedPullRequests` forgets a merge after `closedPrWindowMs` and the graph is
- * upsert-only, so a note whose write-up merged during a restart is still settled by
- * the first pulse after it.
- *
- * **`unknown` is a verdict and is never folded into either of the others.** A pull
- * request the graph marks merged by *inference* — it vanished without ever being
- * seen closed — settles nothing: acting on it takes a note out of every prompt for
- * a change that may never have landed. Nothing here guesses, and an unsettled note
- * decays like any other row.
+ * What became of one note's documentation change, read from the work graph
+ * and never the world — the graph is upsert-only, so a write-up merged
+ * during a restart is still settled. `unknown` is never folded into the
+ * others: a merge known only by inference settles nothing.
  */
 export function writeUpReading(jobId: string, nodes: readonly WorkNode[]): ObstacleWriteUpOutcome | 'unknown' | null {
   const jobRef = `job:${jobId}`;
-  // The job's **direct** pull-request children, which is what the graph's fold
-  // produces. Not the whole subtree: a pull request adopted further down belongs to
-  // some other piece of work.
+  // Direct pull-request children only — one adopted further down the subtree
+  // belongs to some other piece of work.
   const prs = nodes.filter((node) => node.kind === 'pr' && node.parentRef === jobRef);
   if (prs.length === 0) {
-    // A job cancelled without ever opening a pull request is over. Anything else —
-    // queued, dispatched, an agent still writing — is simply not finished yet, and
-    // a documentation job with no pull request means nothing happened, which the
-    // template says in as many words.
+    // A job cancelled without ever opening a PR is over; anything else is
+    // simply not finished yet.
     return nodes.some((node) => node.ref === jobRef && node.status === 'cancelled') ? 'abandoned' : null;
   }
   const verdicts = prs.map(prVerdict);
@@ -257,20 +156,10 @@ const MAX_WORDS_CHARS = 1_000;
 const MAX_VOICES = 6;
 
 /**
- * Everything a note's documentation change is composed from: the job's title, the
- * `docs-change` template's variables, and the passage **appended** to what that
- * template renders.
- *
- * One composer rather than one per caller, because there are two — the endings
- * desk on the pulse, and an operator's *write it down* on the cockpit's own token
- * — and a note written up two ways is two documents claiming to be the fleet's one
- * statement of the same thing. The rendering itself stays with each caller,
- * because the template book is the deployment's.
- *
- * Appended and never interpolated, which is CLAUDE.md's rule under "Prompts and
- * templates": `loadPromptTemplates` rejects only *unknown* placeholders, so an
- * override written before this existed would silently drop a new `{token}` — on
- * exactly the deployments that customised most.
+ * Everything a note's documentation change is composed from: the job's
+ * title, the `docs-change` template's variables, and the passage appended
+ * to what that template renders. One composer for both callers; appended,
+ * never interpolated, so an old template override cannot drop it.
  */
 export function noteWriteUpFields(row: ObstacleStanding): {
   title: string;
@@ -289,9 +178,8 @@ export function noteWriteUpFields(row: ObstacleStanding): {
 const TITLE_CHARS = 80;
 
 /**
- * What the note is *about*, said as a phrase a sentence can contain — never parsed
- * back. Its binding keys are the harness’s own statement of that, and a note with
- * none is about working this repository at all.
+ * What the note is *about*, as a phrase a sentence can contain — never parsed back. A
+ * note with no binding keys is about working this repository at all.
  */
 function keyPhrase(row: ObstacleStanding): string {
   const keys = row.keys.filter((key) => key.binds).map((key) => `\`${key.value}\``);

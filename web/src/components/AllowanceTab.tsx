@@ -14,34 +14,17 @@ import { Ref, RefLinksExtended } from './refs.js';
 import { Label } from './label.js';
 
 /**
- * Allowance: what the account has spent, when it went, and on what.
+ * Allowance: what the account has spent, when it went, and on what — the series
+ * behind the usage chip, drawn four ways (the timeline, where it went, the week, and
+ * per landed change).
  *
- * The usage chip says how much of the five hours is gone and can say nothing
- * else, because `account_rate_limits` keeps one row and overwrites it on every
- * turn. This tab is the series behind that number
- * ([14](../../../docs/spec/14-persistence.md)) drawn four ways, in the order an
- * operator asks:
+ * **Nothing here is derived in the browser**, `EconomicsTab`'s rule: the reset test,
+ * the gap threshold and the apportionment are statements about what the readings
+ * *mean*, and a cockpit computing its own would draw a line the server's totals
+ * disagree with. The cockpit owns presentation only — the `--al-*` goal colours.
  *
- * 1. **The timeline** — the percentage over the window, with every agent that ran
- *    beneath it on the same axis.
- * 2. **Where it went** — the same rise apportioned to the goals that were
- *    spending while it happened, with the remainder carried rather than divided.
- * 3. **The week** — whether the current pace reaches the weekly limit before the
- *    limit resets.
- * 4. **Per landed change** — the Economics tab's one sentence, re-denominated in
- *    percentage of the account rather than in dollars.
- *
- * **Nothing here is derived in the browser**, `EconomicsTab`'s rule and for its
- * reason: the reset test, the gap threshold and the apportionment are statements
- * about what the readings *mean*, and a cockpit free to compute its own would
- * draw a line the server's own totals disagree with. What the cockpit owns is
- * presentation — the goal colours, which live in the stylesheet as `--al-*`.
- *
- * **A point is one percent of the window, and the word is used on purpose.** The
- * money on the Economics tab is measured; a percentage per goal is apportioned,
- * and every surface here says which it is rather than leaving a reader to assume
- * the two figures were arrived at the same way.
- *
+ * **A point is one percent of the window, and the word is used on purpose**: money is
+ * measured, a percentage per goal is apportioned, and every surface says which.
  * → docs/spec/17-cockpit.md#allowance
  */
 export function AllowanceTab({ payload }: { payload: AllowancePayload }): JSX.Element {
@@ -96,12 +79,9 @@ export function AllowanceTab({ payload }: { payload: AllowancePayload }): JSX.El
 }
 
 /**
- * What the window came to, in the three figures the rest of the tab breaks down.
- *
- * The calibration constant sits here rather than in the method note, because it
- * is the one reading on this tab that is *about* the apportionment rather than a
- * product of it: it moves with the model mix, and an operator who watches it
- * drift is being told that something outside the fleet is eating the account.
+ * What the window came to, in the three figures the rest of the tab breaks down. The
+ * calibration constant sits here because it is *about* the apportionment rather than
+ * a product of it: drift in it says something outside the fleet is eating the account.
  */
 function Headline({ allowance, now }: { allowance: AllowanceInsights; now: number }): JSX.Element {
   const { observedPoints, attributedPoints, unattributedPoints, pointsPerUsd } = allowance.apportionment;
@@ -157,32 +137,19 @@ function pct(units: number): string {
 /**
  * The percentage over the window, with the agent runs beneath it.
  *
- * **The lanes are the point.** They let a reader see which agents were running
- * while the line climbed without the chart ever claiming that the tallest one
- * caused it — adjacency drawn honestly, which is all the readings can support.
- * The apportionment below is where a number per goal is offered, and it is
- * labelled as apportioned there.
+ * **The lanes are the point**: adjacency drawn honestly, without the chart claiming
+ * the tallest run caused the rise. **A row is a goal, not a run**, so it can carry a
+ * `<Ref>` name in the gutter, and rows come in the apportionment's order so the table
+ * at the foot is the same list twice.
  *
- * **A row is a goal, not a run.** Two dispatches onto one goal are two bars in
- * one row, which is what lets the row carry a name in the gutter — and the name
- * is a `<Ref>`, so the row is a way *to* the goal rather than a mention of it.
- * Rows come in the apportionment's order, so the table at the foot of the tab
- * reads as the same list twice rather than two orders to reconcile.
+ * **The band is HTML and the plot is SVG, on one set of fractions** — the document
+ * buys a gutter that can hold a link and a readout that is not the browser's
+ * `<title>` tooltip. Both are laid out in percentages of the same box.
  *
- * **The band is HTML and the plot is SVG, on one set of fractions.** The band is
- * a gutter and some bars on a linear time axis, which HTML draws as well as SVG
- * does — and drawing it in the document buys the two things SVG was costing: a
- * gutter that can hold a link, and a readout that is this cockpit's own rather
- * than the browser's `<title>` tooltip, which arrives after a second, cannot be
- * styled, and never arrives at all on a touch screen. Both are laid out in
- * percentages of the same box, so a bar still stands under the stretch of line it
- * ran during.
- *
- * Two things are deliberately *not* joined. A reset (the window refilling) breaks
- * the line rather than drawing a cliff, which would read as the fleet having
- * given something back. A gap — the fleet idle, so no reading arrived — is drawn
- * as a shaded column through both panels and a dashed connector: the rise across
- * it is real and counted, and what is unknown is what happened inside it.
+ * Two things are deliberately *not* joined: a reset breaks the line rather than
+ * drawing a cliff that would read as spend given back, and a gap is a shaded column
+ * with a dashed connector — the rise across it is real, what happened inside is not
+ * known.
  */
 function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: number }): JSX.Element {
   const { readings } = allowance;
@@ -501,14 +468,10 @@ type LaneRow = {
 };
 
 /**
- * The window's runs, gathered into one row per goal.
- *
- * Ordered by the apportionment rather than by when a run started, so the band and
- * the table at the foot of the tab are the same list in the same order — a reader
- * who has just read one is not re-learning the other. Goals the apportionment
- * does not carry (a run that spent nothing measurable) follow, and the runs that
- * reached no goal at all share the last row: they are an absence, and an absence
- * is one row however many agents are in it.
+ * The window's runs, gathered into one row per goal. Ordered by the apportionment
+ * rather than by start time, so the band and the table at the foot are the same list
+ * in the same order. Goals the apportionment does not carry follow, and runs that
+ * reached no goal share the last row.
  */
 function laneRows(allowance: AllowanceInsights): LaneRow[] {
   const rows = new Map<string, LaneRow>();
@@ -580,17 +543,12 @@ function laneTip(lane: AllowanceLane, now: number): string[] {
 }
 
 /**
- * The rise, split — one bar rather than a second graph over time.
+ * The rise, split — one bar rather than a second graph over time, since the time
+ * dimension is the timeline's above and two x axes would need reconciling.
  *
- * The time dimension is the timeline's, above, and drawing it twice would put two
- * x axes on one tab for a reader to reconcile. What this adds is the split, and a
- * bar is the shortest way to say it. `EconomicsTab`'s phase bar is the same
- * component decision about the same kind of partition.
- *
- * **The residual is a segment, not a rounding error.** It is the part of the rise
- * that no fleet spend explains, and it is drawn at the end of the bar at full
- * width rather than folded into the goals — dividing it among them is the one
- * thing the readings cannot support.
+ * **The residual is a segment, not a rounding error**: the part of the rise no fleet
+ * spend explains, drawn at full width at the end rather than divided among the goals,
+ * which is the one thing the readings cannot support.
  */
 function GoalBar({ apportionment }: { apportionment: AllowanceApportionment }): JSX.Element {
   const { goals, observedPoints, unattributedPoints } = apportionment;
@@ -658,15 +616,10 @@ function GoalBar({ apportionment }: { apportionment: AllowanceApportionment }): 
 const P = { left: 44, right: 596, top: 12, bottom: 96 };
 
 /**
- * The weekly burn-down: does this pace reach the limit before the limit resets.
- *
- * The only reading on this tab that can be acted on **before** the fact, which is
- * why it is always about the seven-day window whatever span the page is on — an
- * operator who cuts the cap because of it cuts it for the week.
- *
- * The projection is drawn dashed and its fit is stated, because a rate taken over
- * a turn-bound series across a quiet weekend is a line through very few dots. A
- * verdict this confident has to carry how much it is standing on.
+ * The weekly burn-down: does this pace reach the limit before the limit resets. The
+ * only reading here that can be acted on **before** the fact, so it is always about
+ * the seven-day window whatever span the page is on. The projection is drawn dashed
+ * and its fit stated, because it can be a line through very few dots.
  */
 function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
   const p = allowance.projection;
@@ -862,13 +815,9 @@ function Goals({ goals, unattributed }: { goals: readonly AllowanceGoal[]; unatt
 }
 
 /**
- * What the figures on this tab are, said where they are read rather than at the
- * foot of the page.
- *
- * The caveats are worth more level with the numbers they qualify: an apportioned
- * percentage read as a measured one is the single misreading this tab can cause,
- * and it is the operator's own Claude Code that makes it likely — that spend is
- * real, it is on the same account, and no goal here can be charged for it.
+ * What the figures on this tab are, said level with the numbers they qualify rather
+ * than at the foot of the page: an apportioned percentage read as a measured one is
+ * the single misreading this tab can cause.
  */
 function Method({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
   const { pointsPerUsd } = allowance.apportionment;

@@ -24,26 +24,19 @@ import type { IssueSequencing } from '../sequence/readiness.js';
 
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
- *
- * This is *dispatcher-level* and provider-agnostic (fake, github or azure): it
- * decides which visible issues an agent is started for. Issues are **opt-in**: an
- * issue is only picked up when it carries the `watchLabel`; an untagged issue stays
- * visible in the world/cockpit but is left alone. Pull requests gate the same way —
- * see `src/watchLabels.ts` for the shared model.
+ * Dispatcher-level and provider-agnostic. Issues are opt-in: only tagged with
+ * `watchLabel` are picked up; untagged issues stay visible but left alone. PRs gate
+ * the same way — see `src/watchLabels.ts`.
  */
 export interface IssuePickupPolicy {
-  /**
-   * The `${labelPrefix}-watch` tag. When set, only issues whose `labels` include it
-   * are eligible for pickup (opt-in). Empty/unset = no watch gate, act on every
-   * open issue — the backward-compatible default the no-arg `RuleDispatcher` uses.
-   */
+  /** The `${labelPrefix}-watch` tag. Empty/unset = no watch gate, act on every open issue. */
   watchLabel?: string;
   /**
    * When set, the watch label only counts if the authenticated viewer added it
-   * themselves — the gate reads `labelsAddedByViewer` instead of `labels`. Stops a
-   * third party from tagging an item to get an agent onto it. Off by default; needs
-   * a provider that resolves tag authorship (github/azure). If the provider didn't
-   * populate authorship (unknown), no tag counts as the viewer's, so nothing passes.
+   * themselves — reads `labelsAddedByViewer` instead of `labels`, so a third party
+   * cannot tag an item onto the fleet. Needs a provider that resolves tag authorship
+   * (github/azure); if it left authorship unknown, no tag counts as the viewer's and
+   * nothing passes — a provider that never populates the field silently stops all pickup.
    */
   requireOwnLabel?: boolean;
   /** Label → priority weight; higher is dispatched first under limited headroom. */
@@ -52,100 +45,55 @@ export interface IssuePickupPolicy {
   defaultPriority: number;
   /**
    * When non-empty, only issues whose provider-native `workItemState` is in this
-   * list are eligible for pickup (e.g. `["Ready", "Doing"]` for Azure DevOps).
-   * Issues with no `workItemState` (GitHub, the fake) skip this gate entirely, so
-   * it stays a no-op for providers with only open/closed. Unset/empty = no state
-   * gate (the backward-compatible default).
+   * list are eligible (e.g. `["Ready", "Doing"]` for Azure DevOps). Issues with no
+   * `workItemState` skip this gate entirely. Unset/empty = no state gate.
    */
   pickupStates?: string[];
   /**
-   * The state a work item is moved to once a pull request is open for it, so it
-   * stops being re-picked while under review (e.g. Azure "In Review"). When set
-   * *and* `pickupStates` is non-empty, the dispatcher emits a `set_work_item_state`
-   * action for a still-in-pickup item that has an open PR. Unset = no automatic
-   * transition (the default). Needs a provider that can write the state back.
+   * The state a work item moves to once a PR is open for it, so it isn't re-picked
+   * under review (e.g. Azure "In Review"). Needs `pickupStates` set too and a
+   * provider that can write state back. Unset = no automatic transition.
    */
   inReviewState?: string;
   /**
-   * The state a work item is moved to once an agent is actually working it (e.g.
-   * Azure "Doing"). When set *and* `pickupStates` is non-empty, rule
-   * `work-item-in-progress` emits a `set_work_item_state` for an item in a pickup
-   * state with a live work agent and no open PR. Unset = no transition (the
-   * default).
-   *
-   * It is **not** the operator's job to list it in `pickupStates` as well:
-   * {@link effectivePickupStates} folds it in, which is what keeps an item the
-   * harness put there pickup-eligible and still able to advance to the review
-   * state. See that function for why the fold is required rather than tidy.
+   * The state a work item moves to once an agent is actually working it (e.g. Azure
+   * "Doing"). {@link effectivePickupStates} folds it into `pickupStates` so such an
+   * item stays pickup-eligible without the operator listing it twice.
    */
   inProgressState?: string;
   /**
-   * Provider-native item types that hold other work rather than being work — e.g.
-   * `["Feature", "Epic"]` for Azure DevOps. An item of one of these types is never
-   * picked up: its children are the work. Issues with no `issueType` (GitHub, the
-   * fake) skip the gate entirely, so it is a no-op for flat trackers. Unset falls
-   * back to `DEFAULT_CONTAINER_TYPES`; an explicit `[]` turns the gate off.
+   * Provider-native item types that hold other work rather than being work (e.g.
+   * `["Feature", "Epic"]`) — never picked up. Issues with no `issueType` skip the
+   * gate. Unset falls back to `DEFAULT_CONTAINER_TYPES`; `[]` turns it off.
    */
   containerTypes?: string[];
   /**
-   * Provider-native item types expected to hang off a container — `["User Story",
-   * "Bug", …]` for Azure DevOps. One of these with no parent is an orphan: the
-   * appraisal prompt says so and offers the containers the harness can see, and
-   * the cockpit asks where it belongs. Unset falls back to
-   * `DEFAULT_PARENTED_TYPES`; an explicit `[]` turns the orphan report off.
+   * Provider-native item types expected to hang off a container. One with no parent
+   * is an orphan, reported in the appraisal prompt and the cockpit. Unset falls back
+   * to `DEFAULT_PARENTED_TYPES`; `[]` turns the orphan report off.
    */
   parentedTypes?: string[];
   /**
-   * How much of the sequencing gate is switched on — `off` (the default) holds
-   * nothing and is byte-for-byte the behaviour before it existed, `links` honours
-   * the tracker's own dependency links, `full` adds the sequencer.
-   * → `docs/spec/33-story-sequencing.md`
-   *
-   * On the policy rather than on the dispatcher's constructor because it is a
-   * pickup gate like every other field here, and because the one thing it must
-   * never become is a second opinion: `issue-plan` and `issue-pickup` read it
-   * through the one context the dispatcher derives once.
-   *
-   * {@link isIssuePickupEligible} deliberately does **not** read it. That function
-   * is pure over the issue plus the policy, and readiness is a question about the
-   * world — a predecessor's state — so answering it there would either be wrong or
-   * would drag the world into a predicate the cockpit's chip also asks.
+   * How much of the sequencing gate is switched on — `off` (default), `links`, or
+   * `full`. {@link isIssuePickupEligible} does not read it — it is pure over issue +
+   * policy, and readiness is a question about the world. → `docs/spec/33-story-sequencing.md`
    */
   sequencing?: IssueSequencing;
-  /**
-   * `issueSequenceMaxChildren` — above this a Feature is not sequenced at all.
-   * Unset falls back to {@link DEFAULT_SEQUENCE_MAX_CHILDREN}.
-   */
+  /** `issueSequenceMaxChildren` — above this a Feature is not sequenced at all. Unset falls back to {@link DEFAULT_SEQUENCE_MAX_CHILDREN}. */
   sequenceMaxChildren?: number;
 }
 
 /**
- * The pickup states as every gate must actually read them: the operator's list,
- * plus the in-progress state the harness writes itself.
- *
- * The fold is load-bearing, not tidiness. Two readers key on the pickup list —
- * {@link isIssuePickupEligible}'s state gate and rule `work-item-in-review`, whose
- * first guard is "the item is still in a pickup state" — so an item the harness
- * moved to a state outside the list falls into a hole: never picked up again,
- * never advanced to the review state when its PR opens, and nothing red. Folding
- * the state in one place makes forgetting it impossible, and makes the useful
- * behaviour fall out: an item left in the in-progress state by an agent that died
- * without a PR is picked up again rather than lost.
- *
- * One caller must **not** use this: `deliveryHold` asks whether the item is in a
- * pickup state to mean "a human moved it back, they want it worked", and a state
- * the harness wrote is not that. It keeps the configured list.
- *
- * Returns the list unchanged (identity, not a copy) when there is nothing to fold,
- * and `undefined`/empty stays `undefined`/empty — an empty gate is the gate off,
- * and an in-progress state must not switch it on.
+ * The pickup states as every gate must actually read them: the operator's list plus
+ * the in-progress state the harness writes itself — without the fold, an item the
+ * harness moved falls into a hole, never picked up again, with nothing red.
+ * `deliveryHold` must **not** use this: it asks about a pickup state to mean "a
+ * human moved it back", which a harness-written state is not. `undefined`/empty
+ * stays that way — an empty gate must stay off.
  */
 export function effectivePickupStates(
-  // The two fields it reads, rather than the whole policy: the cockpit's readers —
-  // the state facets and the board's drop warnings — hold a `Config` and not a
-  // dispatch policy, and a signature demanding the priority knobs would make them
-  // assemble a policy object nobody dispatches from. Every existing caller passes a
-  // full `IssuePickupPolicy`, which satisfies this unchanged.
+  // The two fields it reads, not the whole policy: the cockpit's readers hold a
+  // `Config` rather than a dispatch policy.
   policy: Pick<IssuePickupPolicy, 'pickupStates' | 'inProgressState'>,
 ): string[] | undefined {
   const states = policy.pickupStates;
@@ -161,23 +109,11 @@ export function issueBranch(number: number): string {
 }
 
 /**
- * The open pull request resolving this issue, or `null` when none is open.
- *
- * `linkedPrNumber` is the *last* PR that ever cross-referenced the issue, with no
- * open/merged filter (see `linkedPrFromTimeline`) — so it stays set after that PR
- * merges. Gating pickup on it alone retires an issue the moment any PR touches it,
- * which kills an issue that needs a second PR; resolving it against the live PRs
- * instead is what keeps the loop moving. The branch convention is checked too, so a
- * PR the provider hasn't linked yet still counts.
- *
- * `openPrs` must be **every** open PR — including the unwatched ones hidden from the
- * dispatch world (`Harness.runCycle` filters them out, so the dispatcher passes them
- * back in via `DispatchContext.hiddenPrs`). Both providers list only open/active
- * PRs, so absence otherwise reads as "merged" — and an unwatched PR would get its
- * issue re-picked and a second agent onto the very same branch.
- *
- * Not covered: a `prAuthor` filter narrows the provider's PR list, so a linked PR
- * opened by someone else is invisible here and reads as gone.
+ * The open pull request resolving this issue, or null when none is open.
+ * `linkedPrNumber` is sticky (stays set after merge), so it's resolved against the
+ * live PRs; the branch convention is checked too. `openPrs` must be every open PR,
+ * unwatched included — a hidden PR would re-pick its issue and send a second agent
+ * onto the same branch.
  */
 export function openPrForIssue(issue: Issue, openPrs: PullRequest[]): PullRequest | null {
   const branch = issueBranch(issue.number);
@@ -196,22 +132,15 @@ interface IssuePickupEligibility {
 }
 
 /**
- * Whether an open, unlinked issue may be picked up under the policy's gate —
- * with *why not* when it may not, so the cockpit can explain an untouched item
- * instead of leaving it implied. Pure over the issue + policy alone.
+ * Whether an open, unlinked issue may be picked up under the policy's gate, with why
+ * not when it may not. Pure over the issue + policy alone.
  */
 export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): IssuePickupEligibility {
   const reasons: string[] = [];
-  // The type gate (Azure work items): a Feature/Epic is a statement of intent its
-  // children deliver, so an agent is never put on one — no watch tag or workflow
-  // state makes a container workable. Asked before the state gate because it is
-  // the more fundamental refusal: a container in a pickup state is still a
-  // container. Items with no `issueType` bypass it, so flat trackers are unaffected.
+  // Type gate (Azure): an agent is never put on a Feature/Epic. Asked before the state gate — a container in a pickup state is still a container.
   const container = containerPickupReason(issue, policy.containerTypes);
   if (container) reasons.push(container);
-  // State gate (Azure work items): only pick up items in an allowed workflow state
-  // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
-  // fake) bypass this entirely, so it's a no-op unless the provider populates it.
+  // State gate (Azure): only pick up items in an allowed workflow state. Items with no tracked state bypass this entirely.
   const pickupStates = effectivePickupStates(policy);
   if (pickupStates && pickupStates.length > 0 && issue.workItemState !== undefined) {
     if (!pickupStates.includes(issue.workItemState)) {
@@ -225,17 +154,14 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   return { eligible: reasons.length === 0, reasons };
 }
 
-/**
- * The opt-in watch gate: an issue must carry the watch tag to be worked. Empty
- * watch label = gate off (the no-arg dispatcher / test default), so every open
- * issue passes as before.
- */
+/** The opt-in watch gate: an issue must carry the watch tag to be worked. Empty watch label = gate off. */
 function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | null {
   if (!policy.watchLabel) return null;
+  // With requireOwnLabel, reads labelsAddedByViewer instead of labels — a provider
+  // that never populates it resolves every issue's labels to [] and nothing is picked up.
   const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
   if (labels.includes(policy.watchLabel)) return null;
-  // Distinguish "not tagged at all" from "tagged, but not by you" (the ownership
-  // gate failing closed) so the operator knows which knob to turn.
+  // Distinguish "not tagged" from "tagged, but not by you" so the operator knows which knob to turn.
   if (policy.requireOwnLabel && issue.labels.includes(policy.watchLabel)) {
     return `watch label "${policy.watchLabel}" not added by you`;
   }
@@ -243,11 +169,9 @@ function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | nul
 }
 
 /**
- * The label half of the gate on its own — the one parts inherit. There is no
- * per-part watch check: the tag is evaluated once, on the parent issue, and parts
- * follow it. Deliberately **without** the workflow-state gate: rule `work-item-in-review` parks a work
- * item in the review state as soon as any part's PR opens, and re-applying the
- * state gate there would stop the plan's remaining parts from ever being scheduled.
+ * The label half of the gate on its own — the one parts inherit; the tag is
+ * evaluated once, on the parent issue. Deliberately without the workflow-state gate,
+ * or `work-item-in-review` parking on the first part's PR would strand the rest.
  */
 export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): string | null {
   return issueWatchReason(issue, policy);
@@ -286,45 +210,24 @@ export interface IssuePickupContext {
   now: string;
   tasks: TaskSummary[];
   recentDecisions: Decision[];
-  /**
-   * Every open PR the world knows about, for {@link openPrForIssue}. The cockpit
-   * reads the connector directly, so it passes the unfiltered list — an unwatched PR
-   * is hidden from dispatch but is still an open PR for this gate.
-   */
+  /** Every open PR the world knows about, for {@link openPrForIssue}. Unfiltered — an unwatched PR is hidden from dispatch but is still open for this gate. */
   openPrs: PullRequest[];
-  /**
-   * The plan funnel's state and policy — the same inputs rules `issue-plan` and `issue-pickup` consult.
-   * Omitted = funnel off, so every issue routes straight to pickup as before.
-   */
+  /** The plan funnel's state and policy. Omitted = funnel off, every issue routes straight to pickup. */
   plans?: Plan[];
   /** Every plan's parts, so a `parts` verdict can report progress rather than a flat string. */
   planParts?: PlanPart[];
-  /**
-   * Standing `delivered` verdicts and the world transitions that may have ended
-   * one — the same two lists rule `issue-pickup` gates on, so the chip predicts it. Absent =
-   * nothing parked, which is every deployment until an issue is assessed.
-   */
+  /** Standing `delivered` verdicts and the world transitions that may have ended one, so the chip predicts what `issue-pickup` gates on. Absent = nothing parked. */
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
-  /**
-   * Standing goal-appraisal verdicts and the transitions that may have ended one —
-   * the same two lists rule `issue-appraisal` and the `eligibleIssues` filter gate on, so the chip
-   * predicts them. Absent = nothing appraised, which holds nothing.
-   */
+  /** Standing goal-appraisal verdicts and the transitions that may have ended one. Absent = nothing appraised, which holds nothing. */
   appraisals?: IssueAppraisal[];
   /**
-   * The goals parked behind an obstacle and the board that lifts them — the same
-   * two lists the `eligibleIssues` filter gates on, so the chip predicts it.
-   * Absent = nothing parked, which is every deployment until an agent concludes
-   * `blocked`. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
+   * Goals parked behind an obstacle and the board that lifts them. Absent = nothing
+   * parked. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
    */
   obstacleBlocks?: ObstacleBlock[];
   obstacles?: ObstacleStanding[];
-  /**
-   * The harness's runs at each goal, so a closed issue can be told from a closed
-   * *ticket* (issue #234). Absent = nothing retained, which reads exactly as it did
-   * before runs existed.
-   */
+  /** The harness's runs at each goal, so a closed issue can be told from a closed ticket (issue #234). Absent = nothing retained. */
   runs?: IssueRun[];
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
@@ -332,28 +235,19 @@ export interface IssuePickupContext {
 }
 
 /**
- * Fold every gate that decides issue pickup — intrinsic policy gates *and* the
- * contextual ones (active task, cooldown/attempt cap, capacity) — into one
+ * Fold every gate that decides issue pickup — intrinsic and contextual — into one
  * per-item verdict, mirroring `prHealth` for PRs. Pure over the issue + context,
- * and checked in the same order rule `issue-pickup` of the rule dispatcher applies them, so
- * the verdict matches what actually happens next cycle.
+ * checked in the same order `issue-pickup` applies them, so the verdict matches
+ * what actually happens next cycle.
  */
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
   if (issue.state !== 'open') {
-    // A close is the tracker's answer, not the run's end (issue #234). While the
-    // run lives, `done` is the wrong reading twice over: the harness may still act
-    // on the goal — `issue-assess` and `issue-retro` are dispatched off exactly
-    // these retained runs — and "nothing to do" hides the one thing the operator
-    // still has to do, which is dismiss it. `done` keeps its meaning for the case
-    // it was always right about: a closed ticket the harness never had a run at,
-    // or one whose run the operator already ended.
+    // A close is the tracker's answer, not the run's end — while the run lives the harness may still act on the goal.
     const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
     if (run !== null && run.dismissedAt === null) {
       return {
         eligible: false,
         status: 'retained',
-        // Off `completed_at`, the same evidence the dismissal reads its outcome
-        // from — so the chip and the outcome it will be stamped with agree.
         reasons: [
           run.completedAt !== null
             ? 'closed; run kept until you dismiss it'
@@ -364,10 +258,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return { eligible: false, status: 'done', reasons: ['closed'] };
   }
 
-  // The plan comes *before* the PR gate for an issue that split into parts, and it
-  // has to: a part's PR is on `issue/<n>/<slug>`, but `linkedPrNumber` is sticky and
-  // will point at one, so the PR gate below would report "has open PR #n" for every
-  // mid-plan issue — hiding the plan behind whichever part happened to open last.
+  // Plan comes before the PR gate: linkedPrNumber is sticky and points at a part's PR, which would else misreport "has open PR".
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
@@ -375,18 +266,12 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
   });
-  // Answered here, beside the `parts` arm and before the PR gate, for the same
-  // reason: an issue whose decomposition is awaiting approval is planned, and a
-  // part's PR (a replan of a live plan) would otherwise report it as "has open
-  // PR #n" — hiding the one thing the operator has to do about it.
   if (planVerdict.route === 'awaiting_approval' && plan) {
     const total = liveParts(parts).length;
     return {
       eligible: false,
       status: 'planning',
-      // No parts is the single verdict awaiting approval, not an empty
-      // decomposition — "the 0-part plan" would read as a planner that said
-      // nothing, on the arm an operator answers most often.
+      // No parts is the single-PR verdict awaiting approval, not an empty decomposition.
       reasons: [
         total === 0
           ? 'awaiting your approval of the single-PR plan'
@@ -397,13 +282,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   if (planVerdict.route === 'parts' && plan) {
     const { settled, total } = planProgress(parts);
-    // A `complete` plan is the one arm that never moves again on its own: rule `plan-part`
-    // schedules nothing and pickup stays narrowed off, which is correct while a
-    // human decides whether the issue is done — but "3/3 parts done" reads like
-    // a plan still in flight. Say what the two ways out are instead.
-    //
-    // "done" rather than "merged": a part can finish as a report or a
-    // determination, and counting only merges would understate a finished plan.
+    // A complete plan never moves again on its own — name the two ways out instead of "N/N done".
     const reason =
       total === 0
         ? 'plan split this into parts'
@@ -413,12 +292,9 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return { eligible: false, status: 'planning', reasons: [reason] };
   }
 
-  // Resolved against the live PRs, not the sticky `linkedPrNumber` — the reason
-  // says "open", so it has to be one, and a merged PR must not park the issue.
   const openPr = openPrForIssue(issue, ctx.openPrs);
   if (openPr) return { eligible: false, status: 'has_pr', reasons: [`has open PR #${openPr.number}`] };
 
-  // An active task on this origin owns the issue — report the agent's state.
   const origin = `issue:${issue.number}`;
   const active = ctx.tasks.find((t) => t.originRef === origin && isActiveTask(t));
   if (active) {
@@ -431,22 +307,13 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return { eligible: false, status: 'active', reasons: [reason] };
   }
 
-  // The harness's own park, asked *after* `has_pr` and `active`: a delivered issue
-  // that somehow has an open PR is honestly `has_pr` — the PR rules own it — and
-  // one with a live agent is honestly `active`. Same predicate rule `issue-pickup` gates on, so
-  // the chip cannot promise what the next cycle refuses.
   const held = deliveryHold(ctx.deliveries?.find((d) => d.originRef === origin) ?? null, issue, {
     pickupStates: ctx.policy.pickupStates,
     signals: ctx.deliverySignals,
   });
   if (held) return { eligible: false, status: 'delivered', reasons: [held] };
 
-  // The third park, beside the delivery above and the appraisal below, and the
-  // one whose exit is not the issue at all: an agent concluded `blocked` naming
-  // something that is not this goal, and the goal comes back when the board stops
-  // reaching agents with it. Asked through the same pure `blockedGoals` the rule
-  // gates on and the ownership desk sweeps with, so the chip cannot promise what
-  // the next cycle refuses. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
+  // → `docs/spec/27-obstacles.md#blocked-is-an-answer`
   const block = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []).get(origin);
   if (block) {
     return {
@@ -458,25 +325,14 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);
   if (!intrinsic.eligible) {
-    // A container is its own answer: it is not an item waiting to be opted in —
-    // tagging it changes nothing, and a chip saying "unwatched" would send an
-    // operator to the one control that cannot help.
+    // A container is its own answer — tagging it changes nothing, so "unwatched" would mislead.
     const status = isContainerIssue(issue, ctx.policy.containerTypes) ? 'container' : 'unwatched';
     return { eligible: false, status, reasons: intrinsic.reasons };
   }
 
-  // The content gate (issue #158), asked *after* the intrinsic policy gates and
-  // *before* the plan funnel — which is exactly where rule `issue-appraisal` sits. After, because
-  // an unwatched or state-parked issue is never appraised, so reporting an appraisal for
-  // one would promise something that cannot happen; before, because an appraisal that
-  // refused the goal is the reason no planner and no pickup agent is coming.
   const appraisal = appraisalFor(issue, ctx);
   if (appraisal) return { eligible: false, status: 'appraisal', reasons: [appraisal] };
 
-  // The rest of the funnel sits between eligibility and pickup: narrowing rule `issue-pickup`
-  // without reporting it here would leave the chip saying "eligible" for an issue
-  // that is actually waiting on a planner. (The `parts` arm is answered above,
-  // before the PR gate can mistake a part's PR for the issue's.)
   const route = planVerdict;
   if (route.route === 'parts') {
     return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
@@ -517,33 +373,21 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
 /**
  * Why the goal appraisal is the reason nothing is happening to this issue, or null
- * when it isn't.
- *
- * Two arms, in the order rule `issue-appraisal` resolves them. A **standing** `unclear` verdict
- * first — asked through the same pure `appraisalHold` the dispatcher asks, so the chip
- * cannot say "parked" for an issue the next cycle dispatches, nor the reverse.
- * Then the **pending** case: an issue rule `issue-appraisal` would appraise, or is appraising now.
- * Reporting that matters as much as the hold — an issue silently waiting a cycle
- * for a verdict looks exactly like an idle fleet, which is the invisibility
- * `capped` and `unapproved` were added to `QueueItem` to fix.
- *
- * A `workable` verdict returns null from both arms: it releases the issue to
- * whatever the funnel says next, which is the whole of its effect.
+ * when it isn't. A `workable` verdict returns null from both arms, releasing the
+ * issue to the funnel.
  */
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const origin = `issue:${issue.number}`;
   const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
   const held = appraisalHold(stored, issue);
   if (held) return held;
-  // Same preconditions rule `issue-appraisal` applies, in its order.
   if (isAppraised(stored, issue)) return null;
   if (hasWorkStarted(issue.number, ctx.tasks)) return null;
   if (ctx.plans?.some((p) => p.originRef === origin)) return null;
   const running = ctx.tasks.find((t) => t.originRef === appraisalOrigin(issue.number) && isActiveTask(t));
   if (running) return running.status === 'waiting' ? 'goal appraisal waiting on you' : 'a goal appraisal is running';
   const verdict = dispatchVerdict(appraisalOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown);
-  // A spent cap is the fail-open: the issue carries on into the funnel, so this
-  // says nothing about it and lets the arms below explain what happens instead.
+  // A spent cap fails open: the issue carries on into the funnel.
   if (verdict.kind === 'escalate' || verdict.kind === 'hold') return null;
   return verdict.kind === 'cooldown' ? 'goal appraisal on cooldown' : 'awaiting a goal appraisal';
 }
@@ -559,11 +403,7 @@ function countAttempts(origin: string, decisions: Decision[]): number {
   return n;
 }
 
-/**
- * Parse an issue's priority from its labels: the highest weight among labels that
- * match the scheme, or the configured default when none match. Pure — no world,
- * no side effects — so the label → weight mapping is unit-testable in isolation.
- */
+/** Parse an issue's priority from its labels: the highest matching weight, or the configured default. Pure. */
 export function issuePriority(labels: string[], policy: IssuePickupPolicy): number {
   let best: number | null = null;
   for (const label of labels) {

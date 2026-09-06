@@ -23,63 +23,24 @@ import {
 } from './insightsWindow.js';
 
 /**
- * The spend breakdown: the same money the cost chips report, split three ways at
- * once.
+ * The spend breakdown: the same money the cost chips report, split three ways at once — by
+ * phase, by goal (per-issue totals ranked, with the phase split inside each row), and over
+ * time (rolling buckets off the dated deltas).
  *
- * The chips answer *how much* — `$4.10 5h`, `$1.20` on a goal — and an operator
- * reading one immediately has a question the number cannot hold: **where did it
- * go**. Three splits answer it, and each is a different question:
+ * One attribution, not two: the per-goal totals are `rollUpIssueSpend`'s own, taken whole,
+ * and the phase split rides on the attribution map that roll-up returns, so a second walk of
+ * the work graph can never silently disagree with the card in the cockpit.
  *
- * - **By phase** — deliberation, build, landing, evidence. What kind of work the
- *   money bought. A fleet spending half its budget deciding what to build is the
- *   finding this whole module exists to surface, and no per-goal figure shows it:
- *   a goal's total folds its planner and its parts into one number on purpose.
- * - **By goal** — the per-issue totals the cards already carry, gathered into one
- *   ranked table with the phase split inside each row, so the expensive goal and
- *   the reason it was expensive are one glance apart.
- * - **Over time** — daily buckets off `usage_events`. Cost is the one reading the
- *   harness holds that is *dated*, and a trend is the only way to tell a fleet
- *   that is spending more from one that has simply been running longer.
- *
- * ## One attribution, not two
- *
- * The per-goal totals are `rollUpIssueSpend`'s own, taken whole rather than
- * recomputed, and the phase split rides on the attribution map that roll-up
- * returns. That is deliberate and it is the sharp edge here: the panel and the
- * card state the same goal's cost inches apart in the cockpit, and a second walk
- * of the work graph would be a second opinion about which goal a pull request
- * belongs to — free to disagree, silently, on exactly the origin shapes the two
- * readings classify differently.
- *
- * ## Derived, never stored
- *
- * For [per-goal spend's reason](docs/spec/18-observability.md): the money is
- * already durable on the `agents` rows and in `usage_events`, and a table of
- * pre-summed insights would be a copy that goes stale the moment a turn reports.
+ * Derived, never stored — the money is already durable on `agents` and `usage_events`.
+ * → `docs/spec/18-observability.md`
  */
 
 /**
- * What a run's money bought, as a partition of the fleet's spend.
- *
- * The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second
- * one — that module is where an origin is classified, and a new suffix must not
- * have to be remembered in two places. What it does not cover is everything
- * *outside* the subtree, which is where the last three come from: a pull request's
- * own agents (`pr:41:ci`, `pr:41:comments`), an operator's job, and the remainder.
- *
- * `ci` and `landing` are separate from `build` even though all three are work on
- * the same code, because they fail differently and an operator acts on the
- * difference: build is what the goal cost to write, and the other two are what it
- * cost to get *through*. A goal whose landing dwarfs its build is not an expensive
- * goal, it is a flaky pipeline.
- *
- * **`ci` is split out of `landing` because it is the one an operator can act on
- * alone.** Answering review comments is the cost of being reviewed and a fleet
- * cannot decline it; re-running failing checks is the cost of a *broken suite*,
- * which is a bug with a price — and folded together the two are one number that
- * cannot say which it is. `pr:<n>:ci-gate` — checks waiting on an action rather
- * than failing — counts here too: it is the same pipeline costing the same money,
- * and a phase per dispatch state would rank states instead of causes.
+ * What a run's money bought, as a partition of the fleet's spend. The issue-subtree phases
+ * are `issueOriginRole`'s vocabulary rather than a second one. `ci` and `landing` are separate
+ * from `build` because they answer different questions — what the goal cost to write versus
+ * what it cost to get through — and `ci` is separate from `landing` because a broken suite is
+ * the half an operator can act on alone. `pr:<n>:ci-gate` counts as `ci`.
  */
 export type SpendPhase =
   | 'deliberation'
@@ -93,12 +54,8 @@ export type SpendPhase =
   | 'other';
 
 /**
- * Reading order, funnel order: decide, build, go green, land, check, and the two
- * remainders.
- *
- * Exported because `spendTrend` walks the same phases over a different axis, and
- * a phase list written twice is a panel that silently stops counting `job` the
- * day someone adds a phase to one of them.
+ * Reading order, funnel order: decide, build, go green, land, check, and the remainders.
+ * Exported because `spendTrend` walks the same phases over a different axis.
  */
 export const PHASE_ORDER: readonly SpendPhase[] = [
   'deliberation',
@@ -112,14 +69,7 @@ export const PHASE_ORDER: readonly SpendPhase[] = [
   'other',
 ];
 
-/**
- * What each phase is, in the operator's words rather than the ref vocabulary's.
- *
- * Shipped with the figures rather than held in the cockpit because it is a claim
- * about what the harness *did*, not about how to draw it: `landing` means
- * `pr:*` here and must mean it in the legend. Colour is the cockpit's business and
- * stays there.
- */
+/** What each phase is, in the operator's words. Shipped with the figures rather than held in the cockpit, since it is a claim about what the harness did. */
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   deliberation: { label: 'Deliberation', blurb: 'Planning and appraising — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
@@ -135,19 +85,10 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
 
-/**
- * How many runs the costliest-runs table carries. Capped because the table is a
- * *ranking* and not a ledger — the whole fleet's runs are the agent drawer's job —
- * and the panel says the cap out loud, because a silently truncated table reads as
- * a complete one.
- */
+/** How many runs the costliest-runs table carries. A ranking, not a ledger; the panel states the cap out loud. */
 const TOP_RUNS = 20;
 
-/**
- * The two concerns the `ci` phase is: checks that failed, and checks blocked
- * waiting on an action (`src/dispatcher/rules/prCiFailing.ts` dispatches both).
- * They ride together because they are one pipeline's bill — see {@link SpendPhase}.
- */
+/** The two concerns the `ci` phase is: checks that failed, and checks blocked waiting on an action — they ride together as one pipeline's bill. */
 const CI_CONCERN = /^pr:\d+:ci(?:-gate)?$/;
 
 /** The fleet's spend in one line, and how much of the fleet it actually covers. */
@@ -155,39 +96,19 @@ interface SpendTotals {
   costUsd: number;
   inputTokens: number;
   outputTokens: number;
-  /**
-   * The cached share of the input, split the two ways it is priced: a read at a
-   * fraction of a fresh token, a write at a premium. Both are *parts* of
-   * {@link SpendTotals.inputTokens} and never additions to it.
-   *
-   * This is the panel's one actionable token reading. Cost already has the cache
-   * discount baked in (it comes from the provider), so no figure derived from
-   * cost can say whether the fleet is getting that discount — only this can, and
-   * a fleet whose read share collapses is one paying full price for context it
-   * had already paid to warm.
-   */
+  /** The cached share of the input, split the two ways it is priced. Both are parts of {@link SpendTotals.inputTokens}, never additions to it. */
   cacheReadTokens: number;
   cacheCreationTokens: number;
   /**
-   * The gross input of the runs the two figures above are summed over — the
-   * denominator the hit rate is a fraction *of*, and never `inputTokens`.
-   *
-   * They differ, and the difference is the whole reason this is shipped: a run
-   * from before the split was recorded reports a gross input and no breakdown at
-   * all, so dividing by the fleet's whole input would read those runs as a 0%
-   * hit rate rather than as unmeasured. Same stance as
-   * {@link SpendTotals.unmeasuredRuns}, one grain finer.
+   * The gross input of the runs the two figures above are summed over — the denominator the
+   * hit rate is a fraction of, never `inputTokens`: a pre-split run has no breakdown, and
+   * dividing by the whole input would read it as 0% rather than unmeasured.
    */
   cacheMeasuredInputTokens: number;
   turns: number;
   /** Runs the totals are over: every agent and local run that reported any usage at all. */
   measuredRuns: number;
-  /**
-   * Runs that reported nothing — PTY mode throughout, or a run that ended before
-   * its first `result`. Shipped beside the totals rather than left out, because
-   * every figure in this panel is silent about these and a reader has no way to
-   * know how much of the fleet the panel is speaking for otherwise.
-   */
+  /** Runs that reported nothing — PTY mode throughout, or a run that ended before its first `result`. */
   unmeasuredRuns: number;
 }
 
@@ -203,19 +124,11 @@ export interface SpendPhaseTotal {
 }
 
 /**
- * One goal's row: what the goal has cost inside the window, plus where inside the
- * goal it went and when it last moved.
- *
- * Not the same figure as the goal card's, which is all-time — the panel is
- * windowed and the card is not, so the two agree only on `window=all`.
+ * One goal's row: what the goal cost inside the window, where inside the goal it went, and
+ * when it last moved. Not the goal card's figure, which is all-time — the two agree only on `window=all`.
  */
 export interface SpendGoal extends IssueSpend {
-  /**
-   * The goal's name. From the world baseline while the tracker still lists it, and
-   * from the run record the harness kept once it does not — a goal the fleet spent
-   * money on was worked, and a run captures its title while it is still live. Null
-   * only for a goal older than the run record itself.
-   */
+  /** The goal's name: from the world baseline while the tracker lists it, from the run record once it does not. Null only for a goal older than the run record itself. */
   title: string | null;
   /** Cost per phase, summing to `costUsd`. Every phase is keyed, most are zero. */
   byPhase: Record<SpendPhase, number>;
@@ -225,13 +138,7 @@ export interface SpendGoal extends IssueSpend {
 
 /** One expensive run, named well enough to find what spent it. */
 export interface SpendRun {
-  /**
-   * The agent's id, or the local run's — {@link SpendRun.kind} says which.
-   *
-   * Not `agentId`, because half of these are not agents. A run id sitting in a field
-   * of that name is a caller one join away from looking a local run up in the agent
-   * drawer and drawing nothing, with no way to see why.
-   */
+  /** The agent's id, or the local run's — {@link SpendRun.kind} says which. Not `agentId`, since a caller would join half of these against the agent drawer and draw nothing. */
   id: string;
   kind: 'agent' | 'local';
   originRef: string | null;
@@ -253,14 +160,7 @@ interface SpendBucket {
   costUsd: number;
 }
 
-/**
- * The trend, in rolling buckets ending now, at whatever resolution the window
- * asked for ({@link timelineSpan}).
- *
- * Rolling rather than calendar buckets: a calendar day needs a timezone, and the
- * harness has no opinion about the operator's. The last bucket is therefore "up
- * to now" — it is still filling, and the panel draws it hollow for that reason.
- */
+/** The trend, in rolling buckets ending now, at the window's resolution ({@link timelineSpan}). Rolling rather than calendar, since a calendar day needs a timezone the harness has no opinion about. */
 interface SpendTimeline {
   bucketMs: number;
   startsAt: string;
@@ -269,13 +169,7 @@ interface SpendTimeline {
 
 export interface SpendInsights {
   generatedAt: string;
-  /**
-   * The stretch every figure below was measured over, as the page reads it back.
-   *
-   * Shipped rather than assumed, because the page's caption and the timeline
-   * under it must be the same window: a caption derived from the key the browser
-   * asked with is free to disagree with the buckets the server actually cut.
-   */
+  /** The stretch every figure below was measured over. Shipped rather than assumed, so the caption cannot disagree with the buckets the server actually cut. */
   window: InsightsWindowView;
   totals: SpendTotals;
   /** Every phase with a run in it, in funnel order. A phase with nothing in it is left out. */
@@ -284,36 +178,17 @@ export interface SpendInsights {
   goals: SpendGoal[];
   /** The remainder that reached no goal — `rollUpIssueSpend`'s own figure. */
   unattributedCostUsd: number;
-  /**
-   * Cost per kind of work — the grain below `phases`, off the rule each task
-   * recorded at dispatch. A partition of the same money: review comments get a
-   * figure of their own here, which no phase can give them.
-   */
+  /** Cost per kind of work — the grain below `phases`, off the rule each task recorded at dispatch, and a partition of the same money. */
   taskTypes: TaskTypeSpend[];
   /** Cost per CI check — what `dotnet test` and `Qodana` are each costing. */
   checks: ChecksSpend;
-  /**
-   * Pull requests merged inside the window — the denominator of the page's one
-   * headline, `spent ÷ landed`.
-   *
-   * Merges rather than closed goals, and deliberately: a goal closes when a
-   * person says it is done, which can happen without the fleet having landed
-   * anything, while a merge is the fleet's own output. It is the same event the
-   * production reading counted, asked over the same window as the money beside
-   * it — which is what the reading never had.
-   */
+  /** Pull requests merged inside the window — the denominator of `spent ÷ landed`. Merges rather than closed goals: a goal can close without the fleet having landed anything. */
   landed: number;
-  /**
-   * What the runs that failed or crashed inside the window cost.
-   *
-   * On this payload rather than the reliability one because the headline needs
-   * it: "$26 of $118 never landed" is one sentence, and fetching its two halves
-   * from two routes is how they end up describing two windows.
-   */
+  /** What the runs that failed or crashed inside the window cost. On this payload rather than the reliability one so the headline's two halves cannot describe two windows. */
   lostCostUsd: number;
   /** The {@link TOP_RUNS} costliest runs, costliest first. */
   runs: SpendRun[];
-  /** How many runs the table above is a ranking *of*, so the cap can be stated against it. */
+  /** How many runs the table above is a ranking of, so the cap can be stated against it. */
   rankedFrom: number;
   timeline: SpendTimeline;
 }
@@ -329,11 +204,7 @@ interface SpendInsightsInput {
   issues: readonly Issue[];
   /** The run records, for the titles the world has forgotten. See {@link buildSpendGoals}. */
   runs: readonly IssueRun[];
-  /**
-   * The dated cost deltas behind the trend — already windowed by the caller, and
-   * **every** source of them (`Store.listCostDeltasSince`). A window drawn off the
-   * agents' alone would fall short of the totals above it by exactly the local runs.
-   */
+  /** The dated cost deltas behind the trend — already windowed by the caller, and every source of them (`Store.listCostDeltasSince`). The agents' alone would fall short by exactly the local runs. */
   costDeltas: readonly CostDelta[];
   /** `pr_merged` rows inside the window. Only the count is read. */
   mergeEvents: readonly WorldEvent[];
@@ -343,31 +214,19 @@ interface SpendInsightsInput {
 }
 
 /**
- * Which phase an origin's money belongs to.
- *
- * Origins only, which is why `local` is not among the answers: a local run has no
- * task and no dispatch origin, and the goal ref it does carry is the one shape that
- * would classify as `build`. Its phase is decided where its money is read, and
- * asking this function would have it guessing about a ref that means something else.
- *
- * The issue subtree defers to `issueOriginRole`, so the one place an origin suffix
- * is classified stays the one place. Its `unrecognised` answer is carried through
- * as `other` rather than guessed at, for the reason that function names an answer
- * at all: a new suffix should show up in the panel as a row an operator can ask
- * about, not be quietly folded into whichever neighbour looked closest.
+ * Which phase an origin's money belongs to. Origins only — `local` is not among the answers,
+ * since a local run's phase is decided where its money is read. The issue subtree defers to
+ * `issueOriginRole`, and its `unrecognised` is carried through as `other` rather than folded
+ * into a neighbour, so a new suffix shows up as a row an operator can ask about.
  */
 export function phaseOf(originRef: string | null): SpendPhase {
   if (originRef === null) return 'other';
-  // `landing` is the remainder of `pr:*` rather than a list of its own suffixes,
-  // and deliberately: `merge`, `comments`, `comment:<id>`, `reply`, `mergeable`
-  // and the bare `pr:<n>` all belong there, and a new one must not have to be
-  // remembered here to be counted at all. Only CI is named, because only CI is
-  // being lifted out.
+  // `landing` is the remainder of `pr:*` rather than a list of suffixes, so a new one is
+  // counted without being remembered here. Only CI is named, because only CI is lifted out.
   if (originRef.startsWith('pr:')) return CI_CONCERN.test(originRef) ? 'ci' : 'landing';
   if (originRef.startsWith('job:')) return 'job';
-  // A repair dispatch is not any goal's work and must not file under one: it is
-  // what the fleet spent getting something out of its own way, which is the one
-  // figure that says whether the second ownership door is paying for itself.
+  // A repair dispatch is not any goal's work: it is what the fleet spent getting something
+  // out of its own way.
   if (obstacleOriginId(originRef) !== null) return 'obstacle';
   const issueNumber = /^issue:(\d+)(?::|$)/.exec(originRef)?.[1];
   if (issueNumber === undefined) return 'other';
@@ -383,19 +242,12 @@ export function phaseOf(originRef: string | null): SpendPhase {
   }
 }
 
-/**
- * A phase in the operator's words. Exported so a second panel naming these phases
- * names them identically: `landing` means `pr:*` here, in the legend, and anywhere
- * else the vocabulary is borrowed.
- */
+/** A phase in the operator's words. Exported so a second panel names them identically. */
 export function phaseLabel(phase: SpendPhase): string {
   return PHASE_COPY[phase].label;
 }
 
-/**
- * A zeroed phase record — the shape every `byPhase` starts from, so every key is
- * present. Exported alongside {@link PHASE_ORDER} and for its reason.
- */
+/** A zeroed phase record — the shape every `byPhase` starts from, so every key is present. */
 export function zeroPhases(): Record<SpendPhase, number> {
   return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, local: 0, obstacle: 0, job: 0, other: 0 };
 }
@@ -416,15 +268,9 @@ interface SpendGoalRollup {
 }
 
 /**
- * The per-goal rows, costliest first — `rollUpIssueSpend`'s totals with the phase
- * split and the last activity folded on.
- *
- * Its own function because two panels want it and only one of them wants the rest
- * of this module. `spendTrend` cohorts these rows by the week each goal closed
- * and needs nothing else here; making it call {@link buildSpendInsights} would
- * have it computing a run ranking and a check table to throw both away, and
- * having it roll up goals itself would be the second opinion about which goal a
- * pull request belongs to that this module opens by refusing to have.
+ * The per-goal rows, costliest first — `rollUpIssueSpend`'s totals with the phase split and
+ * the last activity folded on. Its own function because `spendTrend` wants these rows and
+ * nothing else, and rolling goals up itself would be the second attribution this module refuses to have.
  */
 export function buildSpendGoals(input: {
   agents: readonly Agent[];
@@ -433,18 +279,7 @@ export function buildSpendGoals(input: {
   tasks: readonly TaskSummary[];
   nodes: readonly WorkNode[];
   issues: readonly Issue[];
-  /**
-   * The run records — the harness's own memory of every goal it has worked, whose
-   * titles were captured while the issue was live and are never rewritten.
-   *
-   * Second to the world and not instead of it: a live issue's title is the current
-   * one, and a run's is the one it had when the tracker last returned it. But the
-   * world baseline is the tracker's *open* set, so a goal that was closed, retired
-   * or dismissed drops out of it — while the money the fleet spent under it stays
-   * on this table forever. Naming those rows off the world alone left every one of
-   * them drawn as its number and an apology, which is the failure this exists to
-   * end: the harness does know what they were.
-   */
+  /** The run records — titles captured while each issue was live. Second to the world: the world baseline is the tracker's open set, so a closed goal drops out of it while its spend stays on the table forever. */
   runs: readonly IssueRun[];
 }): SpendGoalRollup {
   const { agents, tasks, issues } = input;
@@ -459,8 +294,8 @@ export function buildSpendGoals(input: {
   const goalPhases = new Map<number, Record<SpendPhase, number>>();
   const goalLastAt = new Map<number, string>();
   for (const agent of agents) {
-    // The roll-up's own silence about a run that reported nothing, kept here so
-    // the phase split is a partition of exactly the money the totals are over.
+    // The roll-up's own silence about an unmeasured run, kept so the phase split partitions
+    // exactly the money the totals are over.
     if (unmeasured(agent)) continue;
     const issueNumber = rollup.attribution.get(agent.id) ?? null;
     if (issueNumber === null) continue;
@@ -478,8 +313,7 @@ export function buildSpendGoals(input: {
     const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
     byPhase.local = roundUsd(byPhase.local + (run.costUsd ?? 0));
     goalPhases.set(issueNumber, byPhase);
-    // A local run counts as activity on the goal for the same reason its money does:
-    // somebody was looking at this goal's work then.
+    // A local run counts as activity: somebody was looking at this goal's work then.
     const at = run.endedAt ?? run.startedAt;
     const seen = goalLastAt.get(issueNumber);
     if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
@@ -502,27 +336,19 @@ export function buildSpendGoals(input: {
 
 export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   const { tasks, nodes, issues, costDeltas, mergeEvents, window, now } = input;
-  // The window is applied **once, here**, and everything below folds the lists it
-  // produces. Applying it per fold instead would put the same filter in five
-  // places for the four other folds to get subtly different — and the way that
-  // shows up is a phase table whose costs do not add to the total beside it.
-  //
-  // Both spenders are cut, and by the same rule: a local run is a session that
-  // held the dev environment for as long as somebody was looking at it, so it
-  // belongs to the window it *finished* in exactly as an agent does.
+  // The window is applied once, here; everything below folds the lists it produces.
+  // Per-fold filtering drifts, and shows up as a phase table that does not add to its total.
+  // Both spenders are cut by the same rule: a run belongs to the window it finished in.
   const agents = input.agents.filter((agent) => runInWindow(window, agent));
   const localRuns = input.localRuns.filter((run) => runInWindow(window, run));
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
-  // The per-goal totals and the attribution behind them, computed once by the
-  // fold that owns the question — never a second walk of the graph. See above.
+  // Computed once by the fold that owns the question — never a second walk of the graph.
   const rollup = buildSpendGoals({ agents, localRuns, tasks, nodes, issues, runs: input.runs });
   const span = timelineSpan(
     window,
-    // The earliest *reported* instant, which for `all` is what the timeline spans.
-    // Taken off the deltas rather than off the runs because the deltas are what it
-    // buckets: a row with no usage on it would stretch the axis in front of a
-    // graph that has nothing to draw there.
+    // The earliest reported instant, off the deltas rather than the runs — a usage-less row
+    // would stretch the axis over nothing.
     costDeltas.reduce<number | null>((oldest, delta) => {
       const at = Date.parse(delta.at);
       return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
@@ -545,9 +371,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   let lostCostUsd = 0;
 
   for (const agent of agents) {
-    // The same silence `rollUpIssueSpend` keeps, and for the same reason: a run
-    // that reported nothing is unmeasured, not free. It is counted here — once,
-    // as a caveat — and appears in no figure.
+    // A run that reported nothing is unmeasured, not free: counted once as a caveat, and in
+    // no figure.
     if (unmeasured(agent)) {
       totals.unmeasuredRuns += 1;
       continue;
@@ -557,18 +382,15 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     const outputTokens = agent.outputTokens ?? 0;
     const originRef = originOfTask.get(agent.taskId) ?? null;
     const phase = phaseOf(originRef);
-    // `undefined` (an agent the roll-up never saw) cannot happen for a measured
-    // run — it walks the same list with the same test — but `null` and "absent"
-    // mean the same thing to a reader either way: this run reached no goal.
+    // `undefined` cannot happen for a measured run, and reads the same as `null` anyway:
+    // this run reached no goal.
     const issueNumber = rollup.attribution.get(agent.id) ?? null;
 
     totals.costUsd = roundUsd(totals.costUsd + cost);
     totals.inputTokens += inputTokens;
     totals.outputTokens += outputTokens;
-    // Both-or-neither, and the run's own input alongside them: the two columns
-    // are written in one breath by `recordAgentUsage`, so a run carrying one and
-    // not the other is a shape that cannot occur — testing both is what keeps a
-    // future half-write out of the denominator rather than silently at 0%.
+    // Both-or-neither, plus the run's own input: testing both keeps a future half-write out
+    // of the denominator rather than silently at 0%.
     if (agent.cacheReadTokens !== null && agent.cacheCreationTokens !== null) {
       totals.cacheReadTokens += agent.cacheReadTokens;
       totals.cacheCreationTokens += agent.cacheCreationTokens;
@@ -576,9 +398,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     }
     totals.turns += agent.numTurns ?? 0;
     totals.measuredRuns += 1;
-    // `failed` and `crashed` only. A killed run is a steer rather than a fault,
-    // and counting an operator's own change of mind as waste is the reading that
-    // makes every steered fleet look broken.
+    // `failed` and `crashed` only: a killed run is a steer, and counting an operator's change
+    // of mind as waste makes every steered fleet look broken.
     if (agent.status === 'failed' || agent.status === 'crashed') lostCostUsd = roundUsd(lostCostUsd + cost);
 
     const phaseTotal = phaseTotals.get(phase) ?? {
@@ -611,10 +432,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     });
   }
 
-  // The same three accumulators, a second source. Its own loop rather than a
-  // widened one: everything an agent's phase and attribution has to be *looked up*
-  // is already decided for a local run — the phase is `local` and the goal is its
-  // own origin — and a merged walk would carry both sets of lookups over both.
+  // The same accumulators, a second source. Its own loop because a local run's phase and
+  // goal are already decided, where an agent's have to be looked up.
   for (const run of localRuns) {
     if (unmeasured(run)) {
       totals.unmeasuredRuns += 1;
@@ -652,8 +471,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
       id: run.id,
       kind: 'local',
       originRef: run.originRef,
-      // The branch it was pointed at, which is the one thing about a local run that
-      // is not on its origin — two runs of one goal are told apart by nothing else.
+      // The branch it was pointed at: the only thing telling two runs of one goal apart.
       title: `Local run · ${run.ref}`,
       phase: 'local',
       issueNumber: rollup.localRunAttribution.get(run.id) ?? null,
@@ -684,12 +502,9 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
 }
 
 /**
- * The dated deltas, folded into rolling daily buckets ending now.
- *
- * An event older than the window is dropped rather than clamped into the first
- * bucket: the caller already asked the store for exactly this window, so anything
- * outside it is a clock skew rather than history, and a spike drawn on day one
- * that nothing spent there is worse than a missing point.
+ * The dated deltas, folded into rolling buckets ending now. An event outside the window is
+ * dropped rather than clamped into the first bucket: it is clock skew rather than history,
+ * and a spike nothing spent is worse than a missing point.
  */
 function bucketise(events: readonly CostDelta[], span: TimelineSpan): SpendTimeline {
   const buckets: SpendBucket[] = Array.from({ length: span.buckets }, (_, i) => ({

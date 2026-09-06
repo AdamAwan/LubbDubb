@@ -36,10 +36,8 @@ export function EscalationCard({
   proposal?: Proposal;
   /**
    * When the agent that raised this was last seen working *after* it parked, if it
-   * was. Parking is only a request — the `escalate` tool returns at once — so an
-   * agent that carried on leaves this question standing with nobody waiting on it.
-   * Shown as a chip rather than clearing the item: the harness can see that the
-   * agent moved on, not that the question stopped mattering.
+   * was — parking is only a request, so an agent may carry on and leave the question
+   * standing with nobody waiting. Shown as a chip rather than clearing the item.
    */
   resumedAt?: string | null;
   now?: number;
@@ -66,20 +64,16 @@ export function EscalationCard({
     acknowledged?: string[],
   ) => Promise<unknown> | unknown;
   /**
-   * A plan proposal's other two answers, and the ones the card had no way to say:
-   * the ticket is not really an issue (close it, with the note as its comment), or
-   * it needs more thought before anybody works it (hold it — the watch tag comes
-   * off and the plan waits where it is). Separate from {@link onDecide} because
-   * neither is a verdict on the plan: rejecting sends the goal back to a planner,
-   * which is the wrong answer to both.
+   * A plan proposal's other two answers: close the ticket (the note becomes its
+   * comment), or hold it (the watch tag comes off and the plan waits). Separate from
+   * {@link onDecide} because neither is a verdict on the plan — rejecting sends the
+   * goal back to a planner, which is the wrong answer to both.
    */
   onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
   /**
-   * A shortfall proposal's third arm: the assessment is wrong, and the note says
-   * why. Separate from {@link onDecide} because it is not a verdict on the act
-   * being proposed but on the one behind it — accepting spends an agent on work
-   * already done, rejecting leaves the assessment standing to be re-derived, and
-   * neither is "no, that finding is mistaken".
+   * A shortfall proposal's third arm: the assessment is wrong, and the note says why.
+   * Separate from {@link onDecide} because it is a verdict on the finding behind the
+   * act rather than on the act — neither accept nor reject can say it.
    */
   onOverrule?: (issueNumber: number, proposalId: string, text: string) => Promise<unknown> | unknown;
   /** Allow or deny a permission request an agent is blocked on (issue #130). */
@@ -465,17 +459,9 @@ export function EscalationCard({
 
 /**
  * A prompt's headline and its body: everything up to the first blank line, and
- * everything after it.
- *
- * Split here rather than at the authoring end because the two halves are the same
- * author's words. A rule writing "here is what happened" and then "here is what
- * accepting does" is writing one message with two paragraphs, and asking every
- * rule — and every operator override — to file the second half somewhere else
- * would be a second contract to get wrong. What *does* move to a field of its own
- * is text the harness is quoting from an agent, which is `context.detail`.
- *
- * A prompt with no blank line has no body, which is the common case and the one
- * every already-short escalation is in.
+ * everything after it. Split here rather than at the authoring end because the two
+ * halves are one author's words; text the harness quotes from an agent has a field of
+ * its own (`context.detail`). A prompt with no blank line has no body.
  */
 function splitPrompt(prompt: string): [headline: string, body: string] {
   const at = prompt.search(/\r?\n\s*\r?\n/);
@@ -483,19 +469,12 @@ function splitPrompt(prompt: string): [headline: string, body: string] {
 }
 
 /**
- * A body's own prose and the caution the harness appended to it.
+ * A body's own prose and the caution the harness appended to it. `caveatNotice`
+ * (`src/plans/planCaveats.ts`) writes its bullets under a `Before you decide:` line,
+ * appended rather than interpolated, so no operator override can lose the marker.
  *
- * `caveatNotice` (`src/plans/planCaveats.ts`) writes its bullets under a
- * `Before you decide:` line, appended rather than interpolated — so the marker is
- * the harness's own and no operator override can lose it. Split here because the
- * two halves are read differently: the prose restates what the plan sheet draws,
- * and the caution is the only part of the ask that is about *this* decision — an
- * unclaimed pull request on the branch, parts already blocked. A card that drops
- * the first must keep the second — except where the same caveats are drawn as
- * boxes to tick, and then the paragraph is the checklist restated and the card
- * drops it (see the `caveats` reading below).
- *
- * No marker means no caution, which is the common case.
+ * A card that drops the prose must keep the caution — except where the same caveats
+ * are drawn as boxes to tick. No marker means no caution.
  */
 function splitCaution(body: string): [prose: string, caution: string] {
   const at = body.search(/(^|\n)Before you decide:/);
@@ -503,18 +482,10 @@ function splitCaution(body: string): [prose: string, caution: string] {
 }
 
 /**
- * Who wrote the block under the headline.
- *
- * **Declared by whoever quoted the text, never derived here.** Deriving it from
- * `agentId` is the obvious move and it is wrong: the harness quotes an assessor
- * on a shortfall and a planner on a decomposition, and both arrive with no agent
- * behind them, so a rule reading "no agent, therefore an assessor" mislabels
- * every plan approval — which is exactly what it did, until the golden markup
- * caught it. Same discipline as a shortfall's `cause`: the party that knows says
- * so, and nothing downstream has a second opinion.
- *
- * The fallback names only what is actually known — that an agent raised this, or
- * nothing at all — rather than guessing at a role.
+ * Who wrote the block under the headline. **Declared by whoever quoted the text,
+ * never derived here** — deriving it from `agentId` mislabels every plan approval,
+ * since an assessor and a planner both arrive with no agent behind them. The fallback
+ * names only what is known rather than guessing at a role.
  */
 function detailLabel(context: Record<string, unknown>, agentId: string | null | undefined): string {
   const declared = context.detailFrom;
@@ -524,11 +495,9 @@ function detailLabel(context: Record<string, unknown>, agentId: string | null | 
 
 /**
  * Why the button says something different on the two kinds that carry a verdict.
- * Dismissing has to mean one thing everywhere — nothing goes out, nobody is left
- * blocked — and for those two that costs a real decision: a permission request has
- * an agent stopped inside a tool call and a proposal has a rule held off a PR, so
- * simply dropping the row would strand one and wedge the other. Each is routed to
- * its own "no" instead, and the label says so before it is pressed.
+ * Dismissing must mean one thing everywhere — nothing goes out, nobody is left
+ * blocked — so a permission request and a proposal are each routed to their own "no"
+ * rather than dropped, and the label says so before it is pressed.
  */
 const DISMISS_HINT: Record<string, string> = {
   question: 'Clear this from "Needs you" without sending the agent anything',
@@ -586,11 +555,9 @@ function quickAnswers(prompt: string): string[] {
 
 /**
  * The options an agent offered through the `escalate` tool, or null if it offered
- * none. Null rather than `[]` so the caller can tell "the agent said nothing"
- * (fall back to the heuristic) from "the agent offered no choices".
- *
- * Defensive about the shape: `context` is an open bag reaching us from an agent's
- * tool arguments, so anything non-string is dropped rather than rendered.
+ * none — null rather than `[]` so the caller can tell "the agent said nothing" from
+ * "the agent offered no choices". `context` is an open bag from an agent's tool
+ * arguments, so anything non-string is dropped rather than rendered.
  */
 function agentOptions(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;

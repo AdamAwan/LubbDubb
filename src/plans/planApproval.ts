@@ -5,32 +5,21 @@ import { REFUSED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
 import { followupPartInput, followupSlot } from '../delivery/shortfall.js';
 
 /**
- * What a human's verdict *does* to the plan — three functions, one shape: read the
- * plan, refuse unless it is still the thing that was proposed, write, say what
- * happened.
- *
- * The first two are the approval gate (issue #109 phase 3) and compare-and-set
- * against `awaiting_approval` for the same reason `Store.decideProposal` is one
- * against `pending`: a verdict that arrives after the plan moved on — an operator
- * who hit Replan with the card still open — must not release or refuse a
- * decomposition nobody was shown. The third is a failed assessment's arm (issue
- * #159) and compare-and-sets against the states in which its arm still means
- * something. `better-sqlite3` writes are synchronous, so every read-then-write
- * here is race-free by construction.
+ * What a human's verdict *does* to the plan: read the plan, refuse unless it is still the
+ * thing that was proposed, write, say what happened.
  */
 
 /**
- * The plan as the operator is asked to authorize it — every part, in dispatch
- * order, with what it stacks on. One part or eight: the list is the list, and a
- * plan with a single entry is not described in some other idiom.
+ * The plan as the operator is asked to authorize it — every part, in dispatch order, with
+ * what it stacks on.
  */
 export function describeProposedParts(parts: PlanPart[]): string {
   const live = liveParts(parts);
   if (live.length === 0) return 'The plan declares no parts.';
   return live
     .map((p) => {
-      // Every prerequisite: the operator is weighing the shape, and a rejoin whose
-      // second dependency went unmentioned would read as a plain chain.
+      // Every prerequisite: a rejoin whose second dependency went unmentioned
+      // would read as a plain chain.
       const stacks = p.dependsOn.length === 0 ? '' : `, stacks on ${p.dependsOn.map((d) => `"${d}"`).join(' + ')}`;
       return `- "${p.slug}": ${p.title}${stacks} — ${p.scope}`;
     })
@@ -38,25 +27,8 @@ export function describeProposedParts(parts: PlanPart[]): string {
 }
 
 /**
- * What the operator actually reads on the card: what the planner found, and what
- * it is going to do about it.
- *
- * The ask used to carry {@link describeProposedParts} as its body — the split, in
- * dispatch order, with every prerequisite — and that is the wrong half of the
- * plan to put in front of someone. A decomposition is *how* the work is cut up;
- * the question being answered here is whether the work is right at all, and the
- * split is one click away in the plan panel, drawn, where it reads far better
- * than a flat list ever did. So the card leads with `diagnosis` and `approach`
- * and the shape stays behind **Read the full plan**.
- *
- * Quoted rather than templated, for `propose_shortfall`'s reason: this is the
- * planner's prose, up to a couple of thousand characters of it, and the cockpit
- * labels a block whose edges it can see.
- *
- * Falls back to `reason` — a plan written before those fields existed, or a
- * planner that filled in neither, would otherwise leave the card with a headline
- * and nothing else. Null when it said nothing at all, which the caller carries
- * as an absent block rather than an empty one.
+ * What the operator reads on the card: `diagnosis` and `approach` — whether the work is
+ * right at all — with the split left behind "Read the full plan".
  */
 export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | 'reason'>): string | null {
   const blocks: string[] = [];
@@ -72,25 +44,9 @@ export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | '
 }
 
 /**
- * What approving and rejecting *this* verdict do — appended to the rendered ask,
- * never interpolated into it.
- *
- * Appending is `caveatNotice`'s rule and for its reason: `plan-approval` is
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so a `{settlement}` token would be silently dropped by exactly the
- * deployments that customised most. Appending has no fallback to get wrong.
- *
- * **Four answers, and two of them are not about the plan.** Approve and Reject
- * both agree the work is worth doing — a rejection asks a planner for a different
- * plan — so the note names the back-outs too (`src/plans/planBackOut.ts`), which
- * are what an operator reaches for when the *ticket* is the problem. Without them
- * stated, the only "no" on the card was the one that re-plans a goal nobody wants.
- *
- * **One paragraph, whatever the plan's size.** This used to be two, because a
- * one-pull-request plan settled somewhere else entirely — approving it handed the
- * issue to ordinary pickup, and refusing it had nowhere to fall back to. Both arms
- * now settle identically, so a reader can no longer be handed the paragraph for
- * the other one.
+ * What approving and rejecting this verdict do — **appended** to the rendered ask, never
+ * interpolated, since an operator override that never learned a placeholder would drop it
+ * silently.
  */
 export function planApprovalNote(): string {
   return (
@@ -107,25 +63,15 @@ interface PlanSettlement {
   detail: string;
 }
 
-/**
- * Approve: the plan becomes work. One status write and rule `plan-part` starts on
- * the next pulse — which is the entire effect, because `awaiting_approval` was
- * never anything but the released status with the gate closed.
- *
- * One rule owns every released plan, so there is nothing here to decide: a
- * one-part plan is released by the same write and scheduled by the same stage as
- * any other.
- */
+/** Approve: the plan becomes work. */
 export function releasePlan(store: Store, planId: string, originRef: string): PlanSettlement {
   const plan = store.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing released` };
   const parts = liveParts(store.listPlanParts(planId));
-  // Every plan has at least one part, so a plan with none is a shape the funnel is
-  // built not to have: released, it schedules nothing, never rolls up to `complete`
-  // and is not wedged, so the goal sits `active` and idle with nothing saying why.
-  // Refusing here turns any future way of reaching that shape into a visible no.
+  // A plan with no live parts, if released, schedules nothing and never rolls up,
+  // leaving the goal `active` and idle with nothing saying why. Refuse visibly.
   if (parts.length === 0)
     return { ok: false, detail: `plan ${planId} for ${originRef} has no live parts — nothing to release` };
   store.setPlanStatus(planId, 'active');
@@ -135,39 +81,7 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
   };
 }
 
-/**
- * Refuse: nothing is scheduled from the plan — **and the issue is left a route**,
- * which is the half a plain "no" would get wrong.
- *
- * Rejection is durable by design (phase 1), and once the funnel is on a plan is
- * the only thing that schedules anything for an issue: rule `work-item-in-review`
- * parks the work item in the review state for the life of the plan, and
- * `resolvePlanRoute` fails a spent replan back to `parts` rather than open to
- * unplanned pickup. A "no" that only stopped the parts would therefore park the
- * issue for good — the exact failure the planner's fail-open exists to prevent.
- *
- * So a refusal *reassigns* the plan rather than stopping it, and it does so the
- * same way whatever the plan's size: **back to a planner** (`planning`) with the
- * operator's reason appended, which is the one thing that can produce a different
- * plan. `planning` is exactly the status rule `issue-plan` dispatches a replan
- * from, and the same one status write `POST /api/plans/:id/replan` makes, so the
- * refusal reuses a path rather than inventing one. It cannot loop: the planner's
- * attempt cap ends it, and a spent cap falls the issue open and gets it worked.
- *
- * Refusing used to fork on the part count, and the fork is what this replaces: a
- * plan with parts collapsed to the no-parts "single" shape and was picked up
- * whole, while a plan that was *already* that shape had nowhere to fall and went
- * back to a planner. So "reject" meant two unrelated things depending on a number
- * the button did not mention. Only one of them was ever the operator's intent —
- * this plan is wrong, write a better one — and it is the one that survives.
- *
- * **The one thing still keyed on the parts is work that has actually left the
- * harness**, which is not a question about shape: parts nothing has been started
- * for are retired, so the graph says what happened instead of leaving `ready` rows
- * nothing schedules, and parts with a branch or a PR are left exactly as they are
- * because they are not the refusal's to withdraw. A refusal that finds work in
- * flight is a *replan* being refused, and the work already running carries on.
- */
+/** Refuse: nothing is scheduled from the plan — **and the issue is left a route**. */
 export function refusePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
   const plan = store.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
@@ -177,9 +91,8 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
   const parts = store.listPlanParts(planId);
   const retire = partsToRetire(parts, []);
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
-  // Retiring the part and withdrawing its ask are one act, wherever a part is
-  // retired — a refusal that did only the first left the operator's bench holding
-  // a step no plan schedules.
+  // Retiring a part and withdrawing its ask are one act: doing only the first
+  // leaves the operator's bench holding a step no plan schedules.
   withdrawPartAsks(store, retire, REFUSED_PART_RESOLUTION);
   const surviving = survivorsOf(parts, retire);
   store.setPlanStatus(planId, 'planning', refusedPlanReason(plan.reason, note ?? null));
@@ -193,30 +106,10 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
 }
 
 /**
- * Decline: the plan stops, and **nothing takes its place**. The third settlement,
- * and the one the other two had no way to express.
- *
- * {@link releasePlan} and {@link refusePlan} are both answers to "is this the right
- * plan" — yes, or no-write-another-one. An operator reading a plan and concluding
- * that the *issue* is not real, or is not worth the work, was answering a different
- * question and had only the second button to say it with: a refusal sends it
- * straight back to a planner, which re-derives a plan for a goal nobody wants and
- * puts the same card back in front of them until the attempt cap runs out. So the
- * back-out (`src/plans/planBackOut.ts`) settles the plan here instead.
- *
- * `abandoned` rather than `complete`: rule `plan-part` schedules nothing from
- * either, and the work graph reads both as terminal, but only one of them is
- * honest about a plan whose parts were never done. The reason carries the
- * operator's words, appended for {@link refusePlan}'s reason — a plan somebody
- * later reopens should say why it stopped, next to what it was going to do.
- *
- * Compare-and-set against `awaiting_approval`, exactly as the other two: a verdict
- * that arrives after the plan moved on — an operator who hit Replan with the card
- * still open — must not abandon a decomposition nobody was shown. Unstarted parts
- * are retired and their asks withdrawn through the same `withdrawPartAsks` a
- * refusal reaches, and parts with a branch or a pull request are left exactly as
- * they are: work that has left the harness is not this verdict's to withdraw, and
- * the operator still has **End the run** for that.
+ * Decline: the plan stops and **nothing takes its place** — the answer for an operator who
+ * concludes the *issue* is not worth the work, where a refusal would re-derive a plan for a
+ * goal nobody wants. `abandoned` rather than `complete`: both are terminal, but only one is
+ * honest about a plan whose parts were never done.
  */
 export function declinePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
   const plan = store.getPlan(planId);
@@ -240,38 +133,14 @@ export function declinePlan(store: Store, planId: string, originRef: string, not
 }
 
 /**
- * Perform the arm an accepted shortfall names (issue #159) — the "No → re-plan"
- * end of the loop, finally wired to the check at the other end.
- *
- * **Arm A, `plan` — send the decomposition back.** One status write, and the
- * entire effect: rule `issue-plan` already routes a `planning` plan to a planner with the
- * `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
- * narrows the cooldown to decisions since `plan.updatedAt` so the original
- * planner's attempt does not throttle the replan. This is {@link releasePlan}'s
- * pattern — write one status, and a rule that was already there starts working.
- * The assessor's summary rides to the planner through `Plan.reason`, appended
- * rather than replacing it: the planner's own reasoning is what the replan is
- * amending, so overwriting it would take away the thing being corrected.
- *
- * **Arm B, `part` — append, never resurrect.** The tempting version returns the
- * named part to `ready`, and `partHasWork` is the existing statement of why it is
- * wrong: a merged part's PR is on the default branch and its branch is spent, so
- * re-dispatching puts an agent on a branch whose PR is closed. So one new part is
- * appended for the scope that fell short and the named part is left exactly as it
- * is — which meets "cannot retire parts that have work started" by construction
- * rather than by a check. Rule `plan-part` schedules it with no new dispatch path, and the
- * plan moves `complete` → `active` through the roll-up it already computes.
- *
- * "By construction" holds only while the slug it appends onto is free or unstarted,
- * which is why the slug is resolved against the plan's parts (`followupSlot`): a
- * second shortfall whose follow-up has since merged — or a shortfall naming a
- * `-followup` part itself — would otherwise land *on* a terminal row, schedule
- * nothing, and rewrite the declaration of work that was already delivered.
- *
- * Routing arm B to a replan instead was considered and refused: that is precisely
- * the issue's stated failure mode — re-decomposing a plan whose shape was fine —
- * and it would give the surviving parts new slugs unless the planner happened to
- * preserve them.
+ * Perform the arm an accepted shortfall names — the "No → re-plan" end of the loop. **Arm
+ * A, `plan`** — one status write to `planning`; rule `issue-plan` already routes it to a
+ * replan. The assessor's summary is appended to `Plan.reason`, never replacing it, since
+ * the planner's reasoning is what is being amended. **Arm B, `part` — append, never
+ * resurrect.** Returning the named part to `ready` would put an agent on a spent branch
+ * whose PR is closed, so a new part is appended and the named one left untouched. The slug
+ * is resolved against the plan's parts (`followupSlot`) so a follow-up that has since
+ * merged is not written over — that would schedule nothing and rewrite delivered work.
  */
 export function actOnShortfall(
   store: Store,
@@ -279,10 +148,8 @@ export function actOnShortfall(
 ): PlanSettlement {
   const plan = store.getPlan(act.planId);
   if (!plan) return { ok: false, detail: `plan ${act.planId} for ${act.originRef} no longer exists` };
-  // `planning` means a planner already has it — accepting again would be a second
-  // replan of a plan nobody has re-derived yet. `awaiting_approval` means the
-  // decomposition the assessment judged has since been replaced by one no human
-  // has released, so acting on the old verdict would settle a plan nobody saw.
+  // `planning`: a planner already has it. `awaiting_approval`: the decomposition
+  // the assessment judged has been replaced by one no human released.
   if (plan.status === 'planning' || plan.status === 'awaiting_approval')
     return { ok: false, detail: `plan ${act.planId} is "${plan.status}" — it has already moved on` };
 
@@ -295,21 +162,18 @@ export function actOnShortfall(
   const target = liveParts(parts).find((p) => p.slug === act.partSlug);
   if (!target)
     return { ok: false, detail: `"${act.partSlug}" is no longer a live part of the plan for ${act.originRef}` };
-  // Seq beyond every existing part, live or retired: rule `plan-part` orders by depth then
-  // seq, and a follow-up is the last thing the plan does.
+  // Seq beyond every existing part, live or retired: a follow-up is the last
+  // thing the plan does.
   const seq = Math.max(0, ...parts.map((p) => p.seq)) + 1;
-  // Where the follow-up lands is a question about the plan, not about the slug —
-  // see `followupSlot`. A `-followup` that has already merged would absorb the
+  // See `followupSlot`: a `-followup` that has already merged would absorb the
   // write, scheduling nothing and rewriting what that merged part was for.
   const slot = followupSlot(target, parts);
   const [written] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq, slot.slug)]);
   if (!written) return { ok: false, detail: `could not append a follow-up part to the plan for ${act.originRef}` };
-  // The plan may have rolled up to `complete` when the part that fell short
-  // merged. An unsettled part makes that false again, and the roll-up is the one
-  // place that reading lives — deriving it here would be a second opinion.
+  // The plan may have rolled up to `complete`; an unsettled part makes that false
+  // again, and the roll-up is the one place that reading lives.
   store.rollUpPlanStatus(act.planId);
-  // The `detail` is copied verbatim into the decision log, so it says which of the
-  // two happened rather than always claiming the append.
+  // Copied verbatim into the decision log, so it must say which of the two happened.
   const what = slot.refreshing
     ? `refreshed the declaration of the unstarted follow-up part "${written.slug}"`
     : `appended part "${written.slug}"`;
@@ -320,31 +184,17 @@ export function actOnShortfall(
 }
 
 /**
- * The planner's own reason, with what the assessment found appended.
- *
- * Appended rather than replaced because the replan is *amending* the planner's
- * reasoning, and a planner shown only the complaint has lost the decomposition it
- * is being asked to correct. Bounded so a long assessment cannot grow the row
- * without limit across repeated shortfalls.
+ * The planner's own reason, with what the assessment found appended — a planner shown only
+ * the complaint has lost the decomposition it must correct.
  */
 function appendShortfallReason(reason: string | null, summary: string): string {
   return appendPlanReason(reason, `An assessment of the delivered work found: ${summary}`);
 }
 
 /**
- * The reason a refused plan carries back to the planner: what it decided, plus
- * that a human declined it and why.
- *
- * The operator's note is the whole content of the refusal — without it the replan
- * is a re-run of the question that just produced the answer being refused, and the
- * planner has no reason to decide differently. Appended for
- * {@link appendShortfallReason}'s reason: the planner's own reasoning is what is
- * being corrected.
- *
- * It says nothing about how the work should be cut up. A refusal that told the
- * planner to "reconsider whether it should be split" would answer a question the
- * operator was not asked and may well not have meant — what they declined is this
- * plan, and the note is where they say why.
+ * The reason a refused plan carries back to the planner: what it decided, plus that a human
+ * declined it and why. Deliberately says nothing about how the work should be cut up — the
+ * operator declined this plan, and the note is where they say why.
  */
 function refusedPlanReason(reason: string | null, note: string | null): string {
   return appendPlanReason(
@@ -354,11 +204,8 @@ function refusedPlanReason(reason: string | null, note: string | null): string {
 }
 
 /**
- * The reason an abandoned plan keeps: what it decided, plus that a human stopped
- * it here and why. Appended rather than replaced for {@link refusedPlanReason}'s
- * reason — and with more riding on it, because nothing will read this to write a
- * better plan: it is the record of why work that was planned was not done, in
- * front of whoever reopens the goal.
+ * The reason an abandoned plan keeps: what it decided, plus that a human stopped it here
+ * and why — the record in front of whoever reopens the goal.
  */
 function declinedPlanReason(reason: string | null, note: string | null): string {
   return appendPlanReason(
@@ -367,7 +214,10 @@ function declinedPlanReason(reason: string | null, note: string | null): string 
   );
 }
 
-/** One plan reason with another appended, bounded so repeated verdicts cannot grow the row without limit. */
+/**
+ * One plan reason with another appended, bounded so repeated verdicts cannot grow the row
+ * without limit.
+ */
 function appendPlanReason(reason: string | null, note: string): string {
   const joined = reason ? `${reason}\n\n${note}` : note;
   return joined.length > MAX_PLAN_REASON ? `${joined.slice(0, MAX_PLAN_REASON - 1)}…` : joined;

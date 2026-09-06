@@ -1,14 +1,10 @@
 /**
- * The outbound seam — the mirror image of {@link Connector}.
- *
- * `Connector` reads the world; `ActionSink` *changes* it. Every side-effectful
+ * The outbound seam — the mirror image of {@link Connector}. Every side-effectful
  * action the harness may take autonomously goes through this interface, so a real
- * GitHub / Azure DevOps adapter drops in here exactly the way a real read
- * connector drops in behind `Connector`, without any other module changing.
+ * provider adapter drops in without any other module changing.
  *
- * v1 ships `FakeConnector` as the sink too: it "sends" by reflecting the effect
- * back into its own fake world (marking the answered comment handled), so nothing
- * actually leaves the machine while the seam stays real and testable.
+ * `FakeConnector` doubles as the sink, reflecting effects back into its own fake
+ * world so nothing leaves the machine while the seam stays real.
  */
 
 export interface PrReplyInput {
@@ -37,15 +33,9 @@ export interface PrMergeInput {
 }
 
 /**
- * A pull request the operator is closing **without merging it** — the plan part
- * restart's "this PR was built to a declaration that no longer stands"
- * (`src/plans/partRestart.ts`).
- *
- * The number alone, for {@link IssueCloseInput}'s reason turned the other way up:
- * a pull request has no close *reason* vocabulary on either provider — GitHub
- * closes, Azure abandons — so there is nothing to state, and the account of why
- * belongs in prose the harness posts as a comment or in the audit line rather than
- * smuggled into a state change neither provider can carry it on.
+ * A pull request the operator is closing without merging it — the plan part restart
+ * (`src/plans/partRestart.ts`). The number alone: neither provider has a
+ * close-reason vocabulary for a PR, so the account of why belongs in a comment.
  */
 export interface PrCloseInput {
   prNumber: number;
@@ -114,14 +104,9 @@ export interface WorkItemLinkInput {
 }
 
 /**
- * Where a tracker item sits on the backlog — the container it rolls up to, and
- * the node that puts it on a team's board (`src/intake/placement.ts`).
- *
- * Two inputs rather than one placement object, because they are two writes on
- * every provider that has them (Azure hangs a hierarchy relation for one and
- * patches a field for the other) and the operator settles them one at a time. A
- * combined input would have to model "set this, leave that alone", which is the
- * `null`-means-two-things shape this codebase keeps out of its wire types.
+ * Where a tracker item sits on the backlog — the container it rolls up to, and the
+ * node that puts it on a team's board (`src/intake/placement.ts`). Two inputs
+ * rather than one, since they are two provider writes settled one at a time.
  */
 export interface WorkItemParentInput {
   /** The item being re-parented. */
@@ -146,19 +131,10 @@ export interface IssueLabelInput {
 }
 
 /**
- * A tracker item the harness is creating — the outbound half of a filing.
- *
- * Everything a create needs is here, and that is the point: the four filing arms
- * used to spell this out as a `gh`/`az` command string for a model to run, so a
- * label, a type or a relation the harness knew about was only ever as reliable as
- * the model's memory of the sentence naming it (issue #394).
- *
- * `type` and `relatedTo` are **provider-native, not provider-specific**: each
- * adapter expresses them in its own vocabulary or ignores them. GitHub has no work
- * item type and drops it; it draws a relation as a `#<n>` cross-reference in the
- * body, which is the only edge it has. Azure DevOps creates *as* a type and hangs a
- * `related` link off the new item. A caller states the intent once and never learns
- * which tracker it landed in.
+ * A tracker item the harness is creating — the outbound half of a filing. Everything
+ * a create needs is an argument here, never a sentence in a prompt. `type` and
+ * `relatedTo` are provider-native, not provider-specific: each adapter expresses
+ * them in its own vocabulary or ignores them.
  */
 export interface IssueCreateInput {
   title: string;
@@ -174,14 +150,9 @@ export interface IssueCreateInput {
 }
 
 /**
- * A tracker item the harness is closing without doing the work — the operator's
- * "this is not really an issue" (the plan back-out).
- *
- * `reason` is the provider's own vocabulary for *why* it closed, not prose: GitHub
- * carries `not_planned` alongside `completed`, and the two read very differently on
- * a timeline. It is deliberately the only field beyond the number, because the
- * operator's words are a **comment** — a separate write, and one every provider has
- * — rather than something smuggled into a state change only one of them can hold.
+ * A tracker item the harness is closing without doing the work — the plan
+ * back-out's "this is not really an issue". `reason` is the provider's own
+ * vocabulary, not prose, and is deliberately the only field beyond the number.
  */
 export interface IssueCloseInput {
   /** The issue / work item to close. */
@@ -203,19 +174,9 @@ export interface IssueCommentInput {
 }
 
 /**
- * Where a filing would land and who it would be filed by — the answer to "can I
- * file, and where, and as whom", asked live rather than read off config
- * (issue #413).
- *
- * Config already says which tracker is *selected*; what it cannot say is whether
- * the credential behind it still works, and that is the half worth asking before
- * an operator types a report into a box. So this is resolved by a real provider
- * call and **throws** when the provider will not answer — a dead token is the
- * outcome this exists to catch, not an inconvenience to hide.
- *
- * `identity` is null for a provider with no notion of who is authenticated (the
- * fake), never an invented name: "filing as nobody in particular" is a true thing
- * to show an operator and a made-up login is not.
+ * Where a filing would land and who it would be filed by, asked live rather than
+ * read off config — config cannot say whether the credential still works. Resolved
+ * by a real provider call and throws when the provider will not answer.
  */
 export interface FilingTarget {
   /** The destination in the provider's own vocabulary — `octo/demo`, `contoso/Web`. */
@@ -229,34 +190,18 @@ export interface SendResult {
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
   ref?: string;
   /**
-   * The provider's **own id** for a comment this call created, in the same
-   * vocabulary the read side puts on `PrThreadMessage.id` — so a reply the
-   * harness sent can be recognised in the thread it lands in.
-   *
-   * Separate from {@link ref}, which is a URL for a person to click in the audit
-   * log and matches nothing on a read. One field could not be both: GitHub's
-   * `html_url` and its comment id are different strings, and attribution that
-   * compared the wrong one would quietly never match — which reads exactly like
-   * the reply having never been sent.
-   *
-   * Absent when the provider will not name what it created. That is a real
-   * possibility rather than a theoretical one (Azure's reply POST is fire and
-   * forget on older API versions), and the harness must not fall back to the
-   * author when it happens: the thread stays unanswered and the miss is recorded.
-   * → `docs/spec/07-pull-requests.md#review-threads`
+   * The provider's own id for a comment this call created, in the vocabulary the
+   * read side puts on `PrThreadMessage.id`. Separate from {@link ref}, a clickable
+   * URL that matches nothing on a read. Absent when the provider will not name what
+   * it created; the harness must not fall back to the author then — the thread
+   * stays unanswered and the miss is recorded. → `docs/spec/07-pull-requests.md#review-threads`
    */
   commentRef?: string;
   /**
-   * The provider's **own id for the thread** this send landed in, in the
-   * vocabulary the read side puts on `PrReviewThread.id` — so a thread the
-   * harness opened can be recognised when somebody resolves it.
-   *
-   * Separate from {@link commentRef}, which names the *comment*: on Azure those
-   * are two different numbers, and a resolution matched against the wrong one
-   * would quietly never match — which reads exactly like a thread nobody closed.
-   * Absent where the provider will not name the thread, and on a provider whose
-   * pull-request comments are not threads at all (GitHub's are not), which is what
-   * leaves the review's publication unrecorded rather than guessed at.
+   * The provider's own id for the thread this send landed in, in the vocabulary the
+   * read side puts on `PrReviewThread.id`. Separate from {@link commentRef}: on
+   * Azure those are different numbers. Absent where the provider will not name the
+   * thread, or has no threads at all (GitHub).
    */
   threadRef?: string;
 }
@@ -264,83 +209,39 @@ export interface SendResult {
 export interface ActionSink {
   /** Post a reply on a pull request. Throws if the send fails. */
   postPrReply(input: PrReplyInput): Promise<SendResult>;
-  /**
-   * Whether any configured integration can resolve a review thread at all.
-   *
-   * Asked rather than inferred, for {@link canCloseIssue}'s reason: an agent that
-   * says it dealt with a thread is told which happened, and a harness that could
-   * not resolve it must say so rather than let the agent believe the thread is
-   * shut when it is still open in front of the reviewer.
-   */
+  /** Whether any configured integration can resolve a review thread at all — an agent must be told which happened, never left believing a thread is shut when it is still open. */
   canResolvePrThread(): boolean;
-  /**
-   * Mark a review thread resolved — the verdict a reviewer would otherwise have to
-   * click themselves, now that the reply goes out through the harness rather than
-   * from the agent's own shell.
-   *
-   * Idempotent: a thread already resolved is a success. `ok: false` is "the
-   * provider has no such thread" — a root comment id that matches nothing, which
-   * is a stale reading rather than a fault — and throws when the provider has the
-   * operation and it failed.
-   */
+  /** Mark a review thread resolved. Idempotent: already-resolved is a success. `ok: false` means the provider has no such thread (a stale reading, not a fault); throws when the operation failed. */
   resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
   /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
   mergePr(input: PrMergeInput): Promise<SendResult>;
   /**
-   * Whether any configured integration can close a pull request at all.
-   *
-   * Asked rather than inferred, for {@link canCloseIssue}'s reason exactly: the
-   * only caller **offers** the operation — the plan sheet's "restart this part",
-   * which closes the superseded pull request before it hands the part back to the
-   * fleet — and a surface that promised it where nothing implements it would take
-   * the part back to `ready` while the reconciler reads the still-open PR and puts
-   * it straight back to `in_review`. Where this is false the restart is refused
-   * whole rather than done in halves.
+   * Whether any configured integration can close a pull request at all. The plan
+   * sheet's "restart this part" offers the operation; where nothing implements it
+   * the restart is refused whole, since taking the part to `ready` while the
+   * still-open PR remains would put it straight back to `in_review`.
    */
   canClosePr(): boolean;
   /**
-   * Close a pull request without merging it — the operator's "this was built to a
-   * plan that has since been amended".
-   *
-   * Idempotent: closing a pull request that is already closed is a success, which
-   * is what makes a restart safe to press twice. Throws if it fails, including
-   * where nothing implements it, which is why {@link canClosePr} exists. Never
-   * called by a rule: a reviewable pull request is only ever closed because a
-   * person said so. → `docs/spec/08-planning.md#restarting-a-part`
+   * Close a pull request without merging it. Idempotent, so a restart is safe to
+   * press twice; throws if it fails, including where nothing implements it (hence
+   * {@link canClosePr}). Never called by a rule — only because a person said so.
+   * → `docs/spec/08-planning.md#restarting-a-part`
    */
   closePr(input: PrCloseInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
-  /**
-   * Whether any configured integration can close a tracker item at all.
-   *
-   * Asked rather than inferred, for {@link canSetWorkItemState}'s reason and with
-   * the same caller in mind: the plan back-out **offers** "close the ticket", and a
-   * surface that promised it where nothing implements it would leave the operator
-   * believing the item is shut when it is still on the board. Where this is false
-   * the back-out still comments, concludes and un-watches — the tracker transition
-   * is simply left as the human act it has always been on that provider.
-   */
+  /** Whether any configured integration can close a tracker item at all. Where false, the plan back-out still comments, concludes and un-watches, leaving the transition as a human act. */
   canCloseIssue(): boolean;
   /**
    * Close a tracker item — the plan back-out's "this is not really an issue".
-   * Idempotent: closing an item that is already closed is a success. Throws if it
-   * fails, including where nothing implements it, which is why
-   * {@link canCloseIssue} exists.
+   * Idempotent: closing an already-closed item is a success. Throws if it fails,
+   * including where nothing implements it, which is why {@link canCloseIssue} exists.
    */
   closeIssue(input: IssueCloseInput): Promise<SendResult>;
-  /**
-   * Whether any configured integration can write a work item's state at all.
-   *
-   * Asked rather than inferred, because {@link setWorkItemState} *throws* when
-   * nothing implements it — so a caller that wants to **offer** the operation rather
-   * than attempt it has no other way to find out. The cockpit's board is that
-   * caller: it draws no drag at all where this is false, instead of letting every
-   * drop fail separately and teaching nothing each time. GitHub issues carry no
-   * such state and answer false.
-   */
+  /** Whether any configured integration can write a work item's state at all. {@link setWorkItemState} throws when nothing implements it; the cockpit's board draws no drag where this is false. GitHub issues answer false. */
   canSetWorkItemState(): boolean;
   /**
    * Move a work item to a provider-native state (e.g. Azure "In Review" once a PR
@@ -348,24 +249,9 @@ export interface ActionSink {
    * it fails. Only providers with a rich state model implement it.
    */
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
-  /**
-   * Whether any configured integration can place a work item at all — set its
-   * parent and its area path.
-   *
-   * Asked rather than inferred for {@link canSetWorkItemState}'s reason, and with
-   * the same caller in mind: the cockpit **offers** the placement question, and a
-   * surface that drew the buttons where nothing implements them would let every
-   * click fail separately and teach nothing each time. GitHub issues have neither
-   * concept and answer false, which is what makes the whole feature absent there
-   * rather than broken.
-   */
+  /** Whether any configured integration can place a work item at all — set its parent and area path. Where false, the placement feature is absent rather than broken. GitHub issues answer false. */
   canPlaceWorkItem(): boolean;
-  /**
-   * Hang a work item off its container — the relation that makes it roll up to
-   * anything. Idempotent: a parent the item already carries is a success. Throws
-   * if it fails, including where the process template refuses the link, which is
-   * a real answer rather than a shape.
-   */
+  /** Hang a work item off its container — the relation that makes it roll up to anything. Idempotent. Throws if it fails, including where the process template refuses the link. */
   setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
   /** Move a work item onto a classification node — what puts it on a board. Idempotent. Throws if it fails. */
   setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
@@ -377,94 +263,49 @@ export interface ActionSink {
    */
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
   /**
-   * Create a tracker item — the harness filing its own, rather than composing a
-   * `gh`/`az` command for an agent to run (issue #394).
-   *
-   * `ref` on the result is the new item in the harness's own vocabulary
-   * (`issue:314`), not a provider id: that is what a filing row stores, what
-   * `link_ticket` accepts and what the cockpit resolves to a URL, so the one
-   * translation happens here rather than at each of the four call sites.
-   *
-   * Throws when the provider has the operation and it failed. Unlike
-   * {@link updatePrBranch} there is no `ok: false` arm — a caller only reaches this
-   * once a tracker is configured, and a configured tracker that cannot create an
-   * item is a fault, not a shape.
+   * Create a tracker item — the harness filing its own rather than composing a
+   * `gh`/`az` command for an agent to run. `ref` on the result is the new item in
+   * the harness's own vocabulary (`issue:314`), never a provider id. Throws on
+   * failure; there is no `ok: false` arm.
    */
   createIssue(input: IssueCreateInput): Promise<SendResult>;
   /**
    * Link a work item to the pull request that resolves it — the tracker-side
-   * relation, not a mention in prose.
-   *
-   * **`ok: false` is "this provider does not need it", not a failure**, the way
-   * {@link updatePrBranch}'s is. GitHub links an issue to a pull request from the
-   * body's `#12` itself, so nothing there implements this and there is nothing to
-   * fix; Azure DevOps links only through a work-item artifact link, which is what
-   * its **Check for linked work items** branch policy reads. Throws only when the
-   * provider *has* the operation and it failed.
-   *
-   * Idempotent: linking a pull request a work item already carries is a success.
+   * relation, not a mention in prose. `ok: false` is "this provider does not need
+   * it", not a failure (GitHub links from the body's `#12`); throws only when the
+   * provider has the operation and it failed. Idempotent.
    */
   linkWorkItem(input: WorkItemLinkInput): Promise<SendResult>;
-  /**
-   * Open a pull request. `ref` on the result is the new PR number, so the audit log
-   * records what was created. Throws if creation fails.
-   *
-   * The harness authoring its own PRs is what makes the title convention
-   * enforceable rather than merely requested — but it never replaces an agent
-   * opening one itself, which stays the floor when the tool channel is off.
-   */
+  /** Open a pull request. `ref` on the result is the new PR number. Throws if creation fails. Never replaces an agent opening one itself, which stays the floor when the tool channel is off. */
   createPullRequest(input: PrCreateInput): Promise<SendResult>;
-  /**
-   * Rewrite a pull request's title onto the house convention. Mechanical
-   * bookkeeping like {@link setWorkItemState}, so it is not auto-send gated;
-   * callers skip a write whose rendered title already matches. Throws if it fails.
-   */
+  /** Rewrite a pull request's title onto the house convention. Mechanical bookkeeping like {@link setWorkItemState}, so it is not auto-send gated; callers skip a write whose rendered title already matches. Throws if it fails. */
   setPullTitle(input: PrTitleInput): Promise<SendResult>;
-  /**
-   * Retarget a pull request's base — a stack rung whose parent merged. GitHub does
-   * this itself, Azure does not, which is the whole reason the seam exists.
-   * Idempotent: callers skip a write whose base is already right. Throws if it fails.
-   */
+  /** Retarget a pull request's base — a stack rung whose parent merged. GitHub does this itself, Azure does not, which is the whole reason the seam exists. Idempotent. Throws if it fails. */
   setPullBase(input: PrBaseInput): Promise<SendResult>;
   /**
-   * Merge the base branch into a pull request that is merely **behind** it —
-   * server-side, with no worktree and no agent (issue #332). Only ever called for
-   * a PR the provider itself reported as `behind`, i.e. one it has already said
-   * merges cleanly; the conflicted case is judgement and keeps its agent.
+   * Merge the base branch into a pull request that is merely behind it —
+   * server-side, no worktree, no agent. Only ever called for a PR the provider
+   * reported as `behind`; the conflicted case keeps its agent.
    *
-   * **`ok: false` is "this provider cannot do it", not a failure.** GitHub has
-   * `PUT /pulls/{n}/update-branch`; Azure DevOps has no equivalent, and that is a
-   * legitimate configuration rather than a wiring fault — so the composite answers
-   * `ok: false` instead of throwing, and the caller falls back to the code agent
-   * that did this work before. Throws only when the provider *has* the operation
-   * and it failed, which is the case worth an error entry.
+   * `ok: false` is "this provider cannot do it", not a failure — the caller falls
+   * back to a code agent. Throws only when the provider has the operation and it failed.
    */
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
   /**
-   * Queue a fresh run of a CI check the provider reports as **expired** — the
-   * gate whose cause the harness already knows, cleared without an agent
-   * (issue #395). Only ever called for a check carrying a `requeueRef`, which is
-   * only ever set on an expired one.
+   * Queue a fresh run of a CI check the provider reports as expired. Only ever
+   * called for a check carrying a `requeueRef`.
    *
-   * **`ok: false` is "the requeue did not happen", not a thrown failure**, and it
-   * covers one case more than {@link updatePrBranch}'s does. A provider with no
-   * such operation answers it from the composite, as there; and so does a
-   * provider that *has* it and declined — Azure answers 200 for a policy it will
-   * not restart, so the only honest reading of "still expired" is that nothing
-   * was queued. Both fall back to the code agent rule `pr-ci-gate` dispatched
-   * before this existed. Throws only when the call itself failed.
+   * `ok: false` is "the requeue did not happen", not a thrown failure — a provider
+   * without the operation, and one that has it and declined (Azure answers 200 for
+   * a policy it will not restart). Both fall back to the code agent.
    */
   requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;
   /**
-   * Delete a branch on the remote — the branch behind a pull request that has
-   * merged. Mechanical bookkeeping like {@link setPullTitle}, so it is not auto-send
-   * gated.
+   * Delete a branch on the remote after its pull request merged. Mechanical
+   * bookkeeping like {@link setPullTitle}, so it is not auto-send gated.
    *
-   * **A branch that is already gone is a success, not a failure.** A repository with
-   * GitHub's "automatically delete head branches" setting on will have deleted it at
-   * merge time, so already-absent is the common case rather than an error — and
-   * throwing on it would put a permanent stream of noise in the error log on exactly
-   * the repositories configured best. Throws for anything else.
+   * A branch that is already gone is a success, not a failure — with GitHub's
+   * auto-delete setting on, already-absent is the common case. Throws otherwise.
    */
   deleteBranch(input: BranchDeleteInput): Promise<SendResult>;
 }

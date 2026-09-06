@@ -41,106 +41,48 @@ import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 
 /**
- * React to PR signals first — they're time-sensitive. At most one code agent
- * works a given branch, so a fresh signal for a branch that already has a running
- * agent is delivered to it, never a second dispatch. Dispatch candidates are
- * collected here and ranked across PRs below — world order is arbitrary, so it
- * must not decide who wins scarce headroom.
+ * React to PR signals. At most one code agent works a given branch, so a fresh
+ * signal for a branch that already has a running agent is delivered to it, never
+ * a second dispatch. Candidates are ranked across PRs below — world order is
+ * arbitrary and must not decide who wins scarce headroom.
  *
- * **One pass covering eight rules**, registered in `STAGES` under
- * `pr-ci-failing`, which is why `pr-review`, `pr-review-comment`, `pr-ci-blocked`,
- * `pr-ci-gate`, `pr-base-update`, `pr-base-update-conflict` and `pr-merge-ready`
- * have no stage of their own. They are not independent: the five concern rules
- * feed one per-PR list whose *top* entry alone becomes a dispatch, because one
- * agent works a branch. Their relative
- * urgency is their order in the pipeline — see {@link concernUrgency}, which
- * reads it rather than restating it, and which `prAttention`'s lens asks the same
- * question of so the two cannot end up on different orders.
- *
- * The registration is under `pr-ci-failing` rather than under whichever of the
- * seven the pipeline currently puts first, and that is deliberate: they are
- * contiguous, so nothing else runs between them and the pass contributes its
- * candidates at the same point in the walk whichever id carries it. Chasing the
- * first id through this map on every reorder would be a second copy of the
- * ordering, which is the arrangement the rule numbers rotted under.
+ * One pass covering eight rules, registered under `pr-ci-failing`: the concern
+ * rules feed one per-PR list whose *top* entry alone becomes a dispatch, ordered
+ * via {@link concernUrgency} (which `prAttention`'s lens also reads, so the two
+ * cannot disagree). → `docs/spec/05-dispatcher.md#the-rule-book`
  */
 export function prCiFailing(s: StageContext): void {
   const { ctx } = s;
   const prCandidates: Array<{ pr: PullRequest; top: PrConcern; urgent: boolean }> = [];
   for (const pr of ctx.world.pullRequests) {
     if (pr.merged) continue; // a merged PR is done — never act on it.
-    // Every concern below reads its "is this still outstanding" off the world —
-    // `handled`, the check runs, `mergeableState` — so a reading older than the
-    // agent that just worked this branch describes that agent's own work as work
-    // still to do, and the concern dispatches a second agent to do it again. Skip
-    // the pull request whole rather than per concern: what is stale is the reading,
-    // not one field of it. One cycle at most, and the next real read is already
-    // committed to re-hydrating this entity. → {@link StageContext.readingBehindFleet}
+    // A stale reading describes an agent's own just-finished work as still to do,
+    // dispatching a second agent for it. Skipped whole, not per concern.
+    // → {@link StageContext.readingBehindFleet}
     if (s.readingBehindFleet(pr.number)) continue;
 
     // Every concern that would, on its own, warrant a code agent on this
     // branch, ordered by urgency: review comments > CI > base-update.
     const concerns: PrConcern[] = [];
-    // Review feedback is **one** concern for the whole PR, never one per thread.
-    // A review is written as a unit — the same person leaving three comments in
-    // one pass, each assuming the others — so an agent handed a single thread in
-    // isolation makes a fix for comment 1 that contradicts comment 3, or does
-    // the same edit twice a cycle apart. One agent, one branch, every open
-    // thread in front of it at once.
-    //
-    // De-dup stays per *thread* (`signals` below): dispatch is per branch, but
-    // "has this agent been told about *this* comment" is per comment, or a
-    // reviewer's fourth comment is swallowed by the origin its first three
-    // already claimed.
-    //
-    // **First of the three, and that is the whole ordering decision.** A review
-    // is the one PR signal that can invalidate the diff rather than describe
-    // something wrong around it: a reviewer asking for a different approach
-    // means the code the CI failure is about, and the hunks the merge conflict
-    // is in, are both about to be rewritten. Fixing either first spends an agent
-    // on work the next push discards — and, for the base merge, resolves the
-    // same conflict twice, since the rewrite re-conflicts the branch. CI and the
-    // base still get their agent; they get it on the diff the review settled on.
+    // One concern for the whole PR, never per thread — a review is written as a
+    // unit. De-dup stays per *thread* (`signals` below). Leads the ordering
+    // because a review can invalidate the diff, unlike CI or base-update fixes.
     const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
-    // The fleet's own read of the diff, and the first thing that happens to a
-    // pull request. It leads because a review's value decays faster than any
-    // other concern's: read on the pulse the pull request opened, it is a reading
-    // of the change somebody proposed; read after a CI fix and a base merge, it
-    // is partly a reading of the harness's own work.
-    //
-    // `needsFleetReview` is the whole gate — including the operator's switch, so
-    // the concern and the registry entry that advertises it are switched off by
-    // one field rather than two. It stands down while a human reviewer has
-    // unhandled threads open (the diff is about to be rewritten) and comes back
-    // once they are handled.
-    // One reading per pull request, built once and asked by both the concern below
-    // and the merge gate further down — the arrangement `src/review/prReview.ts`
-    // exists for, since two gathers of the same rows is two chances to differ.
+    // The fleet's own read of the diff, first because its value decays fastest.
+    // `needsFleetReview` is the whole gate. One reading per PR, shared with the
+    // merge gate below so the two cannot differ.
     const reading = reviewReading(s, pr.number);
     const route = reading.route;
-    // How the triage said to read it, or — where it never answered, or where the
-    // project declares no modes — the fail-open default. Resolved here rather
-    // than by the prompt, because the mode decides the profile too and a dispatch
-    // is priced before it runs.
+    // Resolved here, not in the prompt: the mode decides the profile, priced first.
     const mode = resolvedReviewMode(route, s.review);
-    // A routing still to come is a review still to come: dispatching now would
-    // spend the deep profile on a pull request the triage was about to route to
-    // the cheap one, which is the whole saving gone. It is a wait rather than a
-    // hold — `pr-review-triage` fails open, so the absence resolves either way,
-    // on the pulse after it answers or on the pulse it gives up.
+    // A routing still to come is a review still to come — dispatching now could
+    // spend the deep profile on work triage was about to route cheaply. A wait,
+    // not a hold: `pr-review-triage` fails open.
     const routing = route === null && triageRuns(s.review) && !triageSpent(s, pr.number);
-    // **Is the fleet's own review still coming?** Not "is it due this pulse" —
-    // the routing wait below is part of it, and so is the review already having
-    // been dispatched and not yet reported. Everything under `holdForReview`
-    // reads this, which is what makes the review *lead* the concerns rather than
-    // merely sort above them.
-    //
-    // Finite, and that is the whole of why the review's own attempt ledger is
-    // read here. A review that cannot be got through — three dispatches that
-    // reported nothing, then the escalation — stops leading, and the concerns
-    // below it take the branch. Held on the standing verdict instead, a review
-    // nobody can complete would be a pull request nothing may ever fix, with
-    // nothing red: the shape every other wait in this file is written against.
+    // Is the fleet's own review still coming, including one dispatched and not
+    // yet reported? Makes review *lead* rather than merely sort above the other
+    // concerns. Finite by the review's own attempt ledger, or a review nobody
+    // can complete is a PR nothing may ever fix, with nothing red.
     const reviewComing = needsFleetReview(pr, reading, s.review) && !reviewSpent(s, pr.number);
     if (reviewComing && !routing) {
       const origin = reviewOrigin(pr.number);
@@ -148,20 +90,15 @@ export function prCiFailing(s: StageContext): void {
       concerns.push({
         rule: 'pr-review',
         origin,
-        // Its own read-only checkout *of* the pull request's branch, so the
-        // reviewer neither holds the branch lease a CI fix needs nor can commit
-        // what it found. A reviewer that could push would be fixing its own
-        // findings and then reviewing the fix.
+        // Read-only checkout, so the reviewer neither holds the lease a CI fix
+        // needs nor can commit what it found.
         dispatch: readOnlyDispatch(branch, pr.branch),
-        // The mode's profile, and only where the project named one. An operator's
-        // own pin on this origin still wins: `pinFor` is applied where a candidate
-        // becomes an action, so a person overruling the project for one pull
-        // request is unaffected by this.
+        // The mode's profile, only where the project named one; an operator pin
+        // on this origin still wins (`pinFor`).
         profile: (mode === null ? null : (s.review.modes[mode]?.profile ?? null)) ?? undefined,
         title: mode === null ? `Review PR #${pr.number}` : `Review PR #${pr.number} (${mode})`,
-        // Appended, never interpolated: the charter is the half a project writes,
-        // and an operator override that never learned about it would drop every
-        // word of it silently.
+        // Appended, never interpolated — an override that never learned the
+        // charter would silently drop it.
         prompt:
           s.templates.render('pr-review', {
             number: pr.number,
@@ -188,11 +125,8 @@ export function prCiFailing(s: StageContext): void {
         title: many
           ? `Address ${unhandled.length} review comments on PR #${pr.number}`
           : `Address review comment on PR #${pr.number}`,
-        // Appended, never interpolated (see `reviewThreadsNote`). `author` and
-        // `comment` stay filled so an override written against the old
-        // one-comment prompt still renders something true — the full set
-        // follows it either way, and the re-check after it: the list is a
-        // reading taken now, and the review keeps moving while the agent works.
+        // Appended, never interpolated (see `reviewThreadsNote`); `author`/`comment`
+        // stay filled so an old one-comment override still renders true.
         prompt:
           s.templates.render('pr-review-comment', {
             number: pr.number,
@@ -202,52 +136,37 @@ export function prCiFailing(s: StageContext): void {
           }) +
           reviewThreadsNote(unhandled) +
           reviewRecheckNote(pr.number) +
-          // After the threads and the re-check, because it is about what to *do*
-          // with an answer once there is one — and before the remedies, which are
-          // about the repository rather than this review.
+          // After threads/re-check (what to do with an answer), before remedies
+          // (about the repository, not this review).
           replyToolNote() +
-          // Last, after the threads and the re-check: it is the least urgent thing
-          // in the prompt and the only part that is not about *this* review. An
-          // agent that read it first would answer the repository's habits instead
-          // of the reviewer in front of it.
           priorReviewRemediesNote(ctx.priorRemedies ?? []) +
           remedyAskNote('review'),
         dispatchReason: many
           ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
           : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
-        // Only reached when this concern carries no fresh signals of its own,
-        // which cannot happen — kept honest rather than unreachable-by-luck.
+        // Never reached — this concern always carries fresh signals of its own —
+        // kept honest rather than unreachable-by-luck.
         note: `Unhandled review feedback on PR #${pr.number} from ${authors.join(', ')}.`,
         originTitle: pr.title,
         originSummary: many
           ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
           : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
-        // Keyed on `prCommentSignalRef`, which moves when the thread gains a
-        // reply: a follow-up on a thread the running agent was already told about
-        // is a new thing to say, and the plain thread ref would have swallowed it
-        // as something already delivered.
+        // Keyed on `prCommentSignalRef`, which moves on a reply — a plain thread
+        // ref would swallow a follow-up as already delivered.
         signals: unhandled.map((c) => ({
           ref: prCommentSignalRef(pr.number, c),
           note: reviewThreadNote(pr.number, c),
         })),
       });
     }
-    // A stacked PR's CI runs the commits of the PR underneath it, so a red base
-    // turns every PR above it red. Dispatching on that would put an agent on each
-    // of them to fix code that is not theirs — the failure multiplies up the
-    // stack and none of those agents can do anything about it. Suppress the rule
-    // here and leave it at that: the failing PR at the bottom is in this same
-    // world and rule `pr-ci-failing` fires on it under its own steam, so there is no concern to
-    // push down. Only the CI rule is suppressed — the base-update rule below still
-    // fires, which is what keeps a stack restacking when its parent pushes.
+    // A red base turns every PR above it red, so only the CI rule is suppressed
+    // here — the failing PR at the bottom fires on its own, and base-update below
+    // still fires, keeping a stack restacking when its parent pushes.
     const inheritedFailure = inheritedCiFailure(pr, s.openPrs);
-    // Which checks failed decides what happens, not merely that CI is red. An
-    // unconfigured harness — and a provider that reports no per-check detail —
-    // yields `actionable` with empty lists, i.e. exactly the behaviour above.
+    // Which checks failed decides what happens, not merely that CI is red.
     const ciVerdict = classifyCiFailures(pr.ciChecks, s.ci, pr.ciChecksWithheld);
-    // The gate is `ciNeedsAttention`, not the aggregate: a check that fails
-    // without blocking completion still wants a fix, and folding it into
-    // `ciStatus` would have claimed the PR cannot merge when it can.
+    // `ciNeedsAttention`, not the aggregate: a non-blocking failing check still
+    // wants a fix.
     const ciFailing = ciNeedsAttention(pr) && inheritedFailure === null;
     if (ciFailing && ciVerdict.actionable) {
       const ciOrigin = `pr:${pr.number}:ci`;
@@ -255,16 +174,13 @@ export function prCiFailing(s: StageContext): void {
         rule: 'pr-ci-failing',
         origin: ciOrigin,
         title: `Fix failing CI on PR #${pr.number}`,
-        // Appended, never interpolated: `pr-ci-fix` is operator-overridable and
-        // an override written before this existed would silently drop every
-        // word of the operator's own per-check guidance (see `ciFailureNote`).
+        // Appended, never interpolated — an override would silently drop the
+        // operator's per-check guidance (see `ciFailureNote`).
         prompt:
           s.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }) +
           ciFailureNote(ciVerdict) +
-          // Scoped to the checks that are red now, and after the failure note for
-          // the review arm's reason: what is failing comes before what has failed
-          // before. The evidence excerpt itself is appended later still, by the
-          // executor — it is fetched at dispatch, not resolved here.
+          // Scoped to checks red now, after the failure note (what's failing before
+          // what has failed before). Evidence is appended later by the executor.
           priorCiRemediesNote(
             ctx.priorRemedies ?? [],
             ciVerdict.dispatch.map((m) => m.name),
@@ -275,13 +191,13 @@ export function prCiFailing(s: StageContext): void {
         originTitle: pr.title,
         originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
         urgent: ciVerdict.urgent,
-        // The same names `ciDispatchReason` puts in the audit sentence, kept as
-        // data so spend can be read per check without anything parsing prose.
+        // Same names as `ciDispatchReason`'s sentence, as data — spend reads per
+        // check without parsing prose.
         ciChecks: ciVerdict.dispatch.map((m) => m.name),
       });
     } else if (ciFailing && ciNeedsHuman(ciVerdict)) {
-      // Nothing an agent can fix, and the operator asked to be told. Put it to
-      // a human once — see `askedAlready` for why that takes two readings.
+      // Nothing an agent can fix, and the operator asked to be told — once.
+      // See `askedAlready` for why that takes two readings.
       const ciOrigin = `pr:${pr.number}:ci`;
       if (!askedAlready(ciOrigin, ctx.openEscalations, ctx.recentDecisions)) {
         const names = ciVerdict.escalate.map((m) => m.name).join(', ');
@@ -291,14 +207,12 @@ export function prCiFailing(s: StageContext): void {
           prompt:
             `CI is failing on PR #${pr.number} ("${pr.title}") only on checks you told the harness not to act ` +
             `on, so nothing has been dispatched — this needs someone who can reach whoever owns them.`,
-          // The check names are a list of unbounded length, so they go in the body
-          // rather than mid-sentence: one escalating check reads fine inline and
-          // nine turn the lede into the wall this split exists to prevent.
+          // Unbounded list, so it goes in the body rather than mid-sentence.
           context: {
             originRef: ciOrigin,
             prNumber: pr.number,
             taskTitle: pr.title,
-            detail: ciVerdict.escalate.map((m) => `- \`${m.name}\``).join('\n'),
+            detail: ciVerdict.escalate.map((m) => `- \`${m.name}\``).join('\n'), // unbounded list, so the body not the sentence
             detailFrom: 'Failing, and configured to be left alone',
           },
           rule: 'pr-ci-blocked',
@@ -306,36 +220,16 @@ export function prCiFailing(s: StageContext): void {
         } satisfies RawAction);
       }
     }
-    // A check the operator asked to watch in a state that is not failing: the
-    // blocking gate sitting `queued` until somebody runs the thing that releases
-    // it. Nothing else in the harness looks at a pending check, which is why the
-    // PR would otherwise wait forever reading "CI still running".
-    //
-    // Behind the same inherited-failure guard as the CI concern, and no further.
-    // A rung whose real problem is the red base below it must not also collect an
-    // agent for its gate — that is the multiplication `inheritedCiFailure` exists
-    // to stop. But a status policy is evaluated per pull request, so each rung of
-    // an otherwise-healthy stack genuinely has its own gate to clear, and
-    // suppressing those would leave the whole stack stuck on the bottom one.
+    // A watched check in a non-failing state — a blocking gate sitting `queued`
+    // until somebody releases it, or the PR waits forever reading "CI still
+    // running". Behind the same inherited-failure guard as the CI concern.
     const gateVerdict = classifyWatchedChecks(pr.ciChecks, s.ci);
     if (gateVerdict.watched.length > 0 && inheritedFailure === null) {
       const waiting = gateVerdict.watched.map((m) => m.name).join(', ');
       const gateOrigin = `pr:${pr.number}:ci-gate`;
-      // The **expired** arm, taken directly for `pr-base-update`'s reason (issue
-      // #395): the provider has already said no run is in flight and none will
-      // start, and it hands over the evaluation to requeue, so there is no
-      // judgement anywhere on that path — only a write. The *guided* arm keeps its
-      // agent, because only the operator's words can say what releases a check
-      // they asked to be watched.
-      //
-      // All-or-nothing across the gate's checks: the concern is one per pull
-      // request and its dispatch is one agent for the whole of it, so a single
-      // check that needs a model takes the concern with it.
-      //
-      // Unless the last direct attempt came back unperformed — a provider that
-      // cannot requeue, or one that would not. Then this is the dispatch it always
-      // was, with the same `pr-ci-gate` prompt and the same expiry note, so a gate
-      // is never left waiting merely because the cheap path was unavailable.
+      // The expired arm is taken directly (no judgement, just a write); the guided
+      // arm keeps its agent. All-or-nothing across the gate's checks. An
+      // unperformed last attempt falls back to dispatch.
       const requeues = gateRequeues(gateVerdict);
       const direct = requeues !== null && !directActUnperformed('requeue_ci_check', gateOrigin, ctx.recentDecisions);
       concerns.push({
@@ -351,17 +245,12 @@ export function prCiFailing(s: StageContext): void {
                 reason: `The build policy on PR #${pr.number} is expired (${waiting}); queueing a run through the provider rather than spending an agent on it.`,
               } satisfies RawAction)
             : undefined,
-        // **Its own origin, not `pr:<n>:ci`.** Sharing would put one cooldown
-        // budget across two unrelated problems: a red build spending its attempts
-        // would leave the gate permanently capped without a single agent ever
-        // having been sent at it, and the escalation raised at the cap would name
-        // whichever of the two the concern fold happened to pick. It also keeps
-        // notify de-dup honest — a gate signal reaching an agent already on the
-        // branch is not the CI signal that origin already delivered.
+        // Own origin, not `pr:<n>:ci`: sharing would cap the gate on an unrelated
+        // problem's cooldown and confuse notify de-dup.
         origin: gateOrigin,
         title: `Clear the waiting check on PR #${pr.number}`,
-        // Appended, never interpolated — `pr-ci-gate` is operator-overridable and
-        // the check names are the half an agent cannot act without.
+        // Appended, never interpolated — the check names are the half an agent
+        // cannot act without.
         prompt:
           s.templates.render('pr-ci-gate', { number: pr.number, title: pr.title, branch: pr.branch }) +
           ciWatchNote(gateVerdict),
@@ -377,27 +266,13 @@ export function prCiFailing(s: StageContext): void {
       const base = pr.baseBranch ?? s.defaultBranch;
       const behind = pr.mergeableState === 'behind';
       const mergeableOrigin = `pr:${pr.number}:mergeable`;
-      // The `behind` arm is two git commands against a merge the provider has
-      // *already asserted is clean*, so it is taken directly instead of costing a
-      // worktree, a model and a cold read of the repository (issue #332). The
-      // conflicted arm keeps its agent: resolving a conflict is judgement, and
-      // the `pr-base-update-conflict` prompt already tells the agent to escalate
-      // when it cannot.
-      //
-      // Unless the last direct attempt came back unperformed — a provider with no
-      // such endpoint (Azure DevOps has none), or a write the repository refused.
-      // Then this is the dispatch it always was, with the same routine-update
-      // prompt, so a PR is never left behind its base merely because the cheap
-      // path was unavailable.
+      // `behind` is a merge already asserted clean, taken directly rather than
+      // costing a worktree and a model. The conflicted arm keeps its agent —
+      // resolving a conflict is judgement. An unperformed last attempt falls back.
       const direct = behind && !directActUnperformed('update_pr_branch', mergeableOrigin, ctx.recentDecisions);
       concerns.push({
-        // **The rule id splits where the cost does**, off the same `behind` boolean
-        // everything else here reads. `agentModels.byRule` keys on the rule, so one
-        // id across both arms prices a conflict resolution and a routine base merge
-        // on one profile — and on a provider with no `update_pr_branch` endpoint
-        // there is no cheap arm at all, so both dispatch an agent. The **origin**
-        // deliberately does not split with it: same PR, same problem, one cooldown
-        // and one attempt budget.
+        // The rule id splits where cost does (`agentModels.byRule` keys on it);
+        // the origin deliberately doesn't — same PR, one cooldown budget.
         rule: behind ? 'pr-base-update' : 'pr-base-update-conflict',
         origin: mergeableOrigin,
         act: direct
@@ -430,33 +305,17 @@ export function prCiFailing(s: StageContext): void {
     }
 
     if (concerns.length > 0) {
-      // Who holds the pull request's **own** branch. This is the question a note
-      // is about — the agent working the code — and it is no longer the question
-      // the dispatch below is about, which is who holds the branch the winning
-      // concern's agent actually checks out.
+      // Who holds the PR's **own** branch — not the branch the winning dispatch
+      // below checks out.
       const branch = resolveBranchAgent(ctx, pr.branch);
       if (branch.kind === 'running') {
         // A running agent already owns this branch — notify it, don't duplicate.
-        // Collapse every fresh, not-yet-delivered signal into one note.
+        // De-dup is per *signal*, not per concern, or the first three comments
+        // would swallow the fourth under one origin.
         //
-        // De-dup is per *signal*, not per concern: the comment concern covers
-        // every open thread under one dispatch origin, so keying on the origin
-        // alone would let the first three comments swallow the fourth — the
-        // exact signal an operator reviewing an agent's work is sending. Three
-        // things have already delivered a signal: an active task on it (a CI or
-        // base concern *is* its own origin), the dispatch that launched this
-        // agent (its prompt lists those threads; repeating them is noise), and
-        // a note already sent.
-        //
-        // **A concern that takes its own checkout is never a note.** Rule
-        // `pr-review` is the one, and delivering it here would hand "this pull
-        // request has not been reviewed — read the diff and report what you
-        // find" to the agent *writing* the diff: an agent whose dispatch origin
-        // is `pr:<n>:ci`, which `reviewTargetPr` refuses, so its `review_report`
-        // cannot land and the read happens with nothing recording it. The merge
-        // gate then still holds, and the fleet pays for the review a second time
-        // — a review done outside the record, which is worse than one not yet
-        // done. The review is a dispatch of its own or it is nothing.
+        // A concern that takes its own checkout is never a note: rule `pr-review`
+        // delivered here would ask the diff's own author to review it, on an
+        // origin its `review_report` can't land on.
         const fresh = concerns
           .filter((c) => !c.dispatch?.readOnly)
           .flatMap((c) =>
@@ -478,72 +337,36 @@ export function prCiFailing(s: StageContext): void {
                 ? '\n\nRead them together before changing anything — they may resolve or contradict one another.'
                 : ''),
             originRefs: fresh.map((sig) => sig.ref),
-            // **The one action with no proposing rule, and it is left null
-            // deliberately.** `fresh` is a flatMap over *every* concern on this
-            // PR, so one note can carry a CI signal and a review thread at once
-            // — there is no single rule that proposed it. The tempting
-            // attribution is `concerns[0]`, and it would be wrong twice over:
-            // that entry is picked by the urgency order, which exists to decide
-            // who gets the one agent when the branch is *free*, and reusing it
-            // here would name a proposer for a note whose other half it never
-            // asked for. Nothing is lost by refusing to guess — `originRefs`
-            // already lists every concern the note covers, which is a finer
-            // answer than any one rule id could give.
+            // Null deliberately: `fresh` folds every concern on this PR, so no
+            // single rule proposed it. `originRefs` lists what the note covers.
             rule: null,
             admission: 'branch-notify',
             reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
           } satisfies RawAction);
         }
       }
-      // branch.kind === 'busy' (queued / starting / parked waiting): hold every
-      // note. Injecting into a waiting agent would un-park a human escalation,
-      // and a starting agent has no live session yet. The signals persist, so a
-      // later cycle delivers them once the agent is running.
+      // branch.kind === 'busy' (queued / starting / parked waiting): hold every note.
+      // Injecting into a waiting agent would un-park a human escalation, and a
+      // starting one has no session yet. The signals persist for a later cycle.
 
       const top = concerns[0]!;
-      // **The lease the winning concern actually needs, which is not always the
-      // pull request's branch.** `pr-review` takes a read-only checkout of it
-      // (`review/pr-<n>`) precisely so it neither holds the branch nor waits on
-      // it — asked about `pr.branch` instead, the review was blocked by the very
-      // agent that opened the pull request, and by every CI fix after it, which
-      // is the whole of what put the review last.
+      // The lease the winning concern needs, not always the PR's own branch:
+      // `pr-review` takes a read-only checkout.
       const lease = resolveBranchAgent(ctx, top.dispatch?.branch ?? pr.branch);
-      // **Nothing else is worked while the fleet's own review is still coming.**
-      // The review already sorts first, but sorting first only decides who wins
-      // a *free* branch: with the routing still in flight there is no review
-      // concern to win, and the CI fix under it took the branch and the review
-      // landed on a diff the harness had already rewritten — the reading that
-      // decays fastest, taken last. So the pull request contributes no candidate
-      // at all until the review is either done or given up on (`reviewComing`),
-      // rather than contributing the next concern down.
-      //
-      // Notes above are unaffected: telling the agent already on the branch that
-      // CI went red costs no headroom and changes no diff.
+      // Nothing else is worked while the fleet's own review is still coming —
+      // this PR contributes no candidate until the review is done or given up
+      // on. Notes above are unaffected.
       if (lease.kind === 'free' && (!reviewComing || top.rule === 'pr-review')) {
-        // No agent on that branch — a dispatch candidate for the most urgent
-        // concern; ranked cross-PR (and throttled) after the loop.
-        //
-        // `urgent` is read off **every** concern on the PR, not off `top`. The
-        // flag is the operator saying "a red security scan jumps the queue", and
-        // it is set by a CI check — which is no longer the top concern when the
-        // PR also has an open review. Reading it from `top` would have made the
-        // operator's escalation quietly conditional on nobody having commented,
-        // which is not a rule anyone wrote down. Which concern the agent is sent
-        // for is still `top`; this only decides where the PR sits in the queue.
+        // `urgent` is read off **every** concern, not `top`: it's set by a CI
+        // check, which isn't the top concern when a review is open.
         prCandidates.push({ pr, top, urgent: concerns.some((c) => c.urgent === true) });
       }
     }
 
-    // 3: Drive a settled PR the last mile — propose merging it in. `merge_pr`
-    // isn't an agent dispatch (it claims no headroom), and it is never performed
-    // on the harness's own authority: the executor writes it as a proposal, which
-    // only a click or a standing stack landing settles. A 'behind'/'blocked'/'dirty'
-    // state is handled above, so it never counts as merge-ready here.
-    //
-    // A stacked PR is held: merging it would land part 2 *into part 1's branch*
-    // mid-flight rather than into the integration branch. It becomes mergeable on
-    // its own the moment the provider retargets it, which is when its parent
-    // merges — no separate release step (see `isStackedPr`).
+    // Propose merging a settled PR in. `merge_pr` claims no headroom and is
+    // never performed on the harness's own authority — the executor writes it
+    // as a proposal. A stacked PR is held: merging would land into its parent's
+    // branch mid-flight.
     const mergeReady =
       !isStackedPr(pr, s.defaultBranch) &&
       pr.ciStatus === 'passing' &&
@@ -553,20 +376,12 @@ export function prCiFailing(s: StageContext): void {
       pr.mergeableState !== 'blocked' &&
       pr.mergeableState !== 'dirty' &&
       pr.unresolvedComments.every((c) => c.handled) &&
-      // Nothing merges that nobody read. It asks whether the review *happened*,
-      // not whether it liked what it saw — see `reviewSatisfied`, which argues
-      // why a `findings` verdict cannot be the thing that holds the gate.
+      // Nothing merges that nobody read — whether it *happened*, not liked what
+      // it saw. See `reviewSatisfied`.
       reviewSatisfied(pr, reading, s.review);
-    // A merge already put to a human is not put to them again: while the
-    // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
-    // held off that PR. Without it every pulse re-proposes the same merge and
-    // "Needs you" fills with copies of one question, which is what made the
-    // approval inert to begin with (issue #109). The pending item in the inbox
-    // is the visible state; there is no action to audit because none was taken.
-    //
-    // A "no" stops standing once something has happened to the PR since it was
-    // given (phase 4) — the rule then fires again, and its own preconditions
-    // above still decide whether the merge is proposed at all.
+    // A merge already put to a human is not put again while the verdict stands,
+    // or every pulse re-proposes it. A "no" stops standing once something has
+    // happened to the PR since it was given.
     const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? [], {
       rejectionSignals: ctx.rejectionSignals,
     });
@@ -581,9 +396,8 @@ export function prCiFailing(s: StageContext): void {
     }
   }
 
-  // Cross-PR ranking: an operator-flagged urgent check first, then the most
-  // urgent concern class (review comment > CI > base-update), tie-break by PR
-  // number for determinism.
+  // Cross-PR ranking: operator-flagged urgent first, then concern urgency,
+  // tie-broken by PR number for determinism.
   prCandidates.sort(
     (a, b) =>
       Number(b.urgent) - Number(a.urgent) ||
@@ -600,26 +414,19 @@ export function prCiFailing(s: StageContext): void {
         attempts,
       }),
       context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
-      // The concern that was throttled, then what throttling did to it. This
-      // escalation stands in for exactly one proposal — `top`, the concern the
-      // dispatch would have gone out for — so it has a proposer, unlike the
-      // branch note above.
+      // Stands in for exactly one proposal — `top` — unlike the branch note above.
       rule: top.rule,
       admission: 'cooldown-escalate',
       reason: `Origin ${top.origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
     });
-    // A concern with an act of its own is settled here rather than staffed: no
-    // candidate, no headroom claimed, and no Up next row for something that
-    // completes in one request. It is still **throttled on its origin**, and by
-    // the same verdict a dispatch would take — an act that runs and leaves the
-    // concern standing is the loop the cooldown exists for, whoever performed it.
+    // A concern with an act of its own is settled here, not staffed: no
+    // candidate, no headroom, no Up next row. Still throttled on its origin.
     if (top.act) {
       const verdict = dispatchVerdict(top.origin, s.now, ctx.recentDecisions, s.cooldown);
       if (verdict.kind === 'escalate') s.raw.push(escalate(verdict.attempts));
       else if (verdict.kind === 'dispatch') s.raw.push(top.act);
-      // 'cooldown' — attempted too recently, and there is nothing to queue: the
-      // act claims no slot, so a held row would say the fleet is busy when it is
-      // not. 'hold' — already escalated; leave the origin alone.
+      // 'cooldown' — nothing to queue: the act claims no slot, so a held row would
+      // say the fleet is busy when it is not. 'hold' — already escalated.
       continue;
     }
     s.consider(
@@ -632,8 +439,8 @@ export function prCiFailing(s: StageContext): void {
         reason: top.dispatchReason,
         action: {
           type: 'dispatch_code_agent',
-          // The pull request's branch for every concern that fixes something, and
-          // a read-only checkout of it for the one that only reads.
+          // The PR's branch for a fixing concern; a read-only checkout for one
+          // that only reads.
           ...(top.dispatch ?? { branch: pr.branch }),
           ...(top.profile === undefined ? {} : { profile: top.profile }),
           title: top.title,
@@ -641,10 +448,7 @@ export function prCiFailing(s: StageContext): void {
           originRef: top.origin,
           originTitle: top.originTitle,
           originSummary: top.originSummary,
-          // What this agent is being launched to answer. Recorded so the next
-          // pulse doesn't read the same review threads back to it as news —
-          // the dispatch origin alone can't say, since it names the branch's
-          // whole review rather than any one thread.
+          // So the next pulse doesn't read the same threads back as news.
           signalRefs: signalsOf(top).map((sig) => sig.ref),
           ciChecks: top.ciChecks,
           rule: top.rule,
@@ -657,23 +461,9 @@ export function prCiFailing(s: StageContext): void {
 }
 
 /**
- * Did the last agentless act of this type on this origin fail to happen?
- *
- * The memory behind both fallbacks, read from the audit log alone — the same place
- * the cooldown reads its attempts, so the two cannot hold different opinions
- * about what has been tried. Both unperformed outcomes count and mean one thing
- * to the rule: `skipped` is a provider that cannot do it at all, `rejected` is one
- * that can and refused, and either way the concern still stands and only an agent
- * is left to settle it.
- *
- * One function over the action type rather than one per act, because the two
- * differ in nothing else: a base update that never happened and a requeue that
- * never happened are the same fact about the same audit log, and a second copy of
- * this would be a second place for the fallback to rot.
- *
- * Best-effort over the recent-decision window, and harmless as it ages out: the
- * cheap path is simply tried once more, which is the right answer for a refusal
- * that was transient and one wasted request for a provider that never had it.
+ * Did the last agentless act of this type on this origin fail to happen? Read
+ * from the same audit log the cooldown reads. `skipped` and `rejected` both
+ * count — either way only an agent is left to settle the concern.
  */
 function directActUnperformed(
   type: 'update_pr_branch' | 'requeue_ci_check',
@@ -688,19 +478,9 @@ function directActUnperformed(
 
 /**
  * The expired checks this gate can be cleared by requeueing, or null when it
- * needs the agent it always had (issue #395).
- *
- * Null for the whole gate the moment any one watched check needs a model, because
- * the concern buys one agent for all of them:
- *
- * - **Not expired.** A check an operator asked to watch in a non-failing state is
- *   waiting on something only their `guidance` names; there is nothing to requeue
- *   and nothing the harness knows to do.
- * - **Expired *and* guided.** The operator's words outrank the known cause: they
- *   wrote them about this check knowing what it is, so a requeue would do
- *   something other than what they asked for and report the gate cleared.
- * - **No `requeueRef`.** The provider reported the expiry but handed over no way
- *   to act on it — the state this rule was written for before the write existed.
+ * needs an agent — null for the whole gate the moment any one watched check
+ * needs a model (not expired, expired-but-guided, or no `requeueRef`), since
+ * one agent covers the whole concern.
  */
 function gateRequeues(verdict: CiWatchVerdict): Array<{ name: string; requeueRef: string }> | null {
   const requeues: Array<{ name: string; requeueRef: string }> = [];
@@ -717,36 +497,21 @@ interface PrConcern {
   rule: DispatchRuleId;
   origin: string;
   /**
-   * The act that settles this concern **without an agent**, when one can — the
-   * base update of a pull request the provider reported as merely `behind` (issue
-   * #332), and the requeue of a build policy it reported as expired (issue #395).
-   * Set, and this concern's turn on a free branch emits the act instead of a
-   * dispatch; absent, everything below is what happens, unchanged.
-   *
-   * Both are the same trade: a concern whose resolution the provider has already
-   * stated, so there is no judgement left for a model to apply.
-   *
-   * It rides on the concern rather than replacing it, because the concern is more
-   * than a dispatch: a branch that already has a running agent is *told* about the
-   * base moving (`note`) rather than having it merged under its feet, and a branch
-   * that is busy holds the signal for later. Both of those are as true of the
-   * cheap path as of the expensive one — the saving is in not staffing a free
-   * branch, not in acting where the harness would not have.
+   * The act that settles this concern **without an agent**, when the provider has
+   * already stated the resolution. Set, and a free branch emits the act instead
+   * of a dispatch; a staffed branch is still *told* rather than having it done
+   * under its feet.
    */
   act?: RawAction;
   /**
-   * Where this concern's agent is checked out, when it is not the pull request's
-   * own branch. Rule `pr-review` is the one that differs and has to: its agent
-   * reads rather than writes, so it takes a read-only checkout of the branch and
-   * leaves the lease — and the branch's next CI fix — alone.
+   * Where this concern's agent is checked out, when not the PR's own branch.
+   * `pr-review` differs — read-only checkout, leaves the lease alone.
    */
   dispatch?: { branch: string; base: string; readOnly: true };
   /**
-   * The model profile this concern's dispatch is priced on, where the concern
-   * itself knows one — rule `pr-review` does, because the mode the triage chose
-   * is a statement about how much reading the change is worth. Absent leaves the
-   * dispatch to resolve on its rule, which is what every other concern does. An
-   * operator's pin on the origin still overrides it (`pinFor`).
+   * The model profile this concern's dispatch is priced on (rule `pr-review`,
+   * from the triage's mode). Absent resolves on the rule; an operator's pin
+   * still overrides (`pinFor`).
    */
   profile?: string;
   title: string;
@@ -759,31 +524,19 @@ interface PrConcern {
   originSummary: string;
   /**
    * Sort this PR ahead of every other PR concern. Set only by a CI check rule
-   * carrying `urgent` — the operator saying a red security scan outranks a
-   * behind-base branch elsewhere. Never re-orders past a held verdict or the
-   * headroom cut; it decides position in the queue and nothing else.
-   *
-   * Read across the PR's whole concern list rather than off the one that won,
-   * because the concern that carries it is no longer the one that wins.
+   * carrying `urgent`; decides queue position only, read across the PR's whole
+   * concern list rather than off the one that won.
    */
   urgent?: boolean;
   /**
    * The individual world signals this concern folds, for notify de-dup. Defaults
-   * to the concern itself ({@link signalsOf}), which is right for CI and
-   * base-update: one origin, one signal.
-   *
-   * The review-comment concern is the one that differs, and it has to. It
-   * deliberately collapses every open thread onto **one** dispatch origin so a
-   * single agent answers a whole review — but "has this agent been told about
-   * this comment" is still a per-thread question, and answering it per origin
-   * would mean a reviewer's later comments never reached the agent already on the
-   * branch. Dispatch at branch granularity, de-dup at thread granularity.
+   * to the concern itself ({@link signalsOf}). The review-comment concern differs:
+   * dispatch is branch granularity, de-dup is thread granularity.
    */
   signals?: PrSignal[];
   /**
-   * The CI checks this concern is about, carried onto the dispatch and from there
-   * onto the task. Set by the two CI rules; every other concern leaves it unset,
-   * which is what "this run was not about a named check" means downstream.
+   * The CI checks this concern is about, carried onto the dispatch and task.
+   * Set by the two CI rules; unset elsewhere means "not about a named check".
    */
   ciChecks?: string[];
 }
@@ -815,9 +568,8 @@ function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
 }
 
 /**
- * Name the waiting checks in the audit line, so the decision log distinguishes
- * this from the red-build dispatch it sits next to — the two are one word apart
- * in the cockpit and a month later only the check name says which happened.
+ * Name the waiting checks in the audit line, so the decision log distinguishes this
+ * from the red-build dispatch it sits next to.
  */
 function gateDispatchReason(prNumber: number, verdict: CiWatchVerdict): string {
   const names = verdict.watched.map((m) => m.name).join(', ');
@@ -836,15 +588,9 @@ function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
 }
 
 /**
- * Has the triage given up on this pull request?
- *
- * The read that makes rule `pr-review`'s wait finite. `pr-review-triage` fails
- * open silently, so the only way to tell "a route is coming" from "no route is
- * ever coming" is to ask the same ledger the triage asks — which is exactly what
- * `dispatchVerdict` answers, and why it is asked here rather than a second
- * counter being kept. Anything but a spent budget means the route is still on its
- * way, including a cooldown: the wait is one pulse, and dispatching the wrong
- * mode to avoid it costs the whole saving.
+ * Has the triage given up on this pull request? Makes rule `pr-review`'s wait
+ * finite: `pr-review-triage` fails open silently, so only its own ledger can
+ * tell "a route is coming" from "none ever will".
  */
 function triageSpent(s: StageContext, prNumber: number): boolean {
   const verdict = dispatchVerdict(reviewTriageOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown);
@@ -852,25 +598,11 @@ function triageSpent(s: StageContext, prNumber: number): boolean {
 }
 
 /**
- * Has the review itself given up on this pull request?
- *
- * What makes "nothing else is worked until the review is done" a wait rather
- * than a wedge, and read off the same ledger {@link triageSpent} reads for the
- * same reason: the review's own attempt budget is the only thing that can say
- * "no review is ever coming" apart from a row that will never be written.
- *
- * A cooldown is deliberately **not** spent — it is one pulse, and releasing the
- * branch to a CI fix on it would rewrite the diff in exactly the gap the review
- * is about to read.
- *
- * **`hold` alone, and not `escalate`**, which is where this differs from
- * {@link triageSpent} and has to. The triage's cap is silent by design; the
- * review's is not — the escalation is raised by `consider`, and `consider` is
- * only reached for a concern that is still on the list. Standing the review down
- * on `escalate` would drop it on the very pulse its cap was spent, and the human
- * who was to be told a review could not be got through would never hear. So the
- * cap costs one more pulse of holding, and the pulse after — the escalation
- * recorded, the verdict now `hold` — releases the pull request.
+ * Has the review itself given up on this pull request? Makes the wait finite
+ * rather than a wedge, off the same ledger {@link triageSpent} reads. A cooldown
+ * is deliberately **not** spent — releasing the branch for one pulse would
+ * rewrite the diff the review is about to read. `hold` alone, not `escalate`:
+ * standing down on `escalate` would drop the review with nobody told.
  */
 function reviewSpent(s: StageContext, prNumber: number): boolean {
   return dispatchVerdict(reviewOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown).kind === 'hold';

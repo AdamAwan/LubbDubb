@@ -9,48 +9,20 @@ import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
 /**
- * The fleet half of the operator's own channel: what the harness is doing, and
- * the handful of verbs that steer it.
+ * The fleet half of the operator's own channel: what the harness is doing, and the
+ * handful of verbs that steer it. (`desktopTools.ts` is the per-goal half.)
+ * → `docs/spec/11-mcp-tools.md#the-desktop-channel`
  *
- * Everything in `desktopTools.ts` is about **one goal** — read its plan, argue
- * with it, take one of its checks. These seven are about the **harness**: what is
- * running, what it is waiting on a person for, what one agent is actually doing,
- * and the four things an operator does between goals — change the cap or pause,
- * re-order or drop from the queue, answer the thing in "Needs you", and start or
- * stop the fleet working a ticket.
- *
- * ## Why they exist
- *
- * The cockpit was the only way to do any of this, and the cockpit is a browser tab
- * on one machine. An operator who wants their own agent watching the fleet —
- * noticing a park overnight, answering a question, lowering the cap when the
- * account's window is nearly spent — had the bearer token and forty hand-rolled
- * endpoints, or nothing.
- *
- * ## The fence
- *
- * **Nothing here dispatches an agent.** `queue_control` and `goal_control` change
- * what the fleet would pick up next, and `fleet_control` changes how much of it
- * runs at once; none of them names work to start, writes code, opens a pull
- * request or settles a goal. The verbs that do are the fleet's own, behind the
- * origin an agent was dispatched on — and this credential is long-lived and sits
- * in the operator's home directory, which is precisely why the line is drawn
- * here rather than left to a caller's judgement.
- *
- * **Every write goes through the same object the cockpit's click does** —
- * `RuntimeControl.apply`, `EscalationInbox.answer`, `PermissionDesk.decide`,
- * `Store.setPriorityOverrides`, `applyIssueWatch` — never a second implementation
- * beside it. A control surface that reached the store directly would be a second
- * opinion about what a pause or a watch means, free to disagree with the cockpit
- * on the next change to either.
+ * **Nothing here dispatches an agent**: these change what the fleet would pick up
+ * next and how much of it runs, never what work starts. **Every write goes through
+ * the same object the cockpit's click does** — never a second implementation beside
+ * it, which would be free to disagree about what a pause or a watch means.
  */
 
 /**
- * A cycle after a steering write, for the cockpit routes' reason: the ranking or
- * the gate is what changed, so the caller should see the new queue rather than
- * wait a heartbeat to find out whether the call did anything. Safe for the same
- * reason too — none of these un-holds an item held by a cooldown, a cap, an
- * unapproved plan or an ignore tag.
+ * A cycle after a steering write, as the cockpit routes do: the caller sees the new
+ * queue rather than waiting a heartbeat. Safe because none of these un-holds an item
+ * held by a cooldown, a cap, an unapproved plan or an ignore tag.
  */
 async function settle(deps: DesktopToolDeps): Promise<void> {
   await deps.runCycle();
@@ -62,8 +34,7 @@ function describeAgent(deps: DesktopToolDeps, agent: Agent): Record<string, unkn
   return {
     agentId: agent.id,
     status: agent.status,
-    // The agent's own answer to "what are you doing right now", from `note_progress`.
-    // Null is a supported state, not a degraded one: plenty of agents never call it.
+    // From `note_progress`. Null is supported, not degraded: many agents never call it.
     note: agent.note,
     notedAt: agent.notedAt,
     waitingReason: agent.waitingReason,
@@ -80,12 +51,9 @@ function describeAgent(deps: DesktopToolDeps, agent: Agent): Record<string, unkn
 }
 
 /**
- * What kind of thing an inbox item is, which decides how it may be settled.
- *
- * Read here rather than by the caller because the three that are not questions
- * cannot be answered with text: a proposal is a decision, a permission request is
- * an agent blocked inside a tool call, and an orphan's agent is dead. Answering
- * any of them as a question settles the row and loses the thing it was about.
+ * What kind of thing an inbox item is, which decides how it may be settled. The
+ * three that are not questions cannot be answered with text, and answering one as a
+ * question settles the row and loses what it was about.
  * → `src/server/routes/escalations.ts`, which refuses on the same three.
  */
 function inboxKind(
@@ -102,17 +70,10 @@ function inboxKind(
 
 /**
  * The whole fleet in one call: what is running, what is queued, what it costs and
- * how much of the account's allowance is gone.
- *
- * **The account windows are the reason this is one call and not three.** An
- * operator's agent asked to keep an eye on the fleet is nearly always deciding
- * one thing — is there room to run more, or should the cap come down — and the
- * cap, the live count and the five-hour window are the three numbers that answer
- * it. Split across tools, a session would routinely act on two of them.
- *
- * A read and only a read. `fleet_control` is the write, and they are separate for
- * the reason `goal_read` is separate from everything: a tool that reported and
- * steered in one call would make every check-in a change.
+ * how much of the account's allowance is gone. One call rather than three because
+ * the cap, the live count and the five-hour window answer one question together and
+ * a session would otherwise act on two of them. A read only — `fleet_control` is
+ * the write.
  */
 export const fleetStatus: DesktopToolFactory = (deps) => ({
   description:
@@ -132,15 +93,14 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
         cap: control.cap,
         paused: control.paused,
         running: live.length,
-        // Said plainly because it is the one number a session reading `cap` alone
-        // gets wrong: a paused fleet with headroom dispatches nothing.
+        // Said plainly: a paused fleet with headroom dispatches nothing.
         headroom: control.paused ? 0 : Math.max(control.cap - live.length, 0),
       },
       agents: live.map((a) => describeAgent(deps, a)),
       queue:
         upcoming === null
-          ? // Null until the first cycle of this boot, which is a real state and not
-            // an empty queue: the dispatcher has not yet said what it would do.
+          ? // Null until the first cycle of this boot — a real state, not an empty
+            // queue: the dispatcher has not yet said what it would do.
             { at: null, items: [], note: 'No cycle has run since the harness started, so there is no queue yet.' }
           : {
               at: upcoming.at,
@@ -156,9 +116,8 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
       jobs: deps.store
         .listQueuedJobs()
         .map((j) => ({ id: j.id, title: j.title, kind: j.kind, createdAt: j.createdAt })),
-      // Three-valued in effect: null is an account that has reported no window at
-      // all this boot, which is not the same as one with room. A session must not
-      // read absence as headroom.
+      // Null is an account that has reported no window this boot, which is not the
+      // same as one with room: absence must never read as headroom.
       accountUsage:
         limits === null
           ? null
@@ -184,14 +143,9 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
 
 /**
  * The cap, the pause, and a cycle on demand — the three live dispatch controls.
- *
- * **Ephemeral and in-memory, exactly as the cockpit's are.** Nothing here is
- * written to the config file, so a restart comes back on whatever
- * `maxConcurrentAgents` and `startPaused` say. That is worth stating in the reply
- * rather than leaving a session to assume it has made a lasting change.
- *
- * `cap` is validated by `RuntimeControl.apply` and not here: two answers to one
- * question is what a check in this handler would be.
+ * **Ephemeral and in-memory, as the cockpit's are**: a restart comes back on the
+ * configured `maxConcurrentAgents` and `startPaused`, which the reply says. `cap` is
+ * validated by `RuntimeControl.apply`, never a second time here.
  */
 export const fleetControl: DesktopToolFactory = (deps) => ({
   description:
@@ -233,7 +187,6 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
     const pulse = args.pulse === true;
     if (patch.cap === undefined && patch.paused === undefined && !pulse) {
       // A call that changes nothing is nearly always a session that meant to read.
-      // Naming the read is worth more than a silent no-op it would report as a change.
       return toolError('Nothing to do — give `cap`, `paused` or `pulse`. To read the fleet, call fleet_status.');
     }
 
@@ -258,14 +211,10 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * "Needs you" as one list, with what settles each row.
- *
- * The cockpit's inbox is four different objects that share a panel — a question an
- * agent parked on, a permission request it is blocked inside, an act proposed for
- * approval, and a run orphaned by a crash. They come back together because that is
- * how an operator reads them, and each row names its own `kind`, because that is
- * what decides how it may be answered and three of the four cannot be answered
- * with text at all.
+ * "Needs you" as one list, with what settles each row. Four different objects share
+ * the panel — a parked question, a blocked permission request, a proposed act, a
+ * run orphaned by a crash — so each row names its own `kind`: three of the four
+ * cannot be answered with text at all.
  */
 export const attentionRead: DesktopToolFactory = (deps) => ({
   description:
@@ -283,9 +232,8 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
           kind,
           type: item.type,
           prompt: item.prompt,
-          // The questionnaire when there is one: an item with questions is answered
-          // one answer per question, positionally, and a session that sent free text
-          // would put one answer under every heading.
+          // The questionnaire when there is one: answered one answer per question,
+          // positionally, so free text would land under every heading.
           questions: item.context?.questions ?? null,
           agentId: item.agentId,
           originRef: item.context?.originRef ?? null,
@@ -301,9 +249,8 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
                   : `the cockpit — the agent that asked this crashed, and its run (${detail}) needs a recovery verdict first`,
         };
       }),
-      // The open ones only. A settled task is a record, and this list is what is
-      // still waiting — a session reading a done row as outstanding would report
-      // work nobody has to do.
+      // The open ones only: a settled task is a record, and this list is what is
+      // still waiting.
       humanTasks: deps.store
         .listAllHumanTasks()
         .filter((t) => t.status === 'open')
@@ -314,10 +261,9 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
           detail: t.detail,
           originRef: t.originRef,
           createdAt: t.createdAt,
-          // Named for the escalation rows' reason, and it is the whole of why this
-          // list stopped being a dead end: a row whose id `escalation_answer`
-          // refuses by construction — it is not an escalation — read as stuck in
-          // the harness rather than as work with a different verb.
+          // Named because `escalation_answer` refuses these ids by construction —
+          // they are not escalations — and a bare refusal reads as the harness
+          // having lost the row rather than as the wrong verb.
           settledBy: "human_task_settle with `status: 'done' | 'declined'`",
         })),
       orphanedRuns: deps
@@ -343,18 +289,9 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
 
 /**
  * The two ways an inbox item is settled from here: an answer typed into the agent,
- * and a verdict on a blocked tool call.
- *
- * **They are one tool with two arms rather than two tools**, because they are one
- * row in one inbox: a session that read `attention_read` has a list where the
- * difference between them is a field, and a second tool name would be one more
- * thing to get wrong about a row it already knows the kind of.
- *
- * The three refusals are the route's, by the same reads and for the same reasons —
- * a proposal, a permission request answered as free text, and an item whose agent
- * has crashed. Each names where it is actually settled rather than failing bare:
- * an inbox row a session cannot settle and cannot explain is one the operator
- * finds hours later.
+ * and a verdict on a blocked tool call. One tool with two arms, because they are one
+ * row in one inbox and the difference is a field. The three refusals are the route's
+ * own, and each names where the row *is* settled rather than failing bare.
  */
 export const escalationAnswer: DesktopToolFactory = (deps) => ({
   description:
@@ -388,9 +325,8 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
     if (!id) return toolError('id required — take it from attention_read.');
     const item = deps.store.getEscalation(id);
     if (!item) {
-      // A bench row's id lands here as often as a typo does — `attention_read`
-      // returns both lists — and "No escalation" reads as the harness having lost
-      // the row rather than as the wrong verb. Name the tool that does take it.
+      // A bench row's id lands here as often as a typo does, since `attention_read`
+      // returns both lists. Name the tool that does take it.
       const task = deps.store.getHumanTask(id);
       if (task)
         return toolError(
@@ -448,10 +384,8 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
           "would go nowhere. Answer it with `permission: 'allow'` or `'deny'`.",
       );
 
-    // A questionnaire is folded here, by the server, exactly as the route folds it:
-    // the checks are refusals rather than best-effort padding, because a mismatched
-    // array is a caller that disagrees with the harness about what was asked, and
-    // answering anyway puts an answer under the wrong question.
+    // Folded here exactly as the route folds it, and the checks are refusals rather
+    // than padding: a mismatched array puts an answer under the wrong question.
     let response: string;
     if (args.answers !== undefined) {
       const questions = item.context?.questions;
@@ -473,9 +407,8 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
       const result = deps.escalations().answer(id, response);
       return toolJson({
         settled: id,
-        // Stated rather than inferred from a bare "ok": these are different futures
-        // for the answer, and a session told only that the call succeeded would
-        // reasonably believe an agent had read it.
+        // Stated rather than inferred from a bare "ok": a session told only that the
+        // call succeeded would believe an agent had read the answer.
         routing: result.routing,
         means:
           result.routing === 'typed_into_agent'
@@ -493,17 +426,10 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
 const TRANSCRIPT_TAIL = 8000;
 
 /**
- * One agent, close up: its row, what it has written, and the tail of its output.
- *
- * The tail rather than the whole transcript, and the end of it rather than the
- * start: a long run's transcript is megabytes, and the question a session is
- * nearly always answering — why is this parked, what is it stuck on — is answered
- * by the last few thousand characters. `chars` widens it for the case that is not.
- *
- * **It is a read.** Nothing here responds to the agent, kills it or completes it:
- * an agent parked on a question is answered through its inbox row
- * (`escalation_answer`), which is the same path the cockpit takes and the one that
- * settles the row as well as typing the text.
+ * One agent, close up: its row, what it has written, and the tail of its output —
+ * the tail because a long transcript is megabytes and "what is it stuck on" lives at
+ * the end; `chars` widens it. **A read**: an agent parked on a question is answered
+ * through `escalation_answer`, which settles the row as well as typing the text.
  */
 export const agentRead: DesktopToolFactory = (deps) => ({
   description:
@@ -534,8 +460,7 @@ export const agentRead: DesktopToolFactory = (deps) => ({
     return toolJson({
       ...describeAgent(deps, agent),
       files: deps.store.listFiles(id).map((f) => f.path),
-      // Named so a session knows it is reading an excerpt: an agent judged on a
-      // truncated transcript it believed was whole is the failure worth avoiding.
+      // Named so a session knows it is reading an excerpt rather than the whole.
       transcript: { totalChars: full.length, tailChars: Math.min(tail, full.length), tail: full.slice(-tail) },
       awaitingAnswer: open.map((e) => ({ id: e.id, prompt: e.prompt })),
       next:
@@ -549,18 +474,11 @@ export const agentRead: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The "Up next" queue's two operator verbs: what runs first, and dropping a brief
- * that has not run.
- *
- * `order` replaces the whole override set rather than moving one row, because that
- * is what the store records: a rank per origin, 0..n-1. Sending one origin pins
- * that origin first and clears every other pin, which is a real thing to want and
- * a surprising thing to do by accident — so the reply says how many pins now
- * stand.
- *
- * **It re-orders and nothing else.** It does not un-hold a held row, and a manual
- * job stays ahead of everything whatever this says. A session that reads a
- * successful call as "this will now run" has misread it, and the reply says so.
+ * The "Up next" queue's operator verbs: what runs first, dropping a brief that has
+ * not run, and pricing one row. `order` **replaces** the whole override set rather
+ * than moving one row — sending one origin clears every other pin — so the reply
+ * says how many stand. **It re-orders and nothing else**: it un-holds no held row,
+ * and a manual job still goes first.
  */
 export const queueControl: DesktopToolFactory = (deps) => ({
   description:
@@ -604,9 +522,8 @@ export const queueControl: DesktopToolFactory = (deps) => ({
           'fleet_status.',
       );
 
-    // Priced before anything else is written: the two halves are one answer, and a
-    // pin naming a profile that resolves to nothing prices nothing while reading as
-    // a decision taken — the same refusal the cockpit's route makes, by name.
+    // Priced before anything else is written: a pin naming an unknown profile prices
+    // nothing while reading as a decision taken, so it is refused by name.
     let priced: { origin: string; profile: string | null } | null = null;
     if (wantsPrice) {
       const origin = typeof args.origin === 'string' ? args.origin.trim() : '';
@@ -630,8 +547,7 @@ export const queueControl: DesktopToolFactory = (deps) => ({
       if (!Array.isArray(args.order) || args.order.some((o) => typeof o !== 'string'))
         return toolError('order must be an array of origin strings.');
       const origins = (args.order as string[]).map((o) => o.trim()).filter((o) => o !== '');
-      // A duplicate is two ranks for one row, which is meaningless and would make
-      // the stored order depend on insertion accident. The route refuses it too.
+      // A duplicate is two ranks for one row, which the route refuses too.
       if (new Set(origins).size !== origins.length) return toolError('order must not name the same origin twice.');
       deps.store.setPriorityOverrides(origins);
       pinned = origins;
@@ -662,25 +578,16 @@ export const queueControl: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The two standing marks on a goal: whether the fleet works it at all, and whether
- * it works it first.
+ * The standing marks on a goal — whether the fleet works it at all, whether it works
+ * it first, and what it runs on. They are different kinds of thing:
  *
- * They look alike and are not the same kind of thing, which is why one tool draws
- * the difference rather than leaving a session to infer it:
+ * - **`watched` is a tag on the tracker item**, written through the provider and
+ *   visible to anyone reading the ticket. It cascades to every descendant of a
+ *   container. → `src/issueWatch.ts`
+ * - **`priority` is the harness's own record**, deliberately not a label: it is
+ *   about *this deployment's queue*, which no other deployment should inherit.
  *
- * - **`watched` is a tag on the tracker item**, written through the provider, and
- *   a statement about the *goal* that a human reading the ticket sees. It
- *   cascades: watching a Feature tags every descendant, because a container is
- *   never worked itself. → `src/issueWatch.ts`
- * - **`priority` is the harness's own record**, and deliberately not a label. It
- *   is a statement about *this deployment's queue* — what its fleet works next
- *   while it is short of slots — and a tag saying so would claim something the
- *   tracker cannot honour and every other deployment reading that board would
- *   inherit it.
- *
- * Unwatching is the nearest thing this channel has to "stop working on that", and
- * it is honest about what it is: the tag comes off so nothing further is picked
- * up, and an agent already running on the goal keeps running.
+ * Unwatching stops the next dispatch only; an agent already running keeps running.
  */
 export const goalControl: DesktopToolFactory = (deps) => ({
   description:
@@ -724,11 +631,9 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       return toolError('Nothing to do — give `watched`, `priority` or `profile`. To read the goal, call goal_read.');
 
     // The tag on the ticket and the settlement of the appraiser's question, both
-    // through `applyProfilePin` — the cockpit's own write. This arm used to call
-    // `setProfileOverride`, which prices one *queued row* and is `queue_control`'s
-    // job: it left the ticket untagged, left the question unanswered, and reported
-    // a pin the gate went on holding the goal in spite of. Refused by name before
-    // anything is written, exactly as the route refuses it.
+    // through `applyProfilePin` — the cockpit's own write. Never `setProfileOverride`,
+    // which prices one *queued row* and is `queue_control`'s job: it would leave the
+    // ticket untagged and the question unanswered while reporting a pin.
     let profile: { profile: string | null; answered: boolean } | null = null;
     if (wantsProfile) {
       if (typeof args.profile !== 'string') return toolError('profile must be a string, or "" to clear the pin.');
@@ -770,8 +675,7 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       );
       if (!outcome.label) {
         // The gate is off on this deployment: everything is watched and there is no
-        // tag to write. Saying so is the answer — a session told "watched: true"
-        // would report a change that did not happen and could not have.
+        // tag to write, so saying so is the answer.
         watch = {
           watched,
           wrote: 0,
@@ -787,9 +691,8 @@ export const goalControl: DesktopToolFactory = (deps) => ({
           watched,
           wrote: outcome.landed.length,
           cascaded: Math.max(outcome.targets.length - 1, 0),
-          // A partial failure is reported, never swallowed: an operator told
-          // "watched" while three of eight children kept the old tag has been told
-          // the wrong thing about what the harness will pick up.
+          // A partial failure is reported, never swallowed: an operator told "watched"
+          // while some children kept the old tag has been misled about pickup.
           kept: outcome.failed.map((f) => `#${f.number}: ${f.message}`),
         };
       }
@@ -801,9 +704,8 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       watch,
       priority,
       profile: profile === null ? undefined : profile.profile,
-      // Said rather than left to be inferred: settling the appraiser's question is
-      // the *whole* point of the pin on a goal the gate is holding, and a session
-      // told only that a tag was written cannot tell a released goal from a held one.
+      // Said rather than inferred: a session told only that a tag was written cannot
+      // tell a released goal from a held one.
       profileQuestionAnswered: profile === null ? undefined : profile.answered,
       means:
         'this changes what the harness picks up next and in what order. Nothing running was stopped: an agent ' +
@@ -816,24 +718,14 @@ export const goalControl: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The bench's two verbs, on the channel that can already see the bench.
+ * The bench's two verbs. A human task is not an escalation
+ * ({@link docs/spec/13-jobs-and-tickets.md}), so it takes its own name rather than
+ * being refused by `escalation_answer` as a lost row.
  *
- * `attention_read` has always listed the open human tasks, and until this tool
- * there was nothing here that could settle one: a session that tried the obvious
- * thing got `escalation_answer`'s "No escalation" — the id is a `hum_…` row and
- * that tool reads `escalations` — which reads as the harness having lost the row
- * rather than as the wrong verb. The row is not an escalation and never was
- * ({@link docs/spec/13-jobs-and-tickets.md}), so it takes its own name.
- *
- * **The settlement is `settleHumanTask`'s, shared with the cockpit's routes.** The
- * close-out's note, the part that concludes on `done` and deliberately does not on
- * `declined`, are one definition rather than two — a second copy here would be
- * free to conclude a part the cockpit would have left blocked, with nothing red.
- *
- * `close_ticket` is deliberately **not** an arm: it writes to the tracker, which is
- * an act rather than a record of one, and this channel steers the fleet without
- * acting for it. A close-out settles here as `done` for a close taken elsewhere,
- * and the tool says which is which.
+ * **The settlement is `settleHumanTask`'s, shared with the cockpit's routes** — a
+ * second copy here would be free to conclude a part the cockpit would have left
+ * blocked. `close_ticket` is deliberately not an arm: it writes to the tracker, and
+ * this channel steers the fleet without acting for it.
  */
 export const humanTaskSettle: DesktopToolFactory = (deps) => ({
   description:
@@ -879,9 +771,8 @@ export const humanTaskSettle: DesktopToolFactory = (deps) => ({
     const note = typeof args.note === 'string' ? args.note : undefined;
     const settled = settleHumanTask(deps.store, { id, status, note });
     if (!settled.ok) return toolError(settled.error);
-    // A concluded part releases whatever named it in `dependsOn`, and the release
-    // happens on a pulse — run one rather than leaving dependents pending until the
-    // heartbeat, exactly as the cockpit's route does.
+    // A concluded part releases whatever named it in `dependsOn`, on a pulse — run
+    // one rather than leaving dependents pending, as the cockpit's route does.
     if (settled.runCycle) await settle(deps);
     return toolJson({
       settled: id,

@@ -29,39 +29,14 @@ interface RecoveryOutcome {
 type RecoveryResult = { ok: true; outcome: RecoveryOutcome } | { ok: false; error: string };
 
 /**
- * Where an agent orphaned by a crash or a shutdown waits for an operator's call.
+ * Where work orphaned by a crash or a shutdown waits for an operator's call.
+ * Detection decides nothing: it marks each orphan `crashed` and the harness
+ * **holds every pulse** until the set is empty.
  *
- * **The reason this exists is that the harness used to make the call itself.** The
- * old boot reconciler resumed every orphan it could and marked the rest
- * `interrupted`, then the boot cycle dispatched new work straight over the top.
- * Both outcomes are choices an operator has an opinion about — a resumed agent
- * carries on from a turn nobody has read, and an abandoned one silently drops work
- * that may have been minutes from a PR — and neither was ever put to anyone. Worse,
- * the harness went on staffing the fleet while its own model of that fleet was a
- * lie: rows saying `running` with no process behind them.
- *
- * So detection no longer decides. It marks each orphan `crashed` — a status that is
- * explicitly *not* live, so it stops counting toward the concurrency cap and stops
- * pretending in the cockpit — and the harness **holds every pulse** until the set is
- * empty (see {@link file://../harness.ts}). Nothing new is queued in front of a
- * decision about work already in flight, which is the whole point.
- *
- * **Why the pending set is durable but this class is not.** The set is the rows
- * themselves, so it survives a second restart with no state here to persist and
- * no chance of the two disagreeing; {@link detect} is idempotent because a row that
- * is already `crashed` is already in the set. Contrast {@link PermissionDesk}, whose
- * pending calls are open sockets that genuinely die with the process. Each of the
- * three verdicts moves the row *out* of the candidate set — restore makes it live,
- * requeue and remove settle its task — so "already decided" needs no separate record.
- *
- * **The set has two arms, because a restart orphans work in two ways.** An agent row
- * with no process behind it is one. The other is a task with *no agent row at all* —
- * the restart landed between `store.createTask` and `agents.spawn` in the executor —
- * and it is the more damaging of the two, because such a task stays `queued`, which
- * every dispatch gate reads as *this work is already being done*. Its origin and its
- * branch are wedged shut for good and the dispatcher reports "nothing actionable"
- * against an idle fleet, indefinitely. That arm needs no stamp and takes no restore;
- * see {@link isAgentlessCandidate} and {@link restorability} for both arguments.
+ * The pending set is the rows themselves, so it needs no state here and survives a
+ * restart; each verdict moves a row out of it, so "already decided" needs no record.
+ * The set has two arms — an orphaned agent, and a task with no agent row at all.
+ * → `docs/spec/10-agent-runtimes.md#crash-recovery`
  */
 export class RecoveryDesk {
   constructor(
@@ -71,11 +46,7 @@ export class RecoveryDesk {
       escalations: EscalationInbox;
       /** Whether the configured runtime can `--resume` a session at all (PTY only). */
       resumable: boolean;
-      /**
-       * When *this* process started. The fence on the agentless arm: a task created
-       * since is a live dispatch mid-flight, not an orphan. Injectable so a test can
-       * place a task on either side of it deliberately.
-       */
+      /** When *this* process started — the fence on the agentless arm: a task created since is a live dispatch mid-flight, not an orphan. Injectable for tests. */
       bootedAt?: string;
       errors?: ErrorRecorder;
     },
@@ -87,21 +58,14 @@ export class RecoveryDesk {
 
   /**
    * Find every piece of work orphaned by the previous run and park it for a
-   * decision. Runs once at boot, **before** the heartbeat starts — though the hold
-   * does not depend on that ordering, since the harness re-asks on every pulse.
+   * decision. Runs once at boot; no resume is attempted and nothing is buried.
    *
-   * Marking the row is the whole of it: no resume is attempted, nothing is buried.
-   * **Only a row that still claimed to be live is restamped** — an `interrupted`
-   * one is already both non-live and honest about how it ended, and leaving it
-   * alone is what preserves the crash / graceful-shutdown distinction without a
-   * column to hold it. `endedAt` is stamped because the process really is gone,
-   * and leaving it null would have the file-overlap detector treat a dead agent as
-   * eternally live. A genuine crash also lands in the error log; a clean shutdown
-   * does not, because nothing failed.
-   *
-   * The agentless arm writes **nothing at all** — its candidates are computed, so
-   * detection there is a reading rather than a change — but it is still announced,
-   * because a wedged origin is otherwise the most silent failure the harness has.
+   * **Only a row that still claimed to be live is restamped** — leaving an
+   * `interrupted` one alone is what preserves the crash / graceful-shutdown
+   * distinction without a column. `endedAt` is stamped because the process really is
+   * gone; null would leave the file-overlap detector treating it as eternally live.
+   * The agentless arm writes nothing, but is still announced — a wedged origin is
+   * otherwise silent.
    */
   detect(): OrphanedWork[] {
     const at = new Date().toISOString();
@@ -140,31 +104,13 @@ export class RecoveryDesk {
   }
 
   /**
-   * Restore the agents this harness interrupted **on purpose**, on the way back up
-   * from an upgrade it asked for.
+   * Restore the agents this harness interrupted **on purpose**, coming back up from
+   * an upgrade — the second half of a decision the operator already took.
    *
-   * **The verdict was decided before the shutdown, not here.** An operator who
-   * pressed apply with agents running was told in the refusal they overrode that
-   * those agents come back, so this is the second half of a decision already taken
-   * — not the harness quietly deciding for them, which is the thing
-   * {@link RecoveryDesk} exists to have stopped doing.
-   *
-   * Two fences keep it that narrow, and both matter:
-   *
-   * - **Only under `applying`.** The intent row is written before the process goes
-   *   and cleared once this has run, so any other state means this restart was not
-   *   the upgrade's — and an operator who kills the server midway through one is
-   *   asking a different question.
-   * - **Only `interrupted`.** A `crashed` row is one that never got the chance to
-   *   write an ending, so *something else* killed that agent between the handoff and
-   *   the restart. That is a genuine crash inside an upgrade window, its work is in
-   *   an unknown state, and it lands in the panel like any other. Anything not
-   *   restorable — no session id, worktree gone — lands there too, with the reason
-   *   `restorability` already wrote.
-   *
-   * Returns what it restored and what it left, so boot can say both out loud: a
-   * partial auto-restore that mentioned only its successes would read as a clean
-   * upgrade with a held pulse and no stated cause.
+   * Two fences keep it narrow: only under the `applying` intent state, and only
+   * `interrupted` rows. A `crashed` row means something else killed that agent
+   * inside the upgrade window, so it lands in the panel like any other orphan.
+   * Returns what it restored *and* what it left, so boot can say both out loud.
    *
    * @public called by `src/server/main.ts` at boot, after `detect`.
    */
@@ -182,10 +128,8 @@ export class RecoveryDesk {
         restored.push(item);
         continue;
       }
-      // A restore that fails leaves the row exactly as it was, so the operator gets
-      // the same three choices they would have had — and a fault line saying why the
-      // automatic one did not take, which is otherwise invisible against a panel
-      // that simply appeared.
+      // A failed restore leaves the row as it was — same three choices — plus a
+      // fault line saying why the automatic one did not take.
       left.push(item);
       this.deps.errors?.record({
         source: 'boot',
@@ -197,18 +141,11 @@ export class RecoveryDesk {
   }
 
   /**
-   * The outstanding decisions, derived from the rows rather than held in a field —
-   * so a restart, a second cockpit and this process always agree.
-   *
-   * **Arm one, an orphaned agent.** Two statuses, for the two ways a run ends
-   * without an ending: `crashed` (the process fell over) and `interrupted` (a clean
-   * shutdown). The task check is what keeps a *decided* orphan out — both `requeue`
-   * and `remove` settle the task, so an agent left `interrupted` by an earlier
-   * verdict is history, not a question.
-   *
-   * **Arm two, an orphaned task.** Outstanding, with no agent row anywhere pointing
-   * at it, created before this process booted. The two arms cannot double-count:
-   * the first is reached from an agent row and the second requires there to be none.
+   * The outstanding decisions, derived from the rows rather than held in a field, so
+   * a restart, a second cockpit and this process always agree. Arm one is an
+   * orphaned agent (`crashed` or `interrupted`, task still outstanding); arm two is
+   * an outstanding task with no agent row, created before this process booted. The
+   * two cannot double-count — the second requires there to be no agent row.
    */
   pending(): OrphanedWork[] {
     const out: OrphanedWork[] = [];
@@ -284,14 +221,9 @@ export class RecoveryDesk {
       });
     }
 
-    // Both remaining verdicts end this work for good, so they share the teardown:
-    // the rows are settled (which is also what keeps them out of the next boot's
-    // candidate set) and the questions left open are dismissed — nobody can answer a
-    // dead agent, and the answer would route nowhere. **Settling the task is the
-    // load-bearing half**, and the only half an agentless orphan has: `interrupted`
-    // is what releases the origin and the branch that the `queued` row was holding
-    // shut. An orphan that never had an agent has no escalations by construction —
-    // an escalation is raised by a process, and none ever ran.
+    // Both remaining verdicts end this work for good and share the teardown.
+    // Settling the *task* is the load-bearing half: `interrupted` is what releases
+    // the origin and the branch the `queued` row was holding shut.
     const at = new Date().toISOString();
     if (agent) {
       this.deps.store.updateAgent(agent.id, { status: 'interrupted', endedAt: agent.endedAt ?? at, pid: null });
@@ -365,31 +297,14 @@ export class RecoveryDesk {
 /**
  * The job this task was dispatched for, if that job is **still queued** — the one
  * case where a requeue must file nothing and hand the existing job back instead.
+ * A job leaves the queue only after the spawn succeeds, so one still `queued`
+ * means no agent ever ran and there is nothing to redo.
  *
- * **A job leaves the queue only through `markJobDispatched`, which runs after the
- * spawn succeeds.** So a job still `queued` behind a task means no agent ever ran:
- * the dispatch died between `createTask` and `spawn` (a failed `worktrees.ensure`,
- * a restart in that window), and the job it came from is sitting in the queue
- * exactly as it was. There is nothing to redo, and the queue already holds the
- * request — filing a second job for it is not a requeue, it is a duplicate.
- *
- * **A duplicate that then locks the queue shut.** The new job's `originRef` is the
- * task's, which is `job:<predecessor>`, and `STANDING_SQL` folds every *queued*
- * job's `origin_ref` into the standing set — so job N+1 stands in for job N, and
- * rule `manual-job`'s `activeOrigins` check skips N for as long as N+1 is queued.
- * Only the newest of such a chain is ever tried; each failure adds another link
- * ("Requeued: Requeued: Requeued: …"), and no link older than the newest can ever
- * run or expire. The gate is right — it is what stops a requeue and the rule that
- * produced the original both dispatching (#249) — so the fix is upstream of it: do
- * not create the second job, and no chain can form.
- *
- * The `dispatched` case is deliberately left to file a real job: there an agent
- * *did* run, its work may be on the branch, and the predecessor is no longer
- * standing (not queued, and its task is settled by the verdict being applied), so
- * nothing is wedged.
- *
- * Note what this does **not** repair: a chain already in a database predates the
- * collapse and stays locked until its newest link is cancelled.
+ * Filing a second job there wedges the queue: its `originRef` is `job:<predecessor>`,
+ * which puts N+1 in the standing set for N, so only the newest link of the chain is
+ * ever tried and no older one can run or expire. A chain already in a database stays
+ * locked until its newest link is cancelled. The `dispatched` case does file a real
+ * job — there an agent ran and its work may be on the branch.
  */
 function stillQueuedJobBehind(task: Task, store: Store): Job | null {
   const id = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
@@ -399,20 +314,14 @@ function stillQueuedJobBehind(task: Task, store: Store): Job | null {
 }
 
 /**
- * The audit-log cycle id every recovery decision is grouped under — the same
- * device `agent-lifecycle` uses for bookkeeping that happens outside a pulse. Not
- * the `human:` prefix, which the cockpit's decision log resolves to a *proposal*
- * id; a recovery is settled by its own route, not through the proposal desk.
+ * The audit-log cycle id every recovery decision is grouped under. Not the `human:`
+ * prefix, which the cockpit's decision log resolves to a *proposal* id.
  */
 const RECOVERY_CYCLE = 'crash-recovery';
 
 /**
- * When this process started, read once at module load.
- *
- * It fences the agentless arm of the candidate set off from *this* run's dispatches,
- * which are transiently agentless between `createTask` and `spawn` — see
- * {@link isAgentlessCandidate}. Module scope rather than a construction timestamp
- * because it must not drift between two desks in one process; it is overridable per
- * desk only so a test can put a task on either side of it.
+ * When this process started, read once at module load — module scope rather than a
+ * construction timestamp because it must not drift between two desks in one
+ * process. Fences the agentless arm off from this run's own in-flight dispatches.
  */
 const BOOTED_AT = new Date().toISOString();

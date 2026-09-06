@@ -49,11 +49,9 @@ import { hydrationMaxAgeMs, prReadRef, type ReadPlan } from '../../world/readPla
 import { githubRefUrl } from './refUrl.js';
 
 /**
- * The half of a hydrated pull request that costs the four per-PR reads —
- * `getPull`, `listPullReviews`, `listPullReviewComments` and the review-thread
- * GraphQL query — held against the `updated_at` the list payload reported when
- * it was read. Everything else on a {@link PullRequest} comes off the list
- * payload, which is fetched every pulse and so is never cached.
+ * The half of a hydrated pull request that costs the four per-PR reads, held
+ * against the `updated_at` the list payload reported. Everything else on a
+ * {@link PullRequest} comes off the list payload and is never cached.
  */
 interface CachedPullDetail {
   /** The token this hydration is valid for. */
@@ -67,10 +65,9 @@ interface CachedPullDetail {
 }
 
 /**
- * The CI half, held against the head SHA rather than `updated_at` — a check run
- * completing does not touch a pull request's `updated_at`, so gating these on it
- * would freeze a red build as green (or a green one as pending) for as long as
- * nobody commented.
+ * The CI half, held against the head SHA rather than `updated_at`: a check run
+ * completing does not touch `updated_at`, so gating on it would freeze a red build
+ * as green for as long as nobody commented.
  */
 interface CachedPullCi {
   headSha: string;
@@ -80,9 +77,8 @@ interface CachedPullCi {
 
 /**
  * Whether a CI reading is finished with, i.e. safe to reuse while the head SHA
- * holds. `pending` is a build still running and `unknown` is one nothing has
- * reported yet — both are readings that will change without any token moving, so
- * both are refetched every pulse.
+ * holds. `pending` and `unknown` change without any token moving, so both are
+ * refetched every pulse.
  */
 function ciSettled(status: CiStatus): boolean {
   return status === 'passing' || status === 'failing';
@@ -108,21 +104,18 @@ interface GitHubSourceControlOpts {
   now?: () => number;
   /**
    * The record of which replies this harness actually sent — what decides whether
-   * a reply is the fleet's. Threaded in from `src/system.ts` via the registry.
-   * Unset means "no record": every thread reads as unanswered work, which is the
-   * safe direction and never a claim that the fleet handled something.
+   * a reply is the fleet's. Unset means "no record": every thread reads as
+   * unanswered work, never as handled.
    * → `docs/spec/07-pull-requests.md#review-threads`
    */
   sentReplies?: SentPrReplies;
 }
 
 /**
- * The real `sourceControl` provider: reads pull requests (and the merge-readiness
- * signals the PR-monitoring loop drives on) from the GitHub API, and posts replies
- * / merges through it. A drop-in for {@link FakeGitHubIntegration} — same
- * {@link Integration} + {@link PrReplyCapable} + {@link PrMergeCapable} seams, but
- * reading from the network instead of an injected fake world, so it is *not*
- * `Injectable`.
+ * The real `sourceControl` provider: reads pull requests and the merge-readiness
+ * signals from the GitHub API, and posts replies / merges through it. A drop-in for
+ * {@link FakeGitHubIntegration} over the same seams, but network-backed, so it is
+ * *not* `Injectable`.
  */
 export class GitHubSourceControlIntegration
   implements
@@ -149,8 +142,7 @@ export class GitHubSourceControlIntegration
 
   /**
    * Change-gated hydration, keyed by PR number. **Not** a degradation path: a hit
-   * is a *current* reading GitHub's own list payload says has not moved, so it
-   * never sets `stale`, which means the read failed. → {@link HydrationCache}
+   * is a current reading, so it never sets `stale`. → {@link HydrationCache}
    */
   private readonly detailCache: HydrationCache<CachedPullDetail>;
   private readonly ciCache: HydrationCache<CachedPullCi>;
@@ -165,20 +157,16 @@ export class GitHubSourceControlIntegration
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerLogin();
       let pulls = await api.listOpenPulls();
-      // "Your work" is what you opened **or what somebody handed you**. Narrowed to
-      // authorship alone, a pull request assigned to the operator never entered the
-      // world at all, so the assignment could not be reported and the queue could
-      // not raise it — on the default `ownWorkOnly`, which is every real
-      // deployment. Widening costs no request: `assigneeLogins` rides on the list
-      // payload the filter already reads.
+      // "Your work" is what you opened **or what somebody handed you**: narrowed to
+      // authorship alone, an assigned pull request never enters the world at all and
+      // the queue cannot raise it. Costs no extra request.
       if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor || p.assigneeLogins.includes(prAuthor));
       const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          // One lane per pull request, resolved once and handed to both reads: the
-          // two caches gate on different tokens, and a lane that differed between
-          // them would be a pull request half on each.
+          // One lane per pull request, resolved once: the two caches gate on
+          // different tokens, and differing lanes would split a PR across both.
           const maxAgeMs = hydrationMaxAgeMs(plan, prReadRef(p.number));
           const [detail, ci] = await Promise.all([this.pullDetail(p, viewer, maxAgeMs), this.pullCi(p, maxAgeMs)]);
           const pr: PullRequest = {
@@ -187,8 +175,8 @@ export class GitHubSourceControlIntegration
             title: p.title,
             branch: p.branch,
             baseBranch: p.baseBranch,
-            // The commit the checks above ran against — what tells a check that was
-            // fixed from one that flaked (`src/knowledge/noticeDesk.ts`).
+            // The commit the checks ran against — what tells a fixed check from a
+            // flaked one (`src/knowledge/noticeDesk.ts`).
             headSha: p.headSha,
             ciStatus: ci.ciStatus,
             ciChecks: ci.ciChecks,
@@ -202,27 +190,21 @@ export class GitHubSourceControlIntegration
             labels: p.labels,
             url: p.url,
           };
-          // The login is the only name GitHub puts on the list payload, and it is
-          // the name a reviewer is asked by — enough for a row to say who asked.
+          // The login is the only name on the list payload, and what a reviewer is
+          // asked by.
           if (p.authorLogin !== '') pr.author = p.authorLogin;
-          // Whose pull request this is, answered against `viewer` — the identity the
-          // token actually is — for the reason `viewerAssignment` is: `prAuthor` is a
-          // filter, and since it also lets a colleague's *assigned* pull request into
-          // the world, reading it as ownership is what put the fleet on somebody
-          // else's review threads. Left absent when GitHub named neither side, which
-          // every reader falls back to the branch shape for. → `src/prOwnership.ts`
+          // Ownership is answered against `viewer`, the identity the token actually
+          // is — never `prAuthor`, a filter that also admits assigned PRs, which read
+          // as ownership would put the fleet on somebody else's review threads.
+          // Absent where GitHub named neither side. → `src/prOwnership.ts`
           if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
-          // Only ever `true`: a reviewer who has not answered and one GitHub
-          // reports no review from are the same silence, and `false` would assert
-          // a verdict nobody gave.
+          // Only ever `true`: `false` would assert a verdict nobody gave.
           if (detail.viewerApproved) pr.viewerApproved = true;
-          // Resolved against `viewer` — the identity the token actually is — and
-          // never against `prAuthor`, which is a *filter* and is unset the moment a
-          // project turns `ownWorkOnly` off. Read the other way round, turning the
-          // filter off would take the assignment with it.
+          // Against `viewer`, never `prAuthor`: that filter is unset the moment a
+          // project turns `ownWorkOnly` off, which would take the assignment with it.
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
-          // GitHub's tri-state `mergeable`: true/false is a real signal, null means
-          // "still computing" — leave it unknown rather than asserting not-mergeable.
+          // GitHub's tri-state `mergeable`: null means "still computing", so leave
+          // it unknown rather than asserting not-mergeable.
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           return pr;
         }),
@@ -242,9 +224,8 @@ export class GitHubSourceControlIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      // "Last good" means a read that succeeded. With none yet, an empty slice is a
-      // fabricated world, not a stale one — rethrow so the pulse fails rather than
-      // presenting every open PR as vanished.
+      // With no successful read yet, an empty slice is a fabricated world, not a
+      // stale one — rethrow rather than presenting every open PR as vanished.
       if (this.lastGood === null) throw err;
       return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
     }
@@ -252,21 +233,16 @@ export class GitHubSourceControlIntegration
 
   /**
    * The four per-PR reads behind {@link CachedPullDetail}, or the last hydration
-   * when GitHub's `updated_at` says the pull request has not been touched since.
+   * when GitHub's `updated_at` says the pull request has not been touched.
    *
-   * Everything gated here changes only through something done *to* the pull
-   * request — a review, a comment, a resolution, a push, a retarget — and every
-   * one of those bumps `updated_at`. What it does **not** cover is the world
-   * moving underneath: a base branch that advances turns `mergeable_state`
-   * `behind` or `dirty` without touching this token, which is why the cache
-   * expires entries rather than trusting one forever — after `maxAgeMs`, which is
-   * what this pull request's [lane](../../world/readPlan.ts) allows it.
+   * The token does **not** cover the world moving underneath — a base branch that
+   * advances turns `mergeable_state` `behind` without touching it — so entries
+   * also expire after `maxAgeMs`, this PR's [lane](../../world/readPlan.ts).
    */
   private async pullDetail(p: GhPullSummary, viewer: string, maxAgeMs: number): Promise<CachedPullDetail> {
     const { api } = this.opts;
-    // No token on the payload (an old fixture) means no reuse, ever — the cache
-    // must not invent a token, since the only safe reading of "we cannot tell
-    // whether it moved" is that it did.
+    // No token on the payload means no reuse, ever: "we cannot tell whether it
+    // moved" reads as "it did".
     const cached = p.updatedAt === undefined ? undefined : this.detailCache.get(p.number, maxAgeMs);
     if (cached !== undefined && cached.updatedAt === p.updatedAt) return cached;
 
@@ -285,23 +261,16 @@ export class GitHubSourceControlIntegration
       mergeableState: normalizeMergeState(detail.mergeableState),
       merged: detail.merged,
     };
-    // Not cached when the resolution read failed — `fresh` is then a degradation,
-    // and a degradation must not be served as a hit for as long as the token holds.
+    // Not cached when the resolution read failed: a degradation must not be served
+    // as a hit for as long as the token holds.
     if (p.updatedAt !== undefined && threads !== null) this.detailCache.set(p.number, fresh);
     return fresh;
   }
 
   /**
-   * The two CI reads, or the last hydration when the head SHA has not moved
-   * **and** the verdict it produced was terminal.
-   *
-   * Both conditions, because each covers what the other cannot. The SHA is the
-   * only token that moves when a push invalidates a build — `updated_at` does
-   * move on a push too, but the reverse does not hold, and a comment must not buy
-   * a CI refetch it changes nothing about. Terminality covers the rest: a build
-   * that is queued, running or has not reported settles with no token moving at
-   * all, so anything short of `passing`/`failing` is re-read every pulse. A
-   * settled verdict on an unmoved commit is the one reading that cannot change.
+   * The two CI reads, or the last hydration when the head SHA has not moved **and**
+   * the verdict it produced was terminal. Both conditions: the SHA is what moves on
+   * a push, and terminality covers a build that settles with no token moving at all.
    */
   private async pullCi(p: GhPullSummary, maxAgeMs: number): Promise<CachedPullCi> {
     const { api } = this.opts;
@@ -319,19 +288,13 @@ export class GitHubSourceControlIntegration
   }
 
   /**
-   * Review-thread resolution, or an empty list when it cannot be read.
+   * Review-thread resolution, or null when it cannot be read. The one call in the
+   * snapshot allowed to fail on its own: it is the sole GraphQL read here, so it can
+   * be unavailable where the REST reads are not, and letting it throw would freeze
+   * the whole world over a field that only *refines* a verdict.
    *
-   * The one call in the snapshot allowed to fail on its own. It is the sole
-   * GraphQL read here (resolution has no REST form), so it can be unavailable for
-   * reasons the REST reads are not — a token without GraphQL access, an Enterprise
-   * Server that answers the schema differently, a proxy that passes `/repos` and
-   * not `/graphql`. Letting that throw would take the whole snapshot down to
-   * `lastGood` and freeze the world over a field that only *refines* a verdict.
-   *
-   * Absent resolution degrades to the reply arm of `buildUnresolvedComments` —
-   * i.e. exactly the behaviour before this existed — which fails toward a thread
-   * staying *open*, the safe direction: an operator sees an agent dispatched for a
-   * comment they had resolved, rather than their review being silently dropped.
+   * Absent resolution fails toward a thread staying **open** — an agent dispatched
+   * for a resolved comment is visible, a dropped review is not.
    */
   private async reviewThreads(number: number): Promise<GhReviewThread[] | null> {
     try {
@@ -342,18 +305,16 @@ export class GitHubSourceControlIntegration
         message: `${this.id} could not read review-thread resolution for PR #${number}: ${(err as Error).message}`,
         detail: 'Falling back to reply-based handling — a resolved thread may still be treated as open.',
       });
-      // `null`, not `[]`: the difference is what stops the hydration cache from
-      // holding a degraded reading for as long as the token sits still. A
-      // GraphQL outage is retried on the next pulse, exactly as before the cache.
+      // `null`, not `[]`: stops the hydration cache holding a degraded reading for
+      // as long as the token sits still.
       return null;
     }
   }
 
   /**
-   * The PRs that left the open set inside the retention window, in the same
-   * domain shape as an open one. They carry no CI/review/comment signal — nothing
-   * acts on a dead PR, and fetching those per PR is exactly the cost this feature
-   * mustn't have.
+   * The PRs that left the open set inside the retention window, in the same domain
+   * shape as an open one. No CI/review/comment signal: nothing acts on a dead PR,
+   * and the per-PR fetch is the cost this feature must not have.
    */
   private async recentlyClosed(viewer: string): Promise<PullRequest[]> {
     const { api, prAuthor, closedPrWindowMs } = this.opts;
@@ -364,9 +325,8 @@ export class GitHubSourceControlIntegration
       .filter((p) => !prAuthor || p.authorLogin === prAuthor)
       .map((p) => {
         const pr = mapClosedPull(p);
-        // Answered here too, because the branch reap acts on this list: a merged
-        // pull request of a colleague's whose branch the harness deleted is the
-        // same mistake as a rename, and irreversible.
+        // Answered here too, because the branch reap acts on this list and deleting
+        // a colleague's branch is irreversible.
         if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
         return pr;
       });
@@ -378,18 +338,15 @@ export class GitHubSourceControlIntegration
       input.commentId !== null
         ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
         : await api.createIssueComment(input.prNumber, input.body);
-    // Two references, deliberately: the URL is for the audit line a person reads,
-    // and the id is what `buildReviewThreads` will see this comment as when it
-    // comes back on the next read. → `docs/spec/07-pull-requests.md#review-threads`
+    // Two references: the URL for the audit line, the id for `buildReviewThreads`
+    // to recognise on the next read. → `docs/spec/07-pull-requests.md#review-threads`
     return { ok: true, ref: ref.url, commentRef: String(ref.id) };
   }
 
   /**
    * Mark a review thread resolved. The `commentId` is the thread's root comment —
-   * the same id `postPrReply` threads under and the same id
-   * {@link buildReviewThreads} keys a thread on — so the caller needs no
-   * second identifier, and `ok: false` means the pull request carries no such
-   * thread.
+   * the same id `postPrReply` threads under — so `ok: false` means the pull request
+   * carries no such thread.
    */
   async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
     const resolved = await this.opts.api.resolveReviewThread(input.prNumber, Number(input.commentId));
@@ -402,10 +359,9 @@ export class GitHubSourceControlIntegration
   }
 
   /**
-   * Close a pull request that will not be merged. Always `ok: true`: GitHub
-   * accepts the patch whatever state the pull request is already in, so
-   * already-closed is a success — which is what the restart's idempotence rests
-   * on — and anything else throws.
+   * Close a pull request that will not be merged. Always `ok: true`: already-closed
+   * is a success, which is what the restart's idempotence rests on; anything else
+   * throws.
    */
   async closePr(input: PrCloseInput): Promise<SendResult> {
     await this.opts.api.closePull(input.prNumber);
@@ -439,8 +395,7 @@ export class GitHubSourceControlIntegration
 
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
     const deleted = await this.opts.api.deleteBranch(input.branch);
-    // Already gone is success. `ref` distinguishes the two for the audit log without
-    // making the caller care, because nothing downstream should.
+    // Already gone is success; `ref` distinguishes the two for the audit log only.
     return { ok: true, ref: deleted ? input.branch : `${input.branch} (already absent)` };
   }
 
@@ -450,11 +405,9 @@ export class GitHubSourceControlIntegration
   }
 
   /**
-   * Bring a pull request up to date with its base, server-side (issue #332).
-   * Nothing is cloned, checked out or pushed from here — GitHub merges the base in
-   * on its own machines, which is the whole saving over the code agent this
-   * replaces. Always `ok: true`: the endpoint throws rather than declining, and a
-   * throw is what sends the concern back to an agent.
+   * Bring a pull request up to date with its base, server-side — nothing is cloned,
+   * checked out or pushed here. Always `ok: true`: the endpoint throws rather than
+   * declining, and a throw sends the concern back to an agent.
    */
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     await this.opts.api.updatePullBranch(input.prNumber);
@@ -463,13 +416,8 @@ export class GitHubSourceControlIntegration
 
   /**
    * What the red checks reported, annotations first and the log tail behind them.
-   *
-   * Per check rather than in one batch because the two reads are per check at the
-   * API, and **each check is isolated**: one that 404s (a log aged out of
-   * retention, a token without `actions:read`) costs its own excerpt and not the
-   * others'. Everything is recorded and nothing is rethrown — this enriches a
-   * dispatch that is going out either way, so a failure here must leave the
-   * prompt as it was rather than take the dispatch down with it.
+   * **Each check is isolated**, so one that 404s costs its own excerpt and not the
+   * others'. Nothing is rethrown: this enriches a dispatch going out either way.
    */
   async readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]> {
     const found: CiFailureEvidence[] = [];
@@ -483,8 +431,8 @@ export class GitHubSourceControlIntegration
           found.push({ check: check.name, kind: 'errors', lines: failures.map(annotationLine) });
           continue;
         }
-        // No structured error — the common case for a bare test command. Fall
-        // through to the log, which for GitHub means downloading it whole.
+        // No structured error — the common case for a bare test command; fall
+        // through to the log, which GitHub only serves whole.
         if (ids.jobId === null) continue;
         const log = await this.opts.api.getJobLog(ids.jobId);
         const all = log.split('\n').filter((l) => l.trim() !== '');
@@ -509,13 +457,10 @@ export class GitHubSourceControlIntegration
 }
 
 /**
- * The evidence ref for a failing check run: its own id, and the Actions **job**
- * id when one can be recovered from `details_url`.
- *
- * Two ids because the two reads take different ones — annotations are addressed
- * by check run, logs by job — and the job id exists nowhere in the check-run
- * payload but that URL. A check run from a non-Actions app yields the first and
- * not the second, which is exactly right: it has annotations and no log.
+ * The evidence ref for a failing check run: its own id, and the Actions **job** id
+ * when one can be recovered from `details_url`. Two ids because annotations are
+ * addressed by check run and logs by job; a non-Actions check run yields only the
+ * first, which is right — it has annotations and no log.
  */
 function checkEvidenceRef(run: GhCheckRun): string | undefined {
   if (run.id === undefined) return undefined;
@@ -536,17 +481,13 @@ function parseEvidenceRef(ref: string): { checkRunId: number; jobId: number | nu
 function annotationLine(a: GhAnnotation): string {
   const where = a.startLine > 0 ? `${a.path}:${a.startLine}` : a.path;
   const title = a.title && !a.message.startsWith(a.title) ? `${a.title}: ` : '';
-  // Annotations wrap their own message across lines; flattened so one annotation
-  // is one line and the cap's line arithmetic stays honest.
+  // Flattened so one annotation is one line and the cap's arithmetic stays honest.
   return `${where}: ${title}${a.message.replace(/\s*\n\s*/g, ' ').trim()}`;
 }
 
 /**
- * Drop the ISO timestamp GitHub prefixes to every log line.
- *
- * Not cosmetic: it is 29 characters on every line of an excerpt with a character
- * budget, so keeping it would spend something like a fifth of the evidence on
- * telling an agent what time the build ran.
+ * Drop the ISO timestamp GitHub prefixes to every log line — 29 characters per
+ * line of an excerpt with a character budget, so not cosmetic.
  */
 function stripLogTimestamp(line: string): string {
   return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
@@ -554,9 +495,7 @@ function stripLogTimestamp(line: string): string {
 
 /**
  * A closed GitHub PR as the world models it. `ciStatus`/`unresolvedComments` are
- * blanked rather than fetched: this row exists to be *seen* (in the cockpit, in
- * the world diff, in plan reconciliation), never to be acted on, and the harness
- * only reaches those fields for open PRs.
+ * blanked rather than fetched: this row exists to be seen, never acted on.
  */
 export function mapClosedPull(p: GhClosedPull): PullRequest {
   return {
@@ -624,21 +563,15 @@ export function aggregateCiStatus(checkRuns: GhCheckRun[], status: GhCombinedSta
 }
 
 /**
- * The same signals {@link aggregateCiStatus} folds, kept individually so
- * per-check policy can act on *which* check failed.
- *
- * Deliberately a second pass over the same inputs rather than a richer return
- * from the fold: every existing caller wants the one-word verdict, and a check
- * list threaded through them would be carried nowhere and dropped everywhere.
- * The two agree by construction — same inputs, same failing/pending rules.
+ * The same signals {@link aggregateCiStatus} folds, kept individually so per-check
+ * policy can act on *which* check failed. A second pass over the same inputs, so
+ * the two agree by construction.
  */
 export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus): CiCheck[] {
   const checks: CiCheck[] = [];
   for (const run of checkRuns) {
-    // Only a failing run gets an evidence ref. A passing one has no failure to
-    // fetch, and a pending one's last output is about an older commit — handing
-    // that to an agent would point it at code the branch has moved past, which is
-    // worse than handing it nothing.
+    // Only a failing run gets an evidence ref: a pending one's last output is about
+    // an older commit, which is worse than handing an agent nothing.
     const ref =
       run.status === 'completed' && run.conclusion && FAILING_CONCLUSIONS.has(run.conclusion)
         ? checkEvidenceRef(run)
@@ -649,9 +582,8 @@ export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus):
       checks.push({ name: run.name, status: 'failing', ...evidence });
     else checks.push({ name: run.name, status: 'passing' });
   }
-  // Commit statuses get no evidence ref, permanently. A status names a
-  // third-party system by `target_url` and GitHub has no log API for it — there
-  // is nothing to fetch, as opposed to something not yet wired up.
+  // Commit statuses get no evidence ref, permanently: GitHub has no log API for a
+  // third-party status, so there is nothing to fetch.
   for (const s of status.statuses ?? []) {
     if (s.state === 'failure' || s.state === 'error') checks.push({ name: s.context, status: 'failing' });
     else if (s.state === 'pending') checks.push({ name: s.context, status: 'pending' });
@@ -662,15 +594,9 @@ export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus):
 
 /** Approved iff at least one reviewer's latest review is APPROVED and none is CHANGES_REQUESTED. */
 /**
- * Whether **this** operator's own latest review is an approval.
- *
- * Their review, never {@link computeApproved}'s fold: a pull request somebody
- * else approved is still waiting on the review this operator was asked for, and
- * reading the aggregate here would clear their row on a colleague's answer.
- *
- * Latest-per-reviewer, on the same three states that move a stance — a later
- * `CHANGES_REQUESTED` or `DISMISSED` takes an earlier approval back, and a
- * `COMMENTED` leaves it standing.
+ * Whether **this** operator's own latest review is an approval — never
+ * {@link computeApproved}'s fold, which would clear their row on a colleague's
+ * answer. Latest-per-reviewer, on the three states that move a stance.
  */
 function viewerApproved(reviews: GhReview[], viewer: string): boolean {
   if (viewer === '') return false;
@@ -697,44 +623,22 @@ export function computeApproved(reviews: GhReview[]): boolean {
 }
 
 /**
- * Group review comments into threads (by `in_reply_to_id`) and say where each
- * one stands — the provider's whole reading of a pull request's review.
+ * Group review comments into threads (by `in_reply_to_id`) and say where each one
+ * stands. `unresolvedComments` is {@link threadComments} over what this returns,
+ * so the rules and the cockpit read the same threads once.
  *
- * The one derivation: `unresolvedComments` is {@link threadComments} over what
- * this returns, so the list the rules dispatch on and the threads the cockpit
- * draws are the same threads read once.
+ * Two arms, in order: the reviewer's own **resolution** (a GraphQL read, since
+ * REST exposes `isResolved` nowhere — absent means "no verdict", never
+ * "unresolved"), then whether **the harness posted the newest reply**, as
+ * `ourReplyRefs` records it.
  *
- * Two arms, in this order — the same shape as the Azure provider's, which is the
- * point: both trackers have a real resolution verdict, so both read it.
+ * **Arm 2 is a record, never the reply's author.** On a single-operator deployment
+ * the credential is the operator, so a positional test folds their own follow-up to
+ * `PrComment.handled` and silently drops the reviews a human wrote.
  *
- * 1. **The reviewer resolved the thread.** Their own answer to "has this been
- *    dealt with", and the only authoritative one. It costs a GraphQL read
- *    (`listPullReviewThreads`) because GitHub exposes `isResolved` nowhere in
- *    REST — which is the entire reason this function ever had to infer anything.
- *    `threads` is empty when that read failed or when a caller does not supply
- *    one, and absence means "no verdict", never "unresolved".
- * 2. **The harness posted the newest reply**, as `ourReplyRefs` records it. The
- *    fallback for a thread nobody resolved, and the network-native analogue of the
- *    fake's `markCommentHandled`, so the deterministic loop settles one poll after
- *    a reply goes out.
- *
- * **Arm 2 is a record, and it has to be.** It used to be positional — "the newest
- * reply's author is `viewerLogin`" — which held only for as long as *every* reply
- * under a root came from the harness. It does not: a reviewer replies under their
- * own root, and on a single-operator deployment `viewerLogin` is the operator
- * themselves, so their follow-up on their own thread read back as the fleet's
- * answer. That folds to `PrComment.handled`, the only bit rule
- * `pr-review-comment` reads, so the harness silently dropped exactly the reviews a
- * human took the time to write — the one signal it must never drop. No comparison
- * against an identity can fix it, because the two identities are the same string.
- * `ourReplyRefs` carries the ids of the replies this harness actually sent
- * (`PrReplyStore`), and nothing else is ever the fleet's.
- *
- * Both arms fail toward a thread staying **open**, which is the safe direction: an
- * agent dispatched for a comment already dealt with is visible and cheap, where a
- * dropped review is neither. An empty `ourReplyRefs` — no record yet, a reply from
- * before the table existed, a send whose ref the provider would not name — is
- * therefore every thread reading as work, never a thread claimed as handled.
+ * Both arms fail toward a thread staying **open**: an empty `ourReplyRefs` reads
+ * every thread as work, never as handled.
+ * → `docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity`
  */
 export function buildReviewThreads(
   comments: GhReviewComment[],
@@ -749,8 +653,7 @@ export function buildReviewThreads(
       roots.push(c);
       continue;
     }
-    // Comments arrive in creation order, so the list per root is oldest-first and
-    // its last entry is the newest reply.
+    // Comments arrive in creation order, so each root's last entry is its newest reply.
     repliesByRoot.set(c.inReplyToId, [...(repliesByRoot.get(c.inReplyToId) ?? []), c]);
   }
   return roots.map((root) => {
@@ -760,9 +663,8 @@ export function buildReviewThreads(
       id: String(root.id),
       author: root.authorLogin,
       body: root.body,
-      // Resolution first; failing that, a thread whose newest reply is not one the
-      // harness recorded sending is unanswered — whoever wrote it, and however
-      // that author's login compares to the credential's.
+      // Resolution first; failing that, a newest reply the harness has no record of
+      // sending leaves the thread unanswered, whoever wrote it.
       state: threadState({
         resolved: resolved.has(root.id),
         answered: newest !== undefined && ourReplies.has(String(newest.id)),
@@ -771,14 +673,11 @@ export function buildReviewThreads(
         id: String(r.id),
         author: r.authorLogin,
         body: r.body,
-        // The record, not the author. A reply the harness has no row for is not
-        // the fleet's, which is what keeps the badge off a person's message.
+        // The record, not the author: a reply with no row is not the fleet's.
         ours: ourReplies.has(String(r.id)),
       })),
     };
-    // Where the thread hangs, when GitHub reported it. Absent rather than
-    // guessed: a review's own summary comment is attached to no line, and a
-    // fixture from before this field carries neither.
+    // Where the thread hangs, when GitHub reported it — absent rather than guessed.
     if (root.path !== undefined) thread.path = root.path;
     if (root.line !== undefined && root.line !== null) thread.line = root.line;
     return thread;
