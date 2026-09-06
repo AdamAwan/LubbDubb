@@ -821,22 +821,25 @@ load-bearing both ways:
 ## The desktop channel
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Five jobs go there — four about one goal, and
+spawned agent. Six jobs go there — four about one goal, one about a Feature, and
 [one about the harness itself](#watching-and-steering-the-fleet): a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
 where there is room to have one; asking for the application itself to be brought up, which most
 checks need before their first step is possible — the harness runs that one, so the tool asks rather
-than instructs ([23](23-local-runs.md#two-triggers-one-owner)); and
+than instructs ([23](23-local-runs.md#two-triggers-one-owner));
 [a question about a goal](#answering-a-question-about-a-goal), which is the only one of the four that
-settles nothing. **Unconditional** — every start binds the stable socket, mints the
+settles nothing; and the order the stories under a Feature are worked in, which has no
+drag-to-reorder anywhere and is amended by talking about it
+([33](33-story-sequencing.md#amending-it)). **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
 of what the channel costs a deployment that never uses it, and it is the price of the cockpit's four
 deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
 and [the run](20-validation.md#getting-the-application-up);
 [08](08-planning.md#discussing-a-plan) owns the plan one;
-[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth, and
-[Watching and steering the fleet](#watching-and-steering-the-fleet) the fifth.
+[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth;
+[33](33-story-sequencing.md#amending-it) owns the Feature one, and
+[Watching and steering the fleet](#watching-and-steering-the-fleet) the sixth.
 
 | Tool                | Purpose                                                                                                                                                                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -846,6 +849,8 @@ and [the run](20-validation.md#getting-the-application-up);
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument.                                                                                                     |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.                                                                                                         |
 | `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.                              |
+| `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                  |
+| `sequence_amend`    | Rewrite that order, as the whole order rather than a patch — what is sent replaces what stands. Lands `accepted`, so it holds work immediately; an empty order releases everything the last one held.     |
 | `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                         |
 | `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, recent failures.                  |
 | `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                       |
@@ -1232,11 +1237,11 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `raise`, `escalate`, `plan_submit`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`,
-  `note_progress` and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
-  agent may write to that store and every agent may read it, so there is no one dispatch prompt that
-  could name them — and `raise` most of all, since the whole of its value is being callable the moment
-  an agent learns something rather than at a point somebody predicted.
+  `raise`, `escalate`, `plan_submit`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`
+  and `note_progress`. Nothing else names these. `raise` is here because every agent may write to that
+  store and read it in the same call, so there is no one dispatch prompt that could name it — and
+  because the whole of its value is being callable the moment an agent learns something rather than at
+  a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `appraise_issue`, `plan_not_needed`, `retro_submit`, `feature_summary`, `link_ticket`, `review_pack_submit`,

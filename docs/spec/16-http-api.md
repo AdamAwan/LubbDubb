@@ -2074,6 +2074,16 @@ session and flips it back to `running`.
 409 when the agent is not live. Marks the agent `killed` and its task `interrupted`; the agent is not
 resumed on the next boot and its worktree is kept.
 
+### `POST /api/agents/:id/complete`
+
+409 when the agent is not live. The other verdict on a live run: the operator says the work is
+**done** rather than abandoned. Takes no body. The session is killed the way `kill` kills one — the
+process subtree first ([10](10-agent-runtimes.md#reaping-the-process-subtree)) — but the agent and its
+task settle `done`, so the branch, the commits and whatever the run produced are the outcome of a
+finished piece of work rather than of an interrupted one. A decision row is written under
+`human:<agent id>` naming the operator, which is what separates it in the audit from the same ending
+reached by a stall park expiring (`stall:<agent id>`, [10](10-agent-runtimes.md#when-nobody-answers-the-stop)).
+
 ### `POST /api/agents/:id/interrupt`
 
 409 when the agent is not live. Sends raw `\x03`. Mutates no status.
