@@ -5,34 +5,8 @@ import { relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Tag } from './tag.js';
 
-/**
- * A goal's shared scratchpad — what the agents working it left each other, in the
- * order they wrote it.
- *
- * Until now this was readable only by an agent (`scratch_read`) and quotable only
- * by the retrospective that was handed it. That made the retrospective the sole
- * account of a run whose evidence nobody outside the fleet could check, and an
- * operator watching a goal go wrong had no way to read the reasoning as it was
- * written. This is the trail itself, unedited: it is append-only in the store, so
- * what is drawn here is exactly what was written, including the entries a later
- * agent contradicted.
- *
- * Fetched on open rather than read off `/api/state`, for `RetroModal`'s reason
- * with more force — a pad is unbounded prose from every agent on the goal,
- * where a write-up is one document. The snapshot carries the count and the age,
- * which is all the control that opens this needs to draw itself.
- *
- * Three states, and the third is the point again: loading, the trail, and **an
- * error** — a fetch that failed must not render as "nobody wrote anything". That
- * matters more here than for the write-up, because an empty pad is unreachable by
- * construction: nothing draws a way in unless the snapshot says there are entries,
- * so an empty trail on screen means the fetch and the snapshot disagree.
- *
- * A **fork** — an entry carrying a `decision` — is drawn apart from a note: what
- * was chosen, why, and the alternatives rejected with their reasons. The rejected
- * list is the part a diff can never show, so it is the part given the room.
- * → docs/spec/31-review-packs.md#the-witness-log
- */
+// → docs/spec/17-cockpit.md
+
 export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClose: () => void }) {
   const [entries, setEntries] = useState<ScratchEntryView[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');

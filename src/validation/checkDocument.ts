@@ -1,67 +1,25 @@
 import { z } from 'zod';
 import type { ValidationCheckAmendment, ValidationCheckInput, ValidationResourceInput } from '../types.js';
 
-/**
- * The `validation` block of a plan document: how anyone checks the *goal* was
- * met, as steps rather than as a paragraph.
- *
- * `verification` — one optional narrative field, "how anyone will know the whole
- * thing worked" — is read once while deciding whether to approve, and nothing
- * ever runs it. This is that field's executable form.
- *
- * Additive and **optional** on the plan document, for the reason every post-v1
- * field is: an older plan, and an operator override that never learned the block,
- * must keep validating.
- */
+// → docs/spec/20-validation.md
 
-/** How many checks are kept. Trimmed rather than refused, `MAX_EVIDENCE`'s trade. */
 const MAX_CHECKS = 40;
 
-/** Same bound, same argument, for the resources they name. */
 const MAX_RESOURCES = 20;
 
-/**
- * Exported so `validation_amend` refuses exactly what a plan document refuses.
- * A second copy of this shape would be a second opinion about what a resource
- * name may contain, and the two would drift apart on the day one of them learned
- * a new `kind`.
- */
 export const ValidationResourceSchema = z.object({
-  /**
-   * A file name, and only a file name. Refused rather than sanitised, because
-   * this is the string `validationResourcePath` joins onto the goal's directory:
-   * a name carrying a separator or a `..` would resolve outside
-   * `validationRoot`, and a planner is an agent authoring a path the harness then
-   * resolves for a person. A refusal is returned to it and fixable; a quiet
-   * `basename` would silently rename the thing the check asks for.
-   */
   name: z
     .string()
     .min(1)
     .regex(/^[^/\\]+$/, 'a resource name is a file name, not a path')
     .refine((name) => name !== '.' && name !== '..', 'a resource name is a file name, not a path'),
-  /**
-   * Refused rather than widened when it is a word this does not know, the same
-   * treatment `size` and `expectedKind` get: the value is rendered as a label, so
-   * an unrecognised one is a chip nobody can read. Absent is always allowed.
-   *
-   * `access` is kept parseable and means something narrower than the rest: a
-   * precondition rather than a file, drawn on the sheet and **never filed as an
-   * ask** (`fileResourceAsks`). Both writers are told to put what a check
-   * needs to be runnable in its `do` instead — but an older plan, and an operator
-   * override that never learned that, must keep validating, so the word stays
-   * known rather than sinking the document it appears in.
-   */
   kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
   note: z.string().min(1).optional(),
-  /** Default true. False is "I need this and cannot produce it" — ingestion files the ask. */
   provided: z.boolean().default(true),
 });
 
-/** Exported for {@link ValidationResourceSchema}'s reason — one shape, both writers. */
 export const ValidationCheckSchema = z
   .object({
-    /** Stable and author-chosen: an amendment merges on it, so it must survive a replan. */
     id: z
       .string()
       .min(1)
@@ -69,32 +27,13 @@ export const ValidationCheckSchema = z
     title: z.string().min(1),
     do: z.string().min(1),
     expect: z.string().min(1),
-    /** Declared resource **names**, never paths. An unknown name is dropped at ingestion. */
     uses: z.array(z.string().min(1)).default([]),
-    /** Part slugs this check exercises. Unknown slugs are dropped the same way. */
     covers: z.array(z.string().min(1)).default([]),
-    /** The planner's nomination that an agent could run this. Dispatches nothing. */
     fleetCandidate: z.boolean().default(false),
     why: z.string().min(1).optional(),
   })
-  // Strict, where the rest of the plan document is tolerant, and `actor` is the
-  // whole reason. A field this schema quietly dropped would let a planner believe
-  // it had assigned a check to the fleet; refusing says so, and both transports
-  // hand the reason straight back to an agent that can fix it and call again.
   .strict('a check declares only id/title/do/expect/uses/covers/fleetCandidate/why — who runs it is not yours to say');
 
-/**
- * Reached by **both** transports exactly as `PlanDocumentSchema` is — the
- * `plan.json` drain and the `plan_submit` tool must accept and reject the same
- * documents.
- *
- * The one refusal worth stating on its own: **there is no `actor` field**, and a
- * document carrying one is refused rather than ignored. Whether an agent can run
- * a check is a property of the deployment — the fleet has no browser, no
- * interactive login and no account on whatever environment this deployment tests
- * against — and a planner reading the repository can know none of that. Silently
- * dropping the field would let one believe it had assigned work.
- */
 export const ValidationSchema = z
   .object({
     resources: z
@@ -128,38 +67,16 @@ export const ValidationSchema = z
 
 type ValidationBlock = z.infer<typeof ValidationSchema>;
 
-/** One check as either writer's schema parses it, before the store gives it a position. */
 type DeclaredCheck = z.infer<typeof ValidationCheckSchema>;
 
-/** One resource, likewise. */
 type DeclaredResource = z.infer<typeof ValidationResourceSchema>;
 
-/**
- * The declared checks as store input, sequenced by their order in the document
- * and with their bibliographies pruned.
- *
- * `uses` and `covers` are **dropped entry by entry** rather than refused, the
- * `MAX_EVIDENCE` trade-off: a check's prose is worth more than its references,
- * and a planner that named a resource it forgot to declare has still written a
- * runnable check. A refusal here would sink the whole plan document with it.
- */
 export function validationCheckInputs(block: ValidationBlock, partSlugs: readonly string[]): ValidationCheckInput[] {
   const names = new Set(block.resources.map((r) => r.name));
   const slugs = new Set(partSlugs);
   return block.checks.map((check, index) => ({ ...checkAmendment(check, names, slugs), seq: index + 1 }));
 }
 
-/**
- * The same conversion for an amendment, which has **no document order to number
- * from** — it names only the checks it is changing, so a position taken from its
- * own list would file a two-check correction at the top of a nine-check plan. The
- * store assigns the sequence instead.
- *
- * `resourceNames` is what the plan knows about after this amendment, not just what
- * the amendment declares: an agent adding a check that uses a fixture the planner
- * already declared has named a resource that exists, and dropping it would prune a
- * live reference.
- */
 export function validationCheckAmendments(
   checks: readonly DeclaredCheck[],
   resourceNames: readonly string[],
@@ -170,7 +87,6 @@ export function validationCheckAmendments(
   return checks.map((check) => checkAmendment(check, names, slugs));
 }
 
-/** One declared check as store input, minus the sequence its writer assigns. */
 function checkAmendment(
   check: DeclaredCheck,
   names: ReadonlySet<string>,
@@ -184,14 +100,10 @@ function checkAmendment(
     uses: check.uses.filter((name) => names.has(name)),
     covers: check.covers.filter((slug) => slugs.has(slug)),
     fleetCandidate: check.fleetCandidate,
-    // Only ever the reason for a nomination, so it is dropped with one. A "why an
-    // agent could run this" left standing beside `fleetCandidate: false` reads as
-    // a nomination the sheet is failing to draw.
     candidateWhy: check.fleetCandidate ? (check.why ?? null) : null,
   };
 }
 
-/** The declared resources as store input. Takes the list rather than the block, so an amendment's reaches it too. */
 export function validationResourceInputs(resources: readonly DeclaredResource[]): ValidationResourceInput[] {
   return resources.map((resource) => ({
     name: resource.name,
@@ -201,16 +113,6 @@ export function validationResourceInputs(resources: readonly DeclaredResource[])
   }));
 }
 
-/**
- * The next unused check letter: `A`…`Z`, then `AA`, `AB`… Pure.
- *
- * Letters are handed out at ingestion and **never reused**, which is why this
- * takes every letter a plan has ever issued rather than a count. A check dropped
- * by an amendment keeps its row (superseded), so its letter stays taken — and
- * `284:C` names one check for the life of the goal instead of moving under the
- * next replan. Deriving a letter from position compiles, passes and silently
- * misaddresses.
- */
 export function nextCheckLetter(taken: readonly string[]): string {
   const used = new Set(taken);
   for (let n = 0; ; n += 1) {
@@ -219,7 +121,6 @@ export function nextCheckLetter(taken: readonly string[]): string {
   }
 }
 
-/** Bijective base-26: 0 => A, 25 => Z, 26 => AA. */
 function letterAt(index: number): string {
   let n = index + 1;
   let out = '';

@@ -17,15 +17,8 @@ import { relTime } from '../components/util.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
 import { Button } from '../components/button.js';
 
-/**
- * One open ask, pinned, in the tone and under the glyph its kind wears on the
- * rail. The rail's *weight* split (`cn-parked`) is deliberately not carried over:
- * weight ranks competing asks, and there is nothing here to rank against.
- *
- * Draws nothing at all when the row's source is gone from the snapshot — a header
- * over an empty box claims something is waiting with no way to answer it. Shared
- * with the ask panel, so one band serves both placements.
- */
+// → docs/spec/17-cockpit.md
+
 export function NeedsBand({
   row,
   view,
@@ -62,12 +55,6 @@ export function NeedsBand({
   );
 }
 
-/**
- * Why marking this row done costs a sentence, or null when it costs nothing —
- * the route's own guard mirrored in its *condition* only, so the box appears
- * beside the click rather than behind a 400. The server stays the authority.
- * → [20](../../../docs/spec/20-validation.md#where-it-lands)
- */
 function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
   if (task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
   const issue = goalIssue(view.state, task.originRef);
@@ -75,12 +62,6 @@ function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
   return 'Validation is not clear on this goal — the checks listed above are outstanding. Closing it out is still yours to do; what it costs is a sentence saying what you are doing about them, or waiving them first.';
 }
 
-/**
- * Whether this row's ticket can be closed from here: a `close_out` row, an
- * `issue:` origin, and a tracker the harness can write (`config.canCloseIssue`,
- * the connector's own answer rather than a guess from the provider's name). A
- * false draws no button rather than a disabled one.
- */
 function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
   if (task.kind !== 'close_out' || task.status !== 'open') return false;
   if (task.originRef === null || !/^issue:\d+$/.test(task.originRef)) return false;
@@ -97,15 +78,11 @@ function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
  * @public shared with the ask panel, which draws the body under its own header
  */
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  // The post-deploy watch's finding. Its extra control needs state, and `needBody`
-  // is a function rather than a component, so it gets a component of its own.
   if (row.kind === 'watch') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return <WatchFinding task={task} view={view} actions={actions} />;
   }
-  // A burn notice answers the same two ways as a bench row — done, or declined
-  // with a reason. It holds nothing; the run it names carries on either way.
   if (
     row.kind === 'bench' ||
     row.kind === 'close_out' ||
@@ -132,14 +109,9 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
-  // The goal appraisal's refusal — the one verdict that stops a goal's pickup
-  // outright. The appraiser's sentence is quoted **whole** and never reworded: it
-  // is the only account of why this goal is held.
   if (row.kind === 'intake') {
     const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
     const appraisal = issue?.appraisal;
-    // The verdict cleared, or the goal left the watch tag, since the snapshot: an
-    // override for a hold that is gone would change a verdict nobody awaits.
     if (!issue || appraisal?.verdict !== 'unclear') return null;
     return (
       <>
@@ -171,9 +143,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
-  // The goal-profile gate. Both buttons go through the same write — the pin is
-  // re-affirmed and the question settled in one act, so "keep mine" is not
-  // re-readable as an unanswered disagreement for ever.
   if (row.kind === 'profile') {
     const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
     const appraisal = issue?.appraisal;
@@ -217,9 +186,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
-  // Where a goal belongs on the backlog. Three answers rather than two: this holds
-  // nothing, so without an explicit "it wants none" a goal that legitimately has no
-  // parent would sit here for ever.
   if (row.kind === 'placement') {
     const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
     const ask = (issue?.appraisal?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
@@ -230,8 +196,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       <AreaPathAsk issue={issue} proposed={ask.proposedAreaPath} view={view} actions={actions} />
     );
   }
-  // A usage-limit park. The row's id *is* the agent — there is no escalation under
-  // it, because nothing was asked.
   if (row.kind === 'limit') {
     const agent = row.agentId ? view.agentById.get(row.agentId) : undefined;
     if (!agent || !view.limitParked.has(agent.id)) return null;
@@ -251,13 +215,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
-  // A dispatch the executor keeps refusing. There must be no control: what is in
-  // the way is outside the harness, and the refusal is drawn **verbatim** because
-  // it is the harness's own prose naming the branch, the path and what clears it.
-  //
-  // A pull request a person put on you. Nothing here is answerable in the cockpit,
-  // so the band says what it is and offers the `<Ref>` as the way there — its own
-  // branch, because falling through to the escalation lookup draws an empty band.
   if (row.kind === 'assigned') {
     const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
     const pr = view.state.world.pullRequests.find((p) => p.number === number);
@@ -330,17 +287,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   );
 }
 
-/**
- * What a post-deploy watch found, and the one thing an operator can do about it
- * that costs the fleet anything.
- *
- * **The bug is a click, and it is the whole bound on this subsystem**: nothing
- * under `src/dispatcher/` may read a watch, so the route from a number to new work
- * is a person. The modal opens holding the row's own detail and stays editable —
- * what is filed has to be what the operator actually says — and the relation back
- * to the goal is a field on `IssueCreateInput`, never a sentence in a prompt.
- * → `src/bugFiling.ts`
- */
 function WatchFinding({
   task,
   view,
@@ -389,13 +335,6 @@ function WatchFinding({
   );
 }
 
-/**
- * The parent question: take the appraisal's container, pick another, or say this
- * goal wants none. The prose is this band's; the three answers are
- * {@link ParentPicker}'s, shared with the goal page's orphan warning. The proposed
- * container is a `<Ref>` **beside** the buttons and never inside one.
- * → `docs/spec/17-cockpit.md#links`
- */
 function ParentAsk({
   issue,
   proposed,
@@ -411,8 +350,6 @@ function ParentAsk({
   return (
     <>
       {proposed === null ? (
-        /* No suggestion, and the band still draws: returning null for want of a
-           proposal leaves a row that opens onto an empty band. */
         <p>
           <strong>This goal rolls up to nothing.</strong> Nothing has been suggested for it.
         </p>
@@ -434,12 +371,6 @@ function ParentAsk({
   );
 }
 
-/**
- * The area-path question, in {@link ParentAsk}'s three answers. The alternatives
- * come from `config.areaPaths` — the tracker's own tree — never from a text box: a
- * path must match a node exactly, and a near-miss is refused by the provider. An
- * empty list is a tree the harness could not read, and the proposal stands alone.
- */
 function AreaPathAsk({
   issue,
   proposed,

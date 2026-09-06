@@ -13,9 +13,6 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    // The funnel has failed open on every issue in these worlds: it is
-    // unconditional, so an issue it is still working is one pickup is narrowed
-    // away from, and nothing downstream of pickup would fire for it.
     recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
     ...over,
@@ -52,17 +49,11 @@ test('unhandled PR comment produces a code agent dispatch', async () => {
     }),
   );
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
-  // One origin for the PR's whole review, and the thread it folds carried
-  // alongside it so notify de-dup and a refused draft still key on the thread.
   assert.equal((actions[0] as { originRef: string }).originRef, 'pr:7:comments');
   assert.deepEqual((actions[0] as { signalRefs: string[] }).signalRefs, ['pr:7:comment:c1']);
 });
 
 test('every unresolved thread on a PR goes to one agent, not one agent per thread', async () => {
-  // A review is written as a unit: three comments in one pass, each assuming the
-  // others. Dispatched one at a time, an agent fixes comment 1 in a way that
-  // contradicts comment 3 — so the whole review is one concern, one branch, one
-  // agent, with every thread in the prompt.
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx({
@@ -87,7 +78,6 @@ test('every unresolved thread on a PR goes to one agent, not one agent per threa
   assert.equal(dispatches.length, 1, 'one agent for the review, not one per comment');
   const dispatch = dispatches[0] as { originRef: string; prompt: string; title: string; signalRefs: string[] };
   assert.equal(dispatch.originRef, 'pr:7:comments');
-  // Only the unhandled ones, and every one of them.
   assert.deepEqual(dispatch.signalRefs, ['pr:7:comment:c1', 'pr:7:comment:c2', 'pr:7:comment:c4']);
   for (const body of ['rename this', 'and pull it out of the loop', 'add a test']) {
     assert.ok(dispatch.prompt.includes(body), `the prompt carries "${body}"`);
@@ -135,8 +125,6 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
   assert.equal((actions[0] as { branch: string }).branch, 'issue/101');
   assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
-  // The originating issue's human-readable context rides along on the action so
-  // the cockpit can show it without re-fetching from the provider (issue #17).
   assert.equal((actions[0] as { originTitle: string }).originTitle, 'Login broken');
   assert.equal((actions[0] as { originSummary: string }).originSummary, 'steps');
 });
@@ -165,9 +153,6 @@ test('with a pickup label set, only issues carrying it are dispatched', async ()
 });
 
 test("the container-type gate the dispatcher applies is the operator's, not the default pair", async () => {
-  // The constructor used to copy the pickup policy field by field, which dropped
-  // `containerTypes` — so the cockpit honoured the operator's list and the
-  // dispatcher went on gating against `DEFAULT_CONTAINER_TYPES`, silently.
   const issues = [
     {
       id: 'i1',
@@ -322,8 +307,6 @@ test('an issue whose linked PR is still open is not re-dispatched', async () => 
 });
 
 test('an issue whose only PR merged is picked up again', async () => {
-  // `linkedPrNumber` is sticky (the last PR to ever cross-reference the issue), so
-  // gating on it retired an issue needing a second PR. The live PRs decide instead.
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx({
@@ -337,9 +320,6 @@ test('an issue whose only PR merged is picked up again', async () => {
 });
 
 test('an unwatched PR still holds its issue back', async () => {
-  // The harness hides untagged PRs from the dispatch world and hands them back via
-  // `hiddenPrs`; without them "absent" reads as "merged" and a second agent lands
-  // on the branch nobody opted in.
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx(
@@ -359,7 +339,6 @@ test('an unwatched PR still holds its issue back', async () => {
       },
     ),
   );
-  // Held back, and the excluded PR itself is still never acted on.
   assert.equal(actions[0]?.type, 'no_op');
 });
 
@@ -441,10 +420,6 @@ test('a merge-ready PR with an unhandled comment is addressed before merging', a
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
 });
 
-// --------------------------------------------------------------------------
-// Conflict / behind (base-update) rule
-// --------------------------------------------------------------------------
-
 test('a dirty PR is dispatched to a code agent to resolve conflicts', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
@@ -469,7 +444,6 @@ test('a dirty PR is dispatched to a code agent to resolve conflicts', async () =
   assert.match((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
 });
 
-/** The one PR shape the base-update rule's `behind` arm fires on. */
 function behindPr(over: Partial<PullRequest> = {}): PullRequest {
   return {
     id: 'p',
@@ -485,7 +459,6 @@ function behindPr(over: Partial<PullRequest> = {}): PullRequest {
   };
 }
 
-/** One recorded decision, as the audit log hands it back to the next cycle. */
 function pastDecision(action: Action, outcome: DecisionOutcome, createdAt = '2026-01-01T00:00:00.000Z'): Decision {
   return { id: `d_${outcome}`, cycleId: 'c1', action, outcome, detail: '', rule: null, admission: null, createdAt };
 }
@@ -501,9 +474,6 @@ test('a behind PR is merged up to date through the provider, with no agent spent
 });
 
 test('a base update the provider could not perform falls back to a code agent', async () => {
-  // The audit row is the whole memory: a `skipped` (no such endpoint — Azure
-  // DevOps) or `rejected` (had it, refused) direct update means the PR still
-  // needs merging and only an agent is left to do it.
   const d = new RuleDispatcher();
   for (const outcome of ['skipped', 'rejected'] as const) {
     const { actions } = await d.decide(
@@ -527,8 +497,6 @@ test('a base update the provider could not perform falls back to a code agent', 
 });
 
 test("a direct base update keeps the origin's cooldown and attempt cap", async () => {
-  // The accounting is the origin's, not the agent's: an act that runs and leaves
-  // the PR behind is the same loop a dispatch that leaves it behind is.
   const d = new RuleDispatcher();
   const attempt = (at: string): Decision =>
     pastDecision(
@@ -537,8 +505,6 @@ test("a direct base update keeps the origin's cooldown and attempt cap", async (
       at,
     );
 
-  // Cooldown arithmetic is against the snapshot's own clock, so this world needs
-  // a real one — the shared `ctx` helper's `takenAt` is deliberately unparseable.
   const cycle = (recentDecisions: Decision[]): Promise<DispatchResult> => {
     const c = ctx({ pullRequests: [behindPr()] }, { recentDecisions });
     return d.decide({ ...c, world: { ...c.world, takenAt: '2026-01-01T00:01:00.000Z' } });
@@ -639,10 +605,6 @@ test('a conflicted PR is dispatched ahead of a new issue under headroom 1', asyn
   assert.equal((dispatches[0] as { originRef: string }).originRef, 'pr:42:mergeable');
 });
 
-// --------------------------------------------------------------------------
-// Re-dispatch cooldown / attempt cap on a persistent concern (#36)
-// --------------------------------------------------------------------------
-
 const dirtyPr42 = {
   id: 'p',
   number: 42,
@@ -655,7 +617,6 @@ const dirtyPr42 = {
   mergeableState: 'dirty' as const,
 };
 
-/** An executed dispatch decision for `origin` at `createdAt`. */
 const dispatchDecision = (origin: string, createdAt: string) => ({
   id: `d_${createdAt}`,
   cycleId: 'c',
@@ -740,10 +701,6 @@ test('an already-escalated persistent conflict holds silently (no second escalat
   assert.equal(actions[0]?.type, 'no_op', 'no re-dispatch and no duplicate escalation');
 });
 
-// --------------------------------------------------------------------------
-// One code agent per PR branch: notify running, hold waiting, debounce
-// --------------------------------------------------------------------------
-
 const runningAgent = (id: string) => ({
   id,
   taskId: 't',
@@ -801,7 +758,6 @@ test('a fresh concern on a running branch notifies the agent, not a second dispa
         ],
       },
       {
-        // agent is on the branch working the CI concern; the conflict is new.
         tasks: [branchTask('feat', 'pr:42:ci', 'ag1')],
         agents: [runningAgent('ag1')],
       },
@@ -884,10 +840,6 @@ test('an already-notified concern is not re-notified', async () => {
 });
 
 test('a later comment still reaches the agent already answering the review', async () => {
-  // The hazard the collapsed origin introduces: every thread on the PR now shares
-  // one dispatch origin, so de-dup keyed on that origin would let the first
-  // comments swallow every later one — silencing exactly the operator who is
-  // reviewing an agent's work as it goes. De-dup is per thread instead.
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx(
@@ -908,7 +860,6 @@ test('a later comment still reaches the agent already answering the review', asy
         ],
       },
       {
-        // The agent was dispatched to answer c1; c2 arrived after it started.
         tasks: [branchTask('feat', 'pr:42:comments', 'ag1')],
         agents: [runningAgent('ag1')],
         recentDecisions: [
@@ -937,7 +888,6 @@ test('a later comment still reaches the agent already answering the review', asy
   assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'still one agent per branch');
   const note = actions.find((a) => a.type === 'respond_to_agent');
   assert.ok(note, 'the new comment reaches the running agent');
-  // Only the new one: the thread it was dispatched with is already in its prompt.
   assert.deepEqual((note as { originRefs: string[] }).originRefs, ['pr:42:comment:c2']);
   assert.match((note as { response: string }).response, /and one more thing/);
 });
@@ -986,10 +936,6 @@ test('does not duplicate work already in flight for the same origin', async () =
   );
   assert.equal(actions[0]?.type, 'no_op');
 });
-
-// --------------------------------------------------------------------------
-// Work-item state gate + "in review" back-off (Azure DevOps)
-// --------------------------------------------------------------------------
 
 test('state gate: only work items in a pickup state are dispatched', async () => {
   const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'] });
@@ -1123,7 +1069,7 @@ test('in-review back-off: an item already in the review state is not re-transiti
 });
 
 test('in-review back-off is off unless both pickupStates and inReviewState are set', async () => {
-  const d = new RuleDispatcher({ inReviewState: 'In Review' }); // no pickupStates
+  const d = new RuleDispatcher({ inReviewState: 'In Review' });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1146,7 +1092,6 @@ test('in-review back-off is off unless both pickupStates and inReviewState are s
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
-/** An issue parked in review whose PR has left the open list — the merged-PR case. */
 function reviewedIssue(number: number, prNumber: number): Partial<WorldSnapshot> {
   return {
     issues: [
@@ -1161,11 +1106,10 @@ function reviewedIssue(number: number, prNumber: number): Partial<WorldSnapshot>
         linkedPrNumber: prNumber,
       },
     ],
-    pullRequests: [], // the PR merged, so it has dropped out of the active list
+    pullRequests: [],
   };
 }
 
-/** A standing conclusion for `issue:<n>`, as the store would hand it to the dispatcher. */
 function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' | 'operator' = 'agent') {
   return {
     originRef: `issue:${number}`,
@@ -1179,10 +1123,6 @@ function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' |
   };
 }
 
-// The bug this feature exists for: a merged PR used to bounce its work item back
-// to "Ready" and rule `issue-pickup` put a fresh agent on work already on the default branch.
-// `openPrForIssue` cannot tell "merged" from "never existed" — both are absence —
-// so the absence itself must not release the item.
 test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {
   const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94)));
@@ -1217,8 +1157,6 @@ test("return-from-review: an operator's more_work verdict moves it back too", as
   assert.match((transition as { reason: string }).reason, /you reported work outstanding/);
 });
 
-// A conclusion is keyed on the issue origin, so a verdict on one issue must not
-// release another — the same property every origin-keyed gate here relies on.
 test('return-from-review: a verdict on another issue does not release this one', async () => {
   const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
@@ -1307,7 +1245,7 @@ test('return-from-review: an ignore-tagged open PR keeps the item in review', as
 });
 
 test('return-from-review is off unless both pickupStates and inReviewState are set', async () => {
-  const d = new RuleDispatcher({ inReviewState: 'In Review' }); // no pickupStates
+  const d = new RuleDispatcher({ inReviewState: 'In Review' });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1327,13 +1265,6 @@ test('return-from-review is off unless both pickupStates and inReviewState are s
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
-// --------------------------------------------------------------------------
-// The in-progress transition (rule `work-item-in-progress`). The whole walk is
-// asserted at the `buildSystem` seam in `workItemState.test.ts`; these are the
-// narrow cases a hand-built world says more clearly than a cycle does.
-// --------------------------------------------------------------------------
-
-/** An open work item in a tracked state, with nothing else true of it. */
 function tracked(number: number, workItemState: string): Partial<WorldSnapshot> {
   return {
     issues: [
@@ -1351,7 +1282,6 @@ function tracked(number: number, workItemState: string): Partial<WorldSnapshot> 
   };
 }
 
-/** A live task on an origin, as the fleet would report it mid-run. */
 function runningTask(id: string, originRef: string): Task {
   return {
     id,
@@ -1436,17 +1366,12 @@ test('the in-progress state keeps an item pickup-eligible, but does not lift a d
     decidedAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
   };
-  // "Doing" is the state the *harness* wrote, so it is not the operator saying
-  // "work this again" — `deliveryHold` reads the configured list, not the folded
-  // one, and the item stays parked.
   const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
   const parked = await d.decide(ctx(tracked(31, 'Doing'), { deliveries: [delivered] }));
   assert.ok(
     !parked.actions.some((a) => a.type === 'dispatch_code_agent'),
     'a delivered item in the in-progress state stays parked',
   );
-  // The same item is dispatched again the moment nothing has judged it delivered,
-  // which is what makes the assertion above about the hold rather than the gate.
   const free = await d.decide(ctx(tracked(31, 'Doing')));
   assert.ok(
     free.actions.some((a) => a.type === 'dispatch_code_agent'),

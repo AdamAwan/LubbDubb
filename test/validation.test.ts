@@ -10,15 +10,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/**
- * The validation plan as it becomes rows: the schema's refusals, the letters, and
- * what an amendment is allowed to do to a check somebody has already run.
- *
- * The property worth holding on to while reading these: **a check's identity is
- * its id, its handle is its letter, and neither is its position.** Everything
- * below is a way that could quietly stop being true.
- */
-
 function doc(over: Record<string, unknown> = {}): PlanDocument {
   const parsed = validatePlanDocument({
     version: 1,
@@ -40,13 +31,10 @@ function check(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
-/** Ingest, and hand back the **goal** — what the checks are keyed on. */
 function ingest(store: Store, document: PlanDocument, originRef = 'issue:12'): string {
   ingestPlanDocument(store, { doc: document, originRef, title: 'Issue' });
   return originRef;
 }
-
-// -- the schema --------------------------------------------------------------
 
 test('a validation block is optional, and absent is not the same as empty', () => {
   const plain = doc();
@@ -63,8 +51,6 @@ test('a check carrying an actor is refused rather than ignored', () => {
     validation: { checks: [check({ actor: 'fleet' })] },
   });
   assert.equal(refused.ok, false);
-  // Named, so the planner can act on it: silently dropping the field is what
-  // would let one believe it had assigned work to a fleet with no browser.
   assert.match(refused.ok ? '' : refused.error, /who runs it is not yours to say/);
 });
 
@@ -105,8 +91,6 @@ test('a resource name is a file name — a path is refused rather than sanitised
   }
 });
 
-// -- ingestion ---------------------------------------------------------------
-
 test('an unknown resource or part reference is dropped, never a refusal', () => {
   const store = new Store(':memory:');
   const goal = ingest(
@@ -120,8 +104,6 @@ test('an unknown resource or part reference is dropped, never a refusal', () => 
     }),
   );
   const [stored] = store.listValidationChecks(goal);
-  // The prose is worth more than the bibliography: a planner that mistyped a
-  // reference has still written a runnable check.
   assert.deepEqual(stored!.uses, ['fixture.tar.gz']);
   assert.deepEqual(stored!.covers, ['writer']);
 });
@@ -134,8 +116,6 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
       validation: {
         checks: [
           check({ id: 'a', fleetCandidate: true, why: 'runs git; no login' }),
-          // `why` with no nomination would render as a nomination the sheet is
-          // failing to draw.
           check({ id: 'b', why: 'stranded reason' }),
         ],
       },
@@ -146,7 +126,6 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
   assert.equal(checks.find((c) => c.id === 'b')!.candidateWhy, null);
 });
 
-/** The document that declares one file the planner cannot produce, and one it can. */
 function withResources(): PlanDocument {
   return doc({
     validation: {
@@ -164,10 +143,6 @@ test('a resource the planner cannot provide is not an ask until the goal is deli
   const goal = ingest(store, withResources());
   const asks = new ValidationAskDesk(store);
 
-  // The plan is in — and may still be `awaiting_approval`, and is certainly not
-  // built. A check runs against the delivered goal, so there is nothing a person
-  // could usefully do with this yet, and a row they cannot act on is the whole
-  // cost of filing it early.
   asks.run();
   assert.equal(store.listHumanTasks().length, 0, 'nothing is delivered, so nothing is asked for');
 
@@ -179,8 +154,6 @@ test('a resource the planner cannot provide is not an ask until the goal is deli
   assert.match(filed[0]!.detail ?? '', /week of real orders/);
   assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, filed[0]!.id);
 
-  // The sweep runs every pulse, and a replan re-declaring the same resource must
-  // not file it twice — the `recordHumanTask` refresh, carried across by name.
   asks.run();
   ingest(store, withResources());
   asks.run();
@@ -204,9 +177,6 @@ test('a resource naming access rather than a file is never an ask', () => {
   store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(store).run();
 
-  // The ask tells its reader to put the thing in the goal's validation
-  // directory, which nobody can do with an account. Access a check needs is a
-  // precondition, stated in the check's own `do` — so only the file is asked for.
   const filed = store.listHumanTasks();
   assert.equal(filed.length, 1);
   assert.match(filed[0]!.title, /orders-dump\.sql/);
@@ -221,8 +191,6 @@ test('an assessor that sends the goal back stops it being asked about', () => {
   asks.run();
   assert.equal(store.listHumanTasks().length, 0, 'a shortfall is not a delivery — there is nothing to validate');
 
-  // And the other order: a shortfall clears the delivery it contradicts, so the
-  // gate closes again rather than the goal staying asked-about forever.
   store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   store.recordShortfall({ originRef: goal, cause: 'goal', summary: 'still wrong', by: 'assessor' });
   asks.run();
@@ -237,9 +205,6 @@ test('a replan that stops needing a resource withdraws the ask it filed', () => 
   const [filed] = store.listHumanTasks();
   assert.equal(filed?.status, 'open');
 
-  // The resource row is replaced wholesale by the next document, so an ask nothing
-  // withdraws is an obligation pointing at something no plan asks for — and one
-  // the operator can never settle honestly.
   ingest(store, doc({ validation: { resources: [{ name: 'fixture.tar.gz', kind: 'fixture' }], checks: [check()] } }));
   const settled = store.getHumanTask(filed!.id);
   assert.equal(settled?.status, 'declined');
@@ -264,7 +229,6 @@ test('a planner that can produce the resource after all withdraws the ask too', 
     }),
   );
   assert.equal(store.getHumanTask(filed!.id)?.status, 'declined');
-  // And the next pulse does not put it straight back: the resource is provided.
   asks.run();
   assert.equal(store.listHumanTasks().filter((t) => t.status === 'open').length, 0);
 });
@@ -283,15 +247,9 @@ test('a withdrawal never overwrites what the operator already answered', () => {
   assert.equal(settled?.resolution, 'dropped it in the validation directory');
 });
 
-// -- letters -----------------------------------------------------------------
-
 test('nextCheckLetter walks A..Z and then AA, skipping what is taken', () => {
   assert.equal(nextCheckLetter([]), 'A');
   assert.equal(nextCheckLetter(['A', 'B']), 'C');
-  // It fills the lowest free letter, which is safe only because nothing ever
-  // frees one: a dropped check keeps its row and therefore its letter, so the
-  // "taken" list this is asked about has no gaps in practice. The
-  // supersession test below is what actually holds `284:B` still.
   assert.equal(nextCheckLetter(['A', 'C']), 'B');
   const alphabet = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
   assert.equal(nextCheckLetter(alphabet), 'AA');
@@ -310,8 +268,6 @@ test('letters are assigned in declaration order and survive a reordering amendme
     ],
   );
 
-  // The same two checks, declared the other way round, plus a new one. Position
-  // moved; the handle did not.
   ingest(
     store,
     doc({ validation: { checks: [check({ id: 'second' }), check({ id: 'third' }), check({ id: 'first' })] } }),
@@ -321,8 +277,6 @@ test('letters are assigned in declaration order and survive a reordering amendme
   assert.equal(after.get('second'), 'B');
   assert.equal(after.get('third'), 'C');
 });
-
-// -- what an amendment may do ------------------------------------------------
 
 test('a re-declared check keeps its result; a reworded one loses it', () => {
   const store = new Store(':memory:');
@@ -335,8 +289,6 @@ test('a re-declared check keeps its result; a reworded one loses it', () => {
     doc({
       validation: {
         checks: [
-          // Untouched wording, plus a corrected reference — not a rewording, and
-          // a result carried across it is still a result about the same check.
           check({ id: 'a', covers: [] }),
           check({ id: 'b', expect: 'It opens with the columns intact **and in order**.' }),
         ],
@@ -345,8 +297,6 @@ test('a re-declared check keeps its result; a reworded one loses it', () => {
   );
   const checks = new Map(store.listValidationChecks(goal).map((c) => [c.id, c]));
   assert.equal(checks.get('a')!.state, 'passed');
-  // An amendment that changes what a pass means has withdrawn the thing that was
-  // confirmed — `acceptanceCriteria`'s rule, one layer up.
   assert.equal(checks.get('b')!.state, 'unrun');
   assert.equal(checks.get('b')!.resultNote, null);
   assert.equal(checks.get('b')!.resultAt, null);
@@ -362,7 +312,6 @@ test('a check an amendment drops is superseded, not deleted — and keeps its le
   const dropped = checks.find((c) => c.id === 'b')!;
   assert.match(dropped.supersededReason!, /no longer includes this check/);
 
-  // A new check takes C, not B: the letter is retired with the row.
   ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'c' })] } }));
   assert.equal(store.listValidationChecks(goal).find((c) => c.id === 'c')!.letter, 'C');
 });
@@ -382,16 +331,11 @@ test('an amendment with no validation block leaves the checks exactly as they ar
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
   store.recordValidationResult(goal, 'a', { state: 'passed', note: 'fine', by: 'operator' });
-  // An operator override that never learned the block produces plans without one,
-  // and reading that as "the planner withdrew every check" would supersede a plan
-  // somebody is halfway through.
   ingest(store, doc());
   const [only] = store.listValidationChecks(goal);
   assert.equal(only!.state, 'passed');
   assert.equal(only!.supersededReason, null);
 });
-
-// -- results -----------------------------------------------------------------
 
 test('a new reading clears what the last one left behind', () => {
   const store = new Store(':memory:');
@@ -406,8 +350,6 @@ test('a new reading clears what the last one left behind', () => {
   assert.equal(deferred.deferUntil, '2026-09-03');
 
   const passed = store.recordValidationResult(goal, 'a', { state: 'passed', note: 'ran it', by: 'operator' })!;
-  // Otherwise the sheet renders "passed — the test environment is rebuilt on
-  // Thursday", which is two readings wearing one row.
   assert.equal(passed.resultNote, 'ran it');
   assert.equal(passed.deferUntil, null);
 
@@ -424,17 +366,6 @@ test('a superseded check refuses a result — its plan has withdrawn it', () => 
   assert.equal(store.recordValidationResult(goal, 'a', { state: 'passed', note: 'n', by: 'operator' }), null);
 });
 
-// -- the re-key: a database written before validation moved onto the goal ------
-
-/**
- * The rebuild, on a database whose `validation_checks` and `validation_resources`
- * are still keyed on `plan_id`.
- *
- * **`id` and `letter` surviving is the whole assertion.** They are the merge key
- * and the handle a person types: a rebuild that renumbered either would silently
- * invalidate every amendment that names a check and every reading recorded
- * against one, with nothing failing to say so.
- */
 test('an old database is rebuilt onto the goal, and the merge keys come through unchanged', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-rekey-'));
   const path = join(dir, 'old.db');
@@ -476,11 +407,8 @@ test('an old database is rebuilt onto the goal, and the merge keys come through 
   const [resource] = store.listValidationResources('issue:7');
   assert.equal(resource?.name, 'fixture.tar.gz');
   assert.equal(resource?.humanTaskId, 'task_1', 'the ask already filed for it is still joined');
-  // A row whose plan is gone can no longer name a goal, so it goes rather than
-  // being carried under a key made up for it.
   assert.equal(store.listAllValidationChecks().length, 1);
 
-  // Idempotent: the second boot finds the new shape and rebuilds nothing.
   store.close();
   const again = new Store(path);
   assert.equal(again.listValidationChecks('issue:7').length, 1);

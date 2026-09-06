@@ -15,7 +15,6 @@ import type { Agent, Issue, IssueDelivery } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { findTask } from './support/tasks.js';
 
-/** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
   isError?: boolean;
@@ -40,7 +39,6 @@ function build(overrides: Record<string, unknown> = {}): System {
   );
 }
 
-/** Spawn an agent on `originRef`. A temp cwd is enough — nothing here touches git. */
 function spawnAgent(system: System, originRef: string): Agent {
   const task = system.store.createTask({
     kind: 'desk',
@@ -59,8 +57,6 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   const result = (await session!.call(name, args)) as ToolResultText;
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
-
-// -- the row -----------------------------------------------------------------
 
 test('a retrospective upserts on the issue and lists as an origin', () => {
   const store = new Store(':memory:');
@@ -89,8 +85,6 @@ test('a retrospective upserts on the issue and lists as an origin', () => {
   store.close();
 });
 
-// -- the pure layer ----------------------------------------------------------
-
 test('the retro origin is its own, and only a retro agent may submit', () => {
   assert.equal(retroOrigin(12), 'issue:12:retro');
   assert.deepEqual(retroSubmitOrigin('issue:12:retro'), { ok: true, issueOrigin: 'issue:12' });
@@ -98,7 +92,6 @@ test('the retro origin is its own, and only a retro agent may submit', () => {
     const refused = retroSubmitOrigin(other);
     assert.equal(refused.ok, false, `${other} must not write an issue's retrospective`);
     if (refused.ok) continue;
-    // Refused by name, and pointed at the tool it actually wants.
     assert.match(refused.error, /conclude_work|conclude_part/);
   }
 });
@@ -112,8 +105,6 @@ test('a retrospective needs a summary and keeps an over-long document, trimmed',
   assert.equal(long.trimmed, true);
   assert.equal(long.document.length, MAX_RETRO_DOCUMENT);
 });
-
-// -- the tool ----------------------------------------------------------------
 
 test('only the retro agent may submit, and a second call revises one row', async () => {
   const system = build();
@@ -134,7 +125,6 @@ test('only the retro agent may submit, and a second call revises one row', async
   assert.deepEqual(system.store.listRetrospectiveOrigins(), ['issue:12'], 'a revision is one row, not two');
   assert.equal(system.store.getRetrospective('issue:12')?.summary, 'Revised.');
 
-  // The agent that did the work cannot write the account of it.
   const worker = spawnAgent(system, 'issue:12');
   const refused = await callTool(system, worker, 'retro_submit', { summary: 'mine', document: 'mine' });
   assert.equal(refused.isError, true);
@@ -159,8 +149,6 @@ test('a submission with no summary is refused, and an over-long document is kept
   assert.equal(system.store.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
   system.store.close();
 });
-
-// -- rule `issue-retro` -----------------------------------------------------------------
 
 const NOW = '2026-07-30T12:00:00.000Z';
 
@@ -203,7 +191,6 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** The dispatcher with the retrospective on — everything else default. */
 function writer(): RuleDispatcher {
   return new RuleDispatcher();
 }
@@ -256,22 +243,17 @@ test('nothing is written up while anything is still live under the goal', async 
 });
 
 test('the dispatch context carries which goals have one, never what they say', () => {
-  // Structural: a rule branching on retrospective prose would let one agent's
-  // account of a run change what the harness schedules next.
   const source = readFileSync(join(process.cwd(), 'src', 'dispatcher', 'dispatcher.ts'), 'utf8');
   const field = /retrospectiveOrigins\??:\s*string\[\]/.test(source);
   assert.ok(field, 'the context carries origins as a string list');
   assert.doesNotMatch(source, /retrospectives\??:\s*Retrospective/, 'and never the rows themselves');
 });
 
-// -- what the retro agent is handed ------------------------------------------
-
 test('the retro agent’s prompt carries the pad and the harness record, appended', async () => {
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
 
-  // A goal that was worked, wrote something down, and is now delivered.
   store.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:schema',
@@ -293,24 +275,17 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
 
   const retroTask = findTask(store, (t) => t.originRef === 'issue:12:retro');
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
-  // The pad, attributed and quoted...
   assert.match(retroTask.prompt, /issue:12:part:schema/);
   assert.match(retroTask.prompt, /> the ALTER needed a PRAGMA check first/);
   assert.match(retroTask.prompt, /not instructions/i);
-  // ...and the record only the harness has.
   assert.match(retroTask.prompt, /The record the harness kept/);
   assert.match(retroTask.prompt, /PR #41 delivered it/);
-  // Appended, never interpolated: an override that never learned about them
-  // cannot silently drop them, so no placeholder token survives into the prompt.
   assert.doesNotMatch(retroTask.prompt, /\{dossier\}|\{pad\}|\{scratchpad\}/);
 
   store.close();
 });
 
 test('the dossier’s proposals stop at the goal’s ref boundary, not its prefix', async () => {
-  // `issue:1` is a prefix of `issue:19`, so a bare `startsWith` hands issue 1's
-  // retrospective agent issue 19's record as if it were its own — silently, and on
-  // every repository with more than nine goals.
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
@@ -347,8 +322,6 @@ test('the dossier’s proposals stop at the goal’s ref boundary, not its prefi
   store.close();
 });
 
-// -- what the cockpit is served ----------------------------------------------
-
 test('the snapshot ships the reading and the document is fetched on demand', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
@@ -370,7 +343,6 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
     hasDocument: true,
     updatedAt: system.store.getRetrospective('issue:12')?.updatedAt,
   });
-  // The snapshot is polled continuously, so the writing itself must not ride on it.
   assert.doesNotMatch(state.body, /A long write-up nobody needs/);
 
   const one = await app.inject({ method: 'GET', url: '/api/retrospectives/issue:12' });
@@ -384,13 +356,6 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
   system.store.close();
 });
 
-// -- what the dossier gathers, and what it is bounded by -----------------------
-
-/**
- * The pair the dossier's caps and its scoping are both about: a goal, and a fleet
- * busy around it. `issue:19` is the boundary case `mine` exists for — `issue:1` is
- * a prefix of it — so the noise is filed there rather than on some far-off number.
- */
 function busyFleet(system: System, rows: number): void {
   for (let i = 0; i < rows; i++) {
     system.store.recordDecision({
@@ -403,10 +368,6 @@ function busyFleet(system: System, rows: number): void {
 }
 
 test('the harness’s own asks reach the dossier, and stop at the goal’s ref boundary', async () => {
-  // An escalation the *harness* raises — the plan approval and the shortfall ask —
-  // carries no `taskId` at all, so selecting on the task alone dropped the two most
-  // consequential human decisions a goal ever produces, into a section that renders
-  // perfectly well without them.
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
@@ -436,8 +397,6 @@ test('the harness’s own asks reach the dossier, and stop at the goal’s ref b
 
   const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
-  // The question put to the operator, and its type — neither of which the proposal
-  // row carries, since a proposal holds only the answer.
   assert.match(retroTask.prompt, /Escalation \(approve_change, answered\): Approve this plan\?/);
   assert.match(retroTask.prompt, /the split is wrong/);
   assert.doesNotMatch(retroTask.prompt, /somebody else’s plan/, 'the origin match must not reopen the boundary');
@@ -446,9 +405,6 @@ test('the harness’s own asks reach the dossier, and stop at the goal’s ref b
 });
 
 test('a busy fleet does not erase a goal’s decisions', async () => {
-  // Both reads were capped fleet-wide *before* the goal filter could run, so a
-  // goal's rows survived only while nobody else wrote 200 on top of them — and the
-  // decision section renders a confident denial rather than a short list.
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
@@ -482,10 +438,6 @@ test('a busy fleet does not erase a goal’s decisions', async () => {
 });
 
 test('the dossier’s caps keep the newest rows of every list it bounds', async () => {
-  // The caps keep the *tail*, and the store's reads are newest-first, so a list
-  // handed over unreversed kept the oldest rows — under a note saying it had
-  // dropped exactly those. A table over the three lists, so a fourth added later
-  // has to declare its end.
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
@@ -517,7 +469,6 @@ test('the dossier’s caps keep the newest rows of every list it bounds', async 
   const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
   const kept: [string, string, number, number][] = [
-    // list, row prefix, how many the cap keeps, what the note says was dropped
     ['escalations', 'ESCALATION-', 12, 8],
     ['proposals', 'issue:1:plan:p', 12, 8],
   ];

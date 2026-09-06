@@ -2,56 +2,11 @@ import { obstacleRepairBranch, obstacleRepairOrigin, ownershipDoor } from '../..
 import type { ObstacleStanding } from '../../types.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
-/** How many of the reporters' own sentences the briefing carries. The intake's number. */
+// → docs/spec/05-dispatcher.md (rule `obstacle-repair`)
+
 const WORDS_SHOWN = 3;
 
-/**
- * Put one agent on the thing standing in the fleet's way.
- *
- * This is the second of the two ownership doors, and it is a **capability**
- * rather than a convenience: a store that can queue work can put agents on the
- * fleet. So it is one rule, in the pipeline where it can be seen, taking the
- * headroom cut like every other candidate — never a general licence for this
- * subsystem to schedule things.
- *
- * ## What it may fire for
- *
- * Only what is blocking the fleet *now* — a base branch red, or three or more
- * independent voices — which is {@link ownershipDoor}'s `repair` answer and never
- * a second opinion here. Everything else standing goes through the other door: a
- * ticket, filed by the ownership desk, ranked and priced like any other goal.
- *
- * ## Bounded, and bounded here rather than by the cut
- *
- * **At most one repair in flight across the whole fleet.** The headroom cut bounds
- * how many agents run; it does not bound how many of them this rule may be. A
- * board that went to twenty standing rows on a bad afternoon would otherwise
- * propose twenty repairs, and a subsystem whose whole point is *not spending the
- * fleet twice on one thing* would be spending it on itself. One at a time is the
- * bound that cannot be argued with, and a second obstacle waits exactly as long as
- * the first takes.
- *
- * ## Where it sits
- *
- * Directly below rule `manual-job` and above every world-driven rule. What it
- * dispatches for is, by construction, in front of work the rules below it are
- * about to propose: an agent sent to a red base is an agent sent to the reason the
- * next four dispatches would have failed. It is above the PR concerns for the same
- * reason `pr-review-comment` is above `pr-ci-failing` — the earlier signal is the
- * one that invalidates the later work.
- *
- * ## The origin
- *
- * `obstacle:<id>`, classified in `src/issueOrigins.ts`. Left unclassified it reads
- * as `unrecognised`: it stops expanding under a goal's priority flag, and its
- * spend files under "other" — and neither is red.
- * → `docs/spec/27-obstacles.md#ownership`
- */
 export function obstacleRepair(s: StageContext): void {
-  // One at a time, counted off the origins the fleet is actually working rather
-  // than off this cycle's proposals: a repair dispatched two pulses ago is still
-  // a repair in flight, and a rule that only looked at its own candidates would
-  // propose a second one on every pulse until the first finished.
   for (const origin of s.activeOrigins) if (origin.startsWith('obstacle:')) return;
 
   for (const row of s.obstacles) {
@@ -74,10 +29,6 @@ export function obstacleRepair(s: StageContext): void {
         type: 'dispatch_code_agent',
         branch,
         title,
-        // The claim, the keys and the words the reporters used are **appended**,
-        // never interpolated: an operator override written before this rule
-        // existed would silently drop a new token, and they are the whole of what
-        // this agent has to go on.
         prompt: s.templates.render('obstacle-repair', { claim }) + repairBriefing(row),
         originRef: origin,
         originTitle: title,
@@ -86,10 +37,6 @@ export function obstacleRepair(s: StageContext): void {
         reason,
       } satisfies RawAction,
     };
-    // Through `consider` like every other candidate, so a repair that keeps
-    // failing cools down and then asks a person rather than looping: an obstacle
-    // three agents could not fix is exactly the thing an operator wants to be
-    // told about, and the row itself says nothing to anybody who is not looking.
     s.consider(candidate, (attempts) => ({
       type: 'escalate_to_human',
       escalationType: 'resolve_ambiguity',
@@ -106,14 +53,6 @@ export function obstacleRepair(s: StageContext): void {
   }
 }
 
-/**
- * What the agent is told about the thing it is being sent at: the ways into it,
- * and what the agents that hit it said, in their own words.
- *
- * Their words rather than the claim restated, for the intake's reason — the claim
- * is one line with the reporter's own frame stripped out of it, and the sentences
- * behind it are what someone diagnosing the thing actually needs.
- */
 function repairBriefing(row: ObstacleStanding): string {
   const keys = row.keys
     .filter((key) => key.binds)

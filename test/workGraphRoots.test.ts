@@ -23,11 +23,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// Stage 3: the roots that had no work item behind them. Adoption first (this
-// file's opening block) — the two arms that make "unparented PR" name one
-// population instead of two — then the filing record that gives what is left a
-// tracker item.
-
 function world(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
   return {
     takenAt: '2026-07-28T09:00:00.000Z',
@@ -80,19 +75,11 @@ function node(out: WorkNodeObservation[], ref: string): WorkNodeObservation {
   return found;
 }
 
-// ---------------------------------------------------------------------------
-// jobBranch — one predicate, two callers
-// ---------------------------------------------------------------------------
-
 test('jobBranch derives job/<id> for a code job and refuses a desk one', () => {
   assert.equal(jobBranch(job()), 'job/j7', 'the derived branch is what rule `manual-job` dispatches on');
   assert.equal(jobBranch(job({ branch: 'chore/lint' })), 'chore/lint', "an operator's branch wins");
   assert.equal(jobBranch(job({ kind: 'desk' })), null, 'a desk job runs in a scratch dir and has no branch');
 });
-
-// ---------------------------------------------------------------------------
-// Arm A — a job owns the PR its own branch carries
-// ---------------------------------------------------------------------------
 
 test('a PR on a job’s derived branch is parented to the job', () => {
   const out = foldWorkGraph(input({ world: world({ pullRequests: [pr()] }), jobs: [job()] }));
@@ -121,10 +108,6 @@ test("a hand-made PR is left unparented — it is not the harness's work", () =>
   assert.equal(node(out, 'pr:41').parentRef, null, 'filing a ticket for every drive-by PR would be noise');
 });
 
-// ---------------------------------------------------------------------------
-// Arm B — a job is adopted by the issue its own PR names
-// ---------------------------------------------------------------------------
-
 test('a job whose PR links an issue is adopted by it, and needs no ticket filed', () => {
   const out = foldWorkGraph(
     input({
@@ -136,9 +119,6 @@ test('a job whose PR links an issue is adopted by it, and needs no ticket filed'
 });
 
 test('lineage beats aboutness: the PR belongs to the job, and the job to the issue', () => {
-  // Both signals present. The branch match says what *caused* the PR;
-  // `linkedPrNumber` says what it is *about*. Taking either alone loses an edge —
-  // together they give the whole chain.
   const out = foldWorkGraph(
     input({
       world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }),
@@ -151,7 +131,6 @@ test('lineage beats aboutness: the PR belongs to the job, and the job to the iss
 });
 
 test("an issue's own branch match is never displaced by a job", () => {
-  // `issue/<n>` and `job/<id>` cannot collide, so the issue arm is untouched.
   const out = foldWorkGraph(
     input({
       world: world({ issues: [issue()], pullRequests: [pr({ branch: 'issue/12' })] }),
@@ -161,11 +140,6 @@ test("an issue's own branch match is never displaced by a job", () => {
   assert.equal(node(out, 'pr:41').parentRef, 'issue:12');
 });
 
-// ---------------------------------------------------------------------------
-// Arm C — a job is adopted by the origin it stands in for
-// ---------------------------------------------------------------------------
-
-/** A node the graph already holds — a candidate parent the world may no longer mention. */
 function stored(over: Partial<WorkNode> & { ref: string }): WorkNode {
   return {
     kind: 'issue',
@@ -182,9 +156,6 @@ function stored(over: Partial<WorkNode> & { ref: string }): WorkNode {
 }
 
 test('a requeued job is adopted by the issue whose work it redoes', () => {
-  // A requeued appraisal, plan or retro opens no pull request, so arm B can never
-  // reach it — it was parentless forever, and stage 3 offered to file a second
-  // ticket for an issue that already exists.
   const out = foldWorkGraph(
     input({
       world: world({ issues: [issue()] }),
@@ -195,9 +166,6 @@ test('a requeued job is adopted by the issue whose work it redoes', () => {
 });
 
 test("a part's requeue lands on the part, not on the issue two levels up", () => {
-  // The longest prefix the graph holds wins: `issue:12:part:api` is itself a node,
-  // so the walk stops before it reaches the issue — the same lineage-over-aboutness
-  // rule arm A states for a PR.
   const out = foldWorkGraph(
     input({
       world: world({ issues: [issue()] }),
@@ -219,8 +187,6 @@ test('a requeue of a requeue collapses onto the job it redoes, not into a second
 });
 
 test('an origin naming nothing the graph holds leaves the job a root', () => {
-  // Null is the honest answer: the walk cannot invent an edge, so the row stays in
-  // the unrecorded list where an operator can see the mistake.
   const out = foldWorkGraph(input({ jobs: [job({ originRef: 'issue:99:plan' })] }));
   assert.equal(node(out, 'job:j7').parentRef, null, 'issue 99 is not in the graph');
 });
@@ -241,8 +207,6 @@ test('arm C only ever fills a null — arm B’s adoption stands', () => {
 });
 
 test('an origin adopts from a node the world has since forgotten', () => {
-  // `existing` is a candidate too: a closed issue drops out of the world sweep, and
-  // losing the adoption would put its requeued work back in the unrecorded list.
   const out = foldWorkGraph(
     input({
       jobs: [job({ originRef: 'issue:12:retro' })],
@@ -264,7 +228,6 @@ test('an adopted job is not unrecorded, and an origin-less one still is', () => 
   );
   adopted.store.close();
 
-  // The case stage 3 was written for: an operator job stands in for nothing.
   const bare = recorded({ jobs: [job()] });
   assert.deepEqual(
     unrecordedWork(bare.nodes, [job()], []).map((u) => u.ref),
@@ -273,19 +236,12 @@ test('an adopted job is not unrecorded, and an origin-less one still is', () => 
   bare.store.close();
 });
 
-// ---------------------------------------------------------------------------
-// The filing record
-// ---------------------------------------------------------------------------
-
 test('a filing is claimed once per node — a second click is refused by the write', () => {
   const store = new Store(':memory:');
   const first = store.createWorkItemFiling({ targetRef: 'job:j7' });
   assert.equal(first?.status, 'filing');
   assert.equal(first?.ticketRef, null, 'the ticket does not exist yet — that is what filing means');
 
-  // The claim is taken before anything reaches the tracker, which is what makes a
-  // double-click safe now that the harness files on the request rather than
-  // queueing an agent: the second one loses here, not after a second ticket exists.
   assert.equal(
     store.createWorkItemFiling({ targetRef: 'job:j7' }),
     null,
@@ -313,10 +269,8 @@ test('a claim whose create failed is released, so the button comes back', () => 
   store.createWorkItemFiling({ targetRef: 'job:j7' });
   store.dropWorkItemFiling('job:j7');
   assert.equal(store.listWorkItemFilings().length, 0, 'no filing stands for a ticket that was never created');
-  // And it can be claimed again — the node is unrecorded work once more.
   assert.equal(store.createWorkItemFiling({ targetRef: 'job:j7' })?.status, 'filing');
 
-  // A settled filing is never dropped: the ref on it is a real ticket.
   store.linkWorkItemFiling('job:j7', 'issue:314');
   store.dropWorkItemFiling('job:j7');
   assert.equal(store.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
@@ -347,11 +301,6 @@ test('listWorkNodes reads the whole table, roots and descendants alike', () => {
   store.close();
 });
 
-// ---------------------------------------------------------------------------
-// The detector
-// ---------------------------------------------------------------------------
-
-/** Record a fold and read the whole table back — what the route hands the detector. */
 function recorded(over: Partial<WorkGraphInput> = {}): { store: Store; nodes: WorkNode[] } {
   const store = new Store(':memory:');
   store.recordWorkGraph(foldWorkGraph(input(over)));
@@ -393,7 +342,6 @@ test('the narrowings: desk, queued, cancelled and adopted jobs are not unrecorde
     store.close();
   }
 
-  // Adopted by arm B: a work item for this work already exists.
   const { store, nodes } = recorded({
     world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }),
     jobs: [job()],
@@ -439,8 +387,6 @@ test('ignoring twice is one row, and un-ignoring what was never ignored is silen
 });
 
 test('the ticket prompt names the tracker, the ref and what the work produced', () => {
-  // Open first, then merged — a PR is parented while it is in the open list, and
-  // the write-once parent is what carries the edge past the merge.
   const { store } = recorded({ world: world({ pullRequests: [pr()] }), jobs: [job()] });
   store.recordWorkGraph(
     foldWorkGraph(
@@ -454,8 +400,6 @@ test('the ticket prompt names the tracker, the ref and what the work produced', 
   const node = store.listWorkNodes().find((n) => n.ref === 'job:j7');
   assert.ok(node);
   const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'));
-  // The item's own title is the work's, where it used to be a queue entry's — no
-  // desk agent is dispatched for this, so there is no queue to be legible in.
   assert.match(fields.title, /Bump the linter/);
   assert.equal(fields.vars.ref, 'job:j7');
   assert.match(fields.vars.produced ?? '', /pr:41/, 'the PR it produced is in the body');
@@ -463,7 +407,6 @@ test('the ticket prompt names the tracker, the ref and what the work produced', 
   const rendered = defaultPromptTemplates().render('work-item-ticket-body', fields.vars);
   assert.match(rendered, /records work the harness has already done/i);
   assert.match(rendered, /pr:41/);
-  // It is a ticket body, not a prompt: nobody is being instructed.
   assert.doesNotMatch(rendered, /link_ticket|do not do it again/i);
   store.close();
 });
@@ -477,11 +420,6 @@ test('a job that produced nothing says so in the prompt rather than leaving a bl
   store.close();
 });
 
-// ---------------------------------------------------------------------------
-// The fold learns the parent from a linked filing
-// ---------------------------------------------------------------------------
-
-/** A filing row as the store hands one back, without needing a store. */
 function filing(over: Partial<WorkItemFiling> = {}): WorkItemFiling {
   return {
     targetRef: 'job:j7',
@@ -504,9 +442,6 @@ test('a filing still in flight attaches nothing', () => {
 });
 
 test('a ticket the world never lists still leaves its work reachable', () => {
-  // The issue provider lists open items in one repository; a ticket closed
-  // straight away, or filed into another project, is never fetched. Without a
-  // placeholder the adopted job would be reachable from nowhere at all.
   const store = new Store(':memory:');
   store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
 
@@ -539,10 +474,6 @@ test("the world's own issue row wins the title over a placeholder", () => {
 });
 
 test('the placeholder is first sight only: a stored ticket node is never overwritten', () => {
-  // Both real issue providers list the open set, so closing a filed work item
-  // removes it from the world permanently. Guarded on this pulse alone, the
-  // placeholder would revert the stored node to open, terminal false and titled
-  // with its own ref — every pulse, forever.
   const store = new Store(':memory:');
   const listed = issue({ id: 'i314', number: 314, title: 'Bump the linter' });
   const pulse = (over: Partial<WorkGraphInput> = {}) =>
@@ -563,8 +494,6 @@ test('the placeholder is first sight only: a stored ticket node is never overwri
 });
 
 test('a linked filing re-emits a node whose job has aged out of the fold', () => {
-  // `listJobs` is windowed, so an old job emits nothing this pulse. The adoption
-  // must not be lost with it — `existing` is already in the input and carries it.
   const prior: WorkNode = {
     ref: 'job:j7',
     kind: 'job',
@@ -594,11 +523,6 @@ test('the fold is the only writer: a second filing cannot re-parent an adopted n
   store.close();
 });
 
-// ---------------------------------------------------------------------------
-// The route
-// ---------------------------------------------------------------------------
-
-/** A harness with an issue tracker configured, so filing has somewhere to go. */
 function buildServed(over: Record<string, unknown> = {}) {
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
@@ -617,14 +541,6 @@ function buildServed(over: Record<string, unknown> = {}) {
   });
 }
 
-/**
- * A system whose *issue tracker* is GitHub while its world — and the sink it files
- * through — stays the fake one. The selection is flipped after the build on
- * purpose: `trackerCoordinates` is read from config at request time, so this
- * exercises the route's real branch, while the create lands in the fake world
- * instead of on the network. (Building the github provider outright would file
- * these tickets into a real repository.)
- */
 function buildWithTracker(): ReturnType<typeof buildSystem> {
   const system = buildServed();
   system.config.integrations.issues = 'github';
@@ -632,7 +548,6 @@ function buildWithTracker(): ReturnType<typeof buildSystem> {
   return system;
 }
 
-/** Run a code job to `dispatched` — the state that makes it unrecorded work. */
 async function dispatchedJob(system: ReturnType<typeof buildSystem>) {
   const job = system.store.createJob({ title: 'Bump the linter', prompt: 'bump it', kind: 'code' });
   system.store.markJobDispatched(job.id, 't-stub');
@@ -658,7 +573,6 @@ test('the roots route reports unrecorded work beside the roots', async () => {
 });
 
 test('filing creates the work item there and then, and a second click is refused', async () => {
-  // `fake` has no tracker to file into, so this is the tracker-configured path.
   const system = buildWithTracker();
   const job = await dispatchedJob(system);
   const ref = `job:${job.id}`;
@@ -668,21 +582,14 @@ test('filing creates the work item there and then, and a second click is refused
   assert.equal(res.statusCode, 200);
   const filed = res.json() as { job?: unknown; filing: { status: string; ticketRef: string | null } };
 
-  // No desk job: the body was already the harness's own walk of the work subtree,
-  // so all a filing agent added was one API call (issue #394).
   assert.equal(filed.job, undefined);
   assert.equal(system.store.listJobs().filter((j) => j.kind === 'desk').length, 0);
-  // Filed, not filing: the operator is told the item's ref on the request that
-  // asked for it, instead of watching a row that completes minutes later.
   assert.equal(filed.filing.status, 'filed');
   assert.ok(filed.filing.ticketRef?.startsWith('issue:'));
 
   const again = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
   assert.equal(again.statusCode, 409, 'the node already has a work item');
 
-  // And it is off the unrecorded list, because it is recorded now: the route ran a
-  // cycle, the fold read the settled filing and parented the work to the item. The
-  // old two-step left the row sitting on `filing` until an agent got to it.
   const listed = await app.inject({ method: 'GET', url: '/api/work' });
   assert.deepEqual((listed.json() as { unrecorded: { ref: string }[] }).unrecorded, []);
   assert.equal(system.store.listWorkNodes().find((n) => n.ref === ref)?.parentRef, filed.filing.ticketRef);
@@ -699,14 +606,10 @@ test('the route refuses an unknown ref, work that is already recorded, and a mis
 
   assert.equal((await app.inject({ method: 'POST', url: '/api/work/job:nope/file' })).statusCode, 404, 'no such node');
 
-  // An issue is a work item; it is never unrecorded. Checked ahead of the tracker
-  // arm, so this holds even on a deployment with nowhere to file.
   const recordedIssue = await app.inject({ method: 'POST', url: '/api/work/issue:12/file' });
   assert.equal(recordedIssue.statusCode, 409);
   assert.match((recordedIssue.json() as { error: string }).error, /not unrecorded work/);
 
-  // The `fake` provider has nowhere to file into, which is the same predicate
-  // `canFileTickets` hides the button on.
   const res = await app.inject({ method: 'POST', url: `/api/work/job:${job.id}/file` });
   assert.equal(res.statusCode, 409);
   assert.match((res.json() as { error: string }).error, /no issue tracker is configured/);
@@ -731,8 +634,6 @@ test('ignoring a node clears it from the list, survives a re-read, and refuses a
     'still reported, so the panel can offer the un-ignore — it is the panel that hides it',
   );
 
-  // The file route reads the same predicate, so it refuses what the panel no
-  // longer offers rather than filing a ticket for work the operator dismissed.
   const filed = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
   assert.equal(filed.statusCode, 409);
   assert.match((filed.json() as { error: string }).error, /ignored/);
@@ -743,10 +644,6 @@ test('ignoring a node clears it from the list, survives a re-read, and refuses a
   await app.close();
   system.store.close();
 });
-
-// ---------------------------------------------------------------------------
-// The fold parents the work to the item the route filed
-// ---------------------------------------------------------------------------
 
 test('filing parents the work to its new item on the next pulse', async () => {
   const system = buildWithTracker();
@@ -778,7 +675,6 @@ test('an agent on an unrelated job can link nothing, and is told which jobs can'
 
   const res = system.agents.linkTicket(agent.id, 'issue:314');
   assert.equal(res.ok, false);
-  // Identity is the whole access check: there is no argument naming what to link.
   assert.match(res.ok === false ? res.error : '', /raise a bug/);
   system.store.close();
 });
@@ -791,7 +687,6 @@ test('adoption is write-once: a later fold never re-parents a job', () => {
   store.recordWorkGraph(adopted);
   assert.equal(store.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef, 'issue:12');
 
-  // The link vanishes from the world — the parent must not follow it.
   store.recordWorkGraph(foldWorkGraph(input({ world: world({ pullRequests: [pr()] }), jobs: [job()] })));
   assert.equal(
     store.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef,

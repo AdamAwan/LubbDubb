@@ -32,50 +32,25 @@ import type {
   WorldEvent,
 } from '../src/types.js';
 
-// Issue #159 — the assessor's negative verdict, and what it drives.
-//
-// The loop is Plan → Work → is the goal achieved? → No → re-plan. Before this,
-// both ends existed and nothing joined them: rule `issue-assess` asked the question and the
-// answer landed in a row whose only consumer emits a *tracker* move, so on GitHub
-// it changed no dispatch at all and on a decomposed issue it changed none anywhere.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 
-// -- the pure arm resolver ---------------------------------------------------
-
 test('each cause routes somewhere different — which is the whole point of declaring it', () => {
-  // The issue's own point 2: three distinct failures wear one face, and routing
-  // all three to a replan re-decomposes plans whose shape was never the problem.
   assert.equal(shortfallArm('plan', true), 'replan');
   assert.equal(shortfallArm('part', true), 'followup');
   assert.equal(shortfallArm('goal', true), 'escalate', 'a wrong goal is #158’s question, not the planner’s');
 });
 
 test('no cause routes to nothing, and that is a fourth answer rather than a default', () => {
-  // `undeclared`'s discipline: an unplanned issue that simply is not finished
-  // names nothing to route. Folding it into `goal` would file an escalation
-  // claiming the ticket is wrong every time, which is a route invented from silence.
   assert.equal(shortfallArm(null, false), 'none');
   assert.equal(shortfallArm(null, true), 'none');
 });
 
 test('with no plan, the two plan-shaped arms degrade to asking a person', () => {
-  // Refused at the tool boundary, so reaching this means a plan went away between
-  // the verdict and the pulse. There is nothing to replan and no part to follow up.
   assert.equal(shortfallArm('plan', false), 'escalate');
   assert.equal(shortfallArm('part', false), 'escalate');
 });
 
-// -- decision 6: a negative verdict never holds pickup ------------------------
-
 test('the pickup gate names no shortfall type — the polarity is structural, not a runtime check', () => {
-  // Asserted structurally, the way `test/planApproval.test.ts` asserts
-  // `proposalHold` and `planProposalHold` apart and `test/workGraph.test.ts`
-  // asserts the graph is a lens. Every reader of `issue_deliveries` *holds* an
-  // issue out of pickup; a shortfall exists to release one. Putting the two
-  // polarities behind one predicate would leave every present and future reader
-  // remembering which one it had, from rows that look identical until you read a
-  // column — the drift class this repo has paid for twice.
   const source = readFileSync(new URL('../src/delivery/delivery.ts', import.meta.url), 'utf8');
   for (const name of ['IssueShortfall', 'shortfall', 'Shortfall']) {
     assert.equal(source.includes(name), false, `deliveryHold's module must not name ${name}`);
@@ -83,8 +58,6 @@ test('the pickup gate names no shortfall type — the polarity is structural, no
 });
 
 test('a shortfall never holds pickup, and the positive verdict still does', () => {
-  // The behavioural half. Written both ways deliberately: an assertion that only
-  // checked "not held" would pass just as well if the gate had been disabled.
   assert.equal(deliveryHold(null, issue()), null, 'no delivery row: nothing parked');
   assert.match(deliveryHold(deliveryRow(), issue()) ?? '', /marked it delivered/, 'the delivery gate is untouched');
 });
@@ -97,11 +70,8 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    // The funnel has failed open — the shortfall releases the issue *into*
-    // pickup, which is a claim about what happens after the funnel, not before.
     recentDecisions: pastTheFunnel(12),
     openPrs: [],
-    // No delivery row: writing a shortfall clears one, in the store.
     deliveries: [],
     deliverySignals: [],
     plans: [],
@@ -112,19 +82,12 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
   assert.equal(verdict.status, 'eligible');
 });
 
-// -- decision 3: the resolver ranks two records rather than one overwriting the other
-
 test('a shortfall outranks the working agent’s own declaration without erasing it', () => {
-  // The bug this fixes predates the feature: `issue_conclusions` is keyed
-  // `origin_ref PRIMARY KEY`, so an assessor writing `more_work` into it
-  // overwrote the agent's note, author and timestamp — and the resolver read
-  // `by: 'assessor'` and `by: 'agent'` through one arm with no precedence.
   const agentSaid = conclusionRow({ verdict: 'done', by: 'agent', note: 'I delivered all of it' });
   const resolved = resolveIssueConclusion(agentSaid, null, [], shortfallRow());
   assert.equal(resolved.verdict, 'more_work');
   assert.equal(resolved.by, 'assessor', 'the assessor is later and better informed');
   assert.equal(resolved.note, 'the CLI half is missing');
-  // And the agent's row is still there to be read — two records, one resolver.
   assert.equal(agentSaid.note, 'I delivered all of it');
 });
 
@@ -145,12 +108,7 @@ test('with no shortfall the resolver is byte-for-byte what it was', () => {
   assert.equal(resolveIssueConclusion(null, null, []).verdict, 'undeclared');
 });
 
-// -- decision 5: the operator stays in the loop -------------------------------
-
 test('a shortfall proposal’s ref maps onto the issue, so a rejection expires on world signal', () => {
-  // Not inherited by accident: `proposalWorldRef` splits on `:` and takes the
-  // first two segments, so `issue:12:shortfall` → `issue:12` unmodified. It has to
-  // work, or a refused replan would veto every future one — the phase-4 failure.
   const rejected = proposalRow({ status: 'rejected', decidedAt: '2026-07-28T10:00:00.000Z' });
   const held = proposalHold('shortfall', shortfallRef(12), [rejected], { rejectionSignals: [] });
   assert.match(held ?? '', /you rejected it/, 'a "no" stands until the world moves');
@@ -176,8 +134,6 @@ test('a pending shortfall holds the rule, so one question is asked once', () => 
   assert.match(proposalHold('shortfall', shortfallRef(12), [pending]) ?? '', /awaiting your accept\/reject/);
 });
 
-// -- the rule ----------------------------------------------------------------
-
 test('a plan-cause shortfall is proposed, not taken', async () => {
   const { actions } = await decide(ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [planRow()] }));
   const proposed = actions.find((a) => a.type === 'propose_shortfall') as
@@ -187,10 +143,6 @@ test('a plan-cause shortfall is proposed, not taken', async () => {
   assert.equal(proposed!.cause, 'plan');
   assert.equal(proposed!.planId, 'plan_1');
   assert.equal(proposed!.rule, 'issue-shortfall');
-  // The assessor's words still reach the operator — beside the prompt now, not
-  // inside it. Both directions asserted: carrying it in `detail` is only an
-  // improvement if the prompt stops carrying it too, or the operator reads it
-  // twice and the wall is back in the half that has no label.
   assert.match(proposed!.detail ?? '', /the CLI half is missing/, 'the assessor’s words reach the operator');
   assert.doesNotMatch(proposed!.prompt, /the CLI half is missing/, 'and are not also spliced into the prompt');
   assert.equal(
@@ -221,8 +173,6 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
   const base = { shortfalls: [shortfallRow({ cause: 'goal' })], plans: [planRow()] };
   const ref = shortfallRef(12);
 
-  // Rule `pr-ci-blocked`'s pattern: each half covers the other's blind spot — an inbox item
-  // that outlives the decision window, and a decision that outlives the item.
   const viaInbox = await decide(
     ctx({
       ...base,
@@ -265,9 +215,6 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
 });
 
 test('with no plan row both plan-shaped arms degrade rather than parking the issue', async () => {
-  // A replan needs a plan for rule `issue-plan` to pick up and a follow-up part
-  // needs one for rule `plan-part` to append to. Without a plan, accepting either
-  // would park the issue on a transition nothing consumes.
   const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(
     ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [] }),
   );
@@ -294,8 +241,6 @@ test('an unwatched or closed issue’s shortfall drives nothing', async () => {
   );
   assert.equal(closed.actions.filter((a) => a.type === 'propose_shortfall').length, 0);
 });
-
-// -- the tool ----------------------------------------------------------------
 
 test('assess_issue is still the one tool, and its name is still granted', () => {
   assert.ok(MCP_TOOL_NAMES.includes('assess_issue'), 'a shortfall is a verdict, not a fifth surface');
@@ -367,8 +312,6 @@ test('a delivered verdict may not carry a cause — an assessor that filled one 
   system.store.close();
 });
 
-// -- end to end: the loop actually closes ------------------------------------
-
 test('accepting a plan-cause shortfall sends the decomposition back to a planner', async () => {
   const { system } = plannedSystem();
   const agent = spawnAssessor(system);
@@ -389,10 +332,8 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
   const plan = system.store.getPlanByOrigin('issue:12')!;
   assert.equal(plan.status, 'planning', 'which is the entire effect — rule `issue-plan` takes it from here');
   assert.match(plan.reason ?? '', /the split left out the CLI entirely/, 'the replanner is told what fell short');
-  // The row is consumed by the effect it drove, so the rule does not re-propose it.
   assert.equal(system.store.getShortfall('issue:12'), null);
 
-  // Audited outside the pulse, under the authority chain every accepted proposal uses.
   const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`)!;
   assert.match(audited.detail, /sent the plan for issue:12 back to a planner/);
   assert.match(audited.detail, /authorized by you/);
@@ -402,8 +343,6 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
 test('accepting a part-cause shortfall appends a part and leaves the one that fell short alone', async () => {
   const { system } = plannedSystem();
   const planId = system.store.getPlanByOrigin('issue:12')!.id;
-  // The part finished — its PR merged, its branch is spent. That is exactly why a
-  // follow-up is appended rather than the part being returned to `ready`.
   const schema = system.store.listPlanParts(planId).find((p) => p.slug === 'schema')!;
   system.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
 
@@ -441,11 +380,8 @@ test('rejecting acts on nothing and leaves the issue exactly where it was', asyn
   const rejected = system.proposals.reject(proposal.id, 'the split is fine, the ticket is wrong');
   assert.equal(rejected!.outcome, 'none');
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active', 'unlike a plan refusal, nothing settles');
-  // The verdict is still true — you declined to act on it, which is a different
-  // thing — so the row and its chip stay. This is the asymmetry with `refusePlan`.
   assert.ok(system.store.getShortfall('issue:12'));
 
-  // And it is asked once: the rejection holds the rule until the world moves.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   assert.equal(system.store.listProposals().filter((p) => p.kind === 'shortfall').length, 1);
@@ -453,15 +389,10 @@ test('rejecting acts on nothing and leaves the issue exactly where it was', asyn
 });
 
 test('the loop is bounded by the assessor’s own attempt cap, and nothing new counts it', async () => {
-  // `assess → propose → replan → work → assess` is bounded at three rounds by
-  // `dispatchVerdict` on `issue:<n>:assess`, which was already in the code. A
-  // second counter claiming to bound the same loop would be two answers to one
-  // question — the argument that kept `urgent` a boolean rather than a rank.
   const { system } = plannedSystem();
   const agent = spawnAssessor(system);
   await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'wrong split', cause: 'plan' });
 
-  // Repeated pulses with the proposal pending neither re-ask nor grow rows.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
@@ -484,24 +415,16 @@ test('the cockpit is shipped the verdict beside the pickup chip, not inside it',
   const snap = buildStateSnapshot(system);
   const row = snap.world.issues.find((i) => i.number === 12)!;
   assert.equal(row.shortfall?.cause, 'plan');
-  // Beside the pickup verdict, never inside it. This issue is decomposed, so
-  // rule `issue-pickup` leaves it to rule `plan-part` either way — what matters is that the shortfall
-  // is nowhere among the reasons. Folding it in would make it a pickup gate,
-  // which is the one thing it must never be.
   assert.equal(
     (row.pickup?.reasons ?? []).some((r) => /short|assess/i.test(r)),
     false,
     'the pickup verdict does not know this row exists',
   );
-  // And the chip can join to the inbox: the pending proposal is on the same
-  // snapshot, keyed on the ref the chip builds from the issue number.
   assert.ok(
     snap.proposals.some((p) => p.kind === 'shortfall' && p.ref === 'issue:12:shortfall' && p.status === 'pending'),
   );
   system.store.close();
 });
-
-// -- fixtures ----------------------------------------------------------------
 
 function issue(over: Partial<Issue> = {}): Issue {
   return {
@@ -509,8 +432,6 @@ function issue(over: Partial<Issue> = {}): Issue {
     number: 12,
     title: 'Add the thing',
     body: 'please add the thing',
-    // Watched by default: work is opt-in, so an untagged issue is one the funnel
-    // never reaches — which is a different test, below.
     labels: ['lubbdubb-watch'],
     state: 'open',
     linkedPrNumber: null,
@@ -584,7 +505,6 @@ function planRow(over: Partial<Plan> = {}): Plan {
   };
 }
 
-/** One live part, so `plan_1` reads as the decomposition these tests mean. */
 function partRow(): PlanPart {
   return {
     id: 'plan_1:schema',
@@ -652,10 +572,6 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-    // The plan rows above are decompositions, and a plan's **shape** is its parts:
-    // with none, `plan_1` would be a plan being delivered as one pull request and
-    // rule `issue-pickup` would work the issue while these assertions counted
-    // dispatches.
     planParts: [partRow()],
     tasks: [task()],
     agents: [],
@@ -675,8 +591,6 @@ async function decide(context: DispatchContext): Promise<{ actions: { type: stri
   const result = await dispatcher().decide(context);
   return result as never;
 }
-
-// -- system fixtures ---------------------------------------------------------
 
 function gitRepo(): string {
   const root = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -734,8 +648,6 @@ function plannedSystem(): { system: System } {
     originRef: 'issue:12',
     title: 'Add the thing',
   });
-  // Ingestion parks every plan `awaiting_approval`; these tests are downstream of
-  // the gate, so release it the way an accepted proposal does.
   system.store.setPlanStatus(plan.id, 'active');
   return { system };
 }

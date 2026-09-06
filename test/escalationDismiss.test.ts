@@ -10,17 +10,6 @@ import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * Two halves of one problem (the "stale alert" issue): an agent parks, the thing
- * is dealt with outside the harness, and the alert has no way to leave the inbox
- * except by typing a message nobody wanted sent.
- *
- * The park is only ever a *request* — the `escalate` tool returns at once — so the
- * harness can often see for itself that the agent carried on. That is `resumedAt`,
- * and it only ever marks the item; clearing it stays the operator's click.
- */
-
-/** Fake claude stream-JSON process (same shape the stream integration tests drive). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
   writes: string[] = [];
@@ -54,7 +43,6 @@ function streamConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/** Boot a stream-mode system with one agent parked on a question. */
 async function parkedAgent() {
   const children: FakeChild[] = [];
   const spawner: Spawner = () => {
@@ -86,15 +74,12 @@ test('a parked agent that keeps calling tools is marked resumed — but stays pa
   const { system, child, agentId, escalation } = await parkedAgent();
   assert.equal(system.store.getAgent(agentId)!.resumedAt, null);
 
-  // Prose after the park is NOT the signal: an agent explaining that it is waiting
-  // is still waiting, and reading that as work would clear alerts that need answers.
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: 'I will wait for your answer before continuing.' }] },
   });
   assert.equal(system.store.getAgent(agentId)!.resumedAt, null, 'prose alone must not read as resumed');
 
-  // A tool call is the agent *doing* something.
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] },
@@ -102,7 +87,6 @@ test('a parked agent that keeps calling tools is marked resumed — but stays pa
   const agent = system.store.getAgent(agentId)!;
   assert.ok(agent.resumedAt, 'a tool call after the park stamps resumedAt');
 
-  // Marked, never cleared: only the human knows whether the question still matters.
   assert.equal(agent.status, 'waiting', 'the park is not lifted by the observation');
   assert.equal(system.store.listOpenEscalations().length, 1, 'the alert is left standing');
   assert.equal(system.store.getEscalation(escalation.id)!.status, 'open');
@@ -121,8 +105,6 @@ test('answering a question spends the resumed mark, and a fresh park does not in
   system.escalations.answer(escalation.id, 'Azure AD');
   assert.equal(system.store.getAgent(agentId)!.resumedAt, null, 'answered, so the mark is spent');
 
-  // A second question is a new question: last park's evidence must not arrive with it
-  // already looking stale.
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which tenant?@@' }] },
@@ -149,19 +131,13 @@ test('dismiss clears the alert, sends the agent nothing, and leaves it able to a
   const cleared = system.store.getEscalation(escalation.id)!;
   assert.equal(cleared.status, 'dismissed');
   assert.equal(system.store.listOpenEscalations().length, 0, 'inbox is empty');
-  // The whole point: no pointless message.
   assert.equal(child.writes.length, before, 'nothing was typed into the agent');
-  // And the reason is recorded rather than lost.
   assert.match(JSON.stringify(cleared.context), /fixed it by hand/);
   assert.ok(
     system.store.listDecisions(20).some((d) => d.detail?.includes('dismissed escalation')),
     'the dismissal is audited like any other outcome',
   );
 
-  // Load-bearing: the park latch is what makes `handleWaiting` a no-op, so an agent
-  // whose alert was dismissed must not be left unable to raise another one. Asked
-  // through `escalate` (i.e. `agents.ask`) because that is the live path — the agent
-  // is mid-turn, which is exactly why its first alert went stale.
   const asked = system.agents.ask(agentId, { question: 'Actually, which tenant?' });
   assert.ok(asked.ok && asked.escalationId, 'a later question still reaches you');
   assert.equal(system.store.listOpenEscalations().length, 1);
@@ -183,8 +159,6 @@ test('dismissing a proposal rejects it rather than leaving a pending verdict beh
   const res = await app.inject({ method: 'POST', url: `/api/escalations/${escalation.id}/dismiss` });
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().dismissedAs, 'proposal_rejected');
-  // A dropped inbox row with the proposal still pending would hold rule `pr-merge-ready` off that
-  // PR for good — the wedge this arm exists to avoid.
   assert.equal(system.store.listProposals().find((p) => p.id === proposal.id)!.status, 'rejected');
   assert.equal(system.store.listOpenEscalations().length, 0);
 

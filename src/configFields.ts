@@ -1,74 +1,34 @@
 import { defaultConfig, type Config } from './config.js';
 
-/**
- * What every configurable leaf *is* — the one declaration the config form, the save
- * validator, the live-apply switch and the reset action all read from. **Liveness is
- * deliberately not here**: whether saving a key takes effect now is decided by
- * whether `configApply.ts` re-seats whoever holds it, which a table cannot claim.
- * → `docs/spec/02-configuration.md#liveness`
- */
-/** `text` is `string` drawn as a textarea — its own member, because the form switches on this union. */
+// → docs/spec/02-configuration.md
+
 export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'text' | 'enum' | 'stringList' | 'json' | 'colourMap';
 
-/**
- * How far an operator has to reach to edit a field. `advanced` means "this can lock
- * you out of the cockpit or point the fleet at the wrong repository"; `fileOnly` is
- * for a field no form should offer at all.
- */
 export type ConfigFieldAccess = 'plain' | 'advanced' | 'fileOnly';
 
 interface ConfigField {
-  /** Dotted path into the config object, e.g. `planning.maxConcurrentPartsPerIssue`. */
   path: string;
   type: ConfigFieldType;
-  /** The members, for an `enum`. */
   options?: readonly string[];
   access: ConfigFieldAccess;
-  /** One line, shown under the key. The reason it exists, not a restatement of its name. */
   why: string;
-  /**
-   * The environment variable that beats the file for this key. A field carrying one is
-   * drawn as overridden and refused for edit while it is set — the file would be
-   * written and nothing would change.
-   */
   env?: string;
-  /** A duration in milliseconds, so the cockpit can say "5m" beside the number. */
   ms?: boolean;
-  /**
-   * The key whose value makes this one required, and the one value of it that does not
-   * — `fleetId` is required while `integrations.pool` is anything but `fake`. The form
-   * must evaluate it against what is **staged**, not what is running, and draws the
-   * key even while unset; otherwise the save's refusal lands on a form with no field
-   * to fix it.
-   */
   requiredWhen?: ConfigFieldRequirement;
-  /**
-   * The keys to join into a value to *offer* for an unset field. An offer and never a
-   * derivation — nothing writes it on the operator's behalf.
-   * → `docs/spec/28-cross-fleet-pool.md#configuration`
-   */
   suggest?: ConfigFieldSuggestion;
 }
 
-/** The key another key's requirement hangs on, and the one value of it that lifts it. */
 export interface ConfigFieldRequirement {
   path: string;
   unless: string;
 }
 
-/** The keys to join into a suggested value, and what to join them with. Unexported: `suggestedValue` is the one reader. */
 interface ConfigFieldSuggestion {
   join: readonly string[];
   with: string;
 }
 
-/**
- * Every leaf, in no particular order — display order is `GROUPS` in
- * `server/runningConfig.ts`. A `json` field is edited whole because it has no fixed
- * shape to draw: an ordered rule list, or a map whose keys the operator invents.
- */
 export const CONFIG_FIELDS: readonly ConfigField[] = [
-  // ---- Dispatch ----------------------------------------------------------
   {
     path: 'heartbeatIntervalMs',
     type: 'number',
@@ -132,8 +92,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
   {
     path: 'environments',
     type: 'json',
-    // `fileOnly` because each entry is a shell command the harness runs on a
-    // schedule — written deliberately in a file, not filled in beside twenty rows.
     access: 'fileOnly',
     why: 'Where landed work travels, and the command that says whether a commit has got there.',
   },
@@ -166,7 +124,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long an operator’s Up next override outranks the dispatcher’s own order.',
   },
 
-  // ---- Agents ------------------------------------------------------------
   {
     path: 'agentMode',
     type: 'enum',
@@ -270,7 +227,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Extra arguments, appended last — an --allowedTools here silently drops the harness’s MCP grants.',
   },
 
-  // ---- Integrations ------------------------------------------------------
   {
     path: 'integrations.sourceControl',
     type: 'enum',
@@ -446,7 +402,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'The work item types the harness may file. Passed to the provider verbatim.',
   },
 
-  // ---- Features ----------------------------------------------------------
   {
     path: 'featureBoard',
     type: 'boolean',
@@ -630,8 +585,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     access: 'plain',
     why: 'How many finished goals are needed before a typical goal length is known.',
   },
-  // The two pets keys there are, and both are switches. The rates are constants in
-  // `src/pets/rules.ts` and this page cannot reach them.
   {
     path: 'pets.enabled',
     type: 'boolean',
@@ -687,7 +640,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'What a red check gets, first match wins — so the order is the policy.',
   },
 
-  // ---- Paths -------------------------------------------------------------
   {
     path: 'repoRoot',
     type: 'string',
@@ -726,7 +678,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'SQLite file.',
   },
 
-  // ---- Server ------------------------------------------------------------
   { path: 'port', type: 'number', access: 'advanced', env: 'PORT', why: 'HTTP/WS port.' },
   {
     path: 'host',
@@ -747,9 +698,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     access: 'advanced',
     why: 'Where a minted token is persisted. Ignored when LUBBDUBB_TOKEN is set.',
   },
-  // The inbound ingress. No secret and no on switch here: both live in the
-  // environment, and setting one is what turns the endpoint on. These four are the
-  // bounds it runs under. → `docs/spec/30-ingress.md#turning-it-on`
   {
     path: 'ingress.debounceMs',
     type: 'number',
@@ -780,15 +728,10 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
 
 const BY_PATH = new Map(CONFIG_FIELDS.map((field) => [field.path, field]));
 
-/** The declaration for one dotted path, or undefined for a path nothing declares. */
 export function configField(path: string): ConfigField | undefined {
   return BY_PATH.get(path);
 }
 
-/**
- * Read a dotted path out of a config object; `undefined` for an unset optional. Takes
- * a `Partial<Config>` because a *layer* is read through it too.
- */
 export function readPath(config: Partial<Config>, path: string): unknown {
   let cursor: unknown = config;
   for (const segment of path.split('.')) {
@@ -798,12 +741,6 @@ export function readPath(config: Partial<Config>, path: string): unknown {
   return cursor;
 }
 
-/**
- * The value to *offer* for an unset field, or undefined where there is nothing whole
- * to offer: every part must resolve to a non-empty string, since a half-typed
- * suggestion is one an operator can accept. One join rule for both surfaces that
- * offer a value. → `docs/spec/28-cross-fleet-pool.md#configuration`
- */
 export function suggestedValue(field: ConfigField, config: Partial<Config>): string | undefined {
   const suggest = field.suggest;
   if (!suggest) return undefined;
@@ -812,28 +749,16 @@ export function suggestedValue(field: ConfigField, config: Partial<Config>): str
   return parts.join(suggest.with);
 }
 
-/**
- * The environment variable currently overriding this field, if any. Read from
- * `process.env` at call time, never captured — `loadDeploymentConfig` reads it live.
- */
 export function envOverride(field: ConfigField): string | undefined {
   return field.env && process.env[field.env] ? field.env : undefined;
 }
 
-/**
- * Why this value cannot be saved into this field, or null. Checked here rather than
- * in the widget, because the route is what anything else reaches. It deliberately
- * does not check *meaning* — that is `loadConfig`'s, exercised by building the config
- * the save would produce.
- */
 export function fieldValueRefusal(field: ConfigField, value: unknown): string | null {
   switch (field.type) {
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? null : `${field.path} must be a number`;
     case 'boolean':
       return typeof value === 'boolean' ? null : `${field.path} must be true or false`;
-    // `text` is a string all the way to the file; the union member only picks the
-    // widget. One arm for both, so the rule cannot drift.
     case 'string':
     case 'text':
       return typeof value === 'string' ? null : `${field.path} must be a string`;
@@ -846,42 +771,27 @@ export function fieldValueRefusal(field: ConfigField, value: unknown): string | 
         ? null
         : `${field.path} must be a list of strings`;
     case 'json':
-      // Shaped by its own validator in `loadConfig`; only an unserialisable value is refused here.
       return value === undefined ? `${field.path} must be a value` : null;
     case 'colourMap':
-      // A colour is drawn straight into a `style`, so the shape is refused here rather
-      // than silently skipped by the renderer. `stateColour` still guards the read.
       return isColourMap(value) ? null : `${field.path} must map a state to a #rrggbb colour`;
   }
 }
 
-/** `#rrggbb`, the one form the cockpit's picker writes. */
 const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
 
-/**
- * A state → colour map, checked leaf by leaf. The same form `web/src/stateColour.ts`
- * reads, stated twice deliberately — this is the one that decides.
- */
 function isColourMap(value: unknown): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   return Object.values(value).every((entry) => typeof entry === 'string' && HEX_COLOUR.test(entry));
 }
 
-/**
- * Every top-level key of a default config, for the test that keeps this table honest:
- * a key added without a declaration here fails `npm run check` rather than quietly
- * becoming un-editable.
- */
 export function declaredTopLevelKeys(): Set<string> {
   return new Set(CONFIG_FIELDS.map((field) => topSegment(field.path)));
 }
 
-/** The top-level config key a dotted path belongs to. */
 export function topSegment(path: string): string {
   return path.split('.')[0] ?? path;
 }
 
-/** The keys a default config carries, for the same test. */
 export function configTopLevelKeys(): Set<string> {
   return new Set(Object.keys(defaultConfig()));
 }

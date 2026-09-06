@@ -15,14 +15,6 @@ import type {
 } from '../src/types.js';
 import type { ReviewPackPayload } from '../src/wire.js';
 
-/**
- * Review packs, stage 2: the pack document — one JSON document per (pull request,
- * head sha), stored as written and read as written, with a reviewer's marks held
- * beside it and keyed to the code rather than to the ideas.
- * → docs/spec/31-review-packs.md#where-it-lives
- */
-
-/** A clock that ticks one second per read, so "newest written" is never a tie the test relies on rowid for. */
 function tickingClock(): () => string {
   let t = Date.parse('2026-09-02T10:00:00.000Z');
   return () => new Date((t += 1000)).toISOString();
@@ -32,11 +24,6 @@ const STORE_HUNK: ReviewRange = { path: 'src/store/reviewPacks.ts', start: 1, en
 const SCHEMA_HUNK: ReviewRange = { path: 'src/store/schema.ts', start: 570, end: 600 };
 const SPEC_HUNK: ReviewRange = { path: 'docs/spec/31-review-packs.md', start: 533, end: 560 };
 
-/**
- * Every field the spec names, with every union member exercised at least once, so
- * a round-trip that drops or reshapes one is caught as a deep-equal miss rather
- * than a field a renderer would silently draw as a gap.
- */
 function fullPack(headSha: string): ReviewPack {
   const witnessNote: ReviewNote = {
     by: 'witness',
@@ -220,7 +207,6 @@ test('a mark keyed to a hunk survives the pack being rewritten', () => {
   store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: true });
   store.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks: [STORE_HUNK], attention: 'decide' });
 
-  // Rewritten on the same head, then again on a newer one: neither touches the marks.
   store.recordReviewPack({ ...fullPack('a1b2c3d'), headline: 'Rewritten.' });
   store.recordReviewPack(fullPack('e5f6a7b'));
 
@@ -233,14 +219,11 @@ test('a mark keyed to a hunk survives the pack being rewritten', () => {
     ],
     'one row per hunk, ordered by path',
   );
-  // The mark says which head the reviewer was looking at, and never names an idea.
   assert.ok(marks.every((m) => m.headSha === 'a1b2c3d'));
   assert.ok(marks.every((m) => !('ideaId' in m)));
 });
 
 test('reading an idea and overriding its label are two columns on one row', () => {
-  // Each write names only the column it is about, so the other keeps what it had —
-  // a reviewer who marks an idea read does not lose the override they set on it.
   const store = new Store(':memory:', tickingClock());
   const hunks = [STORE_HUNK];
 
@@ -269,9 +252,6 @@ test('a pack stating a schema this build does not write is refused, not stored',
 });
 
 test('the wire payload is the record plus the marks, never a second declaration', () => {
-  // `ReviewPackPayload extends ReviewPackRecord`: a record and the marks compose
-  // into it with no translation, which is what "the wire type is the domain type
-  // or extends it" buys — the cockpit reads the document the store wrote.
   const store = new Store(':memory:', tickingClock());
   const record = store.recordReviewPack(fullPack('a1b2c3d'));
   store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks: [SPEC_HUNK], read: true });

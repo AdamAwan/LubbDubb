@@ -38,9 +38,7 @@ test('buildClaudeStreamArgs resumes an existing session and re-appends the proto
   const id = '550e8400-e29b-41d4-a716-446655440000';
   const args = buildClaudeStreamArgs({ sessionId: id, resume: true });
   assert.equal(args[args.indexOf('--resume') + 1], id);
-  // --session-id and --resume are mutually exclusive: don't set a new id on resume.
   assert.equal(args.includes('--session-id'), false);
-  // The appended system prompt must be re-sent so waiting/done detection survives resume.
   assert.equal(args[args.indexOf('--append-system-prompt') + 1], PROTOCOL_SYSTEM_PROMPT);
 });
 
@@ -77,7 +75,6 @@ test('buildClaudeStreamArgs resumes an existing session and re-appends the proto
   assert.equal(args[args.indexOf('--resume') + 1], id);
   assert.equal(args.includes('--session-id'), false);
   assert.equal(args[args.indexOf('--append-system-prompt') + 1], PROTOCOL_SYSTEM_PROMPT);
-  // Still the headless transport — resume changes the conversation, not the protocol.
   assert.ok(args.includes('-p'));
   assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
 });
@@ -89,9 +86,6 @@ test('buildClaudeStreamArgs ignores resume when no session id is given', () => {
 });
 
 test('the launch never emits --session-id and --resume together', () => {
-  // `claude` refuses --session-id on an id that already has a transcript (exit 1,
-  // plain stderr, no stream event), so the two arms must stay exclusive in both
-  // directions.
   const id = '550e8400-e29b-41d4-a716-446655440000';
   for (const resume of [false, true]) {
     const args = buildClaudeStreamArgs({ sessionId: id, resume });
@@ -103,7 +97,6 @@ test('the launch never emits --session-id and --resume together', () => {
   }
 });
 
-/** Pull the single `--settings` JSON object out of an argv, or null if absent. */
 function settingsOf(args: string[]): Record<string, unknown> | null {
   const i = args.indexOf('--settings');
   if (i < 0) return null;
@@ -115,7 +108,6 @@ test('allowedTools become a permissions.allow fragment in --settings', () => {
   const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits', allowedTools: allow, fileEvents: true });
   const settings = settingsOf(args);
   assert.deepEqual((settings?.permissions as { allow: string[] }).allow, allow);
-  // The file-events hook fragment is still present in the same object.
   assert.ok(settings?.hooks, 'file-events hook should merge alongside permissions');
 });
 
@@ -124,9 +116,7 @@ test('the Bash allowlist never touches --allowedTools (MCP grants stay intact)',
     allowedTools: ['Bash(npm:*)'],
     mcpConfigPath: '/tmp/mcp.json',
   });
-  // permissions.allow carries the Bash rules...
   assert.deepEqual((settingsOf(args)?.permissions as { allow: string[] }).allow, ['Bash(npm:*)']);
-  // ...while --allowedTools carries only the MCP grants, uncontaminated by Bash rules.
   const at = args[args.indexOf('--allowedTools') + 1]!;
   assert.ok(at.includes('mcp__lubbdubb__'), 'MCP grants present');
   assert.equal(at.includes('Bash'), false, '--allowedTools must not carry Bash rules');
@@ -143,12 +133,10 @@ function terminalModeConfig() {
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
-    agentPromptDelayMs: 0, // send immediately in tests
+    agentPromptDelayMs: 0,
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
-    // The funnel in front of pickup defaults **on**; these tests are about the
-    // agent transport, so pin it off and let rule `issue-pickup` dispatch directly.
   });
 }
 
@@ -160,7 +148,6 @@ test('the terminal runtime still detects the protocol sentinels from real output
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  // The agent announces, in its output, that it needs input.
   backend.last().emit('I need to know the target framework.\n@@LUBBDUBB_WAITING:Which framework?@@\n');
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
   assert.equal(system.store.listOpenEscalations().length, 1);

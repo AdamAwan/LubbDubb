@@ -23,7 +23,6 @@ function testConfig() {
   });
 }
 
-/** A plan carrying a single set_work_item_state action. */
 function statePlan(number: number, state: string): DispatchResult {
   return {
     rationale: 'test',
@@ -32,7 +31,6 @@ function statePlan(number: number, state: string): DispatchResult {
   } as unknown as DispatchResult;
 }
 
-/** A sink that records work-item transitions and no-ops everything else. */
 function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
   const states: WorkItemStateInput[] = [];
   const sink: ActionSink = {
@@ -114,7 +112,6 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
   assert.ok(decision, 'the transition is recorded');
   assert.equal(decision!.outcome, 'executed');
   assert.match(decision!.detail, /Set work item #101 to "In Review"/);
-  // A mechanical transition never escalates.
   assert.equal(system.store.listOpenEscalations().length, 0);
   system.store.close();
 });
@@ -195,21 +192,12 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
   system.store.close();
 });
 
-// --------------------------------------------------------------------------
-// The in-progress transition (rule `work-item-in-progress`), at the whole-system
-// seam — the fake tracker mutates its own state, so the walk Ready → Doing →
-// In Review is observable end to end rather than only as an emitted action.
-// --------------------------------------------------------------------------
-
-/** A system whose tracker states are configured as an Azure deployment's would be. */
 function walkSystem(
   states: Partial<Pick<Config, 'issuePickupStates' | 'issueInProgressState' | 'issueInReviewState'>>,
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-progress-'));
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
-    // No watch gate: this file is about states, and an opt-in tag would only be a
-    // second thing every case here has to remember.
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -227,25 +215,20 @@ function walkSystem(
   });
 }
 
-/** Put an issue in the tracker in a given workflow state, as Azure would report it. */
 async function trackedIssue(system: System, number: number, state: string): Promise<void> {
   system.connector.inject({ kind: 'new_issue', number, title: `Issue ${number}` });
   await system.connector.setWorkItemState({ number, state });
 }
 
-/** Every state transition the harness decided, in order, with the rule that decided it. */
 function transitions(system: System): { number: number; state: string; rule: string | null; cycleId: string }[] {
   const moves: { number: number; state: string; rule: string | null; cycleId: string }[] = [];
   for (const d of system.store.listDecisions()) {
     if (d.action.type !== 'set_work_item_state') continue;
-    // `Action` is a validated bag, so its payload reads back as `unknown` — the
-    // narrowing is the assertion that the action carried what it claims to.
     const { number, state } = d.action;
     assert.equal(typeof number, 'number');
     assert.equal(typeof state, 'string');
     moves.push({ number: Number(number), state: String(state), rule: d.rule, cycleId: d.cycleId });
   }
-  // `listDecisions` is newest-first; the walk reads better in the order it happened.
   return moves.reverse();
 }
 
@@ -258,8 +241,6 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
   await trackedIssue(system, 20, 'Ready');
   failPlanningOpen(system.store, 20);
 
-  // First pulse dispatches the pickup agent; the rule observes the task it left
-  // behind, so the board catches up on the next one.
   await system.harness.runCycle('manual');
   assert.deepEqual(transitions(system), [], 'nothing moves on the cycle that dispatches');
   assert.ok(
@@ -273,8 +254,6 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
     [{ number: 20, state: 'Doing', rule: 'work-item-in-progress' }],
   );
 
-  // Idempotent: the state it wrote is one of the effective pickup states, and the
-  // rule excludes it explicitly, so a third pulse writes nothing further.
   await system.harness.runCycle('manual');
   assert.equal(transitions(system).length, 1, 'the move is not repeated once it has landed');
   system.store.close();
@@ -282,8 +261,6 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
 
 test('in-progress: a deliberation agent — a planner or an appraiser — moves nothing', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInProgressState: 'Doing' });
-  // #21 is left to the appraiser (the first gate); #22 is past it, so the planner
-  // takes it. Neither is work on the goal.
   await trackedIssue(system, 21, 'Ready');
   await trackedIssue(system, 22, 'Ready');
   failAppraisalOpen(system.store, 22);
@@ -332,8 +309,6 @@ test('in-progress and in-review never both fire for one item in one cycle', asyn
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  // The PR the agent opened. The item is in "Doing" by now — the state the
-  // harness itself wrote — and must still advance, which is the fold's whole job.
   system.connector.inject({ kind: 'new_pr', number: 80, title: 'wip', branch: 'issue/24', baseBranch: 'main' });
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');

@@ -3,74 +3,30 @@ import { connect } from 'node:net';
 import { promisify } from 'node:util';
 import type { ErrorRecorder } from '../errorLog.js';
 
+// → docs/spec/23-local-runs.md
+
 const exec = promisify(execFile);
 
-/** Which run's ports to look for: the session holding it, and the checkout it runs in. */
 export interface PortOwner {
-  /** The session process, or null when nothing in this harness holds one. */
   pid: number | null;
-  /** `LocalRun.dir` — the checkout every one of this run's processes was launched from. */
   dir: string;
 }
 
-/**
- * Which TCP ports a local run is listening on.
- *
- * A seam for the reaper's reason (`src/agents/processTree.ts`): the real one shells
- * out to the OS, and the fake transports mint pids that belong to other people's
- * processes — so under a fake it must not run at all, and `system.ts` defaults it to
- * {@link FakePortLister} there.
- *
- * `null` is "could not say" — the command is missing, timed out or printed something
- * unreadable — and is never folded into an empty list, which would read as "nothing
- * is listening". Containers never appear: a mapped port belongs to the daemon, not
- * to anything the session started.
- * → `docs/spec/23-local-runs.md#watching-the-environment`
- */
 export interface PortLister {
   listening(run: PortOwner): Promise<number[] | null>;
 }
 
-/** One row of the process table: a pid, the pid that started it, and how it was started. */
 interface ProcessRow {
   pid: number;
   ppid: number;
-  /** The full command line, or '' where the OS would not say (a protected process). */
   args: string;
 }
 
-/** One listening socket and the process that holds it. */
 interface ListeningRow {
   port: number;
   pid: number;
 }
 
-/**
- * Which pids belong to the run: anything launched **from its checkout**, plus
- * anything under the session holding it.
- *
- * **The path is the primary rule, and the subtree is the backstop** — which is the
- * opposite of what this started as, for a reason worth stating. A local run's
- * processes are not reliably its descendants: an instruction that launches each
- * service in its own shell leaves that shell free to exit, and Windows does not
- * reparent an orphan — the child's recorded parent stays a pid that no longer
- * exists. Measured against the NXG stack, **all six** of its services had a dead
- * parent, so a walk from the session's pid reached none of them and the reading was
- * empty on exactly the deployment it was built for.
- *
- * A command line naming the checkout survives all of that, and is what the operator's
- * own runbook already uses to tell one worktree's stack from another's. It is also
- * the sharper reading: two checkouts of the same project on one laptop hold different
- * ports, and this attributes each to its own run rather than to whichever session is
- * an ancestor.
- *
- * The subtree stays because it costs one field of a table already being read, and
- * catches a process whose argv does not happen to name the path.
- *
- * Pure, so both rules are tested without a process table. Cycle-safe, because a
- * table read in two commands is not a snapshot: a pid reused between the reads can
- * point a process at its own descendant.
- */
 export function owners(run: PortOwner, rows: readonly ProcessRow[]): Set<number> {
   const held = new Set<number>();
   for (const row of rows) if (startedIn(row.args, run.dir)) held.add(row.pid);
@@ -78,14 +34,6 @@ export function owners(run: PortOwner, rows: readonly ProcessRow[]): Set<number>
   return held;
 }
 
-/**
- * Whether a command line refers to something inside `dir`.
- *
- * Case-insensitive and separator-agnostic, because a Windows command line quotes
- * backslashes and `path.resolve` may not agree with the shell about which slash a
- * path was written with. The directory must be followed by a separator or end there,
- * so a run in `…/local-run` does not claim the ports of one in `…/local-run-2`.
- */
 export function startedIn(args: string, dir: string): boolean {
   if (dir === '') return false;
   const needle = normalisePath(dir);
@@ -103,10 +51,6 @@ function normalisePath(text: string): string {
   return text.split('\\').join('/').replace(/\/+$/, '').toLowerCase();
 }
 
-/**
- * The pids under `rootPid`, root included, walked through `ppid` links. The backstop
- * half of {@link owners}.
- */
 export function descendants(rootPid: number, rows: readonly ProcessRow[]): Set<number> {
   const children = new Map<number, number[]>();
   for (const row of rows) {
@@ -126,14 +70,6 @@ export function descendants(rootPid: number, rows: readonly ProcessRow[]): Set<n
   return seen;
 }
 
-/**
- * Whether something accepts a TCP connection on `host:port` within `timeoutMs`.
- *
- * A connect and a close, nothing sent: the question is "is the port held", and an
- * HTTP request would be a claim about the application that nothing here is placed
- * to make. False on refusal *and* on timeout — a port that does not answer in a
- * second is not answering, whatever the reason. Never rejects.
- */
 export function probePort(host: string, port: number, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ host, port });
@@ -151,21 +87,8 @@ export function probePort(host: string, port: number, timeoutMs: number): Promis
   });
 }
 
-/** How long either command may run before it is killed. The kill answers null. */
 const COMMAND_TIMEOUT_MS = 8_000;
 
-/**
- * The real lister: two commands per reading — the listening sockets with their
- * owning pids, and the process table with each process's command line — joined by
- * {@link owners}.
- *
- * Two platforms, two pairs, because Windows has no `ss`: PowerShell's
- * `Get-NetTCPConnection` and `Win32_Process` there, `ss -ltnp` and `ps` on POSIX,
- * with `lsof` behind `ss` for a machine without iproute2. Every failure is `null`
- * plus one recorded error per distinct message — `PlanReconciler.maybeFetch`'s
- * rule, so a machine without the command does not fill the Errors panel every
- * ten seconds.
- */
 export class CommandPortLister implements PortLister {
   private lastFailure: string | null = null;
 
@@ -200,9 +123,6 @@ async function run(command: string, args: string[]): Promise<string> {
 }
 
 const WIN_SOCKETS = 'Get-NetTCPConnection -State Listen | Select-Object LocalPort,OwningProcess';
-// CommandLine is the half that attributes a port, and it is null for a process this
-// session may not read — a `Select-Object` of three fields keeps that a blank rather
-// than a failure.
 const WIN_PROCESSES = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine';
 
 async function windowsTables(): Promise<[ListeningRow[], ProcessRow[]]> {
@@ -222,37 +142,15 @@ async function windowsTables(): Promise<[ListeningRow[], ProcessRow[]]> {
   ];
 }
 
-/**
- * Run `script` and read back what it selected, **base64 over the wire**.
- *
- * The JSON is exact by the time it reaches `ConvertTo-Json`: that cmdlet escapes
- * every C0 character, including the ones a command line can carry, so a payload
- * this refuses was corrupted on its way through stdout rather than built wrong.
- * That is what an operator hit — `Bad control character in string literal ... at
- * position 77337`, on a table PowerShell had serialised correctly — and it is a
- * class of failure worth removing rather than diagnosing: what a console does to a
- * 150KB line depends on the code page, the host and the redirection, and none of
- * those is the harness's to pin down.
- *
- * Base64 is plain ASCII, so nothing between here and there has a byte it can
- * mistranslate. The cost is a third again in payload, on a reading taken once every
- * ten seconds while a run is up.
- */
 async function powershell(select: string): Promise<unknown> {
   const script = `[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string](${select} | ConvertTo-Json -Compress)))`;
   const out = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
-  // Every newline taken out rather than left to the decoder: `Buffer.from` skips
-  // whitespace itself, and a payload that is only correct because of that is one
-  // wrapped line away from being silently half-read.
   const encoded = out.replace(/\s+/g, '');
   if (encoded === '') return [];
   const json = Buffer.from(encoded, 'base64').toString('utf8').trim();
-  // `ConvertTo-Json` of nothing at all is an empty string, and of one `$null` is
-  // `null` — neither is a table, and both mean the same thing here.
   return json === '' || json === 'null' ? [] : (JSON.parse(json) as unknown);
 }
 
-/** `ConvertTo-Json` prints one row as a bare object rather than a one-element array. */
 function asRows(value: unknown): Record<string, unknown>[] {
   const rows = Array.isArray(value) ? value : [value];
   return rows.filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null);
@@ -268,7 +166,6 @@ async function posixTables(): Promise<[ListeningRow[], ProcessRow[]]> {
   return [sockets, parsePs(ps)];
 }
 
-/** `ps -eo pid=,ppid=,args=`: two numbers, then the command line to end of line. */
 export function parsePs(out: string): ProcessRow[] {
   const table: ProcessRow[] = [];
   for (const line of out.split('\n')) {
@@ -282,17 +179,11 @@ async function posixSockets(): Promise<ListeningRow[]> {
   try {
     return parseSs(await run('ss', ['-ltnpH']));
   } catch (err) {
-    // No `ss` at all — a Mac — is the one failure worth a second command. Anything
-    // else is the real answer to "could not say".
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     return parseLsof(await run('lsof', ['-iTCP', '-sTCP:LISTEN', '-P', '-n', '-F', 'pn']));
   }
 }
 
-/**
- * `ss -ltnpH`: one socket per line, the local address in the fourth column and
- * every holder in a trailing `users:(("node",pid=123,fd=22),...)`.
- */
 export function parseSs(out: string): ListeningRow[] {
   const rows: ListeningRow[] = [];
   for (const line of out.split('\n')) {
@@ -305,7 +196,6 @@ export function parseSs(out: string): ListeningRow[] {
   return rows;
 }
 
-/** `lsof -F pn`: a `p<pid>` line, then one `n<address>` line per socket that pid holds. */
 export function parseLsof(out: string): ListeningRow[] {
   const rows: ListeningRow[] = [];
   let pid: number | null = null;
@@ -319,7 +209,6 @@ export function parseLsof(out: string): ListeningRow[] {
   return rows;
 }
 
-/** The port off the end of `host:port`, `[::1]:port` or `*:port`; null where there is none. */
 function portOf(address: string): number | null {
   const at = address.lastIndexOf(':');
   if (at < 0) return null;

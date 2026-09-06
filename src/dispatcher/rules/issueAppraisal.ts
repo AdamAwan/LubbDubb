@@ -5,37 +5,11 @@ import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
-/**
- * Check the goal before anything is dispatched against it (issue #158).
- *
- * The gap this closes: every gate an issue passes on its way to an agent asks
- * about policy — the watch tag, the workflow state, the cooldown, the attempt cap,
- * headroom, `resolvePlanRoute` — and none of them asks whether the ticket says
- * anything an agent could act on. So a vague or already-obsolete issue goes
- * straight into the funnel, and the first sign anything was wrong is an agent
- * spending its attempt cap and escalating in a way that reads as its own failure.
- *
- * Ranked ahead of the planner and suppressing it for the same issue, for
- * `issue-plan`'s own reason pointed one stage earlier: a planner *unblocks* work,
- * and decomposing a goal nobody could answer is the specific waste this exists to
- * stop — the operator would be asked to approve a decomposition of a question.
- * The suppression is `s.appraising`, written here and read by the two stages below
- * (see {@link StageContext}).
- *
- * Fires only for an issue nothing has been started for. `hasWorkStarted` is the
- * same discriminator `issue-assess` uses, taking the other arm: nothing started
- * means the goal is still the only thing there is to judge, something started
- * means the question has been answered by someone acting on it (and, once it
- * finishes, it is the assessor's). An issue that already has a plan is likewise
- * past this gate — the funnel has read it — so a plan row skips it whatever its
- * status.
- */
+// → docs/spec/05-dispatcher.md (rule `issue-appraisal`)
+
 export function issueAppraisal(s: StageContext): void {
   const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
-    // Already judged, and judged against *this* text — an edited ticket
-    // fingerprints differently and is appraised again, which is the same
-    // comparison that ends a hold (see `appraisalHold`).
     if (isAppraised(s.appraisals.get(issueOrigin(issue.number)) ?? null, issue)) continue;
     if (hasWorkStarted(issue.number, ctx.tasks)) continue;
     if (s.plansByOrigin.has(issueOrigin(issue.number))) continue;
@@ -44,11 +18,6 @@ export function issueAppraisal(s: StageContext): void {
 
     const origin = appraisalOrigin(issue.number);
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    // Fails open, exactly as the planner and the assessor do: a spent cap
-    // returns the issue to the funnel it would have entered anyway, with no
-    // escalation. Without it, every appraiser crash is a permanently parked
-    // issue — which would make this gate the most effective way to stop the
-    // harness working, the failure issue #158 names in its first decision.
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     s.appraising.add(issue.number);
@@ -65,15 +34,8 @@ export function issueAppraisal(s: StageContext): void {
       held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
-        // A read-only checkout of the default branch: the question is whether this
-        // goal makes sense against the repository as it stands, and answering it
-        // needs the repository, not a branch of its own to leave behind.
         ...readOnlyDispatch(branch, s.defaultBranch),
         title,
-        // The relations decide half of what this rule is asking. A goal that
-        // reads as vague on its own is often exactly right once its parent
-        // feature's description is in front of the appraiser; an orphan is the
-        // other way round, and is a finding rather than a fault of the text.
         prompt:
           s.templates.render('issue-appraisal', {
             number: issue.number,
@@ -82,9 +44,6 @@ export function issueAppraisal(s: StageContext): void {
             branch,
           }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes),
         originRef: origin,
-        // The exact text the verdict will be fingerprinted against — see
-        // `AgentManager.recordAppraisal`, which reads these two fields back off
-        // the task rather than re-reading the issue.
         originTitle: issue.title,
         originSummary: issue.body,
         rule: 'issue-appraisal',

@@ -23,20 +23,16 @@ import { Panel } from './panel.js';
 import { Tag } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
+// → docs/spec/17-cockpit.md
+
 interface TicketQueryPlace {
   watch: TicketWatchFilter;
   tracking: TicketTrackingFilter;
-  /** The tracker's own word, or `any`. Free-form: it is the tracker's vocabulary, not ours. */
   state: string;
-  /** A feature number, `none` for the orphans, or null for every feature. */
   feature: number | 'none' | null;
-  /** Features as headings, or one flat list with a feature column. */
   group: 'feature' | 'flat';
   order: TicketOrder;
-  /** The table, or the board of state columns. */
   view: 'table' | 'card';
-  /** The board columns the operator has hidden. */
   columns: string[];
 }
 
@@ -74,43 +70,12 @@ const VIEW_OPTIONS: ReadonlyArray<{ value: 'table' | 'card'; label: string; titl
   { value: 'card', label: 'Cards', title: 'A column per tracker state, with the work as cards' },
 ];
 
-/**
- * The ordering, as a control rather than a column header.
- *
- * Drawn in card view only: the table sorts from its own headers, which is where a
- * reader of a table looks, and a board has none.
- */
 const ORDER_OPTIONS: ReadonlyArray<{ value: TicketOrder; label: string; title: string }> = [
   { value: 'added', label: 'Added', title: 'Newest tracker id first' },
   { value: 'changed', label: 'Changed', title: 'Order by when the tracker last saw it change' },
   { value: 'cost', label: 'Cost', title: 'Order by what the fleet has spent under each ticket' },
 ];
 
-/**
- * Every ticket the assignment filter has returned since the harness first swept —
- * and, since the backlog was folded into it, the one surface triage happens on
- * (issues #329, #351).
- *
- * **Three axes, because they are three different questions.** `watch` is a label an
- * operator sets and the dispatcher's gate reads; `tracking` is what the *harness* is
- * doing about the item; `state` is the tracker's own word. Watch is three-valued and
- * not two — an item nobody has opted in is *unwatched*, one tagged leave-alone is
- * *ignored*, and folding them would report a triage nobody made.
- *
- * **The mirror is the list; the world is the overlay.** Rows come from the route,
- * which reads the local mirror and is fetched on open and per page rather than
- * polled. Everything that is a *live reading* — the pickup reasons, the appraisal, the
- * current labels — is read off the state snapshot the cockpit already has, for the
- * one reason that matters: those are the server's own sentences, and a second
- * derivation of them here would be a second opinion about a decision made
- * elsewhere.
- *
- * **One control, and no more.** The watch switch, writing through the action the
- * backlog already used. A row is otherwise a reading — including the lamp on a
- * goal held at intake, whose override moved to the queue rail, where every other
- * ask waiting on a person already is.
- * → docs/spec/17-cockpit.md#intake-is-raised-on-the-rail-and-marked-in-the-list
- */
 export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPanelProps): JSX.Element {
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [refUrls, setRefUrls] = useState<Record<string, string>>({});
@@ -126,16 +91,8 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
-  // What the State narrowing was when the board took over, so the notice can name it
-  // and the way back can restore it. Not a `Place` field: it is a fact about one
-  // switch that just happened, not somewhere the operator can be — and a URL
-  // carrying it would re-announce the clearing on every reload of a shared link.
   const [clearedState, setClearedState] = useState('');
 
-  // The scalars rather than the record they arrive in: `query` is built fresh by the
-  // caller on every render, so a dependency on the object identity re-runs the
-  // effect on every render — a fetch loop that clears the rows it just set, and
-  // looks exactly like a list that never loads.
   const { watch, tracking, state, feature, order } = query;
 
   const read = useCallback(
@@ -168,8 +125,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   );
 
   useEffect(() => {
-    // Cleared first, so a filter change never shows the previous list while its own
-    // first page is in flight — the rows would read as matching a filter they do not.
     setRows([]);
     setCursor(null);
     setDone(false);
@@ -180,29 +135,20 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   useEffect(() => {
     const sentinel = foot.current;
     if (sentinel === null || done || loading) return;
-    // Observed inside the situation area, which is the element that actually
-    // scrolls — against the viewport it would never intersect, and the list would
-    // simply stop at forty rows with no way to say why.
     const root = sentinel.closest('.cn-sit');
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) void read(cursor);
       },
-      // A page ahead of the foot, so the next one is usually there by the time a
-      // reader reaches it.
       { root, rootMargin: '400px' },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [cursor, done, loading, read]);
 
-  // The world, by number — the overlay every live reading comes from.
   const worldIssues = view.state.world.issues;
   const live_ = useMemo(() => new Map(worldIssues.map((issue) => [issue.number, issue])), [worldIssues]);
 
-  // Which state the tracking axis is standing widened for, if any — read back off
-  // the facets this page already carries rather than remembered, because a
-  // remembered widening is a second copy of the two `Place` fields that state it.
   const widened = widenedFor(query.state, query.tracking, states);
 
   return (
@@ -272,9 +218,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
                 key={option.value}
                 type="button"
                 className={option.value === query.view ? 'on' : ''}
-                // Disabled rather than hidden where the tracker has no native states:
-                // there are no columns to draw, and a control that vanishes on some
-                // deployments is one nobody can ask a question about.
                 disabled={states.length === 0 && option.value === 'card'}
                 aria-pressed={option.value === query.view}
                 title={
@@ -285,9 +228,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
                 onClick={() => {
                   if (option.value === query.view) return;
                   if (option.value === 'card') {
-                    // `state` stops meaning anything once every state is a column, so
-                    // it is cleared — and said, below. A control silently ignored is
-                    // worse than one that moved and told you.
                     setClearedState(query.state === 'any' ? '' : query.state);
                     onQuery({ view: 'card', state: 'any' });
                   } else {
@@ -446,15 +386,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   );
 }
 
-/**
- * The tracker's own states, with counts, and a mark on the ones the harness picks up
- * from — as a filter over the table, and as column visibility over the board.
- *
- * One control with two jobs rather than two controls, because it is the same question
- * asked of the same list: *which of the tracker's states am I looking at*. On a board
- * the answer is which columns are drawn, so `aria-pressed` means "drawn" and the
- * chips carry no `Any`, there being nothing to widen back to.
- */
 function StateTier(
   props:
     | { states: readonly TicketStateFacet[]; value: string; onPick: (next: TicketStateFacet | null) => void }
@@ -507,27 +438,15 @@ function StateTier(
   );
 }
 
-/** Why a state chip is what it is: the pickup gate, and whether anything under it is still live. */
 function stateWhy(facet: TicketStateFacet): string {
   const gate = facet.pickup
     ? `"${facet.state}" is one of the states pickupStates lets the harness work`
     : `"${facet.state}" is not a state the harness picks up from`;
-  // Said before the click rather than discovered after it: the tracking row above
-  // is about to change, and a filter that moves a control the reader did not touch
-  // has to say so.
   return facet.live === 0
     ? `${gate}. Nothing under it is still in the tracker's open set, so picking it shows the whole history`
     : gate;
 }
 
-/**
- * The legend, which is also the filter.
- *
- * `slot` is an index into the stylesheet's hue ladder rather than a colour: the
- * palette belongs to the theme, and a colour on the wire would be one no theme
- * could reach. The number and the name ride on every chip too, so the column works
- * for a colour-blind reader and in a screenshot.
- */
 function FeatureLegend({
   features,
   orphanCount,
@@ -573,18 +492,6 @@ function FeatureLegend({
   );
 }
 
-/**
- * One feature and the work under it, or one headless run of rows.
- *
- * **A feature is a heading, never a row.** Nothing is ever dispatched at a
- * container, so listing one among the items being triaged asks an operator to
- * remember which is which on every read.
- *
- * **Open by default.** The tab's job is to show what is waiting, and a surface that
- * hides it behind a click reports an empty board. A fold is `Place.collapsed`, so
- * stepping back into the tab restores the same folded features and a shared link
- * shows what the sender was looking at.
- */
 function FeatureBlockView({
   block,
   live,
@@ -630,9 +537,6 @@ function FeatureBlockView({
     );
   }
 
-  // The feature's own row, when the mirror holds it. Non-null means the heading can
-  // carry the container's controls exactly as a row would; null means it is a label
-  // reconstructed from a child's parent, and there is nothing here to tag.
   const featureIssue = live.get(feature.number) ?? null;
   return (
     <>
@@ -679,16 +583,6 @@ function FeatureBlockView({
   );
 }
 
-/**
- * One row: what it is, what the harness is doing about it in the harness's own
- * words, and the one control that changes that.
- *
- * **The name opens the goal's page**, through the same `selectGoal` a queue row and
- * an overview row call — one way into a goal, from everywhere that lists one. It is
- * the name rather than the whole row, because the row carries controls of its own
- * and a button cannot hold them; the reference sits beside it in a `cn-refs` group,
- * since a link inside a button is a second destination for one click.
- */
 function TicketRowView({
   row,
   issue,
@@ -699,7 +593,6 @@ function TicketRowView({
   showFeature = false,
 }: {
   row: TicketRow;
-  /** The live world's own row, when it still holds one — the source of every live reading. */
   issue: Issue | null;
   view: CockpitView;
   actions: CockpitActions;
@@ -708,9 +601,6 @@ function TicketRowView({
   showFeature?: boolean;
 }): JSX.Element {
   const [why, setWhy] = useState(false);
-  // Quoted, never re-derived: `pickup.reasons` is the dispatcher's own account of
-  // what it would do next cycle, and a second reading of the gates here would be a
-  // second opinion about a decision made elsewhere.
   const reasons = issue?.pickup.reasons ?? [];
   const intake = issue?.appraisal?.verdict === 'unclear';
   const frozen = row.tracking === 'frozen';
@@ -793,7 +683,6 @@ function TicketRowView({
   );
 }
 
-/** The feature a row hangs off, in the flat arrangement where there is no heading to say it. */
 function FeatureCell({ row }: { row: TicketRow }): JSX.Element {
   if (row.parent) {
     return (
@@ -804,9 +693,6 @@ function FeatureCell({ row }: { row: TicketRow }): JSX.Element {
       </span>
     );
   }
-  // The two absences, kept apart: the tracker saying there is no parent, and the
-  // link never having been resolved. Drawing them the same would tell a reader an
-  // item belongs to no feature when the truth is that we could not tell.
   return row.parent === null ? (
     <span className="tickets-feat orphan" title="The tracker says this hangs off no feature">
       <i className="tickets-sw" />
@@ -819,15 +705,6 @@ function FeatureCell({ row }: { row: TicketRow }): JSX.Element {
   );
 }
 
-/**
- * The tracker's own word where there is one, and the coarse reading where there is not.
- *
- * The operator's colour wins over the built-in tone, and over nothing at all —
- * which is the point of the setting: a tracker with a dozen state words draws
- * eleven of them the same grey, and this is the one place the difference is meant
- * to be readable at a glance. Frozen keeps its dashed border either way: closed is
- * a fact about the item, not a shade of its last state.
- */
 function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<string, string>> }): JSX.Element {
   const label = row.workItemState ?? row.state;
   const tone =
@@ -844,29 +721,6 @@ function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<
   );
 }
 
-/**
- * The one control on a row or a feature heading, and what it costs.
- *
- * `setIssueWatched` writes the one tag, on or off — there is no second tag and no
- * third state (`src/watchLabels.ts`), so an untagged item is *unwatched* rather
- * than untriaged, and the titles say what the click does rather than what the
- * label reads.
- *
- * **Which of the two readings of that tag it draws is load-bearing**, and that
- * choice is `watchReading`'s — the world where the world holds the item, and the
- * mirror only for the rows it no longer does. Reading them the other way round is
- * a toggle that never visibly moves.
- *
- * **On a container it cascades**, and the title says so with the number it will
- * reach. A container is still never dispatched at, but watching one is not an empty
- * click: the tags go on every descendant, which is what "work this feature" has
- * always meant.
- *
- * Refused in three cases, each with a title that says which: a deployment with the
- * gate off (`labelPrefix: ''`) has no tag to write in either direction; a **frozen**
- * row has nothing in the tracker left to tag; and a row the world no longer holds
- * cannot have its cascade counted.
- */
 function WatchSwitch({
   issue,
   row,
@@ -874,7 +728,6 @@ function WatchSwitch({
   actions,
 }: {
   issue: Issue | null;
-  /** The mirror's row, for the frozen reading and the bucket. Null on a feature heading. */
   row: TicketRow | null;
   view: CockpitView;
   actions: CockpitActions;
@@ -890,8 +743,6 @@ function WatchSwitch({
           ? 'The world no longer holds this item, so there is nothing to tag'
           : null;
 
-  // What the click will also reach — the words are a pure function, so the
-  // invariant that a click writing eight tags says eight is tested without a render.
   const also = issue === null ? '' : cascadeNote(issue, containerTypes);
   const bucket = watchReading(issue, row, watchLabel);
 
@@ -919,13 +770,6 @@ function WatchSwitch({
   );
 }
 
-/**
- * What the foot of the list says, in each of the four states it has.
- *
- * The foot is a real state rather than an absence: a list that simply stops reads
- * as one that failed to load. Reaching the end names the floor, because the floor
- * is a cap and a silent cap is the thing this codebase refuses.
- */
 function footWords(state: {
   loading: boolean;
   backfilling: boolean;
@@ -942,7 +786,6 @@ function footWords(state: {
     : `Start of history — ${absDate(state.anchorAt)}, a month before the first scan. Nothing older was ever fetched, and nothing seen since has been dropped.`;
 }
 
-/** One filter axis. */
 function Segment<T extends string>({
   label,
   options,
@@ -979,13 +822,6 @@ function Segment<T extends string>({
   );
 }
 
-/**
- * A sortable column header — the one place the list is ordered from.
- *
- * Not a segmented control beside the filters: two controls for one job is two
- * places to leave disagreeing, and a header is where a reader of a table looks for
- * the sort anyway.
- */
 function SortHead({
   label,
   order,

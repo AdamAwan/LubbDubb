@@ -13,13 +13,6 @@ import {
   KNOWN_REVIEW_PACK_SCHEMA,
 } from '../web/src/view/reviewPack.js';
 
-/**
- * Review packs, stage 6: the HTML companion — one self-contained file rendered by
- * the harness from the document alone, drawing the page in the order
- * docs/spec/31-review-packs.md#the-page fixes, with no harness behind it and no
- * input.
- */
-
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 
 function idea(over: Partial<ReviewIdea> = {}): ReviewIdea {
@@ -73,12 +66,10 @@ const record = (p: ReviewPack): ReviewPackRecord => ({ pack: p, writtenAt: '2026
 
 const render = (p: ReviewPack): string => renderReviewPackCompanion(record(p));
 
-/** One assertion the whole file makes: this page says that. */
 function contains(html: string, needle: string): void {
   assert.equal(html.includes(needle), true, `expected the companion to contain ${JSON.stringify(needle)}`);
 }
 
-/** Where each of these appears, so the order can be asserted as an order. */
 function positions(html: string, needles: string[]): number[] {
   return needles.map((needle) => {
     const at = html.indexOf(needle);
@@ -117,19 +108,18 @@ test('the companion is one self-contained file that draws the page in the spec�
 
   assert.match(html, /^<!doctype html>/);
   assert.match(html, /<title>Review pack · #7 · The module imports y\.<\/title>/);
-  // No harness behind it: no script, and nothing to fetch.
   assert.equal(/<script/i.test(html), false, 'the companion runs no script');
   assert.equal(/<form|<input|Mark read|Ask again|Share this pack/.test(html), false, 'and takes no input');
 
   const order = positions(html, [
-    'The module imports y.', // 1 the masthead
-    'rp-gate', // 2 the gate, above the ideas
-    'The 2 ideas', // 3 the ideas
-    'The import lands here.', // 4 the walk
-    'What the author claims', // 5 the claims
-    'id="rp-finding-1"', // 6 the finding itself — the gate above only links to it
-    'Where to spend the 4 minutes', // 7 where to spend the time
-    'what in it is fake', // 8 the colophon
+    'The module imports y.',
+    'rp-gate',
+    'The 2 ideas',
+    'The import lands here.',
+    'What the author claims',
+    'id="rp-finding-1"',
+    'Where to spend the 4 minutes',
+    'what in it is fake',
   ]);
   assert.deepEqual(
     [...order].sort((a, b) => a - b),
@@ -137,12 +127,9 @@ test('the companion is one self-contained file that draws the page in the spec�
     'the page is drawn in the spec’s order',
   );
 
-  // The numbers are the checker's reading order, and the false claim is drawn on
-  // the row a reader who opens nothing still sees.
   assert.match(html, /numbered in the order the checker says to read them/);
   assert.match(html, />01<\/span><span class="rp-att rp-att-decide">Decide/);
   assert.match(html, /1 false claim/);
-  // The two pieces of code that disagree, with their captions.
   assert.match(html, /the surviving reader/);
   assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/, 'the finding’s markdown is rendered');
 });
@@ -165,19 +152,13 @@ test('an idea lists the scenarios its tests cover, above its claims and never as
   );
   assert.match(covered, /Covered by/);
   assert.match(covered, /<li>b is exported<\/li>/);
-  // Above the claims, so the reader who has just read the code learns there
-  // whether it is exercised. → docs/spec/31-review-packs.md#tests-are-never-an-idea
   assert.ok(covered.indexOf('Covered by') < covered.indexOf('What the author claims'));
 
-  // Nothing at all where there is nothing to list: a heading over an empty list
-  // reads as tests that were looked for and not found. A pack written before the
-  // field existed reads it back undefined, and renders the same way.
   const bare = renderReviewPackCompanion(record(pack({ ideas: [idea({ coverage: undefined })] })));
   assert.doesNotMatch(bare, /Covered by/);
 });
 
 test('the diff marker is a column of its own, and is dropped where every line carries the same one', () => {
-  // Mixed: the column carries something, so it is drawn and the lines are tinted.
   const mixed = codeBlockLines([' const a = 1;', '-const b = 2;', '+const b = 3;'], true);
   assert.equal(mixed.gutter, true);
   assert.deepEqual(mixed.lines, [
@@ -186,8 +167,6 @@ test('the diff marker is a column of its own, and is dropped where every line ca
     { marker: '+', text: 'const b = 3;' },
   ]);
 
-  // A new file: every line is an addition, the step's tag says so, and a screen
-  // of `+` says it again. → docs/spec/31-review-packs.md#the-code-block
   const added_ = codeBlockLines(['+const a = 1;', '+const b = 2;'], true);
   assert.equal(added_.gutter, false);
   assert.deepEqual(
@@ -195,7 +174,6 @@ test('the diff marker is a column of its own, and is dropped where every line ca
     ['const a = 1;', 'const b = 2;'],
   );
 
-  // A region never had a marker to take off.
   assert.deepEqual(codeBlockLines(['const a = 1;'], false), {
     gutter: false,
     lines: [{ marker: null, text: 'const a = 1;' }],
@@ -222,7 +200,6 @@ test('the diff marker is a column of its own, and is dropped where every line ca
       }),
     ),
   );
-  // The code is in the text; the marker is beside it, not in front of it.
   assert.match(html, /<span class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
   assert.doesNotMatch(html, /<span class="rp-t">\+/, 'the marker is never the first character of the code');
 });
@@ -272,10 +249,6 @@ test('every embedded line is escaped, and a cited pad entry is said to have stay
   assert.match(html, /stayed on the fleet that wrote it/);
 });
 
-/**
- * The stops the weight rule is asserted over, and the answer each must get.
- * → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
- */
 const WEIGHTS: [string, ReviewAnchor, 'key' | 'normal' | 'minor'][] = [
   [
     'an import block is mechanical',
@@ -324,34 +297,24 @@ test('a mechanical stop is drawn quiet, with its code folded rather than dropped
       ],
     }),
   );
-  // Quiet, and named as such — a reader must be able to see why it is dimmed.
   contains(html, 'rp-w-minor');
   contains(html, 'mechanical');
-  // Folded, never dropped: the document carries its code and the reader can open it.
   contains(html, 'show the 1 line');
-  // The lines themselves are still in the file, tokenised by the highlighter.
   contains(html, 'b.js');
-  // The stop beside it is drawn as it always was.
   contains(html, 'rp-w-normal');
 });
 
 test('the contents rail names every idea and every stop, and marks where the time goes', () => {
   const html = render(pack({ ideas: [idea({ title: 'The first idea' })] }));
   contains(html, 'class="rp-rail"');
-  // Every idea and every stop, by the number the page draws on them.
   contains(html, 'href="#rp-i1"');
   contains(html, 'href="#rp-s1-1"');
   contains(html, 'id="rp-i1"');
   contains(html, 'id="rp-s1-1"');
-  // The key stop is marked in the rail too, so the map says where the time goes
-  // before the reader has scrolled to find out.
   contains(html, 'rp-c-key');
 });
 
 test('the companion and the cockpit agree on the derivations neither can share', () => {
-  // Two statements of one set of rules, for the reason `KNOWN_REVIEW_PACK_SCHEMA`
-  // is: `web/src/` may name no server module but `src/wire.ts`, which carries no
-  // runtime. So the agreement is asserted rather than compiled.
   assert.equal(KNOWN_REVIEW_PACK_SCHEMA, REVIEW_PACK_SCHEMA);
   const wrong = idea({
     id: 'idea_two',

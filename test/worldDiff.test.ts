@@ -76,7 +76,6 @@ test('PR approval, mergeable, and merged transitions each emit once (false->true
   assert.deepEqual(kinds(world({ pullRequests: [pr()] }), world({ pullRequests: [pr({ merged: true })] })), [
     'pr_merged',
   ]);
-  // Already approved -> still approved: no event.
   assert.deepEqual(
     kinds(world({ pullRequests: [pr({ approved: true })] }), world({ pullRequests: [pr({ approved: true })] })),
     [],
@@ -94,7 +93,6 @@ test('a new unresolved PR comment emits pr_comment (by comment id)', () => {
     ['pr_comment'],
   );
   assert.match(events[0]!.summary, /bob/);
-  // The same comment on the next diff must not re-emit.
   assert.deepEqual(diffWorlds(after, after), []);
 });
 

@@ -8,12 +8,6 @@ import { isLiveField, liveFieldPaths } from '../src/configApply.js';
 import { describeRunningConfig, groupedTopLevelKeys } from '../src/server/runningConfig.js';
 import { declaredTopLevelKeys, configTopLevelKeys } from '../src/configFields.js';
 
-/**
- * The two things that keep the field table from drifting away from the type it
- * describes — which is the failure `lubbdubb.config.example.json` already had,
- * and the reason the table exists instead of a second hand-maintained example.
- */
-
 test('every config key is declared, so a new one cannot arrive un-editable', () => {
   const declared = declaredTopLevelKeys();
   const missing = [...configTopLevelKeys()].filter((key) => !declared.has(key));
@@ -25,23 +19,11 @@ test('every config key is declared, so a new one cannot arrive un-editable', () 
   );
 });
 
-/**
- * The third, and the one the other two do not cover. `CONFIG_FIELDS` is checked
- * against the type, but `lubbdubb.config.example.json` is checked against nothing
- * — and it is the file an operator is told to copy and run, so a key that outlived
- * its feature there is worse than a stale comment: it is a setting somebody pastes
- * into a live deployment, where it merges into nothing and does exactly what an
- * unset key does. `agentIdleWaitMs` and `sessionTranscriptRoot` shipped in it for
- * releases after the `pty` runtime they configured was removed, and
- * `lessonBlockChars` shipped in it while already retired — so the file told a
- * fresh deployment to warn on its own first boot.
- */
 test('every key in the shipped example config is one this build still reads', () => {
   const example = JSON.parse(
     readFileSync(join(import.meta.dirname, '..', 'lubbdubb.config.example.json'), 'utf8'),
   ) as Record<string, unknown>;
   const declared = declaredTopLevelKeys();
-  // The '//'-prefixed keys are the file's inline docs, ignored at load.
   const unknown = Object.keys(example).filter((key) => !key.startsWith('//') && !declared.has(key));
 
   assert.deepEqual(
@@ -52,9 +34,6 @@ test('every key in the shipped example config is one this build still reads', ()
 });
 
 test('every declared field is drawn in a group of its own, never as an unknown key', () => {
-  // A field whose top-level key is missing from `GROUPS` would fall through to
-  // "Other" — where it is drawn as a key this build does not declare, and refused
-  // for edit. Silent, and exactly backwards.
   const config = loadConfig({ userId: 'someone', github: { owner: 'o', repo: 'r' } });
   const groups = describeRunningConfig(config);
   const other = new Set((groups.find((group) => group.title === 'Other')?.entries ?? []).map((entry) => entry.path));
@@ -63,7 +42,6 @@ test('every declared field is drawn in a group of its own, never as an unknown k
   for (const field of CONFIG_FIELDS) {
     assert.ok(!other.has(field.path), `${field.path} is declared but fell through to the Other group`);
   }
-  // Every field with a value on this config is drawn; the rest are unset optionals.
   assert.ok(drawn.has('heartbeatIntervalMs') && drawn.has('auth.enabled') && drawn.has('github.owner'));
 });
 
@@ -72,9 +50,6 @@ test('a live field is one an arm names, and every arm names a real field', () =>
     assert.ok(configField(path), `configApply has an arm for "${path}", which CONFIG_FIELDS does not declare`);
     assert.ok(isLiveField(path));
   }
-  // And the other direction: a field with no arm is restart-only. Nothing may
-  // claim liveness without one — that claim is the bug this classification exists
-  // to prevent.
   const armed = new Set(liveFieldPaths());
   for (const field of CONFIG_FIELDS) {
     assert.equal(isLiveField(field.path), armed.has(field.path), `${field.path} disagrees with its arm`);
@@ -124,8 +99,6 @@ test('a value of the wrong type is refused by name, and a right one passes', () 
 });
 
 test('no field offers a credential', () => {
-  // `Config` holds no secrets by construction, and a write path is a new reason
-  // that has to hold rather than a reason to weaken it.
   for (const field of CONFIG_FIELDS) {
     assert.doesNotMatch(field.path, /token$|password|secret|\bpat\b|apiKey/i, `${field.path} reads like a credential`);
   }
@@ -133,13 +106,6 @@ test('no field offers a credential', () => {
 });
 
 test('every declared key is claimed by a group, so a new one cannot be invisible', () => {
-  // `GROUPS` is a hand-written key list per group, and the "Other" fallback
-  // deliberately skips anything `CONFIG_FIELDS` *declares* — so a declared key
-  // nobody grouped is drawn nowhere at all. It validates, it applies, and the page
-  // it was declared for never shows it: nothing red, and a field reachable only by
-  // hand-editing the file. (An *unset* optional key legitimately draws no row —
-  // `entryFor` returns null on `undefined` — which is why this asserts the grouping
-  // rather than the rendered rows.)
   const grouped = groupedTopLevelKeys();
   const ungrouped = [...declaredTopLevelKeys()].filter((key) => !grouped.has(key));
 

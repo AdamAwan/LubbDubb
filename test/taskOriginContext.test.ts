@@ -9,11 +9,6 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// The cockpit needs enough of the originating item's context to understand a
-// running agent at a glance (issue #17). These tests pin the thread that
-// carries the source title/summary/dispatch-reason from dispatch time onto the
-// persisted task row so `/api/state` serves it without a second fetch.
-
 test('createTask persists origin context and round-trips through the store', () => {
   const store = new Store(':memory:');
   const task = store.createTask({
@@ -68,8 +63,6 @@ function testConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The funnel in front of pickup would spawn an appraiser/planner first; this
-    // test is about what rule `issue-pickup` puts on the task row.
   });
 }
 
@@ -77,9 +70,6 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
-  // Straight to rule `issue-pickup`: the deliberation rules in front of pickup are off here, so
-  // the agent that spawns is the one working the issue and its task carries the
-  // issue's own title and body.
   system.connector.inject({
     kind: 'new_issue',
     number: 901,

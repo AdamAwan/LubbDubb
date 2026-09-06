@@ -3,28 +3,8 @@ import { WatchSchema, watchCheckInputs } from '../../validation/watchDocument.js
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The working agent's half of the declaration.
- *
- * It is the only party in the system that knows what the code actually emits. A
- * planner cannot guess the message template of a log line that did not exist when
- * it wrote the plan, and nothing downstream can recover it — which is also the
- * second-order reason this tool exists at all: an agent told *if you added a log
- * line or a metric for this, declare the watch that reads it* has a reason to add
- * one. The declaration makes the fleet instrument its own work.
- *
- * **Nothing it writes is live.** A declaration lands as a pending amendment on
- * the plan sheet, with accept and decline beside it, because the query is run
- * inside the operator's own command with the operator's own credential — and that
- * approval is the whole authorisation story. Acceptance is what re-runs the dry
- * run and takes a measure's baseline.
- *
- * Merges on the check's slug exactly as `validation_amend` does
- * (`docs/spec/20-validation.md`), and refuses exactly what a plan document
- * refuses, because it parses with the plan document's own schema rather than a
- * second copy of it.
- * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
- */
+// → docs/spec/11-mcp-tools.md
+
 export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Declare, or correct, what a running system would have to show for the work you just did to have done ' +
@@ -116,11 +96,6 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
     required: ['note'],
   },
   handler: (args) => {
-    // The same fence `validation_amend` carries, and for its reason: the origin
-    // comes off the credential, so an agent working goal A cannot declare a watch
-    // on goal B by asking. A planner is refused by name — it already has a
-    // transport that declares the whole block, and two ways to say one thing
-    // disagree about what an omission means.
     const ref = task.originRef ?? '';
     const match = /^issue:(\d+)(?::(.+))?$/.exec(ref);
     if (!match)
@@ -137,9 +112,6 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
     const note = typeof args['note'] === 'string' ? args['note'].trim() : '';
     if (note === '')
       return toolError('note is required — say why this is the right thing to watch, in a sentence or two.');
-    // Parsed by the plan document's own schema, so the two writers refuse exactly
-    // the same things: a signal without a presence query, a measure that declares
-    // neither a threshold nor a baseline, an id that is not kebab-case.
     const parsed = WatchSchema.safeParse({ signals: args['signals'] ?? [], measures: args['measures'] ?? [] });
     if (!parsed.success)
       return toolError(`Declaration rejected: ${parsed.error.issues.map((i) => i.message).join('; ')}`);
@@ -150,8 +122,6 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
     const { proposed } = deps.store.proposeGoalWatch(origin, checks, note);
     return ok({
       declared: proposed,
-      // Said plainly rather than left to be inferred from a silent success: an
-      // agent that believed this was live would report a watch nobody approved.
       pending: true,
       pendingMeans:
         'nothing here has been put to an environment. Each of these is drawn on the plan sheet as a pending ' +

@@ -10,16 +10,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildReadPlan, hydrationMaxAgeMs, type ReadPlan } from '../src/world/readPlan.js';
 import type { TaskSummary, WorldEvent, WorldSnapshot } from '../src/types.js';
 
-/**
- * The **lane split** and the **adaptive cadence** — the two halves of running the
- * pulse near-real-time without spending the providers' budget on it.
- *
- * What these hold: the pulse hands the world read a plan saying which entities are
- * worth a per-entity fan-out; a cold entity is *slower*, never *absent*; and the
- * gap to the next timer cycle follows what the fleet is actually doing.
- * → `docs/spec/04-harness-cycle.md#hot-and-cold`
- */
-
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function testConfig(overrides: Partial<Config> = {}): Config {
@@ -32,7 +22,6 @@ function testConfig(overrides: Partial<Config> = {}): Config {
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    // Every cycle here is one somebody asked for; nothing is the timer's doing.
     heartbeatIntervalMs: 999_999,
     idleHeartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
@@ -40,10 +29,6 @@ function testConfig(overrides: Partial<Config> = {}): Config {
   });
 }
 
-/**
- * A system whose worktrees are faked — mandatory for anything that dispatches a code
- * agent, or the test cuts a real branch in the checkout the suite is running in.
- */
 function build(overrides: Partial<Config> = {}): System {
   return buildSystem(testConfig(overrides), {
     worktrees: new FakeWorktreeManager(),
@@ -52,7 +37,6 @@ function build(overrides: Partial<Config> = {}): System {
   });
 }
 
-/** Capture the plan the pulse hands the world read, by standing in front of it. */
 function capturePlans(system: System): ReadPlan[] {
   const seen: ReadPlan[] = [];
   const connector = system.connector as { getState: (plan?: ReadPlan) => Promise<WorldSnapshot> };
@@ -68,10 +52,6 @@ function hotRefs(plan: ReadPlan): ReadonlySet<string> {
   assert.notEqual(plan.hot, 'all', 'the pulse classifies; only a read outside it says everything is hot');
   return plan.hot as ReadonlySet<string>;
 }
-
-// --------------------------------------------------------------------------
-// The rule itself
-// --------------------------------------------------------------------------
 
 const lanes = { hotMaxAgeMs: 60_000, coldMaxAgeMs: 600_000 };
 
@@ -96,7 +76,6 @@ function pr(over: Partial<WorldSnapshot['pullRequests'][number]> = {}): WorldSna
   };
 }
 
-/** Only the fields the lane rule reads; the rest of a task row is beside the point. */
 function task(over: Partial<TaskSummary>): TaskSummary {
   return {
     id: 't1',
@@ -133,7 +112,6 @@ test('a settled, unstaffed, untouched entity is the only kind that goes cold', (
     }),
     tasks: [
       task({ id: 't1', branch: 'staffed', originRef: 'issue:20:part:auth' }),
-      // A finished task staffs nothing, so it heats nothing.
       task({ id: 't2', status: 'done', originRef: 'issue:30' }),
     ],
     events: [event('issue:40', 60_000, now), event('issue:50', 60 * 60_000, now)],
@@ -153,8 +131,6 @@ test('a settled, unstaffed, untouched entity is the only kind that goes cold', (
 
   assert.equal(hydrationMaxAgeMs(plan, 'pr:2'), lanes.hotMaxAgeMs);
   assert.equal(hydrationMaxAgeMs(plan, 'pr:1'), lanes.coldMaxAgeMs);
-  // A caller that knows nothing about the fleet reads on the hot lane's terms
-  // rather than declaring anything cold.
   assert.equal(hydrationMaxAgeMs({ hot: 'all', ...lanes }, 'pr:1'), lanes.hotMaxAgeMs);
 });
 
@@ -163,13 +139,7 @@ test('before the first real cycle everything is hot, because there is nothing to
   assert.equal(plan.hot, 'all');
 });
 
-// --------------------------------------------------------------------------
-// The pulse, at the buildSystem seam
-// --------------------------------------------------------------------------
-
 test('the pulse hands the read a lane per entity, and a cold one is still in the world', async () => {
-  // Lanes small enough that "recently moved" ages out inside the test: the issue
-  // this injects is hot for as long as the slow lane is, exactly as a real one is.
   const system = build({ hotReadMaxAgeMs: 20, coldReadMaxAgeMs: 60 });
   system.runtimeControl.apply({ paused: true });
   system.connector.inject({ kind: 'new_issue', number: 801, title: 'An old issue nobody has touched' });
@@ -179,8 +149,6 @@ test('the pulse hands the read a lane per entity, and a cold one is still in the
   await system.harness.runCycle('manual');
 
   const plans = capturePlans(system);
-  // Long enough that the transitions the first cycle recorded are outside the slow
-  // lane's window — the issue has gone quiet.
   await tick(80);
   const report = await system.harness.runCycle('manual');
 
@@ -191,8 +159,6 @@ test('the pulse hands the read a lane per entity, and a cold one is still in the
   assert.equal(plans[0]!.coldMaxAgeMs, 60);
   assert.equal(hydrationMaxAgeMs(plans[0]!, 'issue:801'), 60);
 
-  // The whole point of "cold is not invisible": the dispatcher reasons over the
-  // whole world, so a cold entity is in every snapshot and in the baseline.
   const baseline = system.store.getWorldBaseline();
   assert.ok(
     baseline?.issues.some((i) => i.number === 801),
@@ -217,10 +183,6 @@ test('an issue the fleet is working on is hot, and stays hot while its task is o
   system.store.close();
 });
 
-// --------------------------------------------------------------------------
-// The cadence
-// --------------------------------------------------------------------------
-
 test('the cadence follows the fleet: fast while it is working, slow while it is not', async () => {
   const system = build({ heartbeatIntervalMs: 30_000, idleHeartbeatIntervalMs: 300_000 });
 
@@ -232,8 +194,6 @@ test('the cadence follows the fleet: fast while it is working, slow while it is 
   assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 1);
   assert.equal(busy.nextIntervalMs, 30_000, 'an agent is running, so the pulse takes the fast interval');
 
-  // And back: the agent ends, the work leaves the world, and the fleet drops to
-  // the idle interval on the next cycle rather than staying fast for ever.
   for (const agent of system.store.listAgentsByStatus('starting', 'running')) system.agents.complete(agent.id);
   system.localCycles.stop();
   system.connector.inject({ kind: 'issue_state', number: 821, state: 'closed' });
@@ -246,9 +206,6 @@ test('a build in flight is enough to keep the fleet on the fast interval', async
   const system = build({ heartbeatIntervalMs: 30_000, idleHeartbeatIntervalMs: 300_000 });
   system.runtimeControl.apply({ paused: true });
   system.connector.inject({ kind: 'new_pr', number: 831, title: 'Building', branch: 'feat-831' });
-  // The fake reports a PR with no verdict yet as `pending` — a check that will
-  // settle with no token moving anywhere, which is the commonest thing an
-  // idle-looking fleet is actually waiting for.
   const report = await system.harness.runCycle('manual');
   const built = system.store.getWorldBaseline()?.pullRequests.find((p) => p.number === 831);
 

@@ -2,57 +2,16 @@ import { createHash } from 'node:crypto';
 import type { Issue, IssueAppraisal, TaskSummary } from '../types.js';
 import { hasPriorWork } from '../delivery/assessment.js';
 
-/**
- * The goal appraisal (issue #158): the one gate in front of an issue that asks about its
- * **content** rather than about policy. Everything else in front of a ticket asks whether the
- * harness is *allowed* to act; none asks whether there is anything to act on — so a vague or
- * already-obsolete ticket goes straight into the funnel and burns an agent's attempt cap before
- * anyone notices.
- *
- * The assessor (`issue-assess`) asks the same kind of question at the opposite end: it judges
- * whether an issue was **delivered**, after the work; this judges whether it was **workable**,
- * before. Mutually exclusive by construction — `hasPriorWork` is the discriminator for both.
- *
- * It blocks rather than merely informs, because informing is what the cockpit already does and
- * would let the dispatch it exists to prevent happen anyway. What makes blocking safe: a
- * *missing* verdict holds nothing (an appraiser that crashes/is killed/spends its cap falls
- * through to ordinary pickup, the same fail-open `resolvePlanRoute` and the assessor use); only
- * an explicit `unclear` holds; and the hold itself expires — see {@link appraisalHold}.
- *
- * Applies only to issues that already pass the watch gate — it never second-guesses an untagged
- * backlog, only asks "with what?" of an issue the operator already asked for, ending when the
- * operator edits the ticket, comments, or clears the verdict. What it must never become is a
- * durable refusal, which is what {@link appraisalHold} is about.
- */
+// → docs/spec/06-issue-pickup.md
 
-/**
- * The origin an appraising agent is dispatched on — its own, so the cooldown/attempt cap that
- * throttle appraisals are independent of pickup attempts on `issue:<n>`.
- */
 export function appraisalOrigin(issueNumber: number): string {
   return `issue:${issueNumber}:appraisal`;
 }
 
-/**
- * The branch an appraising agent works on — its own namespace beside `plan/issue/<n>` and
- * `assess/issue/<n>`, since git cannot have both `issue/12` and `issue/12/appraisal` as refs. Cut
- * from the default branch, since the question is whether the goal makes sense against the
- * repository as it stands.
- */
 export function appraisalBranch(issueNumber: number): string {
   return `appraisal/issue/${issueNumber}`;
 }
 
-/**
- * The fingerprint of the goal text a verdict was cast against — issue #158's answer to "a ticket
- * edited after a failed appraisal must be re-appraised". World-signal expiry (#122's answer to
- * the same shape of problem) cannot work here: `worldDiff` emits nothing for an edit, which is
- * exactly the transition that answers the appraiser's question. Fingerprinting the text instead
- * makes the check a lookup against current state, surviving a restart or missed pulse.
- *
- * Title and body joined by NUL (a byte neither can contain), so moving words between them still
- * fingerprints differently. Truncated to 16 hex chars — a change detector, not a security boundary.
- */
 export function goalFingerprint(title: string | null, body: string | null): string {
   return createHash('sha256')
     .update(`${title ?? ''}\u0000${body ?? ''}`)
@@ -60,37 +19,11 @@ export function goalFingerprint(title: string | null, body: string | null): stri
     .slice(0, 16);
 }
 
-/**
- * Why this issue is held out of the funnel by a standing appraisal, or null when free. The
- * string is operator-facing — the cockpit chip and the dispatcher's skip reason both render it.
- *
- * No timer ends a hold, only events — #122's asymmetry: a refused goal waits on the world to
- * *become* something else, not merely reflect time passing, or the appraiser (which costs an
- * agent) would re-ask the same unanswered question forever.
- *
- * 1. **The goal text changed** ({@link goalFingerprint}) — the only arm that ends the hold on the
- *    ticket's side. A prior second arm (any world transition since the verdict) was removed: a
- *    reopen or link answers nothing about "what does done look like" and let an unchanged ticket
- *    straight back into the funnel with no re-appraisal.
- * 2. **The operator clears the row** (`Store.clearAppraisal` — a delete, not a third stored
- *    state) or overrides it to `workable`.
- *
- * Expiry lifts the hold; it does not retract the verdict — a re-appraisal overwrites the row.
- *
- * A second arm holds on an unanswered profile proposal (issue #342): the appraiser also proposes
- * a model profile, and a proposal that diverges from what stands holds the funnel until answered.
- * An absent proposal holds nothing, and an agreeing proposal is stored already answered (decided
- * once, where tag and config are both in hand) — so nothing here threads config or can gate the
- * fleet by a forgotten lookup. Ends the same three ways: answered, ticket rewritten (new
- * fingerprint), or row cleared.
- */
 export function appraisalHold(appraisal: IssueAppraisal | null, issue: Issue): string | null {
   if (!appraisal) return null;
-  // The ticket was rewritten: whatever the appraiser read, it is not this. Applies to both arms.
   if (appraisal.goalRef !== goalFingerprint(issue.title, issue.body)) return null;
 
   if (appraisal.verdict === 'unclear') return unclearHold(appraisal);
-  // Asked after the refusal, so an issue that is both refused and unpriced reads as refused.
   if (appraisal.proposedProfile !== null && appraisal.profileAnsweredAt === null)
     return `the goal appraisal proposes running this on "${appraisal.proposedProfile}"`;
   return null;
@@ -98,27 +31,13 @@ export function appraisalHold(appraisal: IssueAppraisal | null, issue: Issue): s
 
 function unclearHold(appraisal: IssueAppraisal): string {
   const by = appraisal.by === 'operator' ? 'you' : 'the goal appraisal';
-  // The verdict's own words and timestamp are deliberately not in here — the row already carries
-  // them in full, and folding them in made this the longest string the cockpit renders.
   return `${by} could not act on this goal`;
 }
 
-/**
- * Has work on this issue actually started — i.e. is the goal still the only thing there is to
- * judge? Exactly `hasPriorWork`. Appraisal and plan origins are excluded via `issueOriginRole`
- * (the harness *asking*, not work being done) so a crashed appraiser or plan does not silently
- * retire the cooldown and attempt cap forever. The assessor's and retrospective's origins still
- * count, since both only ever fire downstream of work.
- */
 export function hasWorkStarted(issueNumber: number, tasks: TaskSummary[]): boolean {
   return hasPriorWork(issueNumber, tasks);
 }
 
-/**
- * Whether this issue already carries a verdict about the text it currently has. Asked instead of
- * "is there a row" so an edited ticket is re-appraised on its own — the same fingerprint
- * comparison that ends a hold reopens the question.
- */
 export function isAppraised(appraisal: IssueAppraisal | null, issue: Issue): boolean {
   return appraisal !== null && appraisal.goalRef === goalFingerprint(issue.title, issue.body);
 }

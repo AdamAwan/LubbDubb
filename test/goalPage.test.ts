@@ -165,14 +165,6 @@ test('parts group by status, and a retired part joins none of the groups', () =>
   ]);
 });
 
-/**
- * A part names the agent that worked it, and says separately whether it still is.
- *
- * Two fields because the card draws both, and they are not the same claim: a
- * finished agent is still the way to what happened here, while only a live one is
- * a claim that something is happening now — which is what `AgentOnIt` says, in the
- * green it says it in. Folded into one field, a merged part pulses.
- */
 test('a part’s agent is live only while it is running', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -243,8 +235,6 @@ test('a goal whose number is a prefix of another does not inherit that goal’s 
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
-  // Shares `ref` as a string prefix without being this goal or a part of it —
-  // exactly what `startsWith(ref)` alone would wrongly admit.
   const otherRef = `issue:${issue.number}9`;
 
   const otherTask = task({ id: 't:other', originRef: `${otherRef}:part:x` });
@@ -266,12 +256,6 @@ test('a goal whose number is a prefix of another does not inherit that goal’s 
   assert.ok(!page?.decisions.some((d) => d.id === otherDecision.id));
 });
 
-/**
- * A pull request is opened for a goal, so an agent dispatched at one is an agent on
- * the goal. Read off the `issue:<n>` subtree alone the card said *no agent is on
- * this goal* through every CI fix and review round — which is most of the time a
- * goal has somebody on it.
- */
 test('an agent dispatched at this goal’s pull request is one of its agents, and says which PR', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -290,8 +274,6 @@ test('an agent dispatched at this goal’s pull request is one of its agents, an
   };
   const ciTask = task({ id: 't:ci', originRef: 'pr:911', title: 'Fix failing CI on PR #911' });
   const ciAgent = agent({ id: 'a:ci', taskId: ciTask.id });
-  // Another goal's pull request, dispatched the same way — the reading is the
-  // three-way match, never "the origin is a PR".
   const strayTask = task({ id: 't:stray', originRef: 'pr:912' });
   const strayAgent = agent({ id: 'a:stray', taskId: strayTask.id });
 
@@ -312,11 +294,6 @@ test('an agent dispatched at this goal’s pull request is one of its agents, an
   );
 });
 
-/**
- * The other half of the same fact one tier down: a part whose work has reached
- * review has its agents dispatched at `pr:<n>`, so a part row read off its own
- * origin alone draws no agent on exactly the parts that are moving.
- */
 test('a part wears the agent on its pull request, preferring the live one', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -331,7 +308,6 @@ test('a part wears the agent on its pull request, preferring the live one', () =
       plans: [plan(ref)],
       planParts: parts,
       tasks: [...state.tasks, built, review],
-      // Newest first, as the snapshot orders them.
       agents: [
         agent({ id: 'a:review', taskId: review.id, startedAt: '2026-01-02T00:00:00.000Z' }),
         agent({ id: 'a:build', taskId: built.id, endedAt: '2026-01-01T01:00:00.000Z', status: 'done' }),
@@ -345,13 +321,6 @@ test('a part wears the agent on its pull request, preferring the live one', () =
   assert.equal(page?.parts[0]?.agentLive, true);
 });
 
-/**
- * The pull requests a goal owns, and why the part rows are only one of three ways.
- *
- * A goal delivered **whole** has no parts at all — the single-PR arm is exactly
- * "no live parts" — so a page keyed on `prNumber` drew no pull request for any
- * goal the harness worked in one, which is most finished goals.
- */
 test('a goal worked whole owns its pull requests by branch, and a merged one is still shown', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -378,8 +347,6 @@ test('a goal worked whole owns its pull requests by branch, and a merged one is 
     merged: true,
     state: 'merged',
   };
-  // Shares the goal's digits as a branch prefix without being its branch — what a
-  // bare `startsWith` would wrongly admit.
   const other: PullRequest = { ...closed, id: 'pr-903', number: 903, branch: `issue/${issue.number}9` };
 
   const page = buildGoalPage(
@@ -403,14 +370,6 @@ test('a goal worked whole owns its pull requests by branch, and a merged one is 
   );
 });
 
-/**
- * The window forgets; the page must not.
- *
- * `world.closedPullRequests` is `closedPrWindowMs` wide, so a page drawn off it
- * alone lost every pull request a goal shipped a few hours after it merged — the
- * page of a goal delivered last month said nothing had ever named it. The archive
- * is those rows kept for good, and the two are one list here.
- */
 test('a goal keeps its closed pull requests after the world’s window has forgotten them', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -425,8 +384,6 @@ test('a goal keeps its closed pull requests after the world’s window has forgo
     merged: true,
     state: 'merged',
   };
-  // Another goal's, so the archive is filtered by the same `ownsPr` the window is
-  // rather than shipped whole onto every page.
   const elsewhere: PullRequest = { ...archived, id: 'pr-906', number: 906, branch: 'issue/99999/other' };
 
   const page = buildGoalPage(
@@ -447,12 +404,6 @@ test('a goal keeps its closed pull requests after the world’s window has forgo
   );
 });
 
-/**
- * The two lists carry the same pull request for as long as the window holds it, and
- * the window's copy is the fresher reading — an archived row is only ever the last
- * thing the world said. A page that preferred the archive would draw a title the
- * provider has since changed, on exactly the pull requests still moving.
- */
 test('the world’s reading of a closed PR wins over the archived copy of it', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -518,12 +469,6 @@ test('a PR the provider linked is the goal’s, whatever its branch is called', 
   );
 });
 
-/**
- * Retired parts are held apart from `parts` rather than folded in: every count on
- * the page and the overview's track reads `parts`, and what a plan *proposed* is
- * not what the goal is made of. They are still carried, because "the plan has no
- * live parts" without them is a sentence about a plan the operator cannot read.
- */
 test('a goal’s validation checks reach its own page, and only its own', () => {
   const state = buildDemoState().state;
   const checks = state.validationChecks ?? [];
@@ -538,8 +483,6 @@ test('a goal’s validation checks reach its own page, and only its own', () => 
     'every check the goal owns, superseded ones included — the card draws what an amendment withdrew',
   );
 
-  // The other goals draw none of them. The page reads checks off the goal ref, so
-  // the failure worth pinning is a filter loose enough to pull another goal's in.
   const elsewhere = state.world.issues.filter((i) => `issue:${i.number}` !== ref);
   for (const issue of elsewhere) {
     assert.deepEqual(buildGoalPage(state, `issue:${issue.number}`, [])?.checks, [], `#${issue.number} owns no check`);
@@ -547,9 +490,6 @@ test('a goal’s validation checks reach its own page, and only its own', () => 
 });
 
 test('the header’s validation chip agrees with the checks the card under it draws', () => {
-  // The chip is the way in to the card, so the two disagreeing is the one thing
-  // this surface exists to prevent. The server folds the verdict; the demo states
-  // it by hand, which is exactly where it can drift.
   const state = buildDemoState().state;
   const ref = (state.validationChecks ?? [])[0]!.originRef;
   const page = buildGoalPage(state, ref, []);
@@ -566,9 +506,6 @@ test('the header’s validation chip agrees with the checks the card under it dr
 test('a check on a goal does not reach the page through a part ref that starts the same way', () => {
   const state = buildDemoState().state;
   const ref = (state.validationChecks ?? [])[0]!.originRef;
-  // `belongsToGoal` matches descendants, which is right for agents and decisions
-  // and wrong here: a check is keyed on the goal itself, so a row filed against
-  // something *under* it is not one of the goal's checks.
   const strayed = { ...(state.validationChecks ?? [])[0]!, id: 'strayed', originRef: `${ref}:part:signer` };
   const page = buildGoalPage({ ...state, validationChecks: [...(state.validationChecks ?? []), strayed] }, ref, []);
 
@@ -601,12 +538,6 @@ test('a plan with no live parts still carries what it proposed', () => {
   assert.deepEqual(buildGoalTrack(page?.parts ?? []), { merged: 0, now: 0, held: 0, waiting: 0, total: 0 });
 });
 
-/**
- * The track's three rules, each of which is silent when it breaks.
- *
- * Every one of them is a way for the strip to become the fault it replaced: a
- * reading at the top of the page that disagrees with the card it points at.
- */
 test('a stage with nothing to measure draws no proportion', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -761,13 +692,6 @@ test('the record has no relevant moment, so it never opens itself', () => {
   assert.equal(goalSectionsOpen(page).record, false);
 });
 
-/**
- * The local validation card opens when there is a row and folds when there is not.
- *
- * Simpler than its neighbours for a reason worth stating: this card is not about a
- * stage of the goal's life, it is about a thing somebody pressed. Either they
- * pressed it or they did not, and the heading says which either way.
- */
 test('the local validation card opens exactly when there is something in it', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
@@ -783,17 +707,12 @@ test('the local validation card opens exactly when there is something in it', ()
   assert.equal(goalSectionsOpen(asked).localValidation, true);
 });
 
-/**
- * `standsFor` is what keeps a crash recovery's requeue readable: the dispatch is
- * keyed on an opaque `job:<id>` and the work it is redoing is only on the job row.
- */
 test('standsFor reads a job origin through to the work it is redoing', () => {
   const state = buildDemoState().state;
   const jobs = [
     { id: 'j1', originRef: 'issue:41:retro' },
     { id: 'j2', originRef: 'job:j1' },
     { id: 'j3', originRef: null },
-    // A cycle no harness writes, but a walk must still end on.
     { id: 'c1', originRef: 'job:c2' },
     { id: 'c2', originRef: 'job:c1' },
   ] as never;
@@ -805,7 +724,5 @@ test('standsFor reads a job origin through to the work it is redoing', () => {
   assert.equal(standsFor(withJobs, 'job:gone'), 'job:gone', 'a job the snapshot has dropped stays itself');
   assert.equal(standsFor(withJobs, 'issue:41'), 'issue:41', 'every other origin is its own answer');
   assert.equal(standsFor(withJobs, null), null);
-  // Which link of a cycle the walk stops on is the bound's parity and not worth
-  // pinning; that it stops, and hands back a ref, is.
   assert.match(standsFor(withJobs, 'job:c1') ?? '', /^job:c[12]$/, 'a cycle ends at the bound rather than spinning');
 });

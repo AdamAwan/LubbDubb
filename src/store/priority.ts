@@ -1,25 +1,11 @@
 import type { GoalPriority, PriorityOverride } from '../types.js';
 import type { StoreContext } from './context.js';
 
-/**
- * The two operator priority statements, both keyed on origin — the same stable key
- * every dispatch rule and gate already uses, because the queue itself is a per-pulse
- * projection recomputed from the world and there is nothing there to mutate durably.
- *
- * `priority_overrides` arranges one pulse's queue, origin by origin (issue #128).
- * `goal_priorities` marks a whole goal, and covers every origin its work takes.
- * They are one module because they are one question asked at two grains, and the
- * dispatcher reads them together.
- */
+// → docs/spec/14-persistence.md
+
 export class PriorityStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * Replace the operator's whole "Up next" priority order with `origins`, ranked
-   * `0..n-1` in the given order (`0` = "do this next"). Replace-all is the point:
-   * an origin the operator drops from the list has its override cleared, and an
-   * empty list clears every override. Idempotent, and cheap — the set is tiny.
-   */
   setPriorityOverrides(origins: string[]): void {
     const ts = this.ctx.now();
     const tx = this.ctx.db.transaction((rows: string[]) => {
@@ -32,7 +18,6 @@ export class PriorityStore {
     tx(origins);
   }
 
-  /** The current overrides, lowest rank (highest priority) first. */
   listPriorityOverrides(): PriorityOverride[] {
     const rows = this.ctx.db
       .prepare(`SELECT origin, rank FROM priority_overrides ORDER BY rank ASC`)
@@ -40,12 +25,6 @@ export class PriorityStore {
     return rows.map((r) => ({ origin: r.origin, rank: r.rank }));
   }
 
-  /**
-   * Keep the override set from lingering forever (issue #128): bump `last_seen_at`
-   * for every origin the harness still tracks this pulse, then drop any override
-   * whose origin has been untracked for longer than `ttlMs`. `ttlMs <= 0` disables
-   * pruning entirely (a supported configuration). Called once per pulse.
-   */
   reconcilePriorityOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
     const now = this.ctx.now();
     const tx = this.ctx.db.transaction(() => {
@@ -63,12 +42,6 @@ export class PriorityStore {
     tx();
   }
 
-  /**
-   * Mark a goal a priority, or clear the mark. Idempotent both ways, and the
-   * re-flag of an already-flagged goal keeps the original `created_at`: the row
-   * records when the operator decided, and a second click on a button that is
-   * already on decided nothing new.
-   */
   setGoalPriority(originRef: string, priority: boolean): void {
     if (!priority) {
       this.ctx.db.prepare(`DELETE FROM goal_priorities WHERE origin=?`).run(originRef);
@@ -79,7 +52,6 @@ export class PriorityStore {
       .run(originRef, this.ctx.now());
   }
 
-  /** Every flagged goal, oldest decision first. */
   listGoalPriorities(): GoalPriority[] {
     const rows = this.ctx.db
       .prepare(`SELECT origin, created_at FROM goal_priorities ORDER BY created_at ASC`)

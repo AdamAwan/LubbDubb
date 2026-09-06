@@ -6,6 +6,8 @@ import type { ValidationCheck } from '../../types.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Correct the validation plan for the goal you are working on — the checks a person runs against the ' +
@@ -111,33 +113,19 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     const origin = issueOrigin(goal.issueNumber);
     const plan = deps.store.getPlanByOrigin(origin);
     if (!plan) {
-      // `covers` names live part slugs, which is a property of the plan — and a
-      // goal whose planner has not written one yet has no check set to amend
-      // either. Said plainly rather than dressed up as a permission problem,
-      // because it is neither the agent's fault nor something it can fix.
       return toolError(
         `Issue #${goal.issueNumber} has no plan yet, so it has no validation plan to amend. Say what should be ` +
           'checked in your conclusion instead.',
       );
     }
     const parsed = validateAmendment(args);
-    // Nothing is written on a rejection, `plan_submit`'s rule: the caller retries
-    // against an unchanged check set rather than a half-applied one.
     if (!parsed.ok) return toolError(`Amendment rejected: ${parsed.error}`);
     const amendment = parsed.amendment;
 
-    // What `uses` may name is what the *plan* knows about once this amendment
-    // lands, not just what the amendment declares — an agent adding a check
-    // against a fixture the planner already declared has named a real resource.
     const resources = validationResourceInputs(amendment.resources);
     const known = [
       ...new Set([...deps.store.listValidationResources(origin).map((r) => r.name), ...resources.map((r) => r.name)]),
     ];
-    // An amendment removes nothing, so the one thing that withdraws an ask here is
-    // this amendment saying the resource is provided after all. Before the write,
-    // because the ask is reached through the row it is about to update — and the
-    // ask itself is filed by `ValidationAskDesk` once the goal is delivered, which
-    // is when a check is something anybody can run.
     const nowProvided = new Set(resources.filter((r) => r.provided).map((r) => r.name));
     withdrawResourceAsks(
       deps.store,
@@ -158,12 +146,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       note: amendmentNote(amendment.note),
     });
 
-    // The letters go back, because they are what a person types and what the
-    // agent should use if it refers to a check in its conclusion.
     const named = (checks: ValidationCheck[]): string[] => checks.map((c) => `${c.letter}. ${c.id}`);
-    // Said out loud rather than left to be inferred from a silent success: an
-    // agent that reworded a check somebody had passed has *withdrawn that pass*,
-    // and it is the one consequence of this call it did not ask for.
     const withdrew = result.reworded.filter((c) => c.revision?.state != null);
     return ok({
       amended: true,
@@ -171,8 +154,6 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       reworded: named(result.reworded),
       unchanged: result.unchanged,
       withdrawn: result.withdrawn,
-      // Reported rather than swallowed: an id this goal has never held is almost
-      // always a typo, and a silent success would leave the check standing.
       ...(result.unknown.length > 0
         ? { notFound: result.unknown, notFoundMeans: 'no live check on this goal has that id — nothing was withdrawn' }
         : {}),

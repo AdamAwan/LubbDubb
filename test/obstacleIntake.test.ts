@@ -9,18 +9,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Agent } from '../src/types.js';
 
-/**
- * The intake, end to end: **reporting is the lookup**.
- *
- * There is no search tool, and that is a decision rather than an omission — an
- * agent does not search on a hunch, and searching would require it to guess the
- * words somebody else used. So the call it makes the moment it is in pain has to
- * come back with the answer, in one round trip, with no model call and nothing to
- * wait for. What is asserted here is what that answer is allowed to contain at
- * each state, and the one thing the tool refuses.
- * → `docs/spec/27-obstacles.md#the-intake`
- */
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-obstacles-'));
   return buildSystem(
@@ -38,7 +26,6 @@ function build(): System {
   );
 }
 
-/** A dispatch about one check, which is what the harness reads a bare report against. */
 function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['test (windows)']): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -89,18 +76,12 @@ test('one report is not evidence: it lands sighted, reaches nobody, and is told 
 
   assert.equal(answer.status, 'sighted');
   assert.equal(answer.seen_by, 1);
-  // The directive is the harness's and never the agent's, and at one voice it says
-  // the thing the harness cannot rule out: this may be your own change.
   assert.match(answer.directive, /may be your own change/);
-  // Withheld, and not out of politeness: an agent shown the first report's words
-  // and then counted as agreeing with them is not independent evidence, and the
-  // count cannot see the difference.
   assert.deepEqual(answer.what_others_saw, []);
 
   const [row, ...rest] = system.store.listObstacles();
   assert.equal(rest.length, 0);
   assert.equal(row!.state, 'sighted');
-  // The dispatch supplied the key the agent never named — extraction, not a form.
   assert.deepEqual(
     system.store
       .listObstacleKeys(row!.id)
@@ -127,13 +108,10 @@ test('a second goal carries it to standing, and only then are the first words ha
   });
   const answer = JSON.parse(res.text) as Lookup;
 
-  // One row, two voices: two agents who hit one wall in their own words used to
-  // file two singletons, which is the failure the keys replace.
   assert.equal(system.store.listObstacles().length, 1);
   assert.equal(answer.status, 'standing');
   assert.equal(answer.seen_by, 2);
   assert.match(answer.directive, /Two independent voices/);
-  // The re-payment saving, in the call the agent was going to make anyway.
   assert.deepEqual(answer.what_others_saw, [WHAT]);
   system.store.close();
 });
@@ -146,8 +124,6 @@ test('one goal saying it twice is one voice', async () => {
   const again = await callTool(system, agent, 'raise', args);
   const answer = JSON.parse(again.text) as Lookup;
 
-  // Anything the count cannot tell apart from an echo is not a second voice — so
-  // an agent cannot promote its own report by making the call twice.
   assert.equal(answer.seen_by, 1);
   assert.equal(answer.status, 'sighted');
   assert.deepEqual(answer.what_others_saw, []);
@@ -164,8 +140,6 @@ test('an agent may not report its own breakage, and nothing is recorded when it 
     why_not_mine: 'I am sure this is unrelated.',
     fix_makes_it_go_away: true,
   });
-  // The only enforcement of *fix what you broke* that is not a sentence in a
-  // prompt — and it names the file, so the refusal is one the agent can act on.
   assert.equal(res.isError, true);
   assert.match(res.text, /test\/obstacleMatch\.test\.ts/);
   assert.deepEqual(system.store.listObstacles(), []);
@@ -186,8 +160,6 @@ test('why_not_mine is required, and a key that names nothing is dropped rather t
     fix_makes_it_go_away: true,
     keys: ['check:nightly-smoke', 'path:src/does/not/exist.ts', 'nonsense'],
   });
-  // Filed, with the keys that resolved and without the two that did not. A refusal
-  // an agent cannot satisfy is a report that was never filed.
   assert.equal(res.isError, false);
   const row = system.store.listObstacles()[0]!;
   const values = system.store.listObstacleKeys(row.id).map((k) => k.value);
@@ -206,9 +178,6 @@ test('a note lands on the board like an obstacle, and is marked as one', async (
     fix_makes_it_go_away: false,
   });
   assert.equal(res.isError, false);
-  // The discriminator, and the whole of the routing: one intake, one board, and a
-  // column saying which of the two doors the row is at. There is nowhere else a
-  // note can land any more — the claim store it used to go to is gone.
   const rows = system.store.listObstacles();
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.kind, 'note');

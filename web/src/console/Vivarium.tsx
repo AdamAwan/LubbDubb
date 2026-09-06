@@ -2,34 +2,8 @@ import type { PetState } from '../types.js';
 import { PetSprite } from '../components/PetSprite.js';
 import { absDate } from '../components/util.js';
 
-/**
- * The enclosure: the foot of the queue rail beside it, the foot of the page in
- * one column.
- *
- * Rendered **last in `.cn-body`**, after the situation area, because document
- * order is the whole arrangement once the shell collapses to one column — inside
- * the rail this drew half way down a narrow page, between the queue and the work.
- * Last, it is the end of the page: scrolled to after the work rather than pinned
- * across the bottom of it. Above 1100px the sheet places it back into the rail's
- * column as its second row, so a queue longer than the rail scrolls behind it
- * rather than pushing it off the bottom. Always in flow: it covers nothing.
- * → docs/spec/22-pets.md#the-vivarium
- *
- * **One button per creature, rather than one over the floor.** The floor used to
- * be a single button because it had a single destination; an egg gives it two, and
- * a click cannot have two destinations. So each animal is its own control — an egg
- * opens its shell, anything else opens the panel — and the bar underneath carries
- * the way in for an empty enclosure. Nested buttons would be the other way to
- * spell this, and they are not a thing HTML has.
- *
- * **The bar is the Pets destination, and it took the nav slot Pets had.** A tab is
- * the most expensive space in the cockpit and this one was buying a second way to
- * a subsystem already drawn, at full size, in the corner — beside a strip that was
- * *already* a button. So the two clicks split by what they are for: an animal is
- * the collection, which is where you feed and rename and place one; the bar is the
- * page, which is what the subsystem is. The `›` is what says the bar goes
- * somewhere, since it is a destination now rather than a caption over a floor.
- */
+// → docs/spec/17-cockpit.md
+
 export function Vivarium({
   pets,
   runningAgents,
@@ -41,16 +15,11 @@ export function Vivarium({
   pets: PetState;
   runningAgents: number;
   paused: boolean;
-  /** The collection — feed, rename, place, blend. What an animal's own click opens. */
   onOpen: () => void;
-  /** The Pets page, which the nav used to hold a tab for. The bar's click. */
   onOpenPage: () => void;
   onHatch: (id: string) => void;
 }) {
   const placed = pets.pets.filter((pet) => pet.placed);
-  // Everything unopened, placed or not. The count is what the badge says, because
-  // an egg the enclosure had no room for is still an egg you have not looked in —
-  // and it is reachable from the panel the badge's own click opens.
   const eggs = pets.pets.filter((pet) => pet.openedAt === null);
   return (
     <div className="cn-viv">
@@ -121,20 +90,10 @@ export function Vivarium({
   );
 }
 
-/** A grown pet is a bigger pet, which is the whole of what growing is for. */
 function sizeFor(stage: PetState['pets'][number]['stage']): number {
   return stage === 'adult' ? 42 : stage === 'juvenile' ? 34 : 26;
 }
 
-/**
- * How fast the enclosure breathes: quicker with more agents out, still while
- * dispatch is paused.
- *
- * Clamped to a range a heart could plausibly beat at rather than derived from
- * `heartbeatIntervalMs` directly — the pulse is not one: five minutes whenever the
- * fleet is idle, and a bob with a five-minute period is a still image that redraws
- * twice an hour.
- */
 function beatMs(runningAgents: number, paused: boolean): number {
   if (paused) return 0;
   return Math.max(1100, 2600 - runningAgents * 400);

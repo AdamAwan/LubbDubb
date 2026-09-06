@@ -26,7 +26,6 @@ test('an overridden origin jumps ahead of the natural ranking', () => {
     item('pr:2:mergeable', 'pr-base-update'),
     item('issue:5', 'issue-pickup'),
   ];
-  // Operator says "do issue #5 next".
   const ranked = rankByPriorityOverride(items, new Map([['issue:5', 0]]));
   assert.deepEqual(origins(ranked), ['issue:5', 'pr:1:ci', 'pr:2:mergeable']);
 });
@@ -55,14 +54,12 @@ test('`manual-job` items stay first whatever the override', () => {
     item('pr:1:ci', 'pr-ci-failing'),
     item('issue:5', 'issue-pickup'),
   ];
-  // Even an override that names a world item rank 0 cannot outrank a queued job.
   const ranked = rankByPriorityOverride(items, new Map([['issue:5', 0]]));
   assert.deepEqual(origins(ranked), ['job:a', 'job:b', 'issue:5', 'pr:1:ci']);
 });
 
 test('an override on a job origin never demotes the job tier', () => {
   const items = [item('job:a', 'manual-job'), item('pr:1:ci', 'pr-ci-failing')];
-  // A stray override on the job's own origin must not push a world item ahead of it.
   const ranked = rankByPriorityOverride(
     items,
     new Map([

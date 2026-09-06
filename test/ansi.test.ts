@@ -32,7 +32,7 @@ test('dim combines with colour (renderBlocks tool summary)', () => {
 });
 
 test('the end style threads across a delta that splits a colour run', () => {
-  const first = parseAnsi(`before ${RED}mid`); // opened red, not yet reset
+  const first = parseAnsi(`before ${RED}mid`);
   assert.equal(first.end.color, 'red');
   const second = parseAnsi(`still-red${RESET} after`, first.end);
   assert.deepEqual(second.segments, [
@@ -42,13 +42,12 @@ test('the end style threads across a delta that splits a colour run', () => {
 });
 
 test('reset in the middle of a multi-code run clears then re-applies', () => {
-  // \x1b[0;36m — reset, then cyan
   const { segments } = parseAnsi(`\x1b[0;36mcyan${RESET}`);
   assert.deepEqual(segments, [{ text: 'cyan', style: { color: 'cyan' } }]);
 });
 
 test('non-SGR escapes are swallowed, leaving no segment', () => {
-  const { segments } = parseAnsi('a\x1b[2Kb\x1b[1Gc'); // erase-line, cursor-column
+  const { segments } = parseAnsi('a\x1b[2Kb\x1b[1Gc');
   assert.deepEqual(segments, [
     { text: 'a', style: {} },
     { text: 'b', style: {} },

@@ -6,13 +6,6 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 
-// The claims arm went, and with it the `CREATE TABLE IF NOT EXISTS pool_claims`.
-// That stops the table being made; it never removes one. So every database from
-// before the retirement kept the table and a poll's worth of another team's prose
-// for ever, while every database made since had never heard of it — two shapes in
-// the field for one build, which is the thing the migrations exist to close.
-
-/** A database on the old build's shape: the retired arm's table, with a row in it. */
 function withClaims(): string {
   const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-retired-')), 'old.db');
   const db = new Database(path);
@@ -39,8 +32,6 @@ test('a table a retired arm left behind is dropped on the next boot', () => {
 
   const names = tables(path);
   assert.ok(!names.includes('pool_claims'));
-  // The tables the arm did not take with it are untouched: this drops one name, not
-  // everything the pool ever made.
   assert.ok(names.includes('pool_digest_rows'));
   assert.ok(names.includes('pool_fleets'));
   assert.ok(names.includes('pool_publications'));

@@ -17,9 +17,6 @@ import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
-// one thing it must never do: let a second agent onto an issue it is judging.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 
 function issue(over: Partial<Issue> = {}): Issue {
@@ -57,9 +54,6 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-    // The funnel has failed open on every issue here — see `pastTheFunnel`
-    // below. A plan of its own would mean the plan owns the issue, and this rule
-    // stands down for one that does.
     plans: [],
     tasks: [task()],
     agents: [],
@@ -71,22 +65,14 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/**
- * The dispatcher with the assessor on — everything else default, and the
- * retrospective explicitly off: rule `issue-retro` fires on exactly the issues rule `issue-assess` has
- * finished with, so leaving it on would put a second dispatch in every assertion
- * here about a parked issue. It has its own tests (test/retrospective.test.ts).
- */
 function assessor(): RuleDispatcher {
   return new RuleDispatcher();
 }
 
-/** The funnel and the assessor both on — what a `single` verdict actually meets. */
 function planningAssessor(): RuleDispatcher {
   return new RuleDispatcher();
 }
 
-/** One live part — a plan's **shape**: with none, `pl1` is delivered whole. */
 function part(): PlanPart {
   return {
     id: 'pl1:a',
@@ -142,13 +128,7 @@ function origins(actions: { type: string; originRef?: string | null }[]): string
   return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
 }
 
-// -- the headline: what the bug was ------------------------------------------
-
 test('an issue whose delivering PR has merged and left the world is assessed, not re-picked', async () => {
-  // The world after a merge: the issue is still open (waiting on sign-off) and
-  // `openPrForIssue` reads only the open list, so this is byte-for-byte rule `issue-pickup`'s
-  // precondition. Before the assessor, a second agent was dispatched here to redo
-  // work already sitting on the default branch.
   const { actions } = await assessor().decide(ctx());
 
   assert.deepEqual(origins(actions), ['issue:12:assess']);
@@ -166,11 +146,7 @@ test('an issue whose delivering PR has merged and left the world is assessed, no
   assert.equal(dispatch.rule, 'issue-assess');
 });
 
-// -- the prior-work condition ------------------------------------------------
-
 test('a fresh issue is picked up, not assessed', async () => {
-  // Without this the assessor fires on every new issue: nothing is in flight
-  // because nothing ever started, which satisfies every other precondition.
   const { actions } = await assessor().decide(ctx({ tasks: [] }));
   assert.deepEqual(origins(actions), ['issue:12']);
 });
@@ -180,7 +156,6 @@ test('prior work is an origin that could have delivered something, and nothing e
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12' })]), true);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:part:schema' })]), true);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:assess' })]), true, 'downstream evidence work happened');
-  // The harness deliberating about an issue is not work having been done on it.
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:plan' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:appraisal' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:120' })]), false, 'a prefix match must not span numbers');
@@ -189,11 +164,6 @@ test('prior work is an origin that could have delivered something, and nothing e
 });
 
 test('every origin the harness dispatches under an issue is classified deliberately', () => {
-  // The defect this replaces existed precisely because `issue:<n>:plan` was added
-  // and nothing forced a decision about which side of the discriminator it fell.
-  // An unrecognised suffix is the one case that cannot be enumerated, so it is
-  // named: it does not count, which fails toward pickup — a redundant agent, which
-  // is visible — rather than toward a parked issue, which is not.
   assert.deepEqual(
     Object.fromEntries(
       [
@@ -214,10 +184,6 @@ test('every origin the harness dispatches under an issue is classified deliberat
       'issue:12:part:schema': 'work',
       'issue:12:assess': 'evidence',
       'issue:12:retro': 'evidence',
-      // A handed-over validation check. Evidence rather than work, and more
-      // strictly than the two above it: `validate-check` fires only for a goal
-      // already parked as delivered, so a task on one cannot exist unless work
-      // was done and finished.
       'issue:12:validate:merged-branch-gone': 'evidence',
       'issue:12:plan': 'deliberation',
       'issue:12:appraisal': 'deliberation',
@@ -229,13 +195,7 @@ test('every origin the harness dispatches under an issue is classified deliberat
   assert.equal(issueOriginRole(12, null), null);
 });
 
-// -- the funnel's `single` arm -----------------------------------------------
-
 test('a planner having run is not work having been done', async () => {
-  // The bug: the planner's own task sits at `issue:12:plan`, which counted as work
-  // having been done, so rule `issue-assess` fired on an issue nothing had ever
-  // built. The assessor then honestly reported nothing delivered, the shortfall
-  // replanned, and the loop closed with no PR ever written.
   const { actions } = await planningAssessor().decide(
     ctx({
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12', title: 'Plan issue #12' })],
@@ -245,8 +205,6 @@ test('a planner having run is not work having been done', async () => {
 });
 
 test('once the PR has been worked, the assessor gets its turn', async () => {
-  // The other half: the fix must not cost the assessor the case it exists for. A
-  // pickup agent ran and its PR left the open world, so the question is live again.
   const { actions } = await planningAssessor().decide(
     ctx({
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2', originRef: 'issue:12' })],
@@ -255,16 +213,12 @@ test('once the PR has been worked, the assessor gets its turn', async () => {
   assert.deepEqual(origins(actions), ['issue:12:assess']);
 });
 
-// -- suppression -------------------------------------------------------------
-
 test('assess and pickup never both fire for one issue', async () => {
   const { actions } = await assessor().decide(ctx());
   const dispatched = origins(actions);
   assert.equal(dispatched.filter((o) => o.startsWith('issue:12')).length, 1, 'one agent on the issue, not two');
   assert.ok(!dispatched.includes('issue:12'), 'the assessor suppresses the pickup it ranks ahead of');
 });
-
-// -- standing down -----------------------------------------------------------
 
 test('an open PR means the answer is not yet knowable', async () => {
   const world = {
@@ -292,14 +246,9 @@ test('a plan that still schedules something owns the issue', async () => {
     const { actions } = await assessor().decide(ctx({ plans: [plan(status)], planParts: [part()] }));
     assert.ok(!origins(actions).includes('issue:12:assess'), `a ${status} plan is not a finished one`);
   }
-  // A complete plan schedules nothing further, so the issue is assessable.
   const done = await assessor().decide(ctx({ plans: [plan('complete')], planParts: [part()] }));
   assert.ok(origins(done.actions).includes('issue:12:assess'));
 
-  // The part count has no say in it, and used to: a plan delivering one pull
-  // request carried no parts and was scheduled by rule `issue-pickup`, so `active`
-  // did not imply the plan was working the issue and this reading had to consult
-  // the rows. One rule schedules every plan now, so the status is the whole answer.
   const one = await assessor().decide(ctx({ plans: [plan('active')], planParts: [part()] }));
   assert.ok(!origins(one.actions).includes('issue:12:assess'));
 });
@@ -316,9 +265,6 @@ test('a standing verdict is not re-assessed', async () => {
     updatedAt: '2026-07-28T10:00:00.000Z',
   };
   const { actions } = await assessor().decide(ctx({ deliveries: [delivery] }));
-  // The retrospective is what a delivered goal legitimately gets next, and it is
-  // unconditional — so the assertion is that no *assessor* is sent round again,
-  // not that the cycle is empty. `test/retrospective.test.ts` owns the other half.
   assert.deepEqual(
     origins(actions).filter((o) => o !== 'issue:12:retro'),
     [],
@@ -338,11 +284,7 @@ test('the watch gate applies, evaluated once on the issue', async () => {
   assert.deepEqual(origins(watched.actions), ['issue:12:assess']);
 });
 
-// -- failing open ------------------------------------------------------------
-
 test('a spent attempt cap returns the issue to ordinary pickup, with no escalation', async () => {
-  // Narrowing rule `issue-pickup` without this turns any assessor crash into a permanently
-  // parked issue — the planner's fail-open, for the planner's reason.
   const attempt = (i: number): Decision => ({
     id: `d${i}`,
     cycleId: `c${i}`,
@@ -387,7 +329,6 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
       rule: 'issue-assess',
       admission: null,
       detail: '',
-      // Inside the 15-minute cooldown window.
       createdAt: '2026-07-28T11:55:00.000Z',
     },
   ];
@@ -397,8 +338,6 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
   const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');
   assert.equal(queued?.status, 'cooldown', 'kept visible rather than silently skipped');
 });
-
-// -- the tool, through the same dispatch an agent's bridge reaches ------------
 
 function testConfig(): ReturnType<typeof loadConfig> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-assess-'));
@@ -469,10 +408,6 @@ test('a more_work verdict lands as a shortfall, never in the working agent’s o
   });
   assert.equal(res.isError, false);
 
-  // It used to write `issue_conclusions`, which is keyed on the issue and is the
-  // row `conclude_work` writes — so an assessment overwrote the working agent's
-  // own declaration, its note and its author, with no precedence between two
-  // parties the resolver could not tell apart (issue #159).
   const shortfall = system.store.getShortfall('issue:12');
   assert.equal(shortfall?.by, 'assessor');
   assert.equal(shortfall?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
@@ -498,9 +433,6 @@ test('the two verdicts clear each other, so an issue never carries both', async 
 
 test('an agent that did the work cannot assess it, and is told which tool is its own', async () => {
   const system = build();
-  // Three origins, three different remedies — a planner pointed at conclude_work
-  // is refused by that tool too, which is a second wasted turn contradicting the
-  // first.
   const remedies: [string, RegExp][] = [
     ['issue:12', /conclude_work/],
     ['issue:12:plan', /plan_submit/],
@@ -540,12 +472,8 @@ test('a rejected assessment writes nothing', async () => {
   system.store.close?.();
 });
 
-// -- the graph reaches the agent ---------------------------------------------
-
 test('world_read carries the work subtree, including a PR the world has forgotten', async () => {
   const system = build();
-  // A merged PR that has aged out of `closedPullRequests` entirely — the case the
-  // durable record exists for, and the one the assessor most needs.
   system.store.recordWorkGraph([
     { ref: 'issue:12', kind: 'issue', parentRef: null, title: 'Add the thing', status: 'open', terminal: false },
     {
@@ -565,7 +493,6 @@ test('world_read carries the work subtree, including a PR the world has forgotte
   });
 
   const agent = spawnAgent(system, 'issue:12:assess');
-  // The origin ref passes back verbatim: `world_read` is suffix-tolerant.
   const res = await callTool(system, agent, 'world_read', { kind: 'issue', ref: 'issue:12:assess' });
   assert.equal(res.isError, false);
 
@@ -599,8 +526,6 @@ test('an assessment appears in the graph under its issue, and is never terminal'
   assert.equal(node.terminal, false, 'terminality here would be the graph holding an opinion about completion');
   system.store.close?.();
 });
-
-// -- the operator's arm ------------------------------------------------------
 
 test('the operator can park an issue and release it again', async () => {
   const system = build();
@@ -645,15 +570,6 @@ test('the route refuses a body it cannot act on', async () => {
   system.store.close?.();
 });
 
-/**
- * The account travels with the verdict, whichever way the verdict went.
- *
- * An assessment lands in `issue_deliveries` or in `issue_shortfalls` depending on
- * its status, so a `detail` column on only one of them would be silently dropped
- * by half of all assessments — and nothing would error. Both directions are
- * asserted for exactly that reason; one of them passing proves nothing about the
- * other.
- */
 test('detail round-trips through the channel on both verdicts', async () => {
   const system = build();
   const detail = '## Missing\n\nThe stream runtime has no sentinels at all, and `docs/sentinels.md` says so nowhere.';
@@ -676,8 +592,6 @@ test('detail round-trips through the channel on both verdicts', async () => {
   assert.equal(good.isError, false);
   assert.equal(system.store.getDelivery('issue:13')?.detail, detail);
 
-  // Absent stays absent rather than becoming an empty string: the card asks one
-  // question — is there a body? — and '' would answer it wrongly.
   const quiet = spawnAgent(system, 'issue:14:assess');
   await callTool(system, quiet, 'assess_issue', { status: 'delivered', summary: 'nothing to add' });
   assert.equal(system.store.getDelivery('issue:14')?.detail, null);
@@ -685,8 +599,6 @@ test('detail round-trips through the channel on both verdicts', async () => {
 });
 
 test('a blob summary is refused at the boundary, not filed and read later', async () => {
-  // The whole point of putting the refusal here: the assessor is still in its own
-  // turn and can re-file. An operator finding out hours later, on a card, cannot.
   const system = build();
   const agent = spawnAgent(system, 'issue:12:assess');
   const res = await callTool(system, agent, 'assess_issue', {

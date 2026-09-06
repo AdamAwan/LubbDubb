@@ -6,16 +6,6 @@ import type { WorldSnapshot } from '../src/types.js';
 import { Store } from '../src/store/store.js';
 import { pastTheFunnel } from './support/plans.js';
 
-/**
- * Pricing a queued row: the profile every "Up next" item says it
- * would launch on, and the operator's per-origin override of it.
- *
- * Separate from `profilePins.test.ts`, which owns the goal tag and the plan's
- * part profile: those are statements about *work*, read off a ticket and a plan
- * row, and this is a statement about a *queue row*, which is why it is keyed on
- * the whole origin and reaches the pull-request rows neither of those can.
- */
-
 const PROFILES = {
   fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
   standard: { model: 'sonnet', effort: 'medium', rank: 2, description: 'ordinary work' },
@@ -58,8 +48,6 @@ test('every queued row names the profile it would run on, and which level answer
     result.upcoming?.map((q) => [q.origin, q.status, q.profile, q.profileSource]),
     [
       ['issue:101', 'dispatching', 'fast', 'rule'],
-      // The row below the cut is priced too: "what will this cost when it runs"
-      // is the question being asked of a row nobody has started.
       ['issue:102', 'waiting', 'fast', 'rule'],
     ],
   );
@@ -88,8 +76,6 @@ test("an override beats the goal's tag, and says which pin is the operator's", a
 });
 
 test('the override reaches a pull-request row, which no goal tag can', async () => {
-  // The motivating case: a conflict fix an operator can see is mechanical. Its
-  // origin is `pr:<n>:ci`, which has no ticket to tag and no part to carry one.
   const d = new RuleDispatcher();
   const world = {
     pullRequests: [
@@ -114,7 +100,6 @@ test('an overridden row dispatches on the profile the queue advertised', async (
 
 test('an override prices and never un-holds: a held row keeps its hold', async () => {
   const d = new RuleDispatcher();
-  // Unwatched work is held by the watch gate; pricing it says nothing about that.
   const result = await d.decide(
     ctx({ issues: [issue(9)] }, { agentHeadroom: 0, profileOverrides: [{ origin: 'issue:9', profile: 'fast' }] }),
   );
@@ -122,10 +107,6 @@ test('an override prices and never un-holds: a held row keeps its hold', async (
   assert.equal(result.upcoming?.[0]?.profile, 'fast');
   assert.equal(result.actions[0]?.type, 'no_op', 'and nothing dispatched');
 });
-
-// --------------------------------------------------------------------------
-// Store: one row per origin, cleared by null, pruned like a priority override.
-// --------------------------------------------------------------------------
 
 test('setProfileOverride writes one row per origin and clears with null', () => {
   const store = new Store(':memory:');
@@ -135,8 +116,6 @@ test('setProfileOverride writes one row per origin and clears with null', () => 
     { origin: 'issue:1', profile: 'fast' },
     { origin: 'pr:2:ci', profile: 'deep' },
   ]);
-  // Re-pricing one row leaves the other alone — unlike the re-ordering above it,
-  // which is a statement about the whole queue.
   store.setProfileOverride('issue:1', 'deep');
   assert.deepEqual(
     store.listProfileOverrides().find((o) => o.origin === 'issue:1'),
@@ -169,7 +148,6 @@ test('a stale profile override is pruned once its origin stops being tracked', (
     ['issue:2'],
   );
 
-  // A zero TTL disables pruning, which is a supported configuration.
   t += 10_000_000;
   store.reconcileProfileOverrides([], 0);
   assert.deepEqual(

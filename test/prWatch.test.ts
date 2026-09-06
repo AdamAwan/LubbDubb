@@ -17,7 +17,6 @@ function build(overrides: Partial<Config> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -40,10 +39,6 @@ const pr = (over: Partial<PullRequest> = {}): PullRequest => ({
   unresolvedComments: [],
   ...over,
 });
-
-// --------------------------------------------------------------------------
-// Pure predicates
-// --------------------------------------------------------------------------
 
 test('isPrWatched: true only when the PR carries the configured tag', () => {
   assert.equal(isPrWatched(pr({ labels: ['lubbdubb-watch'] }), 'lubbdubb-watch'), true);
@@ -76,10 +71,6 @@ test('prsToSeedWatch: only the harness’s own untagged pull requests', () => {
   assert.deepEqual(prsToSeedWatch([pr({ number: 1, branch: 'issue/12' })], { ...ctx, seeded: new Set([1]) }), []);
   assert.deepEqual(prsToSeedWatch([pr({ number: 1, branch: 'issue/12' })], { ...ctx, watchLabel: '' }), []);
 });
-
-// --------------------------------------------------------------------------
-// Harness behaviour
-// --------------------------------------------------------------------------
 
 test('a PR carrying no watch tag is left alone by the dispatcher', async () => {
   const system = build();
@@ -132,10 +123,6 @@ test('tagging a PR via the sink lets the harness in; untagging stops it', async 
   system.store.close();
 });
 
-// --------------------------------------------------------------------------
-// The harness tags its own work
-// --------------------------------------------------------------------------
-
 test('a PR on a dispatch branch is tagged by the harness, once', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'issue/7' });
@@ -146,8 +133,6 @@ test('a PR on a dispatch branch is tagged by the harness, once', async () => {
   assert.deepEqual(found?.labels, ['lubbdubb-watch'], 'the harness tagged its own pull request');
   assert.ok(system.store.seededPrs().has(42), 'and recorded that it has answered for it');
 
-  // The operator takes it back off. The next pulse must not write it back — a
-  // control that undoes itself is the whole reason the seed row exists.
   await system.connector.setPrLabel({ prNumber: 42, label: 'lubbdubb-watch', present: false });
   await system.harness.runCycle('manual');
   const after = (await system.connector.getState()).pullRequests.find((p) => p.number === 42);
@@ -172,10 +157,6 @@ test('a PR carrying the retired ignore tag is never seeded', async () => {
   system.store.close();
 });
 
-// --------------------------------------------------------------------------
-// Endpoint (the cockpit toggle)
-// --------------------------------------------------------------------------
-
 test('POST /api/prs/:n/watch tags the PR, which the snapshot and harness both honour', async () => {
   const system = build();
   const { app } = await buildApp(system);
@@ -195,7 +176,6 @@ test('POST /api/prs/:n/watch tags the PR, which the snapshot and harness both ho
     'the tagged PR is acted on',
   );
 
-  // Toggle it back off.
   await app.inject({ method: 'POST', url: '/api/prs/42/watch', payload: { watched: false } });
   const cleared = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
   const still = cleared.world.pullRequests.find((p: { number: number }) => p.number === 42);
@@ -210,7 +190,6 @@ test('un-watching through the route stops the seeding desk answering again', asy
   const { app } = await buildApp(system);
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'issue/7', labels: ['lubbdubb-watch'] });
 
-  // Tagged by hand before the harness ever saw it, so there is no seed row yet.
   await app.inject({ method: 'POST', url: '/api/prs/42/watch', payload: { watched: false } });
   await system.harness.runCycle('manual');
 

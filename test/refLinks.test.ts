@@ -10,7 +10,6 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
-// The classic runtime, as `console.test.ts` sets it up and for its reason.
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -60,7 +59,6 @@ const render = (v: CockpitView) =>
     }),
   );
 
-/** One `<Ref>` on its own, against a stated world rather than the fixtures'. */
 function ref(to: string, world: { refUrls?: Record<string, string>; goals?: string[]; prs?: number[] } = {}): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
@@ -84,30 +82,18 @@ test('a goal and a pull request each carry both their doors', () => {
     'and the arm opens the story on the tracker, which the page can only summarise',
   );
 
-  // The pull request is the same shape on the same terms: the cockpit's page for
-  // what the harness makes of it, the provider's for the diff itself.
   const pr = ref('pr:412', { prs: [412], refUrls: { 'pr:412': 'https://tracker/pull/412' } });
   assert.match(pr, /<span class="ref-pair">/);
   assert.match(pr, /<button[^>]*class="ref-goal"[^>]*>PR 412</, 'and it says which family it is');
   assert.match(pr, /<a class="ref-arm"[^>]*href="https:\/\/tracker\/pull\/412"/);
 });
 
-/**
- * The arm is absent, not inert, where the provider resolved nothing. It stands
- * against a token that *did* resolve, so a dead second target reads as a broken
- * link where a missing one reads as a token with one door — which is what it is.
- */
 test('a reference the provider gave no address keeps its page and draws no arm', () => {
   const goal = ref('issue:212', { goals: ['issue:212'] });
   assert.match(goal, /<button[^>]*class="ref-goal"[^>]*>#212</);
   assert.doesNotMatch(goal, /ref-pair|ref-arm|<a /, 'there is no second destination to offer');
 });
 
-/**
- * `#<n>` is shared — `buildRefUrls` walks the pull requests before the issues and
- * the first writer wins — so a goal's arm that tried it first opened the pull
- * request of the same number, on exactly the trackers busy enough to have both.
- */
 test('a goal’s arm prefers the unambiguous key over the shared one', () => {
   const html = ref('issue:412', {
     goals: ['issue:412'],
@@ -117,12 +103,6 @@ test('a goal’s arm prefers the unambiguous key over the shared one', () => {
   assert.doesNotMatch(html, /tracker\/pull/, 'the shared key is the pull request’s address, not the ticket’s');
 });
 
-/**
- * The pull request's half of the case above, and the one that must not be a
- * cockpit link: `buildPrPage` returns null for a number the snapshot does not
- * carry — a closed pull request on a deployment retaining none — and the page
- * behind a link onto one draws nothing at all.
- */
 test('a pull request the world does not carry links to the provider instead of to a blank page', () => {
   const html = ref('pr:412', { refUrls: { '#412': 'https://tracker/pull/412' } });
   assert.doesNotMatch(html, /ref-goal/, 'there is no page to open');
@@ -135,11 +115,6 @@ test('a part’s ref is the goal it is under — the part itself has no page', (
   assert.match(html, />#212</, 'the slug is machinery; the row already names the part');
 });
 
-/**
- * The one case that must not be a cockpit link. `buildGoalPage` returns null for a
- * ref the snapshot does not carry, and the console then draws the tab behind it —
- * so a link onto one is a click that appears to do nothing at all.
- */
 test('a goal the world does not carry links to the tracker instead of to a blank page', () => {
   const html = ref('issue:999', { refUrls: { '#999': 'https://tracker/999' } });
   assert.doesNotMatch(html, /ref-goal/, 'there is no page to open');
@@ -156,18 +131,10 @@ test('one function shortens a ref, and it answers for every family the cockpit d
   assert.equal(refLabel('issue:212'), '#212');
   assert.equal(refLabel('issue:212:part:writes'), '#212');
   assert.equal(refLabel('pr:412'), 'PR 412', 'the marks say where a ref goes; only the name says what it is');
-  // Not a family we recognise: returned whole rather than shortened into a number
-  // that would name a different thing.
   assert.equal(refLabel('job:abc'), 'job:abc');
   assert.equal(refLabel('issue/12'), 'issue/12');
 });
 
-/**
- * The complaint this all comes from: the fleet card said what each agent was on
- * and offered a way to none of it. A row names two things — the pull request it
- * was dispatched at and the goal that pull request delivers — and both are ways
- * there now.
- */
 test('a fleet row is a way to the goal it is working and to the pull request it is on', () => {
   const v = view();
   const html = render(v);
@@ -179,19 +146,11 @@ test('a fleet row is a way to the goal it is working and to the pull request it 
   assert.ok(fleet.includes(`>PR ${prNumber}<`), 'the row names the pull request it is on, and names it as a way there');
   assert.match(fleet, /<span class="cn-refs">/, 'the refs sit beside the row’s control, never inside it');
 
-  // The goal behind that pull request, resolved the server's own way. Without it
-  // the row named a PR and left "which goal is this?" to be answered elsewhere.
   const goal = ci.originRef && v.state.world.issues.find((i) => i.linkedPrNumber === Number(prNumber));
   assert.ok(goal, 'the demo fixtures must carry a goal that pull request delivers');
   assert.ok(fleet.includes(`>#${goal.number}<`), 'and the goal it is delivering');
 });
 
-/**
- * A control cannot contain a link — one click cannot have two destinations — so a
- * row that carries refs draws its name as the button and the refs beside it. This
- * is the rule the whole `cn-refs` shape exists for, and the one a new surface is
- * most likely to break, since nesting them reads fine and renders fine.
- */
 test('no reference is drawn inside a button', () => {
   const html = render(view());
   for (const [, inner] of html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)) {
@@ -211,11 +170,6 @@ test('the pull request rack is a way to the goal each PR delivers', () => {
   assert.ok(rack.includes(`>#${goal.number}<`), 'the rack names the goal, and names it as a way onto its page');
 });
 
-/**
- * The complaint the pull request page came from second: the page existed and the
- * card that lists every open pull request offered no way onto it, so the only
- * route was through the goal a pull request happens to be linked to.
- */
 test('the pull request rack is a way onto each pull request’s own page', () => {
   const v = view();
   const html = render(v);
@@ -223,8 +177,6 @@ test('the pull request rack is a way onto each pull request’s own page', () =>
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the demo fixtures must carry an open pull request');
-  // The name is the control and the refs are beside it, which is the rule every
-  // row with both follows.
   const named = rack.indexOf(`>${pr.title}<`);
   assert.notEqual(named, -1, 'the rack must name the pull request');
   assert.match(
@@ -249,9 +201,8 @@ test('a queued dispatch is a way to what it is queued against', () => {
   const v = view();
   const items = v.state.upcoming?.items ?? [];
   const queued = items.find((i) => i.origin.startsWith('issue:'));
-  if (!queued) return; // nothing goal-scoped in the queue this snapshot
+  if (!queued) return;
   const html = render(v);
-  // The band on the Fleet card, which ends where the next card's heading begins.
   const upNext = html.slice(html.indexOf('Up next'), html.indexOf('Goals in flight'));
   assert.ok(upNext.includes(`>${refLabel(queued.origin)}<`), 'the origin is a ref, so it is drawn as one');
 });
@@ -270,21 +221,6 @@ test('a part row links the pull request that carries it', () => {
   );
 });
 
-/**
- * `refLabel` is the only place a ref becomes a bare number, and this is what keeps
- * it that way. Three surfaces had written the strip themselves, and the fourth
- * that wrote it — the fleet card — printed the label without a link on it, which
- * is exactly the bug: shortening a ref by hand is how a surface ends up *naming*
- * something instead of pointing at it.
- */
-/**
- * The affordance, which no render test can see. It was a 1px underline — dotted
- * for a ref that leaves, solid for one that stays — which on a row that already
- * carries lamps, chips and hairline rules read as ruling rather than as a way
- * somewhere. The vocabulary is three marks now: a box for a thing you can go to, a
- * fill for a destination inside the cockpit, an arrow for one that leaves. Read the
- * stylesheet, because that is where all three live.
- */
 test('a reference is drawn as a token at rest, and shows a ring when it takes focus', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
   const rule = (selector: string): string => {
@@ -293,9 +229,6 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
     return css.slice(at, css.indexOf('}', at));
   };
 
-  // The box, and the fill that separates the two destinations. Shape rather than
-  // hue, so the distinction survives the print sheet and an operator who cannot
-  // separate the colours.
   assert.match(
     css,
     /\.ref-goal\.ref-goal,\s*\.ref-out\.ref-out \{[^}]*border: 1px solid var\(--link-line\)/,
@@ -312,15 +245,8 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
     'a reference that leaves is unfilled and dashed',
   );
 
-  // The arrow, which is the whole treatment for a reference inside a sentence: a
-  // boxed token per mention turns prose lumpy, and prose refs all leave anyway.
   assert.match(rule('.ext-ref.ext-ref::before'), /content: '↗'/, 'a reference that leaves says so in prose too');
 
-  // Every selector doubles its class, and this is why: `console.css` resets its own
-  // markup with `.cn button` / `.cn a`, which outranks a single class and is where
-  // most references are drawn. Under one class the reset stripped the box off a
-  // goal token and the colour off every reference in the console — a treatment
-  // correct in the stylesheet, green in this test, and on screen nowhere.
   for (const single of [
     /\n\.ext-ref \{/,
     /\n\.ref-goal \{/,
@@ -341,19 +267,10 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
     '`.ref-goal` is a reset <button> — without this, tab moves the ring nowhere visible, and the arm is the next stop along',
   );
 
-  // The joint, which is the only new shape: the two halves share an outer edge and
-  // the dashed border between them is the vocabulary's own "beyond here, you leave".
   assert.match(rule('.ref-pair.ref-pair > .ref-goal.ref-goal'), /border-right: 0/, 'the pair is one shape at rest');
   assert.match(rule('.ref-arm.ref-arm'), /border-left-style: dashed/, 'and the joint says the arm leaves');
 });
 
-/**
- * The second half of the treatment, and the half a token style cannot do: a
- * reference is findable by *position*, not only by looking like one. `cn-refs` is a
- * ruled slot, and it is drawn on every row of a list — empty where a row names
- * nothing — because a rule that comes and goes reads as ragged rather than as a
- * column.
- */
 test('the references slot is a column, drawn on rows that have nothing to put in it', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
   const at = css.indexOf('\n.cn-refs {');
@@ -362,13 +279,6 @@ test('the references slot is a column, drawn on rows that have nothing to put in
   assert.match(body, /min-width:/, 'a slot with no width is not a column');
   assert.match(css, /\.cn-refs:empty \{[^}]*border-left-color: transparent/, 'an empty slot is space, not a tick');
 
-  // The fleet row is the one that had a conditional group. A dispatch with no
-  // origin must still draw the slot.
-  //
-  // Bounded from the card's first row rather than from its heading: the queue rail
-  // is drawn between the two markers, and its assigned row carries a slot of its
-  // own — a real one, for the pull request a person put on the operator — which
-  // read from the heading would be counted against the fleet's rows.
   const html = render(view());
   const card = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
   const fleet = card.slice(card.search(/<div class="cn-row[ "]/));
@@ -391,20 +301,12 @@ test('nothing outside refs.tsx strips a ref down to a number', () => {
 
   const offenders = walk(root)
     .filter((file) => /\.tsx?$/.test(file))
-    // The definition itself, and the demo backend, which is a fake *harness*
-    // writing the refs a provider would — not a surface drawing one.
     .filter((file) => !file.endsWith('refs.tsx') && !file.includes(`${join('demo', '')}`))
     .filter((file) => /replace\(\s*\/\^?(issue|pr):/.test(readFileSync(file, 'utf8')));
 
   assert.deepEqual(offenders, [], 'shorten a ref through refLabel, and draw it through <Ref>');
 });
 
-/**
- * The one destination `<Ref>` deliberately does not offer. A ref onto a goal the
- * world carries opens its **page**, so the tracker needs a control of its own —
- * and the three-key resolution behind it is a judgement about how a ref resolves,
- * which is why it sits in `refs.tsx` rather than in the page that draws it.
- */
 function ticket(number: number, world: Record<string, string>, url?: string): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
@@ -419,26 +321,17 @@ function ticket(number: number, world: Record<string, string>, url?: string): st
 }
 
 test('a ticket is reached by the most trustworthy key that resolves it', () => {
-  // The item's own address is the provider's, and beats anything derived.
   assert.match(
     ticket(412, { 'issue:412': 'https://tracker/derived', '#412': 'https://tracker/pull/412' }, 'https://tracker/412'),
     /href="https:\/\/tracker\/412"/,
   );
 
-  // `#<n>` is shared: `buildRefUrls` walks the pull requests before the issues and
-  // the first writer wins, so on a tracker where issue 412 and PR 412 both exist
-  // it is the *pull request's* address. Preferring it was this control quietly
-  // opening the wrong thing.
   assert.match(
     ticket(412, { 'issue:412': 'https://tracker/412', '#412': 'https://tracker/pull/412' }),
     /href="https:\/\/tracker\/412"/,
     'issue:<n> is unambiguous, and nothing else ever writes it',
   );
 
-  // A retained run: the harness kept it after its ticket left the world, so it is
-  // in no `world.issues` list and `#<n>` was never built for it. Trying only that
-  // key is why the goals whose ticket is hardest to find by hand were the ones
-  // offering no way to it.
   assert.match(ticket(412, { 'issue:412': 'https://tracker/412' }), /href="https:\/\/tracker\/412"/);
   assert.match(
     ticket(412, { '#412': 'https://tracker/412' }),
@@ -452,9 +345,6 @@ test('a ticket with no address is drawn inert, never as a link to nowhere', () =
   assert.match(html, /^<span /, 'a link that leads nowhere is the dead end refs exist to prevent');
   assert.doesNotMatch(html, /<a /);
   assert.match(html, /aria-disabled="true"/);
-  // Drawn rather than dropped: a control that comes and goes is a row whose shape
-  // depends on what a provider happened to resolve, and "the tracker gave this
-  // item no address" is a fact worth stating where a missing button says nothing.
   assert.match(html, /Open ticket/);
   assert.match(html, /title="No address for this ticket/);
 });

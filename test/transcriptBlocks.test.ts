@@ -3,20 +3,11 @@ import assert from 'node:assert/strict';
 import { feedBlocks, emptyBlockState } from '../web/src/components/transcriptBlocks.js';
 import { renderBlocks } from '../src/agents/streamTranscript.js';
 
-/**
- * The parser reads structure out of text the *server* writes, so these tests feed it
- * real `renderBlocks` output rather than hand-written markers. That round trip is what
- * holds the two sides together: the marker shape lives in one place and a change to it
- * fails here, instead of silently leaving the drawer unable to find a tool call.
- */
-
-/** Strip SGR so assertions read against plain text. */
 function plain(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-/** Feed a whole transcript in one go, with ANSI stripped from every op. */
 function all(text: string): { ops: { kind: string; text?: string; error?: boolean }[]; tail: string } {
   const { ops, tail } = feedBlocks(text, emptyBlockState);
   return {
@@ -119,8 +110,6 @@ test('text carrying no markers renders as plain prose', () => {
 });
 
 test('a stamped call and its stamped result still fold into one block', () => {
-  // The stamp changes the shape of the very lines this parser matches on, so the
-  // round trip is what keeps the drawer folding after the server started writing it.
   const rendered =
     renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }], '2026-08-20T09:14:02.000Z') +
     renderBlocks([{ type: 'tool_result', content: 'a\nb\nc' }], '2026-08-20T09:14:09.000Z');

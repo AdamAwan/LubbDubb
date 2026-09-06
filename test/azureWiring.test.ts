@@ -22,8 +22,6 @@ test('loadConfig carries an azureDevOps block (org/project/repo/tag) from overri
   assert.equal(config.azureDevOps?.organization, 'org');
   assert.equal(config.azureDevOps?.project, 'proj');
   assert.equal(config.azureDevOps?.repository, 'repo');
-  // `workItemTag` stays a filter because it is about the tracker's shape. Identity
-  // does not: PR authorship and work-item assignment both read `userId`.
   assert.equal(config.azureDevOps?.filters?.workItemTag, 'agent-ready');
   assert.equal(config.userId, 'bot@acme.com');
 });
@@ -43,10 +41,6 @@ test('registry builds real azure providers when selected with a target', () => {
 });
 
 test('an azure-selected connector resolves refs to Azure web URLs', () => {
-  // The regression this guards: the cockpit's every link comes from
-  // `connector.resolveRefUrl`, so an Azure deployment whose integrations aren't
-  // `RefResolvable` renders every ref as plain text — silently, since an
-  // unresolvable ref is *meant* to be omitted (that's the fake provider's case).
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });
   const integrations = buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }), {
@@ -63,8 +57,6 @@ test('an azure-selected connector resolves refs to Azure web URLs', () => {
 });
 
 test('each azure integration resolves refs on its own, whichever the composite picks first', () => {
-  // The composite routes to the *first* resolvable integration, not to the one
-  // whose capability matches the ref — so both must answer every shape.
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });
   for (const integration of buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }), {
@@ -81,7 +73,7 @@ test('each azure integration resolves refs on its own, whichever the composite p
 
 test('registry throws a clear error when azure is selected without a target', () => {
   const store = new Store(':memory:');
-  const config = loadConfig(); // no azureDevOps block
+  const config = loadConfig();
   assert.throws(
     () => buildIntegrations(selection({ sourceControl: 'azure' }), { store, config, now: FIXED }),
     /azureDevOps.*(organization|project|repository)/is,

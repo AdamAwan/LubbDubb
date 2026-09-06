@@ -18,7 +18,6 @@ import type { Decision, Proposal, PullRequest, Task, WorldEvent } from '../src/t
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 const NOW = '2026-07-26T12:00:00.000Z';
-/** `mins` minutes before {@link NOW}, for cooldown and settle-window arithmetic. */
 const ago = (mins: number): string => new Date(Date.parse(NOW) - mins * 60_000).toISOString();
 
 function pr(over: Partial<PullRequest> = {}): PullRequest {
@@ -33,7 +32,6 @@ function pr(over: Partial<PullRequest> = {}): PullRequest {
   };
 }
 
-/** A PR rule `pr-merge-ready` would merge: green, approved, mergeable, nothing outstanding. */
 function mergeReadyPr(over: Partial<PullRequest> = {}): PullRequest {
   return pr({ approved: true, mergeable: true, mergeableState: 'clean', ...over });
 }
@@ -88,7 +86,6 @@ function proposal(over: Partial<Proposal> = {}): Proposal {
   };
 }
 
-/** An executed dispatch on `origin`, which is what `dispatchVerdict` counts as an attempt. */
 function attempt(origin: string, at: string): Decision {
   return {
     id: `d_${origin}_${at}`,
@@ -108,8 +105,6 @@ function attempt(origin: string, at: string): Decision {
   } as unknown as Decision;
 }
 
-// --- done / unwatched: the two arms that are nobody's turn by construction ---
-
 test('a merged or abandoned PR is off the board', () => {
   assert.deepEqual(prAttentionStatus(pr({ merged: true }), ctx()), { status: 'done', reasons: ['merged'] });
   assert.deepEqual(prAttentionStatus(pr({ state: 'closed' }), ctx()), {
@@ -119,9 +114,6 @@ test('a merged or abandoned PR is off the board', () => {
 });
 
 test('an untagged PR is a status of its own, and it wins over every signal', () => {
-  // Failing CI *and* an unresolved comment: with the tag this is the harness's
-  // court. `Harness.runCycle` filters an unwatched PR out of the dispatch world, so
-  // saying so would be describing rules that cannot fire.
   const untagged = pr({
     ciStatus: 'failing',
     unresolvedComments: [{ id: 'c1', author: 'reviewer', body: 'hm', handled: false }],
@@ -130,13 +122,9 @@ test('an untagged PR is a status of its own, and it wins over every signal', () 
   const verdict = prAttentionStatus(untagged, ctx(gate));
   assert.equal(verdict.status, 'unwatched');
   assert.match(verdict.reasons[0]!, /lubbdubb-watch/);
-  // The tag on it => the arm is skipped and the signals are read again.
   assert.notEqual(prAttentionStatus(pr({ ...untagged, labels: ['lubbdubb-watch'] }), ctx(gate)).status, 'unwatched');
-  // Gate off (empty label) => nothing is unwatched, same as `isPrWatched`.
   assert.notEqual(prAttentionStatus(untagged, ctx()).status, 'unwatched');
 });
-
-// --- your court -------------------------------------------------------------
 
 test('a pending proposal is named on the PR row, not deferred to the inbox', () => {
   const verdict = prAttentionStatus(mergeReadyPr(), ctx({ proposals: [proposal()] }));
@@ -147,7 +135,6 @@ test('a pending proposal is named on the PR row, not deferred to the inbox', () 
 test('a pending reply draft counts too, and a proposal on another PR does not', () => {
   const reply = proposal({ id: 'prop_2', kind: 'reply_draft', ref: 'pr:7:comment:c1' });
   assert.equal(prAttentionStatus(mergeReadyPr(), ctx({ proposals: [reply] })).status, 'you');
-  // `pr:70:merge` must not match PR #7 — the ref prefix carries its own colon.
   const otherPr = proposal({ ref: 'pr:70:merge' });
   assert.notEqual(prAttentionStatus(mergeReadyPr(), ctx({ proposals: [otherPr] })).status, 'you');
 });
@@ -165,10 +152,6 @@ test('a concern whose attempt cap is spent is handed back to you', () => {
 });
 
 test('a failure the CI policy holds is your court, not a promise of an agent', () => {
-  // The whole point of a per-check policy: `codeql` is red, the operator has said a
-  // human owns it, so rule `pr-ci-failing` does not dispatch and rule `pr-ci-blocked` escalates.
-  // Reading the aggregate `ciStatus` alone reported "an agent will be dispatched",
-  // which is a promise the dispatcher does not keep.
   const held = pr({
     ciStatus: 'failing',
     ciChecks: [
@@ -180,8 +163,6 @@ test('a failure the CI policy holds is your court, not a promise of an agent', (
   const verdict = prAttentionStatus(held, ctx({ ci: policy }));
   assert.equal(verdict.status, 'you');
   assert.match(verdict.reasons[0]!, /codeql failing — the CI policy holds it, so no agent will be sent/);
-  // With no policy the same PR is the harness's, unchanged — the classification
-  // falls back to "no detail, act generically", which is the pre-policy behaviour.
   assert.equal(prAttentionStatus(held, ctx()).status, 'harness');
 });
 
@@ -196,9 +177,6 @@ test('a red check the policy dispatches for stays the harness’s', () => {
 });
 
 test('a failure that is only muted is stalled, and says the merge gate still reads it', () => {
-  // Nothing dispatches and nothing escalates — but rule `pr-merge-ready`'s merge test reads the
-  // *aggregate*, which is still failing, so this PR can never move. The old wording
-  // was "CI has not reported", which is untrue of a check that reported and was muted.
   const muted = mergeReadyPr({
     ciStatus: 'failing',
     ciChecks: [{ name: 'pages', status: 'failing' }],
@@ -214,9 +192,6 @@ test('a failure that is only muted is stalled, and says the merge gate still rea
 });
 
 test('an inherited failure is never handed to you, whatever the policy says', () => {
-  // The fix belongs to the PR underneath. `ciReading` excludes an inherited failure
-  // for the same reason rule `pr-ci-failing` suppresses the concern, so a policy that would
-  // otherwise escalate cannot make a stacked PR your problem.
   const base = pr({ id: 'p1', number: 1, branch: 'part/one', ciStatus: 'failing' });
   const stacked = pr({ id: 'p2', number: 2, branch: 'part/two', baseBranch: 'part/one', ciStatus: 'failing' });
   const verdict = prAttentionStatus(
@@ -227,14 +202,11 @@ test('an inherited failure is never handed to you, whatever the policy says', ()
   assert.equal(verdict.reasons[0], 'CI failing on base PR #1');
 });
 
-// --- the harness's court ----------------------------------------------------
-
 test('an agent on the branch is the harness’s court, whatever the PR looks like', () => {
   const verdict = prAttentionStatus(pr({ ciStatus: 'failing' }), ctx({ tasks: [task()] }));
   assert.deepEqual(verdict, { status: 'harness', reasons: ['an agent is working this branch'] });
   const queued = prAttentionStatus(pr({ ciStatus: 'failing' }), ctx({ tasks: [task({ status: 'queued' })] }));
   assert.deepEqual(queued, { status: 'harness', reasons: ['an agent is queued for this branch'] });
-  // A finished task no longer staffs the branch.
   const done = prAttentionStatus(pr({ ciStatus: 'failing' }), ctx({ tasks: [task({ status: 'done' })] }));
   assert.equal(done.reasons[0], 'CI is failing — an agent will be dispatched');
 });
@@ -247,8 +219,6 @@ test('unstaffed concerns are the harness’s, in rule order, with the rest liste
   });
   const verdict = prAttentionStatus(messy, ctx());
   assert.equal(verdict.status, 'harness');
-  // Comments lead — the pipeline's order, and the concern the dispatcher is
-  // actually sending an agent for. The lens used to lead with CI (#562).
   assert.deepEqual(verdict.reasons, [
     'unresolved comment from reviewer — an agent will be dispatched',
     'CI is failing',
@@ -257,9 +227,6 @@ test('unstaffed concerns are the harness’s, in rule order, with the rest liste
 });
 
 test('the review concern reads the origin the dispatcher writes, so a spent cap reads as yours', () => {
-  // #563: keyed on `pr:7:comment:c1` — the notify de-dup ref, which no
-  // `dispatch_code_agent` row ever carries — the lens found zero attempts on every
-  // review and promised an agent on a PR a human had already been handed.
   const reviewed = pr({ unresolvedComments: [{ id: 'c1', author: 'nina', body: 'nit', handled: false }] });
   const capped = prAttentionStatus(
     reviewed,
@@ -295,8 +262,6 @@ test('every open thread is one concern, because one agent answers the whole revi
 });
 
 test('a held check denies an agent only when there is no other concern to staff', () => {
-  // #564: the arm answered above the concern fold, so "no agent will be sent" was
-  // printed on the pulse rule `pr-base-update` sent one.
   const policy = { checks: [{ match: 'infra', onFailure: 'escalate' as const }] };
   const held = ctx({ ci: policy });
   const conflicted = pr({
@@ -308,7 +273,6 @@ test('a held check denies an agent only when there is no other concern to staff'
     status: 'harness',
     reasons: ['conflicts with main — an agent will be dispatched', 'infra failing — held by the CI policy'],
   });
-  // Nothing else outstanding and the unqualified sentence is true again.
   const alone = pr({ ciStatus: 'failing', ciChecks: [{ name: 'infra', status: 'failing' }] });
   assert.deepEqual(prAttentionStatus(alone, held), {
     status: 'you',
@@ -336,15 +300,12 @@ test('an accepted merge holds as the harness’s while the world catches up', ()
   const verdict = prAttentionStatus(mergeReadyPr(), ctx({ proposals: [accepted] }));
   assert.equal(verdict.status, 'harness');
   assert.match(verdict.reasons[0]!, /already authorized by auto-send/);
-  // Past the settle window the hold is gone and the gate runs again.
   const stale = proposal({ status: 'accepted', decidedBy: 'auto_send', decidedAt: ago(30) });
   assert.match(
     prAttentionStatus(mergeReadyPr(), ctx({ proposals: [stale] })).reasons[0]!,
     /merge gate runs next cycle/,
   );
 });
-
-// --- settled: you answered, and the world has not moved ---------------------
 
 test('a standing rejection is nobody’s turn, and it quotes what you said', () => {
   const rejected = proposal({
@@ -370,7 +331,6 @@ test('a rejection the world has overtaken stops reading as settled', () => {
   };
   const verdict = prAttentionStatus(mergeReadyPr(), ctx({ proposals: [rejected], rejectionSignals: [signal] }));
   assert.deepEqual(verdict, { status: 'harness', reasons: ['merge-ready — the merge gate runs next cycle'] });
-  // A signal predating the verdict changes nothing — it is not news.
   const old: WorldEvent = { ...signal, id: 'we0', createdAt: ago(90) };
   assert.equal(
     prAttentionStatus(mergeReadyPr(), ctx({ proposals: [rejected], rejectionSignals: [old] })).status,
@@ -379,21 +339,16 @@ test('a rejection the world has overtaken stops reading as settled', () => {
 });
 
 test('a rejection only reads as settled while the merge gate is the thing it holds', () => {
-  // The PR went red after the refusal: rule `pr-ci-failing` dispatches regardless of a merge
-  // verdict, so the honest answer is the harness's court, not "settled".
   const rejected = proposal({ status: 'rejected', decidedBy: 'human', decidedAt: ago(60), note: 'not yet' });
   const verdict = prAttentionStatus(mergeReadyPr({ ciStatus: 'failing' }), ctx({ proposals: [rejected] }));
   assert.equal(verdict.status, 'harness');
 });
-
-// --- elsewhere --------------------------------------------------------------
 
 test('a stacked PR is waiting on the one underneath it', () => {
   const base = pr({ id: 'p6', number: 6, branch: 'feat/base', ciStatus: 'passing' });
   const child = mergeReadyPr({ id: 'p7', number: 7, branch: 'feat/widget', baseBranch: 'feat/base' });
   const verdict = prAttentionStatus(child, ctx({ openPrs: [base, child] }));
   assert.deepEqual(verdict, { status: 'elsewhere', reasons: ['stacked on PR #6, which has to merge first'] });
-  // No PR under it in the world — name the branch rather than inventing a number.
   const orphan = prAttentionStatus(child, ctx({ openPrs: [child] }));
   assert.deepEqual(orphan, { status: 'elsewhere', reasons: ['stacked on feat/base'] });
 });
@@ -410,7 +365,6 @@ test('an inherited CI failure names the ancestor and is never the child’s conc
   });
   const verdict = prAttentionStatus(child, ctx({ openPrs: [base, child] }));
   assert.deepEqual(verdict, { status: 'elsewhere', reasons: ['CI failing on base PR #6'] });
-  // The base is found off the *unfiltered* list, so an `-ignore`d parent still attributes.
   const ignoredBase = { ...base, labels: ['lubbdubb-ignore'] };
   assert.equal(prAttentionStatus(child, ctx({ openPrs: [ignoredBase, child] })).reasons[0], 'CI failing on base PR #6');
 });
@@ -430,11 +384,7 @@ test('CI running, an absent approval and a blocked merge are all outside the loo
   });
 });
 
-// --- stalled ----------------------------------------------------------------
-
 test('a green, approved PR no rule will ever act on is stalled, and says what is missing', () => {
-  // Nothing to fix, nobody asked, and rule `pr-merge-ready` will not fire because the provider
-  // never reported mergeability. This is the case the verdict exists to surface.
   const verdict = prAttentionStatus(pr({ approved: true }), ctx());
   assert.deepEqual(verdict, { status: 'stalled', reasons: ['the provider reports no mergeable state'] });
   const noCi = prAttentionStatus(
@@ -444,25 +394,18 @@ test('a green, approved PR no rule will ever act on is stalled, and says what is
   assert.deepEqual(noCi, { status: 'stalled', reasons: ['CI has not reported'] });
 });
 
-// --- what the verdict deliberately does not read ----------------------------
-
 test('a comment’s author decides nothing — `handled` does', () => {
   const from = (author: string, handled: boolean): PullRequest =>
     mergeReadyPr({ unresolvedComments: [{ id: 'c1', author, body: 'nit', handled }] });
-  // Two different authors, one verdict once the name is taken out of the wording:
-  // the author is what a reason *says*, never what the verdict branches on.
   const anonymised = (p: PullRequest) => {
     const v = prAttentionStatus(p, ctx());
     return { status: v.status, reasons: v.reasons.map((r) => r.replace(/comment from \S+/, 'comment from <author>')) };
   };
   assert.deepEqual(anonymised(from('reviewer', false)), anonymised(from('someone-else', false)));
   assert.equal(prAttentionStatus(from('reviewer', false), ctx()).status, 'harness');
-  // Handled: no concern, so the merge gate is what is next.
   assert.equal(prAttentionStatus(from('reviewer', true), ctx()).status, 'harness');
   assert.match(prAttentionStatus(from('reviewer', true), ctx()).reasons[0]!, /merge gate/);
 });
-
-// --- the plumbing, at the buildSystem seam ----------------------------------
 
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -482,8 +425,6 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
     backend: new FakePtyBackend(),
     errorMirror: () => {},
   });
-  // Tagged, because pull requests are opt-in: an untagged one is `unwatched`, and
-  // that arm answers before every verdict this test is about.
   system.connector.inject({
     kind: 'new_pr',
     number: 11,
@@ -492,14 +433,10 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
     labels: ['lubbdubb-watch'],
   });
   system.connector.inject({ kind: 'ci_failed', prNumber: 11 });
-  // The snapshot draws the world the *pulse* observed, never a fresh provider
-  // read. Seeded rather than pulsed: a cycle would put an agent on the red CI and
-  // the attention verdict under test is the one with no agent on the branch.
   system.store.setWorldBaseline(await system.connector.getState());
 
   const snapshot = await buildStateSnapshot(system);
   const shipped = snapshot.world.pullRequests.find((p) => p.number === 11)!;
-  // Two questions, two answers: health says *can this merge*, attention says *whose turn*.
   assert.deepEqual(shipped.health.reasons, ['CI failing']);
   assert.equal(shipped.attention.status, 'harness');
   assert.match(shipped.attention.reasons[0]!, /CI is failing/);
@@ -523,7 +460,6 @@ test('a pending proposal and a standing rejection read differently through the w
   system.connector.inject({ kind: 'pr_approved', prNumber: 12 });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 12, mergeable: true, mergeableState: 'clean' });
 
-  // The default posture (autoSend off) turns rule `pr-merge-ready`'s merge into a pending ask.
   await system.harness.runCycle('manual');
   const [pending] = system.store.listProposals();
   assert.equal(pending!.status, 'pending');
@@ -539,26 +475,15 @@ test('a pending proposal and a standing rejection read differently through the w
 });
 
 test('the verdict is a lens: nothing in the dispatcher reads it, and computing it decides nothing', async () => {
-  // Structural, the way the findings tool's "nothing reads this" property is kept:
-  // one consumer, and it is the snapshot the cockpit fetches.
   const importers = srcFiles('src')
     .filter((f) => f !== 'src/prAttention.ts')
     .filter((f) => readFileSync(f, 'utf8').includes('prAttention.js'));
-  // `src/wire.ts` names {@link PrAttention} as the shape `/api/state` ships and
-  // reads nothing: every import in it is `import type`, which
-  // `test/wireContract.test.ts` asserts, so it cannot consult the verdict even by
-  // accident. One computing consumer, and it is still the snapshot.
   assert.deepEqual(
     importers,
     ['src/server/stateSnapshot.ts', 'src/wire.ts'],
     'the attention verdict must stay cockpit-only',
   );
 
-  // Behavioural: building the snapshot (which computes the verdict for every PR)
-  // between two pulses changes no decision the harness goes on to make.
-  // Deliberately a world that dispatches no agent: PR 21 is waiting on CI and PR 22
-  // is merge-ready, so the pulse's only effect is rule `pr-merge-ready`'s proposal — which is the
-  // one the verdict could conceivably influence, and must not.
   const world = (system: ReturnType<typeof buildSystem>): void => {
     const watched = ['lubbdubb-watch'];
     system.connector.inject({ kind: 'new_pr', number: 21, title: 'Widget', branch: 'feat/widget', labels: watched });
@@ -588,7 +513,6 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
   await control.harness.runCycle('manual');
   await observed.harness.runCycle('manual');
   const snapshot = await buildStateSnapshot(observed);
-  // The verdicts genuinely differ across the two PRs, so this is not a vacuous run.
   const statuses = snapshot.world.pullRequests.map((p) => p.attention.status);
   assert.equal(new Set(statuses).size, 2, statuses.join(','));
   await control.harness.runCycle('timer');
@@ -598,7 +522,6 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
   observed.store.close();
 });
 
-/** Every `.ts` under a source directory, recursively, as repo-relative paths. */
 function srcFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -609,16 +532,9 @@ function srcFiles(dir: string): string[] {
   return out.sort();
 }
 
-// ---------------------------------------------------------------------------
-// The review wait
-// ---------------------------------------------------------------------------
-
 test('awaitingReview runs only while a reviewer could actually act', () => {
-  // Green, clean, unapproved, unstaffed — the one shape it means.
   assert.equal(awaitingReview(pr({ approved: false }), false), true);
 
-  // Each of these is work that is not the reviewer's, and blaming them for it is
-  // exactly the wrong reading to hang a reminder on.
   assert.equal(awaitingReview(pr({ approved: false }), true), false, 'an agent holds the branch');
   assert.equal(awaitingReview(pr({ approved: false, ciStatus: 'failing' }), false), false, 'red CI');
   assert.equal(
@@ -634,13 +550,12 @@ test('awaitingReview runs only while a reviewer could actually act', () => {
 });
 
 test('a handled comment does not hold the clock', () => {
-  // `handled` is what decides everywhere else in this file, and it decides here.
   const handled = pr({ approved: false, unresolvedComments: [{ id: 'c', author: 'bob', body: 'ok', handled: true }] });
   assert.equal(awaitingReview(handled, false), true);
 });
 
 test('the waiting-on-review arm carries the wait, and stays elsewhere', () => {
-  const since = ago(60 * 24 * 3); // three days
+  const since = ago(60 * 24 * 3);
   const verdict = prAttentionStatus(pr({ approved: false }), {
     ...ctx(),
     reviewWaits: new Map([[7, since]]),
@@ -651,8 +566,6 @@ test('the waiting-on-review arm carries the wait, and stays elsewhere', () => {
 });
 
 test('no wait recorded costs the age and never the verdict', () => {
-  // The map is optional, so a store that has not folded yet — or a caller that
-  // does not pass one — must answer identically about whose court this is.
   const withMap = prAttentionStatus(pr({ approved: false }), { ...ctx(), reviewWaits: new Map() });
   const without = prAttentionStatus(pr({ approved: false }), ctx());
   assert.equal(withMap.status, without.status);
@@ -661,8 +574,6 @@ test('no wait recorded costs the age and never the verdict', () => {
 });
 
 test('an arm above waiting-on-review never carries a wait', () => {
-  // The clock is deliberately a superset of the arm, so a PR whose court is the
-  // harness's has a row in the table and must still show nothing.
   const verdict = prAttentionStatus(pr({ approved: false, ciStatus: 'failing' }), {
     ...ctx(),
     reviewWaits: new Map([[7, ago(60 * 24 * 5)]]),
@@ -672,25 +583,17 @@ test('an arm above waiting-on-review never carries a wait', () => {
 });
 
 test('the wait is a watermark: it survives a pulse, and clears when the wait ends', () => {
-  // A driven clock, not the system one: the assertions below are about *which*
-  // instant was kept, and two folds in one millisecond cannot tell them apart.
   let tick = 0;
   const store = new Store(':memory:', () => new Date(Date.parse(NOW) + tick++ * 60_000).toISOString());
-  // Two pulses with the PR still waiting. The second must not move the clock —
-  // an upsert here would read as "waiting five minutes" forever, which is the
-  // silent wrong answer this table exists to give correctly.
   store.foldReviewWaits([7]);
   const first = store.reviewWaits().get(7);
   assert.ok(first);
   store.foldReviewWaits([7]);
   assert.equal(store.reviewWaits().get(7), first);
 
-  // It stops waiting — approved, merged, gone red, whatever. The row goes.
   store.foldReviewWaits([]);
   assert.equal(store.reviewWaits().get(7), undefined);
 
-  // And a later wait starts a new clock rather than resurrecting the old one:
-  // work happened in between, so the reviewer's wait began after it.
   store.foldReviewWaits([7]);
   assert.notEqual(store.reviewWaits().get(7), first);
   store.close();
@@ -707,18 +610,6 @@ test('folding one PR does not disturb another still waiting', () => {
   store.close();
 });
 
-// --- the lens beside the dispatcher -----------------------------------------
-
-/**
- * The cross-check the lens exists for, and the one thing that holds it: a sweep
- * of PR shapes run through **both** `prAttentionStatus` and a real
- * `RuleDispatcher.decide`, asserting they name the same concern and the same
- * court. Every other test in this file drives one side against hand-built
- * fixtures, which is how #562 (the lens on the pre-reorder urgency order), #563
- * (the lens reading an origin nothing dispatches) and #564 ("no agent will be
- * sent" printed on the pulse one went out) all sat green: both halves read
- * plausibly, and only composing them shows they disagree.
- */
 const prOrigin = (a: ValidatedAction): string | null => {
   if ('originRef' in a && typeof a.originRef === 'string' && a.originRef.startsWith('pr:7:')) return a.originRef;
   if (a.type === 'escalate_to_human') {
@@ -728,7 +619,6 @@ const prOrigin = (a: ValidatedAction): string | null => {
   return null;
 };
 
-/** What the lens's leading reason must say when the dispatcher acts on this origin. */
 const LABEL_FOR: Record<string, RegExp> = {
   'pr:7:comments': /^unresolved comments? from /,
   'pr:7:ci': /^CI is failing/,
@@ -758,8 +648,6 @@ test('the lens names the concern the dispatcher acts on, and the court it acts i
     for (const comments of [[], [comment]]) {
       for (const mergeableState of ['clean', 'behind', 'dirty'] as const) {
         for (const history of [[], ...Object.keys(LABEL_FOR).map((o) => [o])]) {
-          // Three executed attempts is the spent cap; the dispatcher escalates and
-          // the lens must hand the same origin to you.
           const recentDecisions = history.flatMap((o) => [
             attempt(o, ago(90)),
             attempt(o, ago(60)),
@@ -798,6 +686,5 @@ test('the lens names the concern the dispatcher acts on, and the court it acts i
       }
     }
   }
-  // The sweep is only worth its wall time if it is actually a sweep.
   assert.equal(checked, 4 * 2 * 3 * 5);
 });

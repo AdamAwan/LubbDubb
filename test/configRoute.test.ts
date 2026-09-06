@@ -10,19 +10,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ConfigSavePayload, RunningConfigPayload } from '../src/wire.js';
 
-/**
- * `GET`/`POST /api/config` — the route the config form is.
- *
- * Every test here points `configFile` at a temp file. Without that a save
- * rewrites the `lubbdubb.config.json` of whatever checkout the suite is running
- * in, which is the developer's own.
- */
-
-/**
- * The file a fixture starts from — the source of both the harness's config and
- * the form's. Rendered from one record so an `extra` cannot leave a duplicate
- * key in the file, which JSON.parse resolves silently and an edit does not.
- */
 function configText(dir: string, extra: Record<string, unknown> = {}): string {
   const merged: Record<string, unknown> = {
     maxConcurrentAgents: 4,
@@ -45,27 +32,14 @@ function configText(dir: string, extra: Record<string, unknown> = {}): string {
   ].join('\n');
 }
 
-/**
- * A harness whose running config *is* the file's, the way `main.ts` builds one.
- *
- * That matters more than it looks: a system built from explicit overrides the
- * file does not carry would read every one of them as a pending restart the
- * moment anything reloaded, which is a property of the fixture and not of the
- * code under test.
- */
 function fixture(
   extra: Record<string, unknown> = {},
   project?: Record<string, unknown>,
 ): { system: System; file: string; projectFile: string; text: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cfgroute-'));
   const file = join(dir, 'lubbdubb.config.json');
-  // The team's layer lives at `repoRoot`, so a fixture that wants one points the
-  // harness at the temp dir. Injected either way: without it the route reads the
-  // `lubbdubb.project.json` of whatever checkout the suite is running in, which is
-  // `configFile`'s hazard with a second file.
   const projectFile = join(dir, 'lubbdubb.project.json');
   if (project) writeFileSync(projectFile, JSON.stringify(project), 'utf8');
-  // A relative tokenFile would mint into the checkout the suite is running in.
   const text = configText(dir, project ? { repoRoot: dir, ...extra } : extra).replace(
     '"TOKENFILE"',
     JSON.stringify(join(dir, 'token')),
@@ -81,7 +55,6 @@ function fixture(
   return { system, file, projectFile, text, dir };
 }
 
-/** The bearer this app is running with, for the one fixture that has auth on. */
 async function tokenOf(system: System): Promise<string> {
   const { app, cockpitUrl } = await buildApp(system);
   await app.close();
@@ -177,7 +150,6 @@ test('a reset clears the key rather than writing the default back', async () => 
 test('a save whose baseline has moved is refused rather than allowed to clobber it', async () => {
   const { system, file, text } = fixture();
   const { revision } = await read(system);
-  // Somebody else — an editor, or Claude — writes the file in between.
   writeFileSync(file, text.replace('"agentMode": "raw"', '"agentMode": "stream"'), 'utf8');
 
   const res = await save(system, { baseline: revision, set: { maxConcurrentAgents: 9 } });
@@ -191,8 +163,6 @@ test('a save whose baseline has moved is refused rather than allowed to clobber 
 });
 
 test('a save that would not boot is refused with the loader’s own message', async () => {
-  // Auth has to be *on* for this fixture to load at all, which is the point of the
-  // refusal being tested: the pair is what is refused, not either half.
   const { system, dir } = fixture({ host: '0.0.0.0', auth: { enabled: true, tokenFile: 'TOKENFILE' } });
   assert.ok(dir);
   const token = await tokenOf(system);
@@ -350,12 +320,6 @@ test('a save that names no field is refused rather than rewriting the file for n
   system.store.close();
 });
 
-/**
- * Two files, and only one of them is the one this route writes. A row that drew
- * the team's value as a built-in default would send an operator looking for a key
- * their own file does not have — and would promise a reset that goes somewhere
- * else than it goes.
- */
 test('GET /api/config names the project’s file and marks what came from it', async () => {
   const { system, projectFile } = fixture({}, { defaultBranch: 'trunk', closedPrWindowMs: 1000 });
 
@@ -368,7 +332,6 @@ test('GET /api/config names the project’s file and marks what came from it', a
   assert.equal(branch?.isDefault, true, 'the operator did not choose it');
   assert.equal(branch?.fromProject, true, 'and the row says which file did');
 
-  // The operator's own file still reads as theirs, over the same payload.
   const cap = shown.find((entry) => entry.path === 'maxConcurrentAgents');
   assert.equal(cap?.isDefault, false);
   assert.equal(cap?.fromProject, undefined);
@@ -387,11 +350,6 @@ test('a harness whose project carries no config says so rather than guessing', a
   system.store.close();
 });
 
-/**
- * The operator's own file wins, and saving is how they take it — the point of two
- * layers rather than one. The write goes to `lubbdubb.config.json`; the project's
- * file is not touched, because it belongs to the team.
- */
 test('a save overrides a project value locally and leaves the project’s file alone', async () => {
   const { system, file, projectFile } = fixture({}, { maxConcurrentAgents: 4 });
   const before = readFileSync(projectFile, 'utf8');
@@ -419,13 +377,6 @@ test('a save overrides a project value locally and leaves the project’s file a
   system.store.close();
 });
 
-/**
- * The three blocks the config form offers per-leaf edits over that did not merge:
- * `ci`, `github` and `azureDevOps`. A save of one leaf replaced the whole block,
- * so everything the team's `lubbdubb.project.json` said under the same key was
- * gone — `200` from the route, no row saying anything, and for `ci.checks` a live
- * field, so an empty policy took effect on the next pulse.
- */
 test('a save of one leaf keeps the project’s siblings in the same block', async () => {
   const project = {
     ci: { checks: [{ match: 'build', onFailure: 'dispatch', urgent: true }] },
@@ -457,10 +408,6 @@ test('clearing a leaf the project sets falls back to the project’s value, as t
   const second = (await read(system)).revision;
   assert.equal((await save(system, { clear: ['ci.checks'], baseline: second })).status, 200);
 
-  // The emptied parent goes with the leaf: a `"ci": {}` left behind still states
-  // the key, so it would replace the team's policy with no policy at all — the
-  // silent one, because `ci.checks` is live and an empty list reads exactly like
-  // a deployment that never configured CI.
   assert.doesNotMatch(readFileSync(file, 'utf8'), /"ci"/, 'the block the clear emptied goes too');
   assert.deepEqual(
     loadConfigFromText(readFileSync(file, 'utf8'), file).ci.checks,

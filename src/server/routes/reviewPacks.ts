@@ -17,7 +17,8 @@ import { InsightsQuery, resolveWindow, timelineSpan, windowView } from '../../in
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** `/api/prs/:number/review-pack/ideas/:id` — the idea's id as the current pack minted it. */
+// → docs/spec/16-http-api.md
+
 const IdeaParams = PrNumberParams.extend({ id: z.string().min(1, 'idea id is required') });
 
 const ReadBody: z.ZodType<ReviewReadBody, z.ZodTypeDef, unknown> = z.object({
@@ -36,46 +37,18 @@ const AttentionBody: z.ZodType<ReviewAttentionBody, z.ZodTypeDef, unknown> = z.o
     .nullable(),
 });
 
-/**
- * The hunks an idea owns — what a reviewer's mark on it is keyed to. Only the
- * `hunk` anchors: a `region` is a reference to code the idea does not own, and a
- * mark riding on one would land on whichever idea owns that hunk instead.
- */
 function ownedHunks(idea: ReviewIdea): ReviewRange[] {
   return idea.anchors.filter((a) => a.kind === 'hunk').map((a) => a.range);
 }
 
-/**
- * Asking for a review pack, and reading the one a pull request has.
- * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
- *
- * The ask returns at once and the pack arrives later: the author is an agent run,
- * and a route that held the connection open for one would time out on every
- * proxy between the cockpit and the port. Nothing here regenerates a pack on its
- * own — not a push, not a read — so the read says when the one it has is stale
- * and how far behind, and the ask is the same control the second time.
- */
 export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { store, reviewPacks, reviewPackChecker } = system;
 
-  /**
-   * Whether this pull request's pack is in the pool. `available` is false on a
-   * deployment with no pool desk — no pool selected, or no fleet name yet — where
-   * there is nowhere to publish to and the page says so instead of offering a
-   * control that could only refuse.
-   */
   const sharing = (prNumber: number): ReviewPackSharing => ({
     available: system.pool !== undefined,
     share: store.getReviewPackShare(prNumber),
   });
 
-  /**
-   * Ask for a pack from the pull request's row. `202` — accepted, not done. The
-   * refusals are the desk's, in its order: no such open pull request (404), then a
-   * head the provider did not report, an author already on it, or a paused fleet
-   * (409). A second ask on a new head is the same call; the new pack replaces the
-   * old one when it lands.
-   */
   app.post(
     '/api/prs/:number/review-pack',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
@@ -85,16 +58,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * The pull request's current pack with the reviewer's marks, or a 404 that
-   * says whether one is on its way. `checking` says whether the checker is on it,
-   * so a pack with every verdict null reads as "being checked" or "unchecked"
-   * rather than either. Staleness is decided here, against the
-   * pull request's head as the harness last saw it — the store does not know the
-   * head — and the count between the two is asked of the clone, which may not
-   * hold the newer commits yet: then the pack is stale by sha and the count is
-   * null, never zero.
-   */
   app.get(
     '/api/prs/:number/review-pack',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
@@ -120,18 +83,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * Share the pull request's current pack into the pool — **a second, deliberate
-   * act**, and never something asking for a pack does. `202`, accepted rather
-   * than done: the document goes out on the pool's own clock, because a route
-   * that did the network write would make the click wait on a push to another
-   * continent and report a failure there as a failure here
-   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
-   *
-   * Refused with a 409 for a deployment with no pool, for a pull request with no
-   * pack, and — the one that matters — by the secret backstop, which names the
-   * line it stopped on and rewrites nothing.
-   */
   app.post(
     '/api/prs/:number/review-pack/share',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
@@ -146,15 +97,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * Take a shared pack back out of the pool — the inverse of the share, and the
-   * same shape: `202`, because the removal is the pool's own arm's and never a
-   * route handler's. A pack shared by mistake is out on the next pulse rather
-   * than at the prune, which is weeks away.
-   *
-   * Unsharing something nobody shared is answered as done: the caller wanted it
-   * out of the pool, and it is. → `docs/spec/31-review-packs.md#unsharing-a-pack`
-   */
   app.post(
     '/api/prs/:number/review-pack/unshare',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
@@ -166,17 +108,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * What the packs say about the agents that wrote them — the overrides, the
-   * plumbing ratio and whether false claims get read. **The operator's reading and
-   * nobody else's**: it is never shown to the checker, because a label that has
-   * learned to agree with its reader has stopped being evidence, and nothing here
-   * reaches a prompt.
-   *
-   * It lives in this module because the review packs are the group that owns it,
-   * and it obeys the Insights page's window like every other reading there.
-   * → `docs/spec/31-review-packs.md#the-operators-reading`, `docs/spec/16-http-api.md`
-   */
   app.get(
     '/api/review-calibration',
     checked({ query: InsightsQuery }, async ({ query }) => {
@@ -191,9 +122,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         calibration: buildReviewCalibration({
           packs,
           marks: store.listAllReviewMarks(),
-          // The durable record of a merge, not the world's: the world drops a
-          // closed pull request after `closedPrWindowMs`, and a merge that fell
-          // out of it must not read as a pull request that never merged.
           merged: new Set(
             store
               .listWorkNodes()
@@ -207,16 +135,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * A reviewer's three marks on an idea, each its own column on the same rows. The
-   * idea is resolved in the **current** pack and the write is keyed to the hunks
-   * it owns at that pack's head — so a mark survives the pack being rewritten,
-   * and lands on whichever idea owns those hunks next time. Refused when there is
-   * no pack, when the idea is not in the current one (the pack was rewritten
-   * under the page — reload it), and when the idea owns no hunk at all (a walk of
-   * regions only), since the mark would have nothing to ride on and would read
-   * as taken.
-   */
   const resolve = (params: {
     number: number;
     id: string;
@@ -259,17 +177,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
-  /**
-   * The reader took the finding on this idea's false claim. The third mark, and
-   * the one that measures the four surface requirements *What a false claim does*
-   * makes: a pull request that merged while this was unset is a false claim
-   * nobody read, which is the number those requirements stand in for.
-   * → `docs/spec/31-review-packs.md#whether-prominence-works`
-   *
-   * Not refused on an idea with no false claim: the mark rides on hunks and the
-   * page only offers it under a finding, and a route that second-guessed the
-   * document would be the renderer's rule stated twice.
-   */
   app.post(
     '/api/prs/:number/review-pack/ideas/:id/seen',
     checked({ params: IdeaParams, body: SeenBody }, async ({ params, body, reply }) => {

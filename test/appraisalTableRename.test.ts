@@ -7,21 +7,12 @@ import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 import { SCHEMA } from '../src/store/schema.js';
 
-// The goal assay became the goal appraisal, and `issue_assays` became
-// `issue_appraisals`. The rows did not change, so the rename is the whole
-// migration — and skipping it is silent: `CREATE TABLE IF NOT EXISTS` stands an
-// empty table up under the new name, every held goal comes unheld, and every
-// question an operator has already answered is asked again.
-
 const NOW = '2026-08-26T09:00:00.000Z';
 
-/** A database on the old build's shape: the same table, under the old name. */
 function oldShape(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-rename-'));
   const path = join(dir, 'old.db');
   const db = new Database(path);
-  // The pre-rename schema, taken from the post-rename one: the shape is what did
-  // not change, so a second hand-written copy of the DDL could only drift.
   db.exec(SCHEMA.replaceAll('issue_appraisals', 'issue_assays'));
   db.prepare(
     `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, decided_at, updated_at)

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { StreamJsonSession, type Spawner, type StreamChild } from '../src/agents/streamJsonSession.js';
 
-/** A controllable fake claude process speaking stream-JSON. */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 4242;
   writes: string[] = [];
@@ -73,9 +72,6 @@ test('WAITING sentinel at turn end parks the session with the reason', () => {
 });
 
 test('a turn ending with no sentinel is a stall, not a question', () => {
-  // The runtime reports *which* of the two happened and decides neither: an agent
-  // that went quiet has not asked anybody anything, and what it costs to treat the
-  // two alike is an inbox item nobody can answer (see AgentManager.handleStalled).
   const { spawner, child } = fakeSpawner();
   const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
   let waited = false;
@@ -166,7 +162,6 @@ test('does not echo our own typed input back into the transcript', () => {
   const out: string[] = [];
   s.on('output', (d: string) => out.push(d));
   s.start();
-  // A user event carrying plain text (an echoed prompt, not a tool result) is ignored.
   child.emitLine({ type: 'user', message: { content: 'go build the thing' } });
   assert.equal(out.join(''), '');
 });

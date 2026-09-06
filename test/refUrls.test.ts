@@ -4,10 +4,6 @@ import { azureRefUrl } from '../src/integrations/azure/refUrl.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from '../src/server/refUrls.js';
 
-// --------------------------------------------------------------------------
-// githubRefUrl — the provider's canonical ref → URL mapping (pure)
-// --------------------------------------------------------------------------
-
 const O = 'octo';
 const R = 'repo';
 const BASE = `https://github.com/${O}/${R}`;
@@ -23,8 +19,6 @@ test('githubRefUrl: issue origin ref resolves to the issue page', () => {
 });
 
 test('githubRefUrl: suffixed issue refs from the funnel resolve to the same issue page', () => {
-  // `issue:13:plan` is both a planning agent's origin and a plan proposal's ref;
-  // `issue:13:part:<slug>` is a part's. All three name one issue, like the PR shapes.
   assert.equal(githubRefUrl(O, R, 'issue:13:plan'), `${BASE}/issues/13`);
   assert.equal(githubRefUrl(O, R, 'issue:13:part:schema'), `${BASE}/issues/13`);
 });
@@ -49,10 +43,6 @@ test('githubRefUrl: non-source-control origin refs are not links', () => {
   assert.equal(githubRefUrl(O, R, '   '), null);
 });
 
-// --------------------------------------------------------------------------
-// azureRefUrl — the same mapping for Azure DevOps (pure)
-// --------------------------------------------------------------------------
-
 const AZ = (ref: string) => azureRefUrl('org', 'proj', 'repo', ref);
 const PROJ = 'https://dev.azure.com/org/proj';
 const REPO = `${PROJ}/_git/repo`;
@@ -71,8 +61,6 @@ test('azureRefUrl: work-item refs, suffixed or not, resolve to the work item', (
 
 test('azureRefUrl: a comment ref selects that discussion on the work item', () => {
   assert.equal(AZ('issue:13:comment:9001'), `${PROJ}/_workitems/edit/13?discussionId=9001`);
-  // A non-numeric id can't address an Azure discussion, so land on the item itself
-  // rather than build a selector that selects nothing.
   assert.equal(AZ('issue:13:comment:comment_1'), `${PROJ}/_workitems/edit/13`);
 });
 
@@ -86,9 +74,6 @@ test('azureRefUrl: a branch name resolves through the repo version selector', ()
 });
 
 test('azureRefUrl: a bare number is not a link, because the id spaces are disjoint', () => {
-  // Unlike GitHub, `42` names a work item *and* a PR, and neither page redirects to
-  // the other. `buildRefUrls` keys `#42` off the world's own urls, so nothing is
-  // lost by refusing to guess here — and a wrong link is worse than plain text.
   assert.equal(AZ('#42'), null);
   assert.equal(AZ('42'), null);
 });
@@ -105,10 +90,6 @@ test('azureRefUrl: organization/project/repository are url-encoded', () => {
     'https://dev.azure.com/my%20org/my%20proj/_git/my%20repo/pullrequest/1',
   );
 });
-
-// --------------------------------------------------------------------------
-// buildRefUrls — the snapshot's ref → URL map shipped to the cockpit (pure)
-// --------------------------------------------------------------------------
 
 test('buildRefUrls: keys each PR/issue number and prefers the item url over the resolver', () => {
   const map = buildRefUrls({
@@ -162,10 +143,6 @@ test('buildRefUrls: omits refs the resolver cannot map (e.g. the fake provider)'
   assert.deepEqual(map, {});
 });
 
-// --------------------------------------------------------------------------
-// issueCommentRef — the wire shape for a comment the harness maintains (#171)
-// --------------------------------------------------------------------------
-
 test('issueCommentRef: pairs a provider comment id with the issue it lives on', () => {
   assert.equal(issueCommentRef('issue:12', '456'), 'issue:12:comment:456');
 });
@@ -176,16 +153,12 @@ test('issueCommentRef: nothing written, nothing to link', () => {
 });
 
 test('issueCommentRef: refuses an origin that is not an issue', () => {
-  // Every caller has a plain `issue:<n>` origin; a suffixed or absent one would
-  // name the wrong thing, and guessing is what turns a link into a wrong link.
   assert.equal(issueCommentRef('issue:12:plan', '456'), null);
   assert.equal(issueCommentRef('pr:12', '456'), null);
   assert.equal(issueCommentRef(null, '456'), null);
 });
 
 test('issueCommentRef: the ref it builds is the one githubRefUrl resolves', () => {
-  // The pair is the whole point: the id alone reads as an *issue number* to the
-  // resolver, so shipping one would key a confident link to an unrelated ticket.
   const ref = issueCommentRef('issue:12', '456')!;
   assert.equal(githubRefUrl(O, R, ref), `${BASE}/issues/12#issuecomment-456`);
   assert.equal(githubRefUrl(O, R, '456'), `${BASE}/issues/456`);
@@ -196,8 +169,6 @@ test('githubRefUrl: an issue comment resolves to its anchor on the issue page', 
 });
 
 test('githubRefUrl: a non-numeric comment id falls through to the issue page', () => {
-  // Another provider's id, or the fake connector's `comment_1`: GitHub's anchor is
-  // `#issuecomment-<numeric id>`, so an anchor built from one would scroll nowhere.
   assert.equal(githubRefUrl(O, R, 'issue:13:comment:comment_1'), `${BASE}/issues/13`);
 });
 
@@ -214,10 +185,6 @@ test('buildRefUrls: keys a comment ref by itself, and omits it when unresolvable
   assert.equal(map['issue:99:comment:1'], undefined);
 });
 
-// --------------------------------------------------------------------------
-// decisionSubjectRef — what an audited act is *about*
-// --------------------------------------------------------------------------
-
 test('decisionSubjectRef: each action names its subject in the vocabulary refUrls answers', () => {
   const ref = (action: Record<string, unknown>) => decisionSubjectRef(action as { type: string });
 
@@ -225,9 +192,6 @@ test('decisionSubjectRef: each action names its subject in the vocabulary refUrl
   assert.equal(ref({ type: 'dispatch_desk_agent', originRef: 'issue:13:plan' }), 'issue:13:plan');
   assert.equal(ref({ type: 'propose_plan', originRef: 'issue:13' }), 'issue:13');
   assert.equal(ref({ type: 'propose_shortfall', originRef: 'issue:13' }), 'issue:13');
-  // A PR-numbered act is translated into the colon form rather than shipped as a
-  // number: `#42` is the *other* key family, and `refUrls` keys both — but the
-  // column reads a structured ref, so this is the one it can look up.
   assert.equal(ref({ type: 'reply_on_pr', prNumber: 42 }), 'pr:42');
   assert.equal(ref({ type: 'merge_pr', prNumber: 42 }), 'pr:42');
   assert.equal(ref({ type: 'set_work_item_state', number: 13 }), 'issue:13');
@@ -240,13 +204,7 @@ test('decisionSubjectRef: an act about nothing external has no ref, and never gu
   assert.equal(ref({ type: 'escalate_to_human', agentId: 'agent-1' }), null);
   assert.equal(ref({ type: 'no_op' }), null);
   assert.equal(ref({ type: 'respond_to_agent', agentId: 'agent-1' }), null);
-  // A dispatch composed outside a rule carries no origin — `originRef` defaults to
-  // null in the schema, so this is the ordinary shape and not a malformed one.
   assert.equal(ref({ type: 'dispatch_code_agent', originRef: null }), null);
-  // `number` is a work item on exactly one action type. The switch is what stops
-  // it being read as one the day some other action grows a field by that name.
   assert.equal(ref({ type: 'merge_pr', number: 13 }), null);
-  // An unknown type from an older or newer row: no ref, rather than a scan for
-  // likely-looking fields that would key a confident link to the wrong thing.
   assert.equal(ref({ type: 'something_new', originRef: 'issue:13' }), null);
 });

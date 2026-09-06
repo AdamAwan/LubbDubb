@@ -9,15 +9,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { WorldSnapshot } from '../src/types.js';
 
-/**
- * The **local** cycle: the full decide/execute sequence against the world the last
- * real cycle already read, with every world-facing pass skipped.
- *
- * What these hold is the property the whole thing rests on — it reads no world — and
- * the reason it exists: an agent ending refills its own slot in a moment rather than
- * at the next heartbeat. → `docs/spec/04-harness-cycle.md#the-local-cycle`
- */
-
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function testConfig(overrides: Partial<Config> = {}): Config {
@@ -30,18 +21,12 @@ function testConfig(overrides: Partial<Config> = {}): Config {
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    // Long enough that nothing here is ever the timer's doing: every cycle in this
-    // file is one somebody asked for.
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
     ...overrides,
   });
 }
 
-/**
- * A system whose worktrees are faked — mandatory for anything that dispatches a code
- * agent, or the test cuts a real branch in the checkout the suite is running in.
- */
 function build(overrides: Partial<Config> = {}): { system: System; backend: FakePtyBackend } {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(overrides), {
@@ -52,7 +37,6 @@ function build(overrides: Partial<Config> = {}): { system: System; backend: Fake
   return { system, backend };
 }
 
-/** Count the provider fan-outs, by standing in front of the connector's own read. */
 function countWorldReads(system: System): () => number {
   let reads = 0;
   const connector = system.connector as { getState: () => Promise<WorldSnapshot> };
@@ -86,8 +70,6 @@ test('a local cycle before any real one refuses rather than deciding against an 
 });
 
 test('a local cycle takes no snapshot and still dispatches from store state', async () => {
-  // Paused, so the first (real) cycle reads the world and plans nothing: the issue
-  // is left queued with its baseline already taken.
   const { system } = build();
   system.runtimeControl.apply({ paused: true });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
@@ -116,8 +98,6 @@ test('a local cycle is refused while a real cycle is in flight', async () => {
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Second issue' });
   await system.harness.runCycle('manual');
 
-  // Hold the real cycle open inside its world read, which is the window a route's
-  // manual pulse and an agent's ending both land in on a busy fleet.
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   const connector = system.connector as { getState: () => Promise<WorldSnapshot> };
@@ -143,7 +123,6 @@ test('a local cycle is held while a crashed agent awaits a recovery decision', a
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add logout' });
   await system.harness.runCycle('manual');
   assert.equal(system.store.listTasks().length, 1);
-  // What a restart finds: a row saying `running` with no process behind it.
   system.recovery.detect();
   assert.ok(system.recovery.pendingCount() > 0);
 
@@ -157,8 +136,6 @@ test('a local cycle is held while a crashed agent awaits a recovery decision', a
 });
 
 test('an agent finishing fires a local cycle, and the slot it freed is filled', async () => {
-  // A cap of one, so the second issue is queued behind the first agent and the only
-  // thing that can start it is capacity coming back.
   const { system } = build({ maxConcurrentAgents: 1 });
   const sources: string[] = [];
   system.harness.on('cycle:end', (r) => sources.push(r.source));

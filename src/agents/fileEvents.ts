@@ -1,43 +1,10 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * Skill-agnostic artifact detection via a Claude Code `PostToolUse` hook.
- *
- * The flag sentinel (`@@LUBBDUBB_FLAG:…@@`) only surfaces an artifact if the
- * agent's *prompt* tells it to print the sentinel — so every skill that produces
- * a report has to know the protocol. A `PostToolUse` hook instead fires for
- * *any* file-writing tool (`Write`/`Edit`/…) regardless of what the agent was
- * told, so a report shows up with zero skill-side knowledge. The hook is wired
- * once into the launch `--settings` (hooks fire headless too): a small command dumps
- * each write to a per-agent spool dir named by `$LUBBDUBB_EVENTS_DIR` (set in the
- * spawn env), and {@link FileEventsSpool} drains it back on demand.
- *
- * Detection is intentionally broad; the *promotion* decision (report vs. plain
- * code change) is a separate pure step, {@link classifyArtifact}.
- */
+// → docs/spec/10-agent-runtimes.md
 
-/** The hook's per-agent debug log (breadcrumbs), a sibling of the `.json` records. */
 export const HOOK_DEBUG_FILE = '_hook-debug.log';
 
-/**
- * The hook body: read the tool payload on stdin, pull just the written path (never
- * the file *content*), and drop a tiny `{path,tool}` record into the spool dir as
- * its own file (write-tmp-then-rename, so a concurrent drain never reads a partial
- * and parallel tool batches never interleave). The env-var guard lives *inside*
- * the script (`process.env.LUBBDUBB_EVENTS_DIR`) rather than in a shell `if` — see
- * why this must be shell-free below.
- *
- * **Debug breadcrumb.** When `LUBBDUBB_EVENTS_DEBUG` is set (the harness sets it
- * alongside `LUBBDUBB_EVENTS_DIR` whenever `LUBBDUBB_DEBUG` is on), every fire
- * appends a line to {@link HOOK_DEBUG_FILE} in the spool dir recording the tool
- * name, the `tool_input` *key names* (never their values, so no file content
- * leaks), and the extracted path or `<none>`. This is the one signal that proves
- * the hook actually *ran*: its absence when a write clearly happened localises the
- * fault to `--settings` not taking effect (matcher, node-on-PATH, a shell that
- * mangled the command) rather than anything downstream. `.log`, so the
- * `.json`-only {@link FileEventsSpool.drain} never mistakes it for a record.
- */
 const FILE_EVENTS_HOOK_SCRIPT =
   'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{' +
   'const dir=process.env.LUBBDUBB_EVENTS_DIR;if(!dir)return;const fs=require("fs");' +
@@ -54,20 +21,6 @@ const FILE_EVENTS_HOOK_SCRIPT =
   'fs.writeFileSync(dir+"/"+n+".tmp",rec);fs.renameSync(dir+"/"+n+".tmp",dir+"/"+n+".json");' +
   '}catch(e){log("error "+(e&&e.message))}})';
 
-/**
- * The `--settings` fragment wiring the capture hook onto the file-writing tools.
- * The matcher is a tool-name regex; `Write`/`Edit`/`MultiEdit`/`NotebookEdit` are
- * the tools whose `tool_input` carries a `file_path`/`notebook_path`.
- *
- * **Exec form, not shell form.** The hook is `{command:"node", args:["-e",…]}`,
- * which Claude Code spawns as a bare executable with that argv — *no shell*. A
- * shell-string form breaks on Windows: Claude Code runs hook strings through Git
- * Bash only when it's installed, else PowerShell, and a POSIX body like
- * `if [ -n "$VAR" ]; then node -e '…'; fi` is a PowerShell parse error, so the
- * hook silently no-ops and no files/artifacts ever surface. Exec form sidesteps
- * every shell's quoting/builtins entirely, so the guard must be in the script and
- * `node` is invoked directly (it's always on PATH — `claude` is a node CLI).
- */
 export const FILE_EVENTS_SETTINGS = {
   hooks: {
     PostToolUse: [
@@ -79,13 +32,11 @@ export const FILE_EVENTS_SETTINGS = {
   },
 };
 
-/** One captured write: the path the tool wrote, and which tool wrote it (best-effort). */
 export interface FileEventRecord {
   path: string;
   tool: string | null;
 }
 
-/** Parse one spooled record, or null if it's empty/unparsable/pathless. Pure. */
 export function parseFileEventRecord(raw: string): FileEventRecord | null {
   let o: Record<string, unknown>;
   try {
@@ -97,9 +48,6 @@ export function parseFileEventRecord(raw: string): FileEventRecord | null {
   return { path: o.path.trim(), tool: typeof o.tool === 'string' ? o.tool : null };
 }
 
-// Extensions we treat as a "report" the operator wants surfaced as an artifact
-// chip, mapped to the chip `kind`. Everything else is just a tracked edit. Tune
-// this allowlist to match what your skills emit.
 const REPORT_KINDS: Record<string, string> = {
   md: 'report',
   markdown: 'report',
@@ -114,21 +62,6 @@ const REPORT_KINDS: Record<string, string> = {
   svg: 'diagram',
 };
 
-/**
- * Decide whether a written path is a *report* (promote it to an artifact chip,
- * as the flag sentinel does today) or just a *code change* (track it in the
- * files list only). Promotes when the path is under one of `docsPrefix` (the
- * configured artifacts folder(s) — any extension) or under a `reports/` segment,
- * else falls back to the report/doc extension allowlist. Pure and stable per
- * path, so re-recording the same file is idempotent.
- *
- * `docsPrefix` accepts one prefix or a list; a **relative** entry matches the
- * worktree-relative path handed in, an **absolute** entry matches an
- * out-of-worktree write left absolute by `toWorktreeRelative` (e.g. `"D:/docs"`
- * matches `D:/docs/plans/cat.md`). The two never cross: a relative prefix's
- * leading segment can't equal an absolute path's drive/root segment, and vice
- * versa.
- */
 export function classifyArtifact(path: string, docsPrefix?: string | string[]): { promoted: boolean; kind: string } {
   const segs = path.split(/[\\/]/);
   const base = segs[segs.length - 1] ?? path;
@@ -142,48 +75,34 @@ export function classifyArtifact(path: string, docsPrefix?: string | string[]): 
   return kind ? { promoted: true, kind } : { promoted: false, kind: 'file' };
 }
 
-/**
- * True when the path's leading segments match every segment of `prefix`
- * (separator-agnostic). Case-insensitive so a `D:/docs` prefix matches a
- * `D:\Docs\...` write — Windows reports either drive-letter/segment casing.
- */
 function isUnderPrefix(pathSegs: string[], prefix: string | undefined): boolean {
   if (!prefix) return false;
   const p = prefix.split(/[\\/]/).filter(Boolean);
   const s = pathSegs.filter(Boolean);
-  // A file *under* the prefix has strictly more segments than the prefix itself.
   if (p.length === 0 || s.length <= p.length) return false;
   return p.every((seg, i) => seg.toLowerCase() === s[i]?.toLowerCase());
 }
 
-/**
- * The read side: one spool dir per agent under `base`, each write a settled
- * `<ts>-<rand>.json` file. {@link drain} reads and removes them (oldest first by
- * name, which is timestamp-prefixed) so a record is delivered exactly once. All
- * best-effort — a missing dir or unreadable file just yields fewer records.
- */
 export class FileEventsSpool {
   constructor(private readonly base: string) {
     mkdirSync(base, { recursive: true });
   }
 
-  /** The dir a given key's writes land in; exported as LUBBDUBB_EVENTS_DIR at spawn. */
   dirFor(key: string): string {
     const dir = join(this.base, key);
     mkdirSync(dir, { recursive: true });
     return dir;
   }
 
-  /** Read-and-remove every settled record in the key's dir, oldest first. */
   drain(key: string): FileEventRecord[] {
     const dir = join(this.base, key);
     let files: string[];
     try {
       files = readdirSync(dir).filter((f) => f.endsWith('.json'));
     } catch {
-      return []; // dir gone or never created
+      return [];
     }
-    files.sort(); // <ts>-<rand> prefix → chronological enough
+    files.sort();
     const out: FileEventRecord[] = [];
     for (const f of files) {
       const path = join(dir, f);
@@ -191,7 +110,7 @@ export class FileEventsSpool {
       try {
         raw = readFileSync(path, 'utf8');
       } catch {
-        continue; // raced with a rename; next drain catches it
+        continue;
       }
       const rec = parseFileEventRecord(raw);
       try {
@@ -204,23 +123,16 @@ export class FileEventsSpool {
     return out;
   }
 
-  /**
-   * The hook's debug breadcrumbs for a key (only present when `LUBBDUBB_EVENTS_DEBUG`
-   * was set at spawn), oldest first. Read-only and non-destructive — unlike
-   * {@link drain} it doesn't remove anything, so the harness can dump it once at
-   * teardown. `[]` when the hook never fired (or debug was off).
-   */
   readDebug(key: string): string[] {
     try {
       return readFileSync(join(this.base, key, HOOK_DEBUG_FILE), 'utf8')
         .split('\n')
         .filter((l) => l.trim());
     } catch {
-      return []; // no breadcrumbs: hook never ran, or debug off
+      return [];
     }
   }
 
-  /** Drop a finished agent's spool dir entirely. Best-effort. */
   dispose(key: string): void {
     try {
       rmSync(join(this.base, key), { recursive: true, force: true });

@@ -30,16 +30,6 @@ function build() {
   return buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
 }
 
-/**
- * **The one that matters.** The sections are a partition of `CockpitState`, and
- * the failure mode of a partition that has drifted is silent: a key added to the
- * wire and to no section is simply never shipped, on every snapshot, and the
- * surface that draws it renders whatever `undefined` renders as. Nothing is red —
- * the payload still validates and the cockpit still starts.
- *
- * Asserted against a **built** snapshot rather than a hand-written key list, so
- * the list cannot be the thing that goes stale.
- */
 test('every key a full snapshot ships belongs to exactly one section', () => {
   const system = build();
   const full = buildStateSnapshot(system);
@@ -48,8 +38,6 @@ test('every key a full snapshot ships belongs to exactly one section', () => {
   const seen = new Map<string, StateSection>();
   for (const section of STATE_SECTIONS) {
     for (const key of Object.keys(buildStateSections(system, new Set([section])))) {
-      // `refUrls` rides every response deliberately — it is the map every other
-      // section's links resolve in, so it is the one key that is in all of them.
       if (key === 'refUrls') continue;
       const already = seen.get(key);
       assert.equal(already, undefined, `${key} is in both '${already}' and '${section}' — sections must not overlap`);
@@ -78,8 +66,6 @@ test('a sectioned build answers those sections and nothing else, plus refUrls', 
     'the goal enrichment, the fleet and the plan graph are not built at all',
   );
 
-  // The values are the same ones a full build produces: sectioning is a narrowing
-  // of what is assembled, never a second opinion about what a key means.
   const full = buildStateSnapshot(system);
   assert.deepEqual(patch.control, full.control);
   assert.deepEqual(patch.errors, full.errors);
@@ -101,8 +87,6 @@ test('GET /api/state answers the whole snapshot bare, and the named parts with ?
   assert.ok(keys.includes('agents') && keys.includes('overlaps'));
   assert.ok(!keys.includes('world'), 'a fleet fetch does not rebuild the goals');
 
-  // Refused rather than ignored: a typo that quietly answers less is a surface
-  // that quietly stops updating, which is the whole failure this route prevents.
   const typo = await app.inject({ method: 'GET', url: '/api/state?sections=fleet,goels' });
   assert.equal(typo.statusCode, 400);
   assert.match((typo.json() as { error: string }).error, /goels/);
@@ -110,12 +94,6 @@ test('GET /api/state answers the whole snapshot bare, and the named parts with ?
   system.store.close();
 });
 
-/**
- * A patch merged over a held snapshot has to leave the rest of it alone — that is
- * the whole reason the cockpit can keep one complete `AppState` and no component
- * has to learn about partiality. Asserted here rather than in the browser because
- * it is a property of what the server ships.
- */
 test('a section patch overlaid on a full snapshot changes only that section', () => {
   const system = build();
   const full = buildStateSnapshot(system);

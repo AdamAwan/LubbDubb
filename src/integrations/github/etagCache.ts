@@ -1,36 +1,12 @@
-/**
- * Conditional GETs for the GitHub client.
- *
- * The world read is O(open issues + open PRs) requests **per pulse**, and almost
- * every one of them asks for something that has not moved since the last pulse —
- * the timeline of a two-week-old issue nobody has touched is byte-identical every
- * time it is fetched. GitHub answers such a request `304 Not Modified` when it
- * carries the `If-None-Match` of the reading you already hold, and **a 304 does
- * not count against the rate limit at all**. So this is not a latency
- * optimisation with a staleness cost; it is the same reading for no budget.
- *
- * Correctness comes from GitHub rather than from a policy here. There is no TTL
- * and nothing to invalidate: a label the harness itself writes changes the
- * resource, so its ETag changes, so the very next GET is a 200 carrying the new
- * body. A cached entry can only ever be served when the server has just said it
- * is still current — which is why this is the right shape of cache for reads the
- * harness also writes to, and a time-based one would not be.
- */
+// → docs/spec/15-integrations.md
 
-/** An octokit response, narrowed to what a replay has to reproduce. */
 interface CachedResponse {
   status: number;
   url: string;
-  /** Kept whole: `paginate` follows `link`, and the next request re-sends `etag`. */
   headers: Record<string, unknown>;
   data: unknown;
 }
 
-/**
- * Bounded, insertion-ordered ETag store. The bound is a memory guard and nothing
- * more — an entry evicted early costs one ordinary request, never a wrong answer,
- * since the only thing lost is the chance to be told "unchanged".
- */
 export class EtagCache {
   private readonly entries = new Map<string, { etag: string; response: CachedResponse }>();
 
@@ -42,9 +18,6 @@ export class EtagCache {
 
   get(key: string): { etag: string; response: CachedResponse } | undefined {
     const hit = this.entries.get(key);
-    // Re-insert so the eviction below drops the least recently *used* rather than
-    // the least recently written: the per-issue timeline reads are all written in
-    // one burst, so write order says nothing about which is still wanted.
     if (hit) {
       this.entries.delete(key);
       this.entries.set(key, hit);
@@ -63,7 +36,6 @@ export class EtagCache {
   }
 }
 
-/** The minimal octokit surface {@link installConditionalRequests} drives. */
 interface HookableOctokit {
   hook: {
     wrap(
@@ -85,7 +57,6 @@ interface HookableOctokit {
   };
 }
 
-/** Header lookup that does not care how the transport cased the name. */
 function header(headers: Record<string, unknown> | undefined, name: string): string | undefined {
   if (!headers) return undefined;
   for (const [key, value] of Object.entries(headers)) {
@@ -94,21 +65,6 @@ function header(headers: Record<string, unknown> | undefined, name: string): str
   return undefined;
 }
 
-/**
- * Wrap `octokit`'s request path so every GET carries the ETag of the reading the
- * cache already holds, and a `304` is served from it.
- *
- * Registered **after** the retry and throttling plugins, which is what puts it
- * outermost: octokit's transport raises a 304 as a `RequestError`, and neither
- * plugin claims it (retry only acts on `status >= 400`, throttling only on
- * 403/429), so it arrives here intact and is turned back into an ordinary
- * success. Nothing downstream — `paginate` included — can tell the difference.
- *
- * Two kinds of response are deliberately not stored. A non-GET has no business in
- * a read cache, and a `string` body is the Actions **job log**, which is a whole
- * file fetched once per dispatched CI fix — caching megabytes to save a request
- * nobody repeats is the wrong trade.
- */
 export function installConditionalRequests(octokit: HookableOctokit, cache: EtagCache): void {
   octokit.hook.wrap('request', async (request, options) => {
     const method = String(options.method ?? 'GET').toUpperCase();
@@ -118,8 +74,6 @@ export function installConditionalRequests(octokit: HookableOctokit, cache: Etag
     try {
       key = `GET ${octokit.request.endpoint(options).url}`;
     } catch {
-      // An endpoint we cannot name is one we cannot key; pass it straight through
-      // rather than guessing at a cache slot two requests could share.
       return request(options);
     }
 

@@ -10,18 +10,6 @@ import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * An agent with three things to settle used to have one question line and one
- * answer box, so it wrote all three into `detail` and spent its options on "which
- * shall we start with?". The questionnaire is the shape that was missing: a list
- * of questions on the ask, and one reply carrying all the answers back.
- *
- * What these hold: the list survives the trip to the inbox, the *server* folds the
- * answers into the reply (so a second client cannot phrase it differently), and an
- * unanswered question is sent as such rather than dropped — an agent that hears
- * about two of three would sit waiting on the third.
- */
-
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 556;
   writes: string[] = [];
@@ -46,7 +34,6 @@ const QUESTIONS = [
   { question: 'Rename the type?' },
 ];
 
-/** A stream-mode system with one agent parked on a three-question ask. */
 async function parkedOnQuestionnaire() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-qn-'));
   const children: FakeChild[] = [];
@@ -109,11 +96,8 @@ test('answering folds every answer into one reply and settles the item', async (
 
   const answered = system.store.getEscalation(escalation.id)!;
   assert.equal(answered.status, 'answered');
-  // One reply, in order, with the questions restated: the agent gets the answers
-  // attached to what it asked rather than three bare lines it has to re-pair.
   assert.match(answered.response ?? '', /1\. Split part one, or leave it as two\?\n> Keep two/);
   assert.match(answered.response ?? '', /3\. Rename the type\?\n> Yes — expectedKind/);
-  // The one left blank is *told*, not dropped — otherwise the agent waits on it.
   assert.match(answered.response ?? '', /2\. Keep the operator-parks-a-note path\?\n> \(no answer/);
 
   const typed = child.writes.slice(before).join('');
@@ -149,7 +133,6 @@ test('the answers arm refuses what it cannot line up', async () => {
   });
   assert.equal(both.statusCode, 400, 'which text the agent would get is ambiguous');
 
-  // Still open, and still answerable the ordinary way.
   assert.equal(system.store.listOpenEscalations().length, 1);
   const free = await app.inject({
     method: 'POST',

@@ -15,37 +15,12 @@ import { SpeciesSprite } from './SpeciesSprite.js';
 import { absDate } from './util.js';
 import { Panel } from './panel.js';
 
-/**
- * The catalogue: every species that exists, what each costs, and how often it
- * turns up — the part of the vivarium you can read *before* you have the animal.
- *
- * **A species you have not hatched is withheld, not hidden.** Its rate, its cost
- * and the actions that draw it are all drawn; its name, its forms and its colours
- * are not — and a form is given up one at a time, as a pet of yours reaches it.
- * An egg you have not opened gives up nothing at all: the animal in it is decided
- * and withheld, so a shell in the vivarium is not a species you have met.
- *
- * That is the whole shape of the surface: a page that showed
- * everything would spend the reveal the sprites are built around — every tier
- * shares one egg precisely so that finding out *what you got* is worth waiting
- * for — and a page that showed nothing would answer none of the questions an
- * operator actually has. What is withheld is identity; what is published is
- * price.
- *
- * Like {@link PetsPanel}, nothing here gates, ranks or reports anything. If a
- * future change finds a number on this page convenient for a decision, the number
- * is the wrong source — it is written from tables the harness already ships, and
- * reading it back into a decision would be the harness quoting itself.
- *
- * → `docs/spec/22-pets.md#the-pets-page`
- */
+// → docs/spec/17-cockpit.md
+
 export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
   const [catalogue, setCatalogue] = useState<PetCatalogue | null>(null);
   const [failed, setFailed] = useState(false);
 
-  // Fetched once on open rather than read off the snapshot: it is the same bytes
-  // on every request of a build, and a constant riding every heartbeat is paid for
-  // forever. → `src/server/routes/pets.ts`
   useEffect(() => {
     let live = true;
     void api
@@ -61,16 +36,7 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
     };
   }, []);
 
-  // What the collection has actually shown, form by form — an unopened shell has
-  // shown nothing at all, and a stage nobody has raised one to is a form nobody has
-  // seen. A blended pet still counts: its record stays, and so does the fact that
-  // you once had one. Finding is about having seen the animal, not about owning it
-  // now. → `web/src/pets/reveal.ts`
   const seen = useMemo(() => speciesSeen(pets.pets), [pets.pets]);
-  // Found is the juvenile's to give, exactly as `speciesKnown` has it for a single
-  // pet: the hatchling is the tier's own form and says nothing about which animal
-  // is inside it. A page that named a species off a hatchling would spend the
-  // reveal the panel is careful to keep.
   const found = useMemo(
     () => new Set([...seen].filter(([, stages]) => stages.has('juvenile')).map(([species]) => species)),
     [seen],
@@ -80,11 +46,6 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
   if (catalogue === null) return <p className="muted">Reading the catalogue…</p>;
 
   const { rules, rarities, species, sources } = catalogue;
-  // The demo serves an empty catalogue on purpose — what exists is decided by
-  // tables the web bundle deliberately does not import, and a hand-written copy of
-  // them would be stale the first time a species was added. Drawing the rules strip
-  // over no species would put a 0% drop chance on screen, which is a lie rather
-  // than an absence. → `web/src/demo/demoBackend.ts`
   if (species.length === 0)
     return (
       <p className="muted">
@@ -92,13 +53,8 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
       </p>
     );
   const weighed = rarities.reduce((sum, tier) => sum + rules.rarity[tier], 0);
-  // Counted off the sources rather than off a literal seven, so an eighth action
-  // collapses the same way rather than turning every universal card into a wall of
-  // chips.
   const kinds = [...new Set(sources.map((row) => row.kind))];
   const everyKind = kinds.length;
-  // What one action is worth on average, which is what turns a species' share of
-  // drops into "one in how many actions". Read off the rules rather than assumed.
   const meanDrop = kinds.reduce((sum, kind) => sum + rules.rates[kind].dropChance, 0) / Math.max(1, kinds.length);
 
   return (
@@ -254,7 +210,6 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
   );
 }
 
-/** One figure from the rules, with the sentence that says what it means on hover. */
 function Odd({ label, value, why }: { label: string; value: string; why: string }): JSX.Element {
   return (
     <div className="species-odd" title={why}>
@@ -273,14 +228,10 @@ function SpeciesCard({
   meanDrop,
 }: {
   entry: PetCatalogueEntry;
-  /** Whether the collection has named this species, which is what decides the reveal. */
   known: boolean;
-  /** The forms of it the collection has actually shown, which is what decides each age. */
   seen: ReadonlySet<PetStage>;
   rules: PetCatalogue['rules'];
-  /** How many actions there are in total, which is what makes the list collapsible. */
   everyKind: number;
-  /** What one action is worth on average, so a share can be read as "one in how many". */
   meanDrop: number;
 }): JSX.Element {
   const window = entry.hours === null ? null : hourWindow(entry.hours);
@@ -307,10 +258,6 @@ function SpeciesCard({
 
       <div className="species-ages">
         {PET_STAGES.map((stage) => {
-          // Both, and neither is the other: a species is named at the juvenile, and
-          // a form is drawn once one of yours has reached it. Gating the ages on
-          // `seen` alone would light this card's hatchling — and only this card's —
-          // for a hatchling whose species you are not supposed to know yet.
           const hidden = !known || !seen.has(stage);
           return (
             <div key={stage} className="species-age" title={ageNote(entry, stage, known, hidden)}>
@@ -383,14 +330,6 @@ function SpeciesCard({
   );
 }
 
-/**
- * Every action against every tier it can roll, and what that actually lands on.
- *
- * The step-down is invisible everywhere else in the cockpit and decides the most:
- * settling a task can never produce a rare, because `human-task` holds none and
- * the roll walks *down*. Names of species you have not found are withheld here
- * too — a table that spelled them out would undo the card grid above it.
- */
 function SourceTable({
   sources,
   rarities,
@@ -461,23 +400,10 @@ function SourceTable({
   );
 }
 
-/** The stages a species nobody has met has seen none of. */
 const EMPTY: ReadonlySet<PetStage> = new Set();
 
-/**
- * Four actions, so four palettes of one animal.
- *
- * Fixed strings rather than the operator's own pets: the point being made is that
- * the colours come from the action, and four drawn from whatever happens to be in
- * one collection would make it about that collection instead.
- *
- * Four rather than five because four adults fit a card at the narrowest column the
- * grid allows. A fifth scrolls, and a strip that scrolls is one nobody scrolls —
- * they read four and assume that is all of it.
- */
 const VARY_SEEDS: readonly string[] = ['escalation:esc_1', 'human-task:htk_2', 'plan:plan_3', 'landing:land_4'];
 
-/** What the operator was doing, in their words rather than the table's. */
 const KIND_LABEL: Record<PetActionKind, string> = {
   escalation: 'escalation',
   'human-task': 'task',
@@ -485,8 +411,6 @@ const KIND_LABEL: Record<PetActionKind, string> = {
   landing: 'landing',
   job: 'job',
   claim: 'claim',
-  // The name the act had before the three claim stores became one. Nothing
-  // hatches from it any more, and the pets that did still carry the word.
   finding: 'finding',
   upgrade: 'upgrade',
 };
@@ -502,7 +426,6 @@ const KIND_NOTE: Record<PetActionKind, string> = {
   upgrade: 'The harness updating itself',
 };
 
-/** One decimal, or two where a rounding to 0.0% would read as never. */
 function pct(share: number): string {
   return `${(share * 100).toFixed(share < 0.01 ? 2 : 1).replace(/\.0+$/, '')}%`;
 }
@@ -513,8 +436,6 @@ function clock(hour: number): string {
 
 function ageNote(entry: PetCatalogueEntry, stage: PetStage, known: boolean, hidden: boolean): string {
   if (!known) return 'Find one to see this form.';
-  // Known but unreached: the cost is the answer, since it is the thing standing
-  // between the operator and the drawing.
   if (hidden)
     return `Raise one this far to see this form — ${(stage === 'juvenile' ? entry.juvenileAt : entry.adultAt).toLocaleString()} beats.`;
   if (stage === 'hatchling')

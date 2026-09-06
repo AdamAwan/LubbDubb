@@ -2,35 +2,10 @@ import { replyOrigin } from '../../dispatcher/reviewThreads.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * How long a reply may be. Generous — a reply that defends an approach has to be
- * able to say why — and a cap at all for `MAX_LESSON_CHARS`' reason: the thing on
- * the other end is a review thread a person reads.
- */
+// → docs/spec/11-mcp-tools.md
+
 const MAX_REPLY_CHARS = 4000;
 
-/**
- * Hand the harness the reply to a review thread, instead of posting it yourself.
- *
- * **The tool sends nothing.** It raises the same `reply_on_pr` act a rule raises,
- * so the reply takes the route the harness already had for a drafted one: the
- * hold that stops the same question being asked twice, the rejection the operator
- * already gave, the re-ask that names it, their authority — a click, or the
- * config key that says a reply need not be put to them — the sign-off on the way
- * out, and an escalation if the send fails. Calling the sink from here would
- * bypass every one of those, and there would be nothing red.
- *
- * `resolved` is the agent's verdict on the thread it answered, and it rides on the
- * same act: the operator authorizing the reply authorizes closing the thread the
- * reply is about, which is the pairing that makes it one question rather than
- * two. It is the only way a thread gets resolved now that the reply goes out
- * through the harness — an agent has no credential of its own to click with, and
- * the prompt tells it not to reach for the operator's.
- *
- * **The pull request comes from the caller's origin, never from an argument** —
- * the channel's one structural guarantee. An agent dispatched on one review
- * cannot answer another pull request's.
- */
 export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Post your reply to a review thread on the pull request you were dispatched for — a defence of ' +
@@ -87,9 +62,6 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       );
     }
     const thread = typeof args.thread === 'string' && args.thread.trim() ? args.thread.trim() : null;
-    // Only meaningful with a thread to resolve: a reply on the pull request
-    // itself has none, and reporting `resolved: true` for one would tell the
-    // agent a thread was closed that never existed.
     const resolve = args.resolved === true && thread !== null;
 
     const desk = deps.prReply;
@@ -106,21 +78,12 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       commentId: thread,
       draft: body,
       resolve,
-      // Carried so the send can attribute what it creates: the reviewer's
-      // publication of its findings is a reply like any other on the way out, and
-      // its origin is the only thing that says which one it was.
       originRef: scope.originRef,
       reason: `agent reply on ${scope.originRef}${thread ? ` (thread ${thread})` : ''}`,
     });
     return ok({
-      // The act reached the one path that can send it. Whether it has *gone* is
-      // the operator's to decide, and `note` is the executor's own account of
-      // which happened — one wording, not a second derivation of it here.
       handedOver: true,
       thread,
-      // What was asked for, not what happened: the resolution rides on the act,
-      // so it lands when the reply does — which on the stricter posture is after
-      // the operator accepts it. `note` is the executor's account of which.
       resolveRequested: resolve,
       pullRequest: scope.prNumber,
       note: outcome.detail,

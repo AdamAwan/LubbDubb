@@ -8,9 +8,6 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
-// `tsx` compiles JSX with the classic runtime, which emits bare
-// `React.createElement`; the console's own modules load after this so they see
-// the same global the rest of the cockpit tests install.
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -58,18 +55,8 @@ const render = (v: CockpitView): string =>
     }),
   );
 
-/** The rack alone: a pull request's title is drawn on its goal's row as well. */
 const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
-/**
- * The band exists, and the pull requests somebody handed you are above it.
- *
- * The card's question is *is anything waiting on me*, and it used to be answered
- * one row at a time in a column of words — a reading an operator has to take
- * down the whole card before they know the answer is no. What this pins is the
- * order, not the heading's wording: yours are first, so the answer is at the top
- * of the card or it is nowhere.
- */
 test('the rack puts the pull requests a person handed you above the fleet’s', () => {
   const state = buildDemoState().state;
   const yours = state.world.pullRequests.filter((pr) => pr.attention.assignedToYou !== undefined);
@@ -86,14 +73,6 @@ test('the rack puts the pull requests a person handed you above the fleet’s', 
   }
 });
 
-/**
- * The mark says who asked, in the tracker's own name for them.
- *
- * `Who` draws initials, and initials are not a name: what makes the mark
- * readable at all is the label behind it, which has to be the person the
- * provider reported and not a word the cockpit chose. A mark labelled anything
- * else is a row claiming an identity nothing on the board has.
- */
 test('the mark on an assigned row carries the tracker’s own name for the person', () => {
   const state = buildDemoState().state;
   const assigned = state.world.pullRequests.find((pr) => pr.attention.assignedToYou !== undefined);
@@ -104,19 +83,9 @@ test('the mark on an assigned row carries the tracker’s own name for the perso
   const card = rack(render(view()));
   assert.ok(card.includes(`aria-label="${author}"`), 'the mark does not name the person who asked');
   assert.ok(card.includes(`>${initials(author) ?? ''}</span>`), 'the mark draws no initials');
-  // And the fleet's own rows wear the absence of a person rather than a second
-  // kind of one — a login repeated down the column tells no two rows apart.
   assert.ok(card.includes('cn-who-none'), 'the fleet’s rows draw no mark at all');
 });
 
-/**
- * With nothing assigned, the card is the card it was.
- *
- * A single band over every row separates nothing, and the column beside it is
- * then the same hollow mark on every row — two pieces of furniture that say
- * there is no news, drawn at the weight of news. The grouping appears exactly
- * when it has something to separate.
- */
 test('the rack draws no band and no marks when nothing is yours', () => {
   const state = buildDemoState().state;
   const world = {
@@ -132,13 +101,6 @@ test('the rack draws no band and no marks when nothing is yours', () => {
   assert.ok(card.includes('cn-row cn-frow'), 'and the rows themselves are still drawn');
 });
 
-/**
- * The three shapes a provider calls a person by, all off the same field.
- *
- * A GitHub login is one word, an Azure display name is two, and an Azure unique
- * name is an address — so a rule written for any one of them draws a domain, half
- * a surname, or nothing at all on the other two.
- */
 test('initials read a login, a display name and an address', () => {
   assert.equal(initials('adamawan'), 'AD', 'a one-word login gives up two letters, not one');
   assert.equal(initials('Priya Raman'), 'PR');

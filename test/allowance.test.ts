@@ -10,23 +10,6 @@ import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } fr
 import type { SpendGoal } from '../src/spendInsights.js';
 import type { InsightsWindowView } from '../src/insightsWindow.js';
 
-/**
- * The allowance as a series, and the apportionment over it (issue #431).
- *
- * The reading was already captured; what it was not was *kept* —
- * `account_rate_limits` holds one row and overwrites it on every turn, so a
- * percentage over time and any attribution of it had nothing to be read off.
- *
- * Two halves are asserted here and they fail differently. The store half is about
- * a reading surviving: an append that inherited the chip's freshest-wins guard
- * would silently drop exactly the readings a busy fleet produces most of, and the
- * graph would thin out where the account was moving fastest. The fold half is
- * about a number meaning what it says: the account reports one percentage for the
- * whole fleet, so every per-goal figure here is apportioned, and the ways an
- * apportionment can quietly become a lie — netting a reset against a rise,
- * charging an idle stretch to whoever ran last — are what the cases below name.
- */
-
 const T0 = Date.parse('2026-08-27T12:00:00.000Z');
 const iso = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
 
@@ -38,10 +21,6 @@ function reading(minutes: number, fiveHour: number | null, sevenDay: number | nu
   };
 }
 
-// ---------------------------------------------------------------------------
-// The store: a reading is kept as well as landed
-// ---------------------------------------------------------------------------
-
 test('every reading is kept, not just the freshest', () => {
   const store = new Store(':memory:');
   store.recordRateLimits(reading(0, 10));
@@ -52,7 +31,6 @@ test('every reading is kept, not just the freshest', () => {
     kept.map((r) => r.fiveHour?.usedPercentage),
     [10, 20, 30],
   );
-  // The chip is unchanged by any of it: one row, freshest wins.
   assert.equal(store.readRateLimits()?.fiveHour?.usedPercentage, 30);
   store.close();
 });
@@ -61,11 +39,6 @@ test('a reading that arrives late is kept, though it never becomes the chip', ()
   const store = new Store(':memory:');
   store.recordRateLimits(reading(0, 10));
   store.recordRateLimits(reading(10, 30));
-  // Agents report interleaved, so a reading queued behind a slow turn lands after
-  // a newer one. The chip must not go backwards — and the *series* must not lose
-  // the row, which is the whole difference between the two writes. An append that
-  // inherited the chip's guard would drop the overlapping turns of a busy fleet,
-  // thinning the graph precisely where the account was moving fastest.
   store.recordRateLimits(reading(5, 20));
   assert.deepEqual(
     store.listRateLimitReadingsSince(iso(-1)).map((r) => r.fiveHour?.usedPercentage),
@@ -85,10 +58,6 @@ test('two agents reporting one instant record one reading', () => {
 });
 
 test('the readings survive a restart, as the chip does', () => {
-  // A file rather than `:memory:`, because surviving the process is the whole
-  // claim: readings arrive only when an agent takes a turn, so a harness that
-  // dropped them on boot would show a paused or idle fleet nothing at all —
-  // indefinitely, and with no way to tell that from an account at rest.
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-allowance-')), 'db.sqlite');
   const store = new Store(dbPath);
   store.recordRateLimits(reading(0, 10));
@@ -103,10 +72,6 @@ test('the readings survive a restart, as the chip does', () => {
   assert.equal(reopened.readRateLimits()?.fiveHour?.usedPercentage, 20);
   reopened.close();
 });
-
-// ---------------------------------------------------------------------------
-// The fold
-// ---------------------------------------------------------------------------
 
 const WINDOW: InsightsWindowView = {
   key: 'session',
@@ -183,7 +148,6 @@ function build(over: Partial<Parameters<typeof buildAllowanceInsights>[0]> = {})
 test('the rise is split between the goals that were spending while it happened', () => {
   const insights = build({
     readings: [reading(0, 40), reading(10, 50), reading(20, 60)],
-    // #1 spends through the first interval alone; the second is shared three to one.
     usageEvents: [usage('a', 5, 4), usage('a', 15, 3), usage('b', 15, 1)],
     costDeltas: [
       { costUsd: 4, at: iso(5) },
@@ -201,18 +165,13 @@ test('the rise is split between the goals that were spending while it happened',
 
   const { apportionment } = insights;
   assert.equal(apportionment.observedPoints, 20, 'two ten-point steps');
-  // Ten points from the interval it had to itself, plus three quarters of the next.
   assert.equal(apportionment.goals.find((g) => g.issueNumber === 1)?.points, 17.5);
   assert.equal(apportionment.goals.find((g) => g.issueNumber === 2)?.points, 2.5);
   assert.equal(apportionment.unattributedPoints, 0);
-  // The three totals are one partition, however the shares fell.
   assert.equal(apportionment.attributedPoints + apportionment.unattributedPoints, apportionment.observedPoints);
 });
 
 test('a rise with no fleet spend under it is charged to nobody', () => {
-  // The fleet was idle and the account still moved — the operator's own Claude
-  // Code on the same credential. Dividing this among whichever goals happen to be
-  // in the window is the one lie the module exists to avoid telling.
   const insights = build({
     readings: [reading(0, 40), reading(10, 50), reading(80, 54)],
     usageEvents: [usage('a', 5, 4)],
@@ -229,9 +188,6 @@ test('a rise with no fleet spend under it is charged to nobody', () => {
 });
 
 test('a window reset is a boundary, never a negative', () => {
-  // The five-hour window refills four or five times a day. Netting the fall
-  // against the rises reports a fleet that spent almost nothing, which is the
-  // most plausible-looking wrong number this fold can produce.
   const insights = build({
     readings: [reading(0, 80), reading(10, 95), reading(20, 5), reading(30, 15)],
     usageEvents: [usage('a', 5, 1), usage('a', 25, 1)],
@@ -250,9 +206,6 @@ test('a window reset is a boundary, never a negative', () => {
 });
 
 test('local-run money dilutes a goal’s share rather than inflating it', () => {
-  // A local run spends on the same account and its dated deltas carry no run id,
-  // so it can never name a goal. Leaving it out of the denominator would charge
-  // the fleet's goals for an operator's own afternoon.
   const insights = build({
     readings: [reading(0, 40), reading(10, 60)],
     usageEvents: [usage('a', 5, 5)],
@@ -271,8 +224,6 @@ test('local-run money dilutes a goal’s share rather than inflating it', () => 
 });
 
 test('one reading is a level rather than a change', () => {
-  // Reporting zero here would say the account did not move, when what happened is
-  // that nothing watched it.
   assert.equal(build({ readings: [reading(0, 40)] }).apportionment.observedPoints, null);
   assert.equal(build().apportionment.observedPoints, null);
 });
@@ -294,7 +245,6 @@ test('a goal that landed nothing gets no ratio, and says so', () => {
       ['a', 1],
       ['b', 2],
     ]),
-    // The merge reaches goal 1 through the graph; goal 2 landed nothing.
     nodes: [{ ref: 'pr:9', parentRef: 'issue:1' }],
     mergeEvents: [merge('pr:9')],
   });
@@ -304,9 +254,6 @@ test('a goal that landed nothing gets no ratio, and says so', () => {
   assert.equal(first?.landed, 1);
   assert.equal(first?.pointsPerLanded, 10);
   assert.equal(second?.landed, 0);
-  // Null rather than Infinity: a goal that ate a tenth of the account and landed
-  // nothing is the most important row the table draws, and it has to render as
-  // the sentence it is rather than as a symbol.
   assert.equal(second?.pointsPerLanded, null);
 });
 
@@ -328,8 +275,6 @@ test('a reset is marked so the line breaks rather than drawing a cliff', () => {
 });
 
 test('an unmeasured run still gets a lane', () => {
-  // A PTY agent reports no usage, so it is charged nothing — but it was running,
-  // which is the only thing a lane claims.
   const insights = build({
     readings: [reading(0, 40), reading(10, 50)],
     agents: [agent('pty', 't1', 0, 10, null)],
@@ -341,10 +286,6 @@ test('an unmeasured run still gets a lane', () => {
   assert.equal(insights.apportionment.unattributedPoints, 10, 'it spent nothing this harness can see');
 });
 
-// ---------------------------------------------------------------------------
-// The burn-down
-// ---------------------------------------------------------------------------
-
 test('the weekly projection is fitted from the last reset, not across it', () => {
   const now = T0 + 300 * 60_000;
   const at = (minutesBeforeNow: number, sevenDay: number): AccountRateLimits => ({
@@ -354,9 +295,6 @@ test('the weekly projection is fitted from the last reset, not across it', () =>
   });
   const insights = build({
     now,
-    // A full week ending in a refill, then a steep climb on the new allowance. A
-    // fit across the fall averages the two and reports days of headroom that do
-    // not exist.
     weekReadings: [at(600, 80), at(500, 95), at(400, 5), at(300, 20), at(200, 35), at(100, 50)],
   });
 
@@ -364,8 +302,6 @@ test('the weekly projection is fitted from the last reset, not across it', () =>
   assert.ok(p !== null);
   assert.equal(p.usedPercentage, 50);
   assert.equal(p.fittedFrom, 4, 'only the readings from the reset onwards');
-  // 45 points over five hours is 9 an hour, so the remaining 50 take about 5h30 —
-  // which is inside the ten hours to the reset.
   assert.ok(p.ratePerHour !== null && Math.abs(p.ratePerHour - 9) < 0.5);
   assert.equal(p.beforeReset, true);
 });
@@ -378,16 +314,11 @@ test('a flat week projects no exhaustion at all', () => {
     capturedAt: new Date(now - minutesBeforeNow * 60_000).toISOString(),
   });
   const p = build({ now, weekReadings: [flat(300), flat(200), flat(100)] }).projection;
-  // A rate of nearly zero arriving in four hundred hours is a date that is worse
-  // than no date: it renders, and it is read.
   assert.equal(p?.ratePerHour, null);
   assert.equal(p?.exhaustsAt, null);
   assert.equal(p?.beforeReset, null);
 });
 
 test('an account that reports no weekly window gets no burn-down', () => {
-  // API-key auth, or a CLI too old to carry one. Degrading to a projection off
-  // the five-hour window would answer a question about the week with a figure
-  // about the afternoon.
   assert.equal(build({ weekReadings: [reading(0, 40), reading(10, 50)] }).projection, null);
 });

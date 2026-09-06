@@ -15,24 +15,6 @@ import { prReviewState } from '../src/review/prReviewState.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { Agent, PrReview, PrReviewThread } from '../src/types.js';
 
-/**
- * What the fleet's review **published**, and what happened to it after.
- *
- * Two things hang off one record, `pr_reviews.published_thread`:
- *
- * 1. The reviewer can publish at all. `publishNote` has told it to post its
- *    findings with `reply_to_review` since the tool existed, against an origin
- *    check that admitted only `pr:<n>:comments` — so the call the prompt ordered
- *    was refused on every deployment with `review.publish` on, and the only route
- *    left was the operator's own credential in the agent's shell, which the same
- *    prompt forbids.
- * 2. Somebody resolving that thread is the one statement that the findings were
- *    dealt with — which is what turns the mark from red to green.
- *
- * → `docs/spec/07-pull-requests.md#the-fleet-review`,
- *   `docs/spec/17-cockpit.md#the-fleet-reviews-mark`
- */
-
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-review-pub-'));
   return loadConfig({
@@ -46,12 +28,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/**
- * A sink that sends nothing and answers the way Azure does: a comment id for what
- * it wrote, and — where the send opened a thread — a **different** id for the
- * thread. `threadRef` absent is the other provider and the older API version:
- * nothing is named, so nothing is recorded.
- */
 function replySink(script: { threadRef?: string } = { threadRef: 'thread-9' }): ActionSink & {
   replies: { prNumber: number; commentId: string | null; body: string }[];
 } {
@@ -96,11 +72,6 @@ function replySink(script: { threadRef?: string } = { threadRef: 'thread-9' }): 
   };
 }
 
-/**
- * `worktrees` is injected because this builds a whole system: without it
- * `config.repoRoot` defaults to `process.cwd()` and a dispatch cuts a real branch
- * in whoever's checkout is running the suite.
- */
 function build(sink: ActionSink): System {
   return buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
@@ -208,10 +179,6 @@ test('a database from before the column reads its reviews as unpublished', () =>
   });
   store.close();
 
-  // The table as the build before this one wrote it. `CREATE TABLE IF NOT EXISTS`
-  // never alters an existing table, so without the `ColumnMigrations` entry the
-  // column is invisible on every database from before it existed and the read below
-  // throws rather than answering null.
   const raw = new Database(file);
   raw.exec(`CREATE TABLE pr_reviews_pre AS SELECT pr_number, head_sha, verdict, summary, findings,
               agent_id, reviewed_at FROM pr_reviews;
@@ -232,8 +199,6 @@ test('replyOrigin admits the review and the comments, and nothing else', () => {
   assert.equal(replyOrigin('pr:42:ci').ok, false);
   assert.equal(replyOrigin('pr:42:review-triage').ok, false);
 });
-
-// -- and what the mark makes of it --------------------------------------------
 
 function reviewRow(over: Partial<PrReview> = {}): PrReview {
   return {
@@ -281,15 +246,6 @@ test('nothing else can address them', () => {
   assert.equal(mark(reviewRow(), [])?.addressed, false, 'nor can a reading that no longer carries the thread');
 });
 
-// -- the second arm: a thread that names itself -------------------------------
-
-/**
- * `review.publish: 'none'` is a whole deployment the record arm cannot reach: the
- * harness posts nothing, so `publishedThread` is null on every review, so the mark
- * stays red over threads that were published and resolved by the operator's own
- * review tooling. The stamp is how those threads say who opened them.
- * → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
- */
 const STAMP = { publishedThreadProperty: 'pr-agent-review', publishedThreadRole: 'finding' };
 
 function stamped(

@@ -14,7 +14,8 @@ import {
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { LocalValidationFinding, LocalValidationView } from '../types.js';
 
-/** The card's lamp, in the console's own vocabulary. */
+// → docs/spec/17-cockpit.md
+
 const LAMP: Record<LocalValidationTone, string> = {
   up: 'cn-run',
   busy: 'cn-wait',
@@ -22,29 +23,12 @@ const LAMP: Record<LocalValidationTone, string> = {
   off: 'cn-off',
 };
 
-/**
- * What a severity is worth to a reader, in the chip vocabulary the goal page
- * already uses. A `nit` draws no tone at all — it is worth saying and not worth
- * colouring, which is the whole of what the word means.
- */
 const SEVERITY: Record<LocalValidationFinding['severity'], TagTone | undefined> = {
   blocker: 'red',
   defect: 'amber',
   nit: undefined,
 };
 
-/**
- * What the fleet found when it drove this goal on the operator's own machine.
- *
- * **The plan is drawn as prominently as the findings**, and folded rather than
- * omitted: it is the only statement anywhere of what was actually exercised, and a
- * pass with no visible plan is a reassurance nobody can check. It lands before the
- * environment is even up, so the fold has something in it for most of the run.
- *
- * **A settled row still draws its controls' absence rather than a disabled one** —
- * the local-run panel's rule, one surface over: Call it off is present exactly
- * while there is something to call off.
- */
 export function LocalValidationReport({
   validation,
   why,
@@ -55,10 +39,8 @@ export function LocalValidationReport({
   actions,
 }: {
   validation: LocalValidationView | null;
-  /** Why the control is not offered, when it is not — so the empty state says something. */
   why: string | null;
   issueNumber: number;
-  /** Which agents are still running, so a finished one gets a door rather than a pulse. */
   liveAgents: ReadonlySet<string>;
   refUrls: Record<string, string>;
   now: number;
@@ -188,13 +170,9 @@ export function LocalValidationReport({
   );
 }
 
-/** A finding's own screenshot, where it named one the row actually holds. */
 function shotFor(validation: LocalValidationView, finding: LocalValidationFinding): JSX.Element | null {
   if (finding.screenshot === null) return null;
   const file = validation.files.find((f) => f.name === finding.screenshot);
-  // A name with no file behind it draws nothing rather than a broken image: the
-  // agent writes the name and the server lists what is on disk, and the honest
-  // reading of a disagreement is that the picture is not there.
   if (file === undefined) return null;
   return (
     <a href={file.url} target="_blank" rel="noreferrer" title={file.name}>

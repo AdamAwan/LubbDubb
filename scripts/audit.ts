@@ -1,34 +1,6 @@
-/**
- * The dependency-advisory gate, read from OSV rather than from `npm audit`.
- *
- * `npm audit` posts the whole tree to the registry's `/-/npm/v1/security/audits/quick`
- * endpoint, which npm's own output says is being retired, and which began answering
- * GitHub's runners `400 Invalid package tree` while every local run of the same npm,
- * over the same lockfile, returned zero. The message names `package-lock.json` and is
- * wrong about it — `npm install --package-lock-only` reproduces the committed file byte
- * for byte. It is the registry's words, relayed. So the gate was failing on a remote
- * whose behaviour we do not control and cannot reproduce, for a tree that is clean, and
- * the fix is not to rebuild anything: it is to stop asking that endpoint.
- *
- * OSV is queried directly instead. It is the same corpus GitHub publishes GHSAs into,
- * addressed by a documented batch API, so there is no scanner binary to pin and nothing
- * between us and the data.
- *
- * Two rules the security of this file rests on, both of which npm got right and are easy
- * to lose in a rewrite:
- *
- * - **A check that could not run fails.** Every network error, every unreadable severity,
- *   every advisory OSV knows an id for but will not describe, exits non-zero. A gate that
- *   goes green when it learned nothing is worse than no gate, because it is trusted.
- * - **The lockfile is the tree.** `npm ci` installs exactly what `package-lock.json` says,
- *   so auditing the file audits the artefact. `dev: true` marks a package nothing outside
- *   the toolchain can reach, which is what `--omit=dev` meant; `devOptional` is reachable
- *   from both and counts as runtime.
- */
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** GHSA's own scale, ordered. Anything at or above `high` fails the gate. */
 const RANK = ['low', 'moderate', 'high', 'critical'] as const;
 type Severity = (typeof RANK)[number];
 
@@ -64,14 +36,8 @@ interface Finding {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Anything that stops us learning the answer is fatal — never a skipped package. */
 class AuditError extends Error {}
 
-/**
- * Retries only the shape of failure that is worth retrying: a transport error, or a 5xx.
- * A 4xx is the server saying the request is wrong, which repeating cannot mend — that was
- * the failure mode this file exists to stop swallowing.
- */
 async function post(url: string, body: unknown): Promise<unknown> {
   let last = '';
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
@@ -95,11 +61,6 @@ async function post(url: string, body: unknown): Promise<unknown> {
   throw new AuditError(`${url}: ${last}`);
 }
 
-/**
- * The lockfile keys every package by install path, so one name appears once per distinct
- * version in the tree. Deduplicating by name@version keeps the query small without losing
- * a version: two paths on one version are one question.
- */
 export function readTree(path: string, includeDev: boolean): readonly Dep[] {
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
   if (typeof parsed !== 'object' || parsed === null || !('packages' in parsed)) {
@@ -108,11 +69,6 @@ export function readTree(path: string, includeDev: boolean): readonly Dep[] {
   const { packages } = parsed as Lockfile;
   const seen = new Map<string, Dep>();
   for (const [installPath, entry] of Object.entries(packages)) {
-    // A registry dependency is exactly an entry installed under `node_modules/`. That
-    // rules out the root project and any workspace package — local code OSV has never
-    // heard of — and it is what makes the name below safe to take from the path: an
-    // entry with no such segment would otherwise be queried under its whole path, which
-    // matches nothing and reports clean.
     const marker = installPath.lastIndexOf('node_modules/');
     if (marker === -1 || entry.link === true) continue;
     const { version } = entry;
@@ -128,7 +84,6 @@ export function readTree(path: string, includeDev: boolean): readonly Dep[] {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
-/** OSV returns ids in batch and nothing else, so severity costs one lookup per hit. */
 async function idsFor(deps: readonly Dep[]): Promise<ReadonlyMap<Dep, readonly string[]>> {
   const hits = new Map<Dep, readonly string[]>();
   for (let i = 0; i < deps.length; i += BATCH) {
@@ -151,11 +106,6 @@ async function idsFor(deps: readonly Dep[]): Promise<ReadonlyMap<Dep, readonly s
   return hits;
 }
 
-/**
- * A severity we cannot read is not a severity we may dismiss, so an advisory that
- * declines to name one is fatal rather than filtered out. Withdrawn advisories are the
- * one exclusion, because OSV keeps them addressable after retracting them.
- */
 async function describe(dep: Dep, id: string): Promise<Finding | undefined> {
   const response = await fetch(`https://api.osv.dev/v1/vulns/${encodeURIComponent(id)}`);
   if (!response.ok) throw new AuditError(`${id}: HTTP ${response.status}`);
@@ -205,15 +155,10 @@ async function main(): Promise<void> {
   process.stdout.write(`found 0 vulnerabilities at ${GATE} or above in ${counted}${below}\n`);
 }
 
-/**
- * Run only when invoked as the command, never on import: `readTree` is unit-tested, and a
- * module that audits the network the moment it is imported would put the test suite on OSV.
- */
 const invoked = process.argv[1];
 if (invoked !== undefined && realpathSync(invoked) === fileURLToPath(import.meta.url)) {
   await main().catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
-    // A gate that goes green because it could not ask is the failure this file exists to avoid.
     process.stderr.write(`audit: could not complete the check — ${message}\n`);
     process.exitCode = 1;
   });

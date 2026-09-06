@@ -17,30 +17,8 @@ import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { failPlanningOpen } from './support/plans.js';
 
-/**
- * The usage-limit park (issue #318, phase 3).
- *
- * An account that runs out mid-turn used to end the agent's run: `claude` exits
- * non-zero, `StreamJsonSession` called that `failed`, and the agent row, its task
- * and its open work were all settled over something nobody did wrong. Here it is
- * a park an operator ends.
- *
- * **The event payloads below are `claude`'s own, not invented ones.** They are
- * shaped from the CLI's published stream schema in the binary this deployment
- * launches (2.1.223): a `rate_limit_event` carrying `rate_limit_info` whose
- * `status` and `overageStatus` are the enum `allowed | allowed_warning |
- * rejected`, `resetsAt` whole unix seconds, and `rateLimitType` one of
- * `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`,
- * `seven_day_overage_included`, `overage`. Detection reads that structure — not a
- * sentence scraped out of the `result` text, which is the same class of mistake
- * as the PTY sentinel `indexOf`.
- */
-
-// `tsx` compiles JSX with the classic runtime; the cockpit assertion at the end
-// renders real components, which need the global in place before they load.
 (globalThis as { React?: typeof React }).React = React;
 
-/** Fake headless `claude`: replays stream events, records what was typed into it. */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 4242;
   writes: string[] = [];
@@ -61,7 +39,6 @@ class FakeChild extends EventEmitter implements StreamChild {
   speak(text: string): void {
     this.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
   }
-  /** The limit reading `claude` emits after an assistant turn. */
   rateLimit(info: Record<string, unknown>): void {
     this.emitLine({
       type: 'rate_limit_event',
@@ -70,7 +47,6 @@ class FakeChild extends EventEmitter implements StreamChild {
       session_id: 'f0e1d2c3-0000-4000-8000-00000000beef',
     });
   }
-  /** Turn end. `subtype` is the CLI's own: `success`, or one of its four error kinds. */
   result(subtype = 'success', isError = false): void {
     this.emitLine({
       type: 'result',
@@ -82,7 +58,6 @@ class FakeChild extends EventEmitter implements StreamChild {
       total_cost_usd: 0.12,
     });
   }
-  /** The process dying, which is what an exhausted account usually does to it. */
   exit(code: number): void {
     this.emit('exit', code);
   }
@@ -92,7 +67,6 @@ class FakeChild extends EventEmitter implements StreamChild {
   kill(): void {}
 }
 
-/** The reading `claude` sends when the five-hour window is spent. */
 const REJECTED = {
   status: 'rejected',
   resetsAt: 1_776_000_000,
@@ -101,12 +75,6 @@ const REJECTED = {
   isUsingOverage: false,
 };
 
-/**
- * The same reading with the window turning over `offsetMs` from now, in `claude`'s
- * own whole unix seconds. Relative rather than a fixed instant because the pulse
- * now compares it to the wall clock: a pinned date is a test that passes until it
- * is on the wrong side of it.
- */
 function rejectedIn(offsetMs: number): Record<string, unknown> {
   return { ...REJECTED, resetsAt: Math.floor((Date.now() + offsetMs) / 1000) };
 }
@@ -131,14 +99,11 @@ function streamConfig(dir: string, patch: Record<string, unknown> = {}): Config 
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The funnel in front of pickup defaults on; this file is about one transport
-    // ending, so pin it off and let `issue-pickup` dispatch straight.
     auth: { enabled: false } as never,
     ...patch,
   });
 }
 
-/** A stream-mode system with one dispatched agent, and the fake `claude` behind it. */
 async function fleet(issue = 701, patch: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-limit-'));
   const { spawner, children } = recordingSpawner();
@@ -177,7 +142,6 @@ test('the turn-end limit park keeps its resources through the later process exit
   const { system, agent, child } = await fleet();
   child.rateLimit(REJECTED);
   child.result('error_during_execution', true);
-  // What a real `claude` does next: gives up and exits non-zero.
   child.exit(1);
 
   const row = system.store.getAgent(agent.id)!;
@@ -197,8 +161,6 @@ test('the turn-end limit park keeps its resources through the later process exit
 test('a process exit before the turn end still sheds the limit park and resumes on the pulse', async () => {
   const { system, agent, child, children } = await fleet();
   child.rateLimit(rejectedIn(-60_000));
-  // The process-exit arm: Claude can die before it emits the result that would
-  // normally declare the park.
   child.exit(1);
 
   const row = system.store.getAgent(agent.id)!;
@@ -218,10 +180,6 @@ test('a process exit before the turn end still sheds the limit park and resumes 
 });
 
 test('an agent whose process dies with no limit is no park, and fails once resume is spent', async () => {
-  // `agentResumeAttempts: 0` is the pre-#318 crash path: a death mid-run settles the
-  // agent. Pinned here because this file is about the *park*, and what it has to show
-  // is that a crash with no limit reading behind it never becomes one — with the
-  // auto-resume that now stands between a crash and `failed` taken out of the way.
   const { system, agent, child } = await fleet(701, { agentResumeAttempts: 0 });
   child.speak('Working.');
   child.exit(1);
@@ -232,8 +190,6 @@ test('an agent whose process dies with no limit is no park, and fails once resum
 });
 
 test('a crash with no limit is a resume, not a park', async () => {
-  // The same death on the default deployment, where #318 re-attaches it: still not a
-  // park either way — the limit machinery is what must stay out of a plain crash.
   const { system, agent, child } = await fleet();
   child.speak('Working.');
   child.exit(1);
@@ -247,12 +203,7 @@ test('a crash with no limit is a resume, not a park', async () => {
 });
 
 test('a warning is not an exhaustion, and a cleared limit un-arms the park', async () => {
-  // Nudges off: the subject is which *park* an ordinary turn end falls into, and a
-  // fleet that asks the agent first would answer that a turn later (see
-  // `agentStallNudges`).
   const { system, agent, child } = await fleet(701, { agentStallNudges: 0 });
-  // Near the line, still allowed to work: parking here would stop a fleet that has
-  // room left.
   child.rateLimit({ status: 'allowed_warning', resetsAt: 1_776_000_000, rateLimitType: 'five_hour', utilization: 0.9 });
   child.result();
   assert.equal(system.agents.limitedAgentIds().length, 0, 'a warning parks nobody');
@@ -262,7 +213,6 @@ test('a warning is not an exhaustion, and a cleared limit un-arms the park', asy
     'the turn ends as the ordinary "stopped without finishing" park',
   );
 
-  // The window turned over mid-run: the newer reading wins.
   const { system: s2, agent: a2, child: c2 } = await fleet(702, { agentStallNudges: 0 });
   c2.rateLimit(REJECTED);
   c2.rateLimit({ ...REJECTED, status: 'allowed' });
@@ -276,8 +226,6 @@ test('a warning is not an exhaustion, and a cleared limit un-arms the park', asy
 
 test('an exhausted overage allowance parks too, and says so', async () => {
   const { system, agent, child } = await fleet();
-  // An account on overage credit reports `status: allowed` with the exhaustion in
-  // `overageStatus`, so reading `status` alone would miss the one that stopped it.
   child.rateLimit({
     status: 'allowed',
     overageStatus: 'rejected',
@@ -328,8 +276,6 @@ test('resuming a limit-parked agent re-opens the same session in the same worktr
     'the agent is told why it stopped and to carry on — not that the server restarted',
   );
 
-  // The transcript continues rather than repeating: a resumed headless session
-  // replays nothing (verified against claude 2.1.223, issue #318 phase 0).
   relaunch.speak('Migration finished.');
   const after = system.store.getTranscript(agent.id);
   assert.ok(after.startsWith(transcript), 'what was already there is untouched');
@@ -343,7 +289,6 @@ test('a park whose process survived is resumed down the stdin it already has', a
   const { system, agent, child, children } = await fleet();
   child.rateLimit(REJECTED);
   child.result('error_during_execution', true);
-  // No exit: `claude` kept the session open awaiting input. The park is the same.
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
   assert.equal(system.agents.isLive(agent.id), true);
 
@@ -362,8 +307,6 @@ test('resume refuses anything that is not a limit park, and says which', async (
   const { system, agent, child } = await fleet();
   const { app } = await buildApp(system);
 
-  // An agent at work, or parked on a question of its own, is not resumed: it is
-  // answered. Only the account limit produces this park.
   child.speak('Still working.');
   const busy = await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` });
   assert.equal(busy.statusCode, 409);
@@ -379,8 +322,6 @@ test('resume refuses anything that is not a limit park, and says which', async (
 test('a park whose window has turned over is resumed by the pulse, with nobody asked', async () => {
   const { system, agent, child, children } = await fleet();
   child.speak('Halfway through the migration.');
-  // A window that turned over a minute ago — the state an operator used to come
-  // back to and press Resume on.
   child.rateLimit(rejectedIn(-60_000));
   child.result('error_during_execution', true);
   child.exit(1);
@@ -421,9 +362,6 @@ test('a park whose window has not turned over yet is left where it is', async ()
 });
 
 test('a park claude gave no reset time for waits for a person, however many pulses pass', async () => {
-  // Every field but `status` is optional in the CLI's payload, so a park must
-  // survive a reading that names no moment to wait for — and there being no moment
-  // is precisely why the pulse must not invent one.
   const { system, agent, child, children } = await fleet();
   child.rateLimit({ status: 'rejected', rateLimitType: 'five_hour' });
   child.result('error_during_execution', true);
@@ -436,7 +374,6 @@ test('a park claude gave no reset time for waits for a person, however many puls
   assert.equal(children.length, before, 'no clock, so no automatic resume — ever');
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
 
-  // The operator's Resume is still the way out of one, and still works.
   const { app } = await buildApp(system);
   assert.equal((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` })).statusCode, 200);
   assert.equal(system.store.getAgent(agent.id)!.status, 'running');
@@ -450,9 +387,6 @@ test('a limit park still lets an operator kill the agent, and killing ends the p
   child.result('error_during_execution', true);
   child.exit(1);
 
-  // The session is gone, so there is nothing to signal — but the row is unsettled
-  // and the operator must still be able to abandon it, or "resume" is the only
-  // verdict a park can ever receive.
   assert.equal(system.agents.kill(agent.id), true);
   assert.equal(system.store.getAgent(agent.id)!.status, 'killed');
   assert.equal(system.store.getTask(agent.taskId)!.status, 'interrupted');

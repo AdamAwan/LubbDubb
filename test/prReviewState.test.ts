@@ -13,14 +13,6 @@ import type { PrReviewReading } from '../src/review/prReview.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../src/review/policy.js';
 import type { PrReview, PrReviewRoute } from '../src/types.js';
 
-/**
- * The reading the cockpit's review mark is drawn from
- * (`docs/spec/17-cockpit.md#the-fleet-reviews-mark`).
- *
- * A pure lens, so a unit test rather than the `buildSystem` seam — what is being
- * asserted is which of six answers a set of rows means, and every one of them is
- * a state an operator will meet.
- */
 function reading(over: Partial<PrReviewReading> = {}): PrReviewReading {
   return { review: null, route: null, elsewhere: new Set(), ...over };
 }
@@ -89,23 +81,15 @@ test('a clear verdict is its own status, not an empty findings list', () => {
 test('a skip reads as skipped only where the project still allows one', () => {
   const skip = reading({ route: { ...ROUTE, skipped: true, reason: 'A version bump.' } });
   assert.equal(prReviewState(7, skip, policy({ allowSkip: true }))?.status, 'skipped');
-  // `allowSkip` back off falls the standing skip back to a review — the same
-  // direction `reviewSkipped` takes for the gate, so the mark cannot say the
-  // merge is clear while the gate holds it.
   assert.equal(prReviewState(7, skip, policy())?.status, 'routed');
 });
 
 test('a review taken outside the harness stands over the missing verdict', () => {
   const state = prReviewState(7, reading({ elsewhere: new Set([7]) }), policy());
   assert.equal(state?.status, 'elsewhere');
-  // And says nothing about another pull request's number.
   assert.equal(prReviewState(8, reading({ elsewhere: new Set([7]) }), policy())?.status, 'deciding');
 });
 
-/**
- * And that it reaches the cockpit at all: the mark is drawn off the wire, so a
- * lens nothing folds onto the row is a lens no operator ever sees.
- */
 test('the snapshot ships the reading on the pull request’s row', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
@@ -118,7 +102,6 @@ test('the snapshot ships the reading on the pull request’s row', async () => {
     heartbeatIntervalMs: 999_999,
     review: policy({ blocking: false }),
   });
-  // `worktrees` is injected, or a dispatch cuts a real branch in this checkout.
   const system = buildSystem(config, {
     backend: new FakePtyBackend(),
     sink: undefined,

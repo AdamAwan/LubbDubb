@@ -12,6 +12,8 @@ import { applyCheck } from './check.js';
 import { parseDiffHunks, type DiffHunk } from './hunks.js';
 import { checkLeaseHead, checkLeaseKey, checkOrigin, checkTargetPr, packLeaseHead, packTargetPr } from './origins.js';
 
+// → docs/spec/31-review-packs.md
+
 interface CheckerDeps {
   store: Store;
   agents: Pick<AgentManager, 'spawn' | 'on'>;
@@ -19,46 +21,15 @@ interface CheckerDeps {
   git: GitObserver;
   prompts: PromptTemplates;
   defaultBranch: string;
-  /** Live pause flag, read by reference: a paused fleet starts no agent, this one included. */
   runtime: Pick<RuntimeControl, 'paused'>;
   errors: ErrorRecorder;
 }
 
 interface CheckerEvents {
-  /** The verdicts landed — the pack a reviewer is reading has its labels and its gate. */
   checked: [{ record: ReviewPackRecord }];
 }
 
-/**
- * The checker desk: the third role, following the author onto the document it
- * wrote. → `docs/spec/31-review-packs.md#the-check`
- *
- * **It follows the author, and nobody asks for it.** The reviewer's one ask buys
- * both runs — 31's "two agent runs spent deliberately" — so the trigger is the
- * author's run ending with a pack written against its head: `agents` `done`,
- * for an author task, with a row at that head that has not been checked. Not
- * `written`: the author is still alive at its submit, may submit again in the
- * same turn, and its slot is still held; on `done` the document is final and the
- * slot is back. A run the operator killed is not followed — `kill` never emits
- * `done` — and an author that failed after submitting is, because the pack is
- * there to check. A pause between the two is honoured, and said, in the error
- * log: the pack stays unchecked, visibly, and asking again re-runs both.
- *
- * Same shape as the author for the same reasons: outside the dispatcher, a
- * read-only slot through `Worktrees.ensureReadOnly` under its own key
- * (`review-pack-check/pr-<n>/<headSha>`, the head in the key because the row has
- * nowhere else to keep it), reaped through `session.kill()`, not counted against
- * the cap. One slot, one agent, the claims in series — one agent per claim was
- * rejected in 31's Cost section.
- *
- * **What it is handed is the skeleton and nothing that would persuade it**: each
- * idea's one-line claim and the ranges of its anchors, the claims as bare
- * sentences, the diff in its checkout. Not the witness log, not the notes, not
- * the gists, titles or summary. What it writes back goes through `applyCheck`,
- * which can reach only the checker's fields.
- */
 export class ReviewPackChecker extends EventEmitter {
-  /** Pull requests whose checker is being composed — the window before the task row exists. */
   private readonly composing = new Set<number>();
   private readonly inflight = new Set<Promise<void>>();
 
@@ -75,23 +46,14 @@ export class ReviewPackChecker extends EventEmitter {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
 
-  /** Settles once every author the desk decided to follow has its checker spawned or failed to. For tests. */
   async whenIdle(): Promise<void> {
     while (this.inflight.size > 0) await Promise.allSettled([...this.inflight]);
   }
 
-  /** Whether a checker is on the pull request right now — shipped beside the pack so a reader can tell "unchecked" from "being checked". */
   checking(prNumber: number): boolean {
     return this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(checkOrigin(prNumber)) !== null;
   }
 
-  /**
-   * The checker's verdicts, from the tool. The commission is re-derived from the
-   * task row — the pull request from its origin, the head from its lease key, the
-   * document from the store at that head — so a restart mid-run resumes the agent
-   * and its call still lands, and lands on the document it was handed rather than
-   * whatever the pull request has since.
-   */
   submit(
     agent: Agent,
     task: Task,
@@ -121,20 +83,16 @@ export class ReviewPackChecker extends EventEmitter {
     return { ok: true, record };
   }
 
-  /** The pack written against exactly this head, if the store still has it. */
   private packAt(prNumber: number, headSha: string): ReviewPack | null {
     return this.deps.store.listReviewPacks(prNumber).find((r) => r.pack.headSha === headSha)?.pack ?? null;
   }
 
-  /** An agent ended. If it was an author that left a pack behind, the checker is next. */
   private follow(taskId: string): void {
     const task = this.deps.store.getTask(taskId);
     const prNumber = packTargetPr(task?.originRef ?? null);
     const headSha = packLeaseHead(task?.branch ?? null);
     if (prNumber === null || headSha === null) return;
     const pack = this.packAt(prNumber, headSha);
-    // Nothing written, or already checked — a resumed author's second `done`,
-    // say — is nothing to follow.
     if (!pack || pack.order.length > 0) return;
     if (this.checking(prNumber)) return;
     if (this.deps.runtime.paused) {
@@ -161,11 +119,6 @@ export class ReviewPackChecker extends EventEmitter {
     );
   }
 
-  /**
-   * The async half: diff, compose, lease, spawn. No fetch — the author diffed the
-   * same head moments ago, so the clone holds it. A failure anywhere is recorded
-   * and settles whatever row it left, the author's discipline.
-   */
   private async compose(prNumber: number, headSha: string, pack: ReviewPack): Promise<void> {
     const { store, errors } = this.deps;
     let task: Task | null = null;
@@ -200,11 +153,6 @@ export class ReviewPackChecker extends EventEmitter {
     }
   }
 
-  /**
-   * The rendered template, then the skeleton and the note **appended**, never
-   * interpolated — an operator's override never learned these tokens.
-   * → `docs/spec/05-dispatcher.md#prompt-templates`
-   */
   private prompt(
     prNumber: number,
     pr: PullRequest | null,
@@ -234,11 +182,6 @@ function diffNote(base: string, headSha: string, hunks: DiffHunk[]): string {
   ].join('\n');
 }
 
-/**
- * The skeleton: per idea its id, its one-line claim, its anchors as bare ranges
- * and its claims by number. No gist, no title, no note, no provenance — nothing
- * the author wrote to persuade, which is the whole of the third role's independence.
- */
 function skeleton(pack: ReviewPack): string {
   const blocks = pack.ideas.map((idea) => {
     const lines = [`### ${idea.id}`, '', `Claim: ${idea.claim}`, '', 'The walk:'];
@@ -265,11 +208,6 @@ function skeleton(pack: ReviewPack): string {
   ].join('\n\n');
 }
 
-/**
- * How the verdicts are handed back. Named here, at the point of use, rather than
- * in the protocol addendum: only this agent can cast it, and the template says it
- * once where an override may not.
- */
 const CHECK_NOTE = [
   '## Handing the verdicts back',
   '',

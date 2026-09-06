@@ -6,21 +6,8 @@ import { Panel } from './panel.js';
 import { Button } from './button.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * What the write will do to the file, before it does it.
- *
- * The diff is drawn from the **server's own candidate bytes** (`POST
- * /api/config/preview`), never from a splice computed here. That is the whole
- * reason this step can promise anything: the edit that preserves comments, key
- * order and every untouched line is server code, and a second implementation of
- * it in the browser would be free to disagree with the one that actually writes —
- * silently, and in the direction of "your file is fine, honestly".
- *
- * The effects panel beside it is the other half of the same honesty: a change
- * with an arm applies on save, and everything else lands at the next restart. A
- * write that said "saved" and left the harness running the old value is the
- * failure this whole surface exists to avoid.
- */
+// → docs/spec/17-cockpit.md
+
 export function ReviewWrite({
   payload,
   staged,
@@ -47,9 +34,6 @@ export function ReviewWrite({
     setBusy(true);
     setRefusal(null);
     try {
-      // `lubbdubb.config.json` is rewritten in place and no row is written
-      // behind it, so the call site is the only witness that a person changed
-      // what the harness reads.
       logUsage('config.edit');
       const result = await api.saveConfig({ set: staged.set, clear: staged.clear, baseline: payload.revision });
       onWrote(result.changes);
@@ -154,14 +138,6 @@ interface DiffLine {
   text: string;
 }
 
-/**
- * A line diff of two versions of one small file.
- *
- * Deliberately the simplest thing that is honest: a common prefix, a common
- * suffix, and everything between them shown as removed-then-added. A real LCS
- * would pick prettier hunks and could not be more *truthful* — both ends are the
- * server's bytes, and what is between them is exactly what changed.
- */
 function diffLines(before: string, after: string): DiffLine[] {
   const a = before.split('\n');
   const b = after.split('\n');

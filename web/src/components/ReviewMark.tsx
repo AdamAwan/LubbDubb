@@ -4,65 +4,21 @@ import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 import { relTime } from './util.js';
 
-/**
- * The fleet review, on a pull request's row and in its masthead: one glyph,
- * tinted by what the reviewer said, with everything it knows in the tooltip.
- *
- * **Shared components rather than console markup**, because the same reading is
- * drawn on three surfaces — the goal page's PR rows, the pull-request page's
- * masthead and its rail card — and a mark written three times is three chances
- * for one of them to say something the record does not. They style themselves
- * through `styles.css` tokens only, which is the contract for anything under
- * `components/` (`console.css` owns `.cn` and touches no shared class).
- *
- * **Nothing here decides anything.** Every arm is a rendering of
- * `PrReviewState`, folded once by `src/review/prReviewState.ts` off the rows the
- * merge gate itself reads — a second opinion taken in the browser is the drift
- * that outlives the change introducing it.
- * → `docs/spec/17-cockpit.md#the-fleet-reviews-mark`
- */
+// → docs/spec/17-cockpit.md
 
-/**
- * The tone each status carries: the arm's own class, which is what the badge and
- * the word hang off, beside the shared family's tone alias, which is where the
- * hue, the border and the fill come from. Two classes rather than one because the
- * mark is the only thing here with descendants — the badge is tinted *by* the arm
- * — while the triple itself is the tag's, written once.
- * → docs/spec/17-cockpit.md#the-tag
- */
 const TONE: Record<PrReviewStatus, string> = {
   clear: 'rv-clear t-green',
   findings: 'rv-findings t-red',
-  // No tone alias: `routed` is the state every pull request *starts* in, and the
-  // tinted arms are the ones that have a verdict. → `.rv-routed` in `styles.css`
   routed: 'rv-routed',
   deciding: 'rv-deciding t-blue',
   skipped: 'rv-skipped',
   elsewhere: 'rv-elsewhere',
 };
 
-/**
- * The tone, which is the status' own except on one arm: findings somebody has
- * **dealt with** read green rather than red.
- *
- * The verdict is unchanged — the reviewer found four things and always will have
- * — but the mark is a call to look, and a row that keeps shouting after the thing
- * was handled is a row an operator learns to stop reading. What "dealt with"
- * means is the record, not a count of anything: the thread the fleet published
- * the findings into is resolved (`PrReviewState.addressed`).
- */
 function tone(review: PrReviewState): string {
   return review.addressed ? TONE.clear : TONE[review.status];
 }
 
-/**
- * The badge on the glyph's shoulder, or null where the tint says it all.
- *
- * One slot, four meanings — how many findings, a tick where they have been dealt
- * with, a dash for a review that will not happen, an arrow for one that happened
- * elsewhere. It is a badge rather than a mark drawn *through* the lenses because a
- * stroke across a 15px glyph is mud; this holds at every size a row uses.
- */
 function badge(review: PrReviewState): string | null {
   if (review.status === 'findings') return review.addressed ? '✓' : String(review.findings.length);
   if (review.status === 'skipped') return '–';
@@ -70,7 +26,6 @@ function badge(review: PrReviewState): string | null {
   return null;
 }
 
-/** What the mark claims, in one line — the tooltip's heading and its accessible name. */
 function reviewSaid(review: PrReviewState): string {
   const inMode = review.mode === null ? 'by the fleet' : `in ${review.mode} mode`;
   switch (review.status) {
@@ -92,7 +47,6 @@ function reviewSaid(review: PrReviewState): string {
   }
 }
 
-/** The sentence under the heading: what was read, or why nothing will be. */
 function reviewSaidMore(review: PrReviewState): string | null {
   switch (review.status) {
     case 'clear':
@@ -109,37 +63,8 @@ function reviewSaidMore(review: PrReviewState): string | null {
   }
 }
 
-/**
- * How many findings the tooltip lists before it stops counting.
- *
- * A review's findings are written for a person reading the pull request, so each
- * one is a paragraph — four of them filled the tooltip past the height of the
- * window it was hovering in, and the heading it started with scrolled off the top.
- * The tooltip's job on a dense rack is to say *what this mark means*; the reading
- * itself belongs on the page the mark now opens.
- */
 const TIP_FINDINGS = 2;
 
-/**
- * The mark itself. Null where the deployment has no fleet review, which is what
- * draws nothing at all: a grey "no review" glyph on every row of every default
- * deployment is a claim about a feature nobody turned on.
- *
- * **The one glyph in the cockpit that stands without a written label**, against
- * the rule in `icons.tsx`, and it earns the exception the way `AgentOnIt` does: a
- * dense rack of pull requests, one recurring subject, the words one hover away.
- * The checks beside it are a *chip* and carry their name, because they are the
- * reading an operator has to act on and the one nobody should have to learn.
- * The `aria-label` carries the same sentence the tooltip heads with, and the
- * tooltip opens on keyboard focus, so the glyph is never the only channel.
- *
- * **The tooltip is a summary and the page is the record.** Given `onOpen` the mark
- * is a button onto the pull request's own page, where `ReviewDetail` draws the
- * same reading at full length — so the hover can be two findings and a line about
- * when, rather than the whole review in a 320px box that no pointer can reach into
- * and nothing can scroll. The two are one component precisely so they cannot come
- * to word one record differently.
- */
 export function ReviewMark({
   review,
   now,
@@ -148,18 +73,7 @@ export function ReviewMark({
 }: {
   review: PrReviewState | undefined;
   now?: number;
-  /**
-   * Keep the mark's width where this row has no reading but its neighbours do —
-   * a list whose glyphs are a column reads as one, and a row that collapses the
-   * slot bends the column around it. Off by default, so a deployment with the
-   * review off pays no gutter for a feature it does not have.
-   */
   reserve?: boolean;
-  /**
-   * Open the pull request's page, where the whole reading is. Omitted on the
-   * masthead of that very page — a control that goes where you already are is a
-   * dead click — and on any surface that has nowhere to send you.
-   */
   onOpen?: () => void;
 }): JSX.Element | null {
   const tip = useTip();
@@ -170,10 +84,6 @@ export function ReviewMark({
   const stamp = review.reviewedAt ?? review.routedAt;
   const shown = review.findings.slice(0, TIP_FINDINGS);
   const rest = review.findings.length - shown.length;
-  // A button where there is somewhere to go, a span where there is not — rather
-  // than a span with a click handler, which is a control no keyboard reaches and
-  // no screen reader announces. Both carry the same tooltip and the same
-  // accessible name; only the element and the cursor differ.
   const Tag = onOpen === undefined ? 'span' : 'button';
   return (
     <Tag
@@ -214,13 +124,6 @@ export function ReviewMark({
   );
 }
 
-/**
- * The same record at full length, for the pull-request page: the mode, why the
- * triage chose it, what the reviewer understood the diff to do, and what it
- * found. The chrome around it belongs to whichever surface draws it — this is the
- * content, so the console keeps its own card vocabulary and the shared layer
- * keeps its own tokens.
- */
 export function ReviewDetail({ review, now }: { review: PrReviewState; now?: number }): JSX.Element {
   const more = reviewSaidMore(review);
   return (
@@ -253,10 +156,6 @@ export function ReviewDetail({ review, now }: { review: PrReviewState; now?: num
         )}
       </dl>
       {review.findings.length > 0 && (
-        // The bars follow the verdict word above them: red while the findings
-        // stand, green once the thread they were published into is resolved. Two
-        // colours saying opposite things about one record is the smallest way for
-        // a card to contradict itself.
         <ul className={`rv-found${review.addressed ? ' rv-found-done' : ''}`}>
           {review.findings.map((f) => (
             <li key={f}>{f}</li>

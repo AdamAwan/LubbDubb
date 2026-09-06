@@ -45,7 +45,6 @@ import { validatePolicyCheckModes, type PolicyCheckModes } from '../src/integrat
 import type { MergeMethod } from '../src/sink/actionSink.js';
 import type { AreaPathTree } from '../src/intake/placement.js';
 
-/** Everything a test wants to script. Every field defaults to empty/benign. */
 interface Script {
   viewer?: string;
   pulls?: AzPull[];
@@ -54,41 +53,29 @@ interface Script {
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
   labels?: Record<number, string[]>;
   workItems?: AzWorkItem[];
-  /** Items reachable only by id — the parents, children and siblings of the listed ones. */
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline';
-  /** What `listWorkItemsChangedSince` serves, when it should differ from the open list. */
   historyItems?: AzWorkItem[];
-  /** Build timelines by build id — the structured half of CI evidence. */
   timeline?: Record<number, AzTimelineRecord[]>;
-  /** Build logs keyed `<buildId>/<logId>` — the fallback half. */
   buildLogs?: Record<string, string[]>;
   createdPullNumber?: number;
-  /** The id `createWorkItem` reports having created. */
   createdWorkItemId?: number;
-  /** The project's area tree, as `listAreaPaths` serves it. */
   areaPaths?: AreaPathTree;
-  /** When set, `createWorkItem` throws with this message. */
   createThrows?: string;
-  /** When set, `relateWorkItem` throws with this message — the second of a bug's two writes. */
   relateThrows?: string;
-  /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
 }
 
 interface Recorded {
-  /** Thread status writes — the resolution of a review thread. */
   threadStatuses: Array<{ pullRequestId: number; threadId: number; status: string }>;
   threadReplies: Array<{ prId: number; threadId: number; parentCommentId: number; content: string }>;
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
-  /** Instants `listWorkItemsChangedSince` was called with. */
   historySince: string[];
   assignedToQueries: Array<string | undefined>;
   updateQueries: number[];
-  /** Each `getWorkItems` batch, in order — the relation-hydration round trips. */
   itemReads: number[][];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
@@ -107,14 +94,12 @@ interface Recorded {
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
   timelineReads: number[];
-  /** Evaluation ids `requeuePolicyEvaluation` was asked to restart. */
   requeues: string[];
   logReads: Array<{ buildId: number; logId: number }>;
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
-  /** Pull requests `abandonPullRequest` was called for — the restart's close. */
   abandoned: number[];
 }
 
@@ -212,14 +197,11 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.historySince.push(since);
       recorded.tagQueries.push(tag);
       recorded.assignedToQueries.push(assignedTo);
-      // Every state, and every item — the WIQL does the narrowing for real, and a
-      // fake that filtered here would be asserting the query rather than the mapping.
       return script.historyItems ?? script.workItems ?? [];
     },
     async getWorkItems(ids) {
       recorded.itemReads.push([...ids]);
       const pool = [...(script.workItems ?? []), ...(script.relatedWorkItems ?? [])];
-      // Mirrors `errorPolicy: 'omit'`: an id the pool doesn't hold is simply absent.
       return ids.map((id) => pool.find((w) => w.id === id)).filter((w): w is AzWorkItem => w !== undefined);
     },
     async listWorkItemUpdates(id) {
@@ -297,11 +279,6 @@ function pull(over: Partial<AzPull> = {}): AzPull {
   };
 }
 
-// --------------------------------------------------------------------------
-// Pure helpers
-// --------------------------------------------------------------------------
-
-/** The comment list as the provider now ships it: the threads, folded — see the GitHub twin. */
 const buildUnresolvedComments = (threads: AzThread[], ourReplies: ReadonlySet<string>): PrComment[] =>
   threadComments(buildReviewThreads(threads, ourReplies));
 
@@ -330,7 +307,6 @@ test('mergeableFromStatus is tri-state: concrete for succeeded/conflicts, undefi
   assert.equal(mergeableFromStatus('notSet'), undefined);
 });
 
-/** The well-known build-validation and status branch-policy type GUIDs. */
 const BUILD_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
 const STATUS_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
 const REVIEWERS_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
@@ -351,10 +327,6 @@ function evalRec(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
 }
 
 test('policyDisplayName: a build policy with no settings name falls back to its build definition', () => {
-  // The regression this exists for. `settings.displayName` is null for a
-  // build-validation policy whose operator never typed one — on a real repo that
-  // is most of them, the required builds included — and a nameless check was
-  // skipped outright, so `ci.checks` could not reach Build UI or Build-dotnet.
   assert.equal(
     policyDisplayName({
       configuration: { type: { id: BUILD_TYPE, displayName: 'Build' }, settings: {} },
@@ -397,8 +369,6 @@ test('listPolicyCiChecks: an Optional build failure is surfaced as a non-blockin
 });
 
 test('aggregatePolicyCiStatus: an Optional failure still does not move the aggregate', () => {
-  // The decoupling the whole feature rests on: an agent may be dispatched for a
-  // check that cannot stop the merge, and `ciStatus` must not claim it can.
   assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isBlocking: false })]), 'unknown');
 });
 
@@ -480,7 +450,6 @@ test('validatePolicyCheckModes: an unknown kind or mode is refused at load', () 
     () => validatePolicyCheckModes({ build: 'dispatch' } as unknown as PolicyCheckModes),
     /is not one of check \| advisory \| off/,
   );
-  // A valid map passes silently.
   validatePolicyCheckModes({ comments: 'check', workItems: 'off' });
 });
 
@@ -510,17 +479,14 @@ test('aggregatePolicyCiStatus: unknown when no CI policy applies (empty / only n
 });
 
 test('aggregatePolicyCiStatus: non-blocking, disabled, and non-CI policies are ignored', () => {
-  // An optional (non-blocking) build failure isn't a required-check failure.
   assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isBlocking: false })]), 'unknown');
-  // A disabled policy's evaluation is stale noise.
   assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isEnabled: false })]), 'unknown');
-  // A rejected *reviewers* policy is a human gate, not CI — must not read as failing.
   assert.equal(aggregatePolicyCiStatus([evalRec({ typeId: REVIEWERS_TYPE, status: 'rejected' })]), 'unknown');
 });
 
 test('computeApproved: approved on a positive vote with none negative', () => {
   assert.equal(computeApproved([10]), true);
-  assert.equal(computeApproved([5]), true); // approved-with-suggestions counts
+  assert.equal(computeApproved([5]), true);
 });
 
 test('computeApproved: a rejecting or waiting vote cancels an approval', () => {
@@ -564,15 +530,10 @@ test('buildUnresolvedComments: handled when the latest comment is a reply the ha
     },
   ];
   assert.equal(buildUnresolvedComments(threads, new Set(['2']))[0]!.handled, true);
-  // The author is the same string either way — only the row tells the fleet's
-  // reply from the operator's, which is why identity is never consulted.
   assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
-  // The PAT is the operator's own on a single-operator deployment, so a thread
-  // they opened themselves read as already handled and their review never reached
-  // a rule. Nothing was sent here, so nothing is recorded, so nothing is ours.
   const threads: AzThread[] = [
     {
       id: 300,
@@ -605,9 +566,6 @@ test('buildReviewThreads carries Azure’s property bag, and is absent rather th
     },
   ];
   const built = buildReviewThreads(threads, new Set());
-  // The mark `review.publishedThreadProperty` matches against: dropped here, the
-  // whole second arm of `addressed` has nothing to read and the mark stays red
-  // over resolved threads, with nothing red anywhere to say why.
   assert.deepEqual(built[0]!.properties, stamp);
   assert.equal(built[1]!.properties, undefined, '"carries none" and "this provider does not say" are one answer');
 });
@@ -681,12 +639,7 @@ test('buildOpenWorkItemQuery: filters to open states and, when set, a tag (singl
 
 test('buildWorkItemHistoryQuery: drops the state clause, dates the read, and keeps the narrowing', () => {
   const q = buildWorkItemHistoryQuery('2026-08-01T09:30:00.123Z', 'team', "o'brien@acme.com");
-  // Any state — a mirror that could only see finished work would be missing every
-  // row the cockpit shows as open.
   assert.ok(!q.includes('System.State'), 'the open-state clause is gone');
-  // WIQL rejects the `T` separator and sub-second precision, and rejects them by
-  // faulting the whole query — which would be a fault every pulse, not a quiet
-  // empty read.
   assert.ok(q.includes("[System.ChangedDate] >= '2026-08-01 09:30:00Z'"), q);
   assert.ok(q.includes("[System.Tags] CONTAINS 'team'"), q);
   assert.ok(q.includes("[System.AssignedTo] = 'o''brien@acme.com'"), 'the same escape the open list uses');
@@ -706,10 +659,6 @@ test('buildOpenWorkItemQuery: combines tag and assignee as independent AND claus
   assert.match(both, / AND \[System\.AssignedTo]/);
 });
 
-// --------------------------------------------------------------------------
-// RestAzureDevOpsApi.request — transient-failure retry & legible errors
-// --------------------------------------------------------------------------
-
 test('isSignInHtml: detects the sign-in page by content-type or a leading doctype/html tag', () => {
   assert.equal(isSignInHtml('text/html; charset=utf-8', 'whatever'), true);
   assert.equal(isSignInHtml(null, '\n\n<!DOCTYPE html><html>...'), true);
@@ -718,7 +667,6 @@ test('isSignInHtml: detects the sign-in page by content-type or a leading doctyp
   assert.equal(isSignInHtml(null, '{"value":[]}'), false);
 });
 
-/** A fake AzureAuth that counts forceRefresh calls. */
 function fakeAuth(): { auth: AzureAuth; state: { refreshes: number } } {
   const state = { refreshes: 0 };
   const auth: AzureAuth = {
@@ -732,7 +680,6 @@ function fakeAuth(): { auth: AzureAuth; state: { refreshes: number } } {
   return { auth, state };
 }
 
-/** A fetch that returns each scripted response in turn (sticking on the last), recording urls and bodies. */
 function scriptedFetch(responses: Array<() => Response>): {
   fetch: typeof fetch;
   state: { calls: number; urls: string[]; bodies: string[] };
@@ -756,7 +703,6 @@ const signInHtml = (status = 203) =>
     headers: { 'content-type': 'text/html' },
   });
 
-/** Build a client whose request() path is exercised via a real public method. */
 function restApi(responses: Array<() => Response>) {
   const { auth, state: authState } = fakeAuth();
   const { fetch: fetchFn, state: fetchState } = scriptedFetch(responses);
@@ -768,33 +714,25 @@ function restApi(responses: Array<() => Response>) {
     auth,
     fetchFn,
     (m) => logs.push(m),
-    () => Promise.resolve(), // no real backoff
+    () => Promise.resolve(),
   );
   return { api, authState, fetchState, logs };
 }
 
 test('runWorkItemQuery: the changed-since read asks for timePrecision in the url, the open list does not', async () => {
-  // A WIQL request runs at date precision by default and faults — 400,
-  // VssPropertyValidationException — on a comparison that supplies a time.
   const changed = restApi([() => json({ workItems: [] })]);
   await changed.api.listWorkItemsChangedSince('2026-08-01T09:30:00.123Z');
-  // The query string, not the body: `Wiql` is defined as `{query}` alone, so a
-  // `timePrecision` body field is dropped silently and the fault is unchanged.
   assert.match(changed.fetchState.urls[0]!, /[?&]timePrecision=true(&|$)/, changed.fetchState.urls[0]!);
   const changedBody = JSON.parse(changed.fetchState.bodies[0]!) as { query: string };
   assert.deepEqual(Object.keys(changedBody), ['query'], 'the body carries the query and nothing else');
   assert.ok(changedBody.query.includes("[System.ChangedDate] >= '2026-08-01 09:30:00Z'"), changedBody.query);
 
-  // The open list carries no time, so it stays on the server's default.
   const open = restApi([() => json({ workItems: [] })]);
   await open.api.listOpenWorkItems();
   assert.doesNotMatch(open.fetchState.urls[0]!, /timePrecision/);
 });
 
 test('linkWorkItemToPull: the artifact link carries both GUIDs, encoded into one vstfs path segment', async () => {
-  // Three requests: the project GUID, the repository GUID, then the PATCH. Both ids
-  // are resolved rather than the configured names used, because Azure stores the
-  // artifact id verbatim and only the GUID form is the link its policy reads.
   const { api, fetchState } = restApi([
     () => json({ id: 'proj-guid' }),
     () => json({ id: 'repo-guid' }),
@@ -816,8 +754,6 @@ test('linkWorkItemToPull: the artifact link carries both GUIDs, encoded into one
       },
     },
   ]);
-  // And the harness reads its own write back: this is the shape `linkedPrFromRelations`
-  // resolves to a PR number, which is what makes the desk idempotent from the world.
   assert.equal(linkedPrFromRelations(['vstfs:///Git/PullRequestId/proj-guid%2Frepo-guid%2F88']), 88);
 });
 
@@ -828,7 +764,6 @@ test('linkWorkItemToPull: a duplicate relation is a success, and both GUIDs are 
     () => json({ message: 'Relation already exists.', typeKey: 'WorkItemRelationAlreadyExistsException' }, 400),
   ]);
   await api.linkWorkItemToPull(12, 88);
-  // The second link pays for no GUID reads — both are cached for the client's life.
   await api.linkWorkItemToPull(13, 88);
   assert.equal(fetchState.calls, 4);
   assert.match(fetchState.urls[3]!, /_apis\/wit\/workitems\/13/);
@@ -849,7 +784,6 @@ test('request: a transient sign-in-HTML 2xx is retried with a fresh token, then 
   assert.deepEqual(pulls, []);
   assert.equal(fetchState.calls, 2, 'retried once');
   assert.equal(authState.refreshes, 1, 'forced a token refresh before the retry');
-  // The blip cleared, so nothing is recorded: a self-healing retry is not a fault.
   assert.deepEqual(logs, []);
 });
 
@@ -860,11 +794,9 @@ test('request: a persistent sign-in page fails with an auth-naming error, not a 
     (e: Error) => e,
   );
   assert.match(err.message, /HTML sign-in page instead of JSON/);
-  assert.match(err.message, /az login/); // the message names the actual cause
-  // 1 initial + MAX_RETRIES(2) attempts, and a refresh before each retry.
+  assert.match(err.message, /az login/);
   assert.equal(fetchState.calls, 3);
   assert.equal(authState.refreshes, 2);
-  // Only once every attempt is spent is it a fault, and the entry names the attempts.
   assert.equal(logs.length, 1);
   assert.match(logs[0]!, /failed after 3 attempts/);
   assert.match(logs[0]!, /HTML sign-in page instead of JSON/);
@@ -888,10 +820,6 @@ test('request: a 5xx is retried, a 4xx is not', async () => {
   await assert.rejects(() => client.api.listActivePullRequests(), /-> 403/);
   assert.equal(client.fetchState.calls, 1, '4xx not retried');
 });
-
-// --------------------------------------------------------------------------
-// AzureDevOpsSourceControlIntegration.snapshot
-// --------------------------------------------------------------------------
 
 test('snapshot maps a PR with its CI / approval / mergeability / comments', async () => {
   const { api } = fakeApi({
@@ -968,9 +896,6 @@ test('a PR that names you as a reviewer is kept by the owner filter and reported
     viewer: me,
     pulls: [
       pull({ pullRequestId: 7, authorUniqueName: me }),
-      // Somebody else's, and it names you personally — the case the widened
-      // filter exists for. Required and optional both count; what differs is only
-      // the wording the operator reads.
       pull({
         pullRequestId: 8,
         authorUniqueName: 'bob@acme.com',
@@ -979,13 +904,8 @@ test('a PR that names you as a reviewer is kept by the owner filter and reported
       pull({
         pullRequestId: 9,
         authorUniqueName: 'bob@acme.com',
-        // Case is the directory's business, not the operator's: a UPN written
-        // with different capitalisation in a config file is the same person.
         reviewers: [{ uniqueName: 'Alice@Acme.com', vote: 0, isRequired: false, isContainer: false }],
       }),
-      // A team the operator belongs to. Azure lists a group exactly as it lists a
-      // person, and reading the two alike would put the whole project's pull
-      // requests on their queue.
       pull({
         pullRequestId: 10,
         authorUniqueName: 'bob@acme.com',
@@ -1005,8 +925,6 @@ test('a PR that names you as a reviewer is kept by the owner filter and reported
   assert.equal(prs.find((p) => p.number === 7)?.viewerAssignment, undefined);
   assert.equal(prs.find((p) => p.number === 8)?.viewerAssignment, 'reviewer-required');
   assert.equal(prs.find((p) => p.number === 9)?.viewerAssignment, 'reviewer-optional');
-  // And which of them are the fleet's to act on: the filter admits all three,
-  // authorship is what separates them. → `src/prOwnership.ts`
   assert.equal(prs.find((p) => p.number === 7)?.viewerAuthored, true);
   assert.equal(prs.find((p) => p.number === 8)?.viewerAuthored, false);
 });
@@ -1028,12 +946,9 @@ test('an assignment carries who asked, and your own vote is what ends it', async
   };
 
   const open = await snap(asked({}));
-  // The name a person goes by, which is what a row saying somebody asked you for
-  // a review has to print.
   assert.equal(open.author, 'Bob Ferreira');
   assert.equal(open.viewerApproved, undefined);
 
-  // Azure's two approving votes, and only your own entry.
   assert.equal(
     (await snap(asked({ reviewers: [{ uniqueName: me, vote: 10, isRequired: true, isContainer: false }] })))
       .viewerApproved,
@@ -1052,13 +967,9 @@ test('an assignment carries who asked, and your own vote is what ends it', async
       ],
     }),
   );
-  // A colleague's approval is not an answer to the review *you* were asked for —
-  // the fold says the PR is approved and the row stays yours.
   assert.equal(theirs.approved, true);
   assert.equal(theirs.viewerApproved, undefined);
 
-  // No display name is not "no author": the UPN is what is left, and a provider
-  // reporting neither leaves the field off rather than printing an empty name.
   assert.equal((await snap(asked({ authorDisplayName: '' }))).author, 'bob@acme.com');
   assert.equal((await snap(asked({ authorDisplayName: '', authorUniqueName: '' }))).author, undefined);
 });
@@ -1070,10 +981,6 @@ test('a first-read failure rejects rather than serving an empty world', async ()
   await assert.rejects(() => sc.snapshot());
   store.close();
 });
-
-// --------------------------------------------------------------------------
-// Outbound
-// --------------------------------------------------------------------------
 
 test('postPrReply threads under an existing thread when commentId is set', async () => {
   const { api, recorded } = fakeApi();
@@ -1111,7 +1018,7 @@ test('mergePr completes the PR with the snapshotted head commit and requested st
   const { api, recorded } = fakeApi({ pulls: [pull({ pullRequestId: 7, lastMergeSourceCommit: 'headsha' })] });
   const store = new Store(':memory:');
   const sc = new AzureDevOpsSourceControlIntegration({ api });
-  await sc.snapshot(); // learn the head commit
+  await sc.snapshot();
   const res = await sc.mergePr({ prNumber: 7, method: 'squash' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.completions, [{ prId: 7, commit: 'headsha', method: 'squash' }]);
@@ -1148,10 +1055,6 @@ test('setPrLabel adds or removes a label through the API', async () => {
   store.close();
 });
 
-// --------------------------------------------------------------------------
-// AzureDevOpsWorkItemsIntegration.snapshot
-// --------------------------------------------------------------------------
-
 function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
   return {
     id: 101,
@@ -1185,7 +1088,6 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
   const issue = slice.issues![0]!;
   assert.equal(issue.number, 101);
   assert.equal(issue.state, 'open');
-  // The raw System.State is preserved alongside the open/closed collapse.
   assert.equal(issue.workItemState, 'Active');
   assert.deepEqual(issue.labels, ['bug']);
   assert.equal(issue.linkedPrNumber, 55);
@@ -1207,9 +1109,6 @@ test('createIssue creates the work item as its type, tagged and assigned, in one
   });
 
   assert.deepEqual(res, { ok: true, ref: 'issue:314' });
-  // Type, tags and assignee all ride on the create. Azure refuses an untyped
-  // create outright, and an item that exists for a moment untagged is one the
-  // pickup gate can miss.
   assert.deepEqual(recorded.createdWorkItems, [
     {
       type: 'User Story',
@@ -1233,11 +1132,7 @@ test('a related item is linked as a second write the caller never has to remembe
     assignee: null,
     relatedTo: 12,
   });
-  // Azure has no way to create a work item already related to another, so it is
-  // two writes — the exact shape a filing prompt used to spell out as two commands,
-  // where a model that ran the first and stopped left an untraceable bug.
   assert.deepEqual(recorded.relations, [{ id: 314, relatedId: 12 }]);
-  // The body is untouched: `#12` is GitHub's vocabulary, and Azure never adopted it.
   assert.equal(recorded.createdWorkItems[0]!.description, 'The symptom.');
 });
 
@@ -1246,8 +1141,6 @@ test('a relation that fails does not cost the item, and says which one exists', 
   const issues = new AzureDevOpsWorkItemsIntegration({ api });
   await assert.rejects(
     () => issues.createIssue({ title: 'Bug', body: 'x', labels: [], type: 'Bug', assignee: null, relatedTo: 12 }),
-    // The item exists and the operator asked for it; a link they can add by hand is
-    // a smaller loss than a filing that came back empty, so the throw carries its id.
     /work item 314 was created but linking it to #12 failed/,
   );
 });
@@ -1288,10 +1181,6 @@ test('a first-read failure rejects rather than serving an empty work item list',
   store.close();
 });
 
-// --------------------------------------------------------------------------
-// Tag-ownership resolution (viewerAddedTags / parseTags / snapshot wiring)
-// --------------------------------------------------------------------------
-
 test('parseTags: splits, trims and drops empties', () => {
   assert.deepEqual(parseTags('bug; agent-ready ;;'), ['bug', 'agent-ready']);
   assert.deepEqual(parseTags(undefined), []);
@@ -1317,7 +1206,7 @@ test('viewerAddedTags: a re-add by someone else transfers ownership away', () =>
 test('viewerAddedTags: a revision that leaves tags untouched preserves ownership', () => {
   const updates: AzWorkItemUpdate[] = [
     { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' },
-    { revisedByUniqueName: 'other@acme.com' }, // e.g. a title edit — no System.Tags diff
+    { revisedByUniqueName: 'other@acme.com' },
   ];
   assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['agent-ready']);
 });
@@ -1342,7 +1231,6 @@ test('work items snapshot resolves tag ownership only for items carrying the gat
   assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
   assert.deepEqual(byNumber.get(2)!.labelsAddedByViewer, []);
   assert.equal(byNumber.get(3)!.labelsAddedByViewer, undefined);
-  // Only the two tagged items triggered the extra revision fetch — #3 was skipped.
   assert.deepEqual(recorded.updateQueries.sort(), [1, 2]);
   store.close();
 });
@@ -1363,7 +1251,6 @@ test('the plan status comment is created once on the work item, then edited in p
   const issues = new AzureDevOpsWorkItemsIntegration({ api });
   const created = await issues.upsertIssueComment({ number: 101, body: 'first', commentRef: null });
   assert.equal(created.ref, '5101');
-  // Azure addresses an edit by (work item, comment), so both have to ride in.
   const edited = await issues.upsertIssueComment({ number: 101, body: 'second', commentRef: created.ref ?? null });
   assert.deepEqual(recorded.comments, [
     { id: 101, commentId: null, text: 'first' },
@@ -1383,7 +1270,6 @@ test('createPullRequest returns the new id (the REST arm adds the refs/heads pre
     body: 'part of #12',
   });
   assert.deepEqual(res, { ok: true, ref: '88' });
-  // Branches stay plain across the seam; only restAzureDevOpsApi speaks refs/heads.
   assert.deepEqual(recorded.createdPulls, [
     { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
   ]);
@@ -1401,9 +1287,6 @@ test('closePr abandons a pull request, with no remembered merge commit', async (
   const { api, recorded } = fakeApi();
   const sc = new AzureDevOpsSourceControlIntegration({ api });
 
-  // Unlike `mergePr`, which refuses without the head commit a snapshot recorded:
-  // Azure asks for one only to *complete* a pull request, so an abandon works on
-  // one this process never read.
   assert.deepEqual(await sc.closePr({ prNumber: 88 }), { ok: true, ref: 'pr:88' });
   assert.deepEqual(recorded.abandoned, [88]);
 });
@@ -1417,7 +1300,6 @@ test('deleteBranch reaps a merged branch, and an already-absent one is still a s
     ok: true,
     ref: 'issue/13 (already absent)',
   });
-  // Branches stay plain across the seam; only restAzureDevOpsApi speaks refs/heads.
   assert.deepEqual(recorded.deletedBranches, ['issue/12', 'issue/13']);
 });
 

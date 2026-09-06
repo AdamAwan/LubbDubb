@@ -5,46 +5,16 @@ import { checked, IssueNumberParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import { issueOrigin } from '../../plans/planning.js';
 
-/**
- * Recording what somebody concluded about one validation check, and undoing it.
- *
- * Every route here writes the *operator's own reading* and derives nothing. That
- * is the discipline `/api/plans/:id/acceptance` states and `conclude_part`
- * enforces one layer down: a positive terminal inferred from incidental evidence
- * — a green build, a merged pull request, an absence of errors — is a check
- * nobody ran, recorded as one that passed.
- *
- * **No cycle is run by any of them.** Nothing here schedules work: a validation
- * result gates no dispatch, holds no merge and concludes no goal. It changes what
- * closing the goal *looks like*, and a pulse per checkbox would be the cost of
- * saying nothing.
- */
+// → docs/spec/16-http-api.md
+
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;
 
-  /**
-   * A note is required on a deferral and a waiver, and **not trimmed to nothing
-   * silently** — the schema refuses blank in the same words it refuses absent.
-   * `conclude_work`'s rule, for its reason: a reading an operator acts on later
-   * must not be a state with no account of itself. A deferral says what it is
-   * waiting for; a waiver says why it is not being done. A `failed` result shares
-   * the same discipline, spelled out on `ResultBody` below — a note is the one
-   * account anyone has of what went wrong. A `passed` result is the one exception:
-   * the person clicking through their own checklist is watching it happen.
-   */
   const requiredNote = (field: string, what: string): z.ZodType<string, z.ZodTypeDef, unknown> => {
-    // The field is a parameter because the 400 body drops field paths and keeps
-    // only the message: a refusal naming `note` on a route whose body field is
-    // `reason` sends the caller to a key zod then strips.
     const message = `${field} is required — ${what}`;
     return z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
   };
 
-  /**
-   * `:number` is the **goal**, `:checkId` the check's author-chosen slug — never
-   * its letter. Keyed on the goal because that is what a check belongs to: the
-   * plan was only ever standing in for it.
-   */
   const CheckParams = IssueNumberParams.extend({ checkId: z.string().min(1, 'checkId is required') });
 
   const write = (
@@ -62,20 +32,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     return next;
   };
 
-  /**
-   * Mark a check passed or failed. The operator's own reading, and the only thing
-   * that ever writes one by hand.
-   *
-   * A note is optional on a **pass** — a person clicking through their own
-   * checklist is watching it happen, so the sentence would only repeat the
-   * checklist back — and still required on a **failure**, where it is the one
-   * account anyone has of what went wrong.
-   */
   const ResultBody = z
     .object({
-      // `errorMap` rather than the two `*_error` options: those cover absence and a
-      // non-string, and leave the arm an operator actually hits — a value that is a
-      // string and not one of these — refusing in zod's words, which name no field.
       result: z.enum(['passed', 'failed'], { errorMap: () => ({ message: 'result must be "passed" or "failed"' }) }),
       note: optionalText('note'),
     })
@@ -93,20 +51,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: CheckParams, body: ResultBody }, async ({ params, body, reply }) => {
       const note = body.note !== undefined && body.note.length > 0 ? body.note : null;
       const next = write(issueOrigin(params.number), params.checkId, { state: body.result, note, by: 'operator' });
-      // 409 rather than 404 because the commonest cause is not a typo: an
-      // amendment withdrew the check between the sheet being drawn and the click.
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
       return { ok: true, check: next };
     }),
   );
 
-  // Put a check down and say what it is waiting for. **Deferral cannot be used to
-  // reach a clear goal** — it takes the check out of today's work and leaves it in
-  // the count, which is the whole guard. Otherwise it becomes the quiet exit that
-  // `unrun` is loud about.
   const DeferBody = z.object({
     reason: requiredNote('reason', 'say what it is waiting for'),
-    /** Optional: a deferral with no date is honest, and one made to invent a date is not. */
     until: z
       .string({ invalid_type_error: 'until must be a string saying when, or be left out' })
       .trim()
@@ -127,10 +78,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Deliberately not doing this one. The opposite effect on the flag from a
-  // deferral, and kept apart from it because collapsing the two would make one of
-  // them dishonest: "the test environment is rebuilt on Thursday" is not "I am not
-  // going to check this".
   const WaiveBody = z.object({ reason: requiredNote('reason', 'say why this one is not being checked') });
   app.post(
     '/api/issues/:number/validation/:checkId/waive',
@@ -145,14 +92,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  /**
-   * Hand a check to the fleet, or take it back. **The only writer of `actor`**,
-   * and an operator route on purpose: whether an agent can run a check is a
-   * property of the deployment — what logins it has, whether anything can drive
-   * a browser — which the planner writing the check cannot know and the agent
-   * running it cannot decide for itself. `fleetCandidate` is the planner's
-   * argument for pressing this; it is not this.
-   */
   const HandoverBody = z.object({
     to: z.enum(['fleet', 'human'], { errorMap: () => ({ message: 'to must be "fleet" or "human"' }) }),
   });
@@ -162,11 +101,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const current = store.getValidationCheck(issueOrigin(params.number), params.checkId);
       if (!current)
         return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
-      // Refused rather than silently doing nothing, which is what handing over a
-      // settled check would amount to: the rule only ever dispatches an `unrun`
-      // one, so this would otherwise look like it took and never move. Refusing
-      // also protects the reading — an agent re-running a check behind the person
-      // who settled it would overwrite their answer with its own.
       if (body.to === 'fleet' && current.state !== 'unrun') {
         return reply.code(400).send({
           error: `this check reads ${current.state}; reset it first if you want the fleet to run it again`,
@@ -174,18 +108,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }
       const next = store.setValidationActor(issueOrigin(params.number), params.checkId, body.to);
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
-      // No cycle: the rule picks it up on the next pulse like any other world
-      // fact, and a pulse per hand-over is this module's standing refusal.
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, check: next };
     }),
   );
 
-  // Back to `unrun` — the undo for every one of the four above, and the only way
-  // out of a waiver or a deferral. One route rather than an inverse per verb
-  // because there is one thing to say: whatever was recorded about this check no
-  // longer holds. It takes no note for the same reason a dismissal takes none —
-  // it says nothing about the work, only that the previous reading is withdrawn.
   app.post(
     '/api/issues/:number/validation/:checkId/reset',
     checked({ params: CheckParams }, async ({ params, reply }) => {

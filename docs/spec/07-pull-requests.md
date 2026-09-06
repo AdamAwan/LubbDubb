@@ -477,6 +477,11 @@ Placeholders: `{number} {title} {position} {total} {type} {scope} {kind} {summar
 default is `#{number} {position}{kind}{summary}`. The spec commits to the placeholders, not the
 arrangement.
 
+`renderPrTitle` **collapses runs of whitespace** after substituting. The shipped default needs no
+such pass — its clauses carry their own trailing space and sit adjacent — but an override that
+spaces its tokens apart renders a double space wherever an empty clause falls out, and the collapse
+is what keeps a conditional clause invisible when it is empty rather than merely blank.
+
 ### The body is not templated
 
 Only the title is. There is no `pr-body` entry in the prompt book, and there will not be one: a title

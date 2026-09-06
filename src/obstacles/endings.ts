@@ -9,14 +9,8 @@ import type {
 } from '../types.js';
 import { reachesAgents } from './lifecycle.js';
 
-/**
- * How an obstacle ends: a condition the harness can evaluate, the owner
- * landing (read off the landing sweep, never the merge), a clock as backstop
- * only, and decay for everything else. Pure.
- * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
- */
+// → docs/spec/27-obstacles.md
 
-/** A condition the harness is about to promise to watch, before it has an id. */
 interface ConditionToWatch {
   obstacleId: string;
   kind: 'check-green';
@@ -24,11 +18,6 @@ interface ConditionToWatch {
   branch: string;
 }
 
-/**
- * The conditions the harness can promise to watch for this board, right now.
- * One kind: the named check going green on the named branch. Only rows that
- * reach agents, and only obstacles — a note ends by being written down.
- */
 export function conditionsToWatch(
   board: readonly ObstacleStanding[],
   openPrs: readonly PullRequest[],
@@ -48,13 +37,6 @@ export function conditionsToWatch(
   return out;
 }
 
-/**
- * Whether one condition is met: is this check still failing on that branch?
- * Met by going green, by no longer being reported, or by the PR leaving the
- * open set. `pending` does not meet it, nor does `ciChecks` absent — no
- * detail and no longer reported must not fold together.
- * (`docs/spec/24-environments.md#the-three-verdicts`)
- */
 export function conditionMet(condition: ObstacleCondition, openPrs: readonly PullRequest[]): boolean {
   const pr = openPrs.find((candidate) => candidate.branch === condition.branch);
   if (pr === undefined) return true;
@@ -64,32 +46,15 @@ export function conditionMet(condition: ObstacleCondition, openPrs: readonly Pul
   return check.status === 'passing';
 }
 
-/**
- * Whether every condition on a row is met, and there is at least one. Every,
- * not any — an obstacle red on two branches is not over when one goes green.
- */
 export function conditionsSettled(conditions: readonly ObstacleCondition[], openPrs: readonly PullRequest[]): boolean {
   return conditions.length > 0 && conditions.every((condition) => conditionMet(condition, openPrs));
 }
 
-/**
- * Whether the row's own owner has landed — off the landing sweep, never the
- * merge, since the merge SHA has a `closedPrWindowMs` shelf life. Only
- * ticket owners are reachable this way; a repair dispatch owns as
- * `obstacle:<id>`, which is no goal, and ends on its condition, the clock or
- * decay. (`docs/spec/24-environments.md#recording-a-landing`)
- */
 export function ownerLanded(obstacle: Obstacle, landings: readonly GoalLanding[]): boolean {
   if (obstacle.ownerRef === null) return false;
   return landings.some((landing) => landing.goalRef === obstacle.ownerRef);
 }
 
-/**
- * Whether the reporter's own `until` has run out on a row nothing else
- * settled. A backstop, never the mechanism: an owned row is exempt, and a
- * row re-reported after its deadline has outlived the estimate, so the
- * clock stops applying — stamped once, from the first report.
- */
 export function clockExpired(obstacle: Obstacle, now: number): boolean {
   if (obstacle.until === null || obstacle.ownerRef !== null) return false;
   if (obstacle.state !== 'sighted' && obstacle.state !== 'standing') return false;
@@ -97,44 +62,22 @@ export function clockExpired(obstacle: Obstacle, now: number): boolean {
   return until <= now && Date.parse(obstacle.lastSeenAt) < until;
 }
 
-/**
- * Whether nothing has re-reported this row inside `obstacleDormantMs`.
- * `lastSeenAt`, never `updatedAt` — every sighting stamps it, including ones
- * that move no state. An owned row never decays. Keys survive decay, so a
- * matching report reopens the row at `standing` with its history.
- */
 export function decayed(obstacle: Obstacle, now: number, dormantMs: number): boolean {
   if (obstacle.ownerRef !== null) return false;
   if (obstacle.state !== 'sighted' && obstacle.state !== 'standing') return false;
   return now - Date.parse(obstacle.lastSeenAt) >= dormantMs;
 }
 
-/**
- * The notes owed a documentation change: `standing`, never written up
- * before. A note ends by being written into the tree; on merge it's
- * `resolved` and leaves every prompt. `standing` not `sighted` — one report
- * is not evidence enough to commit to the repository.
- */
 export function notesToWriteUp(board: readonly ObstacleStanding[], written: ReadonlySet<string>): ObstacleStanding[] {
   return board.filter(
     (row) => row.obstacle.kind === 'note' && row.obstacle.state === 'standing' && !written.has(row.obstacle.id),
   );
 }
 
-/**
- * What became of one note's documentation change, read from the work graph
- * and never the world — the graph is upsert-only, so a write-up merged
- * during a restart is still settled. `unknown` is never folded into the
- * others: a merge known only by inference settles nothing.
- */
 export function writeUpReading(jobId: string, nodes: readonly WorkNode[]): ObstacleWriteUpOutcome | 'unknown' | null {
   const jobRef = `job:${jobId}`;
-  // Direct pull-request children only — one adopted further down the subtree
-  // belongs to some other piece of work.
   const prs = nodes.filter((node) => node.kind === 'pr' && node.parentRef === jobRef);
   if (prs.length === 0) {
-    // A job cancelled without ever opening a PR is over; anything else is
-    // simply not finished yet.
     return nodes.some((node) => node.ref === jobRef && node.status === 'cancelled') ? 'abandoned' : null;
   }
   const verdicts = prs.map(prVerdict);
@@ -149,18 +92,10 @@ function prVerdict(node: WorkNode): ObstacleWriteUpOutcome | 'unknown' | null {
   return node.terminal ? 'abandoned' : null;
 }
 
-/** How much of one voice's sentence rides the write-up prompt. */
 const MAX_WORDS_CHARS = 1_000;
 
-/** How many voices ride it. A note two goals said is two sentences, not a transcript. */
 const MAX_VOICES = 6;
 
-/**
- * Everything a note's documentation change is composed from: the job's
- * title, the `docs-change` template's variables, and the passage appended
- * to what that template renders. One composer for both callers; appended,
- * never interpolated, so an old template override cannot drop it.
- */
 export function noteWriteUpFields(row: ObstacleStanding): {
   title: string;
   vars: Record<string, string>;
@@ -174,13 +109,8 @@ export function noteWriteUpFields(row: ObstacleStanding): {
   };
 }
 
-/** A job title stays a line. The prompt carries everything worth reading. */
 const TITLE_CHARS = 80;
 
-/**
- * What the note is *about*, as a phrase a sentence can contain — never parsed back. A
- * note with no binding keys is about working this repository at all.
- */
 function keyPhrase(row: ObstacleStanding): string {
   const keys = row.keys.filter((key) => key.binds).map((key) => `\`${key.value}\``);
   return keys.length === 0 ? 'working this repository' : keys.join(', ');

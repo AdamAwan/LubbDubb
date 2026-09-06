@@ -11,37 +11,8 @@ import type {
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
-/**
- * Three tables. `goal_watches` — what each goal declared a running system would have to show,
- * and what the dry run read against it — plus `watch_windows`, one per `(goal, environment)`
- * an arrival opened, and `watch_readings`, what each check answered each time.
- *
- * `goal_watches` is one row per `(goal_ref, check_id)`, `OR REPLACE` on the declaration, so
- * an amended plan lands on the row rather than beside it.
- *
- * **A reading is never written as a `WorldEvent`**: `deliveryHold` expires a standing
- * delivery verdict on any world event matching the goal's issue ref, so one would un-park
- * the goal it just reported on. Own table, own wire list, merged at the feed's door.
- *
- * `watch_windows.settled_at` null means *still watching*, so a new column on that table
- * whose null means something needs a backfill gated on `ensureColumns`' report, or every
- * settled window reopens on the boot an operator takes the build.
- * → `docs/spec/29-post-deploy-watch.md#persistence`
- */
+// → docs/spec/14-persistence.md
 
-/**
- * The columns added to these tables since they were created — measures, the baseline, the
- * pending amendment, the extension. Without these entries each reads `undefined` on every
- * older database, and a measure that can never fail looks like a measure passing.
- *
- * None needs a backfill, each for a stated reason: `baseline_value` null already means
- * *never taken*; `expect_baseline` and `live` carry SQL defaults that are the honest reading
- * of an older row; `authored` defaults to `'plan'`, which is what every pre-edit row was (a
- * database reading `operator` throughout is a fleet no replan can amend); and
- * `watch_windows.extended_at` null means *never extended*, which is why this one column on
- * the settled-window table owes nothing despite that table's warning.
- * → `docs/spec/14-persistence.md#when-a-null-means-something`
- */
 export const WATCH_COLUMNS: ColumnMigrations = {
   goal_watches: {
     expect_under: 'REAL',
@@ -58,24 +29,9 @@ export const WATCH_COLUMNS: ColumnMigrations = {
   watch_windows: { extended_at: 'TEXT' },
 };
 
-/** The three tables' writer and reader. One module per group of related tables, per the store's composition rule. */
 export class WatchStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * Fold a document's `watch` block onto a goal's rows.
-   *
-   * A document speaks for the **whole** watch, so a check it stopped declaring is removed,
-   * and a dropped check takes its readings with it in the same transaction — a reading of a
-   * check nothing declares is a number with no rule. Dry-run columns are not carried across
-   * a re-declaration: a reading is a reading of *that* query.
-   *
-   * Two exclusions. The sweep is over **live rows only**, so a proposal nobody has ruled on
-   * is neither adopted nor thrown away. And an **operator's own check is neither swept nor
-   * overwritten**, because it was never in this document.
-   * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
-   * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
-   */
   ingestGoalWatch(originRef: string, checks: readonly GoalWatchInput[]): void {
     this.ctx.db.transaction(() => {
       const keep = new Set(checks.map((c) => c.id));
@@ -86,7 +42,6 @@ export class WatchStore {
         check_id: string;
         authored: string;
       }[]) {
-        // Neither swept nor, below, overwritten: this row is not this document's.
         if (row.authored === 'operator') {
           mine.add(row.check_id);
           continue;
@@ -115,11 +70,6 @@ export class WatchStore {
     })();
   }
 
-  /**
-   * What the dry run read, stored on the check it was a reading of — and, for a measure that
-   * answered a number, the baseline. The baseline is this reading kept, never a second one.
-   * `value` null leaves the columns alone: only a re-declaration clears a baseline.
-   */
   recordWatchDryRun(
     originRef: string,
     checkId: string,
@@ -129,7 +79,6 @@ export class WatchStore {
       presence: WatchReadingVerdict | null;
       rows: number | null;
       detail: string | null;
-      /** A measure's number, or null for a signal and for an observation that did not answer. */
       value: number | null;
     },
   ): void {
@@ -146,34 +95,18 @@ export class WatchStore {
       .run({ ...reading, goalRef: originRef, checkId, now: this.ctx.now() });
   }
 
-  /**
-   * Every **live** check, in document order within each goal, each carrying whatever
-   * amendment is pending against it. Live-only is the guard, not a filter: otherwise every
-   * reader would put an agent's unapproved query to the operator's own telemetry. Rows
-   * awaiting a ruling come through {@link listProposedGoalWatches}.
-   */
   listGoalWatches(): GoalWatch[] {
     return (
       this.ctx.db.prepare(`SELECT * FROM goal_watches WHERE live=1 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
     ).map(hydrate);
   }
 
-  /** The checks an agent declared that nobody has ruled on yet — drawn on the plan sheet, asked of nothing. */
   listProposedGoalWatches(): GoalWatch[] {
     return (
       this.ctx.db.prepare(`SELECT * FROM goal_watches WHERE live=0 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
     ).map(hydrate);
   }
 
-  /**
-   * An agent's declaration, filed against the operator rather than against the environment.
-   *
-   * **Nothing here is live.** A slug the goal already carries takes the proposal on its row
-   * and leaves the live check untouched; a new slug gets a `live=0` row whose declaration
-   * columns are the proposal's, so accepting is the flag rather than a second write. No
-   * query reaches an environment until the operator approves it.
-   * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
-   */
   proposeGoalWatch(originRef: string, checks: readonly GoalWatchInput[], note: string): { proposed: string[] } {
     const now = this.ctx.now();
     this.ctx.db.transaction(() => {
@@ -220,13 +153,6 @@ export class WatchStore {
     return { proposed: checks.map((c) => c.id) };
   }
 
-  /**
-   * The operator's ruling on one pending declaration. Accepting writes the proposal over the
-   * live columns and **clears every reading of the text it replaced** — dry run, baseline and
-   * window readings — because a reading standing under new text is a verdict about a question
-   * nobody asked; the caller re-runs the dry run. Declining leaves a live check exactly as it
-   * was and deletes a row that was only ever a proposal.
-   */
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
     const row = this.ctx.db
       .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
@@ -271,17 +197,6 @@ export class WatchStore {
     return after === undefined ? null : hydrate(after);
   }
 
-  /**
-   * The operator's own declaration, written from the goal page. Upsert on the slug, the same
-   * merge key everything else here folds on.
-   *
-   * **Live immediately**: `live=0` holds back a query *an agent* wrote until the operator has
-   * read it, and this one they typed. The caller runs the dry run straight after.
-   *
-   * **Readings are cleared only where the question changed** — an edited query or presence.
-   * A re-worded title or changed threshold is the same question, and dropping its baseline
-   * would cost a measure a before it cannot retake. Any pending proposal goes with the write.
-   */
   saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
     const now = this.ctx.now();
     this.ctx.db.transaction(() => {
@@ -306,8 +221,6 @@ export class WatchStore {
         .run({
           ...check,
           expectBaseline: check.expectBaseline ? 1 : 0,
-          // The store's, never the caller's: `seq` is display order, so an edit keeps its
-          // position and a new check goes after the ones already placed.
           seq: row?.seq ?? this.nextWatchSeq(originRef),
           baselineValue: asked ? row.baseline_value : null,
           baselineAt: asked ? row.baseline_at : null,
@@ -330,11 +243,6 @@ export class WatchStore {
     return hydrate(saved);
   }
 
-  /**
-   * Drop a check and the readings taken against it, whoever wrote it — both in one
-   * transaction, since a reading of a check nothing declares is a number with no rule. False
-   * back means there was no such row, which the route refuses rather than answering `ok`.
-   */
   deleteGoalWatch(originRef: string, checkId: string): boolean {
     return this.ctx.db.transaction(() => {
       const gone = this.ctx.db
@@ -346,7 +254,6 @@ export class WatchStore {
     })();
   }
 
-  /** One past the goal's furthest position, live rows and proposals alike — display order only. */
   private nextWatchSeq(originRef: string): number {
     const { top } = this.ctx.db.prepare(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
       top: number | null;
@@ -354,11 +261,6 @@ export class WatchStore {
     return (top ?? 0) + 1;
   }
 
-  /**
-   * Open a window on an arrival. `OR IGNORE`: a goal confirmed again has not arrived twice,
-   * and replacing would move `settles_at` forward or clear `settled_at` — a settled watch
-   * re-opened by a later reading.
-   */
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.ctx.db
       .prepare(
@@ -368,25 +270,12 @@ export class WatchStore {
       .run(input);
   }
 
-  /**
-   * Fix a window's verdict: its readings stop and its rows stay as the permanent account of
-   * what production said. The `settled_at IS NULL` guard is the one-way rule, in SQL rather
-   * than in a caller, so a second settle cannot move the stamp.
-   */
   settleWatchWindow(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE watch_windows SET settled_at=? WHERE goal_ref=? AND environment=? AND settled_at IS NULL`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
-  /**
-   * Give a window more time, on the operator's own click. It re-opens *this* window rather
-   * than opening a second one, so the goal's readings stay one series.
-   *
-   * This is deliberately the only thing that clears `settled_at`; {@link settleWatchWindow}'s
-   * guard is about a later *reading* moving a stamp, and nothing here is a reading. Null back
-   * means no such window, which the route refuses rather than answering `ok`.
-   */
   extendWatchWindow(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
     const now = this.ctx.now();
     const changed = this.ctx.db
@@ -401,7 +290,6 @@ export class WatchStore {
     return hydrateWindow(row);
   }
 
-  /** Every window, oldest first — the order the desk drains its per-pulse cap in. */
   listWatchWindows(): WatchWindow[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM watch_windows ORDER BY opened_at ASC, environment ASC`)
@@ -409,18 +297,12 @@ export class WatchStore {
     return rows.map(hydrateWindow);
   }
 
-  /**
-   * Append what one check answered. Append-only and keyed on the read time, so a window
-   * keeps the series that is the evidence behind its verdict. Bounded by the window's own
-   * length over `watchIntervalMs`, not by a retention rule.
-   */
   recordWatchReading(input: {
     goalRef: string;
     environment: string;
     checkId: string;
     verdict: WatchCheckVerdict;
     rows: number | null;
-    /** A measure's number, or null for a signal and for anything that did not answer. */
     value: number | null;
     detail: string | null;
   }): void {
@@ -433,7 +315,6 @@ export class WatchStore {
       .run({ ...input, readAt: this.ctx.now() });
   }
 
-  /** Every reading, oldest first. The newest per `(window, check)` is what the card draws. */
   listWatchReadings(): WatchReading[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM watch_readings ORDER BY read_at ASC, check_id ASC`)
@@ -451,7 +332,6 @@ export class WatchStore {
   }
 }
 
-/** `watch_windows`, as `better-sqlite3` hands it back. */
 interface WatchWindowRow {
   goal_ref: string;
   environment: string;
@@ -472,7 +352,6 @@ function hydrateWindow(row: WatchWindowRow): WatchWindow {
   };
 }
 
-/** `watch_readings`, the same. `rows_read` because `rows` is not a name SQLite likes. */
 interface WatchReadingRow {
   goal_ref: string;
   environment: string;
@@ -484,7 +363,6 @@ interface WatchReadingRow {
   detail: string | null;
 }
 
-/** The table's own shape, as `better-sqlite3` hands it back. */
 interface GoalWatchRow {
   goal_ref: string;
   created_at: string;

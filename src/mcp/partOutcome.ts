@@ -1,28 +1,7 @@
 import type { PartOutcomeKind } from '../types.js';
 
-/**
- * The `conclude_part` tool's pure layer: what a plan part is allowed to say it
- * produced.
- *
- * ## Why `code` is not one of the kinds
- *
- * A code part finishes by merging a pull request, and the world observes that —
- * `observePartPr` reads it off the provider every pulse. Accepting `code` here
- * would let an agent declare its own work finished with no pull request behind it,
- * which is exactly the false terminal that ruled *derivation* out when this was
- * designed. The tool covers precisely the two outcomes that have no outside world
- * to observe them, and the refusal says so rather than silently rejecting.
- *
- * ## Why the summary is required and not trimmed
- *
- * `conclude_work`'s rule, for its reason. A progress note is cheap and frequent, so
- * trimming an over-long one beats refusing it; a terminal is written once and read
- * by an operator deciding what the plan achieved — and for a determination it is
- * the entire record of why no code was written. A silently truncated one is worse
- * than a refusal the agent can act on.
- */
+// → docs/spec/11-mcp-tools.md
 
-/** The kinds an agent may declare. `code` is deliberately absent — see above. */
 export const PART_OUTCOME_KINDS = ['report', 'determination'] as const satisfies readonly PartOutcomeKind[];
 
 type DeclarableKind = (typeof PART_OUTCOME_KINDS)[number];
@@ -34,17 +13,8 @@ export const PART_OUTCOME_KIND_HELP: Record<DeclarableKind, string> = {
     'or the premise turned out to be wrong',
 };
 
-/** A summary long enough to be prose rather than a label, short of a pasted transcript. */
 const MAX_PART_SUMMARY = 2000;
 
-/**
- * Resolve a task's origin into the part it may conclude — or say why it may not.
- *
- * Only a part origin qualifies, and every other caller is refused **by name**
- * rather than scoped down: an agent handed `{ok: true}` would reasonably believe it
- * had closed something. Each refusal names the tool that caller actually wants, the
- * way `conclusionOrigin`'s assessor arm points at `assess_issue`.
- */
 export function partConclusionOrigin(
   originRef: string | null,
 ): { ok: true; issueNumber: number; slug: string } | { ok: false; error: string } {
@@ -138,9 +108,6 @@ export function validatePartConclusion(
     return { ok: false, error: 'evidenceRef must be a string when given.' };
   }
   const ref = typeof raw === 'string' && raw.trim() ? raw.trim() : null;
-  // A narrow vocabulary, for `report_finding`'s reason: an open-ended evidence
-  // field is an unqueryable junk drawer, and both records it may name are already
-  // addressed this way everywhere else.
   if (ref !== null && !/^(flag|finding):\S+$/.test(ref)) {
     return {
       ok: false,

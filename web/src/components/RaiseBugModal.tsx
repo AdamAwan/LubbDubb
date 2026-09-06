@@ -4,24 +4,8 @@ import { Modal } from './Modal.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * Where the operator says what is wrong.
- *
- * A modal rather than an inline field because this is the one control on the
- * story row that takes **prose the operator has to compose**: every other button
- * there is a verdict — one click, done. The text is also the whole feature. A
- * desk agent writes the bug from it, and it is the one fact about a goal that no
- * agent on it can derive, since none of them ran the thing.
- *
- * The submit is disabled until the report is non-empty, which is the rule the
- * route enforces rather than a second opinion about it: an empty report asks for
- * nothing. The title is optional and labelled as the **job's** — the agent writes
- * the bug's own title, because that is the judgement being delegated.
- *
- * A failed post keeps the modal open with the text intact. Losing what the
- * operator just typed is the one outcome worth writing code to prevent here;
- * everything else they can simply do again.
- */
+// → docs/spec/17-cockpit.md
+
 export function RaiseBugModal({
   issueNumber,
   issueTitle,
@@ -31,15 +15,6 @@ export function RaiseBugModal({
 }: {
   issueNumber: number;
   issueTitle: string;
-  /**
-   * What the box opens holding — the post-deploy watch's reading, when the modal
-   * was opened from its bench row.
-   *
-   * A **seed, not a payload**: it lands in the same editable box, so what is filed
-   * is still whatever the operator sends, and the numbers ride as their own report
-   * rather than as a paraphrase somebody would have had to retype. Empty
-   * everywhere else, which is the box this modal has always opened with.
-   */
   initialSummary?: string;
   onSubmit: (summary: string, title?: string) => Promise<unknown>;
   onClose: () => void;
@@ -56,8 +31,6 @@ export function RaiseBugModal({
       onClose();
     } catch (err) {
       setFailed(true);
-      // Rethrown so the button flashes its own error ring: swallowing it here
-      // would leave the control reporting a success the message below denies.
       throw err;
     }
   }
@@ -97,7 +70,6 @@ export function RaiseBugModal({
         placeholder="The export button still 404s on Safari — worked in the PR preview, not on main."
         onChange={(e) => setSummary(e.target.value)}
         onKeyDown={(e) => {
-          // ⌘/Ctrl+Enter submits, matching the composer and the drawer's respond box.
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault();
             void submit();

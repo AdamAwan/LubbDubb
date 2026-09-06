@@ -21,9 +21,6 @@ import { sequenceBriefing } from '../src/sequence/dossier.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
 import type { FeatureSequence, FeatureSequenceEdge, Issue, IssueRelative } from '../src/types.js';
 
-// Stage 1 of story sequencing: the record, the sequencer and the hold an accepted
-// order puts on work. → `docs/spec/33-story-sequencing.md`
-
 const NOW = '2026-09-04T12:00:00.000Z';
 
 const FEATURE: IssueRelative = {
@@ -73,7 +70,6 @@ function queued(upcoming: QueueItem[] | undefined, origin: string): QueueItem | 
   return upcoming?.find((q) => q.origin === origin);
 }
 
-/** The gate at its only level that runs an agent. */
 function full(): RuleDispatcher {
   return new RuleDispatcher({ sequencing: 'full' });
 }
@@ -97,8 +93,6 @@ function sequence(over: Partial<FeatureSequence> = {}): FeatureSequence {
   };
 }
 
-// -- the key: membership, never movement -------------------------------------
-
 test('the key changes when a story is added', () => {
   const before = features([story(11), story(12)])[0]!.key;
   const after = features([story(11), story(12), story(13)])[0]!.key;
@@ -106,17 +100,12 @@ test('the key changes when a story is added', () => {
 });
 
 test('the key does not change when a story merges', () => {
-  // The whole difference from the summary's key. Re-proposing an order every time a
-  // child landed would ask an operator to re-accept the same sequence eight times.
   const before = features([story(11), story(12), story(13)])[0]!.key;
   const after = features([story(11, { state: 'closed' }), story(12), story(13)])[0]!.key;
   assert.equal(before, after);
 });
 
 test('the key changes when the board gains a Predecessor link', () => {
-  // What was accepted was an order over a set of statements, and the statements
-  // have changed — so the operator is asked again rather than held to an order
-  // written before the team said anything.
   const before = features([story(11), story(12)])[0]!.key;
   const after = features([story(11), story(12, { dependsOn: [{ ...FEATURE, number: 11 }] })])[0]!.key;
   assert.notEqual(before, after);
@@ -125,8 +114,6 @@ test('the key changes when the board gains a Predecessor link', () => {
 test('the key is order-independent', () => {
   assert.equal(featureSequenceKey([11, 12], []), featureSequenceKey([12, 11], []));
 });
-
-// -- what is worth asking about ----------------------------------------------
 
 test('a Feature with one story is not sequenced — there is no order to write', () => {
   assert.deepEqual(features([story(11)]), []);
@@ -142,8 +129,6 @@ test('a story with no parent belongs to no Feature', () => {
   assert.deepEqual(features([story(11, { parent: null }), story(12, { parent: null })]), []);
 });
 
-// -- cycles are refused at ingestion -----------------------------------------
-
 test('a cycle is found and named', () => {
   const cycle = findCycle([
     { issue: 11, dependsOn: 12 },
@@ -156,7 +141,6 @@ test('a cycle is found and named', () => {
 });
 
 test('a rejoin is not a cycle', () => {
-  // Two stories waiting on one, and a fourth waiting on both, is an ordinary shape.
   assert.equal(
     findCycle([
       { issue: 12, dependsOn: 11 },
@@ -217,8 +201,6 @@ test('every edge is marked inferred, whatever the agent says', () => {
   assert.equal(result.ok ? result.submission.edges[0]!.source : null, 'inferred');
 });
 
-// -- the fence ---------------------------------------------------------------
-
 test('only the agent dispatched to sequence a Feature may write its order', () => {
   assert.equal(featureSequenceSubmitOrigin('issue:500:sequence').ok, true);
   for (const origin of ['issue:500', 'issue:500:plan', 'issue:500:summary', null]) {
@@ -227,8 +209,6 @@ test('only the agent dispatched to sequence a Feature may write its order', () =
     assert.match(refused.ok ? '' : refused.error, /sequence_submit is only for/);
   }
 });
-
-// -- the rule ----------------------------------------------------------------
 
 test('a Feature with no order gets a sequencer', async () => {
   const { upcoming, actions } = await full().decide(ctx([story(11), story(12)]));
@@ -249,8 +229,6 @@ test('a Feature whose order was written against this membership gets nothing', a
 });
 
 test('a declined order is an answer, and holds the sequencer off', async () => {
-  // A proposal that came back on the next pulse would make the fleet argue with the
-  // operator once a Feature until they gave in.
   const issues = [story(11), story(12)];
   const key = features(issues)[0]!.key;
   const { upcoming } = await full().decide(
@@ -283,8 +261,6 @@ test('the rule is in the registry and names itself', () => {
   assert.equal(DISPATCH_RULES['feature-sequence'].kind, 'rule');
 });
 
-// -- an accepted order holds work --------------------------------------------
-
 test('an accepted order holds the story it puts second', async () => {
   const issues = [story(11), story(12)];
   const { upcoming } = await full().decide(
@@ -314,8 +290,6 @@ test('a declined order holds nothing', async () => {
   );
   assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
 });
-
-// -- the record --------------------------------------------------------------
 
 test('an order is written as a set, never merged', () => {
   const store = new Store(':memory:');
@@ -361,8 +335,6 @@ test('answering a Feature with no order is a refusal, not a row conjured to hold
   assert.equal(store.answerFeatureSequence('issue:500', 'accepted', 'adam'), null);
 });
 
-// -- the dossier -------------------------------------------------------------
-
 test('the sequencer is shown the Feature and every open story under it', () => {
   const brief = sequenceBriefing('issue:500:sequence', [story(11), story(12), story(13, { state: 'closed' })]);
   assert.ok(brief);
@@ -384,23 +356,17 @@ test('nothing is appended for a caller that is not a sequencer', () => {
   assert.equal(sequenceBriefing('issue:12', [story(11), story(12)]), null);
 });
 
-/** Past the appraisal and the planner, so what is left in front of a story is the order. */
 function pastTheFunnelFor(issues: Issue[]) {
   return issues.flatMap((i) => pastTheFunnel(i.number));
 }
 
-// One edge the provider states is read straight off the issue, with no record at all.
 test('the tracker’s own links need no sequence row', () => {
   assert.deepEqual(linkEdges([story(11), story(12, { dependsOn: [{ ...FEATURE, number: 11 }] })]), [
     { issue: 12, dependsOn: 11 },
   ]);
 });
 
-// -- the cockpit's own derivation --------------------------------------------
-
 test('a wave is longest path, so a story never draws above what it waits on', () => {
-  // The rejoin: #14 waits on #12 and #13, and #12 waits on #11. Taking the first
-  // prerequisite listed would put #14 in wave 2 — above #12, which it waits on.
   const edges: FeatureSequenceEdge[] = [
     { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
     { issue: 14, dependsOn: 13, source: 'inferred', reason: null },
@@ -423,8 +389,6 @@ test('every story lands in exactly one wave, whether or not the order mentions i
 });
 
 test('the two sides of a story are direct, never transitive', () => {
-  // "2 waiting on this" has to be a number the card in front of the operator adds
-  // up to; a transitive count is one nothing on the page shows.
   const edges: FeatureSequenceEdge[] = [
     { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
     { issue: 13, dependsOn: 12, source: 'inferred', reason: null },
@@ -437,12 +401,10 @@ test('the two sides of a story are direct, never transitive', () => {
 test('what accepting costs counts only stories still open', () => {
   const edges: FeatureSequenceEdge[] = [{ issue: 12, dependsOn: 11, source: 'inferred', reason: null }];
   assert.equal(heldByAccepting([11, 12], edges), 1);
-  // #11 has merged and is no longer in the list: accepting now holds nothing.
   assert.equal(heldByAccepting([12], edges), 0);
 });
 
 test('a cycle in a stored order does not spin the display', () => {
-  // Ingestion refuses cycles, but this runs against whatever the payload carries.
   const edges: FeatureSequenceEdge[] = [
     { issue: 11, dependsOn: 12, source: 'inferred', reason: null },
     { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
@@ -450,13 +412,6 @@ test('a cycle in a stored order does not spin the display', () => {
   assert.equal(typeof waveOf(11, edges), 'number');
 });
 
-// -- the desktop channel: an order is amended by talking to Claude Code -------
-
-/**
- * The two desktop tools, driven through `buildDesktopTools` with a world baseline
- * written straight into the store — the one seam that lets a hierarchy be scripted
- * without a provider that reports one.
- */
 function desktopDeck(): {
   call: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
   store: Store;
@@ -488,7 +443,6 @@ test('both sequence tools are on the desktop channel and neither is on the fleet
     assert.ok(DESKTOP_TOOL_NAMES.includes(name as never), `${name} is a desktop tool`);
     assert.ok(!MCP_TOOL_NAMES.includes(name as never), `${name} is not one the fleet can call`);
   }
-  // The one the fleet gets, and it is the other way round.
   assert.ok(MCP_TOOL_NAMES.includes('sequence_submit'));
   assert.ok(!DESKTOP_TOOL_NAMES.includes('sequence_submit' as never));
 });
@@ -552,8 +506,6 @@ test('a Feature the harness can see no stories under is refused, and says why', 
   assert.match(done.text as string, /no stories under it/);
 });
 
-// -- a story is added: keep the order, and keep the acceptance ---------------
-
 const E = (issue: number, dependsOn: number) => ({ issue, dependsOn });
 
 function accepted(edges: { issue: number; dependsOn: number }[], members: number[] | null) {
@@ -561,8 +513,6 @@ function accepted(edges: { issue: number; dependsOn: number }[], members: number
 }
 
 test('an order extended to cover a new story keeps the acceptance', () => {
-  // The whole point: a Feature that gains a story every few days would otherwise
-  // put the same question to the operator once a week until they stopped reading.
   const verdict = resequenceVerdict(accepted([E(12, 11)], [11, 12]), [E(12, 11), E(14, 11)], [11, 12, 14]);
   assert.equal(verdict.carry, true);
   assert.deepEqual(verdict.carry ? verdict.added : null, [14]);
@@ -574,9 +524,6 @@ test('a dropped edge asks again — it un-holds work the operator chose to hold'
 });
 
 test('a new edge between two stories they already ruled on asks again', () => {
-  // A change of opinion about work they answered, whatever else it leaves alone.
-  // #14 is the new story; #13 was already covered, so an edge added between #13
-  // and #12 is a fresh opinion about work the operator already answered.
   const verdict = resequenceVerdict(
     accepted([E(12, 11)], [11, 12, 13]),
     [E(12, 11), E(13, 12), E(14, 11)],
@@ -586,7 +533,6 @@ test('a new edge between two stories they already ruled on asks again', () => {
 });
 
 test('an edge lost because its story left the Feature is not held against the proposal', () => {
-  // #12 was re-parented away. The edge is gone whatever the new order says.
   const verdict = resequenceVerdict(accepted([E(12, 11), E(13, 11)], [11, 12, 13]), [E(13, 11)], [11, 13]);
   assert.equal(verdict.carry, true);
 });
@@ -601,8 +547,6 @@ test('an order nobody accepted is not one to carry', () => {
 });
 
 test('a row from before the membership column asks again rather than guessing', () => {
-  // Null means "we cannot say which stories are new", and the cost of asking is a
-  // click while the cost of not asking is work held in an order nobody chose.
   const verdict = resequenceVerdict(accepted([E(12, 11)], null), [E(12, 11), E(14, 11)], [11, 12, 14]);
   assert.equal(verdict.carry, false);
 });
@@ -614,8 +558,6 @@ test('a first order — nothing on file — is a proposal', () => {
 test('the re-sequence arm is only taken for an order that stands', async () => {
   const issues = [story(11), story(12)];
   const key = features(issues)[0]!.key;
-  // Accepted, but the Feature has since gained #13 — so the key differs and the
-  // rule fires with the standing order to work from.
   const withNew = [...issues, story(13)];
   const { upcoming } = await full().decide(ctx(withNew, { featureSequences: [sequence({ standingKey: key })] }));
   assert.equal(queued(upcoming, 'issue:500:sequence')?.title, 'Re-sequence feature #500');
@@ -638,8 +580,6 @@ test('the dossier hands the sequencer the order that stands, and marks what is n
 });
 
 test('a declined order is not quoted back as something to preserve', () => {
-  // It is not an order they hold, it is them saying to run the stories in
-  // parallel — quoting it would invite exactly the edges they refused.
   const brief = sequenceBriefing(
     'issue:500:sequence',
     [story(11), story(12)],

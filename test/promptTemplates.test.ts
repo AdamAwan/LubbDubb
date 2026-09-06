@@ -32,7 +32,6 @@ test('renderTemplate fills tokens, stringifies numbers, leaves unknown tokens un
 
 test('stripTemplateDoc removes only a leading comment and trims', () => {
   assert.equal(stripTemplateDoc('<!-- docs here -->\n\nHello {x}'), 'Hello {x}');
-  // A comment inside the body is preserved.
   assert.equal(stripTemplateDoc('Hello <!-- keep --> world'), 'Hello <!-- keep --> world');
 });
 
@@ -112,13 +111,9 @@ test('describe: every id carries its doc, placeholders and effective text', () =
   assert.ok(book.length >= 18, `expected the whole registry, got ${book.length}`);
   assert.equal(new Set(book.map((t) => t.id)).size, book.length, 'ids must be unique');
   for (const t of book) {
-    // A new prompt id cannot ship undocumented: the doc seeds the sample override
-    // file and is the only thing the panel can say about what a prompt is for.
     assert.ok(t.doc.trim().length > 0, `${t.id} has no doc`);
     assert.ok(t.template.trim().length > 0, `${t.id} has no template`);
     assert.equal(t.overridden, false, `${t.id} is not overridden by default`);
-    // What the panel offers an operator as writable must be what the loader
-    // actually accepts in an override file.
     for (const p of t.placeholders) {
       assert.doesNotThrow(() => renderTemplate(`{${p}}`, { [p]: 'x' }));
     }
@@ -136,9 +131,7 @@ test('describe: overridden is true only for ids the loader actually replaced', (
     const book = loadPromptTemplates(dir).describe();
     const overridden = book.filter((t) => t.overridden).map((t) => t.id);
     assert.deepEqual(overridden, ['pr-ci-fix']);
-    // The *effective* text, so the panel shows what the dispatcher will send.
     assert.equal(book.find((t) => t.id === 'pr-ci-fix')?.template, 'Fix CI on PR #{number}.');
-    // An untouched id still reports its built-in.
     assert.match(book.find((t) => t.id === 'issue-pickup')?.template ?? '', /issue/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -146,9 +139,6 @@ test('describe: overridden is true only for ids the loader actually replaced', (
 });
 
 test('the panel names the override file in the server\u2019s own path dialect', () => {
-  // `promptTemplatesDir` is resolved to an absolute path server-side, so on
-  // Windows it arrives backslashed. A hardcoded separator would hand the operator
-  // a path in two dialects — one they cannot paste into a shell.
   assert.equal(
     overridePath('C:\\repo\\.lubbdubb\\prompts', 'issue-pickup'),
     'C:\\repo\\.lubbdubb\\prompts\\issue-pickup.md',
@@ -157,10 +147,8 @@ test('the panel names the override file in the server\u2019s own path dialect', 
     overridePath('/srv/repo/.lubbdubb/prompts', 'issue-pickup'),
     '/srv/repo/.lubbdubb/prompts/issue-pickup.md',
   );
-  // A trailing separator is not doubled, either way round.
   assert.equal(overridePath('/srv/prompts/', 'pr-ci-fix'), '/srv/prompts/pr-ci-fix.md');
   assert.equal(overridePath('C:\\prompts\\', 'pr-ci-fix'), 'C:\\prompts\\pr-ci-fix.md');
-  // No dir configured: the panel still says what to create, generically.
   assert.equal(overridePath(null, 'pr-ci-fix'), '<promptTemplatesDir>/pr-ci-fix.md');
 });
 
@@ -189,15 +177,11 @@ test('GET /api/prompts serves the book the dispatcher renders from, overrides an
       dir: string;
       templates: { id: string; template: string; overridden: boolean; placeholders: string[]; doc: string }[];
     };
-    // The directory is what makes a read-only panel actionable: it names the file
-    // an operator would create.
     assert.equal(body.dir, config.promptTemplatesDir);
     const ci = body.templates.find((t) => t.id === 'pr-ci-fix');
     assert.ok(ci);
     assert.equal(ci.overridden, true);
     assert.equal(ci.template, 'CI is red on #{number}. Fix it on {branch}.');
-    // The served text is the *effective* one, so the panel and the agent read the
-    // same words — asserted against the render rather than trusted.
     assert.equal(
       system.prompts.render('pr-ci-fix', { number: 4, title: 'T', branch: 'b' }),
       renderTemplate(ci.template, { number: 4, title: 'T', branch: 'b' }),
@@ -231,8 +215,6 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
     const { actions } = await d.decide(
       ctx(
         { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },
-        // The funnel has failed open, so the rule under test is the pickup
-        // rather than the planner in front of it.
         { recentDecisions: pastTheFunnel(12) },
       ),
     );
@@ -243,19 +225,6 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
   }
 });
 
-/**
- * The three templates that *are* an escalation's whole prompt render to one line.
- *
- * A prompt is what the operator reads first, and the card treats its first
- * paragraph as the headline. These three carry nothing else — no consequence
- * paragraph, no quoted agent text — so a line break in one is not structure being
- * given back, it is a lede that grew into a body with no label on it.
- *
- * The multi-paragraph templates are deliberately absent: `plan-approval` and
- * `issue-shortfall` write what accepting and rejecting *do* as their own
- * paragraphs, which the card renders as the body under the headline. That is the
- * split working, not a violation of it.
- */
 test('an escalation-only template is a single-line lede', () => {
   const t = defaultPromptTemplates();
   const rendered = {
@@ -270,11 +239,6 @@ test('an escalation-only template is a single-line lede', () => {
 });
 
 test('the shortfall proposal no longer templates the assessor s own words', () => {
-  // The placeholder is gone on purpose: what the assessor wrote is carried beside
-  // the prompt as the escalation's `detail` and rendered as the card's labelled
-  // body. Templated, an operator override could bury it mid-paragraph again — and
-  // `loadPromptTemplates` only rejects placeholders it does not know, so an
-  // override written against the old shape would keep interpolating it.
   const t = defaultPromptTemplates();
   const text = t.render('issue-shortfall', { number: 12, title: 'T', consequence: 'Accepting replans it.' });
   assert.doesNotMatch(text, /\{summary\}/);

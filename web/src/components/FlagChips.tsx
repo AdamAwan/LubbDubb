@@ -2,11 +2,8 @@ import type { JSX } from 'react';
 import type { AgentFlag } from '../types.js';
 import { artifactHref } from './util.js';
 
-/**
- * The artifacts an agent surfaced mid-run (design docs, reports, links) as a row
- * of clickable chips. Each opens in a new tab — a local path through the confined
- * artifact route, an http(s) ref directly. Renders nothing when there are none.
- */
+// → docs/spec/17-cockpit.md
+
 export function FlagChips({
   flags,
   artifactUrls,

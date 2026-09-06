@@ -4,13 +4,6 @@ import { buildSpendInsights } from '../src/spendInsights.js';
 import type { Agent, CostDelta, Issue, IssueRun, LocalRun, Task, WorkNode, WorldEvent } from '../src/types.js';
 import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
 
-/**
- * The breakdown behind the cost indicators. What it has to get right is not the
- * arithmetic — that is a sum — but the two things a second reading of the same
- * money can get wrong: which *phase* an origin belongs to, and whether the goal
- * totals still agree with the card that already shows them.
- */
-
 const T = '2026-08-04T09:00:00.000Z';
 const NOW = Date.parse('2026-08-04T12:00:00.000Z');
 
@@ -154,12 +147,6 @@ function build(
   });
 }
 
-/**
- * The whole point of the phase split: a goal's own total folds its planner and
- * its parts into one figure, so "the deliberation cost more than the build" is a
- * question only this can answer. Every origin shape the harness dispatches on is
- * here, including the two that name no issue.
- */
 test('every origin shape lands in the phase it belongs to', () => {
   const insights = build({
     agents: [
@@ -205,12 +192,6 @@ test('every origin shape lands in the phase it belongs to', () => {
   );
 });
 
-/**
- * `landing` is the *remainder* of `pr:*` and not a list of suffixes, so a shape
- * nobody thought to name still lands somewhere an operator can see. Only CI is
- * named, because only CI is being lifted out — and a new PR concern must not need
- * a code change here to be counted at all.
- */
 test('every pull-request concern but CI falls to landing, named or not', () => {
   const shapes = ['pr:41', 'pr:41:merge', 'pr:41:mergeable', 'pr:41:comment:c_7', 'pr:41:reply', 'pr:41:whatever-next'];
   const insights = build({
@@ -223,12 +204,6 @@ test('every pull-request concern but CI falls to landing, named or not', () => {
   assert.equal(byPhase.get('ci'), undefined, 'and none of them is mistaken for a check');
 });
 
-/**
- * `ci` and `landing` are separate from `build` even though all three are work on
- * the same code, and this is the reading that separation exists for: a goal whose
- * CI dwarfs its build is a flaky pipeline, not an expensive goal — and the pull
- * request's money still belongs to the goal, which the lineage is what establishes.
- */
 test("a pull request's spend joins its goal without joining its build", () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 2 }), agent('a2', { costUsd: 8 }), agent('a3', { costUsd: 1 })],
@@ -248,12 +223,6 @@ test("a pull request's spend joins its goal without joining its build", () => {
   assert.equal(insights.unattributedCostUsd, 0);
 });
 
-/**
- * The panel and the goal card state the same figure inches apart in the cockpit,
- * so the totals here are `rollUpIssueSpend`'s own rather than a second walk of the
- * graph. Asserted as the invariant it is: whatever the split says, each goal's
- * phases must add back up to the total the card draws.
- */
 test('a goal’s phases add back up to the total its card shows', () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 1.1 }), agent('a2', { costUsd: 2.2 }), agent('a3', { costUsd: 3.3 })],
@@ -268,12 +237,6 @@ test('a goal’s phases add back up to the total its card shows', () => {
   assert.equal(insights.goals[0]?.costUsd, 6.6, 'and float noise never reaches the wire');
 });
 
-/**
- * A run that reported nothing is unmeasured, not free — the same silence the
- * roll-up keeps. It must appear in no figure and still be counted once, because a
- * panel that is silent about how much of the fleet it speaks for is a panel that
- * reads as complete.
- */
 test('a run that reported nothing is counted as unmeasured and priced nowhere', () => {
   const insights = build({
     agents: [
@@ -290,11 +253,6 @@ test('a run that reported nothing is counted as unmeasured and priced nowhere', 
   assert.equal(insights.runs.length, 1, 'and an unmeasured run cannot rank in a table of costs');
 });
 
-/**
- * The second source of spend, and the reason it is a phase rather than a footnote:
- * the panel states its total beside the gauge an operator opened it from, so money
- * that is in one and not the other is two answers to one question.
- */
 test('local runs are a phase of the same money, and the partition still closes', () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 2 })],
@@ -307,8 +265,6 @@ test('local runs are a phase of the same money, and the partition still closes',
   const local = insights.phases.find((p) => p.phase === 'local');
   assert.equal(local?.costUsd, 0.75);
   assert.equal(local?.runs, 2);
-  // Reading order is funnel order, and a preview comes after the evidence and before
-  // the work nobody asked a goal for.
   assert.deepEqual(
     insights.phases.map((p) => p.phase),
     ['build', 'local'],
@@ -337,8 +293,6 @@ test('a local run ranks among the costliest runs, named by its branch', () => {
   const top = insights.runs[0];
   assert.equal(top?.id, 'r1');
   assert.equal(top?.kind, 'local');
-  // Nothing dispatched it, so there is no task title to name it by — and two runs of
-  // one goal are told apart by nothing except the branch each was pointed at.
   assert.equal(top?.title, 'Local run · issue/9/one');
   assert.equal(top?.issueNumber, 9);
   assert.equal(insights.rankedFrom, 2);
@@ -354,21 +308,11 @@ test('an unmeasured local run is counted once and priced nowhere', () => {
   assert.equal(insights.runs.length, 0);
 });
 
-/**
- * The cached split is a *part* of the input, and the fraction it forms is over
- * the runs that reported one — never over the fleet's whole input. A run from
- * before the split was recorded measured a gross figure and nothing about its
- * cache share; folded into the denominator it would read as a cache miss, which
- * is the one wrong answer this figure can give and the reason the denominator is
- * shipped beside it rather than assumed.
- */
 test('the cached split sums only over runs that reported one, and carries its own denominator', () => {
   const insights = build({
     agents: [
       agent('a1', { costUsd: 2, inputTokens: 10_000, cacheReadTokens: 8000, cacheCreationTokens: 500 }),
       agent('a2', { costUsd: 1, inputTokens: 4000, cacheReadTokens: 0, cacheCreationTokens: 0 }),
-      // Measured for money, silent about caching: an agents row from before the
-      // columns existed.
       agent('a3', { costUsd: 3, inputTokens: 90_000 }),
     ],
     tasks: [task('a1', 'issue:12'), task('a2', 'issue:12'), task('a3', 'issue:12')],
@@ -383,7 +327,6 @@ test('the cached split sums only over runs that reported one, and carries its ow
   assert.equal(totals.unmeasuredRuns, 0);
 });
 
-/** Goals rank by cost, and a goal the world has forgotten still gets its row. */
 test('goals rank by cost, titled where the world still knows them', () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 1 }), agent('a2', { costUsd: 9 })],
@@ -401,12 +344,6 @@ test('goals rank by cost, titled where the world still knows them', () => {
   );
 });
 
-/**
- * The trend is the only dated reading here. Rolling buckets ending now, so the
- * last one is the last 24 hours — and an event outside the window is dropped
- * rather than clamped into the first bucket, where it would draw a spike nothing
- * spent there.
- */
 test('the timeline buckets dated deltas and drops what falls outside the window', () => {
   const day = 24 * 60 * 60 * 1000;
   const insights = build({
@@ -420,13 +357,9 @@ test('the timeline buckets dated deltas and drops what falls outside the window'
   });
 
   const { buckets } = insights.timeline;
-  // Counted off the payload rather than pinned to a number: the resolution is the
-  // window's now, so a test naming 14 would be asserting a constant that moved.
   assert.equal(buckets.length, insights.window.buckets);
   const last = buckets.length - 1;
   assert.equal(buckets[last]?.costUsd, 1.75, 'two deltas in the last day sum into one bucket');
-  // Three days back, and the last bucket is the one still filling — so it lands
-  // two before it, not three. The off-by-one is the whole reason this is asserted.
   assert.equal(buckets[last - 2]?.costUsd, 4, 'a delta three days old lands in the bucket that covers it');
   assert.equal(
     buckets.reduce((a, b) => a + b.costUsd, 0),
@@ -435,15 +368,6 @@ test('the timeline buckets dated deltas and drops what falls outside the window'
   );
 });
 
-/**
- * A goal outlives the tracker's open set, and its name has to outlive it too.
- *
- * The money stays on the table forever; the world baseline is the *open* issues,
- * so every goal that closed or was dismissed is missing from it. Naming those rows
- * off the world alone drew each of them as its number and "no longer in the world"
- * — while the run record, which never forgets a goal the harness worked, had the
- * title all along.
- */
 test('a goal the world has forgotten is named from its run record', () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 3 }), agent('a2', { costUsd: 2 })],
@@ -452,12 +376,10 @@ test('a goal the world has forgotten is named from its run record', () => {
     runs: [run(12, 'What it was called then'), run(99, 'Closed months ago')],
   });
   const named = new Map(insights.goals.map((g) => [g.issueNumber, g.title]));
-  // The world wins where it has an answer — a retitled ticket reads as it does now.
   assert.equal(named.get(12), 'Still open');
   assert.equal(named.get(99), 'Closed months ago');
 });
 
-/** No record anywhere is still a row, and still honest about the name. */
 test('a goal older than the run record keeps its row and no title', () => {
   const insights = build({
     agents: [agent('a1', { costUsd: 1 })],
@@ -467,17 +389,6 @@ test('a goal older than the run record keeps its row and no title', () => {
   assert.equal(insights.goals[0]?.title, null);
 });
 
-/**
- * The window is the page's one control, and this is what makes it mean anything:
- * a run outside it is in no figure at all — not the total, not its phase's row,
- * not its goal's, not the ranking.
- *
- * It is asserted across all four because the cut is made **once**, at the top of
- * the fold, and everything below reads the list it produces. A version that
- * filtered per split would pass three of these assertions and fail the fourth —
- * and what that looks like on the glass is a phase table whose costs do not add
- * to the total above it.
- */
 test('a run outside the window is in no figure, not a smaller one', () => {
   const day = 24 * 60 * 60 * 1000;
   const inside = agent('a1', { costUsd: 3, startedAt: T, endedAt: new Date(NOW - 60_000).toISOString() });
@@ -496,12 +407,6 @@ test('a run outside the window is in no figure, not a smaller one', () => {
   assert.equal(insights.rankedFrom, 1);
 });
 
-/**
- * A run that opened before the window and finished inside it spent its money
- * inside it. Counting it at its start would leave the nine-hour agent out of the
- * six-hour window it in fact dominated — which is the reading an operator opened
- * a six-hour window to get.
- */
 test('a long run counts in the window it finished in', () => {
   const hour = 60 * 60 * 1000;
   const straddling = agent('a1', {
@@ -513,12 +418,6 @@ test('a long run counts in the window it finished in', () => {
   assert.equal(insights.totals.costUsd, 12);
 });
 
-/**
- * The two figures the ratio headline needs beside the total, and they ride on
- * this payload rather than the reliability one: "$26 of $118 never landed" is one
- * sentence, and fetching its two halves from two routes is how they end up
- * describing two windows.
- */
 test('landed counts merges, and what never landed counts faults only', () => {
   const merged = (n: number): WorldEvent => ({
     id: `we_${n}`,
@@ -532,8 +431,6 @@ test('landed counts merges, and what never landed counts faults only', () => {
       agent('a1', { status: 'done', costUsd: 4 }),
       agent('a2', { status: 'failed', costUsd: 3 }),
       agent('a3', { status: 'crashed', costUsd: 2 }),
-      // A killed run is a steer, not a fault. Counting an operator's own change of
-      // mind as waste is what makes every steered fleet look broken.
       agent('a4', { status: 'killed', costUsd: 5 }),
     ],
     tasks: ['a1', 'a2', 'a3', 'a4'].map((id) => task(id, 'issue:7:part:one')),
@@ -545,15 +442,6 @@ test('landed counts merges, and what never landed counts faults only', () => {
   assert.equal(insights.totals.costUsd, 14, 'every run is still in the total, whatever it was doing');
 });
 
-/**
- * A fleet that is out right now is never an empty window.
- *
- * `EconomicsTab` short-circuits on `totals.measuredRuns === 0` and prints "No
- * agent ran in this window, so there is nothing to break down" — while the top
- * bar's chip, a plain sum since an instant, shows the money on the same screen.
- * A local run meets this normally rather than exceptionally: it is held open for
- * as long as somebody is looking at it.
- */
 test('a run still out when the window opened is counted in it, agent and local run alike', () => {
   const day = 24 * 60 * 60 * 1000;
   const nodes = [node('issue:41', null)];
@@ -571,8 +459,6 @@ test('a run still out when the window opened is counted in it, agent and local r
   });
 
   const six = build({ agents: [live], localRuns: [preview], tasks: [task('a-live', 'issue:41:part:api')], nodes }, '6h'); // prettier-ignore
-  // Both spenders, both live: the agent and the preview each count as a measured
-  // run, so the tab has a breakdown to draw rather than its empty state.
   assert.equal(six.totals.measuredRuns, 2, 'the empty state is not drawn over a fleet that is out');
   assert.equal(six.totals.costUsd, 7);
   assert.equal(six.phases.find((p) => p.phase === 'build')?.costUsd, 5);
@@ -580,15 +466,6 @@ test('a run still out when the window opened is counted in it, agent and local r
   assert.equal(six.goals.find((g) => g.issueNumber === 41)?.costUsd, 7);
 });
 
-/**
- * The window cuts both spenders, and by the same rule.
- *
- * A local run is a session that held the dev environment for as long as somebody
- * was looking at it, so it belongs to the window it *finished* in exactly as an
- * agent does. Cutting only the agents would leave a preview from last month in
- * this morning's total — and it would show up as the `local` phase row failing to
- * add up against a bar drawn from the same figure.
- */
 test('a local run obeys the window the agents do', () => {
   const day = 24 * 60 * 60 * 1000;
   const nodes = [node('issue:9', null)];

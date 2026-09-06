@@ -6,20 +6,8 @@ import { PetSprite } from './PetSprite.js';
 import { relTime } from './util.js';
 import { Panel } from './panel.js';
 
-/**
- * The vivarium, whole.
- *
- * The **origin line** is the point of this surface. A grid of creatures is a toy;
- * a grid of creatures each labelled with the thing you were doing when it hatched
- * is a record, and it is the only part of the feature that gets better the longer
- * a deployment runs. Everything else here — the meter, the three buttons — is in
- * service of it.
- *
- * Nothing on this panel gates, ranks or reports anything. If a future change
- * finds a number here convenient for a decision, the number is the wrong source:
- * these tables are written from what an operator has already done, and reading
- * them back into a decision would be the harness marking its own homework.
- */
+// → docs/spec/17-cockpit.md
+
 export function PetsPanel({
   pets,
   now,
@@ -35,13 +23,9 @@ export function PetsPanel({
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
   onBlend: (id: string) => Promise<unknown>;
-  /** Open a shell — the ceremony, not a bare write. See `HatchModal`. */
   onHatch: (id: string) => void;
 }) {
   const { wallet } = pets;
-  // How many of each species are still alive, which is the whole of what decides
-  // whether a card may offer Blend. Counted here rather than per card so the grid
-  // walks the list once.
   const live = new Map<PetView['species'], number>();
   for (const pet of pets.pets) if (pet.dissolvedAt === null) live.set(pet.species, (live.get(pet.species) ?? 0) + 1);
   return (
@@ -102,10 +86,8 @@ function PetCard({
   pet: PetView;
   now: number;
   balance: number;
-  /** Whether the enclosure is already at capacity and this one is not in it. */
   full: boolean;
   slots: number;
-  /** Whether another of this species is still alive, which is what Blend needs. */
   duplicate: boolean;
   onFeed: (id: string, beats: number) => Promise<unknown>;
   onRename: (id: string, name: string) => Promise<unknown>;
@@ -115,14 +97,8 @@ function PetCard({
 }) {
   const [name, setName] = useState(pet.name ?? '');
   const egg = pet.openedAt === null;
-  // What it would take to finish the current stage, and never more than there is.
-  // Offering a button that always refuses is worse than not offering it.
   const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
   const dissolved = pet.dissolvedAt !== null;
-  // A pet that does not verify keeps its card and its origin line — nothing here
-  // deletes anything — and loses the three controls that would spend beats on it
-  // or turn it back into beats. The server refuses all three anyway; the card
-  // says so first, because a button that always refuses is worse than no button.
   const flawed = pet.flaw !== null;
   return (
     <Panel density="padded" className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
@@ -257,21 +233,7 @@ function PetCard({
   );
 }
 
-/**
- * What the operator was doing when it hatched, in their words rather than the
- * table's — the question they answered, the plan they accepted, the job they
- * launched — from `originLabel`, which the server resolves from the source row
- * per snapshot (→ docs/spec/22-pets.md#the-label).
- *
- * A null label is a source row that has been pruned, and a pet outlives what it
- * came from by design, so the line falls back to naming the ref it was seeded
- * from — which is what this line said for every pet before there was a label. It
- * is a shorter sentence, never a blank one and never a suspicion.
- */
 function originLine(pet: PetView): string {
-  // *Found*, not *hatched*: the drop and the reveal are two moments now, and this
-  // line dates the first one. It is the moment worth recording — the night you
-  // answered the thing — and the shell may have come off weeks later.
   if (pet.originLabel === null) {
     const bare: Record<PetView['originKind'], string> = {
       escalation: 'Found when you answered',
@@ -285,9 +247,6 @@ function originLine(pet: PetView): string {
     };
     return `${bare[pet.originKind]} ${pet.originRef}`;
   }
-  // Quoted where the label is something a person wrote — a question, a title, a
-  // claim — and bare where it is a ref or a sha the harness minted, since quoting
-  // one of those reads as a title it is not.
   const said: Record<PetView['originKind'], (label: string) => string> = {
     escalation: (label) => `Found when you answered “${label}”`,
     'human-task': (label) => `Found when you settled “${label}”`,
@@ -301,14 +260,6 @@ function originLine(pet: PetView): string {
   return said[pet.originKind](pet.originLabel);
 }
 
-/**
- * How far along it is towards its next stage, as a share of what that stage will
- * have cost in total.
- *
- * Computed from `fed` and `beatsToNextStage` — the two numbers the server ships —
- * rather than from a copy of the thresholds. Keeping the thresholds themselves
- * out of the cockpit is what stops a card reading JUVENILE above an adult sprite.
- */
 function stageFill(pet: PetView): number {
   if (pet.beatsToNextStage === null) return 100;
   const target = pet.fed + pet.beatsToNextStage;

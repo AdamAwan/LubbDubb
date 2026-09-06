@@ -7,15 +7,6 @@ import { ensureColumns } from '../src/store/migrate.js';
 import { SCHEMA } from '../src/store/schema.js';
 import type { Agent, Task } from '../src/types.js';
 
-/**
- * Cost per kind of work, and cost per failing check.
- *
- * What this has to get right is not the arithmetic but the two claims the tables
- * make: that the task-type rows are a partition of the fleet, and that a check's
- * figure is a *share* of a run that may have answered several — stated as such
- * rather than quietly double-counted.
- */
-
 const T = '2026-08-04T09:00:00.000Z';
 
 function agent(id: string, over: Partial<Agent> = {}): Agent {
@@ -62,11 +53,6 @@ function task(id: string, over: Partial<Task> = {}): Task {
   };
 }
 
-/**
- * The reading the whole column exists for: review comments are half of
- * `landing`, and until a task recorded its rule nothing could give them a figure
- * of their own.
- */
 test('every kind of work gets its own figure, and they partition the fleet', () => {
   const types = rollUpTaskTypes({
     agents: [
@@ -102,7 +88,6 @@ test('every kind of work gets its own figure, and they partition the fleet', () 
   assert.equal(types[0]?.rule, 'pr-ci-failing', 'costliest first');
 });
 
-/** A rule the registry has lost must still be billed, under its own id. */
 test('an unknown rule id is a row named after itself, never dropped', () => {
   const types = rollUpTaskTypes({
     agents: [agent('a1', { costUsd: 2 })],
@@ -112,11 +97,6 @@ test('an unknown rule id is a row named after itself, never dropped', () => {
   assert.equal(types[0]?.costUsd, 2);
 });
 
-/**
- * The answer to "what is `dotnet test` costing me". A run sent at two red checks
- * splits between them, which is what keeps the column a partition — charging each
- * check the whole run would add up to more money than the fleet spent.
- */
 test('a check carries its share of every run sent at it', () => {
   const checks = rollUpChecks({
     agents: [agent('a1', { costUsd: 6 }), agent('a2', { costUsd: 4 })],
@@ -140,11 +120,6 @@ test('a check carries its share of every run sent at it', () => {
   assert.equal(checks.unnamedCostUsd, 0);
 });
 
-/**
- * A provider that reports no per-check detail spends real money on CI. It must
- * reach the caveat rather than the rows, or the table reads as a complete account
- * of CI spend while a whole provider lands nowhere.
- */
 test('CI spend that named no check is shipped as the remainder, never dropped', () => {
   const checks = rollUpChecks({
     agents: [agent('a1', { costUsd: 5 }), agent('a2', { costUsd: 2 })],
@@ -159,11 +134,6 @@ test('CI spend that named no check is shipped as the remainder, never dropped', 
   assert.equal(checks.checks.length, 1);
 });
 
-/**
- * The rule is what puts a run in this table, never the presence of the array —
- * otherwise a build agent and a CI dispatch whose provider reported nothing would
- * be indistinguishable, and the remainder would swallow the whole fleet.
- */
 test('only CI dispatches are this table’s subject', () => {
   const checks = rollUpChecks({
     agents: [agent('a1', { costUsd: 9 }), agent('a2', { costUsd: 1 })],
@@ -175,7 +145,6 @@ test('only CI dispatches are this table’s subject', () => {
   assert.equal(checks.checks[0]?.name, 'sonar', 'a waiting gate is a check costing money like any other');
 });
 
-/** An unmeasured run is priced nowhere here either — the same silence the rest of spend keeps. */
 test('a run that reported nothing is in neither table', () => {
   const args = {
     agents: [agent('a1', { costUsd: null, inputTokens: null, outputTokens: null })],
@@ -185,10 +154,6 @@ test('a run that reported nothing is in neither table', () => {
   assert.equal(rollUpChecks(args).checks.length, 0);
 });
 
-/**
- * A database holding one task as a build that predates the columns wrote it:
- * prose in `dispatch_reason`, nothing in `rule` or `ci_checks`.
- */
 function legacyDb(originRef: string | null, dispatchReason: string | null) {
   const db = new Database(':memory:');
   db.exec(SCHEMA);
@@ -207,11 +172,6 @@ function readBack(db: Database.Database) {
   };
 }
 
-/**
- * The backfill is the only place a dispatch reason is ever parsed: the rule comes
- * off the origin (structural, since only one rule mints each), the checks off the
- * sentence the dispatcher wrote (the one-off).
- */
 test('the boot backfill seeds rule and checks on tasks that predate the columns', () => {
   const db = legacyDb('pr:41:ci', 'PR #41 has failing CI (dotnet test, Qodana) and no agent is on it.');
   backfillTaskDispatchKind(db);
@@ -221,7 +181,6 @@ test('the boot backfill seeds rule and checks on tasks that predate the columns'
   assert.deepEqual(JSON.parse(row.ci_checks ?? 'null'), ['dotnet test', 'Qodana']);
 });
 
-/** The gate rule writes a different sentence, and it is recognised too. */
 test('a waiting-gate dispatch is backfilled from its own sentence', () => {
   const db = legacyDb(
     'pr:41:ci-gate',
@@ -234,7 +193,6 @@ test('a waiting-gate dispatch is backfilled from its own sentence', () => {
   assert.deepEqual(JSON.parse(row.ci_checks ?? 'null'), ['PR-Agent-Reviewed']);
 });
 
-/** A sentence the backfill does not recognise leaves the row null rather than guessing. */
 test('an unrecognised dispatch reason leaves the checks unset', () => {
   const db = legacyDb('pr:41:ci', 'CI is unhappy about something.');
   backfillTaskDispatchKind(db);
@@ -244,7 +202,6 @@ test('an unrecognised dispatch reason leaves the checks unset', () => {
   assert.equal(row.ci_checks, null, 'and the prose half declines rather than inventing a check');
 });
 
-/** Re-running must not overwrite what the dispatcher recorded properly. */
 test('the backfill only ever fills nulls', () => {
   const db = legacyDb('pr:41:ci', 'PR #41 has failing CI (something, else) and no agent is on it.');
   db.prepare(`UPDATE tasks SET rule='pr-ci-failing', ci_checks='["Qodana"]' WHERE id='t1'`).run();

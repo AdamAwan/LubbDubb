@@ -12,14 +12,6 @@ import { PET_RULES, type PetActionRate, type PetRules } from '../src/pets/rules.
 import { beatsToNextStage, blendValue, petStage, resolveTier, SPECIES } from '../src/pets/catalogue.js';
 import type { Pet, PetActionKind } from '../src/types.js';
 
-/**
- * The rates, with whatever this test needs bent. Nothing threads this from config.
- *
- * `dropChance` and `pity` are per action kind on `PET_RULES`, and a test that says
- * `{ dropChance: 1 }` means it of every kind — so they are accepted flat here and
- * spread across the whole table. A test that needs one kind bent and the rest left
- * alone passes `rates` instead.
- */
 type RuleOverrides = Partial<Omit<PetRules, 'rates'>> & Partial<PetActionRate> & { rates?: PetRules['rates'] };
 
 function rules(over: RuleOverrides = {}): PetRules {
@@ -36,7 +28,6 @@ function rules(over: RuleOverrides = {}): PetRules {
   return { ...PET_RULES, ...rest, rates: rates ?? spread };
 }
 
-/** A keeper over a database whose vivarium has not started yet. */
 function coldKeeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
   const store = new Store(':memory:');
   return { store, pets: new PetKeeper(store, { enabled: true, visible: true }, rules(over), () => build) };
@@ -44,19 +35,12 @@ function coldKeeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pe
 
 function keeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
   const { store, pets } = coldKeeper(over, build);
-  // The boot before the operator does anything: it hatches nothing and stamps the
-  // vivarium's start, so the actions a test goes on to make fall *after* it. A
-  // deployment reaches this scan the same way — `main.ts` runs one at boot — and a
-  // test that skipped it would be manufacturing a backlog and then asking why it
-  // paid nothing.
   pets.scan();
   return { store, pets };
 }
 
-/** The build the suite pretends to be running, so a stamp does not need a checkout. */
 const BUILD = { sha: 'build_one', clean: true };
 
-/** What the keeper checks a pet against, read straight out of the store. */
 function ledger(store: Store, build = BUILD): PetLedger {
   return {
     actions: store.petActionIndex(),
@@ -67,32 +51,22 @@ function ledger(store: Store, build = BUILD): PetLedger {
   };
 }
 
-/** When this store's vivarium started counting, which the boundary-aware reads take. */
 function started(store: Store): string {
   const at = store.vivariumStart();
   assert.ok(at !== null, 'a scan stamps the start, and every keeper here has scanned');
   return at;
 }
 
-/** Every action that can roll, which several tests walk. */
 const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'claim', 'upgrade'];
 
-/**
- * The kinds the scan still *produces*. `claim` is not one: the claim store is
- * gone, so nothing rules on one any more — the kind stays in {@link KINDS} because
- * the catalogue and the ledger still have to answer for every creature already
- * hatched from a ruling.
- */
 const LIVE_KINDS: PetActionKind[] = KINDS.filter((kind) => kind !== 'claim');
 
-/** A settled `ask`: a second kind of action, for the tests that need two. */
 function settle(store: Store, title: string): string {
   const { task } = store.recordHumanTask({ title, detail: '', agentId: null, taskId: null, originRef: null });
   store.settleHumanTask(task.id, 'done', 'sorted');
   return task.id;
 }
 
-/** An answered escalation: the cleanest operator action in the harness. */
 function answer(store: Store, prompt: string): string {
   const escalation = store.createEscalation({
     type: 'answer_question',
@@ -126,7 +100,6 @@ test('scanning twice hatches nothing the second time', () => {
 
 test('an action that hatched nothing is still recorded, so pity can count it', () => {
   const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
-  // The deployment's first action always hatches, so the miss under test is the second.
   answer(store, 'the first question ever asked');
   answer(store, 'a question nobody gets a pet for');
   assert.equal(pets.scan().length, 1, 'only the first-of-kind hatches at a zero chance');
@@ -139,12 +112,9 @@ test('an action that hatched nothing is still recorded, so pity can count it', (
 
 test('pity forces a hatch once enough actions have missed', () => {
   const { store, pets } = keeper({ dropChance: 0, pity: 3 });
-  // The first action ever, then three that would all miss — the third is forced.
   for (let i = 0; i < 4; i++) answer(store, `question ${i}`);
   const hatched = pets.scan();
   assert.equal(hatched.length, 2, 'the first action ever, and then the one pity forces');
-  // Sparse by design: the last escalation row hatched, so nothing sits after it
-  // and the kind has no row of its own. Absent is how zero is spelled.
   assert.equal(
     store.petActionsSinceHatch(started(store)).get('escalation') ?? 0,
     0,
@@ -153,17 +123,10 @@ test('pity forces a hatch once enough actions have missed', () => {
 });
 
 test('pity is counted per kind, so a busy action cannot spend a quiet one’s floor', () => {
-  // The whole of why the counter went per kind. A deployment settles jobs and
-  // findings by the dozen and accepts an upgrade a few times a year, so one shared
-  // counter is spent almost entirely by whatever is most frequent — pity then
-  // fires constantly on the busy action and never on the quiet one, which is the
-  // opposite of what a floor is for.
   const { store, pets } = keeper({ dropChance: 0, pity: 3 });
   answer(store, 'the first action ever, which is guaranteed');
   pets.scan();
 
-  // Two escalations short of escalation's own ceiling, and a run of tasks between
-  // them. A shared counter would be forced by the tasks alone.
   answer(store, 'escalation one');
   for (let i = 0; i < 10; i++) settle(store, `task ${i}`);
   pets.scan();
@@ -176,9 +139,6 @@ test('pity is counted per kind, so a busy action cannot spend a quiet one’s fl
 });
 
 test('a quiet action is worth more than a busy one', () => {
-  // The rate is priced against how often the kind comes up. Without that, a
-  // collection is drawn almost entirely from whichever button the deployment
-  // presses most, and the animals behind the scarce actions are never seen.
   const { rates } = PET_RULES;
   assert.ok(rates.upgrade.dropChance > rates.landing.dropChance, 'an upgrade is scarcer than a landing');
   assert.ok(rates.landing.dropChance > rates.plan.dropChance, 'a landing is scarcer than a plan');
@@ -186,7 +146,6 @@ test('a quiet action is worth more than a busy one', () => {
   assert.ok(rates['human-task'].dropChance > rates.finding.dropChance, 'a task is scarcer than a finding');
   assert.ok(rates.finding.dropChance > rates.job.dropChance, 'and a finding is scarcer than a job launch');
 
-  // Pity stays a ceiling rather than a schedule: twice the expected gap, per kind.
   for (const kind of KINDS)
     assert.ok(
       Math.abs(rates[kind].pity - 2 / rates[kind].dropChance) <= 4,
@@ -195,11 +154,6 @@ test('a quiet action is worth more than a busy one', () => {
 });
 
 test('every action is a route to a mythic, and each mythic to one action', () => {
-  // The complaint this answers: `upgrade` held the only mythic in the catalogue,
-  // at 2% of the hatches of an action a deployment takes a handful of times a
-  // year — roughly one in twenty-five hundred accepted self-updates, which is an
-  // animal nobody ever sees. A mythic per action makes the tier reachable; one
-  // action per mythic keeps each of them worth having.
   const owners = new Map<string, PetActionKind[]>();
   for (const kind of KINDS) {
     const landed = resolveTier(kind, 'mythic', 14);
@@ -220,11 +174,6 @@ test('the deployment’s first action hatches, and draws something above a commo
 });
 
 test('the guarantee is spent once, not once per kind of action', () => {
-  // The bug this replaced: `firstOfKind` re-armed for every one of the seven
-  // kinds, so an afternoon that touched each of them handed out seven pets —
-  // and, because the guarantee strips the commons and most tables hold exactly
-  // one non-common by day, handed out the *rare* tier while `nib` and `tuft`
-  // stayed unreachable.
   const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
   answer(store, 'the first question ever asked');
   settle(store, 'a task of an entirely different kind');
@@ -235,8 +184,6 @@ test('the guarantee is spent once, not once per kind of action', () => {
 });
 
 test('a second scan does not re-arm the guarantee for an action rolled later', () => {
-  // `seen` is read once per pass, so a flag derived from it and never advanced
-  // would call every action in a first scan the deployment's first.
   const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
   answer(store, 'the first question ever asked');
   assert.equal(pets.scan().length, 1);
@@ -245,18 +192,9 @@ test('a second scan does not re-arm the guarantee for an action rolled later', (
   assert.deepEqual(pets.scan(), [], 'the guarantee is gone, and a zero chance hatches nothing');
 });
 
-// -- Where the vivarium starts -----------------------------------------------
-
-/**
- * The boundary a replay used before this one existed: earlier than any timestamp
- * the harness can hold, so every row in the log passes it. What "the same answer
- * as before the boundary" is asserted against.
- */
 const BEFORE_EVERYTHING = '0000-01-01T00:00:00.000Z';
 
 test('a backlog from before the vivarium started is recorded, and pays for nothing', () => {
-  // The deployment the report came from: months of history, pets switched on for
-  // the first time, and a scan that read the lot as this afternoon's work.
   const { store, pets } = coldTimedKeeper({ dropChance: 0, pity: 1_000 });
   answer(store, 'answered five days before the upgrade');
   settle(store, 'a task from before pets existed');
@@ -305,10 +243,6 @@ test('a clearance re-stamps the start, so what it leaves standing lends nothing'
 });
 
 test('a vivarium carried over from before the boundary keeps every pet it has', () => {
-  // The risk worth a test of its own: a start computed one row too late marks an
-  // honestly earned action pre-boundary, which moves the pity walk and `firstEver`
-  // in the replay and puts an `unearned` badge on somebody’s real animal, on the
-  // boot they take the build.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vivarium-'));
   const path = join(dir, 'old.db');
   let tick = 0;
@@ -327,9 +261,6 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
     const barren = [...replayBarren(log, PET_RULES, BEFORE_EVERYTHING)].sort();
     store.close();
 
-    // A database from before this change holds no start at all. Every reader of
-    // one has to survive that, and the value the first boot writes is the whole of
-    // whether an existing collection comes through it untouched.
     const raw = new Database(path);
     raw.exec(`DELETE FROM pet_vivarium`);
     raw.close();
@@ -370,7 +301,6 @@ test('a stage is derived from what a pet has been fed, and rarity slows it down'
   assert.equal(petStage('pip', 0), 'hatchling');
   assert.equal(petStage('pip', 1_500), 'juvenile');
   assert.equal(petStage('pip', 8_000), 'adult');
-  // The same beats leave a mythic further back, which is what makes it feel rare.
   assert.equal(petStage('ouroboros', 8_000), 'juvenile');
   assert.equal(beatsToNextStage('pip', 8_000), null, 'an adult owes nothing');
 });
@@ -380,13 +310,11 @@ test('beats are derived from spend, and feeding refuses more than there is', () 
   answer(store, 'hatch me something');
   const [pet] = pets.scan();
   assert.ok(pet);
-  // A drop arrives as an egg, and an egg is not fed — the shell comes off first.
   assert.equal(pets.open(pet.id).ok, true);
 
   const broke = pets.feed(pet.id, 100);
   assert.equal(broke.ok, false, 'a fleet that has spent nothing has nothing to feed with');
 
-  // One dollar of recorded usage, at the default rate, is 25 beats.
   const agent = store.createAgent({ taskId: 'task_1', cwd: '.', pid: null, sessionId: null });
   store.recordAgentUsage(agent.id, {
     costUsd: 1,
@@ -444,9 +372,6 @@ test('turning pets off scans nothing and reports nothing, and deletes nothing', 
 });
 
 test('hiding pets draws nothing and stops nothing', () => {
-  // The whole of what separates hidden from off: an operator who does not want
-  // animals on their cockpit is not also deciding that the months of work they do
-  // while it is off were worth nothing. Turning it back on shows what accrued.
   const store = new Store(':memory:');
   const hidden = new PetKeeper(store, { enabled: true, visible: false }, rules({ dropChance: 1 }), () => BUILD);
   hidden.scan();
@@ -467,16 +392,12 @@ test('every action kind can draw something, so no action is a dead end', () => {
       common.members.includes('pip') && common.members.includes('mote'),
       `${kind} must carry both universals, or a working style can go unrewarded for weeks`,
     );
-    // Every tier must resolve to something, or a roll landing there hatches nothing.
     for (const tier of ['common', 'uncommon', 'rare', 'mythic'] as const)
       assert.ok(resolveTier(kind, tier, 14) !== null, `${kind} must resolve ${tier} to some tier`);
   }
 });
 
 test('the tier is rolled globally, so rarity is a fact about the deployment', () => {
-  // The Mark One bug: rarity was an emergent accident of each action's weight
-  // table, so "a rare is 8%" was true of no deployment. Stage 2 rolls one table
-  // for every action, and only a pool that cannot fill a tier changes the answer.
   const counts: Record<string, number> = { common: 0, uncommon: 0, rare: 0, mythic: 0 };
   for (let i = 0; i < 4_000; i++) {
     const roll = rollAction('escalation', `esc_${i}`, '2026-04-12T14:00:00.000Z', {
@@ -486,8 +407,6 @@ test('the tier is rolled globally, so rarity is a fact about the deployment', ()
     });
     counts[SPECIES[roll.species].rarity] = (counts[SPECIES[roll.species].rarity] ?? 0) + 1;
   }
-  // Every pool now fills every tier, so nothing degrades and the weights land as
-  // written: the shipped table read straight off an action.
   assert.ok(Math.abs(counts.common! / 4_000 - 0.7) < 0.05, `common should sit near 70%, saw ${counts.common}/4000`);
   assert.ok(
     Math.abs(counts.uncommon! / 4_000 - 0.2) < 0.05,
@@ -498,30 +417,18 @@ test('the tier is rolled globally, so rarity is a fact about the deployment', ()
 });
 
 test('every action carries a full ladder, so no shipped roll degrades', () => {
-  // `upgrade` used to hold the only mythic and `human-task` and `job` no rare at
-  // all, so a tier those pools could not fill degraded away — which put the
-  // scarcest animals behind the scarcest action and made them, in practice,
-  // unreachable. A hole in a pool is now a bug rather than a way of expressing a
-  // ceiling; the ceiling is the rate, where it can be read as a number.
   for (const kind of KINDS)
     for (const tier of ['common', 'uncommon', 'rare', 'mythic'] as const)
       assert.equal(resolveTier(kind, tier, 14)?.tier, tier, `${kind} must fill ${tier} itself, not by degrading`);
 });
 
 test('degrading still walks downward, never up', () => {
-  // No shipped pool degrades any more, so this is a guard rather than a mechanic
-  // — but the direction stays the invariant it always was: reaching *up* would
-  // make the scarcest actions the easiest source of the scarcest animals.
-  // Exercised through the night gate, the one filter that can empty a tier.
   const gated = resolveTier('escalation', 'uncommon', 14);
   assert.ok(gated !== null && !gated.members.includes('nocturne'), 'the day filter drops nocturne');
   assert.equal(gated.tier, 'uncommon', 'and what is left still fills the tier');
 });
 
 test('pity forces the hatch and never touches the tier', () => {
-  // A pet you were given because you had been unlucky must be exactly as likely
-  // to be a mythic as one the roll granted: paying out worse would make pity a
-  // punishment, better would make waiting the strategy.
   for (let i = 0; i < 200; i++) {
     const ref = `job_${i}`;
     const rolled = rollAction('job', ref, '2026-04-12T14:00:00.000Z', {
@@ -540,8 +447,6 @@ test('pity forces the hatch and never touches the tier', () => {
 });
 
 test('no common turns up often enough to bore you', () => {
-  // One common per pool put `pip` at 70% of hatches on five of the seven actions.
-  // Three per pool is what keeps any single animal near a fifth.
   const seen: Record<string, number> = {};
   for (const kind of KINDS)
     for (let i = 0; i < 700; i++) {
@@ -562,8 +467,6 @@ test('no common turns up often enough to bore you', () => {
 
 test('blending a duplicate credits beats and keeps the record', () => {
   const { store, pets } = keeper({ dropChance: 1, pity: 1_000 });
-  // Two escalations at the same hour draw the same tier table; force a duplicate
-  // by hatching two and finding a species with two live rows.
   for (let i = 0; i < 12; i++) answer(store, `question ${i}`);
   pets.scan();
   const all = store.listPets();
@@ -603,7 +506,6 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   const refused = pets.blend(only.id);
   assert.equal(refused.ok, false, 'blending is for duplicates — the last one stays');
 
-  // And once something *is* dissolved it stops being a live pet in every sense.
   for (let i = 0; i < 12; i++) answer(store, `filler ${i}`);
   pets.scan();
   const dupes = store.listPets();
@@ -616,9 +518,6 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   assert.equal(pets.place(victim.id, true).ok, false, 'nor put out');
 });
 
-// -- Clearing the vivarium ---------------------------------------------------
-
-/** A keeper on a clock that moves a minute per read, so an epoch can be compared. */
 function coldTimedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
   let tick = 0;
   const store = new Store(':memory:', () =>
@@ -629,11 +528,10 @@ function coldTimedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKee
 
 function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
   const { store, pets } = coldTimedKeeper(over);
-  pets.scan(); // The boot before the operator acts — see `keeper`.
+  pets.scan();
   return { store, pets };
 }
 
-/** One dollar of fleet spend, which is 25 beats at the shipped rate. */
 function spend(store: Store, costUsd: number): void {
   const agent = store.createAgent({ taskId: `task_${costUsd}`, cwd: '.', pid: null, sessionId: null });
   store.recordAgentUsage(agent.id, {
@@ -658,9 +556,6 @@ test('a drop arrives as an egg, and opening it reveals rather than decides', () 
   const after = store.getPet(pet.id)!;
   assert.notEqual(after.openedAt, null, 'and the stamp is the whole of what opening writes');
 
-  // The point of the whole design: the click reveals what the hash already
-  // settled. A roll here would put the subsystem's one decision behind a click,
-  // and a re-scan would stop being free.
   assert.equal(after.species, pet.species, 'the species is the one the roll landed on');
   assert.equal(after.seed, pet.seed, 'and so are its colours');
   assert.equal(after.chain, pet.chain, 'and the chain does not cover the shell coming off');
@@ -686,10 +581,6 @@ test('an egg cannot be fed or blended, and can still be put out', () => {
   assert.equal(store.getPet(egg.id)?.fed, 0, 'and nothing was spent on it');
   assert.equal(store.getPet(egg.id)?.dissolvedAt, null, 'nor lost');
 
-  // Putting one out is the one act an egg has, and it is the point of an egg: the
-  // corner of the rail is where you find it. A slot is freed first — twelve drops
-  // fill the enclosure, and a full one is refused for being full, not for holding
-  // a shell.
   const standing = store.listPets().find((p) => p.placed)!;
   assert.equal(pets.place(standing.id, false).ok, true);
   assert.equal(pets.place(egg.id, true).ok, true);
@@ -699,8 +590,6 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-eggs-'));
   const path = join(dir, 'old.db');
   try {
-    // The `pets` table exactly as a build from before the shell wrote it — no
-    // `opened_at` at all, which is the state every deployment upgrades from.
     const old = new Database(path);
     old.exec(`CREATE TABLE pets (
       id TEXT PRIMARY KEY, species TEXT NOT NULL, seed TEXT NOT NULL, name TEXT,
@@ -723,10 +612,8 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
       'a pet raised before the shell existed was revealed when it dropped, and is stamped so',
     );
 
-    // And the backfill is a one-off, not a boot chore: an egg laid after the
-    // upgrade is still an egg on the next restart.
     const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
-    pets.scan(); // The boot, which stamps the vivarium's start before the operator acts.
+    pets.scan();
     answer(store, 'a question after the upgrade');
     const [fresh] = pets.scan();
     assert.ok(fresh);
@@ -766,7 +653,6 @@ test('a cleared collection does not hatch back out of the history it came from',
   assert.deepEqual(pets.scan(), [], 'the actions are still rolled, so nothing is rolled again');
   assert.deepEqual(store.listPets(), []);
 
-  // The vivarium is empty, not dead: the next thing the operator does still lands.
   answer(store, 'something new');
   assert.equal(pets.scan().length, 1, 'a fresh action hatches into the cleared enclosure');
 });
@@ -804,18 +690,10 @@ test('a clearance is skipped entirely while pets are turned off', () => {
   const off = new PetKeeper(store, { enabled: false, visible: true });
   assert.equal(off.resetOnce(), null);
   assert.equal(store.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
-  // Turned on later, the deployment still gets its clearance.
   assert.equal(pets.resetOnce()?.cleared, 1);
 });
 
-// -- Authenticity ------------------------------------------------------------
-
 test('no configuration key can reach the roll', () => {
-  // The cheapest forgery there was: `dropChance: 1` and a rarity table zeroed
-  // everywhere but `mythic` hatches a full vivarium out of one config edit, and
-  // every animal in it arrives through the ordinary scan with a real origin line.
-  // Nothing on any surface can tell that from an earned one, which is why the
-  // rates are constants and this test is structural rather than behavioural.
   const fields = readFileSync('src/configFields.ts', 'utf8');
   const paths = [...fields.matchAll(/path: '(pets\.[a-zA-Z]+)'/g)].map((m) => m[1]);
   assert.deepEqual(
@@ -824,7 +702,6 @@ test('no configuration key can reach the roll', () => {
     'the only pets keys an operator may set are the two switches',
   );
 
-  // And the type says so too, so a key added to the page has nowhere to land.
   const policy = readFileSync('src/pets/keeper.ts', 'utf8');
   const shape = /export interface PetPolicy \{([^}]*)\}/.exec(policy)?.[1] ?? '';
   assert.deepEqual(
@@ -838,19 +715,11 @@ test('no configuration key can reach the roll', () => {
 });
 
 test('an action reaches one species per tier, and never the one you wanted', () => {
-  // The load-bearing property behind the whole check: stage 3 is a hash of the
-  // action's own key, so a forger cannot pick the animal — they have to grind for
-  // an origin ref that happens to give it, and the ref has to belong to something
-  // really settled.
   for (const kind of KINDS) {
     const reach = speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z');
-    // One per tier, and the tiers hold disjoint members. Filling every ladder
-    // widened this from the two or three a holey pool reached; four in
-    // twenty-seven is still narrower than three in twenty was.
     assert.equal(reach.size, 4, `${kind} must reach one species per tier, saw ${reach.size}`);
     assert.ok(reach.size < Object.keys(SPECIES).length, 'and never the whole catalogue');
   }
-  // Each mythic belongs to exactly one action, so no other kind is a route to it.
   for (const kind of KINDS)
     if (kind !== 'upgrade')
       assert.ok(
@@ -866,7 +735,6 @@ test('a pet the scan hatched checks out, and one written straight into the table
   assert.ok(real);
   assert.equal(attestPet(real, ledger(store)), null, 'what the scan wrote must verify against what the scan recorded');
 
-  // The cheap forgery: a row in `pets` and nothing else.
   const forged = store.hatchPet({
     species: 'ouroboros',
     seed: 'upgrade:deadbeef',
@@ -878,10 +746,6 @@ test('a pet the scan hatched checks out, and one written straight into the table
 });
 
 test('a forged pet cannot be laundered back into beats', () => {
-  // Blending is the only route from a creature back into food, so it is the one
-  // refusal that costs an attacker something rather than only themselves. The
-  // forgery here is the *careful* one: a `pet_actions` row written to match, so
-  // only the species gives it away.
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'a question really answered');
   pets.scan();
@@ -909,16 +773,11 @@ test('a hand-grown pet is caught by what nothing paid for', () => {
   answer(store, 'a question really answered');
   const [pet] = pets.scan();
   assert.ok(pet);
-  // `fed` is a cache of the purchases beside it, so a column edited to put a
-  // creature two stages along has nothing backing it.
   const grown: Pet = { ...pet, fed: 99_999 };
   assert.equal(attestPet(grown, ledger(store))?.code, 'overfed', 'a stage nothing bought is a stage nobody earned');
 });
 
 test('a flaw is drawn, never deleted, and the origin line survives it', () => {
-  // The rule the whole subsystem is built on: nothing is taken away. A pet that
-  // does not verify keeps its row, its species and the night it claims — it simply
-  // stops being feedable, placeable and blendable, and says why on its card.
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'a question really answered');
   pets.scan();
@@ -940,9 +799,6 @@ test('a flaw is drawn, never deleted, and the origin line survives it', () => {
 });
 
 test('every pet a long ordinary run produces verifies', () => {
-  // The failure that would matter most is a false positive: an honest operator
-  // told their collection is a forgery. Two kinds of action, a hundred rolls, and
-  // pity firing throughout — everything the scan writes must check out.
   const { store, pets } = keeper();
   for (let i = 0; i < 60; i++) {
     answer(store, `question ${i}`);
@@ -955,9 +811,6 @@ test('every pet a long ordinary run produces verifies', () => {
 });
 
 test('a pet records the build that rolled it', () => {
-  // Taking the rates out of the config stops the config route to a free vivarium
-  // and stops nothing for somebody editing `src/pets/rules.ts` and restarting.
-  // The stamp is what makes that visible.
   const { store, pets } = keeper({ dropChance: 1 }, { sha: 'build_one', clean: false });
   answer(store, 'hatched by a modified build');
   const [pet] = pets.scan();
@@ -968,25 +821,16 @@ test('a pet records the build that rolled it', () => {
 });
 
 test('the replay accuses only what this same clean build hatched', () => {
-  // The failure worth avoiding above all others: telling an honest operator their
-  // collection is fake, on their machine, months later. A pet decided by constants
-  // this process does not hold is a pet this process may not judge.
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'a real one');
   pets.scan();
-  // After the vivarium started, or the replay skips it as a backlog row and the
-  // check under test never runs.
   const at = new Date(Date.parse(started(store)) + 60_000).toISOString();
 
-  // An action the shipped rules would have hatched nothing on, with a pet against
-  // it anyway — which is what editing the drop chance and restarting looks like.
   store.recordPetAction({ kind: 'escalation', ref: 'esc_barren', at, petId: null });
   const log = store.petActionLog();
   const barren = replayBarren(log, PET_RULES, started(store));
   assert.ok(barren.has('escalation:esc_barren'), 'at the shipped chance, this one hatches nothing');
 
-  // A species that origin really can roll, so the earlier checks pass and the
-  // replay is what is under test.
   const plausible = [...speciesCandidates('escalation', 'esc_barren', at)][0]!;
   for (const [claim, expected] of [
     [{ sha: 'build_one', clean: true }, 'unearned'],
@@ -1027,7 +871,6 @@ test('an edit anywhere in the collection breaks the chain from there on', () => 
   const chain = replayChain(store.petChainLog());
   for (const pet of store.listPets()) assert.equal(pet.chain, chain.get(pet.id), 'what was written is what recomputes');
 
-  // Re-species the second one written, as a hand edit would.
   const log = store.petChainLog();
   const victim = log[1]!;
   const edited = log.map((row) =>
@@ -1047,15 +890,11 @@ test('a broken link is a flaw, and a missing one is not an accusation', () => {
   const tampered: Pet = { ...pet, chain: 'not the link this row should carry' };
   assert.equal(attestPet(tampered, ledger(store))?.code, 'broken-chain');
 
-  // A pet from before the chain existed carries no link at all, and every check
-  // that could accuse it declines instead — the whole migration rests on this.
   const historical: Pet = { ...pet, chain: null };
   assert.equal(attestPet(historical, ledger(store)), null, 'no link is not a broken link');
 });
 
 test('a database from before the stamp reads as unknown rather than as suspect', () => {
-  // Built against the *old* shape on purpose: a fresh database gets the columns
-  // from `SCHEMA` and would pass without the migration existing.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-stamp-'));
   const file = join(dir, 'before-stamps.sqlite');
   try {
@@ -1086,11 +925,6 @@ test('a database from before the stamp reads as unknown rather than as suspect',
 });
 
 test('a database from before blending gains the column rather than reading undefined', () => {
-  // `CREATE TABLE IF NOT EXISTS` never alters an existing table, so `dissolved_at`
-  // without its `ColumnMigrations` entry would be invisible on every database from
-  // before blending — and invisible here means every historical pet reads as alive
-  // again. Built against the *old* shape on purpose: a fresh database gets the
-  // column from `SCHEMA` and would pass this test without the migration existing.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-'));
   const file = join(dir, 'before-blending.sqlite');
   try {
@@ -1129,9 +963,6 @@ test('pets are a lens: nothing in the dispatcher reads them', () => {
 });
 
 test('no agent is ever told a pet exists', () => {
-  // The prompts and the tool channel are the two surfaces an agent reads. A score
-  // an agent can see is a target it can optimise, and the whole feature rests on
-  // it being invisible to the fleet.
   for (const dir of ['src/dispatcher', 'src/mcp', 'docs/prompt-templates']) {
     for (const file of allFiles(dir)) {
       const text = readFileSync(file, 'utf8').toLowerCase();
@@ -1142,9 +973,6 @@ test('no agent is ever told a pet exists', () => {
 
 test('the roll never reaches for randomness', () => {
   for (const file of srcFiles('src/pets')) {
-    // Comments stripped first: this file's own prose argues against `Math.random`
-    // by name, and an assertion that could not tell the argument from the call
-    // would be one nobody could write the argument down beside.
     assert.ok(
       !stripComments(readFileSync(file, 'utf8')).includes('Math.random'),
       `${file} must stay deterministic — a random roll turns every re-read into a fresh chance at a pet`,
@@ -1159,9 +987,6 @@ test('the state carries the vivarium’s start, so the cockpit can say why a bac
     null,
     'before the first scan there is no start, and a surface draws nothing rather than a placeholder',
   );
-  // Read, never stamped: `state()` runs on every heartbeat, and a read that wrote
-  // the boundary would start the vivarium on whichever pulse first drew the
-  // cockpit rather than on the first scan that could hatch anything.
   assert.equal(store.vivariumStart(), null, 'drawing the cockpit does not start the vivarium');
 
   answer(store, 'hatch me something');
@@ -1169,12 +994,10 @@ test('the state carries the vivarium’s start, so the cockpit can say why a bac
   assert.equal(pets.state()?.startedAt, store.vivariumStart(), 'and afterwards it is the store’s own start');
 });
 
-/** Source with block and line comments removed, so prose about a call is not the call. */
 function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-/** Every `.ts` under a source directory, recursively, as repo-relative paths. */
 function srcFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -1185,7 +1008,6 @@ function srcFiles(dir: string): string[] {
   return out.sort();
 }
 
-/** The same walk, for directories holding prose rather than TypeScript. */
 function allFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -1196,19 +1018,6 @@ function allFiles(dir: string): string[] {
   return out.sort();
 }
 
-// ---------------------------------------------------------------------------
-// The origin label (`docs/spec/22-pets.md#the-sources`)
-// ---------------------------------------------------------------------------
-
-/**
- * One settled action of every kind the scan still finds, so a scan can hatch a pet
- * from each.
- *
- * `claim` is not among them any more: the claim store is gone, so nothing hatches
- * one — the kind survives on `PetActionKind` because every creature already
- * hatched from a ruling carries it, and a pet whose origin kind the wire did not
- * know would be a pet the grid could not draw.
- */
 function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   const refs = new Map<PetActionKind, string>();
   refs.set('escalation', answer(store, 'Should the rate-limit park apply to review agents too?'));
@@ -1217,10 +1026,6 @@ function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   refs.set('plan', plan.id);
   refs.set('landing', store.recordStackLanding('stack:413', [411, 412]).id);
   refs.set('job', store.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
-  // Stamped now, not at a fixed date. Every other action here takes its timestamp
-  // from the store's clock, and `requestedAt` is the one a caller supplies — so a
-  // literal puts this action before the vivarium's start, where it is recorded
-  // inert and hatches nothing.
   store.writeUpgradeIntent({
     state: 'applying',
     targetSha: '9c1d4a2f6b3e',
@@ -1244,18 +1049,13 @@ test('every origin arrives on the wire as words rather than as a row id', () => 
   assert.equal(byKind.get('plan')?.originLabel, 'Give jobs real names');
   assert.equal(byKind.get('landing')?.originLabel, 'stack:413');
   assert.equal(byKind.get('job')?.originLabel, 'Re-run the flaky worktree suite');
-  // An upgrade is the one kind that reads nothing: its ref is the commit itself.
   assert.equal(byKind.get('upgrade')?.originLabel, '9c1d4a2');
-  // And the ref the label stands beside has not moved — it is the seed, the
-  // re-roll's input and part of the chain hash.
   for (const kind of LIVE_KINDS) assert.equal(byKind.get(kind)?.originRef, refs.get(kind));
 });
 
 test('the labels are one batched read per kind over the refs the vivarium holds', () => {
   const { store, pets } = keeper({ dropChance: 1 });
   oneOfEachKind(store);
-  // A second escalation, so "the refs it holds" is more than one and a query per
-  // card would show up as two calls rather than one.
   answer(store, 'a second question');
   pets.scan();
 
@@ -1305,18 +1105,12 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
   try {
     const store = new Store(path);
     const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
-    // The boot scan first, exactly as `keeper()` does it: it stamps the vivarium's
-    // start, so the action below falls *after* the boundary rather than racing it.
-    // Without it the escalation only hatches while `answer` and `scan` land in the
-    // same millisecond, which a loaded runner does not grant.
     pets.scan();
     const id = answer(store, 'a question somebody later pruned');
     pets.scan();
     assert.equal(pets.state()?.pets[0]?.originLabel, 'a question somebody later pruned');
     store.close();
 
-    // The source pruned out from under a pet that is otherwise untouched — a
-    // restored backup, or a tidied table.
     const raw = new Database(path);
     raw.prepare(`DELETE FROM escalations WHERE id=?`).run(id);
     raw.close();
@@ -1334,18 +1128,9 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
 });
 
 test('a vivarium raised before the chain keeps the pets it earns afterwards', () => {
-  // The migration's promise — "a database from before them keeps every pet it
-  // holds" — has to hold for the pets that come *after* it too, and it did not:
-  // `lastChain()` answers `null` for a pre-chain newest row, so the next pet
-  // honestly chained onto nothing, while `replayChain` hashed that row in and
-  // expected a different link. Every creature earned from the day the build landed
-  // read `broken-chain` — unfeedable, unplaceable, unblendable — while the old ones
-  // looked fine, which reads as the harness accusing the operator of forging the
-  // ones they just earned.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-chain-'));
   const file = join(dir, 'before-chain.sqlite');
   try {
-    // One honestly-earned pet, rolled by the shipped tables rather than hand-picked.
     const first = new Store(file);
     const early = new PetKeeper(first, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
     early.scan();
@@ -1354,11 +1139,6 @@ test('a vivarium raised before the chain keeps the pets it earns afterwards', ()
     assert.ok(old, 'the fixture starts from a pet the harness itself rolled');
     first.close();
 
-    // Now take the column away, which is the one thing `ALTER TABLE` cannot express
-    // and therefore the one state no fixture built from `SCHEMA` can reach. The
-    // reopen below runs the real `ensureColumns`, which adds `chain` back as NULL on
-    // every row already there — exactly what a deployment sees on the boot it takes
-    // the build.
     const raw = new Database(file);
     raw.exec(`CREATE TABLE pets_pre AS SELECT id, species, seed, name, fed, origin_kind, origin_ref,
                 hatched_at, opened_at, placed, dissolved_at, built_sha, built_clean FROM pets;
@@ -1373,8 +1153,6 @@ test('a vivarium raised before the chain keeps the pets it earns afterwards', ()
     const fresh = pets.scan();
     assert.equal(fresh.length, 4, 'the vivarium still hatches');
 
-    // The ledger reads the same bent rules the keeper rolled under, or every drop
-    // this test forced reads as `unearned` against the shipped table.
     const book: PetLedger = {
       ...ledger(store),
       barren: replayBarren(store.petActionLog(), rules({ dropChance: 1 }), started(store)),
@@ -1383,7 +1161,6 @@ test('a vivarium raised before the chain keeps the pets it earns afterwards', ()
     for (const pet of fresh) {
       assert.equal(attestPet(pet, book), null, `${pet.id} was earned honestly and must not read as an insertion`);
     }
-    // And the run after the break is still a run: an edit inside it still shows.
     const log = store.petChainLog();
     const victim = log[2]!;
     const tampered = log.map((row) =>

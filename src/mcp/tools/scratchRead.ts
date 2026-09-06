@@ -1,6 +1,8 @@
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const scratchRead: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Read the shared scratchpad for the issue — or the pull request — you are working: every note ' +

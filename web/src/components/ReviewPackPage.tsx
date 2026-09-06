@@ -38,76 +38,22 @@ import {
   type NumberedIdea,
 } from '../view/reviewPack.js';
 
-/**
- * The page a review pack renders to, in the order
- * `docs/spec/31-review-packs.md#the-page` fixes: masthead, the gate, the idea
- * rows, and on opening one its walk and its claims; then the findings, where to
- * spend the time, and the folded colophon.
- *
- * A pure function of the payload and what the reviewer has done to it — no
- * fetch, no state — so it can be rendered to static markup and the order of
- * things asserted, which is how the four surface requirements under *What a
- * false claim does* are checked. `ReviewPackModal` is the shell that fetches
- * and takes the marks.
- *
- * **The renderer invents nothing.** Every field it draws is a field of the
- * document; where one is missing it draws the gap — a row with no cue, a code
- * block with no caption — rather than guessing. And a pack whose `schema` this
- * build does not know is refused whole, at the top, never drawn as far as it is
- * recognised.
- */
+// → docs/spec/17-cockpit.md
+
 interface ReviewPackPageProps {
   payload: ReviewPackPayload;
-  /** The marks as they stand — the payload's on open, then whatever the last write returned. */
   marks: readonly ReviewMark[];
-  /**
-   * The pad entries the claims cite, by id, or null while the pads have not
-   * arrived. A `witnessed` or `disputed` claim shows its entry verbatim beside
-   * it; one whose entry is not here is drawn as such rather than silently bare.
-   */
   entries: ReadonlyMap<string, ScratchEntryView> | null;
-  /** Which idea is unfolded — an id, `all`, or null — from the address bar. */
   openIdea: string | null;
   onOpenIdea: (id: string | null) => void;
   onRead: (ideaId: string, read: boolean) => Promise<void>;
-  /**
-   * The reader took the finding on this idea's false claim. Offered under the
-   * finding and nowhere else — it is a statement about the checker's output, not
-   * about the walk. → docs/spec/31-review-packs.md#whether-prominence-works
-   */
   onSeen: (ideaId: string, seen: boolean) => Promise<void>;
   onAttention: (ideaId: string, attention: ReviewAttention | null) => Promise<void>;
-  /** Ask for a new pack — the same control as the first ask, from the pull request's row. */
   onAsk: () => Promise<void>;
-  /**
-   * Why the last ask was refused, in the route's own words — held by the shell,
-   * like {@link ReviewPackPageProps.shareRefusal} and for the same reason. The ask
-   * is refused for four reasons a person can act on (an author already on the pull
-   * request, a checker on the pack, a head the provider does not report, a paused
-   * fleet), and a 409 that reached the reader as a button that did nothing is the
-   * one of those four they cannot act on.
-   * → docs/spec/31-review-packs.md#when-a-pack-is-made
-   */
   askRefusal: string | null;
   onAskRefused: (message: string) => void;
-  /**
-   * Publish this pack into the pool. **A second, deliberate act**, and a separate
-   * control from the ask: a pack carries its code, so sharing one puts the
-   * fleet's source into a repository that never forgets, and nothing does it by
-   * default. → docs/spec/31-review-packs.md#sharing-a-pack
-   */
   onShare: () => Promise<void>;
-  /**
-   * Take a shared pack back out of the pool. The inverse of the share and drawn
-   * beside it: a pack shared by mistake leaves on the next pool pulse rather than
-   * waiting weeks for the prune. → docs/spec/31-review-packs.md#unsharing-a-pack
-   */
   onUnshare: () => Promise<void>;
-  /**
-   * What the last share was refused for, in the route's own words — held by the
-   * shell, because this page is a pure function of the payload and the refusal is
-   * about a click rather than about the pack.
-   */
   shareRefusal: string | null;
   onShareRefused: (message: string) => void;
   refUrls: Record<string, string>;
@@ -126,9 +72,6 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
   const { payload } = props;
   const { pack } = payload;
   if (pack.schema !== KNOWN_REVIEW_PACK_SCHEMA) {
-    // Refused whole, not rendered as far as it is recognised: a page silently
-    // missing its gate because the renderer was a version behind is the failure
-    // the subsystem exists to catch, reproduced by the thing that reports it.
     return (
       <div className="rp rp-refuse" role="alert">
         <h2>This pack cannot be shown.</h2>
@@ -267,16 +210,6 @@ function Masthead({ payload, onAsk, askRefusal, onAskRefused }: ReviewPackPagePr
   );
 }
 
-/**
- * The share control: the second act, drawn as one.
- *
- * Six states and none of them is a default — no pool to publish to, nobody has
- * shared it, asked for and waiting on the pool's own clock, in the pool, taken
- * back out and waiting on the same clock, and refused by the secret backstop. The refusal is drawn in full rather than
- * flashed, because it **names the line** it stopped on and that is the whole of
- * what the person can act on; nothing was rewritten and nothing left the machine.
- * → docs/spec/31-review-packs.md#sharing-a-pack
- */
 function Share({
   sharing,
   headSha,
@@ -289,7 +222,6 @@ function Share({
   headSha: string;
   onShare: () => Promise<void>;
   onUnshare: () => Promise<void>;
-  /** The route's own words for the last refused click, held by the shell. */
   refused: string | null;
   onRefused: (message: string) => void;
 }): JSX.Element | null {
@@ -368,12 +300,6 @@ function Currency({ currency }: { currency: ReturnType<typeof packCurrency> }): 
   );
 }
 
-/**
- * A pack the checker has not finished with, drawn as itself. Two states that
- * look alike from the verdicts alone — every one null — and read differently:
- * being checked, and never checked. The second is a paused fleet or a checker
- * that failed (the error log says which), and nothing retries it on its own.
- */
 function Unchecked({
   standing,
   onAsk,
@@ -409,17 +335,6 @@ function Unchecked({
   );
 }
 
-/**
- * The ask, wherever it is drawn, with its refusal beside it.
- *
- * The desk refuses an ask for four reasons and every one of them is a sentence
- * the reader can act on — an author is already on this pull request, its pack is
- * being checked, the provider reports no head, the fleet is paused. Drawn rather
- * than flashed, for the reason the share's refusal is: the status alone reached
- * the reader as a button that did nothing, and nothing is written to the error
- * log for a refusal, which is correct — a refusal is not a failure.
- * → docs/spec/31-review-packs.md#when-a-pack-is-made
- */
 function AskAgain({
   onAsk,
   refused,
@@ -439,11 +354,6 @@ function AskAgain({
   );
 }
 
-/**
- * The gate: first thing after the masthead and above the ideas, so a reader
- * cannot reach the ideas without passing it. Absent when nothing is false.
- * → docs/spec/31-review-packs.md#what-a-false-claim-does
- */
 function Gate({ wrong }: { wrong: FalseClaim[] }): JSX.Element {
   const first = wrong[0]!;
   const rest = wrong.length - 1;
@@ -515,16 +425,11 @@ function IdeaRow({
   const steps = idea.anchors.length;
   const changes = idea.anchors.filter((a) => a.kind === 'hunk').length;
   const attention = marks.attention ?? idea.attention;
-  // The claims a reader must see first: a false one and a disputed one are
-  // shown at the top of the idea with their evidence, never folded away with
-  // the notes.
   const raised = idea.claims.filter((c) => c.verdict === 'false' || c.provenance.kind === 'disputed');
   return (
     <details className={`rp-idea ${marks.read ? 'rp-read' : ''}`} open={open}>
       <summary
         onClick={(e) => {
-          // The address bar owns which idea is open, so the click is a move
-          // rather than a toggle the element does on its own.
           e.preventDefault();
           onOpen(!open);
         }}
@@ -626,15 +531,6 @@ function IdeaRow({
   );
 }
 
-/**
- * The scenarios the idea's tests cover, listed and never explained.
- *
- * Under the walk and above the claims, so the reader who has just read the code
- * learns whether it is exercised there rather than in a tests section at the far
- * end of the page. Drawn nowhere when there is nothing to draw: a "Covered by"
- * heading over an empty list reads as tests that were looked for and not found.
- * → docs/spec/31-review-packs.md#tests-are-never-an-idea
- */
 function CoveredBy({ coverage }: { coverage: readonly string[] }): JSX.Element | null {
   if (coverage.length === 0) return null;
   return (
@@ -654,12 +550,6 @@ function findingIndex(wrong: FalseClaim[], idea: ReviewIdea, claim: ReviewClaim)
   return i < 0 ? null : i + 1;
 }
 
-/**
- * What each label is *asking of the reader*, in the tag's tones: red to stop and
- * read, amber a call to make, blue an idea that should have been two, and no tone
- * at all for the one that asks nothing. Total over `ReviewAttention`, so a fifth
- * label fails the typecheck rather than drawing untinted.
- */
 const ATTENTION_TONE: Record<ReviewAttention, TagTone> = {
   read: 'red',
   decide: 'amber',
@@ -722,16 +612,6 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
-/**
- * One stop on the walk.
- *
- * The number carries its idea's — `01.3`, never `3` — because step numbers restart
- * per idea and a bare one says nothing about where in the page the reader is.
- * `minor` stops are drawn quiet with their code folded
- * ([weight](../view/reviewPack.js)): an import block beside a fifty-line function
- * is not a stop, and drawing them as equals is what makes a long walk unreadable.
- * → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
- */
 function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: number; ideaNumber: number }): JSX.Element {
   const region = anchor.kind === 'region';
   const counts = diffCounts(anchor.code);
@@ -831,24 +711,13 @@ function CodeBlock({
   caption: string | null;
   dashed: boolean;
   diff: boolean;
-  /** The file the lines came from — the only thing the highlighter reads. */
   path: string;
 }): JSX.Element {
-  // The diff marker is a column of its own, never the first character of the
-  // code: inline it shifts the indentation, lands in anything the reader copies,
-  // and on a new file fills the screen with one character the step's tag already
-  // said. → docs/spec/31-review-packs.md#the-code-block
   const { gutter, lines } = codeBlockLines(code, diff);
-  // Coloured here rather than in the browser, so this page and the HTML companion
-  // cannot disagree about what the code says.
   const coloured = highlightCode(
     lines.map((l) => l.text),
     codeLanguage(path),
   );
-  // A block longer than this is scrolled past rather than read, and one of them
-  // buries every idea under it. The tail is folded, never dropped: the document
-  // carries its code and all of it stays copyable.
-  // → docs/spec/31-review-packs.md#the-code-block
   const cut = lines.length > HEAD_LINES + TAIL_MARGIN ? HEAD_LINES : lines.length;
   const row = ({ marker, text }: { marker: '+' | '-' | ' ' | null; text: string }, i: number): JSX.Element => (
     <span key={i} className={`rp-l ${!gutter ? '' : marker === '+' ? 'rp-add' : marker === '-' ? 'rp-del' : ''}`}>
@@ -895,7 +764,6 @@ function CodeBlock({
   );
 }
 
-/** How much of a code block is shown before the rest is folded, and the slack that stops a fold saving nothing. */
 const HEAD_LINES = 20;
 const TAIL_MARGIN = 6;
 
@@ -910,12 +778,6 @@ function VerdictChip({ verdict }: { verdict: ReviewVerdict | null }): JSX.Elemen
   );
 }
 
-/**
- * One claim: its verdict as a chip, its evidence in the sentence, and where it
- * came from — with the cited pad entry verbatim beside a `witnessed` or
- * `disputed` one. That is what stops the author quietly improving a note in the
- * retelling: the reader sees both halves at once.
- */
 function ClaimLine({
   claim,
   entries,
@@ -974,12 +836,6 @@ function ClaimLine({
   );
 }
 
-/**
- * A finding: the page's most important prose. The two pieces of code that
- * disagree are the step the claim is about (`mark: 'false'` on the walk) and the
- * checker's counter, drawn side by side with their captions; then the body, a
- * table where numbers make it concrete, and the closing paragraph.
- */
 function Finding({
   item,
   index,
@@ -990,7 +846,6 @@ function Finding({
   item: FalseClaim;
   index: number;
   refUrls: Record<string, string>;
-  /** Whether the reader has taken this one, laid off the hunks the idea owns. */
   seen: boolean;
   onSeen: (seen: boolean) => Promise<void>;
 }): JSX.Element {
@@ -1057,7 +912,6 @@ function Finding({
   );
 }
 
-/** `attention` made actionable: the ideas in reading order, each with the reason. */
 function SpendTheTime({
   numbered,
   estimatedMinutes,

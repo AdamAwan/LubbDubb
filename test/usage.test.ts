@@ -11,10 +11,6 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// ---------------------------------------------------------------------------
-// Store: cumulative usage folds onto the agent; deltas feed the rolling window
-// ---------------------------------------------------------------------------
-
 test('recordAgentUsage stores cumulative values and window-sums the deltas', () => {
   let at = '2026-07-22T10:00:00.000Z';
   const store = new Store(':memory:', () => at);
@@ -41,18 +37,14 @@ test('recordAgentUsage stores cumulative values and window-sums the deltas', () 
   });
 
   const after = store.getAgent(agent.id)!;
-  assert.equal(after.costUsd, 1.25); // cumulative, not summed
+  assert.equal(after.costUsd, 1.25);
   assert.equal(after.inputTokens, 5000);
   assert.equal(after.outputTokens, 900);
-  // The cached split is cumulative on the same terms, and is a *part* of the
-  // input rather than a sibling total — fresh input is the subtraction, 400.
   assert.equal(after.cacheReadTokens, 4200);
   assert.equal(after.cacheCreationTokens, 400);
   assert.equal(after.numTurns, 2);
 
-  // Both deltas (0.5 + 0.75) fall in a window opened before the first report…
   assert.equal(store.sumUsageCostSince('2026-07-22T09:00:00.000Z'), 1.25);
-  // …but only the second (0.75) in one opened after it.
   assert.equal(store.sumUsageCostSince('2026-07-22T11:00:00.000Z'), 0.75);
   store.close();
 });
@@ -81,11 +73,6 @@ test('a regressed cumulative total never produces a negative window delta', () =
   store.close();
 });
 
-// ---------------------------------------------------------------------------
-// Stream mode end-to-end: result metadata → agent row → snapshot windows
-// ---------------------------------------------------------------------------
-
-/** Minimal fake claude stream-JSON process (same shape as streamIntegration.test.ts). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 777;
   writes: string[] = [];
@@ -147,9 +134,6 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
   assert.equal(agent.costUsd, 0.42);
   assert.equal(agent.inputTokens, 900 + 4000 + 55_000, 'cache tokens count as input');
   assert.equal(agent.outputTokens, 350);
-  // …and are also kept apart, because the gross figure alone cannot say whether
-  // that input was cheap. A read bills at a fraction of a fresh token: 55k of
-  // this run's 59.9k input was already warm, and only 900 tokens were fresh.
   assert.equal(agent.cacheReadTokens, 55_000);
   assert.equal(agent.cacheCreationTokens, 4000);
   assert.equal(agent.numTurns, 6);

@@ -10,27 +10,8 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 
-/**
- * An agent's children outlive the agent unless something takes the subtree down.
- * The failure this covers is silent and expensive: a shell an agent started with
- * the Bash tool keeps the worktree as its cwd, Windows refuses `rmdir` on a live
- * process's cwd, and every later dispatch onto that branch fails `EBUSY` in
- * `WorktreeManager.reclaim` — indefinitely, ~45s apart, with nothing but rejected
- * dispatches in the log to say why.
- *
- * Both runtimes are exercised, because `agentMode` defaults to `stream` and the
- * PTY runtime is the one with terminal semantics — a fix that only understood
- * terminals would cover neither the default nor the whole fleet.
- *
- * The reaper is **injected**, and that is not only for observation: the real one
- * signals whatever pid it is handed, and these tests' transports are fakes whose
- * pids name unrelated processes on the host running the suite.
- */
-
-/** Every pid a kill asked to be reaped, with what had already happened to the process. */
 interface Reap {
   pid: number;
-  /** Whether the direct child had been signalled by the time the reap ran. */
   childAlreadyKilled: boolean;
 }
 
@@ -47,7 +28,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/** Minimal fake claude stream-JSON process (same shape as usage.test.ts's). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 4242;
   killed = false;
@@ -64,7 +44,6 @@ class FakeChild extends EventEmitter implements StreamChild {
   }
 }
 
-/** Dispatch one code agent and hand back its id. */
 async function dispatch(system: System, issueNumber: number): Promise<string> {
   system.connector.inject({ kind: 'new_issue', number: issueNumber, title: 'Add login' });
   await system.harness.runCycle('manual');
@@ -99,9 +78,6 @@ test('stream mode: killing an agent reaps its process subtree, not just the dire
     [child.pid],
     'the kill reaps the subtree rooted at the agent process',
   );
-  // Ordering is the load-bearing half: both mechanisms (taskkill /T, kill(-pgid))
-  // resolve descendants *through* the root, so a root that has already been
-  // signalled can leave children that are no longer reachable from here.
   assert.equal(reaps[0]!.childAlreadyKilled, false, 'the subtree is reaped before the root is signalled');
   assert.equal(child.killed, true, 'and the root is still signalled afterwards');
   system.store.close();
@@ -147,9 +123,6 @@ test('a shutdown interrupt reaps every live agent subtree', async () => {
   const live = system.store.listAgentsByStatus('starting', 'running');
   assert.ok(live.length >= 2, 'two agents are up');
 
-  // Server shutdown. The agents are left resumable, but their children must not
-  // be: this is the exact path the two-day wedge came down — a task interrupted,
-  // the agent gone, its shell still sitting in the worktree.
   system.agents.interruptAll();
 
   assert.equal(reaps.length, live.length, 'every live agent had its subtree reaped');

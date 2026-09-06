@@ -7,36 +7,12 @@ import { Ref } from './refs.js';
 import { ReviewPackPage } from './ReviewPackPage.js';
 import { Tag } from './tag.js';
 
-/**
- * How often the modal re-reads while an agent is on the pull request. The pack
- * and the check both arrive through the read, and the `dirty` the hub emits for
- * either is a snapshot signal the modal is not on — so while an author or a
- * checker is running, it asks again on a short clock and stops the moment
- * neither is.
- */
+// → docs/spec/17-cockpit.md
+
 const AGENT_POLL_MS = 4000;
 
-/**
- * A pull request's review pack, over the goal page — the one rendering that
- * takes input. Fetched on open (`GET /api/prs/:number/review-pack`), never off
- * the snapshot: a pack carries its code, and one per pull request on every poll
- * would pay for the feature in bandwidth. The reviewer's three marks ride their own
- * routes and the marks the write returns replace what the page holds, so the
- * page re-lays them from one shape rather than patching a copy.
- *
- * **Shell-owned**, opened through `viewReviewPack(prNumber | null)` and its idea
- * through `openReviewIdea` — both `Place` fields, so the back button steps out
- * of an idea and a link lands on one. The page itself is `ReviewPackPage`, pure,
- * so the order of things on it can be asserted.
- *
- * Four states rather than three, because the read's 404 is an answer: loading,
- * no pack (not asked for, or being written), the pack, and an error — a fetch
- * that failed must not read as "nobody asked".
- * → docs/spec/31-review-packs.md#reading-it
- */
 export function ReviewPackModal({
   prNumber,
-  /** The goal page this is over, whose pad the author was handed beside the pull request's own. */
   goalRef,
   openIdea,
   refUrls,
@@ -53,13 +29,7 @@ export function ReviewPackModal({
   const [reading, setReading] = useState<ReviewPackReading | 'loading' | 'failed'>('loading');
   const [marks, setMarks] = useState<ReviewMark[] | null>(null);
   const [entries, setEntries] = useState<ReadonlyMap<string, ScratchEntryView> | null>(null);
-  // The last refused share, in the route's own words — the secret backstop's
-  // reason names the line it stopped on, which is the whole of what the person
-  // can act on. Held here rather than in the page, which is pure.
   const [shareRefusal, setShareRefusal] = useState<string | null>(null);
-  // The last refused ask, in the same terms and for the same reason: the desk
-  // refuses one for four reasons a reader can act on, and none of them is written
-  // to the error log — a refusal is not a failure.
   const [askRefusal, setAskRefusal] = useState<string | null>(null);
   const live = useRef(true);
 
@@ -68,8 +38,6 @@ export function ReviewPackModal({
       const next = await api.getReviewPack(prNumber);
       if (!live.current) return;
       setReading(next);
-      // A fresh read carries the marks as the store holds them; a write's answer
-      // replaces them in between. Either way one shape, never a merge.
       if (next.kind === 'pack') setMarks(next.payload.marks);
     } catch {
       if (live.current) setReading('failed');
@@ -86,10 +54,6 @@ export function ReviewPackModal({
     };
   }, [load]);
 
-  // The pads the claims cite: the pull request's own, and the goal's where the
-  // page is over one. Read once per open, in parallel with the pack, and drawn
-  // verbatim beside each `witnessed` or `disputed` claim. A pad that will not
-  // load leaves the map without its entries, and the claim says so.
   useEffect(() => {
     let on = true;
     const refs = [`pr:${prNumber}`, ...(goalRef !== null ? [goalRef] : [])];
@@ -104,11 +68,6 @@ export function ReviewPackModal({
     };
   }, [prNumber, goalRef]);
 
-  // While an author or a checker is on the pull request the read is what will
-  // change, so it is asked again on a clock and left alone otherwise.
-  // A share asked for and not yet published is the third thing that changes
-  // underneath the page on a clock of the harness's rather than the reader's: the
-  // pool publishes on its own pulse, so the state arrives through the same read.
   const busy =
     reading !== 'loading' &&
     reading !== 'failed' &&
@@ -124,9 +83,6 @@ export function ReviewPackModal({
     try {
       await api.requestReviewPack(prNumber);
     } finally {
-      // Re-read either way: a refused ask usually names state that moved under the
-      // page — an author already on the pull request, a checker on its pack — and
-      // the read is what draws it.
       await load();
     }
   }, [prNumber, load]);
@@ -137,9 +93,6 @@ export function ReviewPackModal({
     await load();
   }, [prNumber, load]);
 
-  // The inverse, and it re-reads for the same reason: the row goes to "waiting to
-  // leave" at once and the copy is gone on the pool's next pulse, which arrives
-  // through the same read on the same short clock.
   const unshare = useCallback(async () => {
     setShareRefusal(null);
     await api.unshareReviewPack(prNumber);
@@ -215,16 +168,12 @@ export function ReviewPackModal({
   );
 }
 
-/** A share or a withdrawal the pool's next pulse has still to carry out — what the short clock above is for. */
 function pendingShare(sharing: ReviewPackSharing): boolean {
   const share = sharing.share;
   if (share === null) return false;
-  // Two waits, both on the pool's own clock: a share the next pulse will publish,
-  // and a withdrawal the next pulse will take back out.
   return share.withdrawnAt !== null || (share.publishedAt === null && share.refusal === null);
 }
 
-/** No pack yet: on its way, or never asked for — two different sentences, and only the second offers the ask. */
 function NoPack({
   prNumber,
   writing,
@@ -235,7 +184,6 @@ function NoPack({
   prNumber: number;
   writing: boolean;
   onAsk: () => Promise<void>;
-  /** Why the last ask was refused, in the route's own words. */
   refused: string | null;
   onRefused: (message: string) => void;
 }) {

@@ -5,7 +5,6 @@ import { Store } from '../src/store/store.js';
 import { AgentManager } from '../src/agents/agentManager.js';
 import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
 
-/** A session whose start() throws, standing in for a failed real spawn. */
 class ThrowingSession extends EventEmitter implements AgentSession {
   status: AgentSessionStatus = 'starting';
   pid: number | null = null;
@@ -37,15 +36,12 @@ test('a spawn that throws surfaces the reason and leaves no live agent', () => {
 
   assert.throws(() => agents.spawn(task, '/tmp'), /was not found on PATH/);
 
-  // The half-created agent is torn down: marked failed, not left in `starting`.
   const agent = store.listAgents()[0];
   assert.ok(agent);
   assert.equal(agent.status, 'failed');
   assert.notEqual(agent.endedAt, null);
   assert.equal(agents.isLive(agent.id), false);
-  // Task fails too, so it isn't re-dispatched into the same broken command forever.
   assert.equal(store.getTask(task.id)?.status, 'failed');
-  // The reason is captured for the operator instead of vanishing.
   assert.match(store.getTranscript(agent.id), /was not found on PATH/);
   assert.deepEqual(statuses, ['failed']);
 });

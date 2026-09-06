@@ -35,13 +35,10 @@ import { loadConfig } from '../src/config.js';
 import type { Agent, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
   isError?: boolean;
 }
-
-// -- the wire protocol, with no transport at all -----------------------------
 
 const echoTool: McpTool = {
   name: 'echo',
@@ -55,7 +52,7 @@ test('parseFrame accepts requests and rejects anything that is not one', () => {
   assert.equal(parseFrame('{"jsonrpc":"2.0","method":"notifications/initialized"}')?.id, undefined);
   assert.equal(parseFrame('not json'), null);
   assert.equal(parseFrame('[]'), null);
-  assert.equal(parseFrame('{"jsonrpc":"2.0","id":1}'), null); // no method
+  assert.equal(parseFrame('{"jsonrpc":"2.0","id":1}'), null);
 });
 
 test('initialize and tools/list answer with the advertised surface', async () => {
@@ -75,8 +72,6 @@ test('initialize and tools/list answer with the advertised surface', async () =>
 test('notifications get no frame at all, and an unknown method is an error not silence', async () => {
   const note = await handleRequest(parseFrame('{"jsonrpc":"2.0","method":"notifications/initialized"}')!, []);
   assert.equal(note, null);
-  // An unknown *notification* is also answered with nothing — replying to one is
-  // itself a protocol violation.
   const unknownNote = await handleRequest(parseFrame('{"jsonrpc":"2.0","method":"who/knows"}')!, []);
   assert.equal(unknownNote, null);
 
@@ -100,8 +95,6 @@ test('a handler that throws becomes a tool error, never a dead channel', async (
   assert.match(result.content[0]!.text, /kaboom/);
 });
 
-// -- launch wiring -----------------------------------------------------------
-
 test('--mcp-config is wired only when a config path was minted', () => {
   {
     const build = buildClaudeStreamArgs;
@@ -111,16 +104,9 @@ test('--mcp-config is wired only when a config path was minted', () => {
 
     const on = build({ mcpConfigPath: '/tmp/agent.json' });
     assert.equal(on[on.indexOf('--mcp-config') + 1], '/tmp/agent.json');
-    // The tools have to be *described*, or they may as well not be wired.
     assert.ok(on[on.indexOf('--append-system-prompt') + 1]?.includes(MCP_PROTOCOL_ADDENDUM));
-    // Never --strict-mcp-config: it would suppress the target repo's own
-    // .mcp.json, and our worktree is a checkout of the user's repository.
     assert.equal(on.includes('--strict-mcp-config'), false);
-    // Without this every call is refused: an --mcp-config server connects
-    // unapproved, but `acceptEdits` does not cover its tool calls and there is no
-    // human at the prompt to grant them.
     assert.equal(on[on.indexOf('--allowedTools') + 1], ALLOWED_MCP_TOOLS.join(','));
-    // Operator args land after ours, so an explicit --allowedTools still wins.
     const withExtra = build({ mcpConfigPath: '/tmp/agent.json', extraArgs: ['--allowedTools', 'Bash'] });
     assert.ok(withExtra.lastIndexOf('--allowedTools') > withExtra.indexOf('--allowedTools'));
   }
@@ -129,43 +115,24 @@ test('--mcp-config is wired only when a config path was minted', () => {
 test('the permission backstop tool is wired only alongside the channel it lives on (#130)', () => {
   {
     const build = buildClaudeStreamArgs;
-    // No --mcp-config → the tool has no server, so no flag however it's asked for.
     const noChannel = build({ permissionPromptTool: PERMISSION_PROMPT_TOOL });
     assert.equal(noChannel.includes('--permission-prompt-tool'), false);
-    // Channel on but the operator disabled the backstop → still no flag.
     const disabled = build({ mcpConfigPath: '/tmp/agent.json' });
     assert.equal(disabled.includes('--permission-prompt-tool'), false);
-    // Both → Claude Code routes an un-allowlisted call to our tool instead of denying.
     const on = build({ mcpConfigPath: '/tmp/agent.json', permissionPromptTool: PERMISSION_PROMPT_TOOL });
     assert.equal(on[on.indexOf('--permission-prompt-tool') + 1], PERMISSION_PROMPT_TOOL);
   }
 });
 
 test('the granted permission names are exactly the tools the server exposes', () => {
-  // Three things must agree — the launch-config key, the tool names, and the
-  // `mcp__<key>__<tool>` grants. Drift between them yields a *connected* server
-  // whose every call is refused, which is invisible until an agent needs it.
   assert.deepEqual(
     ALLOWED_MCP_TOOLS,
     MCP_TOOL_NAMES.map((name) => `mcp__${MCP_SERVER_ID}__${name}`),
   );
-  // The permission-prompt tool is one of them, or the permission machinery's own
-  // call to it is refused — the exact trap names.ts exists to prevent (#130).
   assert.ok(ALLOWED_MCP_TOOLS.includes(PERMISSION_PROMPT_TOOL));
   assert.equal(PERMISSION_PROMPT_TOOL, `mcp__${MCP_SERVER_ID}__request_permission`);
 });
 
-/**
- * The classification itself lives in `src/mcp/names.ts`, beside the names it
- * classifies, because production code reads the `superseded` half: the setup
- * reading tells an operator when a prompt override of theirs still names one
- * (`docs/spec/26-setup.md`). It was written here, and a classification a test owns
- * is one production code has to keep a second copy of — free to disagree with what
- * is actually granted, silently.
- *
- * What is asserted here is each side of it: the addendum names every `addendum`
- * tool and no other, and a retired name is answered but never advertised.
- */
 test('the addendum names every tool an agent has to choose to call', () => {
   for (const name of MCP_TOOL_NAMES) {
     const named = MCP_PROTOCOL_ADDENDUM.includes(name);
@@ -178,9 +145,6 @@ test('the addendum names every tool an agent has to choose to call', () => {
 });
 
 test('a retired name is no longer a tool, and no longer granted', () => {
-  // The five `raise` replaced are gone: not in the list, not in the registry, and
-  // not in the grants. What is left of them is the *name*, which is the whole of
-  // the withdrawal's safety — see the next two tests.
   for (const name of RETIRED_TOOL_NAMES) {
     assert.ok(!(MCP_TOOL_NAMES as readonly string[]).includes(name), `${name} is retired, not advertised`);
     assert.ok(
@@ -189,18 +153,10 @@ test('a retired name is no longer a tool, and no longer granted', () => {
     );
   }
   assert.ok(RETIRED_TOOL_NAMES.includes('report_finding'));
-  // The read side of the claim store, retired with it: there is no search tool now,
-  // and an agent reaching for one from an out-of-date prompt is told so.
   assert.ok(RETIRED_TOOL_NAMES.includes('knowledge_ask'));
 });
 
 test('a retired name is answered, so an override that still names one is not a dead channel', () => {
-  // The failure this closes is the reason the four spent a release registered
-  // rather than deleted, and it is silent: an operator's prompt override written
-  // before the intake still says "report_finding", and a name that is simply gone
-  // comes back as an unknown method — which reaches the agent as a broken channel
-  // and appears in no reading at all. Answered, it is a refusal that names the
-  // replacement, and a recorded call the MCP tab can show.
   const tools = retiredAwareTools();
   for (const name of RETIRED_TOOL_NAMES) {
     const tool = tools.find((t) => t.name === name);
@@ -217,7 +173,6 @@ test('tools/list advertises the live tools and never a retired one', async () =>
   for (const name of RETIRED_TOOL_NAMES) assert.ok(!(names as string[]).includes(name));
 });
 
-/** The whole tool set as one dispatch sees it — the live tools and the retired names. */
 function retiredAwareTools(): McpTool[] {
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
@@ -228,12 +183,9 @@ function retiredAwareTools(): McpTool[] {
 }
 
 test('the addendum keeps the sentinels as the floor rather than withdrawing them', () => {
-  // The done sentinel has no tool, and the prompt must not imply otherwise.
   assert.match(MCP_PROTOCOL_ADDENDUM, /@@LUBBDUBB_DONE@@/);
   assert.match(MCP_PROTOCOL_ADDENDUM, /fall back to the sentinels/i);
 });
-
-// -- kind mapping ------------------------------------------------------------
 
 test('an escalate kind files as an inbox type, unknown kinds landing where the sentinel does', () => {
   assert.equal(escalationTypeForAsk('approve'), 'approve_change');
@@ -243,8 +195,6 @@ test('an escalate kind files as an inbox type, unknown kinds landing where the s
   assert.equal(escalationTypeForAsk(undefined), 'answer_question');
   assert.equal(escalationTypeForAsk('nonsense'), 'answer_question');
 });
-
-// -- world_read's pure layer -------------------------------------------------
 
 const TAKEN_AT = '2026-01-01T00:00:00.000Z';
 
@@ -277,7 +227,6 @@ function fakeWorld(overrides: Partial<WorldSnapshot> = {}): WorldSnapshot {
   return { takenAt: TAKEN_AT, pullRequests: [], issues: [], ...overrides };
 }
 
-/** A parsed target, asserting the parse succeeded — for tests about the *read*. */
 function target(kind: string, ref: string) {
   const parsed = parseWorldRef(kind, ref);
   assert.ok(parsed.ok, `${kind}/${ref} should parse`);
@@ -285,8 +234,6 @@ function target(kind: string, ref: string) {
 }
 
 test('the kind vocabulary is the one the dispatcher already models', () => {
-  // Not a new taxonomy: exactly the lists a WorldSnapshot carries and the ref
-  // prefixes the rest of the system writes.
   assert.deepEqual([...WORLD_READ_KINDS], ['pr', 'issue']);
 });
 
@@ -295,7 +242,6 @@ test('a ref is accepted in every shape the harness itself writes', () => {
     ['pr', 'pr:42', 'pr:42'],
     ['pr', '42', 'pr:42'],
     ['pr', '#42', 'pr:42'],
-    // Origin refs carry a concern after the number; they name the same world item.
     ['pr', 'pr:42:ci', 'pr:42'],
     ['pr', 'pr:42:comment:c_9', 'pr:42'],
     ['issue', 'issue:12', 'issue:12'],
@@ -326,7 +272,6 @@ test('a ref that disagrees with its kind is reported rather than guessed at', ()
 });
 
 test('a PR reads back with the same health verdict and stack attribution the cockpit shows', () => {
-  // #12 is stacked on #7, and #7 is the one that is actually red.
   const world = fakeWorld({
     pullRequests: [
       fakePr(7, { branch: 'issue/12/schema', baseBranch: 'main', ciStatus: 'failing' }),
@@ -343,8 +288,6 @@ test('a PR reads back with the same health verdict and stack attribution the coc
   assert.equal(read.ok, true);
   assert.ok(read.ok);
   const item = prPayload(read.item);
-  // Whose failure it is — the same attribution that stopped an agent being
-  // dispatched here, so the agent is told rather than left to wonder.
   assert.equal(item.ciFailingOnBasePr, 7);
   assert.equal(item.basePr?.number, 7);
   assert.ok(item.health.reasons.includes('CI failing on base PR #7'));
@@ -354,7 +297,6 @@ test('a PR reads back with the same health verdict and stack attribution the coc
   );
 });
 
-/** Narrow a read PR payload for assertions. */
 function prPayload(item: Record<string, unknown>) {
   return item as unknown as {
     ciFailingOnBasePr: number | null;
@@ -386,15 +328,12 @@ test('a miss names what the harness is tracking instead of just saying no', () =
   assert.match(!empty.ok ? empty.error : '', /tracking no Issues/);
 });
 
-// -- the shared pure layer ---------------------------------------------------
-
 test('an item ref is the harness vocabulary, suffix-tolerant, and optional', () => {
   const cases: [unknown, string | null][] = [
-    [undefined, null], // not every claim is about a tracked item
+    [undefined, null],
     ['', null],
     ['issue:41', 'issue:41'],
     ['pr:42', 'pr:42'],
-    // The origin ref an agent holds names its item, so it can be passed back as-is.
     ['pr:42:ci', 'pr:42'],
     ['issue:12:part:schema', 'issue:12'],
   ];
@@ -406,21 +345,15 @@ test('an item ref is the harness vocabulary, suffix-tolerant, and optional', () 
 });
 
 test('a bare number is refused rather than guessed at, unlike world_read', () => {
-  // world_read has a `kind` argument to say which list a number belongs to; this
-  // has none, and "#41" is an issue or a PR. A duplicate report must not guess.
   const bare = parseItemRef('41');
   assert.equal(bare.ok, false);
   assert.match(!bare.ok ? bare.error : '', /ambiguous between an issue and a PR/);
 
-  // And an off-vocabulary ref is refused with somewhere to put it instead: an
-  // open-ended ref field is an unqueryable junk drawer.
   const upstream = parseItemRef('npm:left-pad');
   assert.equal(upstream.ok, false);
   assert.match(!upstream.ok ? upstream.error : '', /omit ref and describe it in the summary/);
   assert.equal(parseItemRef('issue:main').ok, false);
 });
-
-// -- progress notes, as a pure normalisation --------------------------------
 
 test('a progress note is reduced to the one line the fleet card can render', () => {
   const wrapped = normaliseNote('  Reworking the fold\n  so a superseded push   stops poisoning CI  ');
@@ -429,8 +362,6 @@ test('a progress note is reduced to the one line the fleet card can render', () 
     note: 'Reworking the fold so a superseded push stops poisoning CI',
     trimmed: false,
   });
-  // "One line" is a property this establishes rather than one it demands: a note
-  // that happens to arrive with a newline in it is a fine note, badly formatted.
   assert.equal((normaliseNote('a\nb') as { note: string }).note, 'a b');
 });
 
@@ -449,9 +380,6 @@ test('an empty note is the one thing refused — there is nothing to store', () 
   }
 });
 
-// -- end to end through a built system ---------------------------------------
-
-/** A headless `claude` that spawns, says nothing and never exits — enough to inspect argv. */
 class SilentChild extends EventEmitter implements StreamChild {
   pid = 4321;
   stdout = { on: () => {} } as unknown as NodeJS.ReadableStream;
@@ -467,7 +395,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-mcp-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -488,7 +415,6 @@ function build(overrides: Record<string, unknown> = {}): System {
   });
 }
 
-/** Spawn an agent on `originRef`. A temp cwd is enough — nothing here touches git. */
 function spawnAgent(system: System, originRef: string, title = 'Big thing'): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -501,7 +427,6 @@ function spawnAgent(system: System, originRef: string, title = 'Big thing'): Age
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 }
 
-/** The input schema a tool advertises to an agent's client on `tools/list`. */
 function advertisedSchema(system: System, agent: Agent, name: string): { properties: Record<string, unknown> } {
   const task = system.store.getTask(agent.taskId)!;
   const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find((t) => t.name === name);
@@ -509,7 +434,6 @@ function advertisedSchema(system: System, agent: Agent, name: string): { propert
   return tool.inputSchema as { properties: Record<string, unknown> };
 }
 
-/** Call a tool as an agent would, through the same entry point its bridge reaches. */
 async function callTool(system: System, agent: Agent, name: string, args: Record<string, unknown>) {
   const session = system.mcp.session(agent.id);
   assert.ok(session, 'a spawned agent has a live MCP credential');
@@ -539,12 +463,9 @@ test('plan_submit persists the verdict and hands the agent its status back', asy
     ['schema', 'reader'],
   );
 
-  // The `_status` envelope is what removes the need for a polling tool.
   const payload = JSON.parse(res.text) as { accepted: boolean; _status: Record<string, unknown> };
   assert.equal(payload.accepted, true);
   assert.equal(payload._status.origin, 'issue:12:plan');
-  // Freshly written parts are `pending`; the reconciler is what readies them, and
-  // the envelope reports what is, not what will be.
   assert.deepEqual(payload._status.plan, {
     status: 'awaiting_approval',
     parts: [
@@ -559,7 +480,6 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
   const system = build();
   const agent = spawnAgent(system, 'issue:12:plan');
 
-  // A cycle: rejected by the same schema the file path uses.
   const res = await callTool(system, agent, 'plan_submit', {
     reason: 'Circular.',
     parts: [
@@ -569,19 +489,14 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /dependency cycle/);
-  // The whole point over the file path: the agent hears the reason *and* the plan
-  // graph is untouched, so a retry starts from a clean slate rather than a merge.
   assert.equal(system.store.getPlanByOrigin('issue:12'), null);
   assert.deepEqual(system.store.listPlans(), []);
 
-  // ...and the retry, corrected, lands.
   const fixed = await callTool(system, agent, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'Small after all.',
   });
   assert.equal(fixed.isError, false);
-  // `awaiting_approval`: every plan is put to an operator, whatever its size, and
-  // the planner is told so rather than left assuming its issue is being worked.
   assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
   assert.match(fixed.text, /nothing is scheduled until an operator approves it/);
   system.store.close();
@@ -621,10 +536,6 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   const system = build();
   const agent = spawnAgent(system, 'issue:284:plan');
 
-  // The prompt teaches the block and the file path has always accepted it, but the
-  // tool advertised no `validation` property and dropped one sent anyway — so every
-  // plan submitted the way the prompt tells a planner to submit it landed with no
-  // checks at all, and an absent block is a legal document that nothing reports.
   const schema = advertisedSchema(system, agent, 'plan_submit');
   assert.ok(schema.properties.validation, 'the tool offers the block the file path accepts');
 
@@ -657,8 +568,6 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   assert.equal(checks.length, 1);
   assert.equal(checks[0]!.letter, 'A');
   assert.equal(checks[0]!.expect, 'No issue/284/reap ref, locally or on the remote.');
-  // The bibliographies are pruned entry by entry rather than sinking the document:
-  // a check whose author named a resource it forgot to declare is still runnable.
   assert.deepEqual(checks[0]!.uses, ['fixture-repo.tar.gz']);
   assert.deepEqual(checks[0]!.covers, ['reap-writer']);
   assert.equal(checks[0]!.candidateWhy, 'it is a git assertion and nothing else');
@@ -668,9 +577,6 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
     resources.map((r) => r.name),
     ['fixture-repo.tar.gz', 'orders-dump.sql'],
   );
-  // The one it cannot produce is declared unprovided and nothing more: the ask for
-  // it is filed against the *delivery*, so submitting a plan puts nothing on the
-  // operator's bench about work that is not built yet.
   assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.provided, false);
   assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.humanTaskId, null);
   assert.equal(system.store.listHumanTasks().length, 0);
@@ -681,10 +587,6 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
   const system = build();
   const agent = spawnAgent(system, 'issue:285:plan');
 
-  // `actor` is refused rather than ignored: whether an agent can run a check is a
-  // property of the deployment, and dropping the field silently would let a planner
-  // believe it had assigned work. The tool's whole advantage over the file is that
-  // the planner hears this in the same turn.
   const res = await callTool(system, agent, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'one PR',
@@ -696,8 +598,6 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
   assert.match(res.text, /who runs it is not yours to say/);
   assert.equal(system.store.getPlanByOrigin('issue:285'), null);
 
-  // And an omitted block is not an empty one: it leaves whatever is there alone,
-  // which is what makes a replan that says nothing about validation safe.
   const fixed = await callTool(system, agent, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'one PR',
@@ -709,9 +609,6 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
 
 test('identity is structural: an agent cannot submit a plan for work it was not dispatched to', async () => {
   const system = build();
-  // An ordinary pickup agent, not a planner. It takes no origin argument — there
-  // is none to take — so the only origin it could ever write is its own, and its
-  // own is not a planning origin.
   const worker = spawnAgent(system, 'issue:12');
 
   const res = await callTool(system, worker, 'plan_submit', {
@@ -722,7 +619,6 @@ test('identity is structural: an agent cannot submit a plan for work it was not 
   assert.match(res.text, /only available to a planning agent/);
   assert.equal(system.store.getPlanByOrigin('issue:12'), null);
 
-  // A planner on a *different* issue writes only its own issue, for the same reason.
   const planner = spawnAgent(system, 'issue:41:plan');
   await callTool(system, planner, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
@@ -738,7 +634,7 @@ test('a revoked credential can no longer call tools', async () => {
   const agent = spawnAgent(system, 'issue:12:plan');
   const session = system.mcp.session(agent.id)!;
 
-  system.agents.kill(agent.id); // the cockpit kill path revokes the credential
+  system.agents.kill(agent.id);
 
   assert.equal(system.mcp.session(agent.id), null, 'no fresh session for a dead agent');
   const stale = (await session.call('plan_submit', {
@@ -776,7 +672,6 @@ test('escalate parks the agent with structure the sentinel could never carry', a
 });
 
 test('escalate and the WAITING sentinel converge on one park, in either order', async () => {
-  // The two detectors of one transition. Whichever arrives first owns it.
   for (const toolFirst of [true, false]) {
     const backend = new FakePtyBackend();
     const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
@@ -845,8 +740,6 @@ test('escalate refuses an empty question instead of parking on nothing', async (
 
 test('world_read answers out of the harness view, with the status envelope on it', async () => {
   const system = build();
-  // The baseline is what `Harness.recordWorldChanges` persists each pulse — so
-  // seeding it is exactly what a cycle would have left behind.
   system.store.setWorldBaseline(
     fakeWorld({
       pullRequests: [
@@ -877,20 +770,13 @@ test('world_read answers out of the harness view, with the status envelope on it
     item: Record<string, unknown>;
     _status: Record<string, unknown>;
   };
-  // No ref argument: the common case is "how is the thing I was dispatched for",
-  // and the origin the envelope hands back is the ref it defaults to.
   assert.equal(payload.item.number, 42);
   assert.equal(payload.item.ciStatus, 'failing');
   assert.deepEqual(payload.item.health, { blocked: true, reasons: ['CI failing', '1 unresolved comment'] });
   assert.equal(prPayload(payload.item).unresolvedComments[0]?.body, 'this leaks a handle');
-  // The replies come with the thread. The agent is told to compare this list
-  // against the one in its prompt to catch a review that moved while it worked,
-  // and the commonest move is a reply — served roots-only, that re-check could
-  // not see the thing it exists for.
   assert.deepEqual(prPayload(payload.item).unresolvedComments[0]?.replies, [
     { id: 'r1', author: 'rev', body: 'the one in the retry path, specifically', ours: false },
   ]);
-  // A pulse-old reading, not a live fetch — and it says which.
   assert.equal(payload.observedAt, TAKEN_AT);
   assert.equal(payload._status.origin, 'pr:42:ci');
   system.store.close();
@@ -908,8 +794,6 @@ test('reading an issue carries the plan graph, which lives only in the store', a
     ],
   });
 
-  // A part agent reading its parent issue: the sibling graph is most of what it
-  // needs, and it is in the store rather than in the world snapshot.
   const part = spawnAgent(system, 'issue:12:part:reader');
   const res = await callTool(system, part, 'world_read', { kind: 'issue', ref: 'issue:12:part:reader' });
   assert.equal(res.isError, false);
@@ -926,10 +810,6 @@ test('reading an issue carries the plan graph, which lives only in the store', a
 });
 
 test('world_read is deliberately a general read, not one fenced to the caller origin', async () => {
-  // The choice, asserted rather than merely intended. The dispatcher's own
-  // reasoning is cross-item — #12's red CI belongs to #7 — so an agent told that
-  // must be able to look at #7, or it is back to shelling out to `gh`, which is
-  // the gap this tool closes. Writes stay fenced: see the plan_submit test above.
   const system = build();
   system.store.setWorldBaseline(
     fakeWorld({
@@ -946,8 +826,6 @@ test('world_read is deliberately a general read, not one fenced to the caller or
   assert.equal(base.isError, false);
   assert.equal((JSON.parse(base.text) as { item: { number: number } }).item.number, 7);
 
-  // Not just other PRs — any item the harness tracks, in any kind. It can only
-  // ever name what the harness already holds: there is no query and no passthrough.
   const issue = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '3' });
   assert.equal((JSON.parse(issue.text) as { item: { title: string } }).item.title, 'Issue 3');
   system.store.close();
@@ -957,7 +835,6 @@ test('world_read explains itself rather than failing blankly', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
 
-  // Before any cycle there is no snapshot at all: an actionable message, not a throw.
   const early = await callTool(system, agent, 'world_read', { kind: 'issue' });
   assert.equal(early.isError, true);
   assert.match(early.text, /has not completed a cycle yet/);
@@ -976,7 +853,6 @@ test('world_read explains itself rather than failing blankly', async () => {
 test('a desk agent with no origin is told to name a ref rather than reading nothing', async () => {
   const system = build();
   system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
-  // An operator job has no world origin, so there is nothing for `ref` to default to.
   const task = system.store.createTask({
     kind: 'desk',
     title: 'Ad-hoc',
@@ -989,13 +865,10 @@ test('a desk agent with no origin is told to name a ref rather than reading noth
   const res = await callTool(system, agent, 'world_read', { kind: 'issue' });
   assert.equal(res.isError, true);
   assert.match(res.text, /needs a ref/);
-  // ...and naming one works, which is the whole reason it isn't origin-fenced.
   const named = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '12' });
   assert.equal(named.isError, false);
   system.store.close();
 });
-
-// -- raise, end to end -------------------------------------------------------
 
 test('note_progress lands on the agent row and hands back the status envelope', async () => {
   const system = build();
@@ -1010,7 +883,6 @@ test('note_progress lands on the agent row and hands back the status envelope', 
   const stored = system.store.getAgent(agent.id)!;
   assert.equal(stored.note, 'Reading how the dispatcher ranks candidates before touching rule `plan-part`');
   assert.ok(stored.notedAt, 'the note is dated so a reader can tell how current it is');
-  // It says something and changes nothing: not a status transition, not a park.
   assert.equal(stored.status, before);
   assert.equal(stored.waitingReason, null);
   assert.deepEqual(system.store.listOpenEscalations(), []);
@@ -1028,16 +900,9 @@ test('a note is a current value, not a stream — the second one replaces the fi
   await callTool(system, agent, 'note_progress', { note: 'Reading the store schema' });
   await callTool(system, agent, 'note_progress', { note: 'Running the full suite after the rename' });
 
-  // One row, one note. The audit trail of what an agent said, in order, already
-  // exists in its transcript — every call is a tool use there — so a second,
-  // lossier copy in SQLite would answer nothing. What the transcript can't answer
-  // cheaply from a fleet view is "where is this one up to *now*", and that is
-  // exactly what is kept.
   const stored = system.store.getAgent(agent.id)!;
   assert.equal(stored.note, 'Running the full suite after the rename');
 
-  // ...and it survives the agent, because a finished agent's last note is the best
-  // one-line summary of the run there is.
   system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
   assert.equal(system.store.getAgent(agent.id)!.note, 'Running the full suite after the rename');
   system.store.close();
@@ -1054,7 +919,6 @@ test('an over-long note is stored trimmed and the agent is told, rather than los
   assert.match(payload.trimmed ?? '', /trimmed/);
   assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
 
-  // An empty one is the only refusal, and it stores nothing over the good note.
   const empty = await callTool(system, agent, 'note_progress', { note: '   ' });
   assert.equal(empty.isError, true);
   assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
@@ -1067,11 +931,6 @@ test('silence is not "no progress": an agent that never notes leaves the card as
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'issue:12');
 
-  // A whole run's worth of output and not one call to the tool. The note stays
-  // null and nothing stands in for it — no placeholder, no note inferred from the
-  // output, no "quiet" marker. Same asymmetry as @@LUBBDUBB_DONE@@ against the
-  // result event: a tool an agent forgets to call is silence, and silence must
-  // not be read as a statement.
   backend.last().emit('Running tests…\n');
   backend.last().emit('@@LUBBDUBB_DONE@@');
   assert.equal(system.store.getAgent(agent.id)!.status, 'done');
@@ -1082,10 +941,6 @@ test('silence is not "no progress": an agent that never notes leaves the card as
   const shipped = snap.agents.find((a) => a.id === agent.id)!;
   assert.equal(shipped.note, null);
   assert.equal(shipped.notedAt, null);
-  // The output that *did* happen is still the fallback the card shows. It reaches
-  // the cockpit as a Hub broadcast rather than on the row, so nothing about it
-  // changed here — which is the point: the note sits beside the tail, never
-  // instead of it, and an agent that skips the tool costs the operator nothing.
   assert.equal('lastLine' in shipped, false);
   assert.equal('note' in shipped, true);
   await app.close();
@@ -1103,17 +958,8 @@ test('a note is dated but nothing reads the date as liveness', async () => {
   };
   const shipped = snap.agents.find((a) => a.id === agent.id)!;
   assert.equal(typeof shipped.notedAt, 'string');
-  // The raw timestamp is shipped and *nothing is derived from it*. This guard is
-  // the decision, not decoration: the longest gaps between notes are the long
-  // test runs and big refactors — the stretches where an agent is healthiest — so
-  // a staleness verdict would punish honest use and quietly turn an optional note
-  // into a heartbeat an agent must keep sending. If a derived field ever wants to
-  // exist here, this failing is the prompt to re-argue it.
   const derived = Object.keys(shipped).filter((k) => /stale|stuck|idle|silent|heartbeat|alive/i.test(k));
   assert.deepEqual(derived, []);
-  // And the fleet keeps working off real liveness signals, not the note's age:
-  // the agent is live because its session is, and noting nothing would not have
-  // changed that either way.
   assert.equal(shipped.status, system.store.getAgent(agent.id)!.status);
   assert.deepEqual(system.store.listErrors(10), []);
   await app.close();
@@ -1125,8 +971,6 @@ test('a note is a write, so it too is attributed structurally — one field, and
   const one = spawnAgent(system, 'pr:142:ci');
   const two = spawnAgent(system, 'issue:12');
 
-  // Same rule as report_finding, for the same reason: this speaks in an agent's
-  // name to an operator. There is no agent, task or origin argument to forge with.
   const schema = advertisedSchema(system, one, 'note_progress');
   assert.deepEqual(Object.keys(schema.properties), ['note']);
 
@@ -1137,12 +981,8 @@ test('a note is a write, so it too is attributed structurally — one field, and
   system.store.close();
 });
 
-// -- the permission backstop (issue #130 phase B) ----------------------------
-
-/** Let the queued microtasks (the blocking tool handler filing its escalation) run. */
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 10));
 
-/** Start a request_permission call without awaiting it, so we can act while it blocks. */
 function startPermission(
   system: System,
   agent: Agent,
@@ -1153,7 +993,6 @@ function startPermission(
   return session!.call('request_permission', { tool_name: 'Bash', input }) as Promise<{ content: { text: string }[] }>;
 }
 
-/** The bare verdict JSON a permission call resolves to (never an `_status` envelope). */
 function verdictOf(result: { content: { text: string }[] }): Record<string, unknown> {
   const parsed = JSON.parse(result.content[0]!.text) as Record<string, unknown>;
   assert.equal('_status' in parsed, false, 'the permission verdict must be bare, not the tool envelope');
@@ -1167,19 +1006,16 @@ test('an un-allowlisted call blocks, appears in the inbox, and Allow lets the sa
   const pending = startPermission(system, agent, { command: 'terraform apply' });
   await tick();
 
-  // It surfaced as a "Needs you" item carrying the exact command.
   const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id);
   assert.ok(esc, 'the blocked call files an escalation');
   assert.ok(esc!.context.permission, 'marked as a permission request');
   assert.match(esc!.prompt, /terraform apply/);
-  assert.equal(system.agents.isLive(agent.id), true); // still live, blocked in the tool call
+  assert.equal(system.agents.isLive(agent.id), true);
 
-  // Operator allows it: the blocked call resolves with a bare allow verdict.
   assert.equal(system.permissions.decide(esc!.id, true), true);
   const verdict = verdictOf(await pending);
   assert.equal(verdict.behavior, 'allow');
   assert.deepEqual(verdict.updatedInput, { command: 'terraform apply' });
-  // And the inbox item is settled — without typing an answer into the session.
   assert.equal(system.store.getEscalation(esc!.id)?.status, 'answered');
   system.store.close();
 });
@@ -1195,9 +1031,7 @@ test('Deny returns a structured denial the agent reads, and does not orphan the 
   const verdict = verdictOf(await pending);
   assert.equal(verdict.behavior, 'deny');
   assert.match(String(verdict.message), /too destructive/);
-  // The task is untouched — a denial is the agent's to handle, not a kill.
   assert.equal(system.store.getTask(agent.taskId)?.status, 'running');
-  // Deciding twice is a no-op (the second click 409s at the route).
   assert.equal(system.permissions.decide(esc.id, true), false);
   system.store.close();
 });
@@ -1209,7 +1043,7 @@ test('killing an agent mid-request resolves its blocked call as a denial (no hun
   await tick();
   assert.ok(system.store.listOpenEscalations().some((e) => e.agentId === agent.id));
 
-  system.agents.kill(agent.id); // releases the credential -> denyAll
+  system.agents.kill(agent.id);
   const verdict = verdictOf(await pending);
   assert.equal(verdict.behavior, 'deny');
   system.store.close();
@@ -1223,7 +1057,6 @@ test('the ordinary answer route refuses a permission request and names the one t
   await tick();
   const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id)!;
 
-  // Free text can't be branched on: /answer refuses and points at /permission.
   const answered = await app.inject({
     method: 'POST',
     url: `/api/escalations/${esc.id}/answer`,
@@ -1232,7 +1065,6 @@ test('the ordinary answer route refuses a permission request and names the one t
   assert.equal(answered.statusCode, 409);
   assert.match(answered.json().error, /\/permission/);
 
-  // The permission route settles it and unblocks the agent.
   const decided = await app.inject({
     method: 'POST',
     url: `/api/escalations/${esc.id}/permission`,
@@ -1240,7 +1072,6 @@ test('the ordinary answer route refuses a permission request and names the one t
   });
   assert.equal(decided.statusCode, 200);
   assert.equal(verdictOf(await pending).behavior, 'allow');
-  // A second decision has nothing pending to settle.
   const again = await app.inject({
     method: 'POST',
     url: `/api/escalations/${esc.id}/permission`,
@@ -1255,20 +1086,12 @@ test('a system that never listened still mints credentials but wires no config p
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   const agent = spawnAgent(system, 'issue:12');
-  // Identity exists (this is the path tests drive), but with no socket there is
-  // nothing for an agent to connect to, so the launch is left alone.
   assert.ok(system.mcp.session(agent.id));
   assert.equal(backend.spawned[backend.spawned.length - 1]!.args.includes('--mcp-config'), false);
   system.store.close();
 });
 
 test('a listening channel is actually threaded onto the launch (--mcp-config + backstop)', async () => {
-  // The regression guard for the system.ts wiring: AgentManager mints the config
-  // path, but the ArgsBuilder must forward it, or `--mcp-config` (and the backstop
-  // that lives on that server) never reach the agent — invisible to every test
-  // that drives `mcp.session()` in-process. Exercised on `stream`, the runtime the
-  // channel is actually for: `raw` runs the operator's argv verbatim and builds no
-  // launch of its own, so it could never carry the flag either way.
   const launches: string[][] = [];
   const spawner: Spawner = (_command, args) => {
     launches.push(args);
@@ -1291,8 +1114,6 @@ test('a listening channel is actually threaded onto the launch (--mcp-config + b
     system.store.close();
   }
 });
-
-// -- the socket, once, for real ----------------------------------------------
 
 test('a bridge connection handshakes, lists tools and calls one over a real socket', async (t) => {
   if (process.platform === 'win32') return t.skip('named pipes are exercised by the same code path');
@@ -1328,13 +1149,10 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
     }),
   ]);
 
-  // The notification produced no frame, so three replies for four requests.
   assert.deepEqual(
     replies.map((r) => r.id),
     [1, 2, 3],
   );
-  // The advertised set is the same list `--allowedTools` grants — the other half
-  // of the drift guard above, asserted against what the server actually exposes.
   assert.deepEqual(
     ((replies[1]!.result as { tools: { name: string }[] }).tools ?? []).map((tool) => tool.name).sort(),
     [...MCP_TOOL_NAMES].sort(),
@@ -1342,7 +1160,6 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
   assert.equal((replies[2]!.result as ToolResultText).isError, undefined);
   assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
 
-  // Revoking removes the launch config with the credential.
   server.release(credential.token);
   assert.equal(existsSync(credential.configPath!), false);
   await server.close();
@@ -1362,7 +1179,6 @@ test('a connection that does not identify itself is dropped without answering', 
   });
   assert.equal(await server.listen(), true);
 
-  // The token is the only thing between a local process and the whole fleet's store.
   const replies = await roundTrip(socketPath, [JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' })]);
   assert.deepEqual(replies, []);
   await server.close();
@@ -1375,7 +1191,6 @@ test('the default socket path is per-pid and stays inside the POSIX length limit
   if (process.platform !== 'win32') assert.ok(path.length < 104, `socket path too long: ${path}`);
 });
 
-/** Write `lines` to the socket and collect whatever frames come back before it settles. */
 function roundTrip(socketPath: string, lines: string[]): Promise<{ id: unknown; result?: unknown }[]> {
   return new Promise((resolve) => {
     const out: { id: unknown; result?: unknown }[] = [];
@@ -1399,8 +1214,6 @@ function roundTrip(socketPath: string, lines: string[]): Promise<{ id: unknown; 
     setTimeout(settle, 250).unref();
   });
 }
-
-// -- conclude_part (issue #160) ---------------------------------------------
 
 test('conclude_part closes a part that produced no PR, and the plan rolls up complete', async () => {
   const system = build();
@@ -1439,11 +1252,8 @@ test('conclude_part closes a part that produced no PR, and the plan rolls up com
   assert.equal(after.status, 'concluded');
   assert.equal(after.outcomeKind, 'determination');
   assert.equal(after.outcomeRef, 'finding:f_1');
-  // The bug this closes: the one part that found nothing to build no longer holds
-  // the whole decomposition — and its issue — open forever.
   assert.equal(system.store.rollUpPlanStatus(plan.id)?.status, 'complete');
 
-  // Idempotent through the tool as well as the store: a second call is refused.
   const again = await callTool(system, agent, 'conclude_part', { kind: 'report', summary: 'again' });
   assert.equal(again.isError, true);
   system.store.close();
@@ -1468,27 +1278,15 @@ test('conclude_part refuses every caller that is not a part agent, naming the ri
 test('conclude_part refuses "code": a merge is observed, never declared', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:probe');
-  // Accepting `code` would let an agent mark its own work finished with no pull
-  // request behind it — the false terminal that ruled derivation out entirely.
   const res = await callTool(system, agent, 'conclude_part', { kind: 'code', summary: 'done' });
   assert.equal(res.isError, true);
   assert.match(res.text, /pull request/);
-  // And it is not on offer in the first place: the advertised enum is the two
-  // outcomes that have no outside world to observe them.
   const kind = advertisedSchema(system, agent, 'conclude_part').properties.kind as { enum: string[] };
   assert.deepEqual(kind.enum, ['report', 'determination']);
   system.store.close();
 });
 
-// -- the finish reminder on a terminal tool ---------------------------------
-
 test('every terminal tool tells the caller to print the done sentinel', async () => {
-  // The failure this closes is silent and looks like the agent's fault: an
-  // assessor that records its verdict, narrates it and stops has done everything
-  // its prompt asked, and `StreamJsonSession` still parks it — a turn with no
-  // sentinel in it has nowhere else to go. The sentinel is stated once, in the
-  // system prompt, and these responses read as the end of the job, so it is said
-  // again at the point of use.
   const system = build();
   const plan = system.store.upsertPlan({
     originRef: 'issue:12',
@@ -1530,9 +1328,6 @@ test('every terminal tool tells the caller to print the done sentinel', async ()
 });
 
 test('the finish reminder states a condition rather than announcing the end', () => {
-  // A terminal tool's call is not itself "done" — an appraiser, for one, has a
-  // scratchpad note to leave after it. Wording that read as "you are finished
-  // now" would cut that short, so the reminder is conditional on the task.
   assert.ok(DONE_REMINDER.includes(DONE_SENTINEL), 'the reminder is built from the sentinel, never a second copy');
   assert.match(DONE_REMINDER, /when you have finished everything/i);
 });
@@ -1560,20 +1355,12 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
   assert.equal(opened.branch, 'issue/182');
   assert.match(opened.title, /^#182 feat\(store\)/);
 
-  // Linked to the work item as it is created, not a pulse later by the desk. On
-  // Azure the `Relates to #182` in the body satisfies nothing, so a pull request
-  // opened without this is blocked by the linked-work-items policy from the moment
-  // it exists — and clearing that used to cost an agent.
   assert.equal(world.issues.find((i) => i.number === 182)?.linkedPrNumber, payload.pullRequest);
   assert.ok(system.store.linkedWorkItemPrs().has(payload.pullRequest), 'and the link is recorded, so it happens once');
   system.store.close();
 });
 
 test('open_pr opens a part’s pull request against its own branch, plan and all', async () => {
-  // The end-to-end shape the resolver’s own unit tests cannot reach: they are handed
-  // the plan in their context, so the wiring that *finds* it was uncovered — and it
-  // looked for a planner’s origin, which no part agent has. Every part agent was
-  // refused "issue #N has no plan" and opened its pull request by hand, unstacked.
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 183, title: 'Ticket sync rewrite', body: '' });
   await system.harness.runCycle('manual');
@@ -1622,9 +1409,6 @@ test('open_pr opens a part’s pull request against its own branch, plan and all
   assert.equal(bottomPr.title, '#183 [1/2] feat(store): sync cursor table');
   assert.equal(bottomPr.base, 'main', 'the bottom of the stack sits on the integration branch');
 
-  // The rung above: its base is the branch beneath it, which is the whole of what a
-  // hand-opened pull request loses — targeting `main` instead silently un-stacks the
-  // stack, so the diff carries the part below it too.
   const second = await callTool(system, spawnAgent(system, 'issue:183:part:reader'), 'open_pr', {
     summary: 'read the cursor table',
   });
@@ -1673,8 +1457,6 @@ test('open_pr states no position for a lone part, and the plan roll-up reaches i
   };
   assert.equal(payload.title, '#184 prune the spool', 'a plan of one part states no position');
   assert.equal(payload.base, 'main');
-  // The same lookup fills the envelope, so the roll-up its comment describes now
-  // reaches the part agents rather than only the planner that needs it least.
   assert.equal(payload._status.plan?.status, 'active');
   assert.deepEqual(
     payload._status.plan?.parts.map((p) => p.slug),
@@ -1697,8 +1479,6 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
   const system = build();
   const agent = spawnAgent(system, 'issue:182');
   const task = system.store.getTask(agent.taskId)!;
-  // The tool built without its `openPr` wiring is exactly the production trap: the
-  // server still connects and still advertises the tool.
   const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find(
     (t) => t.name === 'open_pr',
   );
@@ -1708,20 +1488,8 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
   system.store.close();
 });
 
-// -- the shape of the surface itself (issue #220) ---------------------------
-//
-// Both assertions are structural rather than behavioural, and deliberately so:
-// each guards a property that nothing else *can* fail on. A twelfth tool that
-// re-derived the caller by hand, or a fourteenth that named itself, would pass
-// every test above — the calls all work, right up until one of them works for
-// the wrong agent.
-
 test('the caller is resolved in exactly one place, so the identity chain cannot be got wrong twice', () => {
   const source = readFileSync(new URL('../src/agents/agentManager.ts', import.meta.url), 'utf8');
-  // `token -> agent -> task -> origin`, as it is actually written. Eleven copies
-  // of this line meant the tool channel's one security-relevant step held eleven
-  // times by inspection; `withCaller` is the single copy, and a method that
-  // re-derives the caller rather than calling it puts a second one back.
   const preamble = source.match(/agent \? this\.store\.getTask\(agent\.taskId\) : null/g) ?? [];
   assert.equal(preamble.length, 1, 'the agent -> task resolution appears once, inside withCaller');
   assert.match(source, /private withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
@@ -1729,15 +1497,8 @@ test('the caller is resolved in exactly one place, so the identity chain cannot 
 
 test('every advertised tool is its own module, and tools.ts is assembly and nothing else', () => {
   const source = readFileSync(new URL('../src/mcp/tools.ts', import.meta.url), 'utf8');
-  // No tool body survives in the registry: a schema or a handler here is the
-  // 844-line scope growing back one tool at a time.
   assert.equal(source.includes('inputSchema'), false, 'no schema is declared in the registry');
   assert.equal(source.includes('handler:'), false, 'no handler is declared in the registry');
-  // Every name `--allowedTools` grants resolves to a module beside it, found by
-  // the one rule (`conclude_part` -> `concludePart.ts`) rather than by reading
-  // the registry. The reverse — a module under a name that was never granted —
-  // is a compile error rather than a test, because the registry is a
-  // `Record<McpToolName, …>`.
   const imported = [...source.matchAll(/from '\.\/tools\/([A-Za-z]+)\.js';/g)].map((m) => m[1]);
   for (const name of MCP_TOOL_NAMES) {
     const module = name.replace(/_(.)/g, (_, c: string) => c.toUpperCase());
@@ -1750,9 +1511,6 @@ test('every advertised tool is its own module, and tools.ts is assembly and noth
   );
 });
 
-// The round trip every origin fence must keep: a refusal names a tool, and that
-// tool accepts the caller it was named to. One remedy for three callers — the
-// #535 shape — is refused again by the tool it points at.
 test('every origin fence points a refused caller at a tool that accepts it', () => {
   const accepts: Record<string, (ref: string) => boolean> = {
     conclude_work: (ref) => conclusionOrigin(ref).ok,
@@ -1774,8 +1532,6 @@ test('every origin fence points a refused caller at a tool that accepts it', () 
       const verdict = fence(origin);
       if (verdict.ok) continue;
       const error = verdict.error ?? '';
-      // `escalate` is the remedy where no tool is the caller's — an agent already
-      // at work asking whether its own goal is workable wants a human, not a tool.
       const named = Object.keys(accepts).filter((name) => name !== tool && error.includes(name));
       if (named.length === 0) {
         assert.match(error, /escalate|raise/, `${tool} refusing ${origin} names no tool and no other remedy`);

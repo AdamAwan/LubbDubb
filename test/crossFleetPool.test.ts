@@ -20,20 +20,8 @@ import {
 import { PoolDesk } from '../src/pool/poolDesk.js';
 import type { PoolDigestDocument } from '../src/types.js';
 import { buildSystem } from '../src/system.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
-
-/**
- * The cross-fleet pool (docs/spec/28-cross-fleet-pool.md).
- *
- * Most of what is asserted here is **negative**, for the reason `test/obstacleIntake.test.ts`
- * gives one level down: this subsystem's failure mode is a claim nobody vouched for
- * reaching every agent, now with a machine boundary in the middle of it. So the
- * properties that matter are that an arrival lands with exactly *one* corroboration
- * whatever the origin's count says, that re-polling the same document forever does
- * not climb, that a notice and a `check:` scope never leave the machine at all, and
- * that a failure anywhere leaves the harness working exactly as a fleet without a
- * pool.
- */
 
 const NOW = '2026-08-24T12:00:00.000Z';
 
@@ -60,16 +48,10 @@ function envelopeDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument
   };
 }
 
-// ---------------------------------------------------------------------------
-// The envelope
-// ---------------------------------------------------------------------------
-
 test('a document from a newer harness is skipped per document, not per fetch', () => {
   const ahead = parsePoolDocument(JSON.stringify({ ...envelopeDoc(), pool: POOL_SCHEMA_VERSION + 1 }));
   assert.equal(ahead.ok, false);
   assert.equal(ahead.ok === false && ahead.reason, 'ahead');
-  // The fleet id is still read off the envelope, so the page can say *which* fleet
-  // is ahead of you rather than reporting a fleet that has published nothing.
   assert.equal(ahead.ok === false && ahead.reason === 'ahead' && ahead.fleetId, 'bob@acme-api');
 });
 
@@ -95,10 +77,6 @@ test('an address is fleets/<fleetId>/<kind>.json', () => {
   assert.equal(poolDocumentPath('alice@acme-api', 'digest'), 'fleets/alice@acme-api/digest.json');
 });
 
-// ---------------------------------------------------------------------------
-// The digest
-// ---------------------------------------------------------------------------
-
 test('the digest buckets by UTC day and marks the current one partial', () => {
   const s = store();
   const document = buildDigestDocument(s, {
@@ -108,8 +86,6 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
     now: NOW,
   });
   assert.equal(document.kind, 'digest');
-  // Every section is present on an empty fleet, `unaccounted` and `unmeasured`
-  // included: an optional field makes every aggregate silently partial.
   assert.deepEqual(
     Object.keys(document)
       .filter((k) => Array.isArray((document as unknown as Record<string, unknown>)[k]))
@@ -142,7 +118,6 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     'acme-api',
     digest('alice@acme-api', [
       { day: '2026-08-22', key: 'build', count: 2, costUsd: 10, partial: false },
-      // The current day: counts in the total, and never in the average.
       { day: '2026-08-24', key: 'build', count: 1, costUsd: 2, partial: true },
     ]),
   );
@@ -159,16 +134,10 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
   assert.equal(build.fleets, 2);
   assert.equal(build.dailyMeanCostUsd, 20, '(10 + 30) over two whole fleet-days — the partial one is out');
 
-  // And the reading that only exists inside one project.
   assert.equal(rollup.byCheck?.length, 1);
   assert.equal(foldPoolDigest(s.listPoolDigestRows(null), { project: null }).byCheck, null);
 });
 
-/**
- * Faults ride the digest so the companion can draw them from the document it
- * renders — and they go no further than this fleet's own file.
- * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
- */
 test('the digest counts faults by source per day, and carries no cost for one', () => {
   const s = store();
   s.recordError({ source: 'provider', message: 'github snapshot failed' });
@@ -191,8 +160,6 @@ test('the digest counts faults by source per day, and carries no cost for one', 
   );
   assert.ok(document.byFault.every((r) => r.day === utcDay(NOW) && r.partial));
 
-  // A clear takes them with it: the log is a list an operator clears, which is the
-  // caveat the companion prints under the table.
   s.clearErrors();
   assert.deepEqual(
     buildDigestDocument(s, { fleetId: 'alice@acme-api', project: 'acme-api', harnessVersion: '0.1.0', now: NOW })
@@ -201,11 +168,6 @@ test('the digest counts faults by source per day, and carries no cost for one', 
   );
 });
 
-/**
- * The one omission in `digestSections`, asserted rather than trusted to a comment:
- * a fault is this harness on this machine, comparable to nothing on anybody else's,
- * so it is published for a person to read and never mirrored for a page to sum.
- */
 test('a fleet’s faults are never mirrored, whatever its document carries', () => {
   const s = store();
   s.replacePoolFleetDigest('bob@acme-api', 'acme-api', {
@@ -232,10 +194,6 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
   );
 });
 
-// ---------------------------------------------------------------------------
-// The desk
-// ---------------------------------------------------------------------------
-
 function desk(s: Store, transport: FakePoolTransport, now = () => NOW): PoolDesk {
   return new PoolDesk({
     store: s,
@@ -261,8 +219,6 @@ test('the first pass publishes the digest, and an idle fleet then writes nothing
     'boot publishes rather than waiting an hour',
   );
 
-  // Nothing has changed, so the hash matches and the desk writes nothing — which is
-  // what stops every idle fleet committing an identical file twenty-four times a day.
   await d.run();
   await d.run();
   assert.equal(transport.published.length, 1);
@@ -293,8 +249,6 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
     'recorded, never swallowed',
   );
 
-  // And the retry is the next pulse: no backoff, because a recovered pool taking an
-  // hour to be noticed is worse than one error record per failure.
   transport.publishError = null;
   await d.run();
   assert.equal(s.getPoolPublication('digest').dirty, false);
@@ -331,10 +285,6 @@ test('a publish-only substrate runs no poller and holds no mirror', async () => 
   assert.ok(transport.published.length > 0, 'it still contributes');
 });
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
 test('the pool is off by default and refuses an incomplete target when it is on', () => {
   assert.equal(loadConfig().integrations.pool, 'fake');
 
@@ -354,18 +304,6 @@ test('the pool is off by default and refuses an incomplete target when it is on'
   );
 });
 
-/**
- * The fleet's own name is the one pool key a boot refusal was wrong about.
- *
- * The coordinates above arrive in the committed `lubbdubb.project.json`, so a
- * missing one is a mis-committed file every clone shares — but `fleetId` is the
- * deployment's, and refusing to start over it handed every operator on a team that
- * committed the pool a harness that would not boot, over a key the cockpit is where
- * you set. So it boots, the row on **Needs you** asks
- * (`test/setup.test.ts`), and the desk sits out until it is answered — never
- * publishing to `fleets//claims.json`, which every other fleet reads as a document
- * with no author.
- */
 test('a pool selected before the fleet is named boots, and publishes nothing until it is', () => {
   const selected = {
     integrations: { sourceControl: 'fake' as const, issues: 'fake' as const, pool: 'git' as const },
@@ -374,45 +312,26 @@ test('a pool selected before the fleet is named boots, and publishes nothing unt
   };
   const unnamed = loadConfig(selected);
   assert.equal(unnamed.fleetId, undefined);
-  assert.equal(buildSystem(unnamed).pool, undefined, 'no desk, so nothing is published under an empty address');
+  const opts = { worktrees: new FakeWorktreeManager() };
+  assert.equal(buildSystem(unnamed, opts).pool, undefined, 'no desk, so nothing is published under an empty address');
 
   const named = loadConfig({ ...selected, fleetId: 'alice@acme-api' });
-  assert.equal(buildSystem(named).pool?.status().fleetId, 'alice@acme-api');
+  assert.equal(buildSystem(named, opts).pool?.status().fleetId, 'alice@acme-api');
 });
 
 test('a pool path that escapes the clone is refused at config load, not at write time', () => {
   for (const path of ['/etc', '../../elsewhere', 'engineering/../../..', 'C:\\\\wiki']) {
     assert.throws(() => loadConfig({ pool: { path } }), /escapes the pool's clone/, path);
   }
-  // A prefix inside the repository is the whole point: a team's existing wiki hosts
-  // the pool in a folder rather than having its root written into.
   assert.equal(loadConfig({ pool: { path: 'engineering/fleet-pool' } }).pool?.path, 'engineering/fleet-pool');
   assert.equal(loadConfig().pool?.path, undefined, 'empty is the repository root');
 });
 
-// ---------------------------------------------------------------------------
-// The git transport, against real git
-// ---------------------------------------------------------------------------
-
-/**
- * An identity for the commits the transport makes.
- *
- * `gitRepo` configures one on the repository it creates, but the pool clone is made
- * by the transport itself — so there is nothing for a test to configure it on, and a
- * runner with no global identity fails the commit for the author rather than for
- * anything under test. The environment is the one place that reaches a clone nobody
- * has created yet. `??=` so a developer's own identity is left alone.
- */
 process.env.GIT_AUTHOR_NAME ??= 'Test';
 process.env.GIT_AUTHOR_EMAIL ??= 'test@example.com';
 process.env.GIT_COMMITTER_NAME ??= 'Test';
 process.env.GIT_COMMITTER_EMAIL ??= 'test@example.com';
 
-/**
- * A bare repository with `main` and one commit on it, standing in for the pool's
- * remote. Bare because that is what a remote is, and seeded because
- * `clone --branch main` on an empty one names a branch that does not exist yet.
- */
 function poolRemote(): string {
   const bare = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-remote-'));
   execFileSync('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: bare });
@@ -421,7 +340,6 @@ function poolRemote(): string {
   return bare;
 }
 
-/** What the remote holds, read through a throwaway clone rather than plumbing. */
 function remoteFile(remote: string, path: string): string | null {
   const reader = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-read-'));
   execFileSync('git', ['clone', '-q', '--branch', 'main', remote, reader]);
@@ -436,14 +354,6 @@ function gitOut(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
-/**
- * The regression that shipped: `rev-parse --git-dir` walks *up*, so a pool root
- * inside another repository's working tree reported that repository's git dir and
- * the guard returned early — never cloning, and writing the fleet's document into
- * the enclosing checkout instead. This is the default configuration and not an
- * exotic one: `poolRoot` is `<deskRoot>/pool` and `deskRoot` resolves against
- * `repoRoot`, so the pool root is always inside the target repository.
- */
 test('the git transport clones its own root even when that root sits inside another repository', async () => {
   const remote = poolRemote();
   const enclosing = gitRepo('lubbdubb-pool-enclosing-');
@@ -455,9 +365,6 @@ test('the git transport clones its own root even when that root sits inside anot
 
   assert.equal(gitOut(root, ['rev-parse', '--show-toplevel']), realpathSync(root), 'the pool root is its own clone');
   assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/digest.json'), null, 'the document reached the pool');
-  // The worse outcome of the same bug, and the silent one: where the enclosing
-  // repository does not happen to ignore the path, `git add` succeeds and the
-  // harness commits a pool document into the operator's repository on a schedule.
   assert.equal(gitOut(enclosing, ['rev-list', '--count', 'HEAD']), '1', 'nothing was committed to the enclosing repo');
   assert.equal(gitOut(enclosing, ['diff', '--cached', '--name-only']), '', 'nothing was staged there either');
 });
@@ -473,8 +380,6 @@ test('a stray document tree left by the unsound guard is cleared when the clone 
   const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
   await transport.publish(envelopeDoc({ fleetId: 'alice@acme-api' }));
 
-  // Re-derivable by construction — the put is a whole replace — so the directory the
-  // transport owns is cleared rather than merged into the clone.
   assert.notEqual(readFileSync(join(stray, 'digest.json'), 'utf8'), '{"stray":true}');
   assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/digest.json'), null);
 });
@@ -499,17 +404,6 @@ test('a clone whose origin is not the configured remote is refused rather than w
   assert.equal(remoteFile(other, 'fleets/alice@acme-api/digest.json'), null, 'and nothing reached the wrong pool');
 });
 
-/**
- * The file a retired kind left behind.
- *
- * `claims.json` was a second clock document until the claims arm went
- * (28-cross-fleet-pool). The type narrowed to `digest` and the parser stopped
- * having a grammar for it, but the transport went on naming it in every fleet's
- * directory — so a pool that had ever run the old build fetched its own stale file
- * and recorded `unknown document kind "claims"` on every pulse, for as long as the
- * file existed. `fetch` names the kinds that exist, and nothing else in the
- * namespace is read.
- */
 test('a document from a retired kind is not fetched, and reads as no document at all', async () => {
   const remote = poolRemote();
   const writer = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-retired-'));
@@ -534,14 +428,6 @@ test('a document from a retired kind is not fetched, and reads as no document at
   assert.match(fetched[0]!.text, /"kind": "digest"/);
 });
 
-/**
- * And the file itself goes, on the next publish.
- *
- * Nobody else can remove it — one writer per namespace cuts both ways — so a pool
- * heals as its fleets upgrade, each clearing its own. The companion matters as much
- * as the document: a wiki that keeps a page about an arm that is gone is a wiki
- * that describes a harness nobody is running.
- */
 test("a publish clears what a retired kind left in this fleet's own namespace, and only its own", async () => {
   const remote = poolRemote();
   const writer = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-prune-'));
@@ -568,8 +454,5 @@ test("a publish clears what a retired kind left in this fleet's own namespace, a
     "another fleet's is not this fleet's to delete",
   );
 
-  // The second publish finds nothing to clear: `git add` on a path that never
-  // existed is a fatal pathspec error, so a deployment that predates nothing must
-  // not be paying one.
   await transport.publish(envelopeDoc({ fleetId: 'alice@acme-api', publishedAt: '2026-01-02T00:00:00.000Z' }));
 });

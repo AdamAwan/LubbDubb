@@ -15,16 +15,6 @@ import { validationVerdict } from '../src/validation/verdict.js';
 import { closeOutPass } from '../src/delivery/closeOut.js';
 import type { HumanTask, Issue, IssueDelivery, ValidationCheck, WorldSnapshot } from '../src/types.js';
 
-/**
- * The flag: what a validation plan that is not clear changes, and — just as
- * importantly — what it does not.
- *
- * Both polarities are asserted on every rule here, `planApproval.test.ts`'s
- * discipline. A verdict that counts `deferred` as clear and one that does not are
- * one edit apart, and only one of them is honest; a test that only ever saw the
- * flagged case would pass against either.
- */
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vflag-'));
   return buildSystem(
@@ -80,21 +70,14 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
   };
 }
 
-// -- the verdict, both directions --------------------------------------------
-
 test('passed and waived clear; unrun, failed and deferred do not', () => {
   assert.equal(validationVerdict([]).state, 'clear');
   assert.equal(validationVerdict([check({ state: 'passed' })]).state, 'clear');
-  // Said out loud, with a reason, as a decision not to check — the one thing
-  // other than a pass that settles.
   assert.equal(validationVerdict([check({ state: 'waived' })]).state, 'clear');
   assert.equal(validationVerdict([check({ state: 'passed' }), check({ id: 'b', state: 'waived' })]).state, 'clear');
 
   assert.equal(validationVerdict([check({ state: 'unrun' })]).state, 'flagged');
   assert.equal(validationVerdict([check({ state: 'failed' })]).state, 'flagged');
-  // The guard that makes deferral honest: it takes a check out of today's work
-  // and leaves it in the count. Otherwise it is the quiet exit `unrun` is loud
-  // about.
   assert.equal(validationVerdict([check({ state: 'deferred' })]).state, 'flagged');
   assert.equal(validationVerdict([check({ state: 'passed' }), check({ id: 'b', state: 'unrun' })]).state, 'flagged');
 });
@@ -104,13 +87,9 @@ test('a superseded check is out of the count as well as out of the sheet', () =>
     check({ state: 'passed' }),
     check({ id: 'b', state: 'unrun', supersededReason: 'an amended plan dropped it' }),
   ]);
-  // Flagging a goal over a check its own plan withdrew is the one way this
-  // becomes noise the operator learns to click past.
   assert.equal(verdict.state, 'clear');
   assert.equal(verdict.total, 1);
 });
-
-// -- the close-out obligation ------------------------------------------------
 
 function issue(number: number): Issue {
   return { id: `i${number}`, number, title: 'Ship it', body: '', labels: [], state: 'open', linkedPrNumber: null };
@@ -149,8 +128,6 @@ function filed(over: Partial<Parameters<typeof closeOutPass>[0]> = {}): { detail
 }
 
 test('the close-out obligation states the count, and only when there is one to state', () => {
-  // Clear, and a goal with no plan at all: nothing is added either way, because
-  // the row is an ask about the tracker and not a place to congratulate anyone.
   assert.doesNotMatch(filed().detail, /Validation/);
   assert.doesNotMatch(
     filed({
@@ -175,12 +152,8 @@ test('the close-out obligation states the count, and only when there is one to s
   assert.match(flagged, /Validation is not clear/);
   assert.match(flagged, /1 never run/);
   assert.match(flagged, /1 deferred/);
-  // The reasons ride through rather than being summarised: a bare count is what
-  // gets read as noise.
   assert.match(flagged, /env rebuilt Thursday/);
 });
-
-// -- what closing a flagged goal costs ---------------------------------------
 
 function plan(system: System, checks: Record<string, unknown>[]): string {
   const parsed = validatePlanDocument({
@@ -192,7 +165,6 @@ function plan(system: System, checks: Record<string, unknown>[]): string {
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   const doc: PlanDocument = parsed.document;
   ingestPlanDocument(system.store, { doc, originRef: 'issue:12', title: 'Ship it' });
-  // The goal, which is what the checks are keyed on.
   return 'issue:12';
 }
 
@@ -221,8 +193,6 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
   const refused = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run', payload: {} });
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /note is required/);
-  // Refused, not blocked: the run is untouched, so the operator's next click
-  // still works.
   assert.equal(system.store.listIssueRuns()[0]!.dismissedAt, null);
 
   const withNote = await app.inject({
@@ -236,8 +206,6 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
   assert.equal(ended.dismissNote, 'shipping it anyway, checking A on Monday');
   await app.close();
 
-  // The other polarity: the same goal, with its one check passed, ends with no
-  // note at all. A guard that fired either way would just be friction.
   const clear = build();
   const clearPlan = plan(clear, [CHECK]);
   clear.store.recordValidationResult(clearPlan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
@@ -268,9 +236,6 @@ test('marking a close-out done on a flagged goal costs a sentence; an ordinary a
     agentId: null,
     taskId: null,
   });
-  // An ordinary ask on the same goal: nothing to do with the validation plan, and
-  // asking a note of somebody ticking off "plug the cable in" is the friction
-  // that gets the whole flag ignored.
   const { task: ask } = system.store.recordHumanTask({
     title: 'Plug the cable in',
     detail: 'rack 4',
@@ -311,8 +276,6 @@ test('closing the ticket from the row costs the same sentence marking it done do
   });
   const app = await server(system);
 
-  // The flag is about the goal, not about which verb settles the row — a button
-  // that closed the item in silence would be the way around the rule.
   const refused = await app.inject({
     method: 'POST',
     url: `/api/human-tasks/${closeOut.id}/close-ticket`,
@@ -328,12 +291,9 @@ test('closing the ticket from the row costs the same sentence marking it done do
     payload: { note: 'A is on Monday' },
   });
   assert.equal(withNote.statusCode, 200);
-  // Both sentences on the row: what was done, and what was said about the checks.
   assert.match(system.store.getHumanTask(closeOut.id)!.resolution ?? '', /Closed #12 .* A is on Monday/);
   await app.close();
 });
-
-// -- and what it does not do -------------------------------------------------
 
 test('a flagged goal blocks nothing: the cycle runs and the conclusion is untouched', async () => {
   const system = build();
@@ -344,8 +304,6 @@ test('a flagged goal blocks nothing: the cycle runs and the conclusion is untouc
   const report = await system.harness.runCycle('manual');
   assert.ok(report, 'a cycle runs with an unrun validation plan on the books');
 
-  // The conclusion is a different question with a different author, and a
-  // flagged plan must not answer it.
   system.store.recordIssueConclusion({
     originRef: 'issue:12',
     verdict: 'done',

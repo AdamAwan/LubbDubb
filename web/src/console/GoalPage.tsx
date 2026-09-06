@@ -65,24 +65,10 @@ import {
 import { Button } from '../components/button.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * Where each of the track's stages jumps to. Anchors, not refs — one element on
- * this page — so they are ids rather than `<Ref>`s, and the controls that carry
- * them are buttons.
- *
- * The map is keyed on {@link GoalStageAt} so a stage the strip learns to draw
- * cannot ship without somewhere to land: a missing entry is a compile error here
- * rather than a control that does nothing, which is the cockpit's most repeated
- * bug and the one thing this strip must not become.
- */
-/**
- * The local validation card's anchor, beside {@link ANCHOR} rather than in it: no
- * track stage lands here, because a run somebody asked for is not a stage of the
- * goal's life. The chip is what jumps to it.
- */
+// → docs/spec/17-cockpit.md
+
 const LOCAL_VALIDATION_ANCHOR = 'cn-local-validation';
 
-/** The chip classes each tone wears, in the goal header's own vocabulary. */
 const CHIP_TONE: Record<LocalValidationTone, string> = {
   up: 't-green',
   busy: 't-amber',
@@ -97,16 +83,6 @@ const ANCHOR: Record<GoalStageAt, string> = {
   tail: 'cn-tail',
 };
 
-/**
- * Which section each track stage jumps to, so a jump can *open* what it lands on.
- * A stage that scrolled to a card the goal's own progress had folded away was a
- * control that appeared to do nothing — the page moved and the reading it moved to
- * was not drawn.
- *
- * Keyed on {@link GoalStageAt} for `ANCHOR`'s reason: a stage without a section is
- * a compile error rather than a dead jump. `plan` is not foldable and says so with
- * a null.
- */
 const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
   plan: null,
   validation: 'validation',
@@ -114,49 +90,8 @@ const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
   tail: 'tail',
 };
 
-/** The three statuses that mean an agent is still going, as `countLiveAgents` reads them. */
 const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
-/**
- * One goal, with what it wants from you pinned above everything it is doing.
- *
- * That order is the design's whole claim: an ask read next to the goal it is
- * about is answerable, and the same ask read in an inbox is a sentence with no
- * subject. So the bands come first and the plan, the ticket and the pull requests
- * come under them — and a goal with nothing to ask draws no band at all rather
- * than an empty one, because a band that is sometimes furniture stops being read
- * as a demand.
- *
- * Under the bands the page is **three full-width zones and then two columns**,
- * which is a claim about width rather than about importance. The plan is a board
- * read left to right and the validation card draws a check's steps beside what to
- * expect from it; both were laid out in a 1.6fr column, and that column is the
- * whole reason the waves only went side by side at 1500px. Full width they lay out
- * from 1200 — and, with the two wide cards out of the grid, what is left is four
- * row-lists that split comfortably at the same 1200 rather than needing 1500 of
- * their own. One breakpoint for the page instead of two.
- *
- * The plan is also now **above** validation, which is the ordering the cards
- * themselves have always asked for: the validation card's own subtitle says the
- * checks are written by the plan, and the plan was underneath it.
- *
- * The goal-profile gate (#342) is one of those bands rather than a section of
- * its own, which is what puts it in the rail as well: it holds every dispatch for
- * this goal and expires on nothing but the answer, so a hold drawn only here was
- * one nobody found until they wondered why the goal had not started.
- *
- * Every band embeds the *shared* component that owns its refusal rules —
- * `EscalationCard` for a question, a permission or a proposal, `HumanTaskActions`
- * for a bench task — embedded, never redrawn. A second wiring is a second way to
- * answer a proposal with free text on one surface only.
- *
- * What is deliberately not here: this goal's slice of the decision log. The
- * snapshot ships the last hundred audit rows fleet-wide and a cycle spends one of
- * them every pulse on its own rationale, so filtered to one goal the list is a
- * handful of dispatches at best and empty for any goal not touched in the last
- * few hours. The design says that becomes its own route rather than being
- * half-built, and this takes that arm.
- */
 export function GoalPage({
   page,
   view,
@@ -204,31 +139,12 @@ export function GoalPage({
   );
 }
 
-/**
- * One foldable card's state and the control that changes it, resolved once for the
- * whole page.
- *
- * A pair rather than a boolean, because every draw site needs both and the toggle
- * is the same three lines each time. `open` is already the answer — the default and
- * the two overrides have been folded together — so no card re-reads the place.
- */
 interface Fold {
   open: boolean;
   onToggle: (open: boolean) => void;
-  /** Opens the card without closing anything, for a jump that lands on it. */
   reveal: () => void;
 }
 
-/**
- * Where each foldable card starts, and where the operator has since put it.
- *
- * Three inputs, in one order that never varies: the operator's `?open=` wins, then
- * their `?shut=`, then {@link goalSectionsOpen}'s reading of how far the goal has
- * actually got. The default moves as the work does — a card is folded while there
- * is nothing in it and opens itself once there is — and the operator's word about
- * one is permanent in both directions.
- * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
- */
 function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActions): Record<GoalSection, Fold> {
   const byDefault = goalSectionsOpen(page);
   const entries = GOAL_SECTIONS.map((section): [GoalSection, Fold] => {
@@ -238,8 +154,6 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
       {
         open,
         onToggle: (next) => {
-          // Only an opening. Folding a section shut is not somebody reading one,
-          // and counting both would make a fidget read as engagement.
           if (next) logUsage('goal.expand');
           actions.openGoalSection(section, next);
         },
@@ -252,13 +166,6 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-/**
- * Scroll to a card, having first opened it.
- *
- * The scroll is deferred a frame because the open is a route change: the card is
- * still folded when this returns, and scrolling to it now lands on the heading of
- * a card that is about to grow underneath the viewport.
- */
 function jumpTo(anchor: string, fold: Fold | null): void {
   fold?.reveal();
   requestAnimationFrame(() => {
@@ -266,38 +173,10 @@ function jumpTo(anchor: string, fold: Fold | null): void {
   });
 }
 
-/**
- * This goal's asks, less the parent question — which the page now states above,
- * louder, and with the same three answers under it.
- *
- * Filtered here rather than dropped from {@link buildNeedsYou}, because the row is
- * not redundant everywhere: the rail still carries it, and the ask panel still
- * answers it for an operator working down the queue rather than down a page. What
- * would be wrong is only this page drawing both — one question, twice, with two
- * sets of buttons that write the same field.
- *
- * The area-path half of `placement` is untouched. It is a different question with
- * a different answer, and the band above says nothing about it.
- */
 function parentAskElsewhere(page: GoalPageView): NeedRow[] {
   return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
 }
 
-/**
- * The goal's pipeline in one row, each stretch a way to the section that owns it.
- *
- * It is the page's only surface that says nothing of its own: every reading on it
- * is folded by {@link buildGoalStrip} out of what a card below already draws, so
- * the top of the page cannot disagree with the thing it points at. That is the
- * whole of why the counters it replaced came out of the header — "2 of 5 parts
- * merged" beside "Validation 3/7" beside a reach chip two screens down was four
- * answers to one question, in four places, none of which was where the question
- * gets asked.
- *
- * Buttons rather than `<a href="#…">`, for `cn-jump`'s reason: an anchor changes
- * the address bar, and the cockpit's address bar is `Place` — a hash the place
- * knows nothing about is a history entry the back button steps through to nowhere.
- */
 function TrackStrip({ page, folds }: { page: GoalPageView; folds: Record<GoalSection, Fold> }): JSX.Element {
   return (
     <div className="cn-strip">
@@ -329,21 +208,6 @@ function Stage({ stage, folds }: { stage: GoalStage; folds: Record<GoalSection, 
   );
 }
 
-/**
- * What is left of the goal once the snapshot has forgotten it, folded away behind
- * its own name at the foot of the page.
- *
- * The ticket used to sit beside it here, and has gone back to the top. The two
- * were paired as *the surfaces that ask nothing of the reader*, which was true of
- * both and only half the story about the ticket: it is what every other card on
- * the page is measured against, and reaching it meant scrolling past all of them.
- * Folded, it costs a heading, which is what it was moved down here to avoid.
- * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
- *
- * **Whether it is open is a `Place`**, not a `useState`. A disclosure held in
- * component state works right up until the back button steps over it or a reload
- * drops it, and both are silent. → docs/spec/17-cockpit.md#the-address-bar
- */
 function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {
   const ref = `issue:${page.issue.number}`;
   return (
@@ -364,12 +228,6 @@ function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView
   );
 }
 
-/**
- * A card heading that opens its own card. The state being *set* is the argument
- * rather than a bare toggle, for `collapseFeature`'s reason: the caller already
- * knows which way the caret points, and a toggle read from stale props would
- * fight a disclosure restored from the URL.
- */
 function Disclosure({
   open,
   onToggle,
@@ -387,14 +245,6 @@ function Disclosure({
   );
 }
 
-/**
- * The goal itself, and the verdicts anyone has passed on it. Each chip quotes a
- * reading the server already made — the appraisal's own word with its summary in the
- * title, the tracker's own workflow state — so nothing here is a second opinion.
- *
- * A null `spend` draws no reading at all. It means nothing was ever measured (a
- * PTY fleet reports no usage), and `$0.00` would report a goal that cost nothing.
- */
 function Header({
   page,
   view,
@@ -411,68 +261,32 @@ function Header({
   const [raisingBug, setRaisingBug] = useState(false);
   const watched = watchBucket(issue.labels, config.watchLabel);
   const finished = issue.conclusion.verdict === 'done';
-  // `more_work` is not the opposite of `done` — it is the verdict that puts a
-  // goal back in front of the harness once no PR is open, so it needs its own
-  // control rather than a second meaning for the finished toggle. Here it only
-  // marks the button: what the operator writes is the instruction, and the
-  // verdict is what makes there be an agent to read it.
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
   const [endingRun, setEndingRun] = useState(false);
-  // Which question pressing Validate locally raises, or null while it is open on
-  // nothing. Local state and not `Place`: a modal is not a destination.
   const [validating, setValidating] = useState<'swap' | 'refresh' | null>(null);
-  // The refusal from a post that went straight through — the one path with no modal
-  // to land it in. Without somewhere to say it, a 409 from a race would be a click
-  // that did nothing, which is the failure the two required notes already taught
-  // this page to avoid. → [17](../../../docs/spec/17-cockpit.md)
   const [validateRefusal, setValidateRefusal] = useState<string | null>(null);
   const run = view.state.localRun;
   const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
   const offer = localValidationOffer(issue, target, config.localRunConfigured);
-  // What is in the environment now, for the swap modal's sentence. Read off the
-  // goals the cockpit already holds rather than shipped a second time: the modal
-  // names it, and a title it cannot find is one it leaves out.
   const runTitle =
     run === null
       ? null
       : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
   const onValidate = async (): Promise<void> => {
     const question = validateLocallyQuestion(issue.number, run);
-    // A question opens a modal and posts nothing, so there is no request to hold a
-    // pending state on — the modal is the feedback.
     if (question !== null) {
       setValidating(question);
       return;
     }
     setValidateRefusal(null);
-    // Awaited rather than fired and forgotten: the button reads its pending state
-    // off this promise, and the post behind it starts an environment and runs a
-    // cycle. Rejections reach `onRefused`, which is what draws the sentence.
     await actions.validateLocally(issue.number);
   };
-  // What ending the run costs, or null when it costs nothing: the route refuses a
-  // dismissal with no note while the plan is flagged
-  // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
-  // posting none was a control that could not work — the 400 went to an unhandled
-  // rejection, so the click did nothing and said nothing.
   const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
-  // What ending the run kills: the `issue:<n>` subtree only, which is the exact
-  // scope `clearGoalWork` sweeps. The header counts the goal's agents through its
-  // pull requests as well, and those keep running — so the two numbers are read
-  // apart on purpose and the modal says which is which, rather than promising a
-  // kill the route does not do.
   const live = page.agents.filter((a) => a.onPr === null && LIVE_AGENT.has(a.agent.status)).length;
   const livePr = page.agents.filter((a) => a.onPr !== null && LIVE_AGENT.has(a.agent.status)).length;
-  // Keyed on the run existing and not having been ended, never on anything the
-  // page itself is showing: the button is how a run is abandoned, so it has to be
-  // reachable for exactly as long as the harness still holds one.
   const retained = issue.run !== undefined && !issue.run.dismissed;
-  // The other end of the same reading: a run the harness held and the operator
-  // ended. Drawn as the run state's third segment, inert — the goal *is* in that
-  // state, and a segment that disappeared once it was reached would leave the
-  // control saying the run is still working.
   const ended = issue.run !== undefined && issue.run.dismissed;
 
   return (
@@ -830,43 +644,10 @@ function Header({
   );
 }
 
-/**
- * How anyone checks this goal was met — the checks, and what anybody concluded
- * from running each one.
- *
- * **Full width, above the two columns.** Not in either stack: a check draws its
- * steps and what to expect side by side and carries a row of five verbs, and both
- * are cramped in a column. Sitting directly under the header also puts it above
- * the plan, which is the order the page already reads in — what is being asked of
- * you, then the work. Running a check is the one thing on this page that is
- * *owed*, and the bands above it are the only thing that outranks that.
- *
- * The card draws even when the goal has no checks, the rule every card on this
- * page follows: a surface that vanishes when quiet is indistinguishable from one
- * that broke, and "nobody wrote a validation plan" is the reading most worth
- * having.
- *
- * {@link ValidationSection} is *embedded*, never redrawn — the same rule the needs
- * bands follow with `EscalationCard`. It owns the five verbs and their refusals;
- * this passes `cn-btn` so they wear the console's chrome, the seam
- * `HumanTaskActions` already takes.
- */
-/**
- * What the plan still owes, in the header chip's own words rather than a second
- * wording of them — the counts are the server's fold (`issue.validation`), and
- * two surfaces reading one verdict two ways is the thing that fold exists to
- * prevent.
- */
 function outstanding(verdict: ValidationVerdict): string {
   return `Its validation plan is not clear — ${verdict.failed} failed, ${verdict.unrun} never run, ${verdict.deferred} deferred, of ${verdict.total}.`;
 }
 
-/**
- * The goal's tracker state, in the colour the operator gave it.
- *
- * The same reading as the backlog's chip and for the same reason: two surfaces
- * drawing one state two colours would be worse than neither being coloured.
- */
 function StateChip({ state, colours }: { state: string; colours: Readonly<Record<string, string>> }): JSX.Element {
   const colour = stateColour(colours, state);
   return (
@@ -876,20 +657,6 @@ function StateChip({ state, colours }: { state: string; colours: Readonly<Record
   );
 }
 
-/**
- * What the fleet found driving this goal on the operator's own machine.
- *
- * **Its own card, under the validation plan.** Not a band inside it, which is the
- * cheaper shape and the wrong one: that card is a checklist against the
- * *delivered* goal and folds until the work has shipped, and this is an
- * exploratory run against work still in flight — folded inside it, the report an
- * operator asked for two minutes ago would be hidden on exactly the unshipped goal
- * they asked about. Under it rather than over, because the plan's checks are the
- * standing statement of what this goal has to do and a run is one look at it.
- *
- * The card is drawn even with nothing in it, the page's rule for every other card:
- * a surface that vanishes when it is empty is one an operator cannot learn.
- */
 function LocalValidation({
   page,
   view,
@@ -905,9 +672,6 @@ function LocalValidation({
   const validation = issue.localValidation;
   const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
   const offer = localValidationOffer(issue, target, view.state.config.localRunConfigured);
-  // Which of this goal's agents are still going, so the report gives a finished one
-  // a door rather than a pulse. The same `LIVE_AGENT` set the header counts with,
-  // rather than a second opinion about what "running" means.
   const liveAgents = new Set(page.agents.filter((a) => LIVE_AGENT.has(a.agent.status)).map((a) => a.agent.id));
 
   return (
@@ -954,7 +718,6 @@ function Validation({
   page: GoalPageView;
   actions: CockpitActions;
   refUrls: Record<string, string>;
-  /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
   desktopFolder: string;
   fold: Fold;
 }): JSX.Element {
@@ -1020,23 +783,6 @@ function Validation({
   );
 }
 
-/**
- * What this goal asked production to show for the work, and the controls that
- * change it.
- *
- * Under Validation and above the environments, which is the order the two
- * questions are asked in: validation is *did we build it*, this is *did it do
- * anything*, and the environment rows below carry what each window has read since
- * the work arrived there. The card is the declarations; those rows are the
- * readings.
- *
- * **Nothing is drawn where nothing is declared and nothing could be**, which is
- * this subsystem's own null rule rather than the page being tidy: a goal that
- * declared no checks reads null, and an empty card headed "Signals" is a surface
- * saying the fleet is verified. The exception is a goal whose plan *has* a watch
- * block — there the card draws with its list, and the add controls are how the
- * list grows.
- */
 function Signals({
   page,
   actions,
@@ -1049,8 +795,6 @@ function Signals({
   fold: Fold;
 }): JSX.Element | null {
   const { issue, signals, plan } = page;
-  // No checks and no plan is a goal nobody has planned, and an add control on it
-  // would offer a query against an environment for work that does not exist yet.
   if (signals.length === 0 && plan === null) return null;
   const pending = signals.filter((c) => !c.live).length;
   return (
@@ -1083,13 +827,6 @@ function Signals({
   );
 }
 
-/**
- * A part's pull request as the page holds it, with the flag that says which list
- * it came off. A boolean rather than a check for `attention` at the draw site:
- * the closed list ships {@link PullRequest}, where every verdict is optional
- * because nothing folds one for a dead PR, and narrowing it back to
- * {@link OpenPullRequest} by sniffing a field is a cast wearing a condition.
- */
 type PartPr = { open: true; pr: OpenPullRequest } | { open: false; pr: PullRequest };
 
 const GROUP_ORDER: PartGroup[] = ['merged', 'now', 'held', 'waiting'];
@@ -1100,29 +837,6 @@ const GROUP_LABEL: Record<PartGroup, string> = {
   waiting: 'Not started',
 };
 
-/**
- * The plan, left to right in dispatch order. Grouped by the derivation's own four
- * groups rather than by `status` a second time, so what the overview's segment
- * track counts and what this draws cannot disagree.
- *
- * A held part carries the reconciler's `blockedReason` verbatim. It is the one
- * status nothing else in the world explains — a blocked part has no branch, no PR
- * and no agent to read — so a paraphrase here would be the only account there is,
- * and wrong.
- *
- * **Retired parts are drawn too, in a column of their own.** What an amendment
- * dropped is half of what the plan's record is for: without them a goal whose part
- * list shrank between two readings has simply lost rows, with nothing saying so.
- * They sit outside the four groups because they are outside every count on this
- * page: what the plan proposed is not what the goal is made of.
- *
- * **The header carries the way into the plan sheet.** What this card draws is the
- * shape of the work — titles, groups and dependencies — and the plan is also a
- * diagnosis, an approach, an acceptance checklist per part and the record of the
- * decision that was made on it. Without a control here the only way onto that
- * from a goal was the validation card's aside about amending the checks, which
- * reads as being about checks.
- */
 function PlanWaves({
   page,
   view,
@@ -1138,8 +852,6 @@ function PlanWaves({
   })).filter((g) => g.parts.length > 0);
   const retired = page.retiredParts;
   const plan = page.plan;
-  // Keyed on the number the part carries, and the open list written second so an
-  // open pull request wins a collision rather than the recently-closed copy of it.
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
@@ -1218,17 +930,6 @@ function PlanWaves({
   );
 }
 
-/**
- * One part of the plan.
- *
- * **The agent on it is drawn as a way there, never as its id.** `agent_ab4sc`
- * beside a part named nothing — agent ids are minted and an agent has no name of
- * its own — and the one thing the operator wanted from it, the run's transcript
- * and its controls, was on a surface the row did not lead to. The row already
- * names the part, so the control is a door rather than a second name, and it sits
- * beside the pull-request reference rather than around it: one click cannot have
- * two destinations, so a `<Ref>` is never nested inside a button.
- */
 function Part({
   part,
   group,
@@ -1239,11 +940,9 @@ function Part({
   actions,
 }: {
   part: PlanPart;
-  /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
   group: PartGroup | 'retired';
   agentId: string | null;
   agentLive: boolean;
-  /** The pull request this part's number names, when the page holds it. */
   pr: PartPr | null;
   now: number;
   actions: CockpitActions;
@@ -1310,32 +1009,6 @@ function Part({
   );
 }
 
-/**
- * The ticket as it stood at pickup — what a plan, an appraisal or an ask is judged
- * against.
- *
- * Through `renderRichText`, not `renderMarkdown`: Azure DevOps stores a
- * description as HTML, and markdown-rendering it printed the `<p>` and `<br>` as
- * text. This is the one field on the page the *tracker* wrote rather than an
- * agent, which is why it is the one that sniffs.
- */
-/**
- * What the operator has asked for on this goal and no agent has answered yet.
- *
- * **Above the ticket, and it draws nothing when there is nothing standing.** Both
- * halves are deliberate. An instruction outranks the ticket for as long as it
- * stands — it is the newer statement of the same goal — so reading it after the
- * body it amends is reading them in the wrong order. And a card that were always
- * present would be furniture: the empty-state rule the rest of this page follows
- * ("a surface that vanishes when quiet is indistinguishable from one that broke")
- * is about surfaces that answer a standing question, and "has anyone written on
- * this goal" is answered by the header's own control, which is always drawn and
- * counts them.
- *
- * Withdrawing is offered per row because an instruction is free text sent to an
- * agent: a typo, or a mind changed before anything picked it up, needs a way back
- * that is not "wait for an agent to act on it".
- */
 function Instructions({ issue, actions }: { issue: Issue; actions: CockpitActions }): JSX.Element | null {
   if (issue.instructions.length === 0) return null;
   return (
@@ -1364,20 +1037,6 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
   );
 }
 
-/**
- * The goal as it was written, at the top of the page it is the top of.
- *
- * **Open until the work starts, folded from the moment it has.** Those are the two
- * readings the same card is: on a goal nobody has planned it is the only thing on
- * the page with anything in it, and the operator is here to read it; on a goal with
- * a plan, ten pull requests and a validation sheet it has been read, and it is a
- * screen of prose between the track and the work. It goes back to the top either
- * way, because *what was asked for* is what everything below it is measured
- * against, and a reader who wants it half way down a running goal should not have
- * to scroll past the whole run to reach it.
- *
- * `workStarted` rather than a plan alone — see {@link goalSectionsOpen}.
- */
 function Ticket({ issue, refUrls, fold }: { issue: Issue; refUrls: Record<string, string>; fold: Fold }): JSX.Element {
   return (
     <section className="cn-card" id="cn-ticket">
@@ -1395,12 +1054,6 @@ function Ticket({ issue, refUrls, fold }: { issue: Issue; refUrls: Record<string
   );
 }
 
-/**
- * This goal's pull requests. Whose court and which check is red are both the
- * server's verdicts — `attention.status` and `ciVerdict` — quoted rather than
- * re-read here: a client-side second opinion about a merge is the drift that
- * outlives the change that introduces it.
- */
 function PullRequests({
   page,
   view,
@@ -1423,9 +1076,6 @@ function PullRequests({
       <div className="cn-rows">
         {open.length === 0 && closed.length === 0 && <p className="cn-empty">No pull request names this goal yet.</p>}
         {open.map((pr) => (
-          // An unwatched PR is drawn spent, the same as a closed one below and as
-          // an unwatched goal in the backlog: nothing will happen on it, and a row
-          // at full weight says the opposite.
           <div className={`cn-row ${pr.attention.status === 'unwatched' ? 'cn-spent' : ''}`} key={pr.number}>
             <span className="cn-grow">
               {/* The name is the way onto the pull request's page and the reference
@@ -1475,16 +1125,6 @@ function PullRequests({
   );
 }
 
-/**
- * How much of the review is still on the fleet, on the row — the one number from
- * the pull request's page worth carrying back to the goal, because it is the one
- * that says whether anybody is waiting.
- *
- * Nothing at all when the provider reports no threads, and nothing when none is
- * outstanding: a chip reading `0` on every settled pull request is furniture, and
- * one drawn where the reading is *absent* would be a claim about a review the
- * harness cannot see. → docs/spec/07-pull-requests.md#review-threads
- */
 function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
   const waiting = (pr.reviewThreads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened').length;
   if (waiting === 0) return null;
@@ -1495,20 +1135,6 @@ function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
   );
 }
 
-/**
- * Where this story sits in the order its Feature was given — folded shut.
- *
- * Shut by default because a story's own page is read for the story, and its
- * neighbours are what the Feature page is for. **The folded reading is the whole
- * point of folding it**: `wave 2 of 4 · 2 waiting on this` says what the rows
- * would, and a goal nothing is waiting on says so without being opened — the
- * `0/3 reached` case. `2 waiting on this` is the reason to open it, and the
- * Feature’s ref sits on the shut header so the way up does not require expanding.
- *
- * A copy, never a second record: the order is the Feature’s, and it is answered,
- * amended and argued with there.
- * → `docs/spec/33-story-sequencing.md#the-goal-page`
- */
 function Sequence({ page, fold }: { page: GoalPageView; fold: Fold }): JSX.Element | null {
   const sequence = page.sequence;
   const parent = page.issue.parent?.number;
@@ -1570,18 +1196,6 @@ function SequenceSide({
   );
 }
 
-/**
- * Where this goal's landed work has got to, one chip per configured environment.
- *
- * Drawn under the pull requests because it is the sentence after them: these
- * merged, and this is where they went. Absent entirely when no environment is
- * configured — a row of question marks on every deployment that never set one up
- * would be a feature announcing itself as broken.
- *
- * The counts are on every chip that is not whole, including `absent`, because
- * "0/3" and "2/3" are the difference between work that has not started moving and
- * work that is halfway there — and the word alone says neither.
- */
 function Environments({
   page,
   actions,
@@ -1683,24 +1297,6 @@ function Environments({
   );
 }
 
-/**
- * What the environment has said since the work arrived in it.
- *
- * **Inside the row and not beside it**, because a watch belongs to an arrival:
- * drawn as a sibling, the two surfaces would be free to disagree about which
- * environment a reading came from — the disagreement the strip's fold exists to
- * prevent one layer up.
- *
- * **Every check draws, and nothing rolls up to a word.** A goal whose one signal
- * passed and whose other regressed is a fix that worked and a thing that is still
- * broken, and a single verdict for the pair would hide the half the ticket was
- * about.
- *
- * Nothing renders where nothing is watched: no empty block, no row of question
- * marks. A goal that declared no checks and a deployment where no environment
- * declares a `watch` both arrive here as `undefined`, because null is a third fact
- * rather than a synonym for clean.
- */
 function Watch({
   watch,
   issueNumber,
@@ -1761,17 +1357,6 @@ function Watch({
   );
 }
 
-/**
- * One check's reading in the operator's words. A reading that did not come back
- * says so.
- *
- * **A measure reads as expected, before and now**, and the before is what makes
- * the row worth looking at: a p95 of 310ms means nothing alone and everything
- * beside the 8,400ms it replaced. It is available precisely because the baseline
- * was taken at declaration, days before the arrival — so a measure that has one
- * says it, and one that never had a baseline taken says *that* rather than
- * printing a number with nothing beside it.
- */
 function watchSaid(check: GoalWatchCheckView): string {
   const reading = check.reading;
   if (reading === null) return 'Not yet put to this environment. Nothing has been read.';
@@ -1782,7 +1367,6 @@ function watchSaid(check: GoalWatchCheckView): string {
     : `${String(reading.rows ?? 0)} matching rows, within the ${String(check.tolerate)} it declared.`;
 }
 
-/** Expected, before, now — the three the card draws a measure as. */
 function measureSaid(check: GoalWatchCheckView, value: number | null): string {
   const unit = check.unit === null ? '' : ` ${check.unit}`;
   const expected: string[] = [];
@@ -1794,14 +1378,6 @@ function measureSaid(check: GoalWatchCheckView, value: number | null): string {
   return `Expected ${expected.join(' and ')} · ${before} · ${now}.`;
 }
 
-/**
- * No new colours: every tone is one the console already draws, so a theme switch
- * carries the watch block without the token layer having to learn about it.
- *
- * `unknown` takes the attention tone rather than a neutral one deliberately — an
- * environment nobody could read is work, not an all-clear, and it is the reading
- * that most looks like success.
- */
 const WATCH_TONE: Record<WatchCheckVerdict | 'unread', TagTone | undefined> = {
   clean: 'green',
   regressed: 'red',
@@ -1809,20 +1385,11 @@ const WATCH_TONE: Record<WatchCheckVerdict | 'unread', TagTone | undefined> = {
   unread: undefined,
 };
 
-/** What each gate holds, in the words the card's own rows use for it. */
 const GATE_SAID: Record<EnvironmentGate, string> = {
   validate: 'the validation checks',
   close_out: 'the close-out',
 };
 
-/**
- * No new colours: every tone here is one the cockpit already draws, so the strip
- * follows a theme switch without the token layer having to learn about it.
- *
- * `partial` takes the attention tone rather than a success one deliberately — half
- * a feature in production is the state on this panel most likely to want somebody,
- * and drawing it green is the mistake the whole tri-state exists to avoid.
- */
 const REACH_TONE: Record<GoalReachStatus, TagTone | undefined> = {
   reached: 'green',
   partial: 'red',
@@ -1830,14 +1397,6 @@ const REACH_TONE: Record<GoalReachStatus, TagTone | undefined> = {
   absent: undefined,
 };
 
-/**
- * What each verdict means, in the words an operator would use asking about it.
- *
- * **Work, not merges.** The fraction counts a plan's unmerged parts too, so a goal
- * three parts short of done reads `1/4` here — and "all of this goal's merges are
- * here" would be true of a row saying `partial`, which is the sentence disagreeing
- * with the count beside it.
- */
 const REACH_SAID: Record<GoalReachStatus, string> = {
   reached: 'all of this goal’s work is here',
   partial: 'some of this goal’s work is here',
@@ -1856,13 +1415,6 @@ function courtTone(pr: OpenPullRequest): TagTone | undefined {
   return COURT_TONE[pr.attention.status];
 }
 
-/**
- * A wait in the units it is read in: days past a day, hours below.
- *
- * Exported for the overview's rack, which draws the same age as a fact on the
- * row. One threshold, in one place — the same reason the chip below was shared
- * before the rack drew the court itself.
- */
 /**
  * The tracker has stopped returning this goal, and this is the one place that
  * says so (`wire.Issue.stale`). Drawn on a retained run wherever the goal is
@@ -1906,33 +1458,6 @@ export function waitedFor(sinceIso: string, now: number): string {
   return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
 }
 
-/**
- * Whose court a pull request is in, and — on the one arm that means it — how long
- * it has been in somebody else's.
- *
- * The goal page's own reading. The overview's rack draws the court in its state
- * column instead — a word in the column every card puts its state in beats the
- * same word in a chip one column further right, which is what the row grammar is
- * for. Both quote `attention`, so neither is a second opinion.
- *
- * **The age is drawn from the first pulse a pull request is observed waiting.**
- * There was a `reviewReminderMs` threshold here, on the argument that an age on
- * every open pull request says nothing about any — which is a team's problem. One
- * person's queue is short enough to read, and a threshold only hides how long the
- * short queue has been sitting.
- *
- * It stays a *chip*, never a row in "Needs you": nothing is dispatched, escalated
- * or filed at any age — the harness has no more idea than you do how to make a
- * review happen faster.
- */
-/**
- * Whose court a pull request is in, with how long it has been waiting where that
- * arm means it.
- *
- * Exported for the pull-request page for `CiMark`'s reason: the chip is a
- * reading of `attention`, and a second one written beside it would be a second
- * opinion about a verdict the server already took.
- */
 export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
   const since = pr.attention.reviewWaitingSince;
   const waited = since !== undefined ? waitedFor(since, now) : null;
@@ -1952,19 +1477,6 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
   );
 }
 
-/**
- * Who is on this goal right now, and what each has cost where that was measured.
- *
- * **A pull request is for a goal, so an agent on one is on the goal.** A dispatch
- * names the goal's own subtree or it names a pull request — a CI fix, a review
- * round, a retarget — and a card that read only the first said *no agent is on
- * this goal* while somebody was fixing its build, which is the reading an operator
- * is on this page to take. The row names that pull request as a way there, since a
- * row saying an agent is on something and not where is the dead end the ref rule
- * exists to stop. The reference sits **beside** the name rather than inside it:
- * the row's own click opens the transcript, and one click cannot have two
- * destinations.
- */
 function OnThisGoal({
   page,
   view,
@@ -2011,11 +1523,6 @@ function OnThisGoal({
   );
 }
 
-/**
- * What the goal has cost, over every agent under it and every local run of it. The whole card is absent
- * when nothing was measured — the rows would all read zero and none of them would
- * be a reading.
- */
 function Spend({ issue }: { issue: Issue }): JSX.Element | null {
   const spend = issue.spend;
   if (spend === null) return null;
@@ -2050,11 +1557,6 @@ function Spend({ issue }: { issue: Issue }): JSX.Element | null {
   );
 }
 
-/**
- * What is left after the parts: the goal check, the write-up, and closing the
- * ticket. Each states the verdict its own author wrote, or that nothing has run —
- * "not reached yet" is a fact about the goal worth seeing, not an empty section.
- */
 function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions; fold: Fold }): JSX.Element {
   const ref = `issue:${issue.number}`;
   const check = issue.delivery?.summary ?? issue.shortfall?.summary ?? null;

@@ -5,14 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../src/configFile.js';
 
-/**
- * The file writer. What is being asserted throughout is that an operator's own
- * file survives: the `"// key"` prose, the blank lines that group it, the indent
- * style and the key order are the half of #401 that keeps the file editable by
- * hand, and a `JSON.parse` → mutate → `JSON.stringify` round trip destroys every
- * one of them.
- */
-
 const COMMENTED = `{
   "// maxConcurrentAgents": "Hard cap on concurrent agents. Raised for the Tuesday backlog push.",
   "//   maxConcurrentAgents, cont": "Put it back to 3 when that is done.",
@@ -45,7 +37,6 @@ test('key order, blank lines and inline objects are left exactly as they were', 
   const next = editConfigText(COMMENTED, { set: { maxConcurrentAgents: 6 } });
 
   assert.deepEqual(Object.keys(JSON.parse(next) as object), Object.keys(JSON.parse(COMMENTED) as object));
-  // The one line that changed is the only line that changed.
   const before = COMMENTED.split('\n');
   const after = next.split('\n');
   assert.equal(after.length, before.length);

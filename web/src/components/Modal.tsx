@@ -3,41 +3,8 @@ import type { JSX, ReactNode } from 'react';
 import { HeadRow } from './panel.js';
 import { Button } from './button.js';
 
-/**
- * The cockpit's one overlay: a backdrop, a surface, and the three ways out of it.
- *
- * It exists because thirteen surfaces hand-wrote the same three lines —
- * `<div className="plan-modal-backdrop" onClick={onClose}>`, a surface with an
- * `onClick={(e) => e.stopPropagation()}` guard, a `pm-head` and a `pm-foot` — and
- * the copy dropped something on eleven of them: **Escape closed two of the
- * thirteen.** `HatchModal` and the prompt viewer registered a key listener;
- * nothing else did, so the modal covering the goal an operator is reading could
- * only be dismissed by finding a small button, and every check the repo runs was
- * green about it. That is the failure a component removes once — the same
- * argument as [the control kit](./controls.tsx), one layer out.
- *
- * **The rules it keeps:**
- *
- * - **Three ways out, always.** The backdrop, the close control, and Escape. A
- *   thing that covers the console must not have exactly one exit.
- * - **The face is a prop, never a class string.** The `--cn-*` console family and
- *   the shared family are a real distinction, not a namespace
- *   ([17](../../../docs/spec/17-cockpit.md#tokens)), so the overlay names which
- *   face it wears and the two sheets keep their own classes. A caller cannot mint
- *   a seventh.
- * - **Escape closes the layer on top, never the one behind it.** The dismissable
- *   layers are a stack and only its last entry answers the key. A nested modal —
- *   the prompt viewer inside the settings page, the questionnaire inside a
- *   "Needs you" panel — is always the one opened last, so registration order *is*
- *   depth, and dismissing the inner sheet cannot take its host down with it.
- *   `PromptsTab` relied on nobody else listening for that; now it is a rule.
- *
- * `armDismiss` is the seam that rule is asserted through — an effect is not
- * reachable from `renderToStaticMarkup`, which is how every other cockpit
- * component is tested. → `test/modal.test.ts`
- *
- * → docs/spec/17-cockpit.md#the-modal
- */
+// → docs/spec/17-cockpit.md
+
 export function Modal({
   face,
   className,
@@ -50,23 +17,15 @@ export function Modal({
   children,
 }: {
   face: ModalFace;
-  /** A modifier on the surface — `qn-modal`, `rp-modal` — never a second face. */
   className?: string;
-  /** The dialog's accessible name, where the visible title is not one. */
   label?: string;
-  /** Drawn as a `pm-head`. A face with a head of its own passes it as a child. */
   title?: ReactNode;
-  /** Chips or refs before the title — the thing this modal is *about*. */
   lead?: ReactNode;
-  /** Chips after the title — what state it is in. */
   chips?: ReactNode;
-  /** The action row. Last child of the surface, so it never scrolls away. */
   foot?: ReactNode;
   onClose: () => void;
   children?: ReactNode;
 }): JSX.Element {
-  // Read through a ref so an inline `onClose` re-render cannot re-register the
-  // layer, which would shuffle it above whatever is genuinely on top of it.
   const latest = useRef(onClose);
   useEffect(() => {
     latest.current = onClose;
@@ -102,7 +61,6 @@ export function Modal({
   );
 }
 
-/** Which pair of classes the overlay wears — never which colours it draws in. */
 type ModalFace = 'modal' | 'sheet' | 'drawer' | 'panel' | 'hatch' | 'prompt';
 
 const FACES: Record<ModalFace, { backdrop: string; surface: string; element: 'div' | 'section' }> = {
@@ -114,7 +72,6 @@ const FACES: Record<ModalFace, { backdrop: string; surface: string; element: 'di
   prompt: { backdrop: 'prompt-backdrop', surface: 'prompt-modal', element: 'div' },
 };
 
-/** The layers a key could close, innermost last. Only the last one answers. */
 const OPEN: Array<{ close: () => void }> = [];
 
 /**
@@ -139,7 +96,6 @@ export function armDismiss(close: () => void): () => void {
   };
 }
 
-/** Keeps a click inside the dialog from reaching the backdrop's close handler. */
 function stop(event: { stopPropagation: () => void }): void {
   event.stopPropagation();
 }

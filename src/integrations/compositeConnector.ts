@@ -54,40 +54,18 @@ import {
   type Integration,
 } from './integration.js';
 
-/**
- * Assembles the world from many {@link Integration}s and presents it behind the
- * single {@link Connector} + {@link ActionSink} seams the harness and executor
- * depend on — so neither of them changes when providers are swapped or added.
- *
- * - Reads: fan out `snapshot()` across integrations and merge the slices.
- * - Outbound: route each side-effectful action to the integration that can
- *   handle it (by capability), not to a hard-coded provider.
- * - Inject (fake-only): route an injected event to the fake that owns its kind.
- */
+// → docs/spec/15-integrations.md
+
 export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader {
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
-    /**
-     * The lane backstops an *unplanned* read uses — a route, or the cockpit's
-     * snapshot. Held here rather than defaulted inside each integration so the
-     * operator's numbers are the only ones in play: a constant down there would be
-     * a second answer to the same question, differing from the config on exactly
-     * the deployments that changed it.
-     */
     private readonly lanes: ReadLanes = DEFAULT_READ_LANES,
   ) {}
 
   async getState(plan?: ReadPlan): Promise<WorldSnapshot> {
-    // Everything hot, for a caller with no fleet state to classify against. Never
-    // *nothing* hot: a read that declared every entity cold because it did not know
-    // any better would serve the cockpit a world as old as the slow lane.
     const read: ReadPlan = plan ?? { hot: 'all', ...this.lanes };
     const slices = await Promise.all(this.integrations.map(async (i) => ({ id: i.id, slice: await i.snapshot(read) })));
-    // Named per integration rather than counted, because which half of the world
-    // is old changes what a decision made against it is worth: a stale issue list
-    // with fresh pull requests is a fleet that will not pick up new work, and the
-    // reverse is one that may act on a pull request that has since merged.
     const staleSources = slices.filter(({ slice }) => slice.stale === true).map(({ id }) => id);
     return {
       takenAt: this.now(),
@@ -98,30 +76,12 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     };
   }
 
-  /**
-   * The failing output of these checks, or `[]`.
-   *
-   * **The one routed method that answers rather than throwing when nothing can
-   * handle it.** Every outbound method below throws, and rightly: an act the
-   * operator asked for that no provider can perform is a fault worth surfacing.
-   * This is the opposite — it enriches a dispatch that is going out regardless,
-   * so "no provider has logs" is an ordinary answer, and raising it would turn a
-   * missing nicety into a failed dispatch on the `fake` provider and on every
-   * deployment whose checks are all third-party statuses.
-   */
   async readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]> {
     const handler = this.integrations.find(isCiEvidenceCapable);
     if (!handler) return [];
     return handler.readCiFailureEvidence(prNumber, checks);
   }
 
-  /**
-   * Tracker items in any state changed since `since`, or `[]` when no provider can
-   * answer — the second routed read that answers rather than throwing, for the
-   * evidence reader's reason. A history nobody can supply is an empty tab, not a
-   * failed pulse: the `fake` provider has no such list, and the sweep runs every
-   * cycle.
-   */
   async listTicketHistory(since: string): Promise<TrackerItem[]> {
     const handler = this.integrations.find(isTicketHistoryCapable);
     if (!handler) return [];
@@ -158,20 +118,6 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return this.integrations.some(isTicketHistoryCapable);
   }
 
-  /**
-   * `body` with the harness's sign-off, in the handling provider's markup.
-   *
-   * **Here rather than at the call sites, and that is the whole of it.** Every
-   * piece of prose the harness sends passes through one of the four methods below
-   * on its way to any provider, so signing here signs the surfaces that exist and
-   * the ones added later — where six call sites each remembering to sign is six
-   * that can be five, silently, on a comment that reads perfectly and is
-   * attributed to a person who never wrote it.
-   *
-   * Nothing else routed here is signed, because nothing else is prose: a label, a
-   * merge, a title or a state transition is an act, and an act carries no voice to
-   * mistake for a human's.
-   */
   private signed(handler: Integration, body: string): string {
     return signOff(body, handler.bodyFormat ?? 'markdown');
   }
@@ -205,12 +151,6 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return this.integrations.some(isPrCloseCapable);
   }
 
-  /**
-   * Close a pull request without merging it. Throws where nothing serves it,
-   * exactly as {@link closeIssue} does and for its reason: the one caller asks
-   * {@link canClosePr} first and refuses the whole act, so reaching here with no
-   * handler is a wiring fault rather than a shape.
-   */
   async closePr(input: PrCloseInput): Promise<SendResult> {
     const handler = this.integrations.find(isPrCloseCapable);
     if (!handler) throw new Error('no integration can close PRs (no sourceControl provider is PrCloseCapable)');
@@ -241,29 +181,12 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.setPullBase(input);
   }
 
-  /**
-   * The one outbound act whose missing handler is **not** an error (issue #332).
-   *
-   * Every other method here throws when no integration can serve it, because
-   * nothing else can: the harness asked for the only way that act happens. This
-   * one has a second way — the code agent the rule dispatched before the
-   * server-side path existed — so a provider without an "update branch" endpoint
-   * (Azure DevOps) is a configuration, not a fault, and saying so as `ok: false`
-   * is what keeps its Errors panel clean while the fallback does the work.
-   */
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     const handler = this.integrations.find(isPrBaseUpdateCapable);
     if (!handler) return { ok: false };
     return handler.updatePrBranch(input);
   }
 
-  /**
-   * The third routed act whose missing handler is not an error, for
-   * {@link updatePrBranch}'s reason exactly: rule `pr-ci-gate` dispatched a code
-   * agent for this gate before the direct write existed and still does when the
-   * write is unavailable, so a provider without the operation (GitHub, which has
-   * no expired-policy state to begin with) is a configuration rather than a fault.
-   */
   async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
     const handler = this.integrations.find(isCiCheckRequeueCapable);
     if (!handler) return { ok: false };
@@ -283,12 +206,6 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.setIssueLabel(input);
   }
 
-  /**
-   * The second outbound act whose missing handler is not an error, for
-   * {@link updatePrBranch}'s reason: a provider that links an issue to a pull
-   * request from the body text (GitHub) needs no relation written, so nothing there
-   * implements this and `ok: false` means "already done", not "failed".
-   */
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
     const handler = this.integrations.find(isWorkItemLinkCapable);
     if (!handler) return { ok: false };
@@ -346,22 +263,11 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.upsertIssueComment({ ...input, body: this.signed(handler, input.body) });
   }
 
-  /**
-   * Resolve a ref to a web URL via the first integration that can, or `null` when
-   * none can (e.g. an all-fake world with no real repo behind it). Used by the
-   * server to build the cockpit's link map without any provider-specific logic.
-   */
   resolveRefUrl(ref: string): string | null {
     const resolver = this.integrations.find(isRefResolvable);
     return resolver ? resolver.resolveRefUrl(ref) : null;
   }
 
-  /**
-   * Apply an injected event to whichever fake integration owns its kind. An event
-   * with no fake owner (e.g. its domain is served by a real adapter that reads from
-   * the network) is dropped rather than throwing — you cannot fake-inject onto a
-   * real provider.
-   */
   inject(event: InjectableEvent): void {
     const target = this.integrations.find((i) => isInjectable(i) && i.handles(event.kind));
     if (target && isInjectable(target)) target.inject(event);

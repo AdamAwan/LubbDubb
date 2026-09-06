@@ -18,17 +18,6 @@ import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { partIsHuman } from '../src/plans/parts.js';
 import type { Agent, Issue, WorldSnapshot } from '../src/types.js';
 
-/**
- * Work only a person can do.
- *
- * The property worth holding on to while reading these: a human task is **work,
- * not an alert**. Nothing is blocked on a socket, no agent is parked, the row
- * outlives every agent and every restart — and the one thing that can hold the
- * fleet off is a plan part the task backs, never the task itself. So the suite
- * asks three separate questions: does the row survive, does an agent's request
- * reach it, and does a step for a person actually stop the parts that named it.
- */
-
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-human-'));
   return loadConfig({
@@ -46,11 +35,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/**
- * A whole system with the fakes injected. `worktrees` is not optional: without it
- * `config.repoRoot` defaults to `process.cwd()` and a dispatched code agent cuts a
- * real branch in whatever checkout the suite is running in.
- */
 function build(overrides: Record<string, unknown> = {}): System {
   return buildSystem(testConfig(overrides), {
     worktrees: new FakeWorktreeManager(),
@@ -77,7 +61,6 @@ function world(issues: Issue[]): WorldSnapshot {
   return { takenAt: '2026-08-11T12:00:00.000Z', pullRequests: [], issues };
 }
 
-/** An agent on an ordinary pickup, the way one reaching for the tool would be. */
 function pickupAgent(system: System, originRef = 'issue:12'): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -96,18 +79,11 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-// -- the pure half ------------------------------------------------------------
-
 test('a one-line title is the boundary, and the refusal names where the rest goes', () => {
   const ok = validateHumanTask({ title: '  Enable the staging webhook  ', detail: '  Dashboard → Developers  ' });
   assert.ok(ok.ok);
-  // Trimmed on both fields, so a model's stray indentation is not the operator's
-  // problem to read around.
   assert.deepEqual(ok.input, { title: 'Enable the staging webhook', detail: 'Dashboard → Developers' });
 
-  // The load-bearing refusal: the only cheap moment to fix a blob is the agent's
-  // own turn, and the error has to say which field the rest belongs in or the same
-  // paragraph comes back shortened.
   const blob = validateHumanTask({ title: 'Enable the webhook\nThen check it returns 200' });
   assert.ok(!blob.ok);
   assert.match(blob.error, /one line/);
@@ -121,14 +97,10 @@ test('a one-line title is the boundary, and the refusal names where the rest goe
   assert.ok(!empty.ok);
   assert.match(empty.error, /required/);
 
-  // Optional on purpose: a required field an agent has nothing for comes back as
-  // "N/A", and a list of those is worse than a bare title.
   const bare = validateHumanTask({ title: 'Plug the reader into the test rig' });
   assert.ok(bare.ok);
   assert.equal(bare.input.detail, null);
 });
-
-// -- the entity ---------------------------------------------------------------
 
 test('a human task is created, listed, settled — and survives a restart', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-human-db-'));
@@ -146,8 +118,6 @@ test('a human task is created, listed, settled — and survives a restart', () =
   assert.equal(first.listHumanTasks().length, 1);
   first.close();
 
-  // The whole point of a durable entity over an escalation: the process went away
-  // and the obligation did not.
   const second = new Store(dbPath);
   const reopened = second.listHumanTasks();
   assert.equal(reopened.length, 1);
@@ -158,8 +128,6 @@ test('a human task is created, listed, settled — and survives a restart', () =
   assert.equal(settled?.status, 'done');
   assert.equal(settled?.resolution, 'Rotated and redeployed.');
   assert.ok(settled?.resolvedAt);
-  // Compare-and-set in the write: a second click settles nothing, so it cannot
-  // overwrite the first verdict with the second.
   assert.equal(second.settleHumanTask(task.id, 'declined', 'no'), null);
   second.close();
 });
@@ -187,12 +155,9 @@ test('a repeat refreshes the row rather than filing it twice, and never resets t
   });
   assert.equal(again.created, false);
   assert.equal(again.task.id, first.task.id);
-  // Better instructions overwrite the thinner ones: the title is the claim, the
-  // detail is its supporting text.
   assert.equal(again.task.detail, 'thicker, with the URL');
   assert.equal(system.store.listHumanTasks().length, 1);
 
-  // Declined, then asked for again: still declined, which is what declining meant.
   system.store.settleHumanTask(first.task.id, 'declined', 'not until the migration lands');
   system.store.recordHumanTask({
     title: 'Enable the webhook',
@@ -204,8 +169,6 @@ test('a repeat refreshes the row rather than filing it twice, and never resets t
   assert.equal(system.store.getHumanTask(first.task.id)!.status, 'declined');
 });
 
-// -- the agent's request path -------------------------------------------------
-
 test('request_human_task is advertised, and identity is structural', async () => {
   const system = build();
   assert.ok(MCP_TOOL_NAMES.includes('request_human_task'));
@@ -216,8 +179,6 @@ test('request_human_task is advertised, and identity is structural', async () =>
     (t) => t.name === 'request_human_task',
   );
   assert.ok(tool, 'the tool is built, so the name and the module agree');
-  // No agent, task, issue or origin argument: an agent cannot file an obligation
-  // under another agent's name however it phrases the call.
   const schema = tool.inputSchema as { properties: Record<string, unknown> };
   assert.deepEqual(Object.keys(schema.properties).sort(), ['detail', 'title']);
 
@@ -230,8 +191,6 @@ test('request_human_task is advertised, and identity is structural', async () =>
   assert.ok(filed);
   assert.equal(filed!.agentId, agent.id);
   assert.equal(filed!.originRef, 'issue:12', 'the origin comes from the credential, not an argument');
-  // Said in the response, not only in the description: an agent that believes
-  // filing this arranged something will sit waiting for it.
   assert.match(res.text, /Nobody is dispatched/);
 });
 
@@ -246,16 +205,12 @@ test('a malformed ask is refused synchronously, and nothing is written', async (
   assert.equal(system.store.listHumanTasks().length, 0);
 });
 
-// -- what it does to the fleet ------------------------------------------------
-
 test('nothing in the dispatcher reads human tasks — a standalone one blocks nothing', async () => {
   const system = build();
   system.store.setWorldBaseline(world([issue(12)]));
   const agent = pickupAgent(system);
   await callTool(system, agent, 'request_human_task', { title: 'Look at the rendered screen' });
 
-  // The gate that would matter if there were one: an open human task against
-  // `issue:12` leaves the issue exactly as dispatchable as it was.
   const before = system.store.listHumanTasks();
   assert.equal(before.length, 1);
   assert.equal(before[0]!.status, 'open');
@@ -294,8 +249,6 @@ test('a plan step for a person is never dispatched, and holds what depends on it
   const dependent = parts.find((p) => p.slug === 'verify')!;
   assert.ok(partIsHuman(step));
 
-  // Ingestion backed it with a row, keyed on the part, with the part's own origin
-  // so the panel links it like everything else.
   const backing = system.store.listHumanTasksForParts([step.id]);
   assert.equal(backing.length, 1);
   assert.equal(backing[0]!.status, 'open');
@@ -316,8 +269,6 @@ test('a plan step for a person is never dispatched, and holds what depends on it
     'and its dependent waits: the step has no branch to stack on and has not settled',
   );
 
-  // The operator does it. The part concludes with `human` as its outcome — the
-  // record of *what* closed it — and the dependent is released.
   const { app } = await buildApp(system);
   const done = await app.inject({ method: 'POST', url: `/api/human-tasks/${backing[0]!.id}/done` });
   assert.equal(done.statusCode, 200);
@@ -358,8 +309,6 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
   const backing = system.store.listHumanTasksForParts([step.id])[0]!;
 
   const { app } = await buildApp(system);
-  // The note is required: a planner shown only "declined" has no reason to decide
-  // differently to the way it just decided.
   const bare = await app.inject({ method: 'POST', url: `/api/human-tasks/${backing.id}/decline`, payload: {} });
   assert.equal(bare.statusCode, 400);
 
@@ -375,14 +324,10 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
   const after = system.store.listPlanParts(plan.id);
   const stopped = after.find((p) => p.slug === 'flip')!;
   const dependent = after.find((p) => p.slug === 'verify')!;
-  // **Not** concluded. Concluding it would make `partSettled` true and release
-  // every dependent waiting on the thing that was refused — a plan completing on
-  // work nobody did.
   assert.equal(stopped.status, 'blocked');
   assert.match(stopped.blockedReason ?? '', /declined/);
   assert.notEqual(dependent.status, 'ready');
 
-  // Declining is settled once, like every other verdict on this row.
   const again = await app.inject({
     method: 'POST',
     url: `/api/human-tasks/${backing.id}/decline`,
@@ -390,8 +335,6 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
   });
   assert.equal(again.statusCode, 409);
 });
-
-// -- the operator's own arm ---------------------------------------------------
 
 test('an operator files and settles one through the routes, and the snapshot ships it', async () => {
   const system = build();
@@ -404,12 +347,8 @@ test('an operator files and settles one through the routes, and the snapshot shi
   });
   assert.equal(created.statusCode, 200);
   const { humanTask } = created.json() as { humanTask: { id: string; agentId: string | null } };
-  // No agent behind it, which is exactly what a null `agentId` means — there is no
-  // `requestedBy` column to disagree with the ids beside it.
   assert.equal(humanTask.agentId, null);
 
-  // The same one-line bound as the tool's, from the same pure function: it is a
-  // property of the panel row, not of who typed it.
   const blob = await app.inject({
     method: 'POST',
     url: '/api/human-tasks',
@@ -425,24 +364,12 @@ test('an operator files and settles one through the routes, and the snapshot shi
   const done = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/done` });
   assert.equal(done.statusCode, 200);
   assert.equal(system.store.getHumanTask(humanTask.id)!.status, 'done');
-  // Settled ones stay in the list: "we asked and it was declined" is information,
-  // and a row that vanished would take the operator's note with it.
   const after = await app.inject({ method: 'GET', url: '/api/state' });
   assert.equal((after.json() as { humanTasks: unknown[] }).humanTasks.length, 1);
 
   assert.equal((await app.inject({ method: 'POST', url: '/api/human-tasks/nope/done' })).statusCode, 409);
 });
 
-/**
- * The way a settled row leaves the bench.
- *
- * The close-out sweep files and settles its own rows without anyone touching
- * them, so on a busy repo the record of work nobody did accumulates under the
- * work you have — and until there was a dismissal there was nothing to do about
- * it. What makes it safe is that it is **not a verdict**: an open obligation
- * cannot be dismissed, so this can never be a quiet way to make work go away, and
- * the settled row it hides keeps its status and its note.
- */
 test('a settled task is dismissed off the bench; an open one cannot be, and nothing else moves', async () => {
   const system = build();
   const { app } = await buildApp(system);
@@ -454,8 +381,6 @@ test('a settled task is dismissed off the bench; an open one cannot be, and noth
   });
   const { humanTask } = created.json() as { humanTask: { id: string } };
 
-  // The guard that makes the button safe: an obligation nobody has answered has
-  // two answers, and hiding it is neither.
   const early = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/dismiss` });
   assert.equal(early.statusCode, 409);
   assert.equal(system.store.getHumanTask(humanTask.id)!.dismissedAt, null);
@@ -466,15 +391,11 @@ test('a settled task is dismissed off the bench; an open one cannot be, and noth
 
   const row = system.store.getHumanTask(humanTask.id)!;
   assert.ok(row.dismissedAt);
-  // It answered nothing, so the verdict and the operator's own note are exactly
-  // where they were — the row is kept, and the bench is what stops drawing it.
   assert.equal(row.status, 'done');
   assert.equal(row.resolution, 'Plugged in.');
   const state = await app.inject({ method: 'GET', url: '/api/state' });
   assert.equal((state.json() as { humanTasks: unknown[] }).humanTasks.length, 1);
 
-  // Compare-and-set on both halves, as every other verdict on this row is: a
-  // second click dismisses nothing and cannot restamp the time.
   const again = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/dismiss` });
   assert.equal(again.statusCode, 409);
   assert.equal(system.store.getHumanTask(humanTask.id)!.dismissedAt, row.dismissedAt);

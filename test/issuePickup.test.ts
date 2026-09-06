@@ -62,17 +62,14 @@ test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', 
     priorityLabels: {},
     defaultPriority: 0,
   };
-  // The viewer added the tag → eligible.
   assert.equal(
     isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: ['agent-ready'] }), policy).eligible,
     true,
   );
-  // The tag is present but someone else added it → not eligible (the abuse case).
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: [] }), policy), {
     eligible: false,
     reasons: ['watch label "agent-ready" not added by you'],
   });
-  // Authorship unknown (provider didn't populate it) → not eligible, fail closed.
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['agent-ready'] }), policy), {
     eligible: false,
     reasons: ['watch label "agent-ready" not added by you'],
@@ -108,7 +105,6 @@ test('isIssuePickupEligible: an item parked in the review state says "in review"
 });
 
 test('isIssuePickupEligible: the state gate is a no-op for issues with no workItemState', () => {
-  // GitHub / fake issues carry no native state, so a state gate must not exclude them.
   const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: ['Ready'] };
   assert.equal(isIssuePickupEligible(issue({ workItemState: undefined }), policy).eligible, true);
 });
@@ -125,21 +121,16 @@ test('isIssuePickupEligible: the state and label gates both report their reasons
     defaultPriority: 0,
     pickupStates: ['Ready'],
   };
-  // Right state, right label → eligible.
   assert.equal(
     isIssuePickupEligible(issue({ workItemState: 'Ready', labels: ['agent-ready'] }), policy).eligible,
     true,
   );
-  // Right state, missing label → not eligible.
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready', labels: [] }), policy).eligible, false);
-  // Wrong state *and* missing label → both reasons, state first.
   assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'New', labels: [] }), policy), {
     eligible: false,
     reasons: ['state "New" not in pickup states', 'no watch label "agent-ready"'],
   });
 });
-
-// -- openPrForIssue: the "does this issue still have a PR open?" predicate -----
 
 test('openPrForIssue: no PRs at all means no open PR', () => {
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), []), null);
@@ -156,15 +147,10 @@ test('openPrForIssue: a PR on the issue branch counts before the provider links 
 });
 
 test('openPrForIssue: a merged linked PR no longer parks the issue', () => {
-  // The `linkedPrNumber` from the timeline is sticky, so this is the whole point:
-  // an issue whose PR merged without closing it must re-enter pickup.
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [pr({ number: 41, merged: true })]), null);
 });
 
 test('openPrForIssue: an unwatched PR still parks its issue', () => {
-  // The harness hides untagged PRs from the dispatch world, so callers pass them
-  // back in — otherwise "absent" reads as "merged" and a second agent lands on the
-  // very branch nobody opted in.
   const hidden = pr({ number: 41, branch: 'issue/1', labels: [] });
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [hidden])?.number, 41);
 });
@@ -172,8 +158,6 @@ test('openPrForIssue: an unwatched PR still parks its issue', () => {
 test('issueBranch is the branch rule `issue-pickup` dispatches onto', () => {
   assert.equal(issueBranch(12), 'issue/12');
 });
-
-// -- issuePickupStatus: the combined per-item verdict -------------------------
 
 const NOW = '2026-07-21T01:00:00Z';
 
@@ -196,7 +180,6 @@ function task(over: Partial<Task> = {}): Task {
   };
 }
 
-/** A dispatch decision for `origin`, executed at `createdAt`. */
 function dispatched(origin: string, createdAt: string): Decision {
   return {
     id: `d_${createdAt}`,
@@ -235,10 +218,6 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
     cooldown: { maxAttempts: 3, cooldownMs: 60_000 },
     now: NOW,
     tasks: [],
-    // The funnel has failed open on this issue, which is the one arm pickup still
-    // works: it is unconditional, so an issue it is still working — or has planned
-    // — is one pickup is narrowed away from. Every case below is about what
-    // happens after that.
     recentDecisions: pastTheFunnel(1),
     openPrs: [],
     plans: [],
@@ -253,8 +232,6 @@ test('issuePickupStatus: a closed issue the harness never ran at is done', () =>
   assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
 });
 
-// The other half of #234 in the chip: a close is the tracker's answer, and the run
-// it does not end is still something the operator has to dismiss.
 test('issuePickupStatus: a closed issue whose run still lives is retained, not done', () => {
   const abandoned = issuePickupStatus(issue({ state: 'closed' }), ctx({ runs: [run({ completedAt: null })] }));
   assert.deepEqual(abandoned, {
@@ -279,7 +256,6 @@ test('issuePickupStatus: a dismissed run gives the close back its plain done', (
   assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
 });
 
-// A run on a *different* goal must not answer for this one.
 test('issuePickupStatus: a run at another issue leaves the close alone', () => {
   const v = issuePickupStatus(issue({ state: 'closed' }), ctx({ runs: [run({ issueNumber: 99 })] }));
   assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
@@ -291,7 +267,6 @@ test('issuePickupStatus: an issue with a live PR reports it', () => {
 });
 
 test('issuePickupStatus: "has open PR" is never claimed for a PR that merged', () => {
-  // The reason said "open" without checking; the issue is eligible again instead.
   const v = issuePickupStatus(issue({ linkedPrNumber: 41 }), ctx({ openPrs: [pr({ number: 41, merged: true })] }));
   assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
 });
@@ -322,9 +297,6 @@ test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intr
 });
 
 test('issuePickupStatus: the watch tag is the whole gate — no other label overrides it', () => {
-  // The retired `-ignore` tag was the third state and is read nowhere now. An item
-  // carrying it and the watch tag is watched: the operator's live answer is the tag
-  // that is there, not the one left over from before.
   const policy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
   const both = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
   assert.deepEqual(both, { eligible: true, status: 'eligible', reasons: [] });
@@ -368,23 +340,15 @@ test('issuePickupStatus: an unimpeded open issue is eligible', () => {
   assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
 });
 
-// --------------------------------------------------------------------------
-// The in-progress state, folded into the pickup set.
-// --------------------------------------------------------------------------
-
 test('effectivePickupStates folds the in-progress state into the operator list', () => {
   assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready'], inProgressState: 'Doing' }), [
     'Ready',
     'Doing',
   ]);
-  // The operator listing it themselves — today's documented arrangement — is not
-  // a second entry.
   assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready', 'Doing'], inProgressState: 'Doing' }), [
     'Ready',
     'Doing',
   ]);
-  // The first pickup state is where `work-item-back-to-pickup` returns an item:
-  // the fold appends, so it cannot become the state the harness writes.
   assert.equal(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready'], inProgressState: 'Doing' })?.[0], 'Ready');
 });
 
@@ -401,12 +365,8 @@ test('an item in the in-progress state is still pickup-eligible', () => {
     inProgressState: 'Doing',
     inReviewState: 'In Review',
   };
-  // The whole point of the fold: an agent that died without opening a PR left the
-  // item in "Doing", and it must be picked up again rather than stranded there by
-  // the harness's own write.
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Doing' }), policy).eligible, true);
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready' }), policy).eligible, true);
-  // And the states outside both lists are refused exactly as before.
   assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'In Review' }), policy).reasons, ['in review']);
   assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'New' }), policy).reasons, [
     'state "New" not in pickup states',

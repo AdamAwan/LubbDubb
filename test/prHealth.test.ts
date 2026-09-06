@@ -14,8 +14,6 @@ test('a clean, green, comment-free PR is healthy', () => {
 });
 
 test('ciNeedsAttention: true for a PR failing only on a check outside the aggregate', () => {
-  // An Azure "Optional" branch policy: it really failed, and an agent really can
-  // fix it, but the provider will complete the PR with it red.
   const p = pr({
     ciStatus: 'passing',
     ciChecks: [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
@@ -37,8 +35,6 @@ test('ciNeedsAttention: true off the aggregate alone, for a provider reporting n
 });
 
 test('ciNeedsAttention: false for a failing aggregate whose only detailed failure is advisory', () => {
-  // An Azure aggregate that folds a policy the per-check list marks advisory —
-  // the detail must settle this, not be outvoted by the aggregate it disagrees with.
   const p = pr({
     ciStatus: 'failing',
     ciChecks: [{ name: 'build', status: 'failing', blocking: true, advisory: true }],
@@ -55,8 +51,6 @@ test('ciNeedsAttention: true for a failing aggregate with a genuine non-advisory
 });
 
 test('prHealth: an Optional failure alone leaves the PR unblocked', () => {
-  // `prHealth` answers "can this merge", and the provider would complete this PR.
-  // Dispatching a fix and reporting the PR unmergeable are different claims.
   const p = pr({
     ciStatus: 'passing',
     ciChecks: [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
@@ -121,10 +115,7 @@ test('a merged PR is done, never blocked, never needs an update', () => {
 });
 
 test('a PR targeting anything but the integration branch is stacked', () => {
-  // The merge rule fires on green + approved, which on a stack would merge part 2
-  // into part 1's branch mid-flight rather than into the default branch.
   assert.equal(isStackedPr(pr({ baseBranch: 'issue/12/schema' }), 'main'), true);
   assert.equal(isStackedPr(pr({ baseBranch: 'main' }), 'main'), false);
-  // Unknown must not silently stop merging PRs that merged fine before.
   assert.equal(isStackedPr(pr({}), 'main'), false);
 });

@@ -1,6 +1,8 @@
 import type { JSX, ReactNode } from 'react';
 import { buttonClass, type ButtonLook } from './button.js';
 
+// → docs/spec/17-cockpit.md
+
 /**
  * An external link that opens safely in a new tab.
  *
@@ -24,16 +26,6 @@ export function ExtLink({
   href: string;
   title?: string;
   boxed?: boolean;
-  /**
-   * Draw it as the shared button instead of as a reference.
-   *
-   * A handful of external links are not references at all — they are a surface's
-   * *control*, and the top bar's offline `Issue!` is one: the same offer as the
-   * compose button it stands in for, so it has to be the same control. Given a
-   * look, the anchor wears {@link buttonClass} and drops `ext-ref`, because the two
-   * are alternatives rather than layers. It stays an `ExtLink` so the `target` and
-   * `rel` pair is still written in exactly one place.
-   */
   look?: ButtonLook;
   children: ReactNode;
 }): JSX.Element {
@@ -50,41 +42,18 @@ export function ExtLink({
   );
 }
 
-/**
- * Render one reference token (e.g. `#42`, `issue/13`) as a link when the provider
- * gave us a URL for it, else as plain text. URLs come from the server-built
- * `refUrls` map — the cockpit never constructs them.
- */
 export function refLink(token: string, refUrls: Record<string, string>): ReactNode {
   const url = refUrls[token];
   return url ? <ExtLink href={url}>{token}</ExtLink> : token;
 }
 
-/**
- * The URL to open a flagged artifact: an http(s) ref opens directly, a
- * worktree-relative path routes through the confined, sandboxed artifact route.
- *
- * The route sits *outside* the `/api` prefix and carries a per-flag capability in
- * its query string, because opening a chip is a top-level browser navigation and a
- * navigation cannot carry the bearer `Authorization` header (issue #129). The
- * server builds that URL — capability and all — into `artifactUrls`, so the cockpit
- * looks it up here (the same way `refLink` looks up `refUrls`) rather than
- * string-building it. A missing entry falls back to the bare path, which is what an
- * auth-off server serves anyway.
- */
 export function artifactHref(flag: { id: string; ref: string }, artifactUrls: Record<string, string>): string {
   if (/^https?:\/\//i.test(flag.ref)) return flag.ref;
   return artifactUrls[flag.id] ?? `/artifacts/${encodeURIComponent(flag.id)}`;
 }
 
-// Issue/PR mentions in free text — the universal `#<number>` GitHub syntax.
 const REF_TOKEN = /#\d+/g;
 
-/**
- * Turn every recognised external reference in a run of text into a clickable
- * link, leaving the rest as-is. Used for labels, decision reasons and escalation
- * prompts, which embed refs like "PR #42" as plain strings.
- */
 export function linkify(text: string, refUrls: Record<string, string>): ReactNode {
   const out: ReactNode[] = [];
   let last = 0;
@@ -99,7 +68,6 @@ export function linkify(text: string, refUrls: Record<string, string>): ReactNod
   return out;
 }
 
-/** A coloured status dot for CI / agent status. */
 export function statusDot(status: string): JSX.Element {
   const cls =
     status === 'passing' || status === 'done'
@@ -122,15 +90,6 @@ export function relTime(iso: string, now: number = Date.now()): string {
   return `${Math.round(secs / 3600)}h ago`;
 }
 
-/**
- * The other direction: how long until an instant, as "4m 12s" or "38s".
- *
- * Seconds all the way up rather than {@link relTime}'s rounding, because this is
- * read as a clock running out rather than as an age — a countdown that says "5m"
- * for a minute and a half is one nobody trusts to be counting. Past the deadline
- * it says so once and stops going negative: the pulse settles it within a beat,
- * and a card that keeps subtracting reads as a promise that was not kept.
- */
 export function untilTime(iso: string, now: number = Date.now()): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';
@@ -140,15 +99,6 @@ export function untilTime(iso: string, now: number = Date.now()): string {
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
-/**
- * The same instant on a longer scale: "2h ago", "3d ago", "14 Jul".
- *
- * Beside {@link relTime} rather than replacing it, because the two are read for
- * different things. A fleet row is minutes old and "72h ago" is the right answer
- * there; a ticket list spans a year, and a column of three-digit hours is
- * unreadable. Past a fortnight it stops being relative at all — "412d ago" is a
- * number nobody converts, and the date is what someone would say out loud.
- */
 export function relAge(iso: string, now: number = Date.now()): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';
@@ -158,34 +108,22 @@ export function relAge(iso: string, now: number = Date.now()): string {
   return new Date(then).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-/**
- * A date as somebody would say it out loud: "14 Aug 2026".
- *
- * Beside {@link relAge} rather than folded into it, because the two answer
- * different questions. "3d ago" is right for a thing that is happening; a floor,
- * a boundary or a start date is a fact about the deployment, and a reader
- * converting "412d ago" back into a date is doing the work this saves them.
- * Returns the input unchanged rather than "Invalid Date" if it is not a date.
- */
 export function absDate(iso: string): string {
   const at = new Date(iso).getTime();
   if (!Number.isFinite(at)) return iso;
   return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Compact USD cost: "$0.42", "$12.30", "$142" — cents only while they matter. */
 export function fmtUsd(n: number): string {
   return n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`;
 }
 
-/** Compact token count: "830", "12.3k", "1.2M". */
 export function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return `${n}`;
 }
 
-/** One-line usage summary for an agent ("$0.42 · 61.2k→3.4k tok · 7 turns"), or null when the runtime reported none. */
 export function agentUsageLine(a: {
   costUsd: number | null;
   inputTokens: number | null;
@@ -201,7 +139,6 @@ export function agentUsageLine(a: {
   return parts.join(' · ');
 }
 
-/** Compact elapsed duration between two instants, e.g. "3m 12s" or "0:07". */
 export function elapsed(fromIso: string, toIso: string | null, now: number = Date.now()): string {
   const from = new Date(fromIso).getTime();
   const to = toIso ? new Date(toIso).getTime() : now;
@@ -213,26 +150,6 @@ export function elapsed(fromIso: string, toIso: string | null, now: number = Dat
   return `${h}h ${m % 60}m`;
 }
 
-/**
- * What proposed a decision, and what became of it — the two readings the audit
- * row keeps in separate columns (`rule` / `admission`), resolved against the
- * rule book for display.
- *
- * One function for every caller rather than the fold written twice: the old-row
- * case below is a judgement about what a row *means*, and two renderers reaching
- * it independently is how they come to disagree about the same row.
- *
- * Three shapes reach here, and telling them apart is the whole job:
- *
- * - **Proposer, and an outcome that transformed it.** Both columns set: a
- *   throttled `issue-pickup` that became a `cooldown-escalate`.
- * - **An outcome with no proposer.** Only the branch note, which folds signals
- *   from several concerns and so was never any single rule's proposal.
- * - **An old row.** Written before the split, when one column carried both: the
- *   *outcome* sits in `rule` and there is nothing in `admission`. Which rule was
- *   throttled is not recorded and cannot be recovered, so it is named as an
- *   outcome and the gap is stated rather than filled.
- */
 export function decisionAttribution(
   d: { rule: string | null; admission?: string | null },
   rules: Record<string, { name: string; description: string; kind: string }>,
@@ -244,9 +161,6 @@ export function decisionAttribution(
   const proposer = d.rule ? rules[d.rule] : undefined;
   const outcome = d.admission ? rules[d.admission] : undefined;
 
-  // The pre-split shape: an admission id sitting in the proposer's column with
-  // nothing beside it. Reading it as a proposer would assert something the row
-  // never said.
   const preSplit = !d.admission && proposer?.kind === 'admission';
 
   if (d.rule && !preSplit) entries.push({ label: 'Proposed by', id: d.rule, rule: proposer });
@@ -264,13 +178,11 @@ export function decisionAttribution(
   return { entries };
 }
 
-/** The issue number a plan hangs off (`issue:12` → 12), or null for a shape we don't recognise. */
 export function planIssueOf(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;
 }
 
-/** A part's dispatch origin — the key the "Up next" queue is joined on. */
 export function partOriginOf(issueNumber: number | null, slug: string): string {
   return issueNumber === null ? '' : `issue:${issueNumber}:part:${slug}`;
 }

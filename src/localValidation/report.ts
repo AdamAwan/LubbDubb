@@ -1,13 +1,7 @@
 import { z } from 'zod';
 import type { LocalValidationFinding } from '../types.js';
 
-/**
- * What `local_validation_report` accepts, and the one refusal that is about the
- * shape of an answer rather than about its fields.
- *
- * Pure, so both the tool and its tests read the same schema — `validateReport`'s
- * arrangement one feature over.
- */
+// → docs/spec/32-local-validation.md
 
 const FindingSchema = z
   .object({
@@ -18,8 +12,6 @@ const FindingSchema = z
       invalid_type_error: 'severity must be "blocker", "defect" or "nit"',
     }),
     url: z.string().trim().min(1).nullish(),
-    // A file name, never a path — the bytes are in the directory you were given, and
-    // the name is what joins this finding to the picture the cockpit draws.
     screenshot: z
       .string()
       .trim()
@@ -35,9 +27,6 @@ const ReportSchema = z
       required_error: 'result must be "passed", "failed" or "blocked"',
       invalid_type_error: 'result must be "passed", "failed" or "blocked"',
     }),
-    // Required on all three arms, `validation_report`'s rule: a reading somebody
-    // acts on later must not be a state with no account of itself, and a `blocked`
-    // with no reason is indistinguishable from an agent that gave up.
     summary: z
       .string({ required_error: 'summary is required — say what you did and what you saw' })
       .trim()
@@ -58,18 +47,6 @@ interface LocalValidationReport {
   visited: string[];
 }
 
-/**
- * Read a report, or say in one sentence why it could not be read.
- *
- * **A failure with nothing found is refused**, and that is the schema's one
- * judgement rather than a field check. The two answers mean different things and
- * only one of them schedules work: `failed` says the delivered behaviour is wrong
- * and dispatches an agent to fix it, so a `failed` with no finding would put an
- * agent on a branch with nothing to tell it what to change. An agent that ran the
- * plan and could not say what was wrong is describing a run it could not complete,
- * which is what `blocked` is for — and the refusal says so, rather than leaving the
- * caller to guess which of the three it wanted.
- */
 export function validateLocalValidationReport(
   args: unknown,
 ): { ok: true; report: LocalValidationReport } | { ok: false; error: string } {

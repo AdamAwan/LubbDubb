@@ -9,26 +9,8 @@ import type {
   ReviewProminenceReading,
 } from '../types.js';
 
-/**
- * Review — what the review packs say about the agents that write them.
- *
- * Three readings, and they sit on one tab because they are three answers to one
- * question: **is this subsystem's own output drifting?** None of them is about a
- * particular pull request; each is a pattern over packs, and the action each
- * points at is the same one — a person changing a prompt, once, deliberately.
- *
- * **It is never shown to the checker.** A reviewer's override is recorded and
- * withheld from every later pack: given the overrides the checker would calibrate
- * to what reviewers like rather than to what is risky, and a label that has
- * learned to agree with its reader has stopped being evidence. Surfacing it here
- * is the whole of what is done with it.
- * → docs/spec/31-review-packs.md#the-operators-reading
- *
- * It lives on Insights rather than on Knowledge deliberately. Knowledge is what
- * the fleet is *told*, and a pack produces none — putting this there would draw a
- * feedback path the subsystem does not have. Insights is where an operator reads
- * whether the harness is working, which is exactly what these three are.
- */
+// → docs/spec/17-cockpit.md
+
 export function ReviewCalibrationTab({ calibration }: { calibration: ReviewCalibration }): JSX.Element {
   if (calibration.packs === 0) {
     return (
@@ -53,11 +35,6 @@ export function ReviewCalibrationTab({ calibration }: { calibration: ReviewCalib
 
 const LABEL: Record<ReviewAttention, string> = { read: 'Read', decide: 'Decide', skim: 'Skim', split: 'Split' };
 
-/**
- * The overrides. The figure that matters is **upgrades**: reviewers steadily
- * moving `skim` to `read` says the checker is systematically underselling risk,
- * and that is a change to its prompt rather than to any one pack.
- */
 function Overrides({ o }: { o: ReviewOverrideReading }): JSX.Element {
   return (
     <section className="rc-block">
@@ -102,12 +79,6 @@ function Overrides({ o }: { o: ReviewOverrideReading }): JSX.Element {
   );
 }
 
-/**
- * The plumbing ratio: how much of what the authors wrote they declined to
- * explain. `plumbing` is the honest answer for a rename or a lockfile, and it is
- * also where an author puts anything it cannot be bothered to explain — so the
- * ratio is the signal that it has started rotting.
- */
 function Plumbing({ p }: { p: ReviewPlumbingReading }): JSX.Element {
   return (
     <section className="rc-block">
@@ -149,12 +120,6 @@ function Plumbing({ p }: { p: ReviewPlumbingReading }): JSX.Element {
   );
 }
 
-/**
- * Whether the loudest thing on the page gets read. The four surface requirements
- * a false claim makes are checkable as an order things are drawn in, and none of
- * them measures that — a pull request that merged with a false claim nobody
- * marked seen does.
- */
 function Prominence({ p }: { p: ReviewProminenceReading }): JSX.Element {
   return (
     <section className="rc-block">
@@ -190,7 +155,6 @@ function PairRow({ pair }: { pair: ReviewOverridePair }): JSX.Element {
   );
 }
 
-/** One pack's share, drawn as a number rather than a link: there is no pull request page to send anybody to. */
 function PlumbingRow({ row }: { row: ReviewPlumbingPack }): JSX.Element {
   return (
     <tr>

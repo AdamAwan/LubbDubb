@@ -3,34 +3,8 @@ import type { PoolStatePayload } from '../types.js';
 import { api } from '../api.js';
 import { relTime } from './util.js';
 
-/**
- * This fleet's own side of the cross-fleet pool, drawn on the Knowledge page.
- *
- * It answers three questions and nothing else, because the pool is a **view** here
- * and never a database:
- *
- * - **When did this fleet last publish, and last poll?** *Could not reach the pool*
- *   is never folded into *nobody has published anything* — read as absence, an
- *   outage says in the operator's words that nobody else knows anything.
- * - **Which of its claims did the secret backstop refuse, and why?** A refusal that
- *   is invisible is a claim an operator vouched for that never reaches the pool with
- *   nothing saying why, which reads exactly like a pool that is broken. Refusing is
- *   loud by design, and this is where it is loud.
- * - **Who else is in the pool?** Including the fleets that are *ahead of this build*,
- *   which is a third verdict rather than a quiet absence.
- *
- * It fetches, which is why it is a component under `components/` rather than
- * anything under `console/` — the console may not reach `api.js`, and this is the
- * sanctioned route the tickets tab and the Insights page already take. It fetches
- * once on mount rather than polling: the desk's cadence is the pulse, so a second
- * clock here would mostly redraw an unchanged panel.
- *
- * With no pool configured it draws **nothing at all**. A deployment on the `fake`
- * default and a pool that has never published are different facts, and an empty
- * panel for the first would say something is broken.
- *
- * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`
- */
+// → docs/spec/17-cockpit.md
+
 export function PoolStatus({ now }: { now: number }): JSX.Element | null {
   const [payload, setPayload] = useState<PoolStatePayload | null>(null);
   useEffect(() => {
@@ -38,9 +12,6 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
     api
       .getPool()
       .then((res) => live && setPayload(res))
-      // Silent: the pool is an addendum to this page, and a fleet with an
-      // unreachable one works exactly as a fleet without one. Failures are recorded
-      // server-side through `errors.record` and read in the Errors panel.
       .catch(() => undefined);
     return () => {
       live = false;

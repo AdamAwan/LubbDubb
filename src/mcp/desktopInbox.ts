@@ -3,42 +3,8 @@ import { proposedCaveats } from '../plans/planCaveats.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
-/**
- * The two "Needs you" rows that are decisions rather than questions: an act the
- * harness proposed, and a run a crash orphaned.
- *
- * They were left off this channel at first and the operator asked for them: the
- * point of the desktop channel is that the harness can be run from wherever they
- * are, and an inbox with two kinds of row that can only be cleared in a browser
- * is an inbox that fills up while they are away. So the fence moved, and this
- * module is where it now sits.
- *
- * ## What accepting a proposal actually does
- *
- * `ProposalDesk.accept` is **one door for five kinds**, and they are not equally
- * reversible:
- *
- * - `plan` — releases a rule. The decomposition starts scheduling parts. Nothing
- *   leaves the machine, but the fleet begins spending on it.
- * - `plan_amendment` — replaces a running plan's document with the amended one.
- * - `shortfall` — sends a goal back to a planner, or appends a follow-up part.
- * - `reply_draft` — **posts a comment to the tracker or the pull request.**
- * - `merge` — **merges the pull request.**
- *
- * The last two reach outside this machine and cannot be taken back. That is said
- * in the tool's own description and again in what it hands back, because the
- * failure worth preventing here is not a refusal — the operator asked for these —
- * but a session that accepts a `merge` believing it approved a plan.
- * {@link proposalRead} exists so that never has to be guessed: it is the read that
- * says which kind a row is and what accepting it will do, in those words.
- *
- * **The caveat gate is not bypassed.** A plan that raises caveats is not released
- * until the verdict names each one, exactly as the cockpit's checkboxes require,
- * and the refusal hands back the ids still unticked so a session can acknowledge
- * them deliberately rather than by passing a flag.
- */
+// → docs/spec/11-mcp-tools.md
 
-/** What each proposal kind does when accepted, in the words the reply uses. */
 const ACCEPT_MEANS: Record<string, string> = {
   plan: 'the plan is released and the harness will start scheduling its parts. Nothing left this machine, but the fleet begins spending on it now.',
   plan_amendment:
@@ -70,13 +36,9 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
       kind: proposal.kind,
       ref: proposal.ref,
       status: proposal.status,
-      // The validated act the executor was about to run, verbatim: accepting runs
-      // *that*, not a re-derivation of it from the world as it is now.
       action: proposal.action,
       note: proposal.note,
       acceptWouldMean: ACCEPT_MEANS[proposal.kind] ?? 'the act is performed as recorded.',
-      // Ids, because they are what `proposal_decide` takes — a label a session can
-      // read back to the operator and cannot then pass is a gate it cannot clear.
       caveats: caveats.map((c) => ({ id: c.id, label: c.label, detail: c.detail })),
       backOutAvailable: proposal.kind === 'plan',
       next:
@@ -131,9 +93,6 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
       return toolError('verdict must be "accept", "reject", "close_ticket" or "hold_ticket".');
     const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
 
-    // Read before the transition, so the reply can say which kind was performed and
-    // a wrong-kind verdict is refused rather than settled into an effect that
-    // cannot run.
     const standing = deps.store.getProposal(id);
     if (!standing) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
     if (standing.status !== 'pending')
@@ -191,8 +150,6 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
       return toolJson({
         id,
         verdict: 'refused',
-        // Not an `isError`: the caller did nothing wrong and the next step is exact,
-        // which is what the ids are for.
         reason: `This plan raises ${accepted.unacknowledged.length} thing(s) that must be acknowledged before it can be approved.`,
         unacknowledged: accepted.unacknowledged.map((c) => ({ id: c.id, label: c.label, detail: c.detail })),
         next:
@@ -236,16 +193,11 @@ export const recoveryDecide: DesktopToolFactory = (deps) => ({
     if (typeof args.verdict !== 'string' || !isRecoveryVerdict(args.verdict))
       return toolError('verdict must be "restore", "requeue" or "remove".');
     const result = deps.recovery().decide(taskId, args.verdict);
-    // The desk's refusals are the operator-facing ones — "not restorable", and why
-    // — so they are handed back verbatim rather than reworded into a generic
-    // failure that says nothing about which of the three verdicts is still open.
     if (!result.ok) return toolError(result.error);
     return toolJson({
       taskId,
       verdict: args.verdict,
       detail: result.outcome.detail,
-      // The job a `requeue` filed, so a session can say where the work went rather
-      // than that it went somewhere.
       requeuedAs: result.outcome.job?.id ?? null,
       means:
         args.verdict === 'restore'

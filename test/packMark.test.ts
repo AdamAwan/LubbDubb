@@ -11,17 +11,6 @@ import type { ReviewPackHead } from '../src/store/reviewPacks.js';
 
 const { PackMark } = await import('../web/src/components/PackMark.js');
 
-/**
- * Whether a pull request has a review pack, as the rack draws it.
- *
- * The mark answers the one question a rack of twenty rows can afford to ask —
- * *is there something written here worth going to read* — and the fold under it
- * is the whole of the reading. What is asserted here is that it never claims more
- * than the rows support: a pack against a head nobody reported is not current, and
- * a pull request with no pack draws nothing at all.
- * → `docs/spec/31-review-packs.md#on-the-row`
- */
-
 const head = (headSha: string): ReviewPackHead => ({ prNumber: 412, headSha, writtenAt: '2026-09-03T09:00:00.000Z' });
 
 test('a pack is current only against the head it was written for', () => {
@@ -29,10 +18,6 @@ test('a pack is current only against the head it was written for', () => {
   assert.equal(packStandingOf(head('abc1234'), 'def5678', false), 'stale');
 });
 
-/**
- * The three-valued rule: the case that is about the **provider** — a pull request
- * reported with no head — must not be drawn as the case that is about the pack.
- */
 test('a pack with no head to compare against says so rather than claiming to be current', () => {
   assert.equal(packStandingOf(head('abc1234'), undefined, false), 'unplaced');
 });

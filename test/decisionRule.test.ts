@@ -7,10 +7,6 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// Rule identity on decisions (issue #58): the rule dispatcher tags every action
-// with a registry id, the store lifts it into its own column, and the cockpit
-// looks the id up in DISPATCH_RULES — so each half is covered here.
-
 function ctx(world: Partial<WorldSnapshot>): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
@@ -19,9 +15,6 @@ function ctx(world: Partial<WorldSnapshot>): DispatchContext {
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    // The funnel has failed open on every issue in these worlds: it is
-    // unconditional, so an issue it is still working is one pickup is narrowed
-    // away from, and nothing downstream of pickup would fire for it.
     recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
   };
@@ -72,14 +65,12 @@ test('the store lifts the rule off the action into its own column and round-trip
     outcome: 'executed',
     detail: 'spawned',
   });
-  // Decisions with no rule identity (bookkeeping, human-authorized acts) stay null.
   store.recordDecision({
     cycleId: 'c1',
     action: { type: 'no_op', reason: 'cycle rationale' },
     outcome: 'skipped',
     detail: 'rationale',
   });
-  // Same-millisecond timestamps make DESC order ambiguous — look up by type.
   const decisions = store.listDecisions();
   assert.equal(decisions.find((d) => d.action.type === 'dispatch_code_agent')?.rule, 'pr-ci-failing');
   assert.equal(decisions.find((d) => d.action.type === 'no_op')?.rule, null);

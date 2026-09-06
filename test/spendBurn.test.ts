@@ -3,17 +3,6 @@ import assert from 'node:assert/strict';
 import { burnPass, validateBurnPolicy, DEFAULT_BURN, type BurnPolicy } from '../src/spendBurn.js';
 import type { Agent, HumanTask, Task } from '../src/types.js';
 
-/**
- * The live burn watch.
- *
- * What this has to get right is not the arithmetic but the three claims the
- * notice makes: that the run is being compared against *its own kind of work*
- * (rule and profile, never rule alone), that a bucket with nothing in it produces
- * silence rather than a guess, and that the row settles itself when the run ends.
- * Each of the gates below exists because without it the watch is on, files, and
- * is ignored — which is indistinguishable from not having it.
- */
-
 const T = '2026-08-04T09:00:00.000Z';
 
 function agent(id: string, over: Partial<Agent> = {}): Agent {
@@ -80,7 +69,6 @@ function humanTask(over: Partial<HumanTask> = {}): HumanTask {
   };
 }
 
-/** Five settled `pr-ci-failing` runs on `standard`, median $2, and one live run to judge. */
 function fleet(liveCost: number | null, over: Partial<Task> = { rule: 'pr-ci-failing', profile: 'standard' }) {
   const settled = [1, 2, 2, 2, 3].map((cost, i) => agent(`s${i}`, { costUsd: cost }));
   const live = agent('live', { status: 'running', costUsd: liveCost, endedAt: null });
@@ -106,11 +94,6 @@ test('a live run far past its own kind of work is filed, and one merely above th
   assert.deepEqual(under, [], 'three and a half times over is inside the multiple');
 });
 
-/**
- * The gate that decides whether anyone keeps reading these. Four times the median
- * of a rule that costs pennies is still pennies, and a notice about it is the one
- * that teaches an operator to dismiss the next one unread.
- */
 test('a multiple of almost nothing is not an alarm', () => {
   const cheap = { rule: 'issue-retro', profile: 'fast' };
   const settled = [0.02, 0.03, 0.03, 0.03, 0.04].map((cost, i) => agent(`s${i}`, { costUsd: cost }));
@@ -124,11 +107,6 @@ test('a multiple of almost nothing is not an alarm', () => {
   assert.deepEqual(steps, [], 'twenty times the median, and still under the dollar floor');
 });
 
-/**
- * The reason the bucket is keyed on both axes. A goal pinned to `deep` costs
- * several times the same rule on `fast` by design — a rule-only baseline would
- * flag every pinned run on the deployment and nothing else.
- */
 test('a profile is not judged against another profile', () => {
   const cheap = [1, 1, 1, 1, 1].map((cost, i) => agent(`f${i}`, { costUsd: cost }));
   const deep = [8, 9, 9, 10, 11].map((cost, i) => agent(`d${i}`, { costUsd: cost }));
@@ -146,7 +124,6 @@ test('a profile is not judged against another profile', () => {
   assert.deepEqual(steps, [], 'twelve dollars is ordinary for a deep run and twelve times a fast one');
 });
 
-/** A median of four observations is not a median. Below the floor the bucket says nothing at all. */
 test('a bucket without enough settled runs is silent, not guessed at', () => {
   const settled = [1, 2, 2].map((cost, i) => agent(`s${i}`, { costUsd: cost }));
   const live = agent('live', { status: 'running', costUsd: 500, endedAt: null });
@@ -159,7 +136,6 @@ test('a bucket without enough settled runs is silent, not guessed at', () => {
   assert.deepEqual(steps, [], 'three runs is not a baseline, however extreme the live one looks');
 });
 
-/** The arm for a deployment with no history at all, where the first runaway is also the first run. */
 test('the flat ceiling fires with no bucket behind it, and says that is what it did', () => {
   const live = agent('live', { status: 'running', costUsd: 40, endedAt: null });
   const steps = burnPass({
@@ -174,11 +150,6 @@ test('the flat ceiling fires with no bucket behind it, and says that is what it 
   assert.match(step.detail, /flat limit, not a comparison/, 'it does not claim the run is unusual');
 });
 
-/**
- * PTY mode reports no usage at all, so `costUsd` stays null for its whole life.
- * Unmeasured is not free, and the watch must not read it as either free or
- * infinite.
- */
 test('a run that reports no usage can never trip the watch', () => {
   const steps = burnPass({ policy: { ...POLICY, ceilingUsd: 0.01 }, ...fleet(null), existing: [] });
   assert.deepEqual(steps, [], 'no reading is not a reading of zero, and not one of everything either');
@@ -197,7 +168,6 @@ test('the notice settles itself when the run ends, naming what it finally cost',
   ]);
 });
 
-/** Answered once is answered. The row would only be refreshed, but the point is that it is not raised again. */
 test('a notice the operator has already settled is not re-filed while the run continues', () => {
   const steps = burnPass({
     policy: POLICY,
@@ -207,7 +177,6 @@ test('a notice the operator has already settled is not re-filed while the run co
   assert.deepEqual(steps, []);
 });
 
-/** Turning the watch off must drain the bench, or a row about last Tuesday's run has no way left to close. */
 test('the watch turned off files nothing and still settles what is standing', () => {
   const ended = agent('live', { status: 'done', costUsd: 3 });
   const other = agent('hot', { status: 'running', costUsd: 90, endedAt: null });

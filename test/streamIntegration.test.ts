@@ -10,7 +10,6 @@ import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { failPlanningOpen } from './support/plans.js';
 
-/** Fake claude stream-JSON process, shared across the harness wiring. */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
   writes: string[] = [];
@@ -39,8 +38,6 @@ function streamConfig() {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
-    // The funnel in front of pickup defaults **on**; these tests are about the
-    // agent transport, so pin it off and let rule `issue-pickup` dispatch directly.
   });
 }
 
@@ -98,7 +95,6 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   failPlanningOpen(system.store, 902);
   await system.harness.runCycle('manual');
 
-  // One agent launched; the task was sent to it as a JSON user message.
   assert.equal(children.length, 1);
   const child = children[0]!;
   const firstMsg = JSON.parse(child.writes[0]!.trim());
@@ -107,7 +103,6 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 
-  // Agent asks for a decision and ends its turn -> escalation.
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which auth provider?@@' }] },
@@ -117,12 +112,10 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   const esc = system.store.listOpenEscalations()[0]!;
   assert.equal(esc.agentId, agentId);
 
-  // Human answers -> delivered as the next user message.
   const res = system.escalations.answer(esc.id, 'Azure AD');
   assert.equal(res.routing, 'typed_into_agent');
   assert.match(child.writes.at(-1)!, /Azure AD/);
 
-  // Agent finishes.
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'done @@LUBBDUBB_DONE@@' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
   assert.equal(system.store.getAgent(agentId)!.status, 'done');

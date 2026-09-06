@@ -144,7 +144,6 @@ function input(over: Partial<WorkGraphInput> = {}): WorkGraphInput {
   return { world: world(), tasks: [], plans: [], parts: [], jobs: [], filings: [], existing: [], ...over };
 }
 
-/** The observation for `ref`, or a failed assertion naming what was produced. */
 function node(out: WorkNodeObservation[], ref: string): WorkNodeObservation {
   const found = out.find((n) => n.ref === ref);
   assert.ok(found, `expected a node ${ref}, got: ${out.map((n) => n.ref).join(', ')}`);
@@ -193,7 +192,6 @@ test('a retired part stays in the graph and is terminal', () => {
 });
 
 test("a part's terminality is `partSettled` plus retired, across every status", () => {
-  // The whole enum, so a ninth status cannot be added without deciding this.
   const statuses: PlanPart['status'][] = [
     'pending',
     'ready',
@@ -272,9 +270,6 @@ test('a PR seen in the closed list is terminal, and says it was observed', () =>
 });
 
 test('a PR the harness never saw open is still parented from the closed window', () => {
-  // The whole lifecycle in one pulse — opened and merged between two probes, or
-  // merged across a restart. The closed window is the fold's only sight of it, and
-  // `parent_ref` is write-once, so a null written here is permanent.
   const byBranch = foldWorkGraph(
     input({ world: world({ issues: [issue()], closedPullRequests: [pr({ number: 41, state: 'merged' })] }) }),
   );
@@ -300,7 +295,6 @@ test('a parent resolved from the closed window survives the window expiring', ()
 
   const store = new Store(':memory:');
   store.recordWorkGraph(first);
-  // The next pulse: the PR is in neither list, so the fold says nothing about it.
   store.recordWorkGraph(foldWorkGraph(input({ world: world({ issues: [issue()] }) })));
   assert.equal(
     store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:41')?.parentRef,
@@ -502,9 +496,6 @@ test('a job is its own root, and a cancelled one is terminal', () => {
 });
 
 test('a merged PR stays merged in the graph long after the world forgets it', async () => {
-  // The headline property, in three moves: the merge is *observed* while the PR is
-  // still in `closedPullRequests`, then the PR leaves both lists the way the 6h
-  // `closedPrWindowMs` retires it, and the graph is asked again.
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
@@ -512,7 +503,6 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
     labelPrefix: '',
     agentMode: 'raw',
     heartbeatIntervalMs: 999_999,
-    // Nothing here needs an agent; a paused fleet keeps the pulse to the world.
     startPaused: true,
   });
   const system = buildSystem(config, {
@@ -529,8 +519,6 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   assert.equal(open?.status, 'open');
   assert.equal(open?.parentRef, 'issue:12');
 
-  // The fake models a merge as a `pr_closed` that moves the row into the closed
-  // list — there is no `pr_merged` event, and `mergePr` leaves the PR in place.
   system.connector.inject({ kind: 'pr_closed', prNumber: 40, merged: true });
   await system.harness.runCycle('manual');
   const merged = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
@@ -538,9 +526,6 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   assert.equal(merged?.terminal, true);
   assert.equal(merged?.provenance, 'observed');
 
-  // Age the row out of the retention window. The fake never expires its closed
-  // list, so emptying the shared world document by hand is what standing past
-  // `closedPrWindowMs` does on a real provider: PR #40 is in neither list.
   new FakeWorldStore(system.store).mutate((world) => {
     world.closedPullRequests = [];
   });
@@ -550,8 +535,6 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   const after = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
   assert.equal(after?.status, 'merged', 'the graph still knows PR #40 merged');
   assert.equal(after?.terminal, true);
-  // The distinction that makes this durability rather than a lucky re-derivation:
-  // absence-means-merged would have rewritten this to `inferred`.
   assert.equal(after?.provenance, 'observed', 'the record was kept, not re-guessed');
   assert.equal(after?.parentRef, 'issue:12', 'and still knows which issue it delivered');
   system.store.close();
@@ -584,8 +567,6 @@ test('the routes serve roots and one subtree, and refuse an unknown root', async
     'the issue is a root',
   );
 
-  // A ref carries colons (`issue:12`, `pr:41:ci`), so the route has to survive one
-  // in a path segment — the whole vocabulary is unusable otherwise.
   const sub = await app.inject({ method: 'GET', url: '/api/work/issue:12' });
   assert.equal(sub.statusCode, 200);
   assert.deepEqual((sub.json() as { nodes: { ref: string }[] }).nodes.map((n) => n.ref).sort(), ['issue:12', 'pr:40']);
@@ -608,9 +589,6 @@ function srcFiles(dir: string, exts = ['.ts']): string[] {
 }
 
 test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
-  // Structural, the way prAttention's single-importer property is kept. The moment
-  // a rule consults the graph, an agent can suppress another's dispatch and a
-  // second opinion about a gate starts living nowhere near the gate it duplicates.
   const readers = srcFiles('src')
     .filter((f) => !f.startsWith('src/graph/'))
     .filter((f) => readFileSync(f, 'utf8').includes('graph/workGraph'));
@@ -622,27 +600,11 @@ test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
 });
 
 test('and nothing in the dispatcher reaches any part of the graph', () => {
-  // The sibling of the assertion above, and strictly stronger: that one names one
-  // module, so a *second* file under src/graph/ would sit outside it. Stage 3 added
-  // `unrecorded.ts`, and whatever comes next is covered by this the day it is
-  // written. The property is unchanged — a rule consulting the graph is a second
-  // opinion about a gate living nowhere near the gate it duplicates, and lets an
-  // agent's own record suppress another's dispatch.
   const readers = srcFiles('src/dispatcher').filter((f) => readFileSync(f, 'utf8').includes('graph/'));
   assert.deepEqual(readers, [], 'the dispatcher decides from the world and the store, never from the record');
 });
 
 test('and nothing under web/ reaches the dispatcher or the graph', () => {
-  // The third sibling, for the cockpit (#168). The Goal Floor draws two verdicts
-  // — a PR's CI classification and an issue's appraisal — that the browser cannot
-  // compute without server code, and importing it is exactly the wrong way to
-  // get them: a second glob matcher and a second first-match-wins ordering,
-  // sitting nowhere near the rule they duplicate, failing silently the first time
-  // they disagreed. So both are computed in `buildStateSnapshot` and shipped, and
-  // this is what keeps that the only way.
-  //
-  // Relative depth is deliberately included in the needle (`../src/`): a match on
-  // the bare directory name would fire on `web/src/` itself.
   const importers = srcFiles('web/src', ['.ts', '.tsx']).filter((f) => {
     const text = readFileSync(f, 'utf8');
     return /from '(\.\.\/)+src\/(dispatcher|graph)\//.test(text);

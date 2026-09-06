@@ -2,7 +2,8 @@ import { nanoid } from 'nanoid';
 import type { ErrorLogEntry, ErrorLogInput } from '../types.js';
 import type { StoreContext } from './context.js';
 
-/** The `error_events` table: a list an operator reads and clears, nothing decides on. */
+// → docs/spec/14-persistence.md
+
 export class ErrorStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -20,18 +21,6 @@ export class ErrorStore {
     return entry;
   }
 
-  /**
-   * Every fault recorded at or after `since`, oldest first.
-   *
-   * Unlimited where {@link listErrors} truncates, because the caller is counting
-   * rather than reading: a `LIMIT 100` on a count would answer "one hundred" for
-   * every fleet that had a bad week, and answer it confidently.
-   *
-   * **What it counts is the log as it stands, not every fault that happened.**
-   * {@link clearErrors} drops the whole table, so a cleared log is a fleet with no
-   * faults in the window — which is the reading, and the one thing anything
-   * publishing this has to say out loud.
-   */
   listErrorsSince(since: string): ErrorLogEntry[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM error_events WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
@@ -46,16 +35,6 @@ export class ErrorStore {
     return rows.map(rowToErrorEntry);
   }
 
-  /**
-   * Drop the whole error log, returning how many rows went.
-   *
-   * A delete rather than an acknowledged-up-to watermark: the log is a list an
-   * operator reads and clears, not a record anything decides on — nothing in the
-   * harness reads `error_events` back, so a row nobody has read is the only thing
-   * it can lose. All of it, never a slice: "clear the faults I can see" is a
-   * different sentence on a list the server truncates at 100, and the second
-   * cockpit watching would disagree with the first about which those were.
-   */
   clearErrors(): number {
     return this.ctx.db.prepare(`DELETE FROM error_events`).run().changes;
   }

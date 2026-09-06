@@ -12,49 +12,12 @@ import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
-/**
- * Four tables, one question: `goal_landings` — the commit each of a goal's pull requests landed
- * as — and `environment_reach`, what a probe said about each of those commits in each
- * environment; neither is readable without the other. Both are stored because nothing else can
- * answer them: a squash-merge SHA is a provider fact with a `closedPrWindowMs` shelf life, and a
- * probe is a process spawn. `goal_arrivals` and `environment_gate_releases` are the same subject
- * read as events rather than status. → `docs/spec/24-environments.md`
- */
+// → docs/spec/14-persistence.md
 
-/**
- * `goal_arrivals.watched_at` — when the watch pass considered an arrival, whether or not it
- * opened a window for it. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so
- * without this entry the column is invisible on every database from before the watch shipped,
- * and the freshness guard reads `undefined` for every arrival on exactly the deployments with a
- * history to storm. It needs no backfill: null means "not considered yet", and an arrival
- * considered for the first time only opens a window if its confirming reading is within two
- * probe intervals of now — a database full of nulls is walked once, stamped, and opens nothing
- * for work that shipped in March. → `docs/spec/14-persistence.md#migrations`
- */
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
   goal_arrivals: { watched_at: 'TEXT' },
 };
 
-/**
- * Undo the landings and arrivals a part-ref goal was filed under (#472).
- *
- * `goalOfPr` stopped its walk on any ref starting with `issue:`, and a part is one —
- * `issue:35916:part:orc-bucket-config` — so every planned goal's merges were attributed to
- * whichever part opened the pull request. The walk is fixed; these are the rows it already
- * wrote, and neither table can be left as-is or the goal reads as never having landed.
- *
- * The two rows are repaired in opposite directions, because they claim different things. A
- * landing is a fact about one pull request — the commit it merged as — so truncating the
- * `:part:…` suffix restores the label without touching the fact (`pr_number` is the primary key,
- * so the rewrite cannot collide). An arrival is a claim about the goal's whole work, so a
- * part-ref row would promote "one part is in testUk" into "this goal has arrived" — an assertion
- * nobody made, on a row `openedGoals` reads to release a hold — so they are discarded, and the
- * desk re-derives real ones from the repaired landings. Re-deriving cannot re-comment on old
- * tickets: a goal confirmed last week comes back stamped and silent.
- *
- * Unconditional and idempotent: no column changed, so there's nothing to gate on, and the fixed
- * walk can never write a part ref again — a second boot finds nothing to do, forever.
- */
 export function repairPartRefGoals(db: Database.Database): void {
   db.transaction(() => {
     db.prepare(
@@ -65,13 +28,6 @@ export function repairPartRefGoals(db: Database.Database): void {
   })();
 }
 
-/**
- * Discard goal arrivals written before the reach denominator counted outstanding plan parts
- * (#515). Those rows claim the goal's whole work arrived while a live code part still owed a
- * merge; they cannot be corrected, so the desk re-derives the arrival once every owed part is
- * confirmed, as `repairPartRefGoals` does for a part-ref arrival. The composition root supplies
- * the goal refs; this module only writes its own table. Unconditional and idempotent.
- */
 export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonly string[]): void {
   if (goalRefs.length === 0) return;
   const remove = db.prepare(`DELETE FROM goal_arrivals WHERE goal_ref=?`);
@@ -83,7 +39,6 @@ export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonl
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /** Attribute a merge commit to the goal it was work for. `OR IGNORE`, never `OR REPLACE`: a landing is settled, and replacing would move `recordedAt` forward every pulse. */
   recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
     this.ctx.db
       .prepare(
@@ -93,7 +48,6 @@ export class EnvironmentStore {
       .run({ ...input, recordedAt: this.ctx.now() });
   }
 
-  /** Every landing, oldest first — the order the prober works through them in. */
   listGoalLandings(): GoalLanding[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM goal_landings ORDER BY recorded_at ASC, pr_number ASC`)
@@ -101,13 +55,11 @@ export class EnvironmentStore {
     return rows.map((r) => ({ prNumber: r.pr_number, goalRef: r.goal_ref, sha: r.sha, recordedAt: r.recorded_at }));
   }
 
-  /** The pull requests already attributed. Unbounded in age on purpose, or the sweep re-attributes every merged PR every pulse inside the closed window. */
   landedPrs(): ReadonlySet<number> {
     const rows = this.ctx.db.prepare(`SELECT pr_number FROM goal_landings`).all() as { pr_number: number }[];
     return new Set(rows.map((r) => r.pr_number));
   }
 
-  /** Record what a probe said. `OR REPLACE` here, unlike a landing: a verdict is an observation of something that moves, and the newest one is the answer. */
   recordEnvironmentReach(input: {
     sha: string;
     environment: string;
@@ -122,7 +74,6 @@ export class EnvironmentStore {
       .run({ ...input, observedAt: this.ctx.now() });
   }
 
-  /** Record that a goal's whole work was first seen in an environment. `OR IGNORE`: replacing would move `arrived_at` forward and clear the announcement stamp, collecting a comment per later merge. */
   recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
     this.ctx.db
       .prepare(
@@ -132,7 +83,6 @@ export class EnvironmentStore {
       .run({ ...input, recordedAt: this.ctx.now() });
   }
 
-  /** Every arrival, newest first — the order the cockpit's signals read them in. */
   listGoalArrivals(): GoalArrival[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM goal_arrivals ORDER BY arrived_at DESC, environment ASC`)
@@ -146,21 +96,18 @@ export class EnvironmentStore {
     }));
   }
 
-  /** Stamp an arrival as considered by the watch pass, whether or not a window opened — how a newly added `watch` starts at the next arrival rather than every one already in the table. */
   markArrivalWatched(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
-  /** Stamp an arrival as announced, whether or not anything went out — a newly added `arrival.comment` starts at the next arrival, not every one already in the table. */
   markArrivalAnnounced(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE goal_arrivals SET announced_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
-  /** The operator's "this one is not waiting on an environment", replacing any standing release on the same goal — a second click is them looking again. */
   releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
     const release: EnvironmentGateRelease = { goalRef, note, releasedAt: this.ctx.now() };
     this.ctx.db
@@ -172,12 +119,10 @@ export class EnvironmentStore {
     return release;
   }
 
-  /** Put the goal back to waiting. A delete, so "not released" has exactly one shape. */
   clearEnvironmentGateRelease(goalRef: string): void {
     this.ctx.db.prepare(`DELETE FROM environment_gate_releases WHERE goal_ref=?`).run(goalRef);
   }
 
-  /** Every standing release. Bounded by the goals an operator has said do not ship. */
   listEnvironmentGateReleases(): EnvironmentGateRelease[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM environment_gate_releases ORDER BY released_at DESC`)
@@ -185,12 +130,6 @@ export class EnvironmentStore {
     return rows.map((r) => ({ goalRef: r.goal_ref, note: r.note, releasedAt: r.released_at }));
   }
 
-  /**
-   * Record what an environment's own health check said. Replace-in-effect; `changed_at`
-   * survives while state and tier are unchanged. The `CASE` keeps that rule in the statement
-   * rather than a read-then-write, so two pulses landing together can't lose an episode's start.
-   * A change of reasons alone is not a change — the same outage would restart its clock.
-   */
   recordEnvironmentHealth(input: {
     environment: string;
     state: EnvironmentHealthState;
@@ -220,7 +159,6 @@ export class EnvironmentStore {
       });
   }
 
-  /** What each environment's health check last said, one row per environment. A row survives one whose `health` command was removed; the cockpit's builder ships only environments declaring one today. */
   listEnvironmentHealth(): EnvironmentHealthReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM environment_health`).all() as HealthRow[];
     return rows.map((r) => ({
@@ -234,7 +172,6 @@ export class EnvironmentStore {
     }));
   }
 
-  /** Every verdict held. One row per landing per environment, so it is bounded by the two. */
   listEnvironmentReach(): EnvironmentReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM environment_reach`).all() as ReachRow[];
     return rows.map((r) => ({
@@ -279,10 +216,6 @@ interface HealthRow {
   changed_at: string;
 }
 
-/**
- * The stored reason list, read defensively: a throw here would take the whole
- * cockpit snapshot down over one environment's unparseable reading.
- */
 function readReasons(text: string): string[] {
   try {
     const json: unknown = JSON.parse(text);

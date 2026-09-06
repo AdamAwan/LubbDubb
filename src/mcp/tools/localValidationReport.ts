@@ -2,6 +2,8 @@ import { validateLocalValidationReport } from '../../localValidation/report.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Say what you found when you ran your plan against the running application. Once, at the end. ' +
@@ -74,10 +76,6 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
     if (!desk) return toolError('Local validation is not wired on this deployment, so there is nowhere to report to.');
     const parsed = validateLocalValidationReport(args);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
-    // The desk owns the fence and the staleness refusal alike: which validation this
-    // is about comes off the dispatch origin, and whether the environment is still
-    // the one that was planned against comes off `validationRunStale` — the same
-    // predicate the sweep uses, so the two can never settle a row differently.
     const { result, ...rest } = parsed.report;
     const written = desk.report(task, { status: result, ...rest });
     if (!written.ok) return toolError(written.error);

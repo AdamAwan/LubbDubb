@@ -15,42 +15,10 @@ import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { Label } from './label.js';
 
-/**
- * MCP: which tools the fleet reaches for, and — the reason the tab exists — which
- * it never does.
- *
- * Every other tab on this page is a reading about work the harness did. This one
- * is a reading about a **channel**, and it is here rather than on the config
- * page's MCP tab because that tab answers "how do I connect my own Claude Code to
- * this" and this answers "is the channel doing anything" — two questions a click
- * apart would have been two halves of one page nobody could take a window over.
- *
- * ## It leads with the silence
- *
- * A tool's call count is the least interesting thing here and it is drawn last.
- * What comes first is the two ways the channel fails without saying so: a **run
- * that called nothing** — an operator `--allowedTools` in `claudeArgs` is
- * appended last and drops every `mcp__lubbdubb__*` grant, leaving a connected
- * server whose every call is refused — and a **tool nothing named**, which is a
- * tool an agent finishes without because `tools/list` is not an instruction.
- *
- * ## The verdicts are the server's words, not this file's
- *
- * A count of zero is four different facts wearing one face, and which one it is
- * depends on the addendum text, the window's dispatch prompts and the refusals —
- * none of which are on this payload as raw material. `src/mcpInsights.ts` ships
- * the verdict and its evidence together, for the reason the phase legend ships
- * its own copy: a cockpit re-deriving a claim about what the harness did would be
- * a second opinion drawn inches from the first.
- *
- * → docs/spec/17-cockpit.md#mcp
- */
+// → docs/spec/17-cockpit.md
+
 export function McpUsageTab({ insights }: { insights: McpInsights }): JSX.Element {
   const { totals, quiet, silentRuns } = insights;
-  // Nothing recorded is a real state and not an empty one, and on this tab it is
-  // the *most* important one to say out loud: a page of zeroes is exactly what a
-  // channel nobody registered looks like, and exactly what a harness that has not
-  // dispatched yet looks like. Saying which is the whole job.
   if (totals.calls === 0 && insights.channels.every((c) => c.calls === 0)) {
     return (
       <>
@@ -66,12 +34,6 @@ export function McpUsageTab({ insights }: { insights: McpInsights }): JSX.Elemen
   }
 
   return (
-    // `sp` as well as `mc`: the by-phase table draws the *same* phase palette the
-    // Economics tab does, and that palette is declared on `.sp`. Borrowing the
-    // class is what stops it being restated here — two spellings of "build is
-    // green" drift the day somebody retunes one, and the phases would then read
-    // differently on two tabs of one page. `.sp` adds nothing else this does not
-    // already set, and its table width cap is the one the other tabs use.
     <div className="mc sp">
       <Tiles totals={totals} />
 
@@ -113,13 +75,6 @@ export function McpUsageTab({ insights }: { insights: McpInsights }): JSX.Elemen
   );
 }
 
-/**
- * The panel as a file, in the order the tab draws it.
- *
- * The verdicts go out as rows rather than as prose, because on paper there is no
- * blurb under a heading to read them off — and they are the only part of this
- * payload that cannot be recomputed from the numbers beside them.
- */
 export function mcpCsv(insights: McpInsights): string {
   const { totals } = insights;
   return toCsv([
@@ -141,8 +96,6 @@ export function mcpCsv(insights: McpInsights): string {
     ['Operator --allowedTools override present', insights.allowedToolsOverridden ? 'yes' : 'no'],
     ['Window', insights.window.label],
     ['Window opened (ISO)', insights.window.since ?? 'no lower bound — all time'],
-    // The distinction that makes every figure above readable, and the one nothing
-    // on paper would otherwise carry.
     ['A call is', 'one tools/call that reached a tool body, counted at the server'],
     ['Refused means', 'a handled error the tool returned — never a permission refusal, which never arrives at all'],
     ['The two channels are', 'never summed: different credentials, different tool sets, one shared tool name'],
@@ -253,14 +206,6 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
   );
 }
 
-/**
- * The runs that made no call at all.
- *
- * Above every table, because it is the one reading here that invalidates the
- * others: a per-tool count taken over a window in which three runs could not
- * reach the channel is a count with three runs missing from it, and nothing
- * further down would say so.
- */
 function SilentRuns({ runs, totals }: { runs: readonly McpSilentRun[]; totals: McpInsights['totals'] }): JSX.Element {
   const profiles = [...new Set(runs.map((r) => r.profile).filter((p): p is string => p !== null))];
   return (
@@ -303,13 +248,6 @@ function SilentRuns({ runs, totals }: { runs: readonly McpSilentRun[]; totals: M
   );
 }
 
-/**
- * The override itself, reported whether or not a run has gone dark yet.
- *
- * This is a **live config read**, not a fold of the window, and it is the only
- * thing on the tab that is: the point is to catch the flag before it costs a run,
- * which is the whole difference between a warning and a post-mortem.
- */
 function GrantHazard({ insights }: { insights: McpInsights }): JSX.Element | null {
   if (!insights.allowedToolsOverridden) return null;
   return (
@@ -324,7 +262,6 @@ function GrantHazard({ insights }: { insights: McpInsights }): JSX.Element | nul
   );
 }
 
-/** Each quiet tool, its verdict, and the evidence the verdict was reached on. */
 function Quiet({ quiet }: { quiet: readonly McpQuietTool[] }): JSX.Element {
   return (
     <ul className="mc-quiet">
@@ -562,13 +499,6 @@ function Desktop({ insights }: { insights: McpInsights }): JSX.Element {
   );
 }
 
-/**
- * The two channels side by side, and the one place they appear in one graphic.
- *
- * A **relative width**, never a sum: the bar says which channel this harness's
- * traffic is, which is a real reading, where a total of the two would be a count
- * of calls across two different credentials over two different tool sets.
- */
 function ChannelSplit({ channels }: { channels: readonly McpChannelUsage[] }): JSX.Element {
   const all = channels.reduce((sum, c) => sum + c.calls, 0);
   return (

@@ -16,16 +16,6 @@ import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { GoalWatchInput } from '../src/types.js';
 
-/**
- * The window pass at the `buildSystem` seam, with `dbPath: ':memory:'` and both
- * environment fakes injected. Nothing here spawns a shell or touches a network.
- *
- * The two that earn their place first are the silences: an arrival the harness
- * merely discovered opening nothing, and a presence query answering zero reading
- * `unknown` all the way to the words on the goal page — the one case that reads as
- * success.
- */
-
 const PROBE_MS = 5 * 60 * 1000;
 
 const TEST_UK: EnvironmentConfig = {
@@ -82,7 +72,6 @@ function build(
   });
 }
 
-/** A goal that declared one signal, and whose whole work has just arrived somewhere. */
 function arrived(system: System, environment: string, agoMs = 60_000, checks: GoalWatchInput[] = [SIGNAL]): void {
   system.store.ingestGoalWatch('issue:12', checks);
   system.store.recordGoalArrival({
@@ -92,7 +81,6 @@ function arrived(system: System, environment: string, agoMs = 60_000, checks: Go
   });
 }
 
-/** A presence query that answers and a check query that does not match — a clean reading. */
 const CLEAN = {
   'no-timeouts:presence': JSON.stringify([watchRow('no-timeouts', { runs: 96 })]),
   'no-timeouts:signal': '[]',
@@ -116,9 +104,6 @@ test('an arrival opens a window, and the harness reads it', async () => {
 });
 
 test('an arrival three probe intervals old opens no window, and is stamped anyway', async () => {
-  // The first pulse after this ships finds every goal already in every environment.
-  // Without the guard each one opens a window; without the stamp each opens one
-  // again on every pulse after that, forever, and nothing goes red.
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer);
   arrived(system, 'testUk', PROBE_MS * 3);
@@ -137,10 +122,6 @@ test('an arrival three probe intervals old opens no window, and is stamped anywa
 });
 
 test('presence answering zero reads unknown on the glass, in the goal page’s own words', async () => {
-  // The case that reads as success: an acceptance environment where the scheduled
-  // job does not run, the queue is empty and no real traffic arrives. End to end
-  // from the probe that confirms the landing, so the arrival the window opens on is
-  // one this harness genuinely watched happen.
   const observer = new FakeEnvironmentObserver({ 'no-timeouts:presence': '[]', 'no-timeouts:signal': '[]' });
   const system = build(observer, [TEST_UK], {
     prober: new FakeEnvironmentProber({ testUk: ['head-testUk'] }),
@@ -158,12 +139,8 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
   assert.equal(check?.reading?.verdict, 'unknown');
   assert.match(check!.reading!.detail!, /could not read testUk/);
   assert.match(check!.reading!.detail!, /has not run here/);
-  // And the strip folds it off the card rather than computing a second verdict, in
-  // words that are never a clean one's.
   const shipped = buildGoalStrip(page!).find((s) => s.at === 'environments');
   assert.equal(shipped?.reading, 'reached testUk · watch not read');
-  // The check's own query is not even asked: whatever it would say about a code
-  // path the telemetry has never heard of is not a reading.
   assert.deepEqual(
     observer.asked.map((a) => a.kind),
     ['presence'],
@@ -206,8 +183,6 @@ test('nothing is asked where no environment declares a watch, and no arrival is 
 });
 
 test('a watch opens per environment, so a goal travelling is watched twice with separate readings', async () => {
-  // testUk answers zero to everything, which is what an acceptance environment
-  // where the job does not run answers; liveUk is where the answer is.
   const observer = new FakeEnvironmentObserver({
     'no-timeouts:presence': JSON.stringify([watchRow('no-timeouts', { runs: 96 })]),
     'no-timeouts:signal': '[]',
@@ -254,9 +229,6 @@ test('a regressed reading says what it expected and what it read, and does not r
   const readings = new Map(system.store.listWatchReadings().map((r) => [r.checkId, r]));
   assert.equal(readings.get('no-timeouts')?.verdict, 'regressed');
   assert.match(readings.get('no-timeouts')!.detail!, /answered 1 row where the check declared none at all/);
-  // The second check answered nothing scripted, so it could not be read — and the
-  // window is not one word: a goal whose one check passed and whose other failed
-  // is a fix that worked and a thing that is still broken.
   assert.equal(readings.get('no-retries')?.verdict, 'unknown');
   const [window] = buildStateSnapshot(system).goalWatchWindows;
   assert.deepEqual(
@@ -271,8 +243,6 @@ test('a settled watch is not re-opened by a later reading', async () => {
   const system = build(observer, [{ ...TEST_UK, watch: { ...TEST_UK.watch!, forMs: 1 } }]);
   arrived(system, 'testUk');
 
-  // The window settles the moment it opens: `forMs` is one millisecond, so it is
-  // already past its own end when the settle pass runs.
   await system.harness.runCycle();
   const settledAt = system.store.listWatchWindows()[0]?.settledAt;
   assert.notEqual(settledAt, null, 'settled at `for`');
@@ -285,9 +255,6 @@ test('a settled watch is not re-opened by a later reading', async () => {
 });
 
 test('an extended window is read again and settles at its new end', async () => {
-  // Extending re-opens the window it names rather than opening a second one, so
-  // the pass has to pick it up again — a re-opened window nothing reads is an
-  // operator's click that changed a stamp and nothing else, with nothing red.
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer, [{ ...TEST_UK, watch: { ...TEST_UK.watch!, forMs: 1 } }]);
   arrived(system, 'testUk');
@@ -326,8 +293,6 @@ test('a check an amendment stopped declaring takes its readings with it', async 
   await system.harness.runCycle();
   assert.equal(system.store.listWatchReadings().length, 2);
 
-  // The document speaks for the whole watch. Dropping the row alone would leave a
-  // reading of a check no document declares — a number with no rule.
   system.store.ingestGoalWatch('issue:12', [SIGNAL]);
   assert.deepEqual(
     system.store.listWatchReadings().map((r) => r.checkId),

@@ -14,22 +14,8 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput } from '../src/types.js';
 
-/**
- * What a finding does, at the `buildSystem` seam with `dbPath: ':memory:'` and
- * `FakeEnvironmentObserver` injected. Nothing here spawns a shell or touches a
- * network.
- *
- * The ones that earn their place are the silences. A row per reading rather than
- * per window is 96 asks a day per check burying the rail. A row filed off an
- * `unknown` puts an expired credential in front of a person as a regression. A
- * reading written as a `WorldEvent` un-parks the goal it just reported on and
- * hands finished work back to the fleet — and every one of those looks, on the
- * glass, exactly like the feature working.
- */
-
 const PROBE_MS = 5 * 60 * 1000;
 
-/** A window that has already run out by the time the pass looks at it. */
 const SETTLES_AT_ONCE: EnvironmentConfig = {
   name: 'testUk',
   at: 'echo unused',
@@ -57,12 +43,10 @@ const SIGNAL: GoalWatchInput = {
   why: null,
 };
 
-/** Presence answers, and the check's own query matches a row it declared none of. */
 const REGRESSED = {
   'no-timeouts:presence': JSON.stringify([watchRow('no-timeouts', { runs: 96 })]),
   'no-timeouts:signal': JSON.stringify([watchRow('no-timeouts', { role: 'worker' })]),
 };
-/** Presence answers zero — the environment could not be read, which is not a finding. */
 const UNKNOWN = { 'no-timeouts:presence': '[]', 'no-timeouts:signal': '[]' };
 const CLEAN = {
   'no-timeouts:presence': JSON.stringify([watchRow('no-timeouts', { runs: 96 })]),
@@ -93,7 +77,6 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
   });
 }
 
-/** A goal that declared one signal and whose whole work has just arrived. */
 function arrived(system: System, environment = 'testUk'): void {
   system.store.ingestGoalWatch('issue:12', [SIGNAL]);
   system.store.recordGoalArrival({
@@ -103,13 +86,10 @@ function arrived(system: System, environment = 'testUk'): void {
   });
 }
 
-/** The goal in the world and delivered, so the close-out desk has a row to file. */
 function delivered(system: System): void {
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
   system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
 }
-
-// -- the bench row ------------------------------------------------------------
 
 test('a settled-regressed watch files one row, and a second reading files no second one', async () => {
   const observer = new FakeEnvironmentObserver(REGRESSED);
@@ -121,14 +101,9 @@ test('a settled-regressed watch files one row, and a second reading files no sec
   assert.equal(filed.length, 1);
   assert.match(filed[0]!.title, /watch on testUk/);
   assert.equal(filed[0]!.originRef, 'issue:12');
-  // The numbers ride, in the reading's own words — no model read them and none
-  // will, so the row is where they go in front of a person.
   assert.match(filed[0]!.detail ?? '', /Job X stops timing out/);
   assert.match(filed[0]!.detail ?? '', /answered 1 row where the check declared none at all/);
 
-  // A window is 96 readings on the defaults. A row per reading is the rail burying
-  // its own asks under one goal's telemetry, so the second one lands on the row
-  // the first filed.
   system.store.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -148,9 +123,6 @@ test('a settled-regressed watch files one row, and a second reading files no sec
 });
 
 test('a settled-unknown watch files nothing — it is not a finding', async () => {
-  // The case that most looks like one: an expired credential, a missing binary and
-  // a job that has not run here all fail identically, and a row filed off any of
-  // them asks a person to look at a regression that was never read.
   const observer = new FakeEnvironmentObserver(UNKNOWN);
   const system = build(observer, [SETTLES_AT_ONCE]);
   arrived(system);
@@ -171,9 +143,6 @@ test('a reading that comes back clean retracts the row, and a later regression b
   const [row] = system.store.listHumanTasksOfKind('watch');
   assert.equal(row?.status, 'open');
 
-  // The obligation is not owed *right now*, which is a different thing from a
-  // person saying they have dealt with it — so the harness's own marker, or the
-  // dedup would refresh their settled row's detail and leave it settled.
   system.store.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -204,16 +173,12 @@ test('a reading that comes back clean retracts the row, and a later regression b
   system.store.close();
 });
 
-// -- the close-out ------------------------------------------------------------
-
 test('the close-out carries what the watch says and does not hold it, with holds absent', async () => {
   const observer = new FakeEnvironmentObserver(REGRESSED);
   const system = build(observer, [OPEN]);
   arrived(system);
   delivered(system);
 
-  // Two pulses: the first opens the window and reads it, and the close-out desk
-  // runs above the environment pass, so the second is the one that carries it.
   await system.harness.runCycle();
   await system.harness.runCycle();
 
@@ -226,9 +191,6 @@ test('the close-out carries what the watch says and does not hold it, with holds
 });
 
 test('a goal delivered with a watch still open closes in front of the reading, not past it', async () => {
-  // `validate`'s arrangement exactly: the row is filed, it is closable, and the
-  // detail is rewritten on every pulse — so the sentence an operator reads at the
-  // moment they close the ticket is the one the watch is saying then.
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer, [OPEN]);
   arrived(system);
@@ -240,8 +202,6 @@ test('a goal delivered with a watch still open closes in front of the reading, n
   assert.match(row!.detail ?? '', /read every declared check clean/);
   assert.match(row!.detail ?? '', /still open, and holds nothing/);
 
-  // And it moves with the readings rather than stating what was true when it was
-  // filed. An `unknown` is never drawn in a clean one's words.
   system.store.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -278,22 +238,12 @@ test('holds: ["close_out"] withholds the row while the window is open, and relea
   system.store.close();
 });
 
-// -- extending ----------------------------------------------------------------
-
 test('extend re-opens the settled window, and the verdict it fixed is still readable', async () => {
-  // Open question 2, settled: it re-opens *this* window rather than opening a
-  // second one. `watch_windows` is keyed on `(goal, environment)`, so a second
-  // window would split one goal's readings across two rows nothing joins — and the
-  // readings taken before it ran out are the evidence behind whatever it says
-  // next. `settleWatchWindow`'s `settled_at IS NULL` guard is untouched by this:
-  // what it prevents is a later *reading* moving a stamp, and a click is not one.
   const observer = new FakeEnvironmentObserver(REGRESSED);
   const system = build(observer, [SETTLES_AT_ONCE]);
   arrived(system);
   await system.harness.runCycle();
 
-  // A window sized at one millisecond settles before anything is read, so give it
-  // the reading whose verdict has to survive.
   system.store.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -334,8 +284,6 @@ test('extend answers nothing for a goal or environment with no window', () => {
 });
 
 test('the extend route refuses a window that is not there, and an environment that asks nothing', async () => {
-  // Reported as done, either would leave the operator believing they had extended
-  // something — a stale page and a wrong name look identical from here otherwise.
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer, [OPEN, { name: 'liveUk', at: 'echo unused' }]);
   arrived(system);
@@ -344,8 +292,6 @@ test('the extend route refuses a window that is not there, and an environment th
   const { app } = await buildApp(system);
   const missing = await app.inject({ method: 'POST', url: '/api/issues/99/watch/testUk/extend' });
   assert.equal(missing.statusCode, 404);
-  // `liveUk` is probed for reach and declares no telemetry, so a window re-opened
-  // there would run to its new end reading nothing at all.
   const unwatched = await app.inject({ method: 'POST', url: '/api/issues/12/watch/liveUk/extend' });
   assert.equal(unwatched.statusCode, 409);
 
@@ -356,14 +302,7 @@ test('the extend route refuses a window that is not there, and an environment th
   system.store.close();
 });
 
-// -- the rule none of it may break --------------------------------------------
-
 test('nothing a finding does is written as a WorldEvent', async () => {
-  // `deliveryHold` expires a standing delivery verdict on *any* world event
-  // matching the goal's issue ref, so a reading, a bench row or a close-out
-  // sentence written as one would un-park the goal it just reported on and hand
-  // the finished fix back to the fleet. Nothing errors, and the re-dispatch of
-  // completed work looks like the harness deciding there is more to do.
   const observer = new FakeEnvironmentObserver(REGRESSED);
   const system = build(observer, [OPEN]);
   arrived(system);

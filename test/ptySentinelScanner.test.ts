@@ -28,12 +28,7 @@ function session(opts: Record<string, unknown> = {}): {
   return { backend, s, out: () => chunks.join(''), flags };
 }
 
-// -- the scanner itself ------------------------------------------------------
-
 test('scanSentinels matches a token whose characters are split by SGR escapes', () => {
-  // The TUI styles the assistant line, so escapes land *inside* the token — not
-  // just around it. Detection used to work on an ANSI-stripped copy while the
-  // display path stripped raw bytes, so only one of them matched.
   const hits = scanSentinels('done \x1b[1m@@LUBBDUBB\x1b[0m_DONE@@\r\n', SPEC);
   assert.equal(hits.length, 1);
   assert.equal(hits[0]?.kind, 'done');
@@ -52,8 +47,6 @@ test('scanSentinels keeps the boundary guard so an echoed sentinel mid-token is 
 });
 
 test('scanSentinels does not let an unterminated prefix swallow a following done token', () => {
-  // Waiting and flag both close on a bare `@@`, which is also the done token's
-  // opening pair — so an unclosed prefix could otherwise claim it.
   const hits = scanSentinels('@@LUBBDUBB_WAITING:oops @@LUBBDUBB_DONE@@\r\n', SPEC);
   assert.ok(
     hits.some((h) => h.kind === 'done'),
@@ -68,11 +61,7 @@ test('holdFrom releases an unterminated prefix once it exceeds the bound', () =>
   assert.equal(holdFrom(long, SPEC, 512), long.length, 'past the bound it is literal text');
 });
 
-// -- through the session -----------------------------------------------------
-
 test('a sentinel split by TUI styling is stripped from the transcript, not just detected', () => {
-  // Regression: detection fired (status went done) while the display path missed
-  // the same token, so the raw sentinel leaked into the user-visible transcript.
   const { backend, s, out } = session();
   backend.last().emit('done now \x1b[1m@@LUBBDUBB\x1b[0m_DONE@@\r\n');
   assert.equal(s.status, 'done');
@@ -91,10 +80,6 @@ test('a styled waiting sentinel parks with a clean reason and is stripped', () =
 });
 
 test('an unterminated prefix no longer blacks out the rest of the run', () => {
-  // Regression: the hold started at the earliest unterminated waiting/flag prefix
-  // and had no bound, so an agent that merely *mentioned* the protocol without
-  // closing the token withheld every subsequent byte forever — a total transcript
-  // blackout for the rest of the session.
   const { backend, out } = session();
   backend.last().emit('I will print @@LUBBDUBB_WAITING: when I need you.\r\n');
   for (let i = 0; i < 20; i++) backend.last().emit(`step ${i}: ${'work '.repeat(12)}\r\n`);

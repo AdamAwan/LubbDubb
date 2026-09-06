@@ -3,18 +3,8 @@ import { toolError } from '../protocol.js';
 import type { PrReviewVerdict } from '../../types.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The reviewer's verdict, and the whole of what the harness keeps about a fleet
- * review.
- *
- * **The record is this call, never a comment on the provider.** A project may
- * tell its reviewer to publish what it found (`review.publish`), and where it
- * does the comment goes out through `reply_to_review` like any other outbound
- * act — but the merge gate reads *this* row. A gate that read the provider
- * instead would be satisfied by anything that could write a comment, the
- * reviewer's own prose included.
- * → `docs/spec/07-pull-requests.md#the-fleet-review`
- */
+// → docs/spec/11-mcp-tools.md
+
 export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Record what you found reviewing the PULL REQUEST you were dispatched for. This is the review — the ' +
@@ -66,16 +56,9 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
     const findings = Array.isArray(input.findings)
       ? input.findings.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
       : [];
-    // A `findings` verdict with nothing under it is the one shape that reads as
-    // the opposite of itself downstream: the row says something was found and
-    // every surface that quotes it has nothing to quote.
     if (verdict === 'findings' && findings.length === 0) {
       return toolError('Review rejected: a "findings" verdict has to list at least one finding.');
     }
-    // What was actually in front of the reviewer, taken from the harness's own
-    // last reading rather than asked of the agent — a SHA an agent types is a
-    // SHA that can be wrong. Null where the provider reports none, which decides
-    // nothing either way (see `needsFleetReview`).
     const headSha = deps.store.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.headSha ?? null;
     const review = deps.store.recordPrReview({
       prNumber,

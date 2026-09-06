@@ -1,10 +1,3 @@
-// Seed data for the GitHub Pages demo: the canned world demoBackend.ts starts from,
-// with no server and no network. One repository throughout — **Markdown Magpie** —
-// because a demo whose tickets come from unrelated products reads as noise.
-//
-// The other rule this file is built to: **every pickup status appears exactly where
-// it belongs.** `issuePickupStatus` has fourteen answers, and a demo carrying eight
-// teaches an operator the other six are broken. See the roll-call above `issues`.
 import type {
   AppState,
   Issue,
@@ -20,17 +13,13 @@ import type {
   ValidationCheck,
 } from '../types.js';
 
+// → docs/spec/17-cockpit.md
+
 interface DemoSeed {
   state: AppState;
-  // Per-agent scrollback the drawer seeds from before live deltas take over.
   transcripts: Record<string, string>;
 }
 
-/**
- * The verdicts every issue on the wire carries, as a goal nobody has judged reads.
- * The server folds all six for every issue, so a fixture omitting them describes a
- * world the real cockpit could not receive.
- */
 type IssueSeed = Omit<
   Issue,
   | 'appraisal'
@@ -54,33 +43,18 @@ function demoIssue(seed: IssueSeed): Issue {
     shortfall: null,
     delivery: null,
     appraisal: null,
-    // Unpinned, which is what almost every goal is: a pin is the exception an
-    // operator or an appraiser made, so the demo models it on the fixtures that are
-    // about it rather than everywhere.
     modelPin: { profile: null, ignoredTags: [] },
     retrospective: null,
     scratchpad: null,
-    // Nothing standing, which is every goal the operator has not written on.
     instructions: [],
-    // Null rather than a zero: a goal nothing measured and a goal that cost
-    // nothing are different facts, and the demo must not model the one the
-    // cockpit is built to keep apart. Fixtures that have been worked set it.
     spend: null,
-    // Null is "no validation plan", which is a third reading and not a synonym
-    // for clear — the fixtures that have one set it.
     validation: null,
-    // Nobody has asked for this goal to be validated on the machine, which is every
-    // goal until an operator presses the button. The fixture that is about it sets it.
     localValidation: null,
-    // Not flagged, which is where every goal starts: a priority is a statement the
-    // operator made about this deployment's queue, so the fixture that is about it
-    // sets it and the rest read as the ordinary case.
     priority: null,
     ...seed,
   };
 }
 
-/** One validation check, with the rarely-varied fields defaulted — `demoPart`'s reason. */
 function demoCheck(
   seed: Partial<ValidationCheck> & Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
 ): ValidationCheck {
@@ -109,7 +83,6 @@ function demoCheck(
   };
 }
 
-/** A worked goal's spend, in the shape the roll-up ships it. */
 function demoSpend(issueNumber: number, costUsd: number, agents: number, localRuns = 0): Issue['spend'] {
   return {
     originRef: `issue:${issueNumber}`,
@@ -122,11 +95,6 @@ function demoSpend(issueNumber: number, costUsd: number, agents: number, localRu
   };
 }
 
-/**
- * The CI verdict for a world that reports no per-check detail, which is what a `fake`
- * provider always reports. `actionable` with three empty lists is missing detail, not
- * a clean bill of health; see `classifyCiFailures`.
- */
 const NO_CI_DETAIL: OpenPullRequest['ciVerdict'] = {
   actionable: true,
   dispatch: [],
@@ -135,18 +103,12 @@ const NO_CI_DETAIL: OpenPullRequest['ciVerdict'] = {
   urgent: false,
 };
 
-/** An open pull request as the wire ships one: the row plus its three verdicts. */
 type OpenPrSeed = Omit<OpenPullRequest, 'ciVerdict'> & Partial<OpenPullRequest>;
 
 function demoPr(seed: OpenPrSeed): OpenPullRequest {
   return { ciVerdict: NO_CI_DETAIL, ...seed };
 }
 
-/**
- * A plan part, with the five columns that are null until something concludes it. The
- * store writes them for every row, so a fixture leaving them out describes a part the
- * reconciler could not have produced.
- */
 type PartSeed = Omit<
   PlanPart,
   | 'blockedReason'
@@ -160,9 +122,7 @@ type PartSeed = Omit<
   | 'size'
 > &
   Partial<PlanPart> & {
-    /** Seeded rather than derived: the demo has no `agent_files` to join against. */
     outsideScope?: string[];
-    /** Seeded when a demo plan is deeper than one stack — see {@link demoPart}. */
     depth?: number;
   };
 
@@ -181,13 +141,7 @@ function demoPart(seed: PartSeed): PlanPartView {
   };
   return {
     ...part,
-    // The wave the map draws it in. The server computes it with `partDepth`, a
-    // longest-path walk; a seed has no siblings to walk, so `depth` is seeded
-    // explicitly wherever a demo plan is deeper than one stack.
     depth: seed.depth ?? (part.dependsOn.length === 0 ? 0 : 1),
-    // Split here the way the server splits it, rather than seeded per part: the
-    // demo is meant to exercise the same rendering the real snapshot produces, and
-    // a hand-written checklist would drift from the one criterion text is keyed on.
     acceptanceCriteria: (part.acceptance ?? '')
       .split('\n')
       .map((line) => line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '').trim())
@@ -197,66 +151,39 @@ function demoPart(seed: PartSeed): PlanPartView {
   };
 }
 
-/** Build a fresh demo world. Timestamps are relative to now so the feed reads as "recent". */
 export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
   const state: AppState = {
     config: {
-      // Short heartbeat so the countdown bar visibly moves in the demo.
       heartbeatIntervalMs: 15_000,
-      // Four agents are live below, so the cap sits one above them: exactly one
-      // goal is `eligible` this cycle and the rest of the ready ones are `blocked`.
       maxConcurrentAgents: 5,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
-      // The demo's tickets hang off Features, so the board is on and the Features tab is
-      // reachable in the Pages build. The remote reads `github`, which a real GitHub
-      // deployment could not do — this is a fake tracker with a hierarchy.
       featureBoard: true,
-      // On together with the flag above, the ordinary shape on a tracker with a
-      // hierarchy: the orphan band draws on #341's page and the placement asks appear.
       canPlaceWorkItem: true,
-      // A plausible checkout, so the demo's Discuss link is a real `claude://code/new`
-      // rather than one pointing at nothing. It opens whatever the visitor has —
-      // which is the honest demonstration: the control hands off to their machine.
       desktopFolder: '/Users/you/code/demo-shop',
-      // Configured, so the demo shows the panel that can start and swap rather than
-      // the one explaining what is missing. Both are worth seeing and only one can
-      // be the default; this is the state an operator who has set it up is in.
       localRunConfigured: true,
       localValidationBrowserConfigured: true,
       localRunStopConfigured: true,
       localRunRefreshConfigured: true,
-      // The demo tracker's own vocabulary, coloured — the setting is invisible
-      // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
-      // The same four states, in workflow order rather than the colours' — the demo's
-      // board is a real one, so the order has to be a judgement somebody made.
       boardStates: ['New', 'Ready', 'Active', 'Closed'],
-      // The demo drags for real: a board that looks draggable and is not would teach
-      // a visitor the wrong thing about the product.
       canSetWorkItemState: true,
       canCloseIssue: true,
       canClosePr: true,
       stateRules: { pickup: ['Ready', 'Active'], inProgress: 'Active', inReview: null, returnsTo: 'Ready' },
-      // Cheapest first, as `rank` orders them — the demo's profile controls draw
-      // this list in this order.
       profiles: [
         { name: 'fast', description: 'Mechanical, well-specified work with an obvious shape.' },
         { name: 'standard', description: 'Ordinary feature and bug work with a clear approach.' },
         { name: 'deep', description: 'Work whose shape is unclear, or where the approach is expensive to undo.' },
       ],
       defaultProfile: 'standard',
-      // Two hours rather than two days, so the waiting PR below actually draws its age.
-      // The world is all-fake, so the inject panel stays and the file-a-ticket button
-      // is hidden, exactly as on a `fake` deployment.
       canFileTickets: false,
       areaPaths: [],
     },
     control: { cap: 3, paused: false },
-    // What the plan sheet's approval bar states: two of a plan's parts run at once.
     planning: {
       maxConcurrentPartsPerIssue: 2,
       gitFetchIntervalMs: 60_000,
@@ -268,9 +195,6 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-412',
           number: 412,
-          // Deliberately not word-for-word its goal's title: a demo where the
-          // ticket and the pull request are one string cannot show that the two
-          // are different objects, and every row that quotes one reads as the other.
           title: 'Cut the ranked section list down to the token budget',
           branch: 'feature/context-budget',
           ciStatus: 'failing',
@@ -282,9 +206,6 @@ export function buildDemoState(): DemoSeed {
               handled: false,
             },
           ],
-          // The same threads the comment list folds — three states, because a demo
-          // showing only open ones cannot show what the page is for: which of a
-          // review is still owed, which is with the reviewer, and which is done.
           reviewThreads: [
             {
               id: 'c-1',
@@ -324,19 +245,11 @@ export function buildDemoState(): DemoSeed {
           approved: false,
           mergeable: true,
           baseBranch: 'main',
-          // GitHub's own `unstable` is folded to `unknown` by `normalizeMergeState`
-          // — the raw value never reaches the wire, which is what the demo used to
-          // claim it did.
           mergeableState: 'unknown',
           merged: false,
           health: { blocked: true, reasons: ['CI failing', '1 unresolved comment'] },
           attention: { status: 'harness', reasons: ['an agent is working this branch'] },
-          // The pack marks are a roll-call of their own across these rows, for the
-          // reason the review states below are: an operator learning a mark should
-          // meet every arm of it once.
           pack: 'current',
-          // The six review states below are a roll-call like the pickup statuses'
-          // above: an operator learning the mark should meet every arm of it once.
           review: {
             status: 'findings',
             addressed: false,
@@ -362,9 +275,6 @@ export function buildDemoState(): DemoSeed {
           branch: 'feature/embed-cache',
           ciStatus: 'passing',
           unresolvedComments: [],
-          // A pull request whose review is finished: threads reported, none of them
-          // owed. Told apart from the pull request below, whose provider reports no
-          // threads at all — the page says which of the two it is looking at.
           reviewThreads: [
             {
               id: 'c-5',
@@ -438,9 +348,6 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        // Green, clean, unapproved and nobody's turn but a reviewer's — the one
-        // shape the review-wait age exists for. Dated three days back so it is
-        // past the demo's threshold and actually draws.
         demoPr({
           id: 'pr-408',
           number: 408,
@@ -529,8 +436,6 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        // The ignore tag as a *state*, so the demo shows the one row the harness
-        // will never touch: tagged, still listed with its health, drawn spent.
         demoPr({
           id: 'pr-407',
           number: 407,
@@ -550,8 +455,6 @@ export function buildDemoState(): DemoSeed {
             reasons: ['not tagged "lubbdubb-watch" — the harness is leaving it alone'],
           },
         }),
-        // A pull request a colleague put on you: the one queue row with no rule behind
-        // it, and the only one that says who asked. Unwatched, the usual shape.
         demoPr({
           id: 'pr-415',
           number: 415,
@@ -579,8 +482,6 @@ export function buildDemoState(): DemoSeed {
           },
         }),
       ],
-      // What the World panel used to lose: a PR you were watching disappears when
-      // it leaves the open set, with nothing to say whether it landed.
       closedPullRequests: [
         {
           id: 'pr-410',
@@ -593,9 +494,6 @@ export function buildDemoState(): DemoSeed {
           merged: true,
           state: 'merged',
           closedAt: ago(52),
-          // A dead pull request keeps the reading that is a record rather than a verdict.
-          // Findings **dealt with**: the thread reads resolved, so the mark is green with
-          // a tick rather than red with a 2.
           review: {
             status: 'findings',
             addressed: true,
@@ -626,8 +524,6 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(30),
         },
         {
-          // The pull request behind the shortfall on #382: it merged, it did what
-          // it said, and the assessor still found the goal unreached.
           id: 'pr-405',
           number: 405,
           title: 'Raise the gap-cluster similarity threshold to 0.81',
@@ -652,36 +548,7 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(96),
         },
       ],
-      /*
-       * The pickup roll-call. `issuePickupStatus` answers fourteen ways, and each
-       * one is somebody's whole reading of why nothing is happening — so each has
-       * a goal here, in the order they are gated:
-       *
-       *   done       #352   retained  #357   has_pr    #388, #376
-       *   active     #332, #368       ignored   #366   container #300
-       *   unwatched  #371   planning  #390, #395       delivered #364
-       *   appraisal      #379   cooldown  #345   escalated #359
-       *   blocked    #333, #382  eligible  #341
-       *
-       * `blocked` outnumbers `eligible` on purpose: the cap is 5 and four agents
-       * are live, so exactly one goal can start this cycle and the queue below
-       * dispatches it. A fixture set where six goals are all "eligible" under a
-       * cap of five is a world the dispatcher could never have produced.
-       *
-       * Thirteen of the fourteen are reachable by clicking: the backlog lists every
-       * *open* item, in one of its four groups, and the overview reaches the retained
-       * run (#357, carried in `retainedRuns` below, marked stale) behind the
-       * goals-in-flight card's `kept` disclosure, where a run with no work left on it
-       * goes. `done` (#352)
-       * is the one that is not, because no surface lists a closed goal the harness
-       * holds no run for — it is carried anyway, since it is a reading the wire
-       * ships and the goal page draws, and a demo world with no closed goal in it
-       * would be the only world the cockpit ever sees that has none.
-       */
       issues: [
-        // A three-row slice of a work-item tree: a container the harness refuses to
-        // work, a story that reads its feature's goal, and a flagged orphan bug.
-        // → docs/spec/06-issue-pickup.md#hierarchy
         demoIssue({
           id: 'iss-300',
           number: 300,
@@ -787,9 +654,6 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           issueType: 'Bug',
           workItemState: 'Active',
-          // Flagged, not blocked: still eligible, and every agent put on it is
-          // told the parent is missing and offered the open features it may
-          // belong to.
           parent: null,
           linkedPrNumber: null,
           pickup: { eligible: true, status: 'eligible', reasons: [] },
@@ -802,14 +666,9 @@ export function buildDemoState(): DemoSeed {
           labels: ['bug', 'priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
-          // An agent is on it and parked on a question (`agent-a4`, `esc-6`) — the
-          // one escalation in the demo raised against a goal rather than a pull
-          // request, which is the only kind the feature board counts under a Feature.
           pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
           spend: demoSpend(368, 0.27, 1),
         }),
-        // The two goals the in-flight pull requests belong to, so every ask the demo
-        // raises has a goal page to be read on.
         demoIssue({
           id: 'iss-388',
           number: 388,
@@ -837,9 +696,6 @@ export function buildDemoState(): DemoSeed {
           body: 'A maintenance job blocks in an API callback while the API waits on the AI jobs it enqueued, so a single watcher self-starves. Nothing says so outside a code comment.',
           labels: ['docs', 'lubbdubb-watch'],
           state: 'open',
-          // Delivered by PR #410, which merged and left the open list — the state
-          // the retrospective exists for, and the one the demo could not show
-          // before: a goal that is finished but not yet closed by a human.
           linkedPrNumber: 410,
           pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
           delivery: {
@@ -853,19 +709,12 @@ export function buildDemoState(): DemoSeed {
             note: 'architecture.md gained the section; the console warns on one watcher.',
             at: ago(95),
           },
-          // The reading only — the document is fetched when the station is opened.
           retrospective: {
             summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
             hasDocument: true,
             updatedAt: ago(60),
           },
-          // What the agents wrote each other while they worked it — the testimony
-          // the write-up above was written from, and the demo's one readable pad.
-          // The count and the age only; the trail is fetched on open.
           scratchpad: { entries: 4, updatedAt: ago(70) },
-          // A finished goal, so its total has stopped moving: the write-up above
-          // says two agents were spent on a red base that was never ours, and this
-          // is what that cost.
           spend: demoSpend(364, 6.14, 4),
         }),
         demoIssue({
@@ -876,15 +725,8 @@ export function buildDemoState(): DemoSeed {
           labels: ['refactor', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 413,
-          // A plan, not a PR: the chip reports plan progress rather than whichever
-          // part happened to open a pull request last.
           pickup: { eligible: false, status: 'planning', reasons: ['1/5 parts done'] },
-          // Still running, and the figure with it: a decomposed goal's spend is the
-          // planner plus every part, which is exactly what one number per goal is
-          // for — no card anywhere else adds those up.
           spend: demoSpend(390, 19.16, 7, 2),
-          // Settled and `failed`, the state the whole feature is for: the parts merged,
-          // the build was green, and it still did not work when a person clicked through.
           localValidation: {
             id: 'lv-390-1',
             originRef: 'issue:390',
@@ -932,9 +774,6 @@ export function buildDemoState(): DemoSeed {
               },
             ],
             visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
-            // No bytes to serve in a demo with no server, and an `<img>` pointed at a
-            // path that answers nothing demonstrates a broken feature rather than a
-            // working one — the attachments' rule, one surface over.
             screenshots: [],
             files: [],
             note: null,
@@ -952,9 +791,6 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         }),
-        // A watched ticket pickup is held on: the appraisal could not work out what to
-        // do, so the row carries both overrides and a way into the question the harness
-        // asked on the thread.
         demoIssue({
           id: 'iss-379',
           number: 379,
@@ -979,8 +815,6 @@ export function buildDemoState(): DemoSeed {
               'What should the right sections have been? A sample of one good record.',
             ],
             by: 'appraiser',
-            // An `unclear` verdict names no profile: a goal nobody could start
-            // from has no work to size.
             proposedProfile: null,
             awaitingProfileAnswer: false,
             placement: [],
@@ -998,14 +832,8 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
-          // The goal the demo's validation plan hangs off. It must agree with
-          // `validationChecks` below — three passed of six live — or the header chip
-          // disagrees with the rows it leads to.
           validation: { state: 'flagged', total: 9, passed: 3, failed: 1, unrun: 3, deferred: 1, waived: 1 },
         }),
-        // Worked, landed, and still not what was asked for. A shortfall gates
-        // nothing — the goal is eligible again the moment there is capacity — and
-        // the assessor's write-up is the body of the ask in the queue below.
         demoIssue({
           id: 'iss-382',
           number: 382,
@@ -1026,8 +854,6 @@ export function buildDemoState(): DemoSeed {
           },
           spend: demoSpend(382, 4.38, 3, 1),
         }),
-        // Attempted twice and failed twice, so the dispatcher is waiting out the
-        // re-dispatch gap. The operator's own `more_work` is on it as well.
         demoIssue({
           id: 'iss-345',
           number: 345,
@@ -1045,8 +871,6 @@ export function buildDemoState(): DemoSeed {
           },
           spend: demoSpend(345, 3.08, 2),
         }),
-        // The cap spent: three agents have been and gone, and the harness has
-        // stopped rather than spending a fourth. Nothing moves until a person does.
         demoIssue({
           id: 'iss-359',
           number: 359,
@@ -1062,8 +886,6 @@ export function buildDemoState(): DemoSeed {
           },
           spend: demoSpend(359, 7.36, 3),
         }),
-        // Closed, and the harness never had a run at it — the reading `done`
-        // keeps, and the one a closed ticket gets on every deployment.
         demoIssue({
           id: 'iss-352',
           number: 352,
@@ -1074,8 +896,6 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'done', reasons: ['closed'] },
         }),
-        // Nobody opted it in. Listed, with its health, and never touched — the
-        // absent tag as a state rather than an absence.
         demoIssue({
           id: 'iss-366',
           number: 366,
@@ -1091,8 +911,6 @@ export function buildDemoState(): DemoSeed {
           },
         }),
       ],
-      // What the parent picker offers the orphan bug #341 — the list the server derives
-      // with `candidateParents`, written out so the fixture states what the wire carries.
       parentCandidates: [
         {
           number: 300,
@@ -1132,8 +950,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(4),
         updatedAt: ago(2),
       },
-      // The run behind #332's `active` — a story under the demo's one real Feature
-      // (#300), so the board has a goal-origin run to draw as being worked.
       {
         id: 'task-a3',
         kind: 'code',
@@ -1149,7 +965,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(23),
         updatedAt: ago(5),
       },
-      // The run behind #368's `active`, parked on a question (`esc-6`).
       {
         id: 'task-a4',
         kind: 'code',
@@ -1180,9 +995,6 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(100),
       },
     ],
-    // One decomposed issue, so the plan panel has a stack: part 1 merged, part 2 in
-    // review, part 3 held by the plan's two-at-a-time cap. Seen as pull requests, part
-    // 2 is the bottom rung and part 3 stacks on it, red only because part 2's are.
     stacks: [
       {
         ref: 'stack:413',
@@ -1209,11 +1021,7 @@ export function buildDemoState(): DemoSeed {
         ],
       },
     ],
-    // Withheld, because rung #414 is red — the state worth having in the demo, since
-    // "why can't I click it" is the question the control has to answer on its own.
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
-    // The two arrivals behind the reach rows below — what the signals list draws
-    // for an environment, and what the ticket comments were posted off.
     environmentArrivals: [
       {
         goalRef: 'issue:390',
@@ -1223,8 +1031,6 @@ export function buildDemoState(): DemoSeed {
         watchedAt: '2026-08-19T09:12:04.000Z',
       },
     ],
-    // One environment of each health worth drawing: well, not well with a tier and
-    // its own reasons, and a check that could not answer at all.
     environmentHealth: [
       {
         environment: 'staging',
@@ -1245,9 +1051,6 @@ export function buildDemoState(): DemoSeed {
         changedAt: '2026-08-19T08:05:00.000Z',
       },
     ],
-    // One goal in each of the readings worth drawing: whole, half, and unanswerable.
-    // `staging` opens both obligations, so the second goal also draws the hold —
-    // delivered, and its bench rows waiting on an environment it has not reached.
     environmentReach: [
       {
         goalRef: 'issue:390',
@@ -1282,9 +1085,6 @@ export function buildDemoState(): DemoSeed {
         released: null,
       },
     ],
-    // The layer above reach: two checks with two different answers, which is why every
-    // check is drawn rather than one word — and an `unknown` is never drawn in a clean
-    // one's words. No Feature carries an order: `issueSequencing` is off by default.
     featureSequences: [],
     goalWatchWindows: [
       {
@@ -1316,9 +1116,6 @@ export function buildDemoState(): DemoSeed {
               detail: null,
             },
           },
-          // The measure, drawn as expected / before / now — the line the card is
-          // worth looking at for: 310ms means nothing alone and everything beside
-          // the 8,400ms it replaced.
           {
             checkId: 'checkout-p95',
             title: 'Checkout is no slower at p95',
@@ -1366,18 +1163,11 @@ export function buildDemoState(): DemoSeed {
         ],
       },
     ],
-    // An environment that is up, so the indicator reads `running` and the panel has
-    // something to swap away from.
     localRun: {
       id: 'run-1',
-      // The stacked goal at the tip of its stack: a branch carrying its own pull
-      // request, with an earlier part behind it to fall back to.
       originRef: 'issue:390',
       ref: 'issue/390/validate',
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
-      // Where the checkout stands — two commits behind the branch's tip, so the
-      // panel has its Code tile amber and a Refresh to offer. A demo at the tip would
-      // show the control's absence, which is the half that needs no explaining.
       commit: '8b052b99c4d1e7f2a3b6c9d0e1f2a3b4c5d6e7f8',
       pid: 48211,
       status: 'running',
@@ -1393,12 +1183,8 @@ export function buildDemoState(): DemoSeed {
       note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
       startedAt: ago(18),
       endedAt: null,
-      // Never interrupted, and held on the latest beat: this one is up, with a live
-      // session behind it.
       interruptedAt: null,
       lastSeenAt: ago(0),
-      // What the session holding it up has cost so far — one of the two runs the
-      // spend panel's #390 row counts.
       costUsd: 0.22,
       inputTokens: 39_600,
       outputTokens: 1_980,
@@ -1406,24 +1192,12 @@ export function buildDemoState(): DemoSeed {
       cacheCreationTokens: 2_420,
       numTurns: 4,
       live: true,
-      // An environment that is already up has nothing in flight to caption. The
-      // phase is what a bring-up shows *while* it is happening — press Start in the
-      // demo and the scripted one in `demoBackend` runs through them.
       phase: null,
-      // Filled below, from the same rows the rows are: see `localRunTargets`.
       refFacts: null,
     },
-    // Filled below rather than written out: one entry per goal, and hand-maintaining
-    // twenty of them beside the issue list is how a fixture comes to describe a world
-    // that is not the one above it.
     localRunTargets: [],
-    // A vivarium with something in it, because an empty one is indistinguishable
-    // from the feature being broken — and the demo is where somebody decides
-    // whether they want it at all. Four species, four stages, one of each rarity.
     pets: {
       slots: 4,
-      // Well before the demo's own pets, so the line reads as a deployment that has
-      // been counting for a while rather than as one that started this morning.
       startedAt: '2026-05-02T09:00:00.000Z',
       wallet: { earned: 6_240, spent: 2_900, balance: 3_340 },
       pets: [
@@ -1510,8 +1284,6 @@ export function buildDemoState(): DemoSeed {
           originRef: '9c1d4a2',
           originLabel: '9c1d4a2',
           hatchedAt: ago(90),
-          // The demo's one unopened egg: the newest drop, still a shell in the
-          // corner of the rail, so the hatch is one click away in the tour.
           openedAt: null,
           placed: true,
           dissolvedAt: null,
@@ -1529,9 +1301,6 @@ export function buildDemoState(): DemoSeed {
         originRef: 'issue:390',
         title: 'Validate job payloads in the catalog, not in each runner',
         status: 'active',
-        // Deliberately left on the old shape: a plan written before `diagnosis`
-        // and `approach` existed, so the modal falls back to reading `reason` as
-        // the headline. Every plan in a real database predates them once.
         diagnosis: null,
         approach: null,
         reason: 'The schemas have to move into the catalog before anything can validate against them.',
@@ -1550,15 +1319,10 @@ export function buildDemoState(): DemoSeed {
           '## Why three PRs\n\n' +
           'Each part is independently reviewable and each one leaves the queue working — the schema move alone ' +
           'is a no-op re-export; the enqueue part alone tightens what may be written without changing what is read.',
-        // An active plan whose parts have moved: the reconciler has news to
-        // report, so its one living comment exists. Canonical (`issue:<n>:comment:<id>`)
-        // exactly as the server ships it — the store's provider id never reaches here.
         statusCommentRef: 'issue:390:comment:8391',
         createdAt: ago(300),
         updatedAt: ago(6),
       },
-      // A decomposition still waiting on a human: the approval escalation below
-      // and the plan card's Approve/Reject footer are the whole point of this entry.
       {
         id: 'plan-395',
         originRef: 'issue:395',
@@ -1616,8 +1380,6 @@ export function buildDemoState(): DemoSeed {
           '## The one thing I am unsure about\n\n' +
           'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
           'That means two modes and only one of them is covered by the tests.',
-        // An unapproved decomposition announces nothing, so the reconciler has
-        // deliberately written no comment for this one.
         statusCommentRef: null,
         createdAt: ago(12),
         updatedAt: ago(12),
@@ -1673,9 +1435,6 @@ export function buildDemoState(): DemoSeed {
         rationale:
           'Intake goes last — enqueue has to be proven out first, or a rejected job is indistinguishable from a bad write.',
         acceptance: 'Every runner receives a payload the catalog parsed; no runner re-parses one itself.',
-        // The one part the planner singled out (#342), so the demo teaches the
-        // control rather than only offering it: its siblings inherit the goal's
-        // pin and this one is drawn loudly because it does not.
         profile: 'deep',
         touches: [],
         acceptanceMet: [],
@@ -1687,8 +1446,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      // The step a person owns and the part waiting behind it — two rows, because a
-      // `cutover` nobody is waiting on looks identical on a list to one holding work up.
       demoPart({
         id: 'plan-390:cutover',
         planId: 'plan-390',
@@ -1730,8 +1487,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      // plan-395's three parts — all `ready`, none dispatched, because the plan
-      // itself is still awaiting approval (rule `plan-part` queues them `unapproved`).
       demoPart({
         id: 'plan-395:signer',
         planId: 'plan-395',
@@ -1787,8 +1542,6 @@ export function buildDemoState(): DemoSeed {
         seq: 3,
         title: 'Mint capabilities into the snapshot list',
         scope: 'The snapshot list payload that mints a capability per row, and the console row that opens it.',
-        // A rejoin: it wires the signer's output into the route, so it waits for
-        // *both* lanes to have merged rather than stacking on either.
         dependsOn: ['signer', 'route'],
         rationale:
           'Touches the console as well as the API, so it waits until both the signer and the route it points at exist.',
@@ -1807,9 +1560,6 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       }),
     ],
-    // A validation plan on the plan awaiting approval, so the sheet's section and the
-    // flag are both reachable. Ten checks, one of each state the section can draw, so
-    // the card's weighting can be read off the demo.
     validationChecks: [
       demoCheck({
         id: 'download-opens-in-a-new-tab',
@@ -1836,9 +1586,6 @@ export function buildDemoState(): DemoSeed {
         do: 'Set `AUTH_ENABLED` to false, restart the API, and open the same link.',
         expect: 'The file downloads with no capability in the URL at all.',
         covers: ['route'],
-        // The case the amber band exists for, and the reason it is in the demo
-        // rather than only in a test: somebody ran this, and then the check
-        // stopped being the check they ran.
         amendedAt: ago(3),
         amendNote:
           'An agent working this goal amended the validation plan: the unsigned path now redirects rather ' +
@@ -1863,14 +1610,9 @@ export function buildDemoState(): DemoSeed {
         covers: ['signer'],
         fleetCandidate: true,
         candidateWhy: 'a plain HTTP request against a running API; needs no login and no browser',
-        // Claimed right now by a desktop session, nine minutes in — otherwise
-        // unreachable by clicking, and the whole of what the fleet list's keyboard
-        // entry draws from. The demo backend drops it two beats after load.
         claimedBy: 'desktop (studio)',
         claimedAt: ago(9),
       }),
-      // The two ends of a hand-over, neither reachable by clicking around: one check is
-      // with the fleet and one came back.
       demoCheck({
         id: 'expired-capability-refused',
         createdAt: ago(12),
@@ -1885,9 +1627,6 @@ export function buildDemoState(): DemoSeed {
         candidateWhy: 'clock arithmetic and one request; nothing interactive',
         actor: 'fleet',
         state: 'passed',
-        // Attributed, and that is the point of drawing it at all: "an agent says
-        // this passed" is a weaker fact than "I ran it and it passed", and the
-        // section must never let the second be read off the first.
         resultNote: 'Minted a 1s capability, slept 2s, requested it: 403 "capability expired". Snapshot not served.',
         resultBy: 'agent',
         resultAt: ago(1),
@@ -1902,14 +1641,8 @@ export function buildDemoState(): DemoSeed {
         do: 'Open /snapshots at 380px wide and tap a download link.',
         expect: 'The link is hittable and the file downloads.',
         covers: ['route'],
-        // The answer that is neither a pass nor a failure, and the reason there
-        // are three: this agent found nothing out about the goal, so recording
-        // `failed` would have flagged it for something that is not about the code.
         handbackNote: 'An agent could not run this check: it needs a browser at a set viewport, and I have none.',
       }),
-      // The hand-back's other ending: the operator's own Claude picked the same
-      // kind of check up on a machine that *does* have a browser, and the row
-      // says which of the three kinds of reader took the reading.
       demoCheck({
         id: 'proposal-sheet-scrolls-on-a-phone',
         createdAt: ago(12),
@@ -1925,9 +1658,6 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'desktop',
         resultAt: ago(1),
       }),
-      // The three readings that are not a pass, one each — what the card's weighting is
-      // for: a failure and an unrun check are still owed, a waiver is settled, and a
-      // deferral sits between them saying who it waits on.
       demoCheck({
         id: 'pruned-snapshot-mints-nothing',
         createdAt: ago(12),
@@ -1957,8 +1687,6 @@ export function buildDemoState(): DemoSeed {
         covers: ['signer'],
         state: 'deferred',
         resultNote: 'There is no rotation path yet — the signer part is the one that adds it.',
-        // Free text rather than a date, which is what the route asks for: a
-        // deferral is usually waiting on a thing rather than on a day.
         deferUntil: 'the signer part merges',
         resultBy: 'operator',
         resultAt: ago(2),
@@ -1978,9 +1706,6 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'operator',
         resultAt: ago(2),
       }),
-      // The withdrawn check, which is otherwise the one part of the section a
-      // demo never draws: the fold only appears when a plan has dropped
-      // something, and nothing in the cockpit amends a plan.
       demoCheck({
         id: 'bearer-token-never-in-a-url',
         createdAt: ago(12),
@@ -1997,8 +1722,6 @@ export function buildDemoState(): DemoSeed {
       }),
     ],
     validationResources: [],
-    // The post-deploy watch: one signal, dry-run against the environment and firing —
-    // the reading that proves the query is live *and* the defect real.
     goalWatches: [
       {
         originRef: 'issue:284',
@@ -2026,9 +1749,6 @@ export function buildDemoState(): DemoSeed {
         proposal: null,
         authored: 'plan',
       },
-      // A measure the working agent declared through `watch_declare`, waiting on
-      // the operator: nothing has been put to an environment, because the query
-      // would run against their telemetry with their own credential.
       {
         originRef: 'issue:284',
         id: 'snapshot-download-p95',
@@ -2078,8 +1798,6 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     jobs: [],
-    // One recurrence, so the schedule list is not an empty box. `nextRunAt` is null
-    // because the cron parser is server code and a copy here could disagree with it.
     schedules: [
       {
         id: 'sch-1',
@@ -2096,20 +1814,7 @@ export function buildDemoState(): DemoSeed {
         updatedAt: new Date(now - 3 * 24 * 3_600_000).toISOString(),
       },
     ],
-    // Every list `/api/state` always ships, empty here because the demo has no story
-    // for them. Present rather than omitted: the wire sends them unconditionally.
     recovery: [],
-    // A build a day behind, which is the state the update ask exists for: current
-    // is one muted line and teaches nothing, and the changelog — what changed, who
-    // wrote it, how long it has been sitting — is the whole reason the panel beats
-    // the gauge it replaced. `behind` is 14 against ten commits carried, because
-    // the reading itself caps at ten (`MAX_COMMITS`) and a demo that never showed
-    // a capped list would leave the card's "…and N more" line undrawn on the one
-    // surface built to rehearse it.
-    //
-    // The subjects are LubbDubb's own, not Markdown Magpie's: this is the harness
-    // watching the process it runs inside, and it is the one card on the Overview
-    // that is not about the codebase the fleet is pointed at.
     build: {
       state: 'behind',
       label: '14 behind',
@@ -2190,22 +1895,10 @@ export function buildDemoState(): DemoSeed {
         unavailable: null,
       },
       intent: { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false },
-      // The *worked* repository, read on the same timer by the same reader. Three
-      // commits on Markdown Magpie's `main` that this clone has not got — two of
-      // them the fleet's own merges, one a hand-landed hotfix, which is the case
-      // the card exists for: work in the project that no goal, pull request or
-      // arrival on this page accounts for.
-      //
-      // Clean, and that is load-bearing rather than incidental: `upgradability`
-      // refuses an upgrade over uncommitted changes in *either* checkout, so a
-      // dirty fixture here would draw a build panel with no controls, and no upgrade
-      // ask on the rail, hiding the feature the demo is showing.
       project: {
         head: 'c18a6f30b94d27e5a0f3d81c6b52e9047fa13d6e',
         upstream: '5d9e0c41a7b8362fd05e1749cb3a806e2f4d91b7',
         behind: 3,
-        // One commit of this clone's own — somebody's local hotfix that never went
-        // up. It is what refuses the auto-pull below, and it refuses nothing else.
         ahead: 1,
         commits: [
           {
@@ -2232,45 +1925,15 @@ export function buildDemoState(): DemoSeed {
         checkedAt: ago(2),
         unavailable: null,
       },
-      // The server folds this from the standing above (`projectPullability`); the
-      // fixture states it, because `web/src/` may name no server module but
-      // `src/wire.ts`. It has to agree with the standing by hand, which is the
-      // price of that rule and the reason the demo keeps the two adjacent.
-      //
-      // Refused, and refused on `ahead` rather than on `dirty`, which is the one
-      // choice this fixture had to make carefully. Auto-pull is on, so a checkout
-      // that *could* be pulled is one the harness would have pulled already — the
-      // rail row only exists where something is in the way, and a demo showing no
-      // obstruction would show no row. Dirty is the obvious obstruction and is the
-      // one that cannot be used: `upgradability` refuses the whole upgrade over a
-      // dirty project checkout, so it would take the Upgrade ask away with it.
-      // A local commit blocks the pull and nothing else.
       projectPull: {
         can: false,
         blocked:
           'the project checkout carries 1 commit of its own, so the pull is not a fast-forward — ' +
           'merge or rebase it by hand',
       },
-      // On, which is what makes the refusal above worth a row: a deployment that
-      // pulls by hand has already said so, and telling it daily that auto-pull is
-      // off would be the harness reporting the operator's own decision as news.
       projectAutoPull: true,
-      // Neither ask is snoozed, so the demo opens on the state the rail rows exist
-      // to be seen in. Snooze is the demo's one destructive-looking control that
-      // is not: it hides a row for thirty minutes and the fixture is reloaded on
-      // every visit.
       snoozedUntil: { upgrade: null, projectPull: null },
     },
-    // Left the tracker's open set — moved to Resolved in Azure — while the
-    // harness still holds its run: the state that separates "the ticket is
-    // shut" from "the work is over". Beside `world.issues` rather than in it,
-    // which is where a real deployment carries a retained run, and marked
-    // `stale` — the tracker's copy is from the last pulse it was live, the
-    // run, conclusion and spend are the harness's own. The only way out is the
-    // operator's dismissal, which is why it is a queue row and not a chip.
-    // The pull requests the world stopped reporting hours ago, kept for good: what
-    // goal 390 shipped first, still on its page months later. Stale by
-    // construction — no verdicts, and nothing re-reads them.
     archivedPullRequests: [
       {
         id: 'pr-388',
@@ -2312,14 +1975,8 @@ export function buildDemoState(): DemoSeed {
     ],
     flags: [],
     artifactUrls: {},
-    // The demo has no attachments: their bytes live on a disk the demo does not
-    // have, and a thumbnail is the one thing here that cannot be faked from a
-    // fixture.
     attachments: [],
     attachmentUrls: {},
-    // A path two live agents are both editing from different branches. Neither
-    // dispatch gate is violated — the collision only exists inside the worktrees,
-    // which is the whole point of detecting it off what was actually written.
     overlaps: [
       {
         path: 'apps/api/src/config-holder.ts',
@@ -2347,13 +2004,7 @@ export function buildDemoState(): DemoSeed {
         ],
       },
     ],
-    // Empty for the same reason `canFileTickets` is false: the demo has no tracker
-    // to raise a bug into, so a row here would be a link to nothing.
     bugFilings: [],
-    // Work only a person can do. Four, so the panel shows each shape it has: a
-    // plan step holding parts shut, a standalone ask from an agent that could not
-    // do it itself, one already declined with the note that stopped it, and the
-    // harness's own close-out on the goal it delivered but cannot close.
     humanTasks: [
       {
         id: 'hum-1',
@@ -2411,10 +2062,6 @@ export function buildDemoState(): DemoSeed {
         dismissedAt: null,
       },
       {
-        // The harness's own, on the goal it delivered at #364 and cannot close.
-        // Nobody asked for it — no agent, no operator — which is what a
-        // `close_out` with a null `agentId` says, and it settles itself as soon as
-        // the tracker stops listing the item open.
         id: 'hum-4',
         title: 'Close issue #364 in the tracker',
         detail:
@@ -2476,8 +2123,6 @@ export function buildDemoState(): DemoSeed {
         numTurns: 2,
         note: 'Rebasing onto main — three files conflict, working through them in order',
         notedAt: ago(9),
-        // Asked, then carried on regardless: the demo's one stale alert, so the
-        // "agent resumed" chip and Dismiss have something to act on.
         resumedAt: ago(2),
         resumeAttempts: 0,
       },
@@ -2540,31 +2185,16 @@ export function buildDemoState(): DemoSeed {
         cacheReadTokens: 975_000,
         cacheCreationTokens: 71_000,
         numTurns: 9,
-        // A finished agent keeps its last note: the one-line summary of the run.
         note: 'Suite green, PR opened',
         notedAt: ago(100),
         resumedAt: null,
         resumeAttempts: 0,
       },
     ],
-    // Nobody in the demo world is out of account limit. The key is here rather
-    // than absent because the wire always ships it, and a surface that has never
-    // seen the empty case is one that renders it wrong the first time it happens.
-    // The demo's ended agents are all in the list above, so the count is the
-    // list's — what a deployment inside the tail reads.
     endedAgents: 0,
-    // Empty, and it has to be: a readying row is an action a live process is inside
-    // an await on, and a fixture's would draw as one that had been being readied
-    // since the fixture was written.
     readying: [],
     parkedOnLimit: [],
-    // Nor is anybody stopped without saying why. Present-and-empty for
-    // `parkedOnLimit`'s reason: the wire always ships it, and the empty case is the
-    // one a surface renders wrong if it has never seen it.
     stallParks: [],
-    // The act behind the drafted-reply escalation below. It is what turns that
-    // card from "type something" into "approve & send / reject": the draft was
-    // written, and nothing goes out until you say so.
     proposals: [
       {
         id: 'prop-1',
@@ -2585,7 +2215,6 @@ export function buildDemoState(): DemoSeed {
         escalationId: 'esc-2',
         createdAt: ago(1),
       },
-      // The plan decomposition itself, held for a human before any part is scheduled.
       {
         id: 'prop-2',
         kind: 'plan',
@@ -2596,10 +2225,6 @@ export function buildDemoState(): DemoSeed {
           reason: 'Issue #395 was decomposed into 3 part(s) and approval is required before any is scheduled.',
           planId: 'plan-395',
           originRef: 'issue:395',
-          // What `planCaveats` would have written for this plan: the planner
-          // declared both uncertainty and risks, so approving it is gated on
-          // reading them. Without these the demo draws a plan approval that is
-          // one click, which is the shape the checklist exists to replace.
           caveats: [
             {
               id: 'open-questions',
@@ -2627,9 +2252,6 @@ export function buildDemoState(): DemoSeed {
         escalationId: 'esc-3',
         createdAt: ago(12),
       },
-      // The merge of #390's second rung, held for the operator: auto-merge is off
-      // in the demo (see `dec-1`), so a green, approved pull request is proposed
-      // rather than landed. This is what PR #413's `attention: you` is about.
       {
         id: 'prop-3',
         kind: 'merge',
@@ -2645,10 +2267,6 @@ export function buildDemoState(): DemoSeed {
     ],
     escalations: [
       {
-        // A drafted PR reply held for sign-off — the auto-send gate wrote a
-        // response to the reviewer's comment on #412 but wasn't confident enough
-        // to send it unattended, so it escalates for approval (the "Draft reply"
-        // panel + approve flow).
         id: 'esc-2',
         type: 'review_reply',
         status: 'open',
@@ -2670,9 +2288,6 @@ export function buildDemoState(): DemoSeed {
         answeredAt: null,
       },
       {
-        // The plan-approval ask: "Needs you" gets a card with a link into the same
-        // plan modal rather than a free-text prompt, since a decomposition is
-        // approved or rejected, never typed into.
         id: 'esc-3',
         type: 'approve_change',
         status: 'open',
@@ -2684,14 +2299,7 @@ export function buildDemoState(): DemoSeed {
         context: {
           originRef: 'issue:395',
           planId: 'plan-395',
-          // Whose words these are, said rather than guessed at. A plan approval
-          // has no agent behind it and is not an assessment, so a card deriving
-          // the label from "no agent" would caption a planner's decomposition as
-          // an assessor's finding.
           detailFrom: 'What the plan says',
-          // What it found and what it will do about it — not the split, which is
-          // drawn in the plan panel the card's own button opens. Markdown, so the
-          // demo shows the rendered path rather than the grey block it used to be.
           detail:
             "**What's wrong**\n\n" +
             'The snapshot download route sits inside the `/api` prefix the console guards with a bearer token, ' +
@@ -2709,9 +2317,6 @@ export function buildDemoState(): DemoSeed {
         answeredAt: null,
       },
       {
-        // Several questions in one park (the questionnaire). The demo carries one
-        // because it is the shape that changes how the inbox reads: a count chip
-        // and a button where the answer box was, with the questions in a modal.
         id: 'esc-4',
         type: 'resolve_ambiguity',
         status: 'open',
@@ -2737,8 +2342,6 @@ export function buildDemoState(): DemoSeed {
             { question: 'Capability in the query string, or a path segment?' },
           ],
         },
-        // Agentless, like the plan approval above: an ask with no agent is the
-        // operator's alone, and the queue groups it as `yours` rather than blocking.
         agentId: null,
         taskId: null,
         response: null,
@@ -2762,10 +2365,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(2),
         answeredAt: null,
       },
-      // A question raised against a *goal* rather than a pull request — `esc-1`
-      // above names `pr:409`, and the feature board counts a question under a
-      // Feature only where the escalation names one of its stories. This is that
-      // arm: #368's agent parked, the fleet stopped on it, and a reply owed.
       {
         id: 'esc-6',
         type: 'answer_question',
@@ -2783,9 +2382,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(6),
         answeredAt: null,
       },
-      // The ask behind `prop-3`: the harness, not an agent, holding a merge for a
-      // verdict. Agentless for the plan approval's reason — nothing is parked on
-      // it, so the queue groups it as the operator's own.
       {
         id: 'esc-7',
         type: 'approve_change',
@@ -2803,17 +2399,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(15),
         answeredAt: null,
       },
-      // The harness asking, not an agent: a shortfall whose cause is the goal
-      // itself, which schedules nothing and so is a question rather than a
-      // proposal. Here because it is the *long* case — the assessor's write-up is
-      // the body of the card — and the card that has to stay readable is this one.
-      // Note the shape: a one-line prompt, and every word the assessor wrote in
-      // `detail`, quoted rather than spliced into the harness's sentence.
       {
-        // `esc-5`, not a second `esc-4`: the goal page resolves a queue row back to
-        // its escalation by id, so two open rows sharing one id would pin this
-        // assessment to the wrong goal's page — and the rail would key two rows the
-        // same.
         id: 'esc-5',
         type: 'resolve_ambiguity',
         status: 'open',
@@ -2876,7 +2462,6 @@ export function buildDemoState(): DemoSeed {
         id: 'dec-2',
         cycleId: 'cycle-101',
         action: { type: 'escalate_to_human', reason: 'agent parked on a human' },
-        // An escalation is about a human, not a ticket: the column draws a dash.
         subjectRef: null,
         outcome: 'executed',
         detail: 'Rebase conflict on PR #409 needs a call',
@@ -2896,13 +2481,6 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(12),
       },
     ],
-    // The dispatcher's ranked pickup plan from the "last pulse": cap 5 with four
-    // live agents leaves headroom 1, so the top candidate dispatches and the
-    // rest sit below the cut.
-    // A fleet with more work than slots — the state the harness is *for*, so the
-    // demo shows the band at rest rather than mid-alarm. The queued figure is
-    // above the reservoir deliberately: a demo whose headline reading is a
-    // warning teaches the warning as the normal case.
     runway: {
       state: 'healthy',
       runwayMinutes: 187,
@@ -2933,16 +2511,10 @@ export function buildDemoState(): DemoSeed {
           branch: 'issue/341',
           status: 'dispatching',
           reason: 'Open issue #341 has no linked PR and no agent is on it.',
-          // What the row will launch on, resolved from `agentModels.byRule` — the
-          // ordinary case, and the one the panel has to state for the queue to
-          // answer "which profile" at all.
           profile: 'standard',
           profileSource: 'rule',
         },
         {
-          // Held by the plan's own concurrency cap rather than by fleet headroom —
-          // a free slot wouldn't start it, which is why it says `capped` and not
-          // `waiting`, and why it is queued at all rather than skipped in silence.
           origin: 'issue:390:part:watcher',
           rule: 'plan-part',
           title: 'Issue #390 part: Route the watcher’s job intake through the catalog',
@@ -2951,16 +2523,11 @@ export function buildDemoState(): DemoSeed {
           status: 'capped',
           reason:
             'Part "watcher" of issue #390 is ready and stacks on issue/390/validate. Held: issue #390 is already at its 2-part concurrency cap.',
-          // Priced by the operator from this very panel: mechanical work they
-          // could see was mechanical. A held row is priced too — "what will it
-          // cost when it runs" is exactly the question being asked of it.
           profile: 'fast',
           profileSource: 'pin',
           override: 'fast',
         },
         {
-          // Queued but held, same as `watcher` above — this time by the plan's own
-          // awaiting_approval status rather than a concurrency cap.
           origin: 'issue:395:part:signer',
           rule: 'plan-part',
           title: 'Issue #395 part: Add the download capability signer',
@@ -2969,8 +2536,6 @@ export function buildDemoState(): DemoSeed {
           status: 'unapproved',
           reason:
             'Part "signer" of issue #395 is ready and has no agent. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
-          // The plan named this part deep, and nothing has overridden it: the
-          // picker reads "Pinned (deep)" rather than offering the fleet default.
           profile: 'deep',
           profileSource: 'pin',
         },
@@ -3011,8 +2576,6 @@ export function buildDemoState(): DemoSeed {
       { id: 'we-2', kind: 'issue_opened', ref: 'issue:341', summary: 'Issue #341 opened', createdAt: ago(15) },
       { id: 'we-1', kind: 'pr_merged', ref: 'pr:406', summary: 'PR #406 merged', createdAt: ago(30) },
     ],
-    // Ref → URL map the real provider builds; canned here so the demo's issue/PR
-    // references render as clickable links, keyed by how they appear in the UI (`#N`).
     refUrls: {
       '#412': 'https://github.com/example/markdown-magpie/pull/412',
       '#411': 'https://github.com/example/markdown-magpie/pull/411',
@@ -3021,10 +2584,6 @@ export function buildDemoState(): DemoSeed {
       '#410': 'https://github.com/example/markdown-magpie/pull/410',
       '#406': 'https://github.com/example/markdown-magpie/pull/406',
       '#405': 'https://github.com/example/markdown-magpie/pull/405',
-      // Every open pull request is here, because the server's `buildRefUrls` puts
-      // every one of them there — a demo missing three drew them as plain text on
-      // the one card whose whole job is to be a way to a pull request, and looked
-      // like `<Ref>` refusing rather than like a fixture with a hole in it.
       '#407': 'https://github.com/example/markdown-magpie/pull/407',
       '#408': 'https://github.com/example/markdown-magpie/pull/408',
       '#414': 'https://github.com/example/markdown-magpie/pull/414',
@@ -3047,20 +2606,9 @@ export function buildDemoState(): DemoSeed {
       '#395': 'https://github.com/example/markdown-magpie/issues/395',
       '#366': 'https://github.com/example/markdown-magpie/issues/366',
       '#376': 'https://github.com/example/markdown-magpie/issues/376',
-      // The two comments the harness maintains on a ticket by itself, keyed by the
-      // canonical ref the snapshot ships and anchored the way the provider builds
-      // them. Absent from this map ⇒ the cockpit draws no way in at all.
       'issue:390:comment:8391': 'https://github.com/example/markdown-magpie/issues/390#issuecomment-8391',
       'issue:379:comment:8402': 'https://github.com/example/markdown-magpie/issues/379#issuecomment-8402',
-      // The colon form, which is what the harness speaks: a part's ref, a job's
-      // origin, an agent's origin and a decision's subject are all structured refs,
-      // and the `#n` keys above answer none of them. The server keys both families
-      // for the same items (see `buildRefUrls`), so the demo does too — otherwise
-      // the Pages build is the one place every new link renders as plain text.
       'issue:341': 'https://github.com/example/markdown-magpie/issues/341',
-      // The ticket a claim's `ticket` exit produced. Brand new, so it is in no
-      // world list the `#n` keys are built from — which is exactly why the server
-      // resolves a graduation's `ticketRef` directly rather than borrowing it.
       'issue:352': 'https://github.com/example/markdown-magpie/issues/352',
       'issue:364': 'https://github.com/example/markdown-magpie/issues/364',
       'issue:371': 'https://github.com/example/markdown-magpie/issues/371',
@@ -3076,8 +2624,6 @@ export function buildDemoState(): DemoSeed {
       'pr:412': 'https://github.com/example/markdown-magpie/pull/412',
       'pr:412:ci': 'https://github.com/example/markdown-magpie/pull/412/checks',
     },
-    // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
-    // canned to just the rules the demo's decisions reference.
     dispatchRules: {
       'pr-ci-failing': {
         kind: 'rule',
@@ -3128,8 +2674,6 @@ export function buildDemoState(): DemoSeed {
           'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',
       },
     },
-    // Claude usage: canned subscriber limits (as the PTY status-line capture
-    // would report) plus rolling cost windows summed from agent turn reports.
     usage: {
       windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 },
       rateLimits: {
@@ -3137,20 +2681,12 @@ export function buildDemoState(): DemoSeed {
         sevenDay: { usedPercentage: 30, resetsAt: ahead(3 * 24 * 60) },
         capturedAt: ago(1),
       },
-      // The remainder no goal's card shows — an operator's job the graph never
-      // linked to a ticket. Non-zero on purpose: the honest demo of a partition is
-      // one where the parts visibly do not add to the whole.
       unattributedCostUsd: 0.86,
     },
-    // The Yield gauge's reading. Not every run finishes in the demo either: a
-    // fleet that has never lost one is a fleet whose gauge nobody would click.
     runOutcomes: { settled: 24, live: 4, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
   };
 
   const transcripts: Record<string, string> = {
-    // Real `renderBlocks` output, markers intact — stamps included — so the demo
-    // exercises the drawer's collapsed tool blocks rather than only plain prose. The
-    // times are literals like every other demo value: nothing here reads a clock.
     'agent-a1': [
       'Reading feature/context-budget — the failing case is a question that matches every section.\n',
       '\x1b[2m[10:14:02]\x1b[0m \x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/retrieval\x1b[0m\n',
@@ -3214,12 +2750,6 @@ export function buildDemoState(): DemoSeed {
     ].join('\n'),
   };
 
-  // Where the local run could be pointed, and what has happened on each of those
-  // branches. **Restated, not imported** — the demo has no server to ask, the same
-  // reason the questionnaire fold above is restated. It mirrors `localRunChoices`
-  // and `localRunRefFacts` in `src/`: the tip of the stack is the furthest-along part
-  // with a branch, and the pull request is the one on *that branch* and never one
-  // borrowed from elsewhere on the goal.
   const stale = (status: PlanPart['status']): boolean =>
     status === 'merged' || status === 'retired' || status === 'concluded';
   const allPrs: PullRequest[] = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
@@ -3231,9 +2761,6 @@ export function buildDemoState(): DemoSeed {
       : ([] as PlanPartView[]);
     const branched = parts.filter((p) => p.branch !== null && p.branch !== '');
     const tip = [...branched].reverse().find((p) => !stale(p.status)) ?? null;
-    // The goal's own branch, the way `openPrForIssue` finds it: the conventional
-    // name, or whatever its linked pull request is on. A goal nobody decomposed has
-    // its whole work there.
     const ownPr =
       state.world.pullRequests.find(
         (r) => r.merged !== true && (r.number === issue.linkedPrNumber || r.branch === `issue/${String(issue.number)}`),
@@ -3268,8 +2795,6 @@ export function buildDemoState(): DemoSeed {
         ),
       };
     };
-    // Its own branch first, then its parts in plan order — the order
-    // `localRunChoices` builds them in.
     const options: LocalRunTargetView['options'] = [];
     if (ownPr !== null) options.push({ option: { ref: ownPr.branch, part: null }, facts: facts(ownPr.branch) });
     for (const part of branched) {
@@ -3288,9 +2813,6 @@ export function buildDemoState(): DemoSeed {
     };
   });
   if (state.localRun !== null) {
-    // Facts for the run's **own** ref, never the goal's default. Falling back to the
-    // target is the tempting shortcut and it describes a different branch than the
-    // one that is up — which is the whole failure this view exists to end.
     const run: string = state.localRun.ref;
     const parts = state.planParts.filter((p) => {
       const plan = state.plans.find((pl) => pl.id === p.planId);
@@ -3328,19 +2850,6 @@ export function buildDemoState(): DemoSeed {
   return { state, transcripts };
 }
 
-/**
- * A plan's revision history, for the sheet's "What changed" view.
- *
- * Authored rather than derived, and only for `plan-395` — the demo's world is
- * built fresh in the browser each load, so no replan has ever landed in it and
- * there is nothing to snapshot. The real route reads `plan_revisions`, which
- * `ingestPlanDocument` writes on every submission.
- *
- * The amendment below is the one worth showing: a discussion in which the
- * operator argued the console change was not a fourth pull request, the planner
- * agreed and folded it in. Anything else answers with no revisions, which is what
- * a plan with no history draws — no History control at all.
- */
 export function demoPlanHistory(planId: string): PlanHistory {
   if (planId !== 'plan-395') return { revisions: [], diff: null, pending: null };
   const at = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
@@ -3452,9 +2961,6 @@ export function demoPlanHistory(planId: string): PlanHistory {
     },
   ];
   return {
-    // The demo's plan has already been amended and released, so there is nothing
-    // waiting on the operator — the sheet's pending block is drawn from a live
-    // harness, where a running plan is what an amendment is proposed against.
     pending: null,
     revisions,
     diff: {
@@ -3509,5 +3015,4 @@ export function demoPlanHistory(planId: string): PlanHistory {
   };
 }
 
-/** The declaration half of a part, as a revision stores it — `seq` and all. */
 type PlanPartInputView = PlanRevision['parts'][number];

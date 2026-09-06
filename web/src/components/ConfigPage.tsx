@@ -14,27 +14,8 @@ import { ReviewWrite } from './ReviewWrite.js';
 import { ThemeSettings } from './ThemeSettings.js';
 import { Button } from './button.js';
 
-/**
- * Configuration, as a surface rather than a modal.
- *
- * It was a modal with three tabs, opened from the top bar, until the page it had
- * outgrown was drawn: fifty keys, five sections and a file to reconcile against
- * is a thing you work in, and a modal is a thing you glance at and dismiss. The
- * decisive argument is smaller than that, though — a modal cannot be linked to.
- * "Look at what `agentMode` is set to on the box" is a URL now.
- *
- * Everything that says *where you are* lives on `Place` (`cockpit/place.ts`) and
- * nothing lives in a `useState` here: the section, and the group it is showing.
- * A surface held outside the address bar compiles, renders and works until the
- * back button steps over it or a reload drops it, and neither is a thing
- * `npm run check` can see.
- *
- * What is **not** here is a second store. Every section reads and writes
- * `lubbdubb.config.json`; the file stays the source of truth, and an edit made in
- * an editor lands on the same apply path these do.
- *
- * → `docs/spec/17-cockpit.md#configuration`
- */
+// → docs/spec/17-cockpit.md
+
 const TABS: readonly { id: ConfigTab; label: string }[] = [
   { id: 'values', label: 'Values' },
   { id: 'raw', label: 'Raw file' },
@@ -45,14 +26,6 @@ const TABS: readonly { id: ConfigTab; label: string }[] = [
   { id: 'theme', label: 'Theme' },
 ];
 
-/**
- * The state words the tracker is reporting, for the colour picker to offer.
- *
- * Read off the world rather than fetched: `issueStateColours` is a policy about a
- * vocabulary the operator already has in front of them on the backlog, and a
- * second request for a list the snapshot is holding is a second answer that can
- * disagree with it.
- */
 function trackerStates(view: CockpitView): string[] {
   const seen = new Set<string>();
   for (const issue of view.state.world.issues) seen.add(issue.workItemState ?? issue.state);
@@ -62,10 +35,6 @@ function trackerStates(view: CockpitView): string[] {
 export function ConfigPage({ view, actions }: { view: CockpitView; actions: CockpitActions }): React.JSX.Element {
   const [payload, setPayload] = useState<RunningConfigPayload | null>(null);
   const [staged, setStaged] = useState<Staged>({ set: {}, clear: [] });
-  // The review step, once the operator has asked to see what the write would do.
-  // Held here rather than on `Place` deliberately: it is a step inside an
-  // unsaved edit, and a URL that restored it would restore a review of changes
-  // the reload has already dropped.
   const [reviewing, setReviewing] = useState(false);
   const [saved, setSaved] = useState<readonly ConfigChange[] | null>(null);
   const themeEdit = useThemeUnsaved();
@@ -79,9 +48,6 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
   };
   useEffect(load, []);
 
-  // The file moved — a save from another cockpit, or the watcher picking up an
-  // edit on disk. Re-read rather than patch: the payload is what `/api/config`
-  // answers, and half of it applied here would be a second opinion about it.
   useEffect(() => {
     const onChanged = (): void => load();
     window.addEventListener('lubbdubb:config-changed', onChanged);

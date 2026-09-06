@@ -21,12 +21,6 @@ import type { Agent, PadDecision, ScratchEntry } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildApp } from '../src/server/app.js';
 
-/**
- * Review packs, stage 1: the witness log — a fork is a pad entry with a decision,
- * and a pull request's agents have a pad of their own.
- * → docs/spec/31-review-packs.md#the-witness-log
- */
-
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
   isError?: boolean;
@@ -79,14 +73,9 @@ const FORK: PadDecision = {
   paths: ['src/store/scratch.ts', 'src/store/schema.ts'],
 };
 
-// -- the pure layer ----------------------------------------------------------
-
 test("a pull request's concerns resolve to the pull request's own pad, which is not a goal", () => {
   for (const origin of ['pr:42', 'pr:42:ci', 'pr:42:review', 'pr:42:comment:abc', 'pr:42:merge']) {
     assert.equal(padOriginFor(origin), 'pr:42', origin);
-    // The readers that scope a briefing, an instruction or an attachment to "the
-    // goal this agent is working" see no goal here: nothing about an issue reaches
-    // a PR concern, and the PR pad reaches its agents through scratch_read.
     assert.equal(goalOriginFor(origin), null, origin);
   }
   assert.equal(goalOriginFor('issue:12:part:schema'), 'issue:12');
@@ -100,12 +89,9 @@ test('a decision is normalised whole, and absent means a note', () => {
   const whole = normalisePadDecision(FORK);
   assert.deepEqual(whole, { ok: true, decision: FORK, trimmed: false });
 
-  // The lists may be omitted, and come back empty rather than missing: a reader
-  // never has to ask which fields a fork carries.
   const bare = normalisePadDecision({ chose: 'x', because: 'y' });
   assert.deepEqual(bare, { ok: true, decision: { chose: 'x', because: 'y', rejected: [], paths: [] }, trimmed: false });
 
-  // One line each: a paragraph is collapsed, not refused.
   const folded = normalisePadDecision({ chose: '  two\n  lines ', because: 'why' });
   assert.equal(folded.ok && folded.decision?.chose, 'two lines');
 });
@@ -164,8 +150,6 @@ test('a fork is replayed with its decision wherever the pad is read', () => {
   assert.doesNotMatch(padTestimony([{ ...entry, decision: null }]), /Rejected|chose:/, 'a note carries no fork lines');
 });
 
-// -- the tool channel --------------------------------------------------------
-
 test('a fork is stored and read back whole, and a note is unaffected', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:schema');
@@ -189,14 +173,11 @@ test('a fork is stored and read back whole, and a note is unaffected', async () 
   assert.equal(entries[1]?.decision, null);
   assert.equal(entries[1]?.note, 'an ordinary note');
 
-  // The tool's own reading carries it too, so the next agent on the goal sees the
-  // fork and not only the note beside it.
   const read = await callTool(system, agent, 'scratch_read', {});
   const payload = JSON.parse(read.text) as { entries: { note: string; decision: PadDecision | null }[] };
   assert.deepEqual(payload.entries[0]?.decision, FORK);
   assert.equal(payload.entries[1]?.decision, null);
 
-  // And the cockpit's route serves the same rows.
   const built = await buildApp(system);
   const pad = await built.app.inject({ method: 'GET', url: '/api/scratchpads/issue:12' });
   assert.equal(pad.statusCode, 200);
@@ -223,9 +204,6 @@ test('a malformed decision is refused by name through the tool, and lands nowher
 
 test("a pull request's agents write to the pull request's own pad, never the issue's", async () => {
   const system = build();
-  // The join the old refusal guarded against, made real: PR 42 is linked to issue
-  // 12, and `linkedPrNumber` is sticky. The PR's pad must still not be a door
-  // into the issue's.
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'Adds the thing', branch: 'issue/12' });
   system.connector.inject({ kind: 'issue_linked_pr', number: 12, prNumber: 42 });
@@ -244,7 +222,6 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   assert.equal(onPr.isError, false, onPr.text);
   assert.match(onPr.text, /"pad":\s*"pr:42"/);
 
-  // Two records, neither reachable from the other.
   assert.deepEqual(
     system.store.listScratchEntries('pr:42').map((e) => e.note),
     ['the failing check was the base branch'],
@@ -263,7 +240,6 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   const issueRead = await callTool(system, issueAgent, 'scratch_read', {});
   assert.doesNotMatch(issueRead.text, /base branch/, "an issue agent cannot read the PR's pad");
 
-  // The route resolves the same way the tool does.
   const built = await buildApp(system);
   const viaConcern = await built.app.inject({ method: 'GET', url: '/api/scratchpads/pr:42:ci' });
   assert.equal(viaConcern.statusCode, 200);
@@ -271,7 +247,6 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   assert.equal((viaConcern.json().entries as unknown[]).length, 1);
   const viaPr = await built.app.inject({ method: 'GET', url: '/api/scratchpads/pr:42' });
   assert.equal(viaPr.json().padRef, 'pr:42');
-  // The issue's snapshot reading counts only the issue's own pad.
   const state = await built.app.inject({ method: 'GET', url: '/api/state' });
   const issues = state.json().world.issues as { number: number; scratchpad: { entries: number } | null }[];
   assert.equal(issues.find((i) => i.number === 12)?.scratchpad?.entries, 1);
@@ -279,12 +254,7 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   system.store.close();
 });
 
-// -- persistence -------------------------------------------------------------
-
 test('a database created before the column reads every old row as a note', () => {
-  // `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without the
-  // `SCRATCH_COLUMNS` entry the column is invisible on every older database — and
-  // the pad from before the witness log would have no place for a fork.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-witness-migrate-'));
   const path = join(dir, 'old.db');
   const old = new Database(path);
@@ -317,7 +287,6 @@ test('a database created before the column reads every old row as a note', () =>
   assert.equal(row?.note, 'from before forks');
   assert.equal(row?.decision, null, 'an old row is a note');
 
-  // A fork writes beside it.
   store.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:schema',
@@ -334,15 +303,10 @@ test('a database created before the column reads every old row as a note', () =>
   store.close();
 });
 
-// -- the prompt ---------------------------------------------------------------
-
 test('the instruction to record forks is appended for a code agent and absent for a desk agent', async () => {
   const system = build();
-  // A code dispatch that is nobody's issue: the CI fixer on a pull request.
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'Something', branch: 'feature/x' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
-  // Something already on the pull request's pad. Stage 1 leaves it to
-  // `scratch_read`: it is not replayed into the prompt the way an issue's pad is.
   system.store.appendScratchEntry({
     padRef: 'pr:7',
     authorOriginRef: 'pr:7:review',
@@ -352,7 +316,6 @@ test('the instruction to record forks is appended for a code agent and absent fo
     note: 'a note already on the pull request pad',
     decision: null,
   });
-  // A desk dispatch: a job with no worktree.
   system.store.createJob({ title: 'Write a report', prompt: 'Report on X.', kind: 'desk' });
   await system.harness.runCycle('manual');
 

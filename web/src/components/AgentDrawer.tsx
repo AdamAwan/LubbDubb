@@ -13,35 +13,10 @@ import { Button } from './button.js';
 import { Tag } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * How often the drawer re-reads the persisted transcript while the run is live.
- * Short enough that a watched pane visibly moves, long enough that it is not a
- * request per second per open drawer.
- */
+// → docs/spec/17-cockpit.md
+
 const TRANSCRIPT_POLL_MS = 5_000;
 
-/**
- * The drill-down: the transcript for one agent, rendered in the shared
- * {@link TranscriptPane}, plus a box to type a response straight into its session.
- *
- * **It polls the transcript as well as listening on the socket, and the poll is
- * the load-bearing half** (issue #639). The socket only carries output an agent
- * produced *since this drawer subscribed*, so what arrives on it is a suffix of a
- * stream whose earlier part came from the fetch — and there is no marker joining
- * the two. The old rule ("prefer the live buffer once it is longer than the seed")
- * was the safe reading of that, and it meant a run opened mid-flight showed a
- * frozen pane until the socket had delivered more bytes than the *entire*
- * transcript before it: for a long run, never. So the seed is re-read every
- * {@link TRANSCRIPT_POLL_MS} — ranged, from what is already held, so a quiet run
- * costs an empty response.
- *
- * The live buffer is still preferred where it is safe, which is exactly when the
- * transcript was **empty on open**: the socket then carries the stream from its
- * first byte, the two are the same string, and the pane moves at the speed of the
- * agent rather than the poll. Anywhere else it is ignored, because appending a
- * suffix to a prefix with an unknown gap between them would draw output that
- * never existed.
- */
 export function AgentDrawer({
   agent,
   task,
@@ -60,44 +35,25 @@ export function AgentDrawer({
 }: {
   agent: Agent;
   task: TaskSummary | null;
-  /**
-   * What the task's origin stands in for, when that is not the origin itself — a
-   * requeued job's `job:<id>` read through to the `issue:41:retro` it is redoing.
-   * Resolved by the shell (`standsFor`) rather than here, because it is a reading
-   * of the whole snapshot and the drawer is handed one agent.
-   */
   originStandsFor: string | null;
   refUrls: Record<string, string>;
   live: string | undefined;
   flags?: AgentFlag[];
   artifactUrls: Record<string, string>;
-  /** Parked because the account's usage limit is spent, not because it asked anything. */
   limitParked: boolean;
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
-  /** Declare the work finished: the clean terminal an agent reaches with a done sentinel. */
   onComplete: () => Promise<unknown> | unknown;
   onInterrupt: () => Promise<unknown> | unknown;
-  /** End a usage-limit park: re-open the conversation and carry on. */
   onResume: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
-  // The paths this agent has written. Fetched here rather than read off the
-  // snapshot for the transcript's reason exactly: it is bulk text about one agent,
-  // and the whole-fleet list it used to come from was most of `/api/state`.
-  // → `docs/spec/16-http-api.md#bulk-text`
   const [files, setFiles] = useState<AgentFile[]>([]);
-  // Whether the socket buffer is the whole stream — true only while this agent's
-  // transcript was still empty when the drawer opened. Set from the first read.
   const [liveIsWhole, setLiveIsWhole] = useState(true);
   const [text, setText] = useState('');
   const send = useAsyncAction();
-  // How much of the transcript `seed` holds, so each poll asks for the tail. A ref
-  // rather than derived from `seed.length` because the poll must not re-subscribe.
   const held = useRef(0);
-  // Read in the interval rather than keyed on: a status flip (running ⇄ waiting is
-  // every question an agent asks) must not restart the seed and reseed the pane.
   const liveRef = useRef(false);
 
   const isLive = agent.status === 'running' || agent.status === 'waiting' || agent.status === 'starting';
@@ -112,8 +68,6 @@ export function AgentDrawer({
     setSeed('');
     setFiles([]);
     setLiveIsWhole(true);
-    // Re-read on the same beat as the transcript: a live agent's writes land while
-    // the drawer is open, and the list is a handful of short rows.
     const readFiles = (): void => {
       void api
         .getAgentFiles(agent.id)
@@ -122,9 +76,6 @@ export function AgentDrawer({
         })
         .catch(() => {});
     };
-    // One read at a time: a response slower than the interval would otherwise be
-    // overlapped by a second read asking from the same offset, and both would
-    // append the same tail.
     let reading = false;
     const read = (): void => {
       if (reading) return;
@@ -138,9 +89,6 @@ export function AgentDrawer({
             setLiveIsWhole(r.total === 0);
           }
           held.current = r.total;
-          // `from` is the server's clamp of what we asked for: equal to what we
-          // hold is the append, anything less means the record is shorter than we
-          // thought and the whole slice replaces it.
           if (r.transcript || r.from === 0) setSeed((prev) => (r.from === 0 ? r.transcript : prev + r.transcript));
         })
         .catch(() => {})
@@ -150,9 +98,6 @@ export function AgentDrawer({
     };
     read();
     readFiles();
-    // A finished run's transcript never grows again, so the poll stops with it —
-    // but a first read that has not landed yet is always retried, whatever the
-    // status says.
     const timer = setInterval(() => {
       if (liveRef.current || !seeded) read();
       if (liveRef.current) readFiles();
@@ -165,9 +110,6 @@ export function AgentDrawer({
 
   const output = liveIsWhole && live !== undefined && live.length > seed.length ? live : seed;
 
-  // A limit park takes the reply box away rather than leaving one that cannot send:
-  // the process is usually gone with the limit, so typing here would reach nothing —
-  // and there is no question on the other end of it to answer.
   const canRespond = !limitParked && (agent.status === 'waiting' || agent.status === 'running');
 
   return (
@@ -290,9 +232,6 @@ export function AgentDrawer({
             e.preventDefault();
             const value = text.trim();
             if (!value) return;
-            // Steering a live agent leaves no row of its own: the text goes
-            // onto the session's stdin, and the transcript that results is the
-            // agent's rather than a record that a person typed.
             logUsage('agent.send');
             void send.run(async () => {
               await onRespond(value);

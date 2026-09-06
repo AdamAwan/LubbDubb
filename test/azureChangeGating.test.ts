@@ -14,17 +14,6 @@ import type {
   AzureDevOpsApi,
 } from '../src/integrations/azure/azureDevOpsApi.js';
 
-/**
- * Change-gated hydration on the Azure provider: a second snapshot over a world
- * that has not moved must issue **no** per-entity detail request, an entity that
- * has moved must be re-read, and neither must ever be mistaken for the
- * degradation path — a hit is a current reading, not a stale one.
- *
- * Everything here drives the `AzureDevOpsApi` seam with its own scripted fake, so
- * nothing touches the network. The counter on each read is the assertion: the
- * point of the change is a request that is not made.
- */
-
 const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241';
 const COMMENT_POLICY = 'c6a1889d-b943-4856-b76f-9e46bb6b0df2';
 
@@ -81,7 +70,6 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
   };
 }
 
-/** The whole seam, scripted. Every read counts itself; every write is inert. */
 function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script: Script } {
   const counts: Counts = { threads: [], policyEvals: [], labels: [], updates: [] };
   const nope = async (): Promise<never> => {
@@ -153,7 +141,6 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
   return { api, counts, script };
 }
 
-/** A settled (approved, unexpired) build policy — the state a reading may be reused from. */
 function approvedBuild(): AzPolicyEvaluation {
   return {
     evaluationId: 'e1',
@@ -174,8 +161,6 @@ test('a second snapshot over an unmoved pull request re-reads no policy evaluati
   const second = await sc.snapshot();
 
   assert.deepEqual(counts.policyEvals, [7], 'the settled evaluation is read once, not once per pulse');
-  // Threads and labels are not covered by any cheap token, so they are still paid
-  // for — the change must not pretend otherwise.
   assert.deepEqual(counts.threads, [7, 7]);
   assert.deepEqual(counts.labels, [7, 7]);
   assert.equal(second.pullRequests?.[0]?.ciStatus, 'passing');
@@ -189,8 +174,6 @@ test('a cache hit is a current reading and never marks the slice stale', async (
   await sc.snapshot();
   const second = await sc.snapshot();
 
-  // `stale` is the degradation path — a failed read replayed from `lastGood`.
-  // Reuse is the opposite and must be indistinguishable from a fresh fan-out.
   assert.equal(second.stale, undefined);
 });
 
@@ -215,8 +198,6 @@ test('a policy evaluation still running is re-read even though nothing else move
   await sc.snapshot();
   await sc.snapshot();
 
-  // The head commit does not move when a build finishes, so a token-only gate
-  // would cache "pending" forever. Settledness is the second half of the gate.
   assert.deepEqual(counts.policyEvals, [7, 7, 7]);
 });
 
@@ -281,7 +262,6 @@ test('a pull request that leaves the active set is dropped from the cache', asyn
   script.pulls = [pull()];
   await sc.snapshot();
 
-  // Re-read rather than served from an entry the retain pass should have dropped.
   assert.deepEqual(counts.policyEvals, [7, 7]);
 });
 
@@ -299,14 +279,10 @@ test('labelsAddedByViewer survives a cache hit and follows a revision bump', asy
   const second = await wi.snapshot();
 
   assert.deepEqual(counts.updates, [42], 'the revision history is folded once per revision, not once per pulse');
-  // The gate that stops the fleet silently when it is wrong: the reused answer
-  // must be the same answer, not an empty one.
   assert.deepEqual(first.issues?.[0]?.labelsAddedByViewer, ['watch']);
   assert.deepEqual(second.issues?.[0]?.labelsAddedByViewer, ['watch']);
   assert.equal(second.stale, undefined);
 
-  // Somebody else re-adds the tag: a revision, so `changedAt` moves and the fold
-  // is paid for again — and now reports the tag as not this viewer's.
   script.workItems = [workItem({ changedAt: '2026-01-03T00:00:00Z' })];
   script.updates = {
     42: [
@@ -355,15 +331,11 @@ test('a work item that leaves the open set is dropped from the authorship cache'
 test('policyEvalsSettled ignores disabled and non-automated policies', () => {
   assert.equal(policyEvalsSettled([]), true);
   assert.equal(policyEvalsSettled([{ ...approvedBuild(), status: 'running', isEnabled: false }]), true);
-  // A comment policy is only ever moved by something the reuse token already
-  // sees, so a pending one does not make the reading unsettled.
   assert.equal(policyEvalsSettled([{ ...approvedBuild(), typeId: COMMENT_POLICY, status: 'queued' }]), true);
   assert.equal(policyEvalsSettled([{ ...approvedBuild(), status: null }]), false, 'no verdict yet reads as unsettled');
 });
 
 test('a hydration entry expires rather than being reused forever', () => {
-  // The bound is the caller's, not the cache's: it is whatever the entity's lane
-  // allows (`hydrationMaxAgeMs`), which is why it is passed per read.
   const maxAgeMs = 5 * 60_000;
   let now = 0;
   const cache = new HydrationCache<string>(() => now);
@@ -407,8 +379,6 @@ test('a GET Azure ETagged is re-asked conditionally, and a 304 replays the readi
         headers: { 'content-type': 'application/json', etag: 'W/"abc"' },
       });
     }
-    // `new Response` refuses a 304 (it is a null-body status), so the not-modified
-    // answer is shaped by hand — which is what a real transport hands back anyway.
     return {
       ok: false,
       status: 304,
@@ -461,8 +431,6 @@ test('a GET Azure did not ETag is never asked conditionally', async () => {
   await api.listActivePullRequests();
   await api.listActivePullRequests();
 
-  // The layer makes no claim about which endpoints validate: an endpoint that
-  // volunteers no validator is left exactly as expensive as it was.
   assert.equal(sent.length, 2);
   for (const headers of sent) assert.equal(headers['If-None-Match'], undefined);
 });

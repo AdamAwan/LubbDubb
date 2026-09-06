@@ -19,17 +19,15 @@ import { elapsed, fmtUsd, relTime } from './util.js';
 import { Label } from './label.js';
 import { Tag } from './tag.js';
 
-/** How often the tail is refetched while the run is live. */
+// → docs/spec/17-cockpit.md
+
 const POLL_MS = 2000;
 
-/** What the picker is selecting: a goal, and which of its branches. */
 interface Pick {
   issueNumber: number;
-  /** Undefined means the goal's default — the tip of its stack. */
   ref?: string;
 }
 
-/** The stage line's caption for each turn — what the session is in the middle of. */
 const TURN_LABEL: Record<LocalRunTurn, string> = {
   start: 'starting',
   stop: 'stopping',
@@ -37,18 +35,6 @@ const TURN_LABEL: Record<LocalRunTurn, string> = {
   message: 'replying',
 };
 
-/**
- * The machine's one dev environment: which goal's code is in it, whether it came
- * up, what it is listening on, how far behind its branch it has fallen, and how to
- * talk to it or point it at something else.
- *
- * One environment is the whole design, so this is a card and a picker rather than a
- * list — a list would imply two could be up, which the store refuses. Nothing here
- * is a `Place`: which fold is open and which row is picked are not *where you are*.
- * Every reading is three-valued and drawn as such — "not checked" and "could not
- * read" are different words from a zero — and a button that would be disabled is
- * not drawn, the stage line saying what is happening instead.
- */
 export function LocalRunPanel({
   run,
   configured,
@@ -67,29 +53,18 @@ export function LocalRunPanel({
   fetchOutput,
 }: {
   run: LocalRunView | null;
-  /** `localRun.instruction` is set, so a start has something to run. */
   configured: boolean;
-  /** `localRun.stopInstruction` is set, so a stop can take the environment down and not just the session. */
   stopConfigured: boolean;
-  /** `localRun.refreshInstruction` is set, so a refresh tells the session the project's own steps. */
   refreshConfigured: boolean;
-  /** What can be started — the goals the cockpit is already drawing. */
   goals: Issue[];
-  /** Where each of those goals would run, and what has happened there. */
   targets: LocalRunTargetView[];
   now: number;
   onStart: (issueNumber: number, ref?: string) => Promise<unknown> | unknown;
   onStop: () => Promise<unknown> | unknown;
   onMessage: (text: string) => Promise<unknown> | unknown;
   onRefresh: () => Promise<unknown> | unknown;
-  /**
-   * Ask for the goal in the environment to be validated. Takes the number because
-   * the panel knows it and the caller would only re-derive it from the same row.
-   */
   onValidate: (issueNumber: number, opts: { refresh?: boolean }) => Promise<unknown> | unknown;
-  /** The running goal's latest validation, so the panel can say one is in flight. */
   validation: LocalValidationView | null;
-  /** `localRun.instruction` is set — the same gate the goal page's control reads. */
   validationConfigured: boolean;
   fetchOutput: () => Promise<string[]>;
 }): JSX.Element {
@@ -97,19 +72,10 @@ export function LocalRunPanel({
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
-  // The two folds. Null follows the default for the run's state; a value is the
-  // operator's own choice and wins from then on.
   const [outputOpen, setOutputOpen] = useState<boolean | null>(null);
   const [pickerOpen, setPickerOpen] = useState<boolean | null>(null);
-  // Whether the refresh question is open. The swap question never arises on this
-  // panel — the run in front of it is the goal being validated.
   const [askRefresh, setAskRefresh] = useState(false);
 
-  // Polled while the run is live off the panel's own clock — `tick` is the
-  // dependency that does it. The tail is off the snapshot, so nothing else
-  // refetches it, and without this a bring-up that hung looks like one that prints.
-  // Do not rely on `fetchOutput` being a fresh closure: a `useCallback` upstream
-  // would silently freeze the tail.
   const tick = run?.live === true ? Math.floor(now / POLL_MS) : 0;
   useEffect(() => {
     let live = true;
@@ -123,25 +89,16 @@ export function LocalRunPanel({
 
   const live = run !== null && run.live;
   const turn = run === null ? null : run.turn;
-  // What it is doing, and if it never said, the last thing it printed — only while
-  // a turn is in flight. Once nothing is, there is no stage: captioning a live
-  // environment with the last step of its start describes something that is not
-  // happening. The fallback is drawn as the session's own words, not as a caption.
   const phase = turn !== null && run !== null ? run.phase : null;
   const said = turn !== null && phase === null ? (lines[lines.length - 1] ?? null) : null;
 
   const behind = run?.freshness?.behindTip ?? null;
   const stale = live && behind !== null && behind > 0;
-  // Only while nothing else is going on — the server refuses a queued turn. Absent
-  // rather than disabled, with the stage line saying why.
   const idle = live && run.status === 'running' && turn === null;
   const canRefresh = stale && idle;
   const canMessage = idle && run.holdsSession;
-  // The goal in the environment, as a number — every question below is about it.
   const runNumber = run === null ? null : Number(/^issue:(\d+)$/.exec(run.originRef)?.[1] ?? Number.NaN);
   const runsAGoal = runNumber !== null && Number.isFinite(runNumber);
-  // The goal page's terms plus one of this panel's own: the run must be idle, or
-  // the validation's agent polls an environment that is being talked to.
   const canValidate =
     idle &&
     runsAGoal &&
@@ -152,18 +109,11 @@ export function LocalRunPanel({
     run === null ? null : (goals.find((g) => `issue:${String(g.number)}` === run.originRef)?.title ?? null);
 
   const byNumber = new Map(targets.map((t) => [t.issueNumber, t]));
-  // Everything that could be drawn: a goal the cockpit is showing, with somewhere
-  // for it to run. A target for a goal not in the list is no row.
   const candidates = goals.flatMap((goal) => {
     const target = byNumber.get(goal.number);
     return target === undefined ? [] : [{ goal, target }];
   });
-  // Goals with a branch of their own by default. Everything else resolves to the
-  // integration branch, which is one choice however many goals offer it.
   const rows = showAll ? candidates : candidates.filter((row) => row.target.runnable);
-  // Counted off the **same** population the rows come from: counting hidden targets
-  // instead let the checkbox and the empty state disagree, leaving no control to
-  // reveal what the filter was holding back.
   const holdingBack = candidates.length - rows.length;
   const chosen = picked === null ? null : (byNumber.get(picked.issueNumber) ?? null);
   const chosenFacts =
@@ -176,16 +126,12 @@ export function LocalRunPanel({
   return (
     <div className="lrun">
       {!configured && (
-        // The refusal a start would have given, said before it is pressed; the
-        // control is still drawn, since a vanished button explains nothing.
         <p className="lrun-note">
           Nothing is configured to start. Set <code>localRun.instruction</code> on the Config page — what you would tell
           somebody to get this project running on your machine.
         </p>
       )}
       {configured && !stopConfigured && (
-        // Said where Stop is: Stop kills the session but not the containers, which
-        // belong to the Docker daemon and no harness signal reaches.
         <p className="lrun-note lrun-warn">
           Nothing is configured to stop it. Set <code>localRun.stopInstruction</code> on the Config page — until then,
           Stop kills the session but whatever it started keeps running.
@@ -203,7 +149,6 @@ export function LocalRunPanel({
           {run !== null && (canRefresh || canValidate || (live && run.status !== 'stopping')) && (
             <div className="lrun-actions">
               {canRefresh && (
-                // Primary, and only while there is something to pick up.
                 <AsyncButton
                   tone="primary"
                   onClick={() => onRefresh()}
@@ -217,8 +162,6 @@ export function LocalRunPanel({
                 </AsyncButton>
               )}
               {canValidate && runNumber !== null && (
-                // Beside Refresh rather than instead of it. The swap question cannot
-                // arise here — this *is* the goal running — so only the stale one is left.
                 <AsyncButton
                   className="primary"
                   onClick={() => (stale ? setAskRefresh(true) : onValidate(runNumber, {}))}
@@ -228,8 +171,6 @@ export function LocalRunPanel({
                 </AsyncButton>
               )}
               {live && run.status !== 'stopping' && (
-                // Two clicks: a mis-click costs a warm environment. Not drawn while
-                // stopping — the status line already says so.
                 <ConfirmButton
                   label="Stop"
                   confirmLabel="Stop it — really"
@@ -340,11 +281,7 @@ export function LocalRunPanel({
       >
         <summary>
           <span>{live ? 'Run a different goal' : 'Run a goal'}</span>
-          {live && (
-            // The one non-obvious consequence: there is one environment, so starting
-            // is also stopping.
-            <span className="lrun-fold-hint">stops what is running now</span>
-          )}
+          {live && <span className="lrun-fold-hint">stops what is running now</span>}
         </summary>
         <div className="lrun-pick-body">
           {(holdingBack > 0 || showAll) && (
@@ -355,9 +292,6 @@ export function LocalRunPanel({
           )}
 
           {rows.length === 0 && (
-            // Which of the two empty states this is, in words: a filter hiding
-            // everything and a cockpit with no goals read identically otherwise. Both
-            // arms read `holdingBack`, so they line up with the checkbox by construction.
             <p className="lrun-note">
               {holdingBack > 0
                 ? `No goal has a branch of its own yet. ${String(holdingBack)} would run the integration branch — tick “show every goal” to pick one.`
@@ -370,7 +304,6 @@ export function LocalRunPanel({
           {rows.map(({ goal, target }) => {
             const running = live && run.originRef === target.originRef;
             const isPicked = picked?.issueNumber === goal.number;
-            // Only worth an expander when there is something else behind the tip.
             const others = target.options.filter((o) => o.option.ref !== target.target.ref);
             return (
               <div className={`lrun-row${isPicked ? ' on' : ''}`} key={goal.number}>
@@ -448,19 +381,12 @@ export function LocalRunPanel({
   );
 }
 
-/**
- * A click on a fold's summary, and nothing else inside the fold. The folds are
- * controlled, so the browser's own toggle is stopped and the state does the
- * opening. Never `onToggle`: it fires for a programmatic open too, which would
- * read as the operator having asked for the fold to stay open.
- */
 function summaryClick(e: MouseEvent<HTMLDetailsElement>, flip: () => void): void {
   if (!(e.target instanceof Element) || e.target.closest('summary') === null) return;
   e.preventDefault();
   flip();
 }
 
-/** The status dot's hue: green up, amber in motion, red failed, muted for nothing or stopped. */
 function tone(run: LocalRunView | null): string {
   if (run === null) return 'off';
   if (run.status === 'running') return 'up';
@@ -469,12 +395,6 @@ function tone(run: LocalRunView | null): string {
   return 'off';
 }
 
-/**
- * The readings on a live environment: the declared URL and whether its port answers,
- * what the session's processes are listening on, how far the checkout has fallen
- * behind, and what the run has cost. Each is three-valued: "not checked" and "could
- * not read" are distinct, and neither is a zero.
- */
 function Readings({ run, now, stale }: { run: LocalRunView; now: number; stale: boolean }): JSX.Element {
   return (
     <div className="lrun-grid">
@@ -547,8 +467,6 @@ function ListeningWord({ ports }: { ports: LocalRunPorts | null }): JSX.Element 
   return <code>{ports.listening.join(' · ')}</code>;
 }
 
-// `branch`, not `ref`: a prop called `ref` is React's, and a function component given
-// one throws before it renders a thing.
 function FreshnessWord({ freshness, branch }: { freshness: LocalRunFreshness | null; branch: string }): JSX.Element {
   if (freshness === null) return <span className="lrun-dim">not checked</span>;
   if (freshness.behindTip === null) return <span className="lrun-dim">could not compare</span>;
@@ -578,10 +496,6 @@ function FreshnessSub({ freshness, now }: { freshness: LocalRunFreshness | null;
   );
 }
 
-/**
- * Type into the session holding the environment. The refusal stays on screen — the
- * server's reasons ("still coming up", "busy replying") are the useful half.
- */
 function MessageForm({ onMessage }: { onMessage: (text: string) => Promise<unknown> | unknown }): JSX.Element {
   const [text, setText] = useState('');
   const send = useAsyncAction();
@@ -612,15 +526,12 @@ function MessageForm({ onMessage }: { onMessage: (text: string) => Promise<unkno
   );
 }
 
-/** The headline of a row: where in the plan this ref is, and what is on it. */
 function RefSummary({ facts, now }: { facts: LocalRunRefFacts; now: number }): JSX.Element {
   const bits: string[] = [];
   if (facts.part !== null) {
     bits.push(`part ${String(facts.part.seq)} of ${String(facts.part.total)}`);
     if (facts.part.status === 'merged') bits.push('merged — an older state than the goal delivered');
   } else if (facts.isDefaultBranch) {
-    // A goal with nothing of its own outstanding: its work is in the integration
-    // branch, and that is what running it means.
     bits.push(
       facts.mergedParts > 0
         ? `the integration branch · ${String(facts.mergedParts)} part${facts.mergedParts === 1 ? '' : 's'} merged in`
@@ -641,10 +552,6 @@ function RefSummary({ facts, now }: { facts: LocalRunRefFacts; now: number }): J
   );
 }
 
-/**
- * The pull request **on this ref**, or the fact that there is none. The no-PR arm
- * is the point: "no pull request of its own" is a different statement from silence.
- */
 function PrBit({ facts }: { facts: LocalRunRefFacts }): JSX.Element {
   if (facts.pr === null) return <> · no pull request of its own</>;
   const ci =
@@ -668,7 +575,6 @@ function PrBit({ facts }: { facts: LocalRunRefFacts }): JSX.Element {
   );
 }
 
-/** The same reading as a row's, for the branch that is actually up. */
 function RefLine({ facts, now }: { facts: LocalRunRefFacts; now: number }): JSX.Element {
   return (
     <p className="lrun-meta lrun-on">
@@ -677,11 +583,6 @@ function RefLine({ facts, now }: { facts: LocalRunRefFacts; now: number }): JSX.
   );
 }
 
-/**
- * The headline: what state the environment is in, in words rather than a chip. A
- * live run is timed with {@link elapsed} rather than "3m ago" — a rounded relative
- * time sits still for ninety seconds, which reads as a frozen screen.
- */
 function StatusLine({ run, now }: { run: LocalRunView; now: number }): JSX.Element {
   if (run.status === 'starting')
     return (
@@ -695,8 +596,6 @@ function StatusLine({ run, now }: { run: LocalRunView; now: number }): JSX.Eleme
         Running <span className="lrun-clock">up {elapsed(run.startedAt, null, now)}</span>
       </>
     );
-  // No clock here: the only timestamp on the row is when the *run* started, and
-  // "Stopping · 18:04" reads as an eighteen-minute stop. The stage line moves instead.
   if (run.status === 'stopping') return <>Stopping…</>;
   if (run.status === 'failed') return <>It did not start</>;
   return <>Stopped {run.endedAt === null ? '' : relTime(run.endedAt, now)}</>;

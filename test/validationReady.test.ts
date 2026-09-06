@@ -14,16 +14,6 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { HumanTask, Issue, IssueDelivery, ValidationCheck } from '../src/types.js';
 
-/**
- * The bench row that says a delivered goal's checks are now somebody's to run.
- *
- * The property to hold on to: the row is filed on the **delivery**, discharged by
- * the **check rows**, and gated by neither the tracker nor the plan. So each
- * question is asked from both ends — what makes it appear, and what makes it go
- * away — and the settled-row cases are the ones that matter most, because a sweep
- * that re-opens an operator's verdict is one they stop trusting.
- */
-
 function delivery(number: number, over: Partial<IssueDelivery> = {}): IssueDelivery {
   return {
     originRef: `issue:${number}`,
@@ -117,8 +107,6 @@ const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
 
 const checksOn = (...checks: ValidationCheck[]) => new Map([['issue:12', checks]]);
 
-// -- filing -------------------------------------------------------------------
-
 test('a delivered goal with an unrun check owes somebody a run', () => {
   const steps = pass({
     issues: [issue(12, { title: 'Ship the thing', url: 'https://tracker/12' })],
@@ -129,8 +117,6 @@ test('a delivered goal with an unrun check owes somebody a run', () => {
   const step = steps[0]!;
   assert.equal(step.kind, 'file');
   assert.equal(step.kind === 'file' && step.originRef, 'issue:12');
-  // Stable: the title is the merge key a repeat folds onto, so neither the count
-  // nor the goal's own name — which a rename would change under it — is in it.
   assert.equal(step.kind === 'file' && step.title, 'Run the validation checks for issue #12');
   const detail = step.kind === 'file' ? step.detail : '';
   assert.match(detail, /Ship the thing/);
@@ -173,9 +159,6 @@ test('a check with the fleet is not on the bench, and a hand-back puts it straig
   const handed = check({ actor: 'fleet' });
   assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(handed) }), []);
 
-  // A hand-back sets the actor back to `human` in the same write, which is what
-  // puts the check on the bench — the note outlives a re-hand-over now, so it is
-  // not what the bench reads.
   const back = pass({
     issues: [issue(12)],
     deliveries: [delivery(12)],
@@ -187,8 +170,6 @@ test('a check with the fleet is not on the bench, and a hand-back puts it straig
 });
 
 test('a check handed over again is off the bench, note or no note', () => {
-  // The state a re-hand-over leaves: the previous attempt's reason is still on the
-  // row, because the next dispatch is briefed with it.
   const again = check({ actor: 'fleet', handbackNote: 'no account on the staging console' });
   assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(again) }), []);
 });
@@ -215,9 +196,6 @@ test('a superseded check owes nothing — an amendment withdrew the ask', () => 
 });
 
 test('a standing row is re-filed each pulse, which is what keeps the detail current', () => {
-  // `recordHumanTask` folds a repeat onto the row rather than inserting, so this
-  // is the refresh: the row says what is outstanding *now*, not on the day it
-  // was filed. The close-out's own detail claims this and never re-emits.
   const steps = pass({
     issues: [issue(12)],
     deliveries: [delivery(12)],
@@ -243,8 +221,6 @@ test('a settled row is never re-filed — a decline stays declined, and its deta
   }
 });
 
-// -- settling -----------------------------------------------------------------
-
 test('the last check being recorded settles the obligation', () => {
   const steps = pass({
     issues: [issue(12)],
@@ -269,10 +245,6 @@ test('handing the remainder to the fleet settles it too, and says so', () => {
 });
 
 test('an empty world settles nothing — this row is not a reading of the tracker', () => {
-  // The close-out's gone-arm refuses to act on an empty issue list because it
-  // reads the tracker to settle. This one does not: the issue is a name and a
-  // link, so a provider that read nothing costs the detail its headline and
-  // nothing else. What it must never do is discharge a standing obligation.
   const steps = pass({ issues: [], deliveries: [delivery(12)], checks: checksOn(check()), existing: [task()] });
   assert.equal(steps.length, 1);
   assert.equal(steps[0]!.kind, 'file');
@@ -287,11 +259,6 @@ test('clearing the delivery retracts the obligation rather than leaving it stand
 });
 
 test('a re-delivered goal is asked again — the retraction was the harness, not an answer', () => {
-  // The ordering the two rules meet in, and the one nothing drove: delivered →
-  // shortfall → replan → delivered is what `issue-assess` and `issue-shortfall`
-  // do for a living. Read off status alone the retraction is permanent, and the
-  // one surface that announces validation has become runnable is gone for good on
-  // a goal that is still `flagged` with its checks still `unrun`.
   const retracted = pass({ issues: [issue(12)], deliveries: [], checks: checksOn(check()), existing: [task()] });
   const resolution = retracted[0]!.kind === 'settle' ? retracted[0]!.resolution : '';
   assert.ok(deskSettled({ ...task(), resolution }), 'the retraction says who settled it');
@@ -304,16 +271,10 @@ test('a re-delivered goal is asked again — the retraction was the harness, not
   });
   assert.equal(steps.length, 1);
   assert.equal(steps[0]!.kind, 'reopen');
-  // Reopened, never re-filed: `recordHumanTask` dedups on the title regardless of
-  // status and `validateTitle` is stable, so a repeat would refresh the declined
-  // row's detail and leave it declined.
   assert.match(steps[0]!.kind === 'reopen' ? steps[0]!.detail : '', /A\. \*\*A squash-merged part branch/);
 });
 
 test('an operator’s own decline on a re-delivered goal still stands', () => {
-  // The other direction, and only one of the two is honest. A person who declined
-  // this must not be asked again next pulse, however many times the goal is
-  // re-delivered.
   for (const status of ['done', 'declined'] as const) {
     const steps = pass({
       issues: [issue(12)],
@@ -324,8 +285,6 @@ test('an operator’s own decline on a re-delivered goal still stands', () => {
     assert.deepEqual(steps, [], `a ${status} an operator wrote is the last thing said about the row`);
   }
 });
-
-// -- through the harness ------------------------------------------------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vready-'));
@@ -375,8 +334,6 @@ test('a pulse files the validate row, and the next one settles it once the resul
     amendNote: 'the plan was re-read',
   });
 
-  // Declared, but nothing is delivered yet: a check runs against the delivered
-  // goal, so asking anybody for one now is a row they cannot act on.
   await system.harness.runCycle('manual');
   assert.deepEqual(system.store.listHumanTasksOfKind('validate'), []);
 
@@ -386,12 +343,9 @@ test('a pulse files the validate row, and the next one settles it once the resul
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.status, 'open');
   assert.equal(filed[0]!.originRef, 'issue:12');
-  // Nobody asked for it, and it blocks nothing: the harness filed it, and no
-  // part backs it.
   assert.equal(filed[0]!.agentId, null);
   assert.equal(filed[0]!.partId, null);
 
-  // A second pulse folds onto the same row rather than filing a second one.
   await system.harness.runCycle('manual');
   assert.deepEqual(
     system.store.listHumanTasksOfKind('validate').map((t) => t.id),
@@ -410,11 +364,6 @@ test('a pulse files the validate row, and the next one settles it once the resul
 });
 
 test('clearing the last delivery retracts the row, with nothing else on the board', () => {
-  // The retraction reads the standing rows, not the deliveries, so it is the one
-  // arm with work to do precisely when nothing is delivered. A desk that reads the
-  // deliveries first and returns on an empty list therefore retracts only while
-  // some *unrelated* goal happens to still be parked — which is a harness working
-  // one goal at a time never retracting at all.
   const system = build();
   const desk = new ValidationReadyDesk(system.store);
   system.store.ingestValidation('issue:12', {
@@ -448,14 +397,9 @@ test('clearing the last delivery retracts the row, with nothing else on the boar
   assert.match(settled.resolution ?? '', /back into production/);
 });
 
-// -- the environment gate -----------------------------------------------------
-
 test('a gated goal is not asked to validate until its work has arrived somewhere', () => {
   const checks = checksOn(check({ state: 'unrun' }));
   const held = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, opened: new Set() });
-  // The delivery is when a check becomes meaningful; with a gate configured it is
-  // not yet when one becomes runnable, and a check against a build nobody can open
-  // is the row-asking-for-impossible-work this file exists to end.
   assert.deepEqual(held, []);
 
   const opened = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, opened: new Set(['issue:12']) });

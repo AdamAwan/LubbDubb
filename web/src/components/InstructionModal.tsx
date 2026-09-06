@@ -4,22 +4,8 @@ import { Modal } from './Modal.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * Where the operator says what they want done next on a goal.
- *
- * A modal for {@link RaiseBugModal}'s reason: this is prose the operator has to
- * compose, and every other control in that header is a verdict — one click, done.
- * It replaced a verdict, in fact. "Work left" wrote `more_work` and nothing else,
- * so the operator's actual sentence — *change the button to primary* — had
- * nowhere to go, and the next agent re-read the ticket that had already produced
- * the thing they were unhappy with.
- *
- * The placeholder is an example rather than an instruction about how to write
- * one: the whole claim of the feature is that a sentence is enough.
- *
- * A failed post keeps the modal open with the text intact — the one outcome worth
- * writing code to prevent here, since everything else they can simply do again.
- */
+// → docs/spec/17-cockpit.md
+
 export function InstructionModal({
   issueNumber,
   issueTitle,
@@ -42,8 +28,6 @@ export function InstructionModal({
       onClose();
     } catch (err) {
       setFailed(true);
-      // Rethrown so the button flashes its own error ring: swallowing it here
-      // would leave the control reporting a success the message below denies.
       throw err;
     }
   }
@@ -84,7 +68,6 @@ export function InstructionModal({
         placeholder="Change the button to primary — it reads as a cancel next to the one beside it."
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          // ⌘/Ctrl+Enter submits, matching the composer and the bug modal.
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault();
             void submit();

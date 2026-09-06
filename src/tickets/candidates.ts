@@ -1,33 +1,7 @@
 import type { MirroredTicket } from '../store/tickets.js';
 
-/**
- * The tracker items a filing agent should look at before it writes a new one
- * (issue #394).
- *
- * ## Why the harness shortlists rather than the agent searching
- *
- * Every filing prompt used to open with "search the existing open items for the
- * same thing", which is an instruction to go and do a cold search of a tracker the
- * agent reaches through a CLI — several turns, and the quality of it depends
- * entirely on the query the model happens to try. Meanwhile the harness keeps a
- * **local mirror** of the tracker (`src/tickets/sweep.ts`, issue #329) and holds
- * the open world besides. The candidates are computable, so computing them is
- * strictly better than asking: the agent starts from a list instead of a search
- * box, and what it was shown is in the prompt where anyone can read it afterwards.
- *
- * ## Why it is a shortlist and not a verdict
- *
- * Title-token overlap finds items worth *reading*; it does not decide that two
- * reports are the same thing, which needs both bodies and is exactly the judgement
- * the agent is kept for. So a candidate list is never empty-meaning-none — it is
- * "here is what looked adjacent", and the agent is told that plainly.
- *
- * Closed items are candidates too. A finding that duplicates a ticket somebody
- * closed last week is worth knowing about, and the mirror is the only place the
- * harness can see one at all: the world is open items by definition.
- */
+// → docs/spec/13-jobs-and-tickets.md
 
-/** Words that appear in every ticket title and so separate nothing. */
 const STOPWORDS = new Set([
   'the',
   'and',
@@ -62,7 +36,6 @@ const STOPWORDS = new Set([
   'or',
 ]);
 
-/** Terms worth matching on: lowercased, punctuation-free, no stopwords, no noise. */
 function terms(text: string): Set<string> {
   return new Set(
     text
@@ -72,13 +45,6 @@ function terms(text: string): Set<string> {
   );
 }
 
-/**
- * The mirrored items whose titles share the most terms with `subject`, best first.
- *
- * Pure, so what an agent is shown is testable without a tracker or a server. An
- * item sharing nothing is dropped rather than ranked last: a list padded to a fixed
- * length with unrelated tickets teaches the reader to ignore the list.
- */
 export function dedupeCandidates(
   items: readonly MirroredTicket[],
   subject: string,
@@ -99,18 +65,6 @@ export function dedupeCandidates(
     .map((c) => c.item);
 }
 
-/**
- * The block appended to a filing prompt — **appended**, never interpolated into
- * it. A `{candidates}` placeholder would be dropped silently by every prompt
- * override that never learned about it, on exactly the deployments that customised
- * most; appending has no fallback to get wrong. → `CLAUDE.md`, "Prompts and
- * templates".
- *
- * Null when nothing looked adjacent, so the prompt says nothing rather than
- * printing an empty heading the agent has to interpret. That silence is honest:
- * the mirror can also be mid-backfill, which is why the wording never claims the
- * list is exhaustive.
- */
 export function renderCandidates(candidates: readonly MirroredTicket[]): string | null {
   if (candidates.length === 0) return null;
   const rows = candidates.map((c) => `- issue:${c.number} (${c.state}) — ${c.title}`).join('\n');

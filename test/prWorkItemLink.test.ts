@@ -49,10 +49,6 @@ const issue = (over: Partial<Issue> = {}): Issue => ({
   ...over,
 });
 
-// --------------------------------------------------------------------------
-// The pure predicate
-// --------------------------------------------------------------------------
-
 test('prsToLinkWorkItem: the harness’s own unlinked pull requests, and the work item off the row', () => {
   const ctx = {
     prAuthorConfigured: false,
@@ -98,8 +94,6 @@ test('prsToLinkWorkItem: the recorded row is what makes it once', () => {
 });
 
 test('prsToLinkWorkItem: an earlier part stays linkable when linkedPrNumber names a later one', () => {
-  // `linkedPrNumber` folds a work item's relations to one number, so part 1 reads as
-  // unlinked once part 2 links. Only the row can tell them apart.
   const ctx = { prAuthorConfigured: false, issues: [issue({ linkedPrNumber: 2 })], linked: new Set([2]) };
   assert.deepEqual(prsToLinkWorkItem([pr({ number: 1, branch: 'issue/12/a' }), pr({ number: 2 })], ctx), [
     { prNumber: 1, workItemNumber: 12 },
@@ -108,8 +102,6 @@ test('prsToLinkWorkItem: an earlier part stays linkable when linkedPrNumber name
 
 test('prsToLinkWorkItem: with prAuthor configured every open pull request in the world is ours', () => {
   const ctx = { prAuthorConfigured: true, issues: [issue({ linkedPrNumber: 7 })], linked: new Set<number>() };
-  // Resolved by `linkedPrNumber` rather than the branch — a human's branch name is
-  // not a dispatch shape, and the link is still the harness's to keep.
   assert.deepEqual(prsToLinkWorkItem([pr({ number: 8, branch: 'feature/hand-cut' })], ctx), [], 'no issue resolves');
   assert.deepEqual(
     prsToLinkWorkItem([pr({ number: 7, branch: 'feature/hand-cut' })], ctx),
@@ -130,10 +122,6 @@ test('isRelationAlreadyExists: Azure’s duplicate-relation 400 is not a failure
   assert.equal(isRelationAlreadyExists('403 Forbidden: TF401027 you need Work Item write permission'), false);
 });
 
-// --------------------------------------------------------------------------
-// Harness behaviour
-// --------------------------------------------------------------------------
-
 test('a PR on a dispatch branch is linked to its work item by the harness, once', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Sync cursors' });
@@ -148,8 +136,6 @@ test('a PR on a dispatch branch is linked to its work item by the harness, once'
   );
   assert.ok(system.store.linkedWorkItemPrs().has(42), 'and recorded that it has answered for it');
 
-  // The operator judges the link wrong and removes it. The next pulse must not
-  // write it back — a correction that undoes itself is why the row exists.
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Other' });
   await system.harness.runCycle('manual');
   assert.equal(system.store.linkedWorkItemPrs().size, 1, 'no second link is written for a pull request already done');

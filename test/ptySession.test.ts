@@ -49,11 +49,6 @@ test('waiting sentinel is stripped from output while waiting fires with the reas
 });
 
 test('a sentinel wait is latched: TUI repaint after the sentinel must not un-park it', () => {
-  // Regression: the interactive claude TUI keeps repainting after a turn. That
-  // post-sentinel output eventually scrolls the waiting sentinel out of the 4096-
-  // byte detection tail; the next chunk then finds no sentinel and the "any output
-  // while parked → running" reset used to silently un-park a real human wait, so
-  // the agent reverted to 'running' and no escalation stuck. It must stay waiting.
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   const statuses: string[] = [];
@@ -63,25 +58,16 @@ test('a sentinel wait is latched: TUI repaint after the sentinel must not un-par
   backend.last().emit('  @@LUBBDUBB_WAITING:need a decision@@  \r\n');
   assert.equal(session.status, 'waiting');
 
-  // A full repaint larger than TAIL_WINDOW (4096) evicts the sentinel from the tail…
   backend.last().emit('\x1b[2J\x1b[H' + 'x'.repeat(5000) + '\r\n');
-  // …and a following idle frame carries no sentinel — this is where it used to flip.
   backend.last().emit('\x1b[38;5;8m* idle spinner *\x1b[0m\r\n');
   assert.equal(session.status, 'waiting', 'must remain parked despite TUI repaint noise');
 
-  // The human answering is what releases the latch and resumes the agent.
   session.send('go with A');
   assert.equal(session.status, 'running');
   assert.deepEqual(statuses, ['running', 'waiting', 'running']);
 });
 
 test('answering a waiting session does not re-park off the stale sentinel left in the tail', () => {
-  // Regression: the consumed waiting sentinel stayed in the retained detection tail
-  // (stripFlags removes only flags). The `sentinelWaiting` latch suppresses re-emit
-  // only *while parked*; once the human answered (send un-parks → running) the next
-  // output chunk re-scanned the tail, re-found the still-present sentinel, and fired a
-  // SECOND 'waiting' — which spawned a duplicate, never-cleared escalation and left the
-  // ⏳ banner stuck on the finished card. Answering must clear the stale sentinel.
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   const waits: string[] = [];
@@ -92,12 +78,9 @@ test('answering a waiting session does not re-park off the stale sentinel left i
   assert.equal(session.status, 'waiting');
   assert.deepEqual(waits, ['need a decision']);
 
-  // The human answers — the session un-parks.
   session.send('go with A');
   assert.equal(session.status, 'running');
 
-  // The agent continues; a normal echo/repaint chunk arrives carrying NO new sentinel,
-  // but the just-answered one is still sitting in the small tail.
   backend.last().emit('Great, proceeding with A.\r\n');
 
   assert.equal(session.status, 'running', 'stale waiting sentinel must not re-park after an answer');
@@ -124,12 +107,6 @@ test('detects a waiting sentinel and extracts the reason', () => {
 });
 
 test('done sentinel hugged by SGR styling (no whitespace either side) still finishes', () => {
-  // The interactive claude TUI styles the assistant line, so the sentinel arrives
-  // flanked by SGR escapes — `…m` right before, ESC right after — not whitespace.
-  // The two-sided boundary guard used to reject it (`m`/`\x1b` aren't boundaries),
-  // so a real finish was silently never detected even though display-stripping
-  // (which has no such guard) still removed the tag. Detection must ignore the
-  // escape noise the same way the strip path does.
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
   let done = false;
@@ -173,9 +150,6 @@ test('done sentinel finishes the session', () => {
   assert.equal(session.status, 'done');
 });
 
-// A payload is framed as an explicit bracketed paste (ESC[200~ … ESC[201~) so the
-// claude TUI closes the paste at the end marker and the submitting CR that follows
-// can never be folded into it as a literal newline (the "text sits unsubmitted" bug).
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 const pasted = (text: string): string => `${PASTE_START}${text}${PASTE_END}`;
@@ -188,8 +162,6 @@ test('send un-parks a waiting session and submits with a separate carriage retur
   assert.equal(session.status, 'waiting');
   session.send('yes');
   assert.equal(session.status, 'running');
-  // The bracketed-paste payload is written on its own; the submitting CR follows
-  // separately once the paste is closed, so the TUI never folds it into the paste.
   assert.equal(backend.last().writes.at(-1), pasted('yes'));
   await new Promise((r) => setTimeout(r, 15));
   assert.deepEqual(backend.last().writes, [pasted('yes'), '\r']);
@@ -200,7 +172,6 @@ test('send strips a trailing newline from the payload so the CR alone submits', 
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   session.start();
   session.send('line1\nline2\n');
-  // Internal newlines are preserved inside the paste; only the trailing one is dropped.
   assert.deepEqual(backend.last().writes, [pasted('line1\nline2'), '\r']);
 });
 
@@ -212,8 +183,6 @@ test('submitDelayMs 0 writes the payload and CR synchronously', () => {
   assert.deepEqual(backend.last().writes, [pasted('go'), '\r']);
 });
 
-// -- the sentinel wait latch -------------------------------------------------
-
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 test('a sentinel wait is latched, so later output does not un-park it', async () => {
@@ -224,8 +193,6 @@ test('a sentinel wait is latched, so later output does not un-park it', async ()
   session.start();
   backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
   assert.equal(session.status, 'waiting');
-  // Anything the process prints afterwards is not the agent "continuing": only an
-  // answer, a done sentinel or an exit ends a wait it asked for.
   backend.last().emit('still here');
   await tick(20);
   assert.equal(session.status, 'waiting');
@@ -259,8 +226,6 @@ test('kill marks the session killed even when the exit fires synchronously', () 
   let failed = false;
   session.on('failed', () => (failed = true));
   session.start();
-  // FakePtyProcess.kill() emits a non-zero exit synchronously; the session must
-  // recognise it as a kill, not misfire a spurious 'failed'.
   session.kill();
   assert.equal(session.status, 'killed');
   assert.equal(failed, false, 'kill must not emit a failure');

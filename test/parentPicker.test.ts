@@ -19,28 +19,6 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { AppState, Issue as WebIssue } from '../web/src/types.js';
 
-/**
- * The answer under the missing-parent warning: which containers an operator is
- * actually offered (issue #683).
- *
- * The failure this exists to stop is the one that was reported. The *question*
- * appears — `placementAsks` reads it off the live item, and `orphanGoal` off the
- * item again — and the three answers under it come from `ParentPicker`. Two of
- * them always draw. The one that resolves the warning is the list, and the list
- * used to be `world.issues` filtered by container type, which is the half of
- * `candidateParents` that is almost always empty: an Azure item list is narrowed
- * by tag and assignee, so an open Feature is usually visible only as some *other*
- * item's parent. So the deployments that raise the warning were the deployments
- * with nothing under it, and nothing was red.
- *
- * The tests are therefore pointed at the seam that was wrong rather than at the
- * warning: a world whose containers exist only as parents, and the select that has
- * to be drawn from it.
- */
-
-// `tsx` compiles JSX with the classic runtime, which emits bare
-// `React.createElement`; the bundle uses the automatic one. The global goes in
-// before the console's modules load so the test exercises the same sources.
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -70,12 +48,6 @@ function issue(over: Partial<Issue> = {}): Issue {
   };
 }
 
-// -- the list itself --------------------------------------------------------
-
-/**
- * The regression, at the level it happened: a world with no container-typed item
- * in it still has containers, and they are the ones an operator needs.
- */
 test('the candidate list is the containers a narrowed world can see, not just the ones in it', () => {
   const world = [issue({ number: 12, parent: null }), issue({ number: 13, parent: FEATURE })];
 
@@ -91,12 +63,6 @@ test('the candidate list is the containers a narrowed world can see, not just th
   );
 });
 
-/**
- * The cap is the prompt's, and it moved so the picker would stop inheriting it. A
- * truncated select is the same dead end as an absent one: the container an operator
- * wants is either offered or unreachable, and "the thirteenth by id" is not a rule
- * anybody can learn from a box it is missing from.
- */
 test('the whole list reaches the cockpit; only the prompt is capped', () => {
   const world = Array.from({ length: 20 }, (_, i) =>
     issue({ number: 500 + i, parent: { ...FEATURE, number: 100 + i, title: `Feature ${100 + i}` } }),
@@ -108,8 +74,6 @@ test('the whole list reaches the cockpit; only the prompt is capped', () => {
   const offered = note.match(/^- Feature #/gm) ?? [];
   assert.equal(offered.length, 12, 'the prompt still pays for twelve lines and no more');
 });
-
-// -- what the snapshot ships ------------------------------------------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-parent-picker-'));
@@ -149,11 +113,6 @@ test('the snapshot carries the candidate containers, derived once for the whole 
   }
 });
 
-// -- what the picker draws --------------------------------------------------
-
-/**
- * `renderToStaticMarkup` escapes text nodes, so an assertion on prose decodes first.
- */
 function decode(html: string): string {
   return html
     .replace(/&#x27;/g, "'")
@@ -177,10 +136,6 @@ test('the picker offers every candidate the world carries', () => {
   assert.match(html, /Choose a Feature/, 'with no proposal to compare against, the list is the whole offer');
 });
 
-/**
- * A goal cannot be its own container, and it is in the list whenever anything
- * already hangs off it — a Feature the operator is looking at the page of.
- */
 test('the goal is never offered as its own parent', () => {
   const html = pickerHtml([FEATURE], 300);
   assert.doesNotMatch(html, /<select/, 'the only candidate was the goal itself, so there is nothing to pick');

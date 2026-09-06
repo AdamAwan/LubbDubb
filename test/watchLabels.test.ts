@@ -22,8 +22,6 @@ test('isWatched: the tag, and nothing else', () => {
 });
 
 test('the retired ignore tag decides nothing', () => {
-  // It was the third state. An item carrying it simply has no watch tag, so it is
-  // left alone by the same rule that leaves every untagged item alone.
   assert.equal(isWatched(['lubbdubb-ignore'], 'lubbdubb-watch'), false);
   assert.equal(isWatched(['lubbdubb-ignore', 'lubbdubb-watch'], 'lubbdubb-watch'), true);
 });

@@ -3,38 +3,16 @@ import type { PadDecision, Retrospective, ScratchEntry, ScratchPadSummary } from
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
-/**
- * `scratch_entries.decision` arrived after the table did, so it needs the entry:
- * without it every database from before the witness log has no column, and every
- * fork written there is a note that lost its decision in silence. Null means "an
- * ordinary note", which is true of every row written before the column existed,
- * so no backfill is owed. `retrospectives` is declared empty so its first added
- * column is noticed here rather than read back as `undefined`.
- */
+// → docs/spec/14-persistence.md
+
 export const SCRATCH_COLUMNS: ColumnMigrations = {
   scratch_entries: { decision: 'TEXT' },
   retrospectives: {},
 };
 
-/**
- * The `scratch_entries` and `retrospectives` tables: a goal's written record.
- *
- * Both are prose nothing branches on, and they are the two halves of one thing —
- * the pad is written *during* a run by whoever is working it, the retrospective
- * *after* it by an agent that did none of the work and reads the pad to write it.
- */
 export class ScratchStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * Append one entry to an issue's shared pad.
-   *
-   * There is deliberately no update and no delete beside this: an agent able to
-   * revise its own entries would leave a tidied record rather than a true one, and
-   * a retrospective reads the trail for *when* something was learned. The pad ref
-   * is resolved from the caller's credential upstream (`padWriteTarget`), never
-   * from an argument.
-   */
   appendScratchEntry(input: {
     padRef: string;
     authorOriginRef: string;
@@ -42,12 +20,9 @@ export class ScratchStore {
     taskId: string;
     topic: string | null;
     note: string;
-    /** The fork behind the entry, or null for an ordinary note. */
     decision: PadDecision | null;
   }): ScratchEntry {
     const row: ScratchEntry = { id: `scr_${nanoid(10)}`, ...input, createdAt: this.ctx.now() };
-    // Stored as one JSON column rather than normalised: it is written whole,
-    // read whole, and nothing queries inside it.
     this.ctx.db
       .prepare(
         `INSERT INTO scratch_entries (id, pad_ref, author_origin_ref, agent_id, task_id, topic, note, decision, created_at)
@@ -57,15 +32,6 @@ export class ScratchStore {
     return row;
   }
 
-  /**
-   * One pad, oldest first — the order the trail is read in. Unbounded on purpose:
-   * a pad is already bounded by one goal's agents, and dropping the early entries
-   * would lose exactly the ones a late retrospective has no other way to hear.
-   *
-   * Ties on `created_at` break on **rowid**, which is insertion order. The id
-   * cannot do it — it is a nanoid, so two entries written in the same millisecond
-   * would come back in a random order, and this pad is read as a sequence.
-   */
   listScratchEntries(padRef: string): ScratchEntry[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, rowid ASC`)
@@ -73,16 +39,6 @@ export class ScratchStore {
     return rows.map(rowToScratchEntry);
   }
 
-  /**
-   * Every pad that has been written to, as a count and the age of its newest
-   * entry — what the cockpit needs to draw a way in without opening one.
-   *
-   * **One grouped query for the whole world**, not one per issue: this is read on
-   * every `/api/state` poll, and a per-issue read would scale the poll with the
-   * number of goals to say nothing more than these two numbers do. `MAX` over an
-   * ISO-8601 UTC timestamp sorts as it reads, which is the same property
-   * {@link listScratchEntries} already leans on.
-   */
   listScratchPadSummaries(): ScratchPadSummary[] {
     const rows = this.ctx.db
       .prepare(
@@ -93,14 +49,6 @@ export class ScratchStore {
     return rows.map((r) => ({ padRef: r.pad_ref, entries: r.entries, updatedAt: r.updated_at }));
   }
 
-  /**
-   * Write (or revise) an issue's retrospective.
-   *
-   * Upsert on the issue, so a second submission revises one row rather than
-   * duplicating it — idempotence in the write rather than in a read-then-check.
-   * `created_at` survives an overwrite, so the row still dates the moment the run
-   * was first written up rather than the last time someone tidied it.
-   */
   recordRetrospective(input: {
     originRef: string;
     summary: string;
@@ -130,12 +78,6 @@ export class ScratchStore {
     return row ? rowToRetrospective(row) : null;
   }
 
-  /**
-   * Which goals have one — **origins only, never the writing**. Rule `issue-retro` needs to
-   * know whether to dispatch and that is the whole of what it may know: a rule
-   * branching on retrospective prose would let one agent's account of a run change
-   * what the harness schedules next.
-   */
   listRetrospectiveOrigins(): string[] {
     const rows = this.ctx.db.prepare(`SELECT origin_ref FROM retrospectives`).all() as { origin_ref: string }[];
     return rows.map((r) => r.origin_ref);
@@ -150,7 +92,6 @@ interface ScratchEntryRow {
   task_id: string;
   topic: string | null;
   note: string;
-  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   decision?: string | null;
   created_at: string;
 }

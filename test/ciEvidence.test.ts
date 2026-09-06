@@ -21,28 +21,7 @@ import type { ErrorRecorder } from '../src/errorLog.js';
 import type { PullRequest, WorldSnapshot } from '../src/types.js';
 import { findTask } from './support/tasks.js';
 
-/**
- * Evidence on a CI-fix dispatch (issue #334): the agent is handed what broke,
- * not only the name of the check that broke.
- *
- * The three things worth pinning are the three ways this can go wrong silently.
- * A dispatch that carries the failing assertion is the feature; a dispatch whose
- * log fetch **failed** must be byte-identical to the one composed before this
- * existed, or a provider outage quietly degrades every CI agent; and the cap
- * must say what it dropped, or an agent reads a trimmed log as a whole one and
- * concludes from an absence that was manufactured here.
- *
- * The world is built by the **real provider integrations** over scripted `*Api`
- * fakes rather than hand-written, because half of what is under test is the
- * mapping — a check run that carries no evidence ref produces no excerpt however
- * well the rest of the path works.
- */
-
 const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241';
-
-// ---------------------------------------------------------------------------
-// GitHub
-// ---------------------------------------------------------------------------
 
 interface GhScript {
   checkRuns?: GhCheckRun[];
@@ -126,7 +105,6 @@ function ghApi(script: GhScript): GitHubApi {
   };
 }
 
-/** A failing Actions check run, with the `/job/<id>` detail URL its log hangs off. */
 function failingRun(over: Partial<GhCheckRun> = {}): GhCheckRun {
   return {
     name: 'test',
@@ -137,10 +115,6 @@ function failingRun(over: Partial<GhCheckRun> = {}): GhCheckRun {
     ...over,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Azure
-// ---------------------------------------------------------------------------
 
 interface AzScript {
   timeline?: Record<number, AzTimelineRecord[]>;
@@ -226,23 +200,14 @@ function azApi(script: AzScript): AzureDevOpsApi {
   };
 }
 
-/** A timeline task record — the structured half of Azure's evidence. */
 function taskRecord(over: Partial<AzTimelineRecord> = {}): AzTimelineRecord {
   return { type: 'Task', name: 'Run tests', result: 'failed', logId: 12, issues: [], ...over };
 }
-
-// ---------------------------------------------------------------------------
-// The system, pulsed on a world the real provider mapped
-// ---------------------------------------------------------------------------
 
 async function build(
   make: (errors: ErrorRecorder) => GitHubSourceControlIntegration | AzureDevOpsSourceControlIntegration,
 ): Promise<{ system: System; pullRequests: PullRequest[] }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-evidence-'));
-  // The integration needs the system's error log, and the system needs the
-  // integration — so the reader handed to `buildSystem` delegates, and is bound
-  // by the time a pulse can reach it. Production has no such knot: the registry
-  // builds the integration with `ctx.errors` before the executor exists.
   let integration: GitHubSourceControlIntegration | AzureDevOpsSourceControlIntegration | null = null;
   const system = buildSystem(
     loadConfig({
@@ -259,8 +224,6 @@ async function build(
       backend: new FakePtyBackend(),
       worktrees: new FakeWorktreeManager(dir),
       errorMirror: () => {},
-      // The same integration that mapped the world answers for its evidence —
-      // which is the pairing production has, since both are the one provider.
       ciEvidence: { readCiFailureEvidence: (n, c) => integration!.readCiFailureEvidence(n, c) },
     },
   );
@@ -272,14 +235,9 @@ async function build(
   return { system, pullRequests };
 }
 
-/** The CI-fix task the pulse dispatched for PR 42, or undefined. */
 function ciTask(system: System) {
   return findTask(system.store, (t) => t.originRef === 'pr:42:ci');
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 test('a GitHub CI-fix dispatch carries the check run annotations', async () => {
   const api = ghApi({
@@ -299,16 +257,12 @@ test('a GitHub CI-fix dispatch carries the check run annotations', async () => {
   });
   const { system, pullRequests } = await build((errors) => new GitHubSourceControlIntegration({ api, errors }));
 
-  // The mapping first: only the *failing* run carries a ref, and it pairs the
-  // check-run id with the job id parsed out of `details_url`.
   assert.deepEqual(pullRequests[0]?.ciChecks, [{ name: 'test', status: 'failing', evidenceRef: '900/9001' }]);
 
   await system.harness.runCycle('manual');
   const task = ciTask(system);
   assert.ok(task, 'a CI-fix task should have been dispatched');
   assert.match(task.prompt, /src\/thing\.ts:12: AssertionError: Expected 3, received 4/);
-  // A warning is not a failure: annotations are filtered to the level that broke
-  // the build, or the excerpt fills with lint noise the check tolerated.
   assert.doesNotMatch(task.prompt, /unused var/);
   system.store.close();
 });
@@ -321,12 +275,9 @@ test('with no annotations, GitHub falls back to the tail of the job log and name
   await system.harness.runCycle('manual');
   const task = ciTask(system);
   assert.ok(task);
-  // The tail, not the head — a log fails at the bottom.
   assert.match(task.prompt, /line 500/);
   assert.doesNotMatch(task.prompt, /line 1\b/);
-  // The timestamp prefix is stripped: 29 characters a line is a fifth of the budget.
   assert.doesNotMatch(task.prompt, /2026-08-15T09:00:00\.000Z/);
-  // And the loss is named rather than silent.
   assert.match(task.prompt, /380 earlier lines were not fetched/);
   system.store.close();
 });
@@ -336,8 +287,6 @@ test('an Azure CI-fix dispatch carries the build timeline errors, keyed off the 
     timeline: {
       7788: [
         taskRecord({ issues: [{ type: 'error', message: 'AssertionError: expected 3 to equal 4' }] }),
-        // A failed Job is the aggregate of the task above — reporting it too
-        // would say the same thing twice at the top of the budget.
         { type: 'Job', name: 'Build and test', result: 'failed', logId: 3, issues: [] },
       ],
     },
@@ -355,9 +304,6 @@ test('an Azure CI-fix dispatch carries the build timeline errors, keyed off the 
 });
 
 test('a fetch that fails leaves the prompt exactly as it was, and records the failure', async () => {
-  // Both providers' worst realistic case: a token that reads everything else and
-  // 403s on the log API. Azure's is the likelier one — Build (read) is a scope an
-  // operator granting code + work items does not think to add.
   const api = azApi({ throwOn: 'timeline' });
   const { system } = await build((errors) => new AzureDevOpsSourceControlIntegration({ api, errors }));
 
@@ -366,8 +312,6 @@ test('a fetch that fails leaves the prompt exactly as it was, and records the fa
   assert.ok(task, 'the dispatch still happens — evidence is an enrichment, not a precondition');
   assert.doesNotMatch(task.prompt, /What the failing checks actually reported/);
 
-  // Recorded, never swallowed: the Errors panel is where a provider failure has
-  // to surface, and this one is invisible in the dispatch itself by design.
   const errors = system.store.listErrors();
   assert.ok(
     errors.some((e) => e.source === 'provider' && /could not read CI evidence for "CI" on PR #42/.test(e.message)),
@@ -377,8 +321,6 @@ test('a fetch that fails leaves the prompt exactly as it was, and records the fa
 });
 
 test('the whole-prompt cap trims the excerpt and says how much it trimmed', () => {
-  // Pure, at the renderer: the cap is arithmetic over a budget, and driving it
-  // through a dispatch would test the plumbing again instead of the boundary.
   const long: CiFailureEvidence = {
     check: 'test',
     kind: 'log',
@@ -387,24 +329,16 @@ test('the whole-prompt cap trims the excerpt and says how much it trimmed', () =
   const note = ciEvidenceNote([long]);
   assert.ok(note.length < 8000, `the excerpt should be capped, got ${note.length} characters`);
   assert.match(note, /lines were trimmed to fit/);
-  // The tail survives the trim, because that is where a log fails.
   assert.match(note, /399/);
 
-  // Two checks share one budget rather than taking one each — three red checks
-  // must not be three times the prompt.
   const two = ciEvidenceNote([long, { ...long, check: 'lint' }]);
   assert.ok(two.length < note.length * 1.6, 'a second check splits the budget, it does not double it');
 
-  // Nothing to say composes nothing at all, which is what keeps a failed fetch
-  // byte-identical to the prompt before this existed.
   assert.equal(ciEvidenceNote([]), '');
   assert.equal(ciEvidenceNote([{ check: 'test', kind: 'log', lines: [] }]), '');
 });
 
 test('a single line longer than the whole budget is cut mid-line, not admitted whole', () => {
-  // Not a synthetic input: both readers flatten a multi-line message onto one
-  // line, so an Azure task issue carrying a stack trace, or a bundler summary in
-  // a GitHub log, arrives as one line of tens of thousands of characters.
   const stack = Array.from({ length: 400 }, (_, i) => `at Handler${i}(ct) in /src/Service/Handler${i}.cs:line ${i}`)
     .join(' ')
     .concat(' THE-ASSERTION-AT-THE-TAIL');
@@ -419,8 +353,6 @@ test('a single line longer than the whole budget is cut mid-line, not admitted w
   assert.match(errors, /cut mid-line to fit/);
   assert.match(errors, /FIRST-ERROR/, "an error's head is the end kept");
 
-  // The per-check split is what made this worse rather than better: three
-  // oversized lines each took their own unbounded pass.
   const three = ciEvidenceNote([
     { check: 'a', kind: 'log', lines: [stack] },
     { check: 'b', kind: 'log', lines: [stack] },

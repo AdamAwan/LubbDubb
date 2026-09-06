@@ -1,9 +1,3 @@
-// In-browser fake backend for the GitHub Pages demo: the whole server surface (`/api/*` and
-// the `/ws` socket) with no Node process behind it. Mutations are applied to an in-memory
-// AppState and echoed back as the events the real Hub emits, so App.tsx is unchanged.
-//
-// Kept side-effect-free at module scope: the real build imports this file but the `VITE_DEMO`
-// branch in api.ts is statically false there, so Rollup drops it.
 import type {
   AgentFilesPayload,
   AllowanceInsights,
@@ -90,7 +84,8 @@ import { inFlight } from '../view/localValidation.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { buildGoalPage } from '../view/goalPage.js';
 
-/** The demo's catalogue carries no rates, so every kind names the same empty one. */
+// → docs/spec/17-cockpit.md
+
 const ZERO_RATE = { dropChance: 0, pity: 0 };
 
 type Emit = Record<string, unknown>;
@@ -99,9 +94,6 @@ interface Conn {
   subs: Set<string>;
 }
 
-// Plausible log lines a "running" agent emits, cycled to fake live progress.
-// Markdown Magpie's own commands, so the drawer reads like the repository the
-// rest of the demo world is about.
 const CHATTER = [
   'reading changed files …',
   'npm test -w packages/retrieval',
@@ -115,12 +107,10 @@ const CHATTER = [
 
 type WatchConfig = { watchLabel: string };
 
-/** Opt-in effective state: watched only with the watch tag. */
 function isWatched(labels: string[] | undefined, config: WatchConfig): boolean {
   return (labels ?? []).includes(config.watchLabel);
 }
 
-/** Set the watch tag to reflect a toggle — one label, added or taken off. */
 function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: boolean): string[] {
   const set = new Set(labels ?? []);
   if (watched) set.add(config.watchLabel);
@@ -128,22 +118,10 @@ function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: 
   return [...set];
 }
 
-/** The dispatch action a kind of agent is sent as — the executor's two, by name. */
 function dispatchAction(kind: TaskSummary['kind']): Decision['action']['type'] {
   return kind === 'desk' ? 'dispatch_desk_agent' : 'dispatch_code_agent';
 }
 
-/**
- * The three statuses `isActiveTask` calls outstanding, mirrored here because the
- * demo has no server to ask. It used to compare against `'active'`, which is not
- * a `TaskStatus` at all — so killing or completing an agent left its task row
- * saying `running` forever.
- */
-/**
- * The issue an origin in the `issue:<n>` subtree belongs to, or null. The server's
- * `originIssueNumber` restated rather than imported, because the cockpit names `src/wire.ts`
- * and nothing else. Anchored: `startsWith` alone reads `issue:14` as belonging to `issue:1`.
- */
 function goalOriginIssue(originRef: string | null | undefined): number | null {
   const match = /^issue:(\d+)(?::|$)/.exec(originRef ?? '');
   return match ? Number(match[1]) : null;
@@ -153,11 +131,6 @@ function isLiveTask(task: TaskSummary): boolean {
   return task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
 }
 
-/**
- * A pull request injected into the demo world, with the three verdicts the wire
- * always carries on an open one. `attention` is the injected PR's honest reading:
- * the demo dispatches an agent for it in the same breath.
- */
 function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenPullRequest {
   return {
     ...pr,
@@ -166,7 +139,6 @@ function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenP
   };
 }
 
-/** An injected issue, with the verdicts nothing has yet cast about its goal. */
 function injectedIssue(
   issue: Omit<
     Issue,
@@ -193,21 +165,12 @@ function injectedIssue(
     retrospective: null,
     scratchpad: null,
     instructions: [],
-    // A goal injected this second has had no agent on it, so nothing has been
-    // measured — which is null, not zero. See `demoIssue`.
     spend: null,
-    // And nothing has planned it, so it has no validation plan at all.
     validation: null,
-    // Nor has anybody asked for it to be validated on the machine.
     localValidation: null,
   };
 }
 
-/**
- * One tool call as `renderBlocks` writes it, with its result under it — blank lines dropped,
- * as {@link LocalRunner}'s tail drops them. The line count only past one line, which is
- * `renderBlocks`' own rule: "· 1 lines" would be a demo of a bug nothing has.
- */
 function toolLines(at: string, tool: string, summary: string, done: string, body: readonly string[]): string[] {
   const count = body.length > 1 ? `\x1b[2m · ${String(body.length)} lines\x1b[0m` : '';
   return [
@@ -217,26 +180,10 @@ function toolLines(at: string, tool: string, summary: string, done: string, body
   ];
 }
 
-/**
- * A bring-up as the panel sees one: a phase, then the output of that phase. Scripted rather
- * than instant, since "it takes minutes and says nothing" is the complaint this answers.
- * **Real `renderBlocks` output, markers and stamps intact**, so the demo exercises the
- * folding the panel draws it with. The times are literals; nothing here reads a clock.
- */
-/** How long the demo's scripted validation sits on each phase. */
 const VALIDATION_TICK_MS = 1800;
 
-/**
- * How long the demo takes to answer a press — the shortest delay that still shows the
- * button's pending state, which the real route holds for seconds.
- */
 const REQUEST_MS = 900;
 
-/**
- * The demo's validation, one step per tick: queued, planning, waiting for the environment,
- * driving it, then a failure with something worth looking at. It ends `failed` because the
- * case this feature is for is a change that looked finished and did not work.
- */
 const VALIDATION_STEPS: readonly ((row: LocalValidationView) => Partial<LocalValidationView>)[] = [
   () => ({ status: 'dispatched', phase: 'planning', dispatchedAt: new Date().toISOString() }),
   () => ({
@@ -285,9 +232,6 @@ const VALIDATION_STEPS: readonly ((row: LocalValidationView) => Partial<LocalVal
       },
     ],
     visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
-    // No bytes to serve in a demo with no server, and an `<img>` pointed at a path
-    // that answers nothing is a demo of a broken feature. The fixtures' attachment
-    // rule, one surface over.
     screenshots: [],
     files: [],
   }),
@@ -324,15 +268,8 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
   },
 ];
 
-/**
- * And the teardown, which is a turn of its own: the project's stop command, because
- * a dev environment is not a process tree — the containers a start brought up belong
- * to the Docker daemon and no signal the harness can send reaches them.
- */
-/** Where the demo's branches point: what a start checks out and what a refresh moves to. */
 const DEMO_TIP = 'e4f1c9a7b2d8503f6a19c4e7b0d2f8a1c3e5b7d9';
 
-/** A message turn: one phase and one answer, so the panel shows a turn in flight and then quiet. */
 const MESSAGE_TURN: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'doing what you asked',
@@ -341,7 +278,6 @@ const MESSAGE_TURN: readonly { phase: string; lines: readonly string[] }[] = [
   { phase: 'done', lines: ['Ran the pending migrations; the API picked the schema up without a restart.'] },
 ];
 
-/** A refresh turn: what the session does once the checkout has moved under it. */
 const REFRESH_TURN: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'restarting the api',
@@ -373,7 +309,6 @@ class DemoServer {
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
-  /** What the local run's session has 'printed', for the panel's tail. */
   private lines: string[] = [
     'Bringing #395 up on this machine — the compose file first, then the app.',
     ...toolLines('09:12:04', 'Bash', 'docker compose up -d', '09:12:31', [
@@ -383,14 +318,10 @@ class DemoServer {
     ...toolLines('09:12:32', 'Bash', 'npm run dev -- --host', '09:12:34', ['VITE ready in 1180 ms']),
     'Up on http://localhost:5173. Nothing needed that the instruction did not mention.',
   ];
-  /** Which step of {@link BRINGUP} is next. Past the end: the fixture is already up. */
   private bringUp = BRINGUP.length;
-  /** Which step of {@link TEARDOWN} is next. */
   private teardown = TEARDOWN.length;
-  /** Which step of the scripted validation is next. Past the end = nothing scheduled. */
   private validating = VALIDATION_STEPS.length;
   private validationSeq = 1;
-  /** Where a message or refresh turn's script is up to; past the end is quiet. */
   private reply = MESSAGE_TURN.length;
   private deskBeats = 0;
   private seq = 1000;
@@ -399,21 +330,13 @@ class DemoServer {
     return `${prefix}-${++this.seq}`;
   }
 
-  // --- REST surface -------------------------------------------------------
   async getState(): Promise<AppState> {
-    // Fresh clone so React re-renders. The ended count is taken here rather than kept on the
-    // seed, because the demo ends agents as it runs.
     return structuredClone({
       ...this.state,
       endedAgents: this.state.agents.filter((a) => a.endedAt !== null).length,
     });
   }
 
-  /**
-   * The demo holds every agent it has ever run in `state.agents`, so a goal's
-   * history is a filter over the same rows the real route reads out of the store.
-   * The pull requests are named by the caller there and here alike.
-   */
   async getGoalAgents(ref: string, prs: readonly number[]): Promise<GoalAgentsPayload> {
     const origins = new Set(prs.map((n) => `pr:${n}`));
     const tasks = this.state.tasks.filter(
@@ -429,17 +352,11 @@ class DemoServer {
     return { agentId, from: at, total: full.length, transcript: full.slice(at) };
   }
 
-  /**
-   * The demo records no file writes, so this is empty rather than fabricated: the
-   * old snapshot's `files` list was `[]` here too, and inventing paths would put
-   * a "files changed" list under an agent that changed nothing.
-   */
   async getAgentFiles(agentId: string): Promise<AgentFilesPayload> {
     return { agentId, files: [] };
   }
 
   async pulse(): Promise<{ ok: true }> {
-    // A heartbeat with nothing new to do — just advance the clock + audit it.
     this.addDecision('no_op', 'executed', 'nothing to dispatch this cycle', undefined, 'idle');
     this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'manual pulse' });
     this.dirty();
@@ -459,11 +376,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * The demo's stand-in for `src/escalation/questionnaire.ts`'s fold. Restated rather than
-   * imported: the cockpit reaches the harness through `src/wire.ts` alone
-   * (`test/wireContract.test.ts`). Same shape, so the demo transcript reads like a real one.
-   */
   async answerQuestions(id: string, answers: (string | null)[]): Promise<{ ok: true }> {
     const esc = this.state.escalations.find((e) => e.id === id);
     const questions = esc?.context?.questions ?? [];
@@ -494,11 +406,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Clear an item without answering it. Nothing is typed into the agent — that is
-   * the point of the button — so the agent's own status is left exactly as it was,
-   * and the stale-alert chip goes with the item.
-   */
   async dismissEscalation(id: string, note?: string): Promise<{ ok: true; dismissedAs: string }> {
     const esc = this.state.escalations.find((e) => e.id === id);
     if (esc) {
@@ -546,12 +453,6 @@ class DemoServer {
     return { ok: true, cap, paused };
   }
 
-  /**
-   * Authorize (or call off) landing a whole stack. The demo has no pulse that
-   * merges anything, so this records the intent and lets the rack draw it —
-   * which is the half worth demonstrating, since the effects of the real one
-   * arrive over several cycles.
-   */
   async setStackLanding(ref: string, landing: boolean): Promise<{ ok: true }> {
     const view = this.state.stackLandings.find((v) => v.ref === ref);
     if (!view) return { ok: true };
@@ -579,7 +480,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Toggle the watch tag on a PR — the demo mirror of the real label write-back. */
   async setPrWatched(prNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const tag = this.state.config.watchLabel;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
@@ -602,11 +502,6 @@ class DemoServer {
     return { ok: true, watched };
   }
 
-  /**
-   * Set or clear an issue's conclusion — the demo mirror of the operator override.
-   * Purely local, as on the server: concluding an issue records the harness's own
-   * view and never touches the tracker.
-   */
   async setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -628,12 +523,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Write an instruction on a goal. Both halves, as on the server: the instruction the next
-   * agent reads, and the `more_work` that makes there be a next agent — the first alone parks
-   * the goal quietly. The server's exception too: on a delivered goal the second half is
-   * skipped, since `more_work` there would clear the delivery.
-   */
   async addInstruction(issueNumber: number, text: string): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -669,16 +558,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Overrule a standing shortfall. The shortfall going is the *delivery's* doing rather than a
-   * line of its own, because the exclusion matrix is what clears it on the server.
-   */
-  /**
-   * Stop a goal waiting on an environment, or put it back — the demo's own arm of
-   * the escape hatch. It rewrites the reach row rather than a table of its own,
-   * because the row *is* what the card draws: a release that left `gateHold`
-   * standing would draw a control that changes nothing.
-   */
   async releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<{ ok: true }> {
     const reach = (this.state.environmentReach ?? []).find((r) => r.goalRef === `issue:${issueNumber}`);
     if (reach) {
@@ -720,11 +599,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Take one back. The last one out clears the `more_work` it wrote — the server's
-   * rule, mirrored, because a demo that left the goal bounced back to pickup for
-   * withdrawn words would be teaching the wrong model of the control.
-   */
   async withdrawInstruction(issueNumber: number, id: string): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -740,11 +614,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Put a review thread back in front of the fleet, or take the ask back. With no provider to
-   * remember what the thread said before, taking a reopen back reads the thread's own
-   * conversation — the same fold the real providers make, from the same evidence.
-   */
   async reopenPrThread(prNumber: number, threadId: string, reopened: boolean): Promise<{ ok: true }> {
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     const thread = pr?.reviewThreads?.find((t) => t.id === threadId);
@@ -763,11 +632,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Override the goal appraisal — the demo mirror of the escape hatch a blocking gate
-   * has to have. `null` deletes the row rather than storing a third verdict, so
-   * "nobody has decided" keeps one representation here too.
-   */
   async setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -779,15 +643,9 @@ class DemoServer {
               missing: [],
               by: 'operator',
               commentRef: null,
-              // An operator's own verdict proposes no profile: the pin is its own
-              // control, and a hand-set appraisal must not raise a question nobody asked.
               proposedProfile: null,
               awaitingProfileAnswer: false,
-              // Nor any placement: the same argument. What the operator sets by
-              // hand is a verdict, never a suggestion about where the item is filed.
               placement: [],
-              // Nor any answer to the parent question, which is a different act
-              // with its own control: `setIssueParent` is what stamps that.
               parentSettledAt: null,
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
@@ -806,13 +664,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * End a run — the one way a goal leaves the console. Marks the run dismissed wherever it
-   * rides (a live issue, or a `retainedRuns` entry), which is what the console filters on.
-   * The note the route requires goes into the decision line, the demo's only record. The
-   * clear-out is mirrored too: the confirmation says ending a run kills the goal's live
-   * agents, cancels its jobs and settles its instructions, so the demo must do that.
-   */
   async dismissRun(issueNumber: number, note?: string): Promise<{ ok: true; cleared: RunClearOut }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);
     const forgotten = (this.state.retainedRuns ?? []).find((i) => i.number === issueNumber);
@@ -850,10 +701,6 @@ class DemoServer {
     return { ok: true, cleared };
   }
 
-  /**
-   * Pin a goal to a profile, or clear the pin. The tag write and the settling are one act
-   * here as on the route: picking a profile answers the appraiser's proposal either way.
-   */
   async setIssueProfile(issueNumber: number, profile: string | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -864,12 +711,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Settle a goal's placement. The row is dropped from `appraisal.placement` rather than
-   * flagged answered, because the question is *derived* from the live work item and there is
-   * nothing left to derive it from. `parent` is written onto the issue as well, so the goal
-   * page shows where the item now hangs.
-   */
   async setIssueParent(issueNumber: number, parent: number | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -903,7 +744,6 @@ class DemoServer {
     this.dirty();
   }
 
-  /** Override one part's profile — `null` returns it to inheriting the goal's pin. */
   async setPartProfile(planId: string, slug: string, profile: string | null): Promise<{ ok: true }> {
     const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
     if (part) {
@@ -913,11 +753,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Restart one part — the demo mirror of closing the pull request and handing the
-   * part back. The PR row goes with it: a demo that left the pull request on the
-   * board would show the one state the real restart exists to get out of.
-   */
   async restartPart(planId: string, slug: string): Promise<{ ok: true; detail: string }> {
     const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
     if (!part?.prNumber) return { ok: true, detail: 'nothing to restart' };
@@ -930,12 +765,6 @@ class DemoServer {
     return { ok: true, detail: `closed PR #${prNumber} and put "${slug}" back to ready` };
   }
 
-  /**
-   * Toggle an issue's watch/ignore tags — the demo mirror of the real write-back
-   * (opt-in), **including the container cascade**: watching a Feature tags every
-   * descendant, as the route does, or the demo would show a click that the real
-   * cockpit turns into eight writes doing nothing.
-   */
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -975,10 +804,6 @@ class DemoServer {
     return { ok: true, watched };
   }
 
-  /**
-   * Move a work item to one of the tracker's own states — the demo's half of the board's
-   * drag. It moves the card for real: a drop that springs back teaches the opposite.
-   */
   async setIssueState(issueNumber: number, state: string): Promise<{ ok: true; state: string }> {
     DEMO_STATE_MOVES.set(issueNumber, state);
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
@@ -996,11 +821,6 @@ class DemoServer {
     return { ok: true, state };
   }
 
-  /**
-   * Mark a goal a priority, or clear it. The demo does not re-rank anything — its
-   * queue is scripted — so this writes the reading the chip and the button draw and
-   * stops there, which is the honest half: the ordering is the server's.
-   */
   async setGoalPriority(issueNumber: number, priority: boolean): Promise<{ ok: true; priority: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -1010,12 +830,6 @@ class DemoServer {
     return { ok: true, priority };
   }
 
-  /**
-   * Send a plan back for replanning — the demo mirror of `POST /api/plans/:id/replan`.
-   * Like the real endpoint it only flips the plan's status; the part rows are left
-   * alone, because what an amendment does to them is decided when a planner's new
-   * declaration actually lands.
-   */
   async replan(planId: string): Promise<{ ok: true }> {
     const plan = (this.state.plans ?? []).find((p) => p.id === planId);
     if (plan) {
@@ -1027,15 +841,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * The operator's ruling on a check the working agent declared. Accepting makes it live with
-   * **no reading against it** — the demo has no environment to put the dry run's query to.
-   * Declining drops a row that was only a proposal, and clears a pending change off a live one.
-   */
-  /**
-   * Give a window more time. It re-opens the window it names, as the real route does, so the
-   * readings already drawn stay put; the demo asks no environment, so nothing new arrives.
-   */
   async extendWatch(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const window = (this.state.goalWatchWindows ?? []).find(
       (w) => w.goalRef === `issue:${issueNumber}` && w.environment === environment,
@@ -1063,11 +868,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * The operator's own check, written from the goal page. With no environment to query, the
-   * dry run is empty and the reading columns are cleared rather than guessed — inventing a
-   * `fires` would teach the control that saving proves something.
-   */
   async saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<{ ok: true; dryRun: string[] }> {
     const originRef = `issue:${issueNumber}`;
     const watches = this.state.goalWatches ?? [];
@@ -1114,17 +914,10 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * One validation check's current reading. Everything the last reading left behind is
-   * cleared too: a deferral's reason left standing under a "passed" chip teaches wrong.
-   */
   async setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
     const origin = `issue:${issueNumber}`;
     const check = (this.state.validationChecks ?? []).find((c) => c.originRef === origin && c.id === checkId);
     if (check && check.supersededReason === null) {
-      // The hand-over writes who runs it, never a reading — mirrored separately
-      // because folding it into the branch below would have the demo record a
-      // state the real route does not touch.
       if (act.kind === 'handover') {
         if (act.to === 'fleet' && check.state !== 'unrun') return { ok: true };
         check.actor = act.to;
@@ -1141,16 +934,12 @@ class DemoServer {
               ? 'waived'
               : 'unrun';
       check.state = state;
-      // A blank note reads as absent, matching the real route: a noteless pass
-      // draws no dangling "— " beside it, exactly as a reset does.
       check.resultNote =
         act.kind === 'result' ? (act.note.length > 0 ? act.note : null) : act.kind === 'reset' ? null : act.reason;
       check.resultBy = act.kind === 'reset' ? null : 'operator';
       check.resultAt = act.kind === 'reset' ? null : new Date().toISOString();
       check.deferUntil = null;
       check.handbackNote = null;
-      // The reading is in, so the run is over — the same clearing the store does,
-      // and without it the demo would draw "running at …" beside a settled check.
       check.claimedBy = null;
       check.claimedAt = null;
       this.dirty();
@@ -1158,10 +947,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * A reviewer ticking one acceptance criterion. Mirrors the real route's key:
-   * the criterion's **text**, so a re-worded criterion loses its tick here too.
-   */
   async setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<{ ok: true }> {
     const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
     if (part) {
@@ -1174,28 +959,10 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Promote a finding into a queued job — the demo mirror of
-   * `POST /api/findings/:id/promote`, and the only path from a finding to work in
-   * either backend: the operator's click is the gate.
-   */
-  /** The build fixture — see the note on `demoApi.checkBuild`. */
   getBuild(): BuildReading {
     return this.state.build;
   }
 
-  /**
-   * Drain and cancel, modelled; apply, not. A drain is **pure state**, so Queue upgrade moves
-   * the card to `draining` exactly as it would live and Cancel puts it back; an apply is a
-   * handoff between two processes a browser tab has none of, so it stays a no-op rather than
-   * reporting a success nobody could have had. `live` is left alone: the fleet keeps working
-   * through a drain, which is the whole reason it is a state you can sit in.
-   */
-  /**
-   * The project checkout catching up: the waiting commits become the ones it has,
-   * and the card goes quiet. Modelled because it is pure state, on `upgrade`'s
-   * terms — see there.
-   */
   async pullProject(): Promise<{ ok: true; build: BuildReading }> {
     const build = this.state.build;
     const project = build.project;
@@ -1213,11 +980,6 @@ class DemoServer {
     return { ok: true, build };
   }
 
-  /**
-   * Snoozing one of the rail's two update asks. Pure state: the row goes for as long as the
-   * browser's clock says, so the ask comes back on the tick the age chips move on. Thirty
-   * minutes, matching `selfUpdate.snoozeMs`'s default rather than a config nothing serves.
-   */
   async snoozeUpdate(target: SnoozeTarget): Promise<{ ok: true; build: BuildReading }> {
     const build = this.state.build;
     build.snoozedUntil = { ...build.snoozedUntil, [target]: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
@@ -1247,15 +1009,8 @@ class DemoServer {
     return { ok: true, build };
   }
 
-  /**
-   * Opening a shell, and the vivarium's three acts. The wallet is recomputed rather than left
-   * alone: with no usage events to derive `earned` from, `spent` moving without the balance
-   * would show a meter that never runs out.
-   */
   async openPet(id: string): Promise<{ ok: true }> {
     const pet = this.state.pets?.pets.find((p) => p.id === id);
-    // Stamped, never rolled — the species the demo already gave it is the one the
-    // shell comes off to reveal, exactly as the harness's hash decides it there.
     if (pet && pet.openedAt === null) {
       pet.openedAt = new Date().toISOString();
       this.dirty();
@@ -1302,8 +1057,6 @@ class DemoServer {
   async blendPet(id: string): Promise<{ ok: true }> {
     const pets = this.state.pets;
     const pet = pets?.pets.find((p) => p.id === id);
-    // Same rule the server enforces: a duplicate only, and the row is marked
-    // rather than dropped so its origin line survives the blend.
     const live = pets?.pets.filter((p) => p.species === pet?.species && p.dissolvedAt === null).length ?? 0;
     if (pets && pet && pet.dissolvedAt === null && live > 1) {
       pet.dissolvedAt = new Date().toISOString();
@@ -1315,25 +1068,14 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Settle a human task (demo mirror of POST /api/human-tasks/:id/done). The note
-   * is what the route requires on a close-out whose goal's validation is flagged,
-   * and it is kept for the same reason the route keeps it: the settled row is the
-   * only account of what was decided about the checks nobody ran.
-   */
   async completeHumanTask(id: string, note?: string): Promise<{ ok: true }> {
     return this.settleHumanTask(id, 'done', note ?? null);
   }
 
-  /** Decline one, with the note the route requires (POST /api/human-tasks/:id/decline). */
   async declineHumanTask(id: string, note: string): Promise<{ ok: true }> {
     return this.settleHumanTask(id, 'declined', note);
   }
 
-  /**
-   * Close the ticket and settle the row. The issue moves to `closed` as well, because the
-   * point of the button is that the two happen together.
-   */
   async closeHumanTaskTicket(id: string, note?: string): Promise<{ ok: true }> {
     const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
     const number = task?.originRef?.startsWith('issue:') === true ? Number(task.originRef.slice('issue:'.length)) : NaN;
@@ -1342,11 +1084,8 @@ class DemoServer {
     return this.settleHumanTask(id, 'done', note ?? `Closed #${number} in the tracker from the cockpit.`);
   }
 
-  /** Clear a settled one off the bench (POST /api/human-tasks/:id/dismiss). */
   async dismissHumanTask(id: string): Promise<{ ok: true }> {
     const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
-    // Settled only, and once — the route's own guard, so the demo cannot show a
-    // button the real cockpit refuses.
     if (task && task.status !== 'open' && !task.dismissedAt) {
       task.dismissedAt = new Date().toISOString();
       task.updatedAt = task.dismissedAt;
@@ -1367,18 +1106,9 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Accept a proposed act — the demo mirror of `POST /api/proposals/:id/accept`,
-   * and the one thing the demo has to show faithfully: the accept *performs the
-   * act*. So a merge marks the PR merged and a reply marks its comment handled,
-   * exactly as the real sink would, rather than only flipping a status.
-   */
   async acceptProposal(id: string, note?: string, acknowledged?: string[]): Promise<{ ok: boolean; detail: string }> {
     const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
     if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
-    // The demo mirrors the gate for the reason it mirrors the effect: a plan whose
-    // caveats are unticked is not released by the real route either, and a demo
-    // that approved one would teach the button to be a click.
     const unticked = planCaveatsOf(proposal).filter((c) => !(acknowledged ?? []).includes(c.id));
     if (unticked.length > 0) return { ok: false, detail: `${unticked.length} thing(s) still to acknowledge` };
     this.settle(proposal, 'accepted', note);
@@ -1399,7 +1129,6 @@ class DemoServer {
     return { ok: true, detail };
   }
 
-  /** Reject it: nothing goes out, and the reason is recorded (demo mirror of /reject). */
   async rejectProposal(id: string, note?: string): Promise<{ ok: boolean; detail: string }> {
     const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
     if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
@@ -1410,11 +1139,6 @@ class DemoServer {
     return { ok: true, detail };
   }
 
-  /**
-   * Back out of a plan verdict. The point of the two verdicts is what happens to the
-   * **ticket**: closing one closes the demo issue and drops its watch tag, holding one drops
-   * the tag and sends the plan back.
-   */
   async backOutProposal(
     id: string,
     verdict: 'close' | 'hold',
@@ -1432,8 +1156,6 @@ class DemoServer {
       if (verdict === 'close') issue.state = 'closed';
     }
     const plan = this.state.plans?.find((p) => p.id === proposal.action.planId);
-    // A close ends the plan; a hold sends it back, so the goal is planned afresh
-    // whenever somebody watches the ticket again.
     if (plan) plan.status = verdict === 'close' ? 'abandoned' : 'planning';
     const what = verdict === 'close' ? 'Closed the ticket' : 'Put the ticket on hold';
     const consequence =
@@ -1446,7 +1168,6 @@ class DemoServer {
     return { ok: true, detail };
   }
 
-  /** The verdict itself: one-way, and it answers the inbox item it hangs off. */
   private settle(proposal: Proposal, status: 'accepted' | 'rejected', note?: string): void {
     proposal.status = status;
     proposal.note = note?.trim() || null;
@@ -1460,15 +1181,8 @@ class DemoServer {
     }
   }
 
-  /**
-   * Start the local run on another goal, which is also the swap: one environment, so
-   * the old row ends as the new one begins — the same transaction the real store
-   * does in one write.
-   */
   startLocalRun(issue: number, ref?: string): Promise<{ ok: true; run: LocalRunView }> {
     const now = new Date().toISOString();
-    // Where this goal runs, and what has happened there — read off the same rows the
-    // panel drew, so the header after a start says what the row said before it.
     const target = this.state.localRunTargets.find((t) => t.issueNumber === issue) ?? null;
     const chosen = ref === undefined ? null : (target?.options.find((o) => o.option.ref === ref) ?? null);
     const facts = chosen?.facts ?? target?.target ?? null;
@@ -1479,17 +1193,11 @@ class DemoServer {
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
       commit: DEMO_TIP,
       pid: 48000 + issue,
-      // `starting`, not `running`, because that is the state an operator spends the
-      // minutes in and the one the panel had nothing to say about. The scripted
-      // bring-up below walks out of it.
       status: 'starting',
       turn: 'start',
       holdsSession: true,
-      // Nothing read yet: the watch's first reading lands when the bring-up ends.
       ports: null,
       freshness: null,
-      // Nothing reported yet: the figure appears with the session's first turn end,
-      // which is what an unmeasured run looks like on the real thing too.
       costUsd: null,
       inputTokens: null,
       outputTokens: null,
@@ -1501,7 +1209,6 @@ class DemoServer {
       startedAt: now,
       endedAt: null,
       interruptedAt: null,
-      // Held right now, by the session this start just spawned.
       lastSeenAt: now,
       live: true,
       phase: null,
@@ -1510,25 +1217,15 @@ class DemoServer {
     this.state.localRun = starting;
     this.lines = [`Bringing #${String(issue)} up on this machine — the compose file first, then the app.`];
     this.bringUp = 0;
-    // The first phase now rather than on the next poll, so the panel never draws a
-    // start with nothing under it.
     this.advanceBringUp();
     return Promise.resolve({ ok: true as const, run: this.state.localRun ?? starting });
   }
 
-  /**
-   * One step of the scripted bring-up: the phase, then that phase's output. Driven by
-   * {@link localRunOutput} rather than a timer, because the panel polls that while a run is
-   * live — the same cadence the real runner's output arrives at.
-   */
   private advanceBringUp(): void {
     const run = this.state.localRun;
     if (run === null || run.status !== 'starting') return;
     const step = BRINGUP[this.bringUp];
     if (step === undefined) {
-      // The turn ending is the environment being up — the real runner's rule, and
-      // the reason `running` here carries no phase: nothing is in flight. The
-      // readings land with it, as the watch's nudge-on-status-change makes them.
       const at = new Date().toISOString();
       this.state.localRun = {
         ...run,
@@ -1548,17 +1245,10 @@ class DemoServer {
     }
     this.bringUp += 1;
     this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
-    // The money climbs with the work, because that is what the panel is showing: a
-    // reading that only appeared at the end would demonstrate the opposite of it.
     this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.06) };
     this.dirty();
   }
 
-  /**
-   * Ask for a goal to be validated locally. The refusals are the server's, because they are
-   * what the modal exists to answer: a swap without consent, and a second validation on a
-   * goal already being validated. Everything after is scripted by {@link advanceValidation}.
-   */
   validateLocally(issue: number, opts: { swap?: boolean; refresh?: boolean } = {}): Promise<{ ok: true }> {
     const goal = this.state.world.issues.find((i) => i.number === issue);
     if (goal === undefined) return Promise.reject(new Error(`#${String(issue)} is not a goal here.`));
@@ -1606,12 +1296,9 @@ class DemoServer {
     this.validating = 0;
     this.dirty();
     this.armValidation(issue);
-    // Deliberately not instant: the real route takes seconds, long enough that a control
-    // with no pending state got pressed twice.
     return new Promise((resolve) => setTimeout(() => resolve({ ok: true as const }), REQUEST_MS));
   }
 
-  /** Call one off — the operator's own answer, and the only one that needs no reason. */
   cancelLocalValidation(issue: number): Promise<{ ok: true }> {
     const goal = this.state.world.issues.find((i) => i.number === issue);
     const row = goal?.localValidation ?? null;
@@ -1628,11 +1315,6 @@ class DemoServer {
     return Promise.resolve({ ok: true as const });
   }
 
-  /**
-   * Walk the scripted validation one step per tick. On a timer rather than a poll, unlike the
-   * bring-up beside it, because the goal page has no log to fetch. Re-arms only while there
-   * are steps left, so a demo left open does not tick for ever.
-   */
   private armValidation(issue: number): void {
     setTimeout(() => {
       this.advanceValidation(issue);
@@ -1642,9 +1324,6 @@ class DemoServer {
   private advanceValidation(issue: number): void {
     const goal = this.state.world.issues.find((i) => i.number === issue);
     const row = goal?.localValidation ?? null;
-    // Stops the moment the row is no longer in flight, which is what Call it off
-    // does to it — a scripted step written onto an abandoned row would undo the
-    // operator's own answer a second and a half later.
     if (goal === undefined || row === null || !inFlight(row)) return;
     const step = VALIDATION_STEPS[this.validating];
     if (step === undefined) return;
@@ -1654,11 +1333,6 @@ class DemoServer {
     if (VALIDATION_STEPS[this.validating] !== undefined) this.armValidation(issue);
   }
 
-  /**
-   * Start the teardown. Not finish it — stopping is a session's turn, because a dev
-   * environment is not a process tree and no signal reaches a container, so
-   * `stopping` is a live state the panel sits in for a while.
-   */
   stopLocalRun(): Promise<{ ok: true }> {
     if (this.state.localRun !== null) {
       this.state.localRun = { ...this.state.localRun, status: 'stopping', turn: 'stop', phase: null };
@@ -1669,10 +1343,6 @@ class DemoServer {
     return Promise.resolve({ ok: true as const });
   }
 
-  /**
-   * Type into the session: the line is echoed as the real runner echoes it, the turn
-   * begins, and the next two looks carry a phase and then the answer.
-   */
   messageLocalRun(text: string): Promise<{ ok: true }> {
     const run = this.state.localRun;
     if (run === null || run.status !== 'running' || run.turn !== null)
@@ -1684,11 +1354,6 @@ class DemoServer {
     return Promise.resolve({ ok: true as const });
   }
 
-  /**
-   * Move the checkout to the tip and tell the session — the state half, exactly as
-   * the real one: the commit moves at once, the freshness reading says current, and
-   * the session's turn plays out over the next looks.
-   */
   refreshLocalRun(): Promise<{ ok: true; run: LocalRunView }> {
     const run = this.state.localRun;
     if (run === null || run.status !== 'running' || run.turn !== null)
@@ -1712,7 +1377,6 @@ class DemoServer {
     return Promise.resolve({ ok: true as const, run: refreshed });
   }
 
-  /** A message or a refresh turn, one step per look: a phase, then what it did, then quiet. */
   private advanceTurn(): void {
     const run = this.state.localRun;
     if (run === null || run.status !== 'running' || (run.turn !== 'message' && run.turn !== 'refresh')) return;
@@ -1729,7 +1393,6 @@ class DemoServer {
     this.dirty();
   }
 
-  /** The teardown, one step per look, exactly as {@link advanceBringUp} runs. */
   private advanceTeardown(): void {
     const run = this.state.localRun;
     if (run === null || run.status !== 'stopping') return;
@@ -1741,7 +1404,6 @@ class DemoServer {
         live: false,
         phase: null,
         turn: null,
-        // Nothing is live, so nothing is read — the watch clears its readings too.
         ports: null,
         freshness: null,
         endedAt: new Date().toISOString(),
@@ -1752,8 +1414,6 @@ class DemoServer {
     }
     this.teardown += 1;
     this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
-    // A teardown is a turn too, and it is billed to the run it takes down — which is
-    // the whole reason the row accumulates rather than being written once.
     this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.03) };
     this.dirty();
   }
@@ -1773,7 +1433,6 @@ class DemoServer {
       agent.waitingReason = null;
       const task = this.state.tasks.find((t) => t.id === agent.taskId);
       if (task && isLiveTask(task)) task.status = 'interrupted';
-      // Any open escalation from this agent is moot now.
       for (const e of this.state.escalations) if (e.agentId === id && e.status === 'open') e.status = 'dismissed';
       this.addDecision('no_op', 'executed', `killed ${id}`);
       this.dirty();
@@ -1781,11 +1440,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * The operator declaring the work finished — the clean terminal, where
-   * {@link killAgent} records an abandonment. The task follows the agent to `done`
-   * rather than `interrupted`, and the open question goes with it.
-   */
   async completeAgent(id: string): Promise<{ ok: true }> {
     const agent = this.state.agents.find((a) => a.id === id);
     if (agent && agent.status !== 'done') {
@@ -1801,11 +1455,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Buy fifteen more minutes before a stall park settles itself. The demo world holds no
-   * stall parks, so this is the refusal arm made visible: the real route 409s an agent with
-   * no countdown, and a silent success would teach the panel a shape the server never sends.
-   */
   async extendStall(id: string): Promise<{ ok: true; expiresAt: string }> {
     const park = this.state.stallParks.find((p) => p.agentId === id);
     const expiresAt = new Date(Date.now() + 900_000).toISOString();
@@ -1821,11 +1470,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * End a usage-limit park (issue #318): the agent leaves `parkedOnLimit` and goes
-   * back to work, which is what the real route does once it has re-opened the
-   * session. No escalation is touched — a limit park never raised one.
-   */
   async resumeAgent(id: string): Promise<{ ok: true }> {
     if (!this.state.parkedOnLimit.includes(id)) return { ok: true };
     this.state.parkedOnLimit = this.state.parkedOnLimit.filter((a) => a !== id);
@@ -1841,17 +1485,14 @@ class DemoServer {
     return { ok: true };
   }
 
-  // --- WS surface ---------------------------------------------------------
   connect(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
     const conn: Conn = { onEvent, subs: new Set() };
     this.conns.add(conn);
-    // Report "live" on the next tick, mirroring a real socket's async open.
     setTimeout(() => onStatus?.(true), 0);
     this.startTimers();
     return {
       subscribe: (agentId: string) => {
         conn.subs.add(agentId);
-        // Prime the drawer with a fresh tail so it feels immediately connected.
         const last = (this.transcripts.get(agentId) ?? '').split('\n').filter(Boolean).at(-1);
         if (last) conn.onEvent({ type: 'agent:tail', agentId, line: last });
       },
@@ -1863,21 +1504,16 @@ class DemoServer {
     };
   }
 
-  // --- internals ----------------------------------------------------------
   private emit(ev: Emit): void {
     for (const c of this.conns) c.onEvent(ev);
   }
 
   private dirty(): void {
     this.state.world.takenAt = new Date().toISOString();
-    // The real snapshot's world is whatever the last pulse observed, so the demo
-    // moves its observation stamp with the world it is pretending to re-read.
     this.state.worldObservedAt = this.state.world.takenAt;
     this.emit({ type: 'dirty' });
   }
 
-  // Append to an agent's transcript and stream it: a delta to subscribers (the
-  // open drawer) and a compact tail to everyone (the fleet-card preview).
   private append(agentId: string, chunk: string): void {
     const prev = this.transcripts.get(agentId) ?? '';
     this.transcripts.set(agentId, prev + chunk);
@@ -1890,10 +1526,6 @@ class DemoServer {
     return this.state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status)).length;
   }
 
-  /**
-   * `rule` names what proposed the act, `admission` what became of it — the same
-   * two columns the server records, so the demo's log renders like a real one.
-   */
   private addDecision(
     type: Decision['action']['type'],
     outcome: Decision['outcome'],
@@ -1911,9 +1543,6 @@ class DemoServer {
       detail,
       rule: rule ?? null,
       admission: admission ?? null,
-      // The demo composes actions as `{type, reason}` alone, so there is no
-      // payload for the server's `decisionSubjectRef` to read even in principle:
-      // the caller names the subject, or the row has none and draws a dash.
       subjectRef: subjectRef ?? null,
       createdAt: new Date().toISOString(),
     };
@@ -1926,17 +1555,12 @@ class DemoServer {
     this.emit({ type: 'world:events' });
   }
 
-  // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
-  // so the FleetControl and pause button visibly matter in the demo.
   private trySpawn(
     kind: TaskSummary['kind'],
     title: string,
     branch: string | null,
     originRef: string | null,
   ): string | null {
-    // A PR without the watch label is left alone — mirrors the server harness
-    // filtering unwatched PRs out of the dispatch view, so the watch toggle visibly
-    // matters in the demo.
     const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
     const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     if (taggedPr && !isWatched(taggedPr.labels, this.state.config)) {
@@ -1988,8 +1612,6 @@ class DemoServer {
         cacheReadTokens: null,
         cacheCreationTokens: null,
         numTurns: null,
-        // A fresh agent has said nothing yet — the card falls back to its output
-        // tail, which is exactly the state note_progress must not paper over.
         note: null,
         notedAt: null,
         resumedAt: null,
@@ -2010,11 +1632,6 @@ class DemoServer {
     return taskId;
   }
 
-  /**
-   * Queue an operator-launched job, then try to dispatch it immediately —
-   * mirroring the real server: it spawns an agent when there's headroom, else
-   * the job waits in the queue (and the FleetControl/pause state visibly gates it).
-   */
   async launchJob(input: { prompt: string; title?: string; kind?: string; branch?: string | null }): Promise<{
     ok: true;
   }> {
@@ -2047,12 +1664,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * The four schedule routes, mirrored. The demo has no clock driving the pulse, so **nothing
-   * here ever fires on its own** — writing, editing and deleting are real, and "run now"
-   * queues the job as the launch composer does. `next_run_at` is not computed: the cron
-   * parser is server code the web bundle does not import, and a copy could disagree with it.
-   */
   async createSchedule(input: { cron: string; prompt: string; title?: string; kind?: string }): Promise<{ ok: true }> {
     const prompt = input.prompt.trim();
     const nowIso = new Date().toISOString();
@@ -2091,7 +1702,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Fire one by hand — the same queue-and-try-to-dispatch the launch composer does. */
   async runSchedule(id: string): Promise<{ ok: true }> {
     const schedule = this.state.schedules.find((s) => s.id === id);
     if (!schedule) return { ok: true };
@@ -2108,7 +1718,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Drop a still-queued job (demo mirror of POST /api/jobs/:id/cancel). */
   async cancelJob(id: string): Promise<{ ok: true }> {
     const job = this.state.jobs.find((j) => j.id === id);
     if (job && job.status === 'queued') {
@@ -2120,7 +1729,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Re-order the Up next queue (demo mirror of POST /api/upnext/order). */
   async reorderUpNext(origins: string[]): Promise<{ ok: true }> {
     const plan = this.state.upcoming;
     if (plan) {
@@ -2142,17 +1750,10 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * Price one queued row. The real dispatcher re-resolves the pin chain on the next pulse;
-   * here the row carries the answer, so the override and the profile it resolves to are set
-   * together — the demo has no rule table to fall back through when the override clears.
-   */
   async setUpNextProfile(origin: string, profile: string | null): Promise<{ ok: true }> {
     const item = this.state.upcoming?.items.find((i) => i.origin === origin);
     if (item) {
       if (profile === null) {
-        // Both halves go back, not just the name: a restored row still reading `pin` would
-        // draw "Pinned (standard)" over a row nothing pins.
         const inherited = this.inheritedProfile.get(origin);
         delete item.override;
         item.profile = inherited?.profile ?? null;
@@ -2174,12 +1775,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  /**
-   * What each overridden row resolved to before the operator priced it, so
-   * clearing the override puts the row back rather than blanking it. The real
-   * harness needs no such memory — it re-derives the answer from the world every
-   * pulse.
-   */
   private readonly inheritedProfile = new Map<string, { profile: string | null; source: QueueItem['profileSource'] }>();
 
   private applyInjection(ev: Record<string, unknown>): void {
@@ -2233,8 +1828,6 @@ class DemoServer {
             'executed',
             `notified branch agent about comment on PR #${n}`,
             undefined,
-            // No proposing rule: a branch note folds every fresh signal on the
-            // PR, so it is an admission with nothing single behind it.
             undefined,
             'branch-notify',
           );
@@ -2259,8 +1852,6 @@ class DemoServer {
           }),
         ];
         this.addWorldEvent('issue_opened', `issue:${number}`, `Issue #${number} opened`);
-        // Opt-in: only a watched issue is worked. An untagged injected issue shows
-        // up unwatched with a "watch" toggle, mirroring the real dispatcher gate.
         if (isWatched(labels, this.state.config)) {
           this.trySpawn('code', `Implement issue #${number}`, `issue/${number}`, `issue:${number}`);
         } else {
@@ -2296,7 +1887,6 @@ class DemoServer {
         break;
       }
       default:
-        // Unknown/raw injection — record it so the feed shows *something* happened.
         this.addDecision('no_op', 'executed', `injected ${kind || 'event'}`);
     }
   }
@@ -2308,7 +1898,6 @@ class DemoServer {
     if (!this.beatTimer) {
       const beat = this.state.config.heartbeatIntervalMs;
       this.beatTimer = setInterval(() => {
-        // A pulse is what observes the world, so the stamp moves with the beat.
         this.state.worldObservedAt = new Date().toISOString();
         this.tickDesktopClaim();
         this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'heartbeat' });
@@ -2323,11 +1912,6 @@ class DemoServer {
     this.beatTimer = null;
   }
 
-  /**
-   * The desktop claim ending by itself — the one of a claim's three endings a demo can show,
-   * since the other two need a terminal closed and an hour of wall clock. Nobody presses
-   * anything: two beats in the check carries a `desktop` reading and the entry leaves.
-   */
   private tickDesktopClaim(): void {
     const held = (this.state.validationChecks ?? []).find((c) => c.claimedBy !== null);
     if (!held) return;
@@ -2341,12 +1925,9 @@ class DemoServer {
     held.claimedBy = null;
     held.claimedAt = null;
     held.updatedAt = held.resultAt;
-    // No world event and no decision: the world did not move and the harness did
-    // not act. That is the fact this whole entry exists to draw.
     this.dirty();
   }
 
-  // Stream a line of progress into every running agent so the fleet looks alive.
   private tickChatter(): void {
     const running = this.state.agents.filter((a) => a.status === 'running');
     if (running.length === 0) return;
@@ -2356,23 +1937,12 @@ class DemoServer {
   }
 }
 
-// Lazily constructed so the module has no side effects until the demo build runs.
 let server: DemoServer | null = null;
 function getServer(): DemoServer {
   if (!server) server = new DemoServer();
   return server;
 }
 
-/**
- * The demo's retrospective: written after the goal was delivered, and deliberately
- * about the *process* rather than the diff — that is what the station is for.
- */
-/**
- * The Review tab's reading, with nothing in it. No pull request in the demo has
- * a pack and nothing can write one, so the honest population is empty — and the
- * tab says so rather than drawing an authored pattern of overrides that would
- * teach a reader the harness has an opinion it does not have.
- */
 const DEMO_REVIEW_CALIBRATION: ReviewCalibration = {
   window: {
     key: 'all',
@@ -2414,12 +1984,6 @@ const DEMO_RETROSPECTIVE = {
   updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
 };
 
-/**
- * The demo's scratchpad: the trail the retrospective above was written from, and
- * deliberately the *same story from the inside* — the second agent rediscovering
- * what the first had already established is what the write-up calls out, and it
- * is only visible here because the pad kept both entries.
- */
 const DEMO_SCRATCHPAD = [
   {
     id: 'scr_demo1',
@@ -2481,24 +2045,14 @@ const DEMO_SCRATCHPAD = [
   },
 ];
 
-/**
- * The demo's spend breakdown. Authored rather than derived, because the real figure comes
- * from `buildSpendInsights` walking a store the web bundle cannot import. The *arithmetic* is
- * not authored — every total is summed from the seeds below, since hand-typed totals that
- * disagree with their own rows are a demo of a bug. The two goals the world fixture already
- * prices carry those exact figures, so no panel contradicts the card behind it.
- */
 const DEMO_GOAL_SEEDS: {
   issueNumber: number;
   title: string | null;
   agents: number;
-  /** Local runs of this goal — the operator's own previews, priced in `byPhase.local`. */
   localRuns: number;
   hoursAgo: number;
   byPhase: Partial<Record<SpendPhase, number>>;
-  /** The harness's outcome word on the tickets tab, agreeing with the goal's own page in `fixtures.ts`. */
   outcome: 'delivered' | 'fell short' | null;
-  /** Still open in the tracker — the one goal here whose page says its plan is mid-landing. */
   open?: true;
 }[] = [
   {
@@ -2507,8 +2061,6 @@ const DEMO_GOAL_SEEDS: {
     agents: 7,
     outcome: null,
     open: true,
-    // The goal that has been looked at locally, twice — the row that shows a total
-    // holding money no agent spent.
     localRuns: 2,
     hoursAgo: 2,
     byPhase: { deliberation: 3.4, build: 9.8, ci: 2.6, landing: 1.3, evidence: 1.32, local: 0.74 },
@@ -2529,14 +2081,9 @@ const DEMO_GOAL_SEEDS: {
     outcome: 'fell short',
     localRuns: 1,
     hoursAgo: 26,
-    // The goal whose CI dwarfs its build — the shape the split exists to surface,
-    // on screen in the demo rather than only in the argument for it. Sums to the
-    // $4.20 the goal's own card states.
     byPhase: { deliberation: 0.3, build: 1.1, ci: 2.6, landing: 0.1, evidence: 0.1, local: 0.18 },
   },
   {
-    // A goal the world snapshot no longer carries — closed and aged out of the
-    // open list — so the panel has one row that can only draw its number.
     issueNumber: 331,
     title: null,
     agents: 2,
@@ -2547,16 +2094,11 @@ const DEMO_GOAL_SEEDS: {
   },
 ];
 
-/** Spend that reached no goal: an operator's job, and one agent dispatched against nothing. */
 const DEMO_LOOSE: { phase: SpendPhase; costUsd: number }[] = [
   { phase: 'job', costUsd: 0.96 },
   { phase: 'other', costUsd: 0.7 },
 ];
 
-/**
- * A local run's usage after one more turn — the accumulation the real store does,
- * so the demo shows the figure climbing rather than appearing.
- */
 function localRunSpent(
   run: LocalRunView,
   costUsd: number,
@@ -2575,13 +2117,11 @@ function localRunSpent(
   };
 }
 
-/** The demo world's token ratio, shared with `demoSpend` in the fixtures. */
 const demoTokens = (costUsd: number) => ({
   inputTokens: Math.round(costUsd * 180_000),
   outputTokens: Math.round(costUsd * 9_000),
 });
 
-/** The cached share of {@link demoTokens}'s input: a fleet reading ~78% from cache. */
 const demoCache = (costUsd: number) => ({
   cacheReadTokens: Math.round(costUsd * 140_000),
   cacheCreationTokens: Math.round(costUsd * 11_000),
@@ -2684,9 +2224,6 @@ const DEMO_RUNS: {
     hoursAgo: 2,
   },
   {
-    // A local run in the ranking, because the ranking is of what money went on and
-    // an operator's preview is money. It carries the branch rather than a task title
-    // — nothing asked it to do anything, so there is nothing else to name it by.
     id: 'run-390-b',
     kind: 'local',
     title: 'Local run · issue/390/validate',
@@ -2708,11 +2245,6 @@ const DEMO_RUNS: {
   },
 ];
 
-/**
- * Cost by kind of work. The rules are real `DISPATCH_RULES` ids and the labels
- * are their real names — the demo must not invent a vocabulary the running
- * harness does not use.
- */
 const DEMO_TASK_TYPES: { rule: string | null; costUsd: number; runs: number }[] = [
   { rule: 'plan-part', costUsd: 11.24, runs: 5 },
   { rule: 'issue-plan', costUsd: 5.9, runs: 4 },
@@ -2724,7 +2256,6 @@ const DEMO_TASK_TYPES: { rule: string | null; costUsd: number; runs: number }[] 
   { rule: null, costUsd: 0.7, runs: 1 },
 ];
 
-/** The registry's own ids and names — the demo must not invent a vocabulary the harness does not use. */
 const RULE_COPY: Record<string, { label: string; description: string | null }> = {
   'plan-part': { label: 'Plan part ready', description: 'A part of an approved plan, worked on its own branch' },
   'issue-plan': { label: 'Issue needs a plan', description: 'Break a goal into parts before any code is written' },
@@ -2739,11 +2270,6 @@ const RULE_COPY: Record<string, { label: string; description: string | null }> =
   none: { label: 'No rule', description: 'Dispatched outside the pulse — an accepted proposal, or agent lifecycle' },
 };
 
-/**
- * What each failing check costs. The Postgres-backed suite is the shape the table
- * exists to expose: fewer runs than the unit tests, but nearly twice as expensive
- * each time — the reading only the per-dispatch column gives.
- */
 const DEMO_CHECKS: { name: string; costUsd: number; runs: number; soleRuns: number; hoursAgo: number }[] = [
   { name: 'test (unit)', costUsd: 1.94, runs: 5, soleRuns: 3, hoursAgo: 4 },
   { name: 'test:db (postgres)', costUsd: 1.18, runs: 2, soleRuns: 2, hoursAgo: 9 },
@@ -2751,15 +2277,8 @@ const DEMO_CHECKS: { name: string; costUsd: number; runs: number; soleRuns: numb
   { name: 'lint', costUsd: 0.24, runs: 2, soleRuns: 1, hoursAgo: 31 },
 ];
 
-/** The trend: a fortnight of daily totals, busiest at the near end. */
 const DEMO_DAYS = [0.4, 0, 1.1, 2.3, 1.8, 0, 0.9, 3.4, 2.2, 1.6, 0.7, 2.9, 4.1, 5.3];
 
-/**
- * The reliability breakdown, authored to the same totals the snapshot's Yield gauge reads
- * (`fixtures.ts`). The two must agree: the real panel's whole claim is that the gauge and the
- * reading come from one fold. The phase rows sum to 24 settled, 20 finished, checked in
- * `test/demoReliability.test.ts`.
- */
 const DEMO_PHASE_HEALTH: {
   phase: SpendPhase;
   settled: number;
@@ -2776,7 +2295,6 @@ const DEMO_PHASE_HEALTH: {
   { phase: 'job', settled: 1, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 12 * 60_000 },
 ];
 
-/** How each ending divides the 24, and what it cost. Sums to the phase rows above. */
 const DEMO_OUTCOMES: { outcome: RunOutcome; runs: number; costUsd: number }[] = [
   { outcome: 'done', runs: 20, costUsd: 18.4 },
   { outcome: 'failed', runs: 2, costUsd: 2.4 },
@@ -2792,7 +2310,6 @@ const OUTCOME_COPY: Record<RunOutcome, { label: string; blurb: string }> = {
   interrupted: { label: 'Interrupted', blurb: 'Cut short mid-run and left recoverable' },
 };
 
-/** A fortnight of CI verdicts, red and green, busiest at the near end. */
 const DEMO_CI_DAYS: [number, number][] = [
   [0, 2],
   [1, 3],
@@ -2810,12 +2327,6 @@ const DEMO_CI_DAYS: [number, number][] = [
   [2, 2],
 ];
 
-/**
- * The pull requests CI kept sending back. One is still red, which is the state
- * worth drawing — and #151 cost nothing, which is the other one: a red a human
- * fixed draws an em dash rather than `$0.00`, and the demo has to show that cell
- * or nobody sees the branch. The costs sum to `ciCostUsd` below.
- */
 const DEMO_FLAKY: CiSubject[] = [
   { ref: 'pr:414', prNumber: 414, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true, costUsd: 1.9 },
   { ref: 'pr:413', prNumber: 413, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false, costUsd: 1.1 },
@@ -2824,7 +2335,6 @@ const DEMO_FLAKY: CiSubject[] = [
   { ref: 'pr:405', prNumber: 405, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false, costUsd: 0 },
 ];
 
-/** Origins the harness went round more than once — the reading no card shows. */
 const DEMO_REPEATS: {
   originRef: string;
   title: string;
@@ -2845,12 +2355,6 @@ const DEMO_REPEATS: {
   { originRef: 'issue:345', title: 'Retry the pickup on #345', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
 ];
 
-/**
- * The Causes reading, authored against the same fixture as the reliability one beside it: the
- * demo's world is built fresh each load, so no agent has ever filed an account. The shape is
- * the point — the largest single share is work the repository's own gate would have caught,
- * because that is what the panel is for.
- */
 function buildDemoRemedies(): RemedyInsights {
   const hour = 3_600_000;
   const now = Date.now();
@@ -3075,8 +2579,6 @@ function buildDemoRemedies(): RemedyInsights {
   return {
     accounts: sum(ci, 'accounts') + sum(review, 'accounts'),
     costUsd: Math.round((sum(ci, 'costUsd') + sum(review, 'costUsd')) * 1e6) / 1e6,
-    // Non-zero on purpose: a demo claiming every dispatch filed one would hide the
-    // panel's own honesty figure, which is the line an operator most needs to read.
     unaccounted: 5,
     byKind: [
       { kind: 'ci', accounts: sum(ci, 'accounts'), costUsd: sum(ci, 'costUsd'), byCause: ci },
@@ -3116,24 +2618,9 @@ function buildDemoRemedies(): RemedyInsights {
   };
 }
 
-/**
- * The MCP tab's fixture, authored for `buildDemoSpend`'s reason and one of its own: a page of
- * zeroes is *precisely* what this tab looks like when a deployment's grants have been
- * dropped, so folding the browser's empty store would teach a reader to read a working
- * channel as a broken one. The figures show the four verdicts rather than healthy traffic.
- */
-/**
- * The allowance reading, authored for `buildDemoSpend`'s reason and one sharper: the demo's
- * store holds no rate-limit readings, and the empty state a fold would draw is precisely what
- * API-key auth looks like. The shape is the fold's own, awkward parts included — an idle
- * stretch, a residual the goals cannot be charged, and a goal that spent and landed nothing.
- */
 function buildDemoAllowance(): AllowanceInsights {
   const now = Date.now();
   const ago = (mins: number): string => new Date(now - mins * 60_000).toISOString();
-  // Minutes back, and the percentage then. The hole between 118 and 51 is the
-  // fleet idle: no agent took a turn, so no reading arrived — and the account
-  // still moved four points, which is the operator's own session.
   const points: [number, number][] = [
     [295, 41],
     [280, 43],
@@ -3162,8 +2649,6 @@ function buildDemoAllowance(): AllowanceInsights {
     afterReset: false,
   }));
 
-  // The slots are the ones `assignSlots` hands out for these four goals in this
-  // order — 412 and 417 both want slot 2, so the later takes the next free one.
   const slotOf = new Map([
     [412, 2],
     [420, 0],
@@ -3267,11 +2752,6 @@ function buildDemoAllowance(): AllowanceInsights {
   };
 }
 
-/**
- * The operator ledger and the reach beside it, authored for `buildDemoMcp`'s reason: nobody
- * has answered an escalation or opened a page in a world built fresh each load, so a folded
- * payload would draw a **console-dark** verdict — a real reading, and the wrong one here.
- */
 function buildDemoUsage(): UsagePayload {
   const now = Date.now();
   const ask = (
@@ -3284,9 +2764,6 @@ function buildDemoUsage(): UsagePayload {
       'offered' | 'settled' | 'declined' | 'openPastWindow' | 'medianAnswerMs' | 'parkedCostUsd'
     >,
   ): OperatorRow => ({ id, kind: 'ask', subject, label, blurb, ...figures });
-  // Nothing records how many landings were *offered*, and nothing parks while an
-  // act goes unperformed -- both are null rather than zero, which is the whole of
-  // what the demo has to teach about this table.
   const act = (
     id: OperatorRow['id'],
     subject: UsageSubject,
@@ -3373,9 +2850,6 @@ function buildDemoUsage(): UsagePayload {
           medianAnswerMs: 26 * 60_000,
           parkedCostUsd: 27.6,
         }),
-        // The obstacle row's own table has no stamp for the moment it started
-        // asking, so two columns are null and the demo says so rather than
-        // drawing a wait nobody measured.
         ask('obstacle-ownership', 'obstacle', 'Obstacle ownership', 'Something in the way, unowned', {
           offered: 4,
           settled: 1,
@@ -3421,11 +2895,6 @@ function buildDemoUsage(): UsagePayload {
   };
 }
 
-/**
- * The two copy registries the payload carries, restated here because the demo
- * *is* the server for this build -- it has to ship what the route would ship, and
- * `src/wire.ts` carries no runtime for it to borrow.
- */
 const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   plan: 'Plans',
   goal: 'Goals',
@@ -3514,16 +2983,10 @@ function buildDemoMcp(): McpInsights {
     tool('appraise_issue', 'point-of-use', 27, 0, 24, 205, 6),
     tool('retro_submit', 'point-of-use', 19, 0, 18, 300, 5),
     tool('escalate', 'addendum', 14, 1, 15, 470, 0),
-    // Called and refused every time — a schema nobody can satisfy, which is the
-    // one verdict where the silence is the tool's own fault.
     tool('report_remedy', 'point-of-use', 11, 11, 12, 540, 4),
 
-    // Retired, and something is still reaching for it: a prompt override that has
-    // not caught up. Every call is a refusal naming `raise`.
     tool('report_finding', 'retired', 6, 6, 2, 96, 1),
-    // Advertised on every dispatch and called by nobody.
     tool('request_human_task', 'addendum', 0, 0, 0, 27_360, 0),
-    // The verdict that matters most: nothing named it at all.
     tool('validation_amend', 'point-of-use', 0, 0, 0, null, 0),
     tool('validation_read', 'desktop', 18, 0, 14, 130, 0),
     tool('validation_claim', 'desktop', 11, 0, 9, 133, 0),
@@ -3765,7 +3228,6 @@ function buildDemoMcp(): McpInsights {
         at: ago(22),
       },
     ],
-    // The flag the demo exists to show off: three runs went dark, and this is why.
     allowedToolsOverridden: true,
   };
 }
@@ -3804,13 +3266,10 @@ function buildDemoReliability(): ReliabilityInsights {
     window: demoWindow(now, DEMO_CI_DAYS.length),
     runs: {
       ...tally,
-      // Four agents are live in `fixtures.ts`; `demoReliability.test.ts` holds the two together.
       live: 4,
       completionRate: tally.completed / tally.settled,
       costUsd: round(DEMO_OUTCOMES.reduce((a, o) => a + o.costUsd, 0)),
       lostCostUsd: round(DEMO_PHASE_HEALTH.reduce((a, p) => a + p.lostCostUsd, 0)),
-      // Two PTY runs, so the panel's "counted in every rate and in no dollar"
-      // caveat is on screen rather than being a branch nobody sees.
       unmeasuredRuns: 2,
       byOutcome: DEMO_OUTCOMES.map((o) => ({ ...o, ...OUTCOME_COPY[o.outcome] })),
       byPhase,
@@ -3855,11 +3314,6 @@ function buildDemoReliability(): ReliabilityInsights {
   };
 }
 
-/**
- * The window a demo payload says it was taken over. Describes the authored figures rather
- * than producing them, and it must be *there*: the page draws its caption and bucket labels
- * off the payload, so a demo missing it renders "reading…" forever.
- */
 function demoWindow(now: number, days: number): InsightsWindowView {
   const dayMs = 24 * 60 * 60 * 1000;
   return {
@@ -3870,8 +3324,6 @@ function demoWindow(now: number, days: number): InsightsWindowView {
     startsAt: new Date(now - days * dayMs).toISOString(),
     bucketMs: dayMs,
     buckets: days,
-    // The demo never draws the session window: it authors a week of figures, and
-    // an anchor here would claim they were taken over an account window nobody read.
     session: null,
   };
 }
@@ -3908,8 +3360,6 @@ function buildDemoSpend(): SpendInsights {
     };
   }).sort((a, b) => b.costUsd - a.costUsd);
 
-  // Every phase's money and every phase's run count, summed from the rows above
-  // rather than typed out beside them.
   const phaseCost = zero();
   const phaseRuns = zero();
   for (const goal of goals) {
@@ -3955,14 +3405,9 @@ function buildDemoSpend(): SpendInsights {
     totals: {
       costUsd,
       ...demoTokens(costUsd),
-      // A warm fleet: most of the input is cache reads, a slice writes. The whole input
-      // carries a breakdown, so the panel's "share is over the runs that reported one"
-      // caveat stays off screen; the unmeasured-runs one below is this fixture's point.
       ...demoCache(costUsd),
       turns: 268,
       measuredRuns,
-      // Two PTY runs, so the panel's "unmeasured, not free" caveat is on screen
-      // where it belongs rather than being a branch nobody sees.
       unmeasuredRuns: 2,
     },
     window: demoWindow(now, 14),
@@ -3980,8 +3425,6 @@ function buildDemoSpend(): SpendInsights {
       checks: DEMO_CHECKS.map((c) => ({ ...c, perRunUsd: round(c.costUsd / c.runs), lastAt: iso(c.hoursAgo) })),
       seen: DEMO_CHECKS.length,
       attributedCostUsd: round(DEMO_CHECKS.reduce((a, c) => a + c.costUsd, 0)),
-      // A provider reporting no per-check detail, so the panel's footnote about
-      // CI money in none of the rows is on screen rather than a dead branch.
       unnamedCostUsd: 0.42,
     },
     runs,
@@ -3997,14 +3440,7 @@ function buildDemoSpend(): SpendInsights {
   };
 }
 
-/**
- * Eight weeks of closed goals, authored — `buildDemoSpend`'s reason exactly. The seed carries
- * the reading the tab is built around: goals get cheaper, deliberation's dollars rise while
- * its share rises faster, CI's fall by more, and completion holds. The last week is partial,
- * so the hollow bar and the "still filling" caveat are drawn rather than unseen branches.
- */
 const DEMO_TREND_WEEKS: {
-  /** Every goal that closed that week, as its total cost. */
   costs: number[];
   byPhase: Partial<Record<SpendPhase, number>>;
   settled: number;
@@ -4049,8 +3485,6 @@ const DEMO_TREND_WEEKS: {
     reds: 9,
     reopened: 0,
   },
-  // The prompt change lands here: deliberation goes up in dollars, everything
-  // downstream of it goes down by more.
   {
     costs: [5.1, 7.2, 8.6, 6.4],
     byPhase: { deliberation: 1.62, build: 3.14, ci: 1.32, landing: 0.84, evidence: 0.28 },
@@ -4078,7 +3512,6 @@ const DEMO_TREND_WEEKS: {
     reds: 5,
     reopened: 0,
   },
-  // Still filling — two goals in, where a whole week runs to four or five.
   {
     costs: [4.2, 6.0],
     byPhase: { deliberation: 1.74, build: 2.52, ci: 0.94, landing: 0.72, evidence: 0.22 },
@@ -4110,8 +3543,6 @@ function buildDemoTrend(): SpendTrend {
     const sorted = [...xs].sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length / 2)] ?? null;
   };
-  // Tokens track cost at the same rate the breakdown's fixture uses, so the two
-  // tabs cannot state a goal's size two different ways.
   const tokensOf = (costUsd: number) => Math.round(costUsd * 620_000);
 
   const start = now - DEMO_TREND_WEEKS.length * week;
@@ -4121,8 +3552,6 @@ function buildDemoTrend(): SpendTrend {
       startsAt: new Date(start + i * week).toISOString(),
       partial: i === DEMO_TREND_WEEKS.length - 1,
       goalsClosed: costs.length,
-      // One goal a fortnight closes with nothing recorded, so the caveat about
-      // unmeasured goals is on screen rather than a dead branch.
       goalsUnmeasured: i === 2 ? 1 : 0,
       medianCostUsd: median(costs),
       medianInputTokens: median(costs.map(tokensOf)),
@@ -4138,7 +3567,6 @@ function buildDemoTrend(): SpendTrend {
     };
   });
 
-  /** The same fold `buildSpendTrend` does, over the complete weeks of one half. */
   const fold = (span: SpendTrendBucket[]): SpendTrendPeriod => {
     const costs = span.flatMap((w) => w.costs);
     const settled = span.reduce((n, w) => n + w.settled, 0);
@@ -4201,15 +3629,6 @@ function buildDemoTrend(): SpendTrend {
   };
 }
 
-/**
- * The demo's answer for one goal's record. `getWorkRoots` returns an empty graph and this
- * does not, because the two answer different questions: that lists roots nothing has claimed,
- * and this asks what happened under a goal that is on screen.
- *
- * **Derived, never authored**, through the same `buildGoalPage` the page uses, so the record
- * cannot contradict the cards above it. What it cannot show is a merge the world has
- * forgotten, since this world forgets nothing.
- */
 async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }> {
   const state = await getServer().getState();
   const page = buildGoalPage(state, ref, [], null);
@@ -4238,8 +3657,6 @@ async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; re
       terminal: page.plan.status === 'complete' || page.plan.status === 'abandoned',
     });
   const partOf = new Map<number, string>();
-  // `parts` are the page's view rows and `retiredParts` the plan rows themselves —
-  // unwrapped to one shape here so a retired part is on the record like any other.
   for (const part of [...page.parts.map((p) => p.part), ...page.retiredParts]) {
     const partRef = `${ref}:part:${part.slug}`;
     if (part.prNumber !== null) partOf.set(part.prNumber, partRef);
@@ -4282,28 +3699,18 @@ async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; re
   return { nodes, refUrls };
 }
 
-// ---- Setup, scripted -------------------------------------------------------
-//
-// The demo's repository is the one its whole world is built on: `example/markdown-magpie`,
-// cloned over SSH, with a project file its "team" committed. The two checks that are not
-// green are the two the real reading most often finds outstanding on a first run.
-
 const DEMO_REPO_ROOT = '/Users/you/code/markdown-magpie';
 const DEMO_ORIGIN = 'git@github.com:example/markdown-magpie.git';
 
-/** Whether the demo's setup flow has been run this session. Flips the reading. */
 let demoSetupWritten = false;
 
-/** The demo's `lubbdubb.config.json`, as bytes. Replaced by a save. */
 let demoConfigText = '{}\n';
 
-/** The file a given set of edits would produce — the demo's stand-in for the server's splice. */
 function demoConfigTextFor(set: Record<string, unknown>): string {
   const lines = Object.entries(set).map(([path, value]) => `  ${JSON.stringify(path)}: ${JSON.stringify(value)}`);
   return `{\n  "//": "Written by Setup. Every key is OPTIONAL; the project file underneath this one wins nothing — this file wins key by key.",\n\n${lines.join(',\n')}\n}\n`;
 }
 
-/** Every edited key, reported as landed-but-waiting. See the note on `saveConfig`. */
 function demoChanges(set: Record<string, unknown>): ConfigChange[] {
   return Object.entries(set).map(([path, value]) => ({ path, from: undefined, to: value, applied: false }));
 }
@@ -4382,8 +3789,6 @@ function demoSetupReading(): SetupPayload {
     prefill: {
       email: 'you@example.com',
       repoRoot: '/Users/you/code/LubbDubb',
-      // The demo's harness and the repository it works on are two directories, as
-      // they are in every deployment that is not dogfooding.
       repoRootIsSelf: false,
     },
     checks,
@@ -4391,9 +3796,6 @@ function demoSetupReading(): SetupPayload {
 }
 
 function demoSetupResolution(answers: { email: string; repoRoot: string }): SetupResolvePayload {
-  // The scripted repository answers only to its own path — so pointing the demo
-  // somewhere else shows the *other* half of the design: a directory that could
-  // not be read, said out loud rather than papered over with the fake provider.
   const found = answers.repoRoot.trim() === DEMO_REPO_ROOT;
   if (!found) {
     return {
@@ -4441,9 +3843,6 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
       maxConcurrentAgents: 1,
       defaultBranch: 'main',
       userId: login,
-      // Written, unlike `labelPrefix` below, because the project file does not select a
-      // provider — only the remote does. Leaf paths, as the real resolver emits them:
-      // `POST /api/config` validates against a registry of leaves, so a nested object is refused.
       'integrations.sourceControl': 'github',
       'integrations.issues': 'github',
       'github.owner': 'example',
@@ -4452,7 +3851,6 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
-/** Why every obstacle control refuses in the demo: there is no board behind it. */
 const DEMO_NO_BOARD = 'the demo has no obstacle board to act on';
 
 export const demoApi = {
@@ -4460,22 +3858,12 @@ export const demoApi = {
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
   getAgentFiles: (agentId: string) => getServer().getAgentFiles(agentId),
   getGoalAgents: (ref: string, prs: readonly number[]) => getServer().getGoalAgents(ref, prs),
-  // The demo's world is built fresh in the browser each load, so nothing has ever
-  // been recorded for it — an empty graph is the honest answer, and these exist to
-  // keep the two API shapes interchangeable.
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
-  // The feature board, authored off the tickets tab's rows and parent map so the two
-  // altitudes agree. Fetched on open and never polled, as the real route is.
   getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
-  // No Feature in the demo carries an order (`issueSequencing` is off by default), so there
-  // is no proposal to answer. It refuses rather than lying about a write.
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
-  // The ticket mirror, authored for `getSpend`'s reason: there is no swept history in a world
-  // built fresh each load. The filtering, ordering and paging are really performed, so what a
-  // reader clicks behaves as it will against a real mirror.
   getTickets: (query: {
     watch: string;
     tracking: string;
@@ -4484,60 +3872,26 @@ export const demoApi = {
     order: string;
     cursor: string | null;
   }) => Promise.resolve(demoTickets(query)),
-  // The demo's one written-up goal, so the Manifest station has something to open.
-  // Everything else answers null, which is the same thing the real route says for a
-  // goal nobody wrote up — silence, not an error.
   getRetrospective: (ref: string) =>
     Promise.resolve({ retrospective: ref === 'issue:364' ? DEMO_RETROSPECTIVE : null }),
-  // The pad behind that write-up. Every other goal answers an empty trail, which
-  // is what the real route says for a pad nobody has written to — and no way in
-  // is drawn for one, since the snapshot's reading is what the control keys on.
   getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : [] }),
-  // No pull request in the demo has a pack, and nothing can write one: the
-  // author is an agent run, and there is no fleet behind the demo to spend it.
-  // "Not asked for" is the honest reading, and asking is refused out loud.
   getReviewPack: (): Promise<ReviewPackReading> => Promise.resolve({ kind: 'none', writing: false }),
   requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
   shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
   unshareReviewPack: () => Promise.reject(new Error('the demo has no pool to unshare a review pack from')),
-  // No pack in the demo, so nothing to fold: an empty population, which the tab
-  // draws as itself rather than as a fleet whose checker nobody has overridden.
   getReviewCalibration: () => Promise.resolve({ calibration: DEMO_REVIEW_CALIBRATION }),
   markReviewIdeaRead: () => Promise.reject(new Error('the demo has no review pack to mark')),
   markReviewFindingSeen: () => Promise.reject(new Error('the demo has no review pack to mark')),
   overrideReviewAttention: () => Promise.reject(new Error('the demo has no review pack to mark')),
-  // The spend breakdown, authored above, because the real route derives it from a store this
-  // world does not have. The window is accepted and ignored: there is nothing to re-cut, and
-  // answering `6h` with an empty page would teach the reader the feature is broken.
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
-  // The trend behind it, authored for the same reason and against the same
-  // fixture: the demo's store holds no closed goals to cohort, so a fixture is
-  // the only way the tab shows what it is for.
   getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
-  // The reliability breakdown, authored for the spend panel's reason exactly: the
-  // demo's world is built fresh in the browser each load, so there are no settled
-  // agents and no CI history to fold.
   getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),
-  // The tool channel, authored: a page of zeroes is what this tab looks like when a
-  // deployment's grants have been dropped.
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
   getUsage: () => Promise.resolve(buildDemoUsage()),
-  // The demo records nothing about itself: there is no harness behind it to write
-  // a row to, and a telemetry call that resolves anyway is the honest shape --
-  // logUsage is fire-and-forget by contract, so nothing downstream can tell.
   logUsageEvents: () => Promise.resolve(),
-  // The allowance, authored for the same reason as the rest and one sharper still:
-  // the demo has no account behind it, so a folded payload would draw the exact
-  // empty state a deployment on API-key auth sees.
   getAllowance: async () => {
     const allowance = buildDemoAllowance();
-    // Resolved from the number, not from the world, the way a provider resolves one: half
-    // these goals have closed and left the world, which is the case the route's map exists
-    // for — looked up in the snapshot they would be plain text.
     const state = await getServer().getState();
-    // Off an issue URL the world already carries rather than the `#412` key,
-    // which a pull request answers to as readily as an issue does — the demo's
-    // does, and a goal row pointed at a pull request is a confident wrong link.
     const tracker = Object.values(state.refUrls).find((url) => /\/issues\/\d+$/.test(url)) ?? null;
     const refUrls: Record<string, string> = {};
     if (tracker !== null)
@@ -4545,11 +3899,6 @@ export const demoApi = {
         refUrls[goal.originRef] = tracker.replace(/\d+$/, String(goal.issueNumber));
     return { allowance, refUrls };
   },
-  // One fleet, one project, no pool behind it, so both pool reads answer *nothing published*
-  // rather than inventing other people's fleets.
-  // The obstacle board. No agent has ever raised anything against a world built fresh each
-  // load, so an empty board is the honest answer and this keeps the two API shapes
-  // interchangeable. The counts are zeroes because they are counts of nothing.
   getObstacles: () =>
     Promise.resolve({
       rows: [],
@@ -4562,9 +3911,6 @@ export const demoApi = {
       dormantMs: 7 * 24 * 60 * 60 * 1000,
       canFileTickets: false,
     }),
-  // The four controls answer rather than pretending: there is no board here to act
-  // on, and a resolving no-op would leave the page reporting a success it did not
-  // have — the shape `injectDemoEvent` takes for the same reason.
   muteObstacle: (_id: string, _muted: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
   ownObstacle: (_id: string, _ownerRef: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
   retireObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
@@ -4593,11 +3939,7 @@ export const demoApi = {
       fleets: [],
     }),
   getPool: () => Promise.resolve({ status: null, fleets: [], claims: [] }),
-  // The prompt book lives in the server's template registry, which the web bundle does not
-  // import; a copy here would drift with nothing to catch it, so the demo says it is empty.
   getPrompts: () => Promise.resolve({ dir: null, templates: [] as PromptTemplateView[] }),
-  // No harness, so no socket to register and no credential minted. Answered as a channel
-  // that is *down*: a registration pointing at nothing is what this tab must never hand out.
   getMcp: (): Promise<McpChannelPayload> =>
     Promise.resolve({
       running: false,
@@ -4607,9 +3949,6 @@ export const demoApi = {
       skillPath: '',
       tools: [],
     }),
-  // The pet catalogue, same reason: what exists and what it costs is decided by tables in
-  // `src/pets/`, which the web bundle does not import, and a copy would go stale unnoticed.
-  // The rules ride at zero because the page draws none of them without species.
   getPetCatalogue: (): Promise<PetCatalogue> =>
     Promise.resolve({
       rules: {
@@ -4631,16 +3970,8 @@ export const demoApi = {
       species: [],
       sources: [],
     }),
-  // ---- Setup -----------------------------------------------------------
-  //
-  // The demo's config file is a **text buffer in memory**. What the demo refuses to invent is
-  // the *running* config, which `describeRunningConfig` resolves server-side; a file's bytes
-  // are not that, and the setup flow's whole subject is what would be written. So the flow
-  // runs end to end here against the scripted repository the world is built on.
   getSetup: () => Promise.resolve(demoSetupReading()),
   resolveSetup: (answers: { email: string; repoRoot: string }) => Promise.resolve(demoSetupResolution(answers)),
-  // Same answer as the prompt book: the running config is resolved by `loadConfig` on the
-  // server, and a copy here would drift with nothing to catch it.
   getConfig: () =>
     Promise.resolve({
       groups: [] as RunningConfigGroup[],
@@ -4651,8 +3982,6 @@ export const demoApi = {
       pending: [],
       canRestart: false,
     }),
-  // Writes land in the buffer above; the *effect* is refused with `applied: false` on every
-  // key, because there is no live config object here to re-seat.
   saveConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; baseline: string }) => {
     demoConfigText = demoConfigTextFor(edits.set ?? {});
     demoSetupWritten = true;
@@ -4671,18 +4000,10 @@ export const demoApi = {
       changes: demoChanges(edits.set ?? {}),
     }),
   saveRawConfig: () => Promise.reject(new Error('the demo has no config file to write')),
-  // The demo configures no `ci.checks`, so an empty policy is what this backend is actually
-  // running on. `unmatched` is a constant of `classifyCiFailures` rather than config.
   getCiPolicy: () =>
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
-  // Nothing to file into either: the demo has no tracker, which is the same
-  // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
-  // Same reason, and the cockpit never calls it: `canFileTickets` is false in the
-  // demo fixtures, so the "raise issue" button is not drawn to be clicked.
   raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),
-  // Answered the way the real route does with no `gh` behind it — `available: false` with
-  // the reason — because that is what the compose modal is built to fall back from.
   probeFilingTarget: (): Promise<FilingTargetProbe> =>
     Promise.resolve({
       available: false,
@@ -4690,9 +4011,6 @@ export const demoApi = {
       identity: null,
       reason: 'this is the demo — there is no harness behind it to file through',
     }),
-  // No arm to give this one: the demo has no CLI to file with. It rejects rather
-  // than resolving a made-up issue number, since the modal's success state is a link
-  // to the thing that was filed and there would be nothing at the other end of it.
   raiseIssue: (_title: string, _body: string, _watch: boolean): Promise<IssueFiled> =>
     Promise.reject(new Error('this is the demo — there is no harness behind it to file through')),
   setWorkItemIgnored: (_ref: string, _ignored: boolean) => Promise.resolve({ ok: true as const }),
@@ -4735,9 +4053,6 @@ export const demoApi = {
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
   deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
-  // The demo's plans have one revision each — no replan has landed in a browser
-  // session — so the history is that single revision and a null diff, which is
-  // exactly what the real route answers for a plan nobody has amended.
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
     getServer().setAcceptance(planId, slug, criterion, met),
@@ -4770,25 +4085,11 @@ export const demoApi = {
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
     getServer().backOutProposal(id, verdict, note),
-  // The demo has no previous run to have crashed, so there is never anything to
-  // decide — the panel is absent and this exists only to keep the two API shapes
-  // interchangeable.
   decideRecovery: (_taskId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
-  // The demo is a browser tab with no process behind it, so there is nothing to
-  // re-read: a check hands the fixture back as it stands, which is what a check
-  // against an unmoved upstream does live too.
   checkBuild: () => Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
-  // `drain` and `cancel` are modelled — see `DemoServer.upgrade`. `apply` is the
-  // one that cannot be: there is no process to hand off to.
   upgrade: (action: string, _opts?: { interrupt?: boolean }) => getServer().upgrade(action),
-  // Modelled in full, unlike the upgrade: a fast-forward is a checkout catching up with its
-  // remote, and what that looks like is the whole card. The demo cannot move a file on disk,
-  // so the config change the pull would have brought is the part left unsaid.
   pullProject: () => getServer().pullProject(),
   snoozeUpdate: (target: SnoozeTarget) => getServer().snoozeUpdate(target),
-  // The local run, modelled because the *state* is the whole feature and the process is not:
-  // starting moves the row onto another goal and stopping ends it, as the panel sees it live.
-  // There is no server on a port, and the fixture's URL will not answer.
   startLocalRun: (issue: number, ref?: string) => getServer().startLocalRun(issue, ref),
   validateLocally: (issue: number, opts?: { swap?: boolean; refresh?: boolean }) =>
     getServer().validateLocally(issue, opts),
@@ -4808,24 +4109,8 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
   return getServer().connect(onEvent, onStatus);
 }
 
-/**
- * The demo's ticket mirror: the goals the spend fixture names, plus a tail of untouched
- * backlog so the two filter axes have something to separate. The query is genuinely applied —
- * filtered, ordered and paged as the route does it.
- */
-/**
- * States the visitor has dragged a card into, by issue number. `demoTickets` derives a row's
- * state from its number, which keeps the board reproducible, so a drag needs somewhere else
- * to say otherwise — a board that springs back teaches the wrong thing.
- */
 const DEMO_STATE_MOVES = new Map<number, string>();
 
-/**
- * The containers the demo's tickets hang off, so the legend, the grouping and the orphan
- * bucket have something to draw. Shared by the tickets tab and the feature board, which are
- * one backlog at two altitudes. The first three are the arithmetic ones (`demoFeatureOf`);
- * #300 is the Feature `fixtures.ts` carries; #903 is a Feature nothing has summarised.
- */
 const DEMO_FEATURES = [
   { number: 900, title: 'Payments' },
   { number: 901, title: 'Onboarding' },
@@ -4834,12 +4119,6 @@ const DEMO_FEATURES = [
   { number: 903, title: 'Search and console polish' },
 ];
 
-/**
- * Parents the world snapshot states outright, read before the arithmetic below. #331 is
- * deliberately **not** here although #300's page lists it: it is the tickets tab's one worked
- * orphan and the board's one shortfall answering to no Feature, which the orphan card has to
- * be able to show.
- */
 const DEMO_PARENTS = new Map<number, number | null>([
   [332, 300],
   [333, 300],
@@ -4848,30 +4127,19 @@ const DEMO_PARENTS = new Map<number, number | null>([
   [379, 903],
 ]);
 
-/** The parent of a demo ticket: the stated one, or every fourth item parentless and the rest dealt round. */
 const demoFeatureOf = (n: number): { number: number; title: string } | null => {
   const stated = DEMO_PARENTS.get(n);
   if (stated !== undefined) return stated === null ? null : (DEMO_FEATURES.find((f) => f.number === stated) ?? null);
   return n % 4 === 3 ? null : (DEMO_FEATURES[n % 3] ?? null);
 };
 
-// The demo's stand-in for the store's least-used-first assignment: the position in
-// the list, which for a fixed list is the same answer.
 const demoFeatureSlotOf = (feature: { number: number } | null): number | null =>
   feature === null ? null : DEMO_FEATURES.findIndex((f) => f.number === feature.number);
 
-/**
- * The rows the tickets tab and the feature board are both built from — worked goals
- * off the spend fixture, and a tail nobody has triaged so `unwatched` is not an
- * empty answer. One function so the two tabs cannot disagree about a title, a cost
- * or a parent.
- */
 function demoTicketRows(iso: (hoursAgo: number) => string): TicketRow[] {
   const worked: TicketRow[] = DEMO_GOAL_SEEDS.map((seed) => ({
     number: seed.issueNumber,
     title: seed.title ?? `Goal #${seed.issueNumber}`,
-    // The fixture's goals are the closed ones — they are what the spend tab
-    // cohorts — bar #390, whose plan is still landing on the goal page.
     state: seed.open === true ? ('open' as const) : ('closed' as const),
     watch: 'watched' as const,
     labels: ['lubbdubb-watch'],
@@ -4879,7 +4147,6 @@ function demoTicketRows(iso: (hoursAgo: number) => string): TicketRow[] {
     outcome: seed.outcome,
     addedAt: iso(seed.hoursAgo + 48),
     changedAt: iso(seed.hoursAgo),
-    // Closed in the tracker, so the mirror has stopped enriching them.
     tracking: seed.open === true ? ('live' as const) : ('frozen' as const),
     workItemState: DEMO_STATE_MOVES.get(seed.issueNumber) ?? (seed.open === true ? 'Active' : 'Closed'),
     issueType: 'Task',
@@ -4950,9 +4217,6 @@ function demoTickets(query: {
         const state = row.workItemState;
         if (state !== null) {
           const seen = counts.get(state);
-          // `live` beside the count for the real route's reason: `Closed` is on
-          // frozen rows only, and the tier reads this to widen the tracking axis
-          // rather than answering an empty list.
           counts.set(state, {
             count: (seen?.count ?? 0) + 1,
             live: (seen?.live ?? 0) + (row.tracking === 'live' ? 1 : 0),
@@ -4975,28 +4239,12 @@ function demoTickets(query: {
   };
 }
 
-/**
- * The feature board, built off the same rows and parent map as the tickets tab, so a story is
- * under one Feature on both and its cost is one figure.
- *
- * Authored rather than folded, for `getSpend`'s reason. It is authored to carry every reading
- * the card draws: a summary current with the rollup, one written before the Feature moved and
- * one absent; all six standings with counts agreeing with the rows; briefings quoting the
- * same sentences the goal pages carry; all four reach verdicts; landings inside and outside
- * the card's seven-day window; and an orphan bucket with its own shortfall, landing and spend.
- *
- * The holds and presence the card derives client-side are in the world snapshot
- * (`fixtures.ts`) under these same children, so both halves describe one fleet. `sequence` is
- * null throughout: `issueSequencing` is off by default and `answerFeatureSequence` refuses.
- */
 function buildDemoFeatureBoard(): FeatureBoardPayload {
   const now = Date.now();
   const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
   const tickets = new Map(demoTicketRows(iso).map((row) => [row.number, row]));
   const environments = ['staging', 'prod'];
 
-  // A child the tickets tab already lists — title, type, state and cost quoted from
-  // that row, so the two tabs agree to the cent.
   const ticket = (
     number: number,
     standing: FeatureChildStanding,
@@ -5016,8 +4264,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       ...over,
     };
   };
-  // A child the world snapshot carries and the tickets tab does not — its figures
-  // are the goal page's own (`fixtures.ts`).
   const goal = (
     number: number,
     title: string,
@@ -5034,21 +4280,12 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     ...over,
   });
 
-  // Every child on the board, in one list. Which Feature each hangs off is
-  // `demoFeatureOf`'s answer below — the tickets tab's — and never stated here, so
-  // a story cannot sit under one Feature on that tab and another on this one.
   const children: FeatureChildRow[] = [
-    // The worked goals off the spend fixture.
     ticket(390, 'queued'),
     ticket(364, 'delivered'),
     ticket(382, 'fellShort'),
-    // #331 is drawn with its title rather than the tickets tab's `Goal #331`: the
-    // spend panel's row can only draw its number because the goal aged out of the
-    // open list, where the mirror the board reads still holds the item.
     ticket(331, 'fellShort', { title: 'Give each source-grounded job a read-only workspace' }),
-    // The tail nobody has triaged.
     ...DEMO_UNTRIAGED.map((seed) => ticket(seed.number, 'unwatched')),
-    // The goals the world snapshot carries, with the runs and verdicts it states.
     goal(376, 'Read GitHub review decisions as proposal approval', 'inFlight', {
       issueType: 'Bug',
       costUsd: 0.31,
@@ -5089,9 +4326,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     goal(379, 'Make retrieval smarter', 'queued', { workItemState: 'New', changedAt: iso(52) }),
   ];
 
-  // What the briefing quotes, per goal: when its run started, the delivery verdict
-  // as its author wrote it, and the question or shortfall standing against it. The
-  // same sentences the goal pages and the queue rail carry in `fixtures.ts`.
   const since = new Map<number, string>([
     [376, iso(4 / 60)],
     [388, iso(8 / 60)],
@@ -5144,9 +4378,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       },
     ],
   ]);
-  // Every landing under a board child, as `goal_landings` would hold it. #345's
-  // two attempts both landed — at the wrong layer, the operator ruled — and the
-  // older of them is outside the window the card counts in.
   const landings: FeatureLandingRow[] = [
     { goal: 390, prNumber: 406, at: iso(0.5) },
     { goal: 364, prNumber: 410, at: iso(52 / 60) },
@@ -5173,7 +4404,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
         const block = blocking.get(c.number);
         return block ? [{ number: c.number, title: c.title, ...block }] : [];
       })
-      // Questions first, then shortfalls; newest first inside each.
       .sort((a, b) => (a.kind === b.kind ? newestFirst(a.since, b.since) : a.kind === 'question' ? -1 : 1));
     return {
       working: working.slice(0, 3),
@@ -5200,8 +4430,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     }
     return out;
   };
-  // Null where no child was ever run on — `TicketRow.costUsd`'s reason: never
-  // worked and worked for free are different facts.
   const cost = (rows: readonly FeatureChildRow[]): number | null => {
     const spent = rows.map((c) => c.costUsd).filter((c): c is number => c !== null);
     return spent.length === 0 ? null : Math.round(spent.reduce((a, b) => a + b, 0) * 100) / 100;
@@ -5210,7 +4438,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     const under = new Set(rows.map((c) => c.number));
     return landings.filter((l) => under.has(l.goal)).sort((a, b) => newestFirst(a.at, b.at));
   };
-  // What is happening, then what is stuck, then the rest — the route's own order.
   const rank: Record<FeatureChildStanding, number> = {
     inFlight: 0,
     fellShort: 1,
@@ -5241,17 +4468,11 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     updatedAt: iso(hoursAgo),
   });
 
-  // Per Feature, what cannot be folded from its children: the reach verdict, the summary an
-  // agent wrote, and where the children stand. A `standingKey` equal to the rollup's is
-  // current; one that differs predates a move; null is a Feature nobody has summarised.
   const rollups: Record<
     number,
     Pick<FeatureRollup, 'reach' | 'summary' | 'standingKey'> &
       Partial<Pick<FeatureRollup, 'workItemState' | 'issueType'>>
   > = {
-    // Onboarding — one of each verdict, two runs, a question with an agent behind it. #376's
-    // probe could not answer, so staging is two of three and prod could not be read at all.
-    // Summarised before #376 and #388 were picked up, so the digest no longer matches.
     901: {
       reach: reach({ staging: ['partial', 2, 3], prod: ['unknown', 0, 3] }),
       summary: summary(901, 'b7d02c4e19a3', 9, {
@@ -5271,9 +4492,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       }),
       standingKey: '5e88f1a3c07d',
     },
-    // Platform hygiene — one run, parked on a question, and nothing landed yet.
-    // Nothing merged under it, so nothing has been anywhere: `rollUpReach`'s
-    // answer to an empty fold, and not a guess.
     902: {
       reach: reach({}),
       summary: summary(902, 'c93af5d1e6b2', 0.4, {
@@ -5288,9 +4506,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       }),
       standingKey: 'c93af5d1e6b2',
     },
-    // Payments — the stack, the merge, the cooldown, and no briefing: nothing worked,
-    // delivered or blocked in the briefing's sense, so the holds say where it is. #390's
-    // first part is unconfirmed in prod, so prod is half.
     900: {
       reach: reach({ staging: ['reached', 2, 2], prod: ['partial', 1, 2] }),
       summary: summary(900, 'a41c9e07f2d8', 0.3, {
@@ -5310,9 +4525,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       }),
       standingKey: 'a41c9e07f2d8',
     },
-    // #300 — the one Feature the world snapshot holds as an item of its own, so
-    // its state and type resolve. Summarised when both stories were queued; #332
-    // has since been picked up.
     300: {
       workItemState: 'Active',
       issueType: 'Feature',
@@ -5332,12 +4544,10 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       }),
       standingKey: '0f6c3a9e75b4',
     },
-    // #903 — two stories nobody has been on, and so nothing to say about them.
     903: { reach: reach({}), summary: null, standingKey: 'e2a7c40b9f13' },
   };
 
   const under = (feature: number | null) => children.filter((c) => demoFeatureOf(c.number)?.number === (feature ?? -1));
-  // What wants a person first, then the most work — the route's own order.
   const features = [901, 902, 900, 300, 903].map((number): FeatureRollup => {
     const feature = DEMO_FEATURES.find((f) => f.number === number);
     const extra = rollups[number];
@@ -5349,8 +4559,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       number,
       title: feature.title,
       slot: demoFeatureSlotOf(feature) ?? 0,
-      // Null unless the mirror holds the container itself, which for the demo is
-      // only #300 — the arithmetic Features are parent links and nothing more.
       workItemState: extra.workItemState ?? null,
       issueType: extra.issueType ?? null,
       counts: counts(rows),
@@ -5385,10 +4593,6 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
   };
 }
 
-/** Backlog the demo's fleet has never been pointed at — the unwatched tail. */
-// The types are spread across the families deliberately: a demo where everything is
-// a Task shows the tickets list with one tone in it, which reads as a list that has
-// no tones. `Capability` is the untinted case, and is the one worth seeing.
 const DEMO_UNTRIAGED: {
   number: number;
   title: string;

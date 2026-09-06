@@ -14,14 +14,6 @@ import type { ReviewMarksPayload, ReviewPackPayload } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { layMarks } from '../web/src/view/reviewPack.js';
 
-/**
- * Review packs, stage 5: the reviewer's marks, through the two routes the page
- * writes them with. A mark is keyed to the hunks an idea owns and never to the
- * idea's id, so it survives the pack being rewritten and lands on whichever idea
- * owns the same hunks next time.
- * → docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack
- */
-
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 
 const DIFF = [
@@ -73,8 +65,6 @@ function build(): System {
 }
 
 function agentOn(system: System, originRef: string): Agent | undefined {
-  // The live agent on the origin: a second ask on the same pull request opens a
-  // second task, and the first author's row is finished by then.
   const tasks = new Set(
     system.store
       .listTasks()
@@ -84,7 +74,6 @@ function agentOn(system: System, originRef: string): Agent | undefined {
   return system.store.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
 }
 
-/** Ask, and have the author land a pack: an idea on h1 with a region, a region-only idea, and plumbing on h2. */
 async function authored(
   system: System,
   titles = { first: 'One new import' },
@@ -141,7 +130,6 @@ test('a mark rides the hunks an idea owns, each column its own, and the read lay
   const [idea, contextOnly] = pack.ideas;
   const { app } = await buildApp(system);
 
-  // Read: one row per owned hunk — the region is not one — stamped with the pack's head.
   const read = await app.inject({
     method: 'POST',
     url: `/api/prs/7/review-pack/ideas/${idea!.id}/read`,
@@ -155,7 +143,6 @@ test('a mark rides the hunks an idea owns, each column its own, and the read lay
   assert.equal(marks[0]!.read, true);
   assert.equal(marks[0]!.attention, null);
 
-  // The override writes its own column and leaves the other as it was.
   const over = await app.inject({
     method: 'POST',
     url: `/api/prs/7/review-pack/ideas/${idea!.id}/attention`,
@@ -167,7 +154,6 @@ test('a mark rides the hunks an idea owns, each column its own, and the read lay
     [[true, 'decide']],
   );
 
-  // The read route ships the same rows, and the renderer's lay-over puts them on the idea.
   const got = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
   const payload = got.json() as ReviewPackPayload;
   const laid = layMarks(payload.pack, payload.marks);
@@ -179,7 +165,6 @@ test('a mark rides the hunks an idea owns, each column its own, and the read lay
     'a walk of regions can carry no mark',
   );
 
-  // Clearing the override, and unreading, each leave the other column alone.
   const clear = await app.inject({
     method: 'POST',
     url: `/api/prs/7/review-pack/ideas/${idea!.id}/attention`,
@@ -249,8 +234,6 @@ test('a mark survives the pack being rewritten and lands on whichever idea owns 
   });
   assert.equal(read.statusCode, 200, read.body);
 
-  // Let the author finish — the checker follows — and take the checker off the
-  // pull request so a second ask is not refused as "being checked".
   system.agents.complete(first.author.id);
   await system.reviewPackChecker.whenIdle();
   const checker = agentOn(system, checkOrigin(7));

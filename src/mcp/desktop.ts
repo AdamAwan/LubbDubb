@@ -15,56 +15,19 @@ import { buildCallLog, type McpCallLog } from './callLog.js';
 import type { DesktopSession, DesktopToolDeps } from './desktopContext.js';
 import { buildDesktopTools } from './desktopTools.js';
 
-/** Absolute path to the shipped stdio bridge. `--desktop` makes it read the credential file. */
+// → docs/spec/11-mcp-tools.md
+
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 
 interface McpDesktopServerOptions extends DesktopToolDeps {
   socketPath: string;
-  /** Where the credential is written, 0600. */
   credentialPath: string;
-  /** How long a recorded call's arguments are kept, in days. See `McpCallStore`. */
   argsRetentionDays?: number;
 }
 
-/**
- * The desktop tool channel: a second MCP socket the operator's **own** Claude
- * Code connects to, so a validation check that needs a browser and a login the
- * fleet does not have can be run at their keyboard and land on the same row.
- *
- * ## What makes it different from the fleet channel
- *
- * **Identity has no agent behind it.** The fleet's is `token -> agent -> task ->
- * origin`, and every fence it draws is taken from that origin. Nobody dispatched
- * a desktop session, so there is no task and no origin, and the equivalent is
- * `token -> connection -> claim`: a session takes one check before it runs it,
- * and that claim is what a report is recorded against. Same shape, same
- * guarantee — which check a report is about is settled before the report rather
- * than by it.
- *
- * **The credential is long-lived and the socket path is stable.** That is the
- * whole feature: `claude mcp add` once, not once per run. The token still never
- * appears in the registration — the bridge reads it from a 0600 file at spawn —
- * so the command an operator pastes carries no secret, and a rotated token needs
- * no re-registration.
- *
- * **The tool set is its own list, narrowed by construction.** See
- * `src/mcp/names.ts` for the list and `src/mcp/desktopTools.ts` /
- * `src/mcp/desktopOps.ts` for what builds it: this server never reaches
- * `buildTools`, so there is no path from a desktop connection to the rest of the
- * harness. The fleet half of the list steers — cap, pause, queue order, the
- * inbox, the watch tag — and dispatches nothing.
- *
- * ## Fail open, as everywhere
- *
- * If the socket cannot be bound or the credential cannot be written, {@link
- * listen} returns false and nothing else changes: the fleet runs exactly as it
- * does, checks stay with whoever they were with, and the operator's Claude simply
- * finds no server. Nothing in the harness is gated on this channel existing.
- */
 export class McpDesktopServer {
   private readonly channel: SocketChannel;
   private readonly calls: McpCallLog;
-  /** Minted at {@link listen}, never configured. Null while the channel is down. */
   private token: string | null = null;
   private readonly sessions = new Map<string, DesktopSession>();
 
@@ -73,8 +36,6 @@ export class McpDesktopServer {
     this.channel = new SocketChannel({
       socketPath: opts.socketPath,
       label: 'MCP desktop channel',
-      // Stable path: a live socket on it belongs to another harness, and taking
-      // it would silently steal every future desktop session from a running one.
       exclusive: true,
       dispatch: (token, connectionId, frame) => this.dispatch(token, connectionId, frame),
       closed: (_token, connectionId) => this.release(connectionId),
@@ -82,14 +43,6 @@ export class McpDesktopServer {
     });
   }
 
-  /**
-   * Start listening and write the credential. False means the channel is off —
-   * the operator is told through the error log, and nothing else is affected.
-   *
-   * The token is minted here rather than read back from an existing credential,
-   * so a credential from a previous run stops working the moment this one starts.
-   * Nothing depends on it being stable: the bridge reads the file at every spawn.
-   */
   async listen(): Promise<boolean> {
     if (this.token) return true;
     if (!(await this.channel.listen())) return false;
@@ -102,7 +55,6 @@ export class McpDesktopServer {
     return true;
   }
 
-  /** Stop listening, drop every session, and remove the credential. */
   async close(): Promise<void> {
     this.token = null;
     this.sessions.clear();
@@ -114,15 +66,6 @@ export class McpDesktopServer {
     }
   }
 
-  /**
-   * An in-process caller for one desktop connection, or null while the channel
-   * is down. The socket path and this one converge on {@link dispatch}, so a test
-   * drives exactly the code the operator's bridge reaches — there is no
-   * test-only tool path, which is the fleet channel's rule and its reason.
-   *
-   * `end()` is what the socket's close handler does, so the claim-release
-   * behaviour under test is the behaviour in production.
-   */
   session(connectionId: string = randomUUID()): {
     call(name: string, args: Record<string, unknown>): Promise<ToolCallResult>;
     list(): Promise<string[]>;
@@ -151,7 +94,6 @@ export class McpDesktopServer {
     };
   }
 
-  /** The `claude mcp add-json` payload for this channel — what the skill's install note quotes. */
   registration(): { command: string; args: string[] } {
     return { command: process.execPath, args: [BRIDGE_PATH, '--desktop'] };
   }
@@ -195,11 +137,6 @@ export class McpDesktopServer {
     }));
   }
 
-  /**
-   * The credential the bridge reads. 0600 for the fleet launch config's reason:
-   * the token is a bearer credential, and a file is why it never has to appear in
-   * argv where `ps` would show it.
-   */
   private writeCredential(token: string): boolean {
     try {
       mkdirSync(dirname(this.opts.credentialPath), { recursive: true, mode: 0o700 });
@@ -218,7 +155,6 @@ export class McpDesktopServer {
     }
   }
 
-  /** One connection's state, created on first use. */
   private sessionFor(connectionId: string): DesktopSession {
     const existing = this.sessions.get(connectionId);
     if (existing) return existing;
@@ -227,14 +163,6 @@ export class McpDesktopServer {
     return session;
   }
 
-  /**
-   * A session ended. Its claim goes with it — closing the terminal is the normal
-   * way a desktop run ends, and a claim that outlived it would hold the
-   * operator's one-at-a-time budget against a session that no longer exists.
-   *
-   * The expiry in `claimStaleBefore` is the backstop for the case this cannot
-   * cover: a harness killed between the claim and the close.
-   */
   private release(connectionId: string): void {
     const session = this.sessions.get(connectionId);
     this.sessions.delete(connectionId);
@@ -249,22 +177,10 @@ export class McpDesktopServer {
     }
   }
 
-  /**
-   * Answer one frame. Everything above the token check is the tools' business.
-   *
-   * Calls are recorded here for the fleet channel's reason and with its rules,
-   * on `channel: 'desktop'` — the two are never summed, because they are
-   * different credentials over different tool sets and `validation_report` is two
-   * different tools with one name. A desktop row carries no agent and no task:
-   * nobody dispatched this session.
-   */
   private async dispatch(token: string, connectionId: string, frame: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const call = this.calls.callOf(frame);
     const startedAt = Date.now();
     if (!this.tokenMatches(token)) {
-      // `initialize` and `tools/list` are still answered, with an empty tool set,
-      // so a stale registration completes its handshake and reports a server with
-      // no tools rather than hanging. Only a call needs a real credential.
       if (frame.method === 'tools/call') {
         const stale =
           'This credential is not the one this harness is listening for. It is written fresh at every start, ' +
@@ -305,7 +221,6 @@ export class McpDesktopServer {
     return response;
   }
 
-  /** Constant-time, because this is the only thing between a local process and the store. */
   private tokenMatches(candidate: string): boolean {
     if (this.token === null) return false;
     const a = Buffer.from(candidate);
@@ -316,11 +231,6 @@ export class McpDesktopServer {
   }
 }
 
-/**
- * What a claim is labelled when the session does not name itself. The machine,
- * because that is what an operator glancing at the cockpit needs in order to know
- * whether the thing holding a check is theirs.
- */
 function defaultClaimLabel(): string {
   try {
     return `desktop (${hostname()})`;

@@ -17,18 +17,9 @@ import type { ReviewPackPayload } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { findTask } from './support/tasks.js';
 
-/**
- * Review packs, stage 3: the author agent and the async route — a reviewer asks
- * for a pack from the pull request's row, an agent is spawned outside the
- * dispatcher over the diff, both pads and the tree, and hands the pack back
- * through `review_pack_submit`, which refuses one that leaves a hunk unowned.
- * → docs/spec/31-review-packs.md#when-a-pack-is-made
- */
-
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const HEAD2 = 'b2c3d4e5f60718293a4b5c6d7e8f901234567890';
 
-/** Two files, one with two hunks; a pure deletion; a deleted file; a binary. */
 const DIFF = [
   'diff --git a/src/a.ts b/src/a.ts',
   'index 1111111..2222222 100644',
@@ -99,7 +90,6 @@ function build(): { system: System; worktrees: FakeWorktreeManager; git: FakeGit
   return { system, worktrees, git, reaps };
 }
 
-/** A pull request with a head, in the world the routes read. */
 async function openPr(system: System, over: { headSha?: string } = { headSha: HEAD }): Promise<void> {
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'Add y', branch: 'feature-7', ...over });
   await system.harness.runCycle('manual');
@@ -125,7 +115,6 @@ async function submit(system: System, agent: Agent, args: Record<string, unknown
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-/** Every hunk owned once: h1 and h2 by the idea, h3 and h4 by plumbing. */
 function fullSubmission(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     headline: 'The module imports y and notes why.',
@@ -164,8 +153,6 @@ function fullSubmission(extra: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
-// -- the hunks, purely --------------------------------------------------------
-
 test('a diff parses into hunks with head-side ranges, and a pure deletion carries a zero-width range', () => {
   const hunks = parseDiffHunks(DIFF);
   assert.deepEqual(
@@ -173,16 +160,12 @@ test('a diff parses into hunks with head-side ranges, and a pure deletion carrie
     [
       ['h1', 'src/a.ts', 1, 4, 1, 0],
       ['h2', 'src/a.ts', 21, 23, 1, 0],
-      // `+9,0`: the deletion sits after line 9 at the head, and nothing there is its code.
       ['h3', 'src/b.ts', 9, 9, 0, 2],
-      // A deleted file keeps its old path; `+0,0` clamps to line 1.
       ['h4', 'src/c.ts', 1, 1, 0, 2],
     ],
   );
-  // The code keeps its diff prefixes, context lines included.
   assert.deepEqual(hunks[0]!.code, [' import x from "x";', '+import y from "y";', ' ', ' export const a = 1;']);
   assert.deepEqual(hunks[2]!.code, ['-const old = 2;', '-const older = 3;']);
-  // A binary file produced no hunk: there is nothing for an idea to own.
   assert.equal(
     hunks.some((h) => h.range.path === 'img.png'),
     false,
@@ -219,7 +202,6 @@ test('coverage is decided mechanically: every hunk owned exactly once, plumbing 
   assert.match(coverageRefusal(hunks, new Map([['idea_1', ['h1', 'h2', 'h3', 'h4', 'h9']]])) ?? '', /no such hunk: h9/);
 });
 
-/** A diff with a test file in it, so the tests-are-never-an-idea rule has something to bite on. */
 const DIFF_WITH_TESTS = [
   'diff --git a/src/a.ts b/src/a.ts',
   '--- a/src/a.ts',
@@ -236,7 +218,6 @@ const DIFF_WITH_TESTS = [
   "+test('b', () => {});",
 ].join('\n');
 
-/** A commission over `DIFF_WITH_TESTS`, with no pads and a tree that answers every region. */
 function commission(diff = DIFF_WITH_TESTS): Commission {
   return {
     prNumber: 7,
@@ -247,7 +228,6 @@ function commission(diff = DIFF_WITH_TESTS): Commission {
   };
 }
 
-/** The submission arguments, with the ideas the test cares about. */
 function submission(ideas: unknown[]): Record<string, unknown> {
   return { headline: 'It does a thing.', summary: '- It does **a thing**.', estimatedMinutes: 3, ideas };
 }
@@ -256,14 +236,11 @@ const hunkAnchor = (hunk: string): Record<string, unknown> => ({ kind: 'hunk', h
 
 test('a test hunk is never an idea of its own — it belongs to the idea it exercises', () => {
   const hunks = parseDiffHunks(DIFF_WITH_TESTS);
-  // The predicate, both ways round.
   assert.equal(testsOnlyIdea(hunks, ['h2']), true);
   assert.equal(testsOnlyIdea(hunks, ['h1', 'h2']), false, 'an idea that owns real code as well is not a tests section');
   assert.equal(testsOnlyIdea(hunks, []), false);
   assert.equal(ownsTestHunk(hunks, ['h1']), false);
   assert.equal(ownsTestHunk(hunks, ['h1', 'h2']), true);
-  // A pull request that is only tests is exempt: there is no other idea for them
-  // to belong to, and the rule would make such a pack impossible to write.
   const onlyTests = parseDiffHunks(
     [
       'diff --git a/test/a.test.ts b/test/a.test.ts',
@@ -276,7 +253,6 @@ test('a test hunk is never an idea of its own — it belongs to the idea it exer
   );
   assert.equal(testsOnlyIdea(onlyTests, ['h1']), false, 'a tests-only pull request is exempt');
 
-  // And through the submission, where the author actually hits it.
   const refused = assemblePack(
     commission(),
     submission([
@@ -327,8 +303,6 @@ test("the author's origin and lease key name the pull request and the head, and 
   assert.equal(packLeaseHead(null), null);
 });
 
-// -- asking, at the seam --------------------------------------------------------
-
 test('asking for a pack spawns a read-only author outside the pulse, and the ask returns before it runs', async () => {
   const { system, worktrees } = build();
   await openPr(system);
@@ -337,11 +311,9 @@ test('asking for a pack spawns a read-only author outside the pulse, and the ask
   const res = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(res.statusCode, 202);
   assert.deepEqual(res.json(), { ok: true, prNumber: 7, headSha: HEAD });
-  // Accepted, not done: nothing has been written and the read says one is coming.
   const early = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
   assert.equal(early.statusCode, 404);
   assert.equal(early.json().writing, true);
-  // A second ask while the first is on its way is refused, not queued.
   const again = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(again.statusCode, 409);
   assert.match(again.json().error, /already being written/);
@@ -352,16 +324,12 @@ test('asking for a pack spawns a read-only author outside the pulse, and the ask
   assert.equal(task!.kind, 'code');
   assert.equal(task!.rule, null, 'no rule dispatched this');
   assert.equal(task!.branch, packLeaseKey(7, HEAD));
-  // The worktree came through the read-only shape of the one seam, pinned at the head.
   assert.deepEqual(worktrees.ensured, [{ branch: packLeaseKey(7, HEAD), base: HEAD, readOnly: true }]);
-  // No decision row: this was never a dispatch.
   assert.equal(
     system.store.listDecisions().some((d) => d.detail.includes('pr:7:pack')),
     false,
   );
 
-  // What the agent was handed: the rendered template, then the hunks by id, the
-  // absent log, and the submission note — appended, in that order.
   const prompt = task!.prompt;
   assert.match(
     prompt,
@@ -404,7 +372,6 @@ test('the ask refuses in order: no such pull request, no head, paused', async ()
     undefined,
   );
 
-  // Nothing was asked for, so the read says so rather than "on its way".
   const none = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
   assert.equal(none.statusCode, 404);
   assert.equal(none.json().writing, false);
@@ -426,13 +393,10 @@ test('a head the clone cannot diff fails the ask loudly and leaves no lease behi
   );
   assert.deepEqual(worktrees.ensured, []);
   assert.ok(system.store.listErrors().some((e) => /Could not start the review pack author for PR #7/.test(e.message)));
-  // ...and the pull request can be asked about again.
   assert.equal(system.reviewPacks.writing(7), false);
   await app.close();
   system.store.close();
 });
-
-// -- the submission ---------------------------------------------------------------
 
 test('the author submits a pack and the harness fills in what it owns; the read ships it with its marks', async () => {
   const { system, worktrees, reaps } = build();
@@ -456,10 +420,8 @@ test('the author submits a pack and the harness fills in what it owns; the read 
   assert.equal(pack.witnessed, false, 'neither pad had an entry');
   assert.equal(pack.fake, 'nothing');
   assert.deepEqual(pack.order, []);
-  // Ids are minted, but the reserved one is kept.
   assert.match(pack.ideas[0]!.id, /^idea_/);
   assert.equal(pack.ideas[1]!.id, 'plumbing');
-  // Every checker field is null, whatever the author might have said.
   for (const idea of pack.ideas) {
     assert.equal(idea.attention, null);
     assert.equal(idea.cue, null);
@@ -468,20 +430,17 @@ test('the author submits a pack and the harness fills in what it owns; the read 
       assert.equal(claim.evidence, null);
     }
   }
-  // The hunk anchors carry the diff's own ranges and code — what a mark is keyed on.
   const [h1, h2, region] = pack.ideas[0]!.anchors;
   assert.deepEqual(h1!.range, { path: 'src/a.ts', start: 1, end: 4 });
   assert.deepEqual(h1!.code, [' import x from "x";', '+import y from "y";', ' ', ' export const a = 1;']);
   assert.equal(h1!.mark, 'key');
   assert.equal(h1!.caption, 'new import');
   assert.deepEqual(h2!.range, { path: 'src/a.ts', start: 21, end: 23 });
-  // The region's code was read off the tree at the head, plain.
   assert.equal(region!.kind, 'region');
   assert.deepEqual(region!.code, ['line two', 'line three']);
   assert.deepEqual(region!.note, { by: 'author', text: 'Checked every importer.' });
   assert.deepEqual(pack.ideas[1]!.anchors[0]!.range, { path: 'src/b.ts', start: 9, end: 9 });
 
-  // The read: the record, the marks, the head, and not stale.
   const { app } = await buildApp(system);
   system.store.markReviewIdeaRead({ prNumber: 7, headSha: HEAD, hunks: [h1!.range], read: true });
   const got = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
@@ -494,8 +453,6 @@ test('the author submits a pack and the harness fills in what it owns; the read 
   assert.equal(payload.stale, null);
   await app.close();
 
-  // The author is an agent like any other: the operator's kill reaps its subtree
-  // through session.kill(), and the reap hands its slot back.
   const pid = system.store.getAgent(agent.id)?.pid;
   system.agents.kill(agent.id);
   assert.equal(system.store.getAgent(agent.id)?.status, 'killed');
@@ -569,7 +526,6 @@ test('a pack is refused by field name — an unowned hunk, one owned twice, a ma
   assert.match(minted.text, /ids are minted by the harness/);
 
   assert.equal(system.store.getCurrentReviewPack(7), null, 'nothing landed');
-  // The fixed submission lands in the same turn.
   const fixed = await submit(system, agent, base);
   assert.equal(fixed.isError, false, fixed.text);
   system.store.close();
@@ -606,7 +562,6 @@ test('the pack is written from both pads: a witnessed claim cites an entry, and 
   });
   const { agent, cwd } = await ask(system);
   const task = findTask(system.store, (t) => t.originRef === packOrigin(7))!;
-  // Both pads, verbatim, with their ids — the ids are what a claim cites.
   assert.match(task.prompt, /the pad of the goal \(issue:12\) and the pull request's own \(pr:7\)/);
   assert.ok(task.prompt.includes(`- ${goalEntry.id} · `));
   assert.ok(task.prompt.includes('  rejected: Inline it — two copies drift'));
@@ -676,8 +631,6 @@ test('the tool is refused to any agent that is not an author, by name', async ()
   system.store.close();
 });
 
-// -- staleness ----------------------------------------------------------------------
-
 test('a pack is shown stale when the head moves, saying how far behind, and nothing regenerates it', async () => {
   const { system, git } = build();
   await openPr(system);
@@ -697,25 +650,18 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
   assert.equal(payload.pack.headSha, HEAD, 'the pack is still the one written');
   assert.equal(payload.head, HEAD2);
   assert.deepEqual(payload.stale, { headSha: HEAD2, commitsBehind: 2 });
-  // The pulse dispatched nothing for it, and neither did the read.
   const authors = system.store.listTasks().filter((t) => t.originRef === packOrigin(7));
   assert.equal(authors.length, 1);
 
-  // A head the clone has not seen: stale by sha, and the count says it cannot say.
   system.connector.inject({ kind: 'pr_pushed', prNumber: 7, headSha: 'c3d4e5f60718293a4b5c6d7e8f901234567890ab' });
   await system.harness.runCycle('manual');
   const unknown = (await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' })).json() as ReviewPackPayload;
   assert.deepEqual(unknown.stale, { headSha: 'c3d4e5f60718293a4b5c6d7e8f901234567890ab', commitsBehind: null });
 
-  // Asking again on the new head is the same control; the new pack replaces the
-  // old. Refused while the first author is still on the pull request, accepted
-  // once it has finished.
   git.setDiff('main', 'c3d4e5f60718293a4b5c6d7e8f901234567890ab', DIFF);
   const busy = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(busy.statusCode, 409);
   system.agents.complete(agent.id);
-  // The checker follows the author onto the pack, and holds the pull request
-  // the same way until it has finished.
   await system.reviewPackChecker.whenIdle();
   const checking = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(checking.statusCode, 409);
@@ -730,8 +676,6 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
   await app.close();
   system.store.close();
 });
-
-// -- structure ------------------------------------------------------------------------
 
 test('nothing under src/dispatcher/ imports the review pack author — it is not a dispatch input', () => {
   const root = resolve(import.meta.dirname, '..');

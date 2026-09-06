@@ -4,27 +4,13 @@ import { relatedWorkNote } from '../../issueRelations.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
-/**
- * Resolve an open issue into a PR — the front of the issue → PR → merge loop, and
- * last in the pipeline because everything above it narrows it.
- */
+// → docs/spec/05-dispatcher.md (rule `issue-pickup`)
+
 export function issuePickup(s: StageContext): void {
   for (const { issue } of s.eligibleIssues) {
-    // Narrowed by the funnel to the **unplanned** arm alone: every planned issue,
-    // whether its plan has one part or eight, is scheduled by rule `plan-part`, so
-    // what reaches here is only an issue the funnel gave up on. Everything below is
-    // byte-for-byte what it was before the gate.
     if (s.routes.get(issue.number)?.route !== 'unplanned') continue;
     const origin = `issue:${issue.number}`;
-    // An agent already on this issue owns it — don't throttle/escalate over a
-    // live attempt; the active-task de-dup handles it.
     if (s.activeOrigins.has(origin)) continue;
-    // `issue-assess` is asking whether this issue is already finished and
-    // `issue-appraisal` whether its goal can be worked from at all. Picking it up in
-    // the same cycle would put a second agent on it to redo work the first is
-    // still judging, or answer the appraisal's question by ignoring it. Both sets are
-    // built by those two stages, which the pipeline runs first, so no two rules
-    // can hold different opinions about which issues are in them.
     const supersededBy = s.assessing.has(issue.number)
       ? ('issue-assess' as const)
       : s.appraising.has(issue.number)
@@ -51,9 +37,6 @@ export function issuePickup(s: StageContext): void {
             branch,
           }) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          // The unplanned arm of the same instruction: a goal small enough to skip
-          // a plan still emits things worth watching, and this agent is the only
-          // one that knows what it wrote. Appended, never interpolated.
           s.watchDeclareNote,
         originRef: origin,
         originTitle: issue.title,
@@ -62,20 +45,10 @@ export function issuePickup(s: StageContext): void {
         reason,
       } satisfies RawAction,
     };
-    // Queued as held rather than skipped, and *not* routed through `consider`:
-    // the cooldown has no bearing on a pickup that is not going out this cycle
-    // for a different reason entirely, and escalating an attempt cap over a
-    // suppressed dispatch would blame the pickup for the appraisal's turn.
     if (supersededBy) {
       s.candidates.push({ ...candidate, held: 'superseded', reason: supersededReason(supersededBy, reason) });
       continue;
     }
-    // The sequence hold, on the same terms and for the same two reasons: queued
-    // rather than skipped, because a dispatch that silently never appears leaves
-    // an operator with an idle fleet and a full board and nothing to read; and
-    // outside `consider`, because the cooldown has no bearing on a pickup that is
-    // not going out this cycle for a different reason entirely.
-    // → `docs/spec/33-story-sequencing.md#a-held-story-is-queued-not-skipped`
     const waits = s.sequenceWaits.get(issue.number);
     if (waits) {
       s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });

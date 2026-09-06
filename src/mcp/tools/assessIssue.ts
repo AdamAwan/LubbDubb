@@ -4,6 +4,8 @@ import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Say whether the ISSUE you were dispatched to assess is finished. You are the second look: ' +
@@ -60,10 +62,6 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = validateAssessment(args);
     if (!parsed.ok) return toolError(`Assessment rejected: ${parsed.error}`);
-    // Structural identity, and here it decides whether there is anything to
-    // assess at all: an agent that did the work is refused rather than scoped
-    // down, because judging your own delivery is not an assessment. The
-    // plan-aware refusals happen there too — this layer cannot read a plan.
     const result = deps.agents.recordAssessment(
       agent.id,
       parsed.verdict,
@@ -78,8 +76,6 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
       issue: result.issueOrigin,
       status: result.verdict,
       cause: parsed.cause,
-      // The finish reminder rides on every terminal tool's response — see
-      // {@link DONE_REMINDER} for why the system prompt alone is not enough.
       note:
         (parsed.verdict === 'delivered'
           ? 'Recorded. The harness will not pick this issue up again while the verdict stands — it ends ' +

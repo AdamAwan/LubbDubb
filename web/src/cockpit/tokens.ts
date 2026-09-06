@@ -1,24 +1,5 @@
-/**
- * Every themeable token, and what each one moves.
- *
- * The registry is the seam between the two stylesheets and the Theme section: the
- * sheets declare the tokens, this says what they are called and what changing one
- * does, and `ThemeSettings` draws a row per entry. `test/cockpitTheme.test.ts`
- * holds the two in step in **both** directions, because each way of drifting is
- * silent — a token missing from here is a colour the operator cannot reach, and an
- * entry naming no token is a swatch that does nothing.
- *
- * `why` is the field that earns its keep. The question a colour picker raises is
- * not "what colour" but "what will change if I move this", and a name like
- * `--panel-2` does not answer it.
- *
- * Order is the reading order of the section: the groups in the order below, and
- * within a group the order the sheet declares them.
- *
- * → docs/spec/17-cockpit.md#the-theme
- */
+// → docs/spec/17-cockpit.md#the-address-bar
 
-/** What a value looks like, and so which control edits it. */
 export type TokenKind = 'colour' | 'radius' | 'space' | 'metric' | 'font';
 
 export type TokenGroup =
@@ -35,23 +16,13 @@ export type TokenGroup =
   | 'type';
 
 export interface ThemeToken {
-  /** The custom property, dashes included: `--panel-2`. */
   name: string;
   label: string;
   group: TokenGroup;
   kind: TokenKind;
-  /** One line: what moves on the screen when this moves. */
   why: string;
 }
 
-/**
- * The groups, in the order they are drawn.
- *
- * Totalled over {@link TokenGroup} rather than typed as a partial record, so a new
- * group fails the typecheck instead of drawing its rows under the previous
- * heading. `advanced` folds a group away behind a disclosure: the four that are
- * not advanced are the twenty-eight tokens most people would want.
- */
 export const TOKEN_GROUPS: Record<TokenGroup, { label: string; blurb: string; advanced: boolean }> = {
   ground: { label: 'Ground and panels', blurb: 'The surfaces everything else sits on.', advanced: false },
   ink: { label: 'Lettering', blurb: 'Text, and what carries on a filled ground.', advanced: false },

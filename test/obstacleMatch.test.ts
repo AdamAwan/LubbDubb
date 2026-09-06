@@ -3,21 +3,6 @@ import assert from 'node:assert/strict';
 import { extractKeys, gateKeys, type ObstacleWorld } from '../src/obstacles/keys.js';
 import { matchObstacle, nearMatches, resolvingKeys } from '../src/obstacles/match.js';
 
-/**
- * The guard the rest of `docs/spec/27-obstacles.md` leans on.
- *
- * Deduplication being an index lookup rather than a judgement is what makes every
- * other decision in that document safe to take: the states, the two-voice gate and
- * the withheld words all assume that two reports of one thing land on one row and
- * two reports of two things do not. Both halves fail silently. A key coarse enough
- * to catch everything answers a genuinely new failure *already owned*, nobody
- * fixes it, and nothing is red; a key too fine files thirty singletons and the
- * fleet pays thirty times.
- *
- * So the rules are asserted here rather than trusted: what binds, what only
- * suggests, and what a report carrying nothing bindable does instead.
- */
-
 function world(over: Partial<ObstacleWorld> = {}): ObstacleWorld {
   return {
     checks: ['test (windows)', 'lint', 'test (linux)'],
@@ -29,9 +14,6 @@ function world(over: Partial<ObstacleWorld> = {}): ObstacleWorld {
 }
 
 test('a check key is extracted from the dispatch, not from a form', () => {
-  // "there's a flakey test" on a dispatch about `test (windows)` yields
-  // `check:test (windows)`. The agent classified nothing, which is the whole of
-  // why extraction beats asking.
   const keys = gateKeys(
     extractKeys({ what: "there's a flakey test", evidence: 'it went red twice.', world: world() }),
     world(),
@@ -50,8 +32,6 @@ test('a key that does not resolve is dropped and the claim is kept', () => {
     declared: [{ kind: 'check', value: 'nightly-smoke' }],
   });
   const keys = gateKeys(candidates, world());
-  // Neither the invented check nor the absent path survives — and nothing here
-  // refuses anything: the report is filed with the keys that did resolve.
   assert.deepEqual(
     keys.map((k) => k.value).filter((v) => v === 'nightly-smoke' || v.includes('does/not')),
     [],
@@ -90,8 +70,6 @@ test('a signature does not rescue a bare check, and never binds beside one eithe
     ],
     world(),
   );
-  // The two rules meeting, rather than one of them having an exception: a key that
-  // cannot bind alone cannot make another one bind either.
   assert.deepEqual(resolvingKeys(keys), []);
   assert.equal(
     matchObstacle(keys, () => 'obs-existing'),
@@ -100,8 +78,6 @@ test('a signature does not rescue a bare check, and never binds beside one eithe
 });
 
 test('the value is the identity and the kind is a column beside it', () => {
-  // `check:test (windows)` and `test:test (windows)` are one key: two agents
-  // disagreeing about what kind of thing they hit must not split one obstacle.
   const asCheck = gateKeys(
     [
       { kind: 'check', value: 'test (windows)' },
@@ -121,8 +97,6 @@ test('matching is exact and never a prefix', () => {
     ],
     world({ branchPaths: ['src/claims.ts'] }),
   );
-  // A provider identifier under which another job's history would be read as this
-  // one's. `test (linux)` is not `test (windows)`, prefix or no prefix.
   assert.equal(
     matchObstacle(keys, (value) => (value === 'test (windows)' ? 'obs-one' : null)),
     null,
@@ -147,8 +121,6 @@ test('the prose matcher is kept, and only to fill near[]', () => {
     rows,
     lookup: (value) => (value === 'econnrefused connecting to the registry' ? 'obs-two' : null),
   });
-  // Both doors into near[] — the prose hit and the suggestion-only key — and
-  // neither of them merged anything: `matchObstacle` still answers null.
   assert.deepEqual(near.map((r) => r.id).sort(), ['obs-one', 'obs-two']);
   assert.equal(
     matchObstacle(keys, () => 'obs-two'),

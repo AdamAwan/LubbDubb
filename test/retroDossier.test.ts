@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { padTestimony, retroDossier, retroPad, type RetroDossierInput } from '../src/retro/dossier.js';
 import type { ScratchEntry } from '../src/types.js';
 
-/** A decision the harness carried out: the row the dossier is allowed to summarise away. */
 function routine(n: number): RetroDossierInput['decisions'][number] {
   return {
     rule: 'plan-part',
@@ -14,7 +13,6 @@ function routine(n: number): RetroDossierInput['decisions'][number] {
   } as RetroDossierInput['decisions'][number];
 }
 
-/** The empty run: nothing was planned, nothing was opened, nobody was asked. */
 function bare(): RetroDossierInput {
   return {
     issueNumber: 12,
@@ -163,7 +161,6 @@ test('an eventful run keeps every exception in full, and names the admission tha
   assert.match(text, /attempt cap/, 'a skipped decision is rendered as a row, never as a count');
   assert.match(text, /cooldown-escalate/, 'what became of the proposal is the retrospective’s subject');
   assert.match(text, /branch busy/);
-  // The routine tail rides along for context, and says how much of itself it dropped.
   assert.match(text, /part 39/, 'the end of the run is what a retrospective is usually about');
   assert.doesNotMatch(text, /part 0\b/, 'the earliest routine rows go first');
   assert.match(text, /30 of the 40 decisions that were carried out are not shown here/);
@@ -178,8 +175,6 @@ test('a sparse list survives alongside a saturated one, and every cap names its 
       (_, i) => ({ type: 'answer_question', status: 'answered', prompt: `q${i}`, response: null }) as never,
     ),
   });
-
-  // Three hundred decisions must not crowd out twenty escalations.
 
   assert.match(text, /280 of the 300 decisions that went another way are not shown here/);
   assert.match(text, /8 of the 20 escalations are not shown here/);

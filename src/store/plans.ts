@@ -19,11 +19,9 @@ import type {
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
+// → docs/spec/14-persistence.md
+
 export const PLAN_COLUMNS: ColumnMigrations = {
-  // `plans`/`plan_parts` were introduced as fresh `CREATE TABLE`s and needed no
-  // entry here. Columns added to them *now* do: `CREATE TABLE IF NOT EXISTS`
-  // never alters an existing table, so without these the fields are invisible
-  // on every database that predates them.
   plans: {
     diagnosis: 'TEXT',
     approach: 'TEXT',
@@ -43,36 +41,18 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     acceptance_met: 'TEXT',
     size: 'TEXT',
     expected_kind: 'TEXT',
-    /** The profile this part's work runs on — see {@link PlanPart.profile}. */
     profile: 'TEXT',
     outcome_kind: 'TEXT',
     outcome_ref: 'TEXT',
     outcome_summary: 'TEXT',
     blocked_reason: 'TEXT',
-    /**
-     * Which blocker — see {@link PlanPart.blockedBy}. Null on an older database's
-     * standing blocked row, and that is the safe reading: an unattributed block
-     * counts toward the wedge exactly as it did before this column existed.
-     */
     blocked_by: 'TEXT',
   },
-  // `plan_revisions` is a brand-new table, so `CREATE TABLE IF NOT EXISTS` is the
-  // whole migration and it needs no entry. That is true *once*: a column added to
-  // it later needs one here like any other.
 };
 
-/**
- * The `plans` and `plan_parts` tables: the multi-PR issue funnel. One module
- * because {@link PlanStore.rollUpPlanStatus} reads the parts and writes the plan.
- */
 export class PlanStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * Write (or refresh) an issue's plan, keyed by its `issue:<n>` origin. Upsert
-   * rather than insert: a replan amends the verdict in place, keeping the plan id
-   * its parts hang off. `createdAt` survives a refresh; `updatedAt` moves.
-   */
   upsertPlan(input: {
     originRef: string;
     title: string;
@@ -97,8 +77,6 @@ export class PlanStore {
       title: input.title,
       status: input.status,
       reason: input.reason ?? null,
-      // Preserved on absence for the same reason `statusCommentRef` is: a caller
-      // that writes a status without re-stating the narrative must not erase it.
       diagnosis: input.diagnosis ?? existing?.diagnosis ?? null,
       approach: input.approach ?? existing?.approach ?? null,
       risks: input.risks ?? existing?.risks ?? null,
@@ -106,14 +84,8 @@ export class PlanStore {
       alternatives: input.alternatives ?? existing?.alternatives ?? null,
       openQuestions: input.openQuestions ?? existing?.openQuestions ?? null,
       verification: input.verification ?? existing?.verification ?? null,
-      // Preserved on absence like the prose beside it, and on *absence* rather
-      // than on emptiness: a planner that cited nothing this time has not
-      // withdrawn what the last one cited, and `ingestPlanDocument` passes the
-      // list it actually parsed either way.
       evidence: input.evidence ?? existing?.evidence ?? [],
       document: input.document ?? existing?.document ?? null,
-      // Preserve a comment ref an earlier write established unless one is given —
-      // the plan's status comment is edited in place, so losing the id orphans it.
       statusCommentRef: input.statusCommentRef ?? existing?.statusCommentRef ?? null,
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
@@ -137,11 +109,6 @@ export class PlanStore {
     return plan;
   }
 
-  /**
-   * Record the plan a document carried, as its own revision. Append-only, numbered
-   * off what is already there rather than off the plan. Called from
-   * {@link ingestPlanDocument} alone, the one place a document becomes rows.
-   */
   recordPlanRevision(planId: string, input: { narrative: PlanNarrative; parts: PlanPartInput[] }): PlanRevision {
     const at = this.ctx.now();
     const row = this.ctx.db.prepare(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
@@ -162,8 +129,6 @@ export class PlanStore {
       )
       .run({
         ...revision,
-        // Vestigial: `NOT NULL` on every existing database and every plan is a
-        // `parts` plan now, so it is written and never read back.
         verdict: 'parts',
         narrative: JSON.stringify(revision.narrative),
         parts: JSON.stringify(revision.parts),
@@ -171,7 +136,6 @@ export class PlanStore {
     return revision;
   }
 
-  /** Every verdict submitted for a plan, oldest first. */
   listPlanRevisions(planId: string): PlanRevision[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
@@ -179,11 +143,6 @@ export class PlanStore {
     return rows.map(rowToRevision);
   }
 
-  /**
-   * Record a change somebody wants made to a plan that is already running. Pending,
-   * always: nothing here touches the plan — an accepted proposal applies it through
-   * the ordinary ingestion. → `src/plans/planAmendment.ts`
-   */
   recordPlanAmendment(input: {
     planId: string;
     originRef: string;
@@ -217,7 +176,6 @@ export class PlanStore {
     return row ? rowToAmendment(row) : null;
   }
 
-  /** Every amendment ever proposed for one plan, newest first. */
   listPlanAmendments(planId: string): PlanAmendment[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM plan_amendments WHERE plan_id=? ORDER BY created_at DESC`)
@@ -225,11 +183,6 @@ export class PlanStore {
     return rows.map(rowToAmendment);
   }
 
-  /**
-   * Every amendment still waiting on an answer, across every plan — what the rule
-   * that puts them to an operator reads. Oldest first: the one that has waited
-   * longest is asked about first.
-   */
   listPendingPlanAmendments(): PlanAmendment[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM plan_amendments WHERE status='pending' ORDER BY created_at ASC`)
@@ -237,11 +190,6 @@ export class PlanStore {
     return rows.map(rowToAmendment);
   }
 
-  /**
-   * Settle one amendment — compare-and-set against `pending`, so a verdict arriving
-   * after the amendment was superseded cannot apply a document nobody was shown.
-   * Null when it had already been settled.
-   */
   settlePlanAmendment(
     id: string,
     status: Exclude<PlanAmendmentStatus, 'pending'>,
@@ -261,11 +209,6 @@ export class PlanStore {
     return row ? rowToPlan(row) : null;
   }
 
-  /**
-   * The title of each of these plans, by id — the pets panel's label for a
-   * `plan` origin. A missing id is absent from the map, never an error.
-   * → `docs/spec/22-pets.md#the-sources`
-   */
   planLabels(ids: string[]): Map<string, string> {
     if (ids.length === 0) return new Map();
     const holes = ids.map(() => '?').join(',');
@@ -286,13 +229,6 @@ export class PlanStore {
     return rows.map(rowToPlan);
   }
 
-  /**
-   * Fold a plan's declared parts onto its rows, **merging on slug**: an existing
-   * part keeps its branch, PR, status and task (it may already be in flight) and
-   * only its declaration — seq/title/scope/dependsOn — is refreshed. Parts absent
-   * from the amended plan are left alone rather than deleted; retiring one is a
-   * status transition, not a disappearance.
-   */
   upsertPlanParts(planId: string, parts: PlanPartInput[]): PlanPart[] {
     const ts = this.ctx.now();
     const existing = new Map(this.listPlanParts(planId).map((p) => [p.slug, p]));
@@ -308,26 +244,17 @@ export class PlanStore {
         touches: input.touches,
         rationale: input.rationale,
         acceptance: input.acceptance,
-        // A reviewer's confirmations, not the declaration, so they survive an
-        // amendment; the text key withdraws one when the criterion changes.
         acceptanceMet: prev?.acceptanceMet ?? [],
         size: input.size,
         expectedKind: input.expectedKind,
         profile: input.profile,
-        // Progress, not declaration: an amendment re-declaring a part must not wipe
-        // an outcome it already reached.
         outcomeKind: prev?.outcomeKind ?? null,
         outcomeRef: prev?.outcomeRef ?? null,
         outcomeSummary: prev?.outcomeSummary ?? null,
         dependsOn: input.dependsOn,
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
-        // `retired` is a *declaration verdict* rather than progress, so re-declaring
-        // the slug lifts it — otherwise a replan, which must reuse slugs, merges onto
-        // retired rows and releases a plan with no live parts.
         status: prev?.status === 'retired' ? 'pending' : (prev?.status ?? 'pending'),
-        // Progress like the outcome columns, except across the un-retirement above,
-        // where the status it explains is gone.
         blockedReason: prev?.status === 'retired' ? null : (prev?.blockedReason ?? null),
         blockedBy: prev?.status === 'retired' ? null : (prev?.blockedBy ?? null),
         taskId: prev?.taskId ?? null,
@@ -337,10 +264,6 @@ export class PlanStore {
       return part;
     });
     const stmt = this.ctx.db.prepare(
-      // The outcome columns and `acceptance_met` are deliberately absent from DO
-      // UPDATE SET: they are progress, not declaration. `status` and `blocked_reason`
-      // *do* update, which is safe only because the computed row already carries
-      // `prev`'s values everywhere but the un-retirement above.
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
          acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
@@ -376,17 +299,11 @@ export class PlanStore {
     return rows.map(rowToPlanPart);
   }
 
-  /** Every part of every plan — what the dispatcher and the reconciler both walk. */
   listAllPlanParts(): PlanPart[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM plan_parts ORDER BY plan_id ASC, seq ASC`).all() as PlanPartRow[];
     return rows.map(rowToPlanPart);
   }
 
-  /**
-   * Move a part's *progress* — status, branch, PR, task — leaving its declaration to
-   * {@link upsertPlanParts}. The two halves have different authors. Returns null
-   * when the part is gone.
-   */
   updatePlanPart(
     id: string,
     patch: {
@@ -422,11 +339,6 @@ export class PlanStore {
     return next;
   }
 
-  /**
-   * Record which of a part's acceptance criteria a reviewer has confirmed. The whole
-   * set is written rather than one criterion toggled: a per-criterion toggle would
-   * have to agree with a text key it did not compute. Null when the part is gone.
-   */
   setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
@@ -437,12 +349,6 @@ export class PlanStore {
     return { ...rowToPlanPart(row), acceptanceMet: criteria, updatedAt };
   }
 
-  /**
-   * Override which model profile one part's work runs on. Null clears it, which is
-   * not the same as naming the goal's profile: a cleared part *inherits* and moves
-   * with a later re-pin. Deliberately not guarded on status — a dispatched part
-   * keeps the profile its task row stored, so this only prices a future dispatch.
-   */
   setPartProfile(id: string, profile: string | null): PlanPart | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
@@ -451,20 +357,10 @@ export class PlanStore {
     return { ...rowToPlanPart(row), profile, updatedAt };
   }
 
-  /**
-   * A part's agent actually spawned. Called from the executor *after* the spawn: a
-   * dispatch the cap/pause gate holds must leave the part `ready` for a later cycle.
-   */
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.updatePlanPart(id, { status: 'dispatched', taskId, branch });
   }
 
-  /**
-   * A part finished without a pull request. Its own method rather than an
-   * {@link updatePlanPart} patch because the guard *is* the point: the write is
-   * conditional on the part still being worked, so a second call changes nothing and
-   * a merged or retired part cannot be re-labelled.
-   */
   concludePlanPart(
     id: string,
     outcome: { kind: PartOutcomeKind; ref: string | null; summary: string },
@@ -480,13 +376,6 @@ export class PlanStore {
     return row ? rowToPlanPart(row) : null;
   }
 
-  /**
-   * A part a person owns finished, because the operator marked its human task done —
-   * `concluded` with `outcome_kind='human'`. Its own method because the guards are
-   * opposites: {@link PlanStore.concludePlanPart} insists on `dispatched`/`in_review`,
-   * while a human part is never dispatched and settles from `pending`, `ready` or
-   * `blocked`. Widening that guard would let an agent conclude an unstarted part.
-   */
   concludeHumanPart(id: string, summary: string): PlanPart | null {
     const result = this.ctx.db
       .prepare(
@@ -499,12 +388,6 @@ export class PlanStore {
     return row ? rowToPlanPart(row) : null;
   }
 
-  /**
-   * Move a plan to a new status, optionally rewriting the reason that goes with it.
-   * `reason` is **preserved on absence**, like every narrative field on a plan: a
-   * transition with no opinion about the planner's words must not clear them. The
-   * one caller that passes it is a shortfall's replan arm.
-   */
   setPlanStatus(id: string, status: PlanStatus, reason?: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     if (!row) return null;
@@ -516,7 +399,6 @@ export class PlanStore {
     return { ...rowToPlan(row), status, reason: next, updatedAt };
   }
 
-  /** Remember the provider comment id so the plan's status comment is edited, never re-posted. */
   setPlanStatusComment(id: string, ref: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     if (!row) return null;
@@ -525,12 +407,6 @@ export class PlanStore {
     return { ...rowToPlan(row), statusCommentRef: ref, updatedAt };
   }
 
-  /**
-   * Fold a plan's part statuses back onto the plan: every part settled => `complete`,
-   * anything outstanding => back to `active`. Returns the plan **only when the
-   * roll-up moved it**, so the return is the "just completed" edge. A partless plan
-   * is never touched, and a retired part is not outstanding work.
-   */
   rollUpPlanStatus(planId: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
     if (!row) return null;
@@ -538,42 +414,16 @@ export class PlanStore {
     if (plan.status !== 'active' && plan.status !== 'complete') return null;
     const parts = liveParts(this.listPlanParts(planId));
     if (parts.length === 0) return null;
-    // Every terminal, not just merges: counting only merges holds a whole
-    // decomposition open on the one part that found nothing to build.
     const next: PlanStatus = parts.every(partSettled) ? 'complete' : 'active';
     if (next === plan.status) return null;
     return this.setPlanStatus(planId, next);
   }
 }
 
-/**
- * Absorb the retired `single` plan status into `active`. `single` was a *shape*
- * wearing a lifecycle status, and consumers that switched on status silently
- * excluded those plans; the shape is now read off the live parts (`planShape`).
- *
- * A data migration rather than an `ensureColumns` entry — no column changes.
- * Unconditional and idempotent. → `docs/spec/14-persistence.md#migrations`
- */
 export function absorbSinglePlanStatus(db: Database.Database): void {
   db.prepare(`UPDATE plans SET status='active' WHERE status='single'`).run();
 }
 
-/**
- * Give every partless plan the one part it always was. A partless plan was the old
- * encoding of "single"; with every plan now scheduled through rule `plan-part`,
- * such a row would be scheduled by nothing and its goal would stop dead with no
- * error anywhere — which is why this is a migration and not a tidy-up.
- *
- * The backfilled part is ordinary but for its branch: the flat `issue/<n>` on a
- * plan already being delivered (so an open PR, a pushed commit and a running agent
- * carry onto it, and the ref-collision guard stays quiet), null before anything was
- * scheduled. `merged` on a `complete` plan so the roll-up still agrees, `ready`
- * otherwise. `abandoned` plans are skipped — nothing schedules them.
- *
- * A data migration rather than an `ensureColumns` entry, and idempotent: a plan with
- * any part row, retired ones included, is left alone.
- * → `docs/spec/14-persistence.md#migrations`
- */
 export function backfillWholePlanParts(db: Database.Database, now: string): void {
   const orphans = db
     .prepare(
@@ -592,8 +442,6 @@ export function backfillWholePlanParts(db: Database.Database, now: string): void
   );
   for (const plan of orphans) {
     const issueNumber = Number(/^issue:(\d+)$/.exec(plan.origin_ref)?.[1]);
-    // A plan whose origin is not an issue has no flat branch to inherit and no
-    // scheduler either; leaving it alone is the honest answer.
     if (!Number.isFinite(issueNumber)) continue;
     const started = plan.status === 'active' || plan.status === 'complete';
     insert.run({
@@ -609,7 +457,6 @@ export function backfillWholePlanParts(db: Database.Database, now: string): void
   }
 }
 
-/** The slug a backfilled part gets — fixed rather than derived, so a plan the migration touched is recognisable. */
 const WHOLE_PART_SLUG = 'whole';
 
 interface PlanRow {
@@ -618,7 +465,6 @@ interface PlanRow {
   title: string;
   status: string;
   reason: string | null;
-  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   diagnosis: string | null | undefined;
   approach: string | null | undefined;
   risks: string | null | undefined;
@@ -664,14 +510,12 @@ interface PlanPartRow {
   seq: number;
   title: string;
   scope: string;
-  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   touches: string | null | undefined;
   rationale: string | null | undefined;
   acceptance: string | null | undefined;
   acceptance_met: string | null | undefined;
   size: string | null | undefined;
   expected_kind: string | null | undefined;
-  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   profile: string | null | undefined;
   outcome_kind: string | null | undefined;
   outcome_ref: string | null | undefined;
@@ -727,7 +571,6 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     outcomeKind: partOutcomeKindOf(r.outcome_kind),
     outcomeRef: r.outcome_ref ?? null,
     outcomeSummary: r.outcome_summary ?? null,
-    // Written as JSON by upsertPlanParts; corrupt degrades to "no deps".
     dependsOn: parseDependsOn(r.depends_on),
     branch: r.branch,
     prNumber: r.pr_number,
@@ -740,28 +583,14 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
   };
 }
 
-/**
- * Narrowed rather than cast: absent on older databases and hand-editable, so an
- * unrecognised value degrades to "unstated".
- *
- * **A new {@link PartOutcomeKind} must be added here too.** The compiler does not
- * check this list against the union, so a missing kind is written, read back as
- * `null`, and silently reads as `code` everywhere downstream.
- */
 function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
   return raw === 'code' || raw === 'report' || raw === 'determination' || raw === 'human' ? raw : null;
 }
 
-/** Narrowed for {@link partOutcomeKindOf}'s reason — absent on older databases, and hand-editable. */
 function partSizeOf(raw: string | null | undefined): PartSize | null {
   return raw === 's' || raw === 'm' || raw === 'l' ? raw : null;
 }
 
-/**
- * Narrowed for {@link partOutcomeKindOf}'s reason; the null it degrades to reads as
- * *blocked, attribution unstated*, which {@link planIsWedged} still counts toward
- * the wedge — the direction that keeps a real collision escalating.
- */
 function partBlockerOf(raw: string | null | undefined): PlanPartBlocker | null {
   return raw === 'collision' || raw === 'declined' ? raw : null;
 }
@@ -770,10 +599,6 @@ function parseDependsOn(raw: string): string[] {
   return parseStringArray(raw);
 }
 
-/**
- * A JSON string array column, degrading to empty rather than throwing. Absent (an
- * older database) and corrupt reach the same answer deliberately.
- */
 function parseStringArray(raw: string | null | undefined): string[] {
   if (raw === null || raw === undefined) return [];
   try {
@@ -784,7 +609,6 @@ function parseStringArray(raw: string | null | undefined): string[] {
   }
 }
 
-/** The citation list, degrading per entry: one malformed row must not lose the rest. */
 function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
   if (raw === null || raw === undefined) return [];
   try {
@@ -807,11 +631,6 @@ function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
   }
 }
 
-/**
- * A stored amendment. `author` and `status` are narrowed rather than trusted: these
- * rows outlive the build that wrote them, and an unknown value reads as the safest
- * of each — somebody else's proposal, still waiting.
- */
 function rowToAmendment(r: PlanAmendmentRow): PlanAmendment {
   return {
     id: r.id,
@@ -843,10 +662,6 @@ function rowToRevision(r: PlanRevisionRow): PlanRevision {
   };
 }
 
-/**
- * A revision's stored prose. Every field degrades independently, so a surprising
- * shape costs that field rather than the history.
- */
 function parseNarrative(raw: string): PlanNarrative {
   const empty: PlanNarrative = {
     reason: null,
@@ -882,7 +697,6 @@ function parseNarrative(raw: string): PlanNarrative {
   }
 }
 
-/** A revision's declared parts, per entry, for {@link parseEvidence}'s reason. */
 function parseRevisionParts(raw: string): PlanPartInput[] {
   try {
     const parsed: unknown = JSON.parse(raw);

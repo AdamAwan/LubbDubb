@@ -1,20 +1,8 @@
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The author's one write: the review pack for the pull request it was dispatched
- * to restate. → `docs/spec/31-review-packs.md#when-a-pack-is-made`
- *
- * **The call is the pack.** The store's row is what the read route ships and
- * what the checker is later handed; an author that writes a file, or prose, has
- * written nothing the harness can see. The tool refuses by field name and the
- * agent fixes and calls again in the same turn — a coverage gap in particular
- * names the hunks, because the author has to find them.
- *
- * The pull request, the head, the hunks and the log are all the desk's: this
- * tool takes ideas, claims and ranges and nothing that would let the author
- * choose what it is checked against.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Submit the review pack for the PULL REQUEST you were dispatched to restate. This is the pack — the harness ' +

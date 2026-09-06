@@ -15,6 +15,8 @@ import { parseDiffHunks, type DiffHunk } from './hunks.js';
 import { checkOrigin, packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from './origins.js';
 import { assemblePack, type Commission } from './submission.js';
 
+// → docs/spec/31-review-packs.md
+
 interface AuthorDeps {
   store: Store;
   agents: Pick<AgentManager, 'spawn'>;
@@ -22,53 +24,20 @@ interface AuthorDeps {
   git: GitObserver;
   prompts: PromptTemplates;
   defaultBranch: string;
-  /** Live pause flag, read by reference: a paused fleet starts no agent, this one included. */
   runtime: Pick<RuntimeControl, 'paused'>;
-  /**
-   * Refresh the remote-tracking refs before the head is asked about. Wired only
-   * for the real observer, the plan reconciler's rule: the observer is fetch-free
-   * by design, and the head a person just clicked on was reported by the
-   * provider, which the clone may not have heard about yet.
-   */
   fetch?: () => Promise<void>;
   errors: ErrorRecorder;
 }
 
 interface AuthorEvents {
-  /** A pack landed — the moment a reviewer who asked for one stops waiting. */
   written: [{ record: ReviewPackRecord }];
 }
 
-/** What asking for a pack answers, before anything has been composed. */
 type PackRequestOutcome =
   | { ok: true; prNumber: number; headSha: string; originRef: string }
   | { ok: false; status: 404 | 409; error: string };
 
-/**
- * The author desk: the way a reviewer asks for a pack, and the way the author
- * agent hands one back. → `docs/spec/31-review-packs.md#when-a-pack-is-made`
- *
- * **Outside the dispatcher on purpose.** A pack is made because a person asked,
- * at the moment they asked, and never because a rule found a pull request without
- * one; putting it in the pipeline would make it a dispatch input, which
- * [31](../../docs/spec/31-review-packs.md#what-it-is-not) forbids. So the spawn is
- * this desk's, and what it keeps from the executor is the two things that must
- * not be arranged twice: the worktree comes through `Worktrees.ensureReadOnly`
- * under a lease like every other agent's, and the process is reaped through
- * `AgentManager.kill` → `session.kill()` like every other agent's. Nothing here
- * is counted against the cap — the cost [31](../../docs/spec/31-review-packs.md#cost)
- * accepts — but the pause flag is honoured: a paused fleet is one the operator
- * asked not to start agents.
- *
- * **Asking is synchronous; writing is not.** `request` decides at once whether a
- * pack can be asked for and returns; the checkout, the diff and the spawn follow
- * on their own, and the pack arrives when the agent submits it. A second ask
- * while one is being written is refused rather than queued: the reader is the
- * party who can tell when a new pack is worth two agent runs, and the answer to
- * "is it done yet" is the read route.
- */
 export class ReviewPackAuthor extends EventEmitter {
-  /** Pull requests whose author is being composed — the window before the task row exists. */
   private readonly composing = new Set<number>();
   private readonly inflight = new Set<Promise<void>>();
 
@@ -84,11 +53,6 @@ export class ReviewPackAuthor extends EventEmitter {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
 
-  /**
-   * Ask for a pack. Refuses, in the order a reader would blame them: no such open
-   * pull request; a provider that reports no head; an author already on it; a
-   * paused fleet. Anything else is accepted and the composition begins.
-   */
   request(prNumber: number): PackRequestOutcome {
     const pr = this.openPr(prNumber);
     if (!pr) return { ok: false, status: 404, error: `no open pull request #${prNumber}` };
@@ -103,8 +67,6 @@ export class ReviewPackAuthor extends EventEmitter {
     if (this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(originRef)) {
       return { ok: false, status: 409, error: `a pack for #${prNumber} is already being written` };
     }
-    // The checker follows the author onto the same document; a second author
-    // under it would replace the ideas its verdicts are keyed to.
     if (this.deps.store.findActiveTaskByOrigin(checkOrigin(prNumber))) {
       return { ok: false, status: 409, error: `the pack for #${prNumber} is being checked` };
     }
@@ -120,26 +82,14 @@ export class ReviewPackAuthor extends EventEmitter {
     return { ok: true, prNumber, headSha: pr.headSha, originRef };
   }
 
-  /** Settles once every accepted request has spawned its author or failed to. For tests. */
   async whenIdle(): Promise<void> {
     while (this.inflight.size > 0) await Promise.allSettled([...this.inflight]);
   }
 
-  /**
-   * Whether an author is on the pull request right now — what the read route says
-   * beside "no pack yet", so a reader can tell "not asked for" from "on its way".
-   */
   writing(prNumber: number): boolean {
     return this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(packOrigin(prNumber)) !== null;
   }
 
-  /**
-   * The author's submission, from the tool. The commission is re-derived from the
-   * task row — the pull request from its origin, the head from its lease key, the
-   * hunks from the same diff the prompt listed — so nothing the tool checks
-   * against lives only in this process's memory; a restart mid-run resumes the
-   * agent and its submit still lands.
-   */
   async submit(
     agent: Agent,
     task: Task,
@@ -164,14 +114,6 @@ export class ReviewPackAuthor extends EventEmitter {
     return { ok: true, record };
   }
 
-  /**
-   * Whether a pack written against `packHead` is behind the pull request's head
-   * as the harness last saw it, and by how much. `head` is null for a pull
-   * request no longer in the world — open or recently closed — where staleness
-   * cannot be decided and `stale` is null too. The count is the clone's answer,
-   * null where it cannot say: a head the clone has not fetched leaves the pack
-   * stale by sha alone, never "zero behind".
-   */
   async staleness(
     prNumber: number,
     packHead: string,
@@ -190,18 +132,10 @@ export class ReviewPackAuthor extends EventEmitter {
     return this.deps.store.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber) ?? null;
   }
 
-  /** The base the diff is taken against: the pull request's, else the configured integration branch. */
   private baseOf(prNumber: number): string {
     return this.openPr(prNumber)?.baseBranch ?? this.deps.defaultBranch;
   }
 
-  /**
-   * Both pads the author is handed: the linked goal's, by the pull request's
-   * issue, and the pull request's own. The goal is found the way every other
-   * desk finds it (`issueForPr`), and its pad the way every write reaches one
-   * (`goalOriginFor`), so the author reads exactly what the working agents wrote
-   * and not a pad reached through a join.
-   */
   private pads(pr: PullRequest): { goal: string | null; own: string; entries: ScratchEntry[] } {
     const { store } = this.deps;
     const world = store.getWorldBaseline();
@@ -240,12 +174,6 @@ export class ReviewPackAuthor extends EventEmitter {
     };
   }
 
-  /**
-   * The async half of a request: refresh, diff, compose, lease, spawn. A failure
-   * anywhere is recorded and settles whatever row it left, `abandonUnstarted`'s
-   * discipline — a task stuck `queued` for a directory that was never leased is a
-   * lease the reaper never releases.
-   */
   private async compose(pr: PullRequest, headSha: string): Promise<void> {
     const { store, errors } = this.deps;
     const originRef = packOrigin(pr.number);
@@ -283,13 +211,6 @@ export class ReviewPackAuthor extends EventEmitter {
     }
   }
 
-  /**
-   * The rendered template, then everything the author has to read **appended**
-   * — the hunks by id, both pads verbatim, and the submission note — never
-   * interpolated: an operator's override never learned these tokens, and
-   * interpolation would drop them on exactly the deployments that customised.
-   * → `docs/spec/05-dispatcher.md#prompt-templates`
-   */
   private prompt(
     pr: PullRequest,
     headSha: string,
@@ -308,13 +229,6 @@ export class ReviewPackAuthor extends EventEmitter {
   }
 }
 
-/**
- * Lines `start..end` of `path` in the checkout, plain, or null where the range
- * names nothing there. Confined to the checkout: a region anchor is a place in
- * the tree at the head, so a path that leaves it — absolute, or through `..` —
- * is not a region, whatever it reads. The checker's counter-evidence is read
- * through the same door, for the same reason.
- */
 export function readRegion(cwd: string, range: ReviewRange): string[] | null {
   if (isAbsolute(range.path) || range.path.split(/[\\/]/).includes('..')) return null;
   const root = resolve(cwd);
@@ -390,11 +304,6 @@ function entryBlock(e: ScratchEntry): string {
   return lines.join('\n');
 }
 
-/**
- * How the pack is handed back. Named here, at the point of use, rather than in
- * the protocol addendum: only this agent can cast it. Said a second time because
- * the template says it once and an override may not.
- */
 const SUBMISSION_NOTE = [
   '## Handing the pack back',
   '',

@@ -35,22 +35,8 @@ import { localValidationReport } from './tools/localValidationReport.js';
 import { watchDeclare } from './tools/watchDeclare.js';
 import { worldRead } from './tools/worldRead.js';
 
-/**
- * The tool set, as a registry keyed on the names `names.ts` declares.
- *
- * Each entry is a module under `tools/` — one tool's description, schema and
- * handler in a file you can read end to end — and this is the whole of the
- * assembly, the way `DISPATCH_PIPELINE` + `STAGES` is for the dispatch rules and
- * for the same stated reason. The growth axis for "add a tool" used to be one
- * 844-line function whose scope every tool shared.
- *
- * **Keying on the name rather than listing factories is what keeps `names.ts`
- * honest.** `Record<McpToolName, …>` makes a name with no module a compile error
- * and a module under a name that is not granted impossible to reach, so the
- * "connected server whose every call is refused" trap — a name in `buildTools`
- * that `--allowedTools` never granted — cannot be reintroduced by a module
- * naming itself. A tool module therefore does not carry its own name at all.
- */
+// → docs/spec/11-mcp-tools.md
+
 const TOOLS: Record<McpToolName, ToolFactory> = {
   plan_submit: planSubmit,
   plan_correct: planCorrect,
@@ -86,21 +72,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   review_pack_check: reviewPackCheck,
 };
 
-/**
- * Build the tool set for one resolved caller.
- *
- * **Identity is structural, not argued.** No tool takes an agent, task, or issue
- * argument — every one of them is derived from the credential the call arrived
- * on. An agent working origin A therefore cannot address origin B by asking
- * nicely, which is the property the `plan.json` side channel had to approximate
- * with `planOriginIssue` fencing over a transport that carried no identity at all.
- * The caller reaches a tool body on its context, never in `args`.
- *
- * The order is `MCP_TOOL_NAMES`', which is the order `tools/list` advertises.
- */
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {
   const ctx = buildToolContext(deps, identity);
-  // The retired names ride along: hidden from `tools/list`, still answered. See
-  // `retiredTools.ts` for why a withdrawn name has to stay dispatchable.
   return [...MCP_TOOL_NAMES.map((name) => ({ name, ...TOOLS[name](ctx) })), ...retiredTools()];
 }

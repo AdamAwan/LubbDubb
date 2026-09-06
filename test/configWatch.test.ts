@@ -11,13 +11,6 @@ import type { CiPolicy } from '../src/ci/ciPolicy.js';
 import type { ErrorRecorder } from '../src/errorLog.js';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 
-/**
- * The file, watched — the half of #401 that keeps `lubbdubb.config.json`
- * first-class. What is asserted is that a hand edit produces the *same* outcome a
- * cockpit save does, because both go through one apply path, and that a
- * half-typed file never reaches the running harness.
- */
-
 function recorder(): ErrorRecorder & { entries: ErrorLogInput[] } {
   const entries: ErrorLogInput[] = [];
   return {

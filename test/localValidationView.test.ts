@@ -17,15 +17,6 @@ import type {
   LocalValidationView,
 } from '../src/wire.js';
 
-/**
- * The cockpit's pure half: what a local validation is called, which question
- * pressing the button raises, and when the control is drawn at all.
- *
- * Its own file because none of it renders — these are the decisions the goal page
- * and the local-run panel both take, and a copy in either would be two vocabularies
- * for one row.
- */
-
 const NOW = '2025-01-01T00:00:00.000Z';
 const STATUSES: LocalValidationStatus[] = ['pending', 'dispatched', 'passed', 'failed', 'blocked', 'abandoned'];
 
@@ -98,8 +89,6 @@ test('every status has a word and a tone — a row cannot be drawn as nothing', 
     assert.ok(STATUS_WORD[status].length > 0, `${status} has a word`);
     assert.ok(localValidationTone(status).length > 0, `${status} has a tone`);
   }
-  // `blocked` is muted rather than red: nothing was found out about the goal, which
-  // is not the same news as the goal being wrong.
   assert.equal(localValidationTone('blocked'), 'off');
   assert.equal(localValidationTone('failed'), 'bad');
 });
@@ -109,8 +98,6 @@ test('a run in flight says which minute of it we are in, and a settled one says 
   assert.equal(localValidationSaid(validation({ phase: 'planning' })), 'writing the test plan');
   assert.equal(localValidationSaid(validation({ phase: 'environment' })), 'waiting for the environment');
   assert.equal(localValidationSaid(validation({ phase: 'driving' })), 'running the plan');
-  // Settled: the phase is null and the status is the reading, which is one answer
-  // to one question rather than two drawn beside each other.
   assert.equal(localValidationSaid(validation({ status: 'failed', phase: null })), 'failed');
 
   assert.equal(inFlight(validation({ status: 'pending' })), true);
@@ -124,8 +111,6 @@ test('the control is offered only when there is something to press, and says why
 
   const unconfigured = localValidationOffer(goal(null), target(true), false);
   assert.equal(unconfigured.offered, false);
-  // Each arm names the thing that would fix it: a control that is simply absent
-  // teaches an operator the feature does not work here.
   assert.match(unconfigured.offered ? '' : unconfigured.why, /localRun\.instruction/);
 
   const noBranch = localValidationOffer(goal(null), target(false), true);
@@ -134,30 +119,20 @@ test('the control is offered only when there is something to press, and says why
   const busy = localValidationOffer(goal(validation()), target(true), true);
   assert.match(busy.offered ? '' : busy.why, /validating it now/);
 
-  // A goal with a *settled* row is offered again — one press is one run, and the
-  // whole point of the button is pressing it after a fix.
   assert.deepEqual(localValidationOffer(goal(validation({ status: 'failed' })), target(true), true), { offered: true });
 });
 
 test('the two questions are raised exactly when they cannot be answered afterwards', () => {
-  // Nothing running: the press starts an environment, and there is nothing to ask.
   assert.equal(validateLocallyQuestion(12, null), null);
   assert.equal(validateLocallyQuestion(12, run({ live: false })), null);
-  // This goal, current: nothing to ask either.
   assert.equal(validateLocallyQuestion(12, run()), null);
 
-  // Somebody else's environment — the answer cannot be given after `start` is
-  // called, because by then it is already coming down.
   assert.equal(validateLocallyQuestion(12, run({ originRef: 'issue:99' })), 'swap');
 
-  // This goal, behind its own branch: a refresh is a hard reset under a running
-  // server, so it is asked rather than assumed.
   assert.equal(
     validateLocallyQuestion(12, run({ freshness: { checkedAt: NOW, behindTip: 2, base: null } })),
     'refresh',
   );
-  // Not asked while the session is busy: the runner refuses a refresh then, so it
-  // would be a question whose answer changes nothing.
   assert.equal(
     validateLocallyQuestion(12, run({ turn: 'message', freshness: { checkedAt: NOW, behindTip: 2, base: null } })),
     null,
@@ -165,7 +140,5 @@ test('the two questions are raised exactly when they cannot be answered afterwar
 });
 
 test('the card is a foldable section, so the address bar can reach it', () => {
-  // Without this it is a card `?open=` accepts the name of and nothing honours —
-  // and `test/cockpitPlace.test.ts` walks this list, so the codec comes free.
   assert.ok(GOAL_SECTIONS.includes('localValidation'));
 });

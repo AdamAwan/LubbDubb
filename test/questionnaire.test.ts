@@ -20,8 +20,6 @@ test('formatAnswers marks a blank answer as unanswered rather than dropping the 
   const out = formatAnswers(QUESTIONS, ['Keep two', null, '   ']);
   const unanswered = out.match(/no answer/g) ?? [];
   assert.equal(unanswered.length, 2, out);
-  // The question itself must still be there — the agent has to know what it is
-  // being told nothing about.
   assert.match(out, /2\. Keep the operator-parks-a-note path\?/);
 });
 

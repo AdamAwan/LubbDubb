@@ -38,8 +38,6 @@ test('explicit overrides win over defaults', () => {
 });
 
 test('one userId answers ownership, assignment and PR authorship together', () => {
-  // The six keys this replaced were one fact spelled per provider and per use, and
-  // could disagree with each other. Now there is one string and nothing to skew.
   const cfg = loadConfig({
     userId: 'adam',
     github: { owner: 'acme', repo: 'app' },
@@ -64,8 +62,6 @@ test('the planning funnel is deep-merged when overridden', () => {
   });
   const cfg = loadConfig({ planning: { maxConcurrentPartsPerIssue: 4 } as never });
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4);
-  // Setting one field must not blank the others: this default is carried over
-  // unmerged, which is the whole of what deep-merging the key buys.
   assert.equal(cfg.planning.gitFetchIntervalMs, 60_000);
 });
 
@@ -165,14 +161,6 @@ test('a relative claudeArg that points at a real file is resolved to an absolute
   assert.equal(cfg.claudeArgs[1], '--flag', 'a non-file arg is left untouched');
 });
 
-/**
- * A removed key merges into nothing and takes the default, so the harness would
- * do the opposite of what the file says while the file went on saying it — the
- * silent-ignore failure `validatePolicyCheckModes` exists to prevent, one level
- * up. Driven through a real file in a temp cwd because the removed-key check
- * reads the *file's own* JSON: the keys are gone from `Config`, so an override
- * object cannot carry one.
- */
 test('a config file naming a removed key is refused, with the key named', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -185,10 +173,6 @@ test('a config file naming a removed key is refused, with the key named', async 
   for (const [key, value] of [
     ['dispatcher', 'claude'],
     ['steeringPriorities', ['ship the release']],
-    // A file asking the harness to act on a pull request without being asked is
-    // asking for the one thing it will now never do, so this is a refusal rather
-    // than a drop: honouring it is impossible and ignoring it would have the
-    // harness do the opposite of what the file goes on saying.
     ['autoSend', { enabled: true, allowedActions: ['merge_pr'] }],
   ] as const) {
     writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ [key]: value }), 'utf8');
@@ -199,17 +183,10 @@ test('a config file naming a removed key is refused, with the key named', async 
     );
   }
 
-  // The check is per key, not a blanket refusal of an unfamiliar file.
   writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ maxConcurrentAgents: 9 }), 'utf8');
   assert.equal(loadDeploymentConfig().maxConcurrentAgents, 9);
 });
 
-/**
- * Somebody has a file with `"planning": {"enabled": false}` in it. That key named
- * a switch that no longer exists, so it can neither be honoured nor refused: the
- * behaviour it asked for is gone, and refusing would take their harness down at
- * boot over one stale line. It warns, drops the key, and boots.
- */
 test('a config file setting a retired switch warns and boots rather than refusing', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -235,8 +212,6 @@ test('a config file setting a retired switch warns and boots rather than refusin
   const cfg = loadDeploymentConfig();
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4, 'the rest of the block is still honoured');
   assert.equal(cfg.validation.desktopClaimMinutes, 30);
-  // Dropped rather than merged into nothing: a value left on the policy object
-  // is one something later can read.
   assert.ok(!Object.hasOwn(cfg.planning, 'enabled'));
   assert.ok(!Object.hasOwn(cfg.validation, 'enabled'));
   assert.equal(warnings.length, 2, 'and the operator hears about both, by name');
@@ -244,15 +219,6 @@ test('a config file setting a retired switch warns and boots rather than refusin
   assert.ok(warnings.some((w) => w.includes('validation.enabled')));
 });
 
-/**
- * The two switches this cleanup retired, together because they fail the same way
- * and in opposite directions. A file turning plan approval off is getting the gate
- * back — N branches and N agents now wait for a click that deployment was not
- * expecting to have to give. A file pinning the worktree pool below its cap is
- * getting a *bigger* pool: more checkouts on a disk somebody sized deliberately.
- * Neither is visible from the fleet's behaviour in time to be understood, so both
- * are named on the boot log.
- */
 test('the retired approval gate and pool bound are dropped by name, and the harness boots', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -279,21 +245,12 @@ test('the retired approval gate and pool bound are dropped by name, and the harn
   const cfg = loadDeploymentConfig();
   assert.equal(cfg.maxConcurrentAgents, 9, 'the rest of the file is still honoured');
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4, 'and the rest of the block');
-  // Dropped rather than merged into nothing: a value left on the policy object is
-  // one something later can read, and both of these read as a decision.
   assert.ok(!Object.hasOwn(cfg.planning, 'requireApproval'));
   assert.ok(!Object.hasOwn(cfg, 'worktreePoolSize'));
   assert.ok(warnings.some((w) => w.includes('planning.requireApproval')));
   assert.ok(warnings.some((w) => w.includes('worktreePoolSize')));
 });
 
-/**
- * The desktop channel's own retirement, kept separate because its shape is the
- * one the list is for: the deployment on the other end of this warning switched
- * the channel *off*, and is getting it back — a socket bound, a credential and a
- * skill written into a home directory that never asked for either. That has to
- * come from the boot log rather than from finding the files.
- */
 test('a config file switching the desktop channel off loads, drops the key and says so', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -320,13 +277,6 @@ test('a config file switching the desktop channel off loads, drops the key and s
   assert.ok(warnings[0]?.includes('validation.desktop'));
 });
 
-/**
- * The same mechanism over a **top-level** key and a whole block. Both forms are in
- * the list because a block whose every field went unconditional is removed whole,
- * while an operator's file names the block rather than the field inside it — so
- * dropping only `mcp.enabled` would leave `mcp: {}` merging into a config that no
- * longer has the key.
- */
 test('a retired top-level key and a retired whole block are both dropped, not merged into nothing', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -363,19 +313,9 @@ test('a retired top-level key and a retired whole block are both dropped, not me
       `${key} must be named on the boot log`,
     );
   }
-  // The deployment that switched these off is getting them back, and has to hear
-  // it from the harness rather than from the fleet's behaviour.
   assert.ok(warnings.every((w) => w.includes('no longer exists')));
 });
 
-/**
- * The two keys the removed `pty` runtime alone read. They are the second kind of
- * retired entry — neither named a switch that went unconditional, so the harness
- * is not "already doing it"; the thing they configured is simply gone. Both were
- * in the shipped example config for as long as the runtime was, which is why they
- * warn and boot rather than refusing: the file an operator was told to copy is the
- * file most likely to still carry them.
- */
 test("the removed pty runtime's two keys warn, are dropped, and name what replaced them", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -408,21 +348,12 @@ test("the removed pty runtime's two keys warn, are dropped, and name what replac
       `${key} must be named on the boot log`,
     );
   }
-  // The one that had a figure worth tuning says where to put it now; the other has
-  // nothing to name, because the stream transport keeps no transcript file.
   assert.ok(
     warnings.some((w) => w.includes('agentIdleWaitMs') && w.includes('agentSilenceParkMs')),
     'the replacement is named, or a tuned deployment silently boots on a default',
   );
 });
 
-/**
- * The example config documented `agentMode: "pty"` for as long as the runtime
- * existed, so it is the stale *value* most likely to still be in a file. It was
- * already fatal — `src/system.ts` indexes a two-key table by the string — so what
- * is asserted here is that the failure names the key and the two modes that are
- * left, rather than dying on a property of `undefined`.
- */
 test('agentMode "pty" is refused by name, and the two modes that are left still load', () => {
   assert.throws(
     () => loadConfig({ agentMode: 'pty' as never }),
@@ -433,12 +364,6 @@ test('agentMode "pty" is refused by name, and the two modes that are left still 
   assert.equal(loadConfig({ agentMode: 'raw' }).agentMode, 'raw');
 });
 
-/**
- * The isolation the split exists for. The suite runs in a working copy of this
- * repo, so an operator's own `lubbdubb.config.json` sitting beside it would
- * otherwise merge into every test that builds a config — silently, and
- * differently on each machine.
- */
 test('loadConfig ignores a config file in the launch directory; loadDeploymentConfig reads it', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -464,11 +389,6 @@ test('loadConfig ignores a config file in the launch directory; loadDeploymentCo
   assert.equal(deployed.planning.gitFetchIntervalMs, 60_000, 'a nested block from the file still deep-merges');
 });
 
-/**
- * Three layers fold into the one argument `loadConfig` takes, so the fold has to
- * preserve the deep merge: an explicit `{planning: {…}}` must not drop the
- * `planning` fields the operator's file set.
- */
 test('an explicit nested override deep-merges over the config file, not replacing it', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const cwd = process.cwd();
@@ -489,13 +409,6 @@ test('an explicit nested override deep-merges over the config file, not replacin
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 7, "the file's other fields survive");
 });
 
-/**
- * The layer a *team* shares: one file, committed in the repository the harness
- * works on, that every member's harness reads and any of them can override
- * locally. Driven through a real temp cwd and a real temp repo for the
- * removed-key test's reason — the layering is about two files on disk, and an
- * override object cannot stand in for either of them.
- */
 test('a project config in repoRoot sits under the operator’s own file', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -507,8 +420,6 @@ test('a project config in repoRoot sits under the operator’s own file', async 
     rmSync(repo, { recursive: true, force: true });
   });
 
-  // What a team commits: the branch they integrate on, the CI routing, and the
-  // environments their work travels through.
   writeFileSync(
     join(repo, 'lubbdubb.project.json'),
     JSON.stringify({
@@ -520,7 +431,6 @@ test('a project config in repoRoot sits under the operator’s own file', async 
     }),
     'utf8',
   );
-  // What one member keeps to themselves.
   writeFileSync(
     join(dir, 'lubbdubb.config.json'),
     JSON.stringify({ repoRoot: repo, userId: 'adam', planning: { gitFetchIntervalMs: 0 } }),
@@ -535,13 +445,9 @@ test('a project config in repoRoot sits under the operator’s own file', async 
     ['staging'],
   );
   assert.equal(cfg.userId, 'adam', 'and beaten where they do');
-  // The deep-merged blocks merge *between* the two files, which is the whole
-  // point of sharing one: a team's planning policy and a member's are one block,
-  // not whichever file was read last.
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 5);
   assert.equal(cfg.planning.gitFetchIntervalMs, 0);
 
-  // An explicit override still has the last word over both.
   assert.equal(loadDeploymentConfig({ defaultBranch: 'release' }).defaultBranch, 'release');
 });
 
@@ -567,13 +473,6 @@ test('an env override beats the project config, as it beats the operator’s own
   assert.equal(loadDeploymentConfig().port, 9999);
 });
 
-/**
- * The one key a project config cannot set. The file was found *because*
- * `repoRoot` resolved, so a value in it could only describe the search that found
- * it — honouring it would mean reading the file from somewhere else, and dropping
- * it would leave the fleet pointed at a repository the file in front of the
- * operator disagrees with. Refused by name, like a removed key.
- */
 test('a project config setting repoRoot is refused by name', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -594,7 +493,6 @@ test('a project config setting repoRoot is refused by name', async (t) => {
   );
 });
 
-/** A project config is held to the same standard as an operator's own file. */
 test('a project config naming a removed key is refused, and a retired one warns', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -631,10 +529,6 @@ test('a project config naming a removed key is refused, and a retired one warns'
   );
 });
 
-/**
- * `repoRoot` is settled from the operator's layers alone and *before* the project
- * file is looked for — a layer cannot be consulted about where to find itself.
- */
 test('the project config is read from the repoRoot the operator’s layers resolve to', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
   const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -660,10 +554,6 @@ test('the project config is read from the repoRoot the operator’s layers resol
 });
 
 test('loadConfig refuses a localRunRoot that overlaps the worktree pool', () => {
-  // The invariant lived only in prose — two specs, CLAUDE.md and a `why` string —
-  // held up by nothing but the shipped defaults being siblings. An operator who
-  // moves the local run "next to the worktrees" gets a config the loader accepts
-  // and the pool then leases, wipes and switches onto an agent's branch.
   const repoRoot = resolve('/tmp/ld-overlap');
   const under = () =>
     loadConfig({ repoRoot, worktreeRoot: '.lubbdubb/worktrees', localRunRoot: '.lubbdubb/worktrees/local-run' });
@@ -689,11 +579,6 @@ test('loadConfig refuses a localRunRoot that overlaps the worktree pool', () => 
 });
 
 test('every block the config form edits per leaf is deep-merged', () => {
-  // The structural half of the same defect, and the durable one: three blocks
-  // (`ci`, `github`, `azureDevOps`) offered per-leaf edits while replacing
-  // wholesale, so one saved leaf dropped everything the project layer set under
-  // the same key. Hand-picking the three would leave the next block added free to
-  // re-open it, so the rule is asserted over the whole field list instead.
   const deep = new Set<string>(DEEP_MERGED_BLOCKS);
   const perLeaf = new Set(
     CONFIG_FIELDS.map((field) => field.path)

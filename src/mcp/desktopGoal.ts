@@ -7,45 +7,8 @@ import { desktopIssueRef } from '../validation/desktop.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
-/**
- * The operator's own answers on one goal, on the channel that can already read it.
- *
- * ## The gap this closes
- *
- * Every tool this channel had could *watch* the fleet work a goal and none could
- * answer a question it was stopped on. The cockpit's goal page has eight controls
- * and the harness holds work on four of them — an appraisal that came back
- * `unclear`, a model profile the appraiser proposed and nobody confirmed, a
- * shortfall standing against a goal that is actually finished, an environment gate
- * on a goal that is never going to deploy — and each of them is a click a browser
- * tab on one machine is the only way to make. An operator away from that machine
- * had a session that could see the hold, name it, and do nothing about it. That is
- * the report this arrived as: a session told to answer a profile question reached
- * for `human_task_settle`, cleared the wrapper task, reported the gate settled, and
- * the gate was still there.
- *
- * ## Why three names and not one
- *
- * `validation_report` living on both channels is the trap this repo has already
- * been caught by, and the answer to it is a name per object rather than a name
- * over several. So the goal's decisions divide by *what they are*, and each tool's
- * arms are arms because they are one row an operator reads in one place:
- *
- * - {@link goalGate} — the three escape hatches. Each of these routes says of
- *   itself that it is "the escape hatch a blocking gate has to have": an appraisal
- *   verdict, a shortfall the assessor got wrong, and a goal waiting on a
- *   deployment that will never come. Nothing runs on the goal until one of them is
- *   answered, which is what makes them one tool.
- * - {@link goalPlacement} — the two placement questions. Where the item hangs and
- *   which node it sits on: one tracker write each, one settlement each, and no
- *   effect on dispatch at all.
- * - {@link goalInstruct} — words in front of the next agent, which is input rather
- *   than a verdict and the one thing here that *restarts* work.
- *
- * What none of them is, is the fleet's surface: nothing here concludes a goal,
- * writes a plan or reports a reading on work the session did itself.
- * → `docs/spec/11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have`
- */
+// → docs/spec/11-mcp-tools.md
+
 export const goalGate: DesktopToolFactory = (deps) => ({
   description:
     'Release a goal the harness is holding, or put the hold back. Three holds, one arm each: `appraisal` ' +
@@ -112,10 +75,6 @@ export const goalGate: DesktopToolFactory = (deps) => ({
         deps.store.clearAppraisal(originRef);
         out.appraisal = null;
       } else {
-        // The text the verdict is about, from the world the last pulse read.
-        // Absent is refused rather than guessed: a verdict fingerprinted against
-        // an empty goal expires the instant the issue is next fetched, which is a
-        // silent no-op dressed as an override.
         const issue = deps.store.getWorldBaseline()?.issues.find((i) => i.number === ref.issue);
         if (!issue)
           return toolError(
@@ -152,8 +111,6 @@ export const goalGate: DesktopToolFactory = (deps) => ({
       if (typeof args.environmentGate !== 'boolean') return toolError('environmentGate must be true or false.');
       if (args.environmentGate) {
         const note = typeof args.note === 'string' ? args.note.trim() : '';
-        // The route's own refusal, by the same rule: a release with no account of
-        // itself is a goal that stopped waiting and nobody can say why.
         if (!note)
           return toolError('A release needs a `note` — it is the only account of why this goal stopped waiting.');
         deps.store.releaseEnvironmentGate(originRef, note);
@@ -164,9 +121,6 @@ export const goalGate: DesktopToolFactory = (deps) => ({
       }
     }
 
-    // Every arm here releases something the harness was holding, and the desks
-    // that act on it run on the pulse — so run one rather than leaving the
-    // operator's answer to the next heartbeat, exactly as the routes do.
     await deps.runCycle();
     return toolJson({
       ...out,
@@ -178,22 +132,6 @@ export const goalGate: DesktopToolFactory = (deps) => ({
   },
 });
 
-/**
- * Where the goal hangs, and which node it sits on.
- *
- * Its own name rather than an arm on {@link goalGate} because it is a different
- * kind of act: these two are the only decisions on this channel that **write to
- * the tracker** — a container relation and a classification node, which is why
- * the connector on the desktop deps had to widen for them at all — and neither
- * holds any work. A goal nobody has placed is dispatched exactly as one that has
- * been; the questions exist because an item filed under nothing rolls up to
- * nothing, and a board nobody can filter is the cost.
- *
- * Both answers are the appraiser's proposal, a value of the operator's own, or
- * "this goal wants no such thing" — and all three settle the question, because a
- * row that came back for one refresh reads as a click that did not take.
- * → `src/intake/placement.ts`, `docs/spec/06-issue-pickup.md`
- */
 export const goalPlacement: DesktopToolFactory = (deps) => ({
   description:
     'Answer where a goal belongs on the tracker: `parent` hangs it off a container, `areaPath` moves it onto a ' +
@@ -266,21 +204,6 @@ export const goalPlacement: DesktopToolFactory = (deps) => ({
   },
 });
 
-/**
- * The operator saying, mid-run, what they actually want.
- *
- * Not a verdict and not a question answered: an instruction is **input**. It
- * accumulates, it is appended to every later dispatch on the goal, and writing one
- * *restarts* the goal — a `more_work` verdict that retracts a delivery, and a
- * settled plan sent back to a planner. That last part is why this is not a store
- * write a session could have made through some other tool: half of it is the row,
- * and half of it is the restart that gets the row read.
- * → `src/goalInstructions.ts`
- *
- * `withdraw` is here rather than in a second tool because it is the same object
- * seen from the other end, and because the asymmetry needs saying somewhere a
- * session will read it: taking the words back does not take the restart back.
- */
 export const goalInstruct: DesktopToolFactory = (deps) => ({
   description:
     'Tell the fleet what you want on a goal, in your own words. The text stands in front of every agent ' +
@@ -332,8 +255,6 @@ export const goalInstruct: DesktopToolFactory = (deps) => ({
 
     if (text.length > MAX_INSTRUCTION) return toolError(`text is too long (max ${MAX_INSTRUCTION} characters).`);
     const { instruction, conclusion, replanned } = writeGoalInstruction(deps.store, originRef, text);
-    // The restart is what makes this urgent: an instruction nothing is dispatched
-    // for is an operator being ignored until the next heartbeat.
     await deps.runCycle();
     return toolJson({
       issue: ref.issue,

@@ -12,17 +12,6 @@ import { obstacleNotices, type NoticeAgent } from '../src/obstacles/notices.js';
 import type { DeliverableObstacle } from '../src/obstacles/delivery.js';
 import type { Agent, Obstacle, ObstacleKey, ObstacleState } from '../src/types.js';
 
-/**
- * The second delivery channel: **mid-session, to a running agent**.
- *
- * Three rules keep it worth reading, and each has a test here that fails when it
- * is broken: **once per agent per obstacle, ever**; **never to the reporter or
- * the owner**; **never for anything else**. A chatty channel is skimmed, and then
- * the message that mattered is skimmed too.
- * → `docs/spec/27-obstacles.md#delivery`
- */
-
-/** One row as the pure decision reads it. */
 function row(id: string, over: Partial<Obstacle> = {}, checks: string[] = ['test (windows)']): DeliverableObstacle {
   const obstacle: Obstacle = {
     id,
@@ -67,13 +56,10 @@ test('never to the reporter: the agent that filed it is told what became of it, 
 
   const sent = obstacleNotices([standing], [mine, other]);
 
-  // Telling the agent whose report created the row that the row exists is absurd.
   assert.deepEqual(
     sent.map((n) => n.agentId),
     ['agent-2'],
   );
-  // What it *is* told is the thing that changes what it should do next: its own
-  // report has been taken up.
   const owned = obstacleNotices([row('obs-a', { state: 'owned', ownerRef: 'issue:841' })], [mine]);
   assert.equal(owned.length, 1);
   assert.equal(owned[0]!.reason, 'owned');
@@ -88,9 +74,6 @@ test('never to the owner: the agent dispatched to fix it is not told to stand do
 
   const sent = obstacleNotices([owned], [fixer, bystander]);
 
-  // The owner is the one party a row is not news to, and a notice saying *do not
-  // fix this* to the agent dispatched to fix it is the channel arguing with the
-  // fleet. The bystander gets nothing either: `owned` is not the standing arm.
   assert.deepEqual(sent, []);
 });
 
@@ -98,14 +81,10 @@ test('never for anything else: only a standing arrival, and only on a check this
   const elsewhere = row('obs-elsewhere', {}, ['lint']);
   const quiet: ObstacleState[] = ['sighted', 'dormant', 'muted', 'resolved'];
 
-  // A row on another check is nothing to this agent, however standing it is.
   assert.deepEqual(obstacleNotices([elsewhere], [agent()]), []);
-  // And no state but `standing` reaches an agent that never reported it: an
-  // interruption is a cost, and it is paid only where something changed.
   for (const state of quiet) {
     assert.deepEqual(obstacleNotices([row('obs-a', { state })], [agent()]), [], `${state} reached an agent`);
   }
-  // The one that does.
   const sent = obstacleNotices([row('obs-a')], [agent()]);
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.reason, 'standing');
@@ -129,7 +108,6 @@ function build(): System {
   );
 }
 
-/** A live agent on a dispatch about one check. */
 function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['test (windows)']): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -143,7 +121,6 @@ function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['te
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 }
 
-/** Two independent goals, which is what carries a row to `standing`. */
 function stand(system: System, what: string, check: string): void {
   for (const goal of ['issue:900', 'issue:901']) {
     system.store.recordObstacleSighting(
@@ -189,8 +166,6 @@ test('once per agent per obstacle, ever: a second pulse sends nothing', () => {
   desk.run();
   desk.run();
 
-  // A notice that arrives twice reads as a second problem, and the ledger is a
-  // primary key rather than a condition: nothing a later writer can forget.
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.agentId, live.id);
   assert.match(sent[0]!.text, /windows runner wedges/);
@@ -203,13 +178,9 @@ test('a notice reaches a live session only, and never ends a park', () => {
   const live = spawnAgent(system, 'issue:12');
   stand(system, 'the windows runner wedges before the suite starts', 'test (windows)');
 
-  // The real fleet, so what the desk asks of it is what the runtime offers.
   new ObstacleNoticeDesk({ store: system.store, fleet: system.agents }).run();
   assert.deepEqual([...system.store.obstaclesNoticedBy(live.id)], [system.store.listObstacles()[0]!.id]);
 
-  // An agent that is not live cannot be typed into, and the desk does not pretend
-  // otherwise: nothing is sent, and the row it left behind is the honest record
-  // that this pair has had its one notice.
   assert.equal(system.agents.notify('agent-that-never-was', 'anything at all'), false);
   system.store.close();
 });

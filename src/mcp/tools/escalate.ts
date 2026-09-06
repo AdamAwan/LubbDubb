@@ -2,24 +2,15 @@ import { toolError } from '../protocol.js';
 import type { AgentAskQuestion } from '../../types.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * A questionnaire past this stops being a question and becomes a form. The cap is
- * enforced here rather than trusted from `maxItems`: the schema is advice to the
- * model, and the cockpit renders whatever arrives.
- */
+// → docs/spec/11-mcp-tools.md
+
 const MAX_QUESTIONS = 10;
 
-/** Strings only, trimmed, blanks dropped — anything else came from a model and is not rendered. */
 function readOptions(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map((o) => o.trim());
 }
 
-/**
- * The sub-questions, filtered as defensively as the options are. A malformed
- * entry is dropped rather than failing the whole call: an agent that mis-shapes
- * one of three questions should still get the other two in front of a human.
- */
 function readQuestions(value: unknown): AgentAskQuestion[] {
   if (!Array.isArray(value)) return [];
   const out: AgentAskQuestion[] = [];
@@ -99,14 +90,9 @@ export const escalate: ToolFactory = ({ deps, agent, ok }) => ({
       questions: questions.length > 0 ? questions : undefined,
     });
     if (!result.ok) return toolError(result.error);
-    // `escalationId: null` means a whitelisted prompt was auto-answered, so the
-    // agent was never actually parked. Say so rather than implying a human saw it.
     return ok({
       parked: result.escalationId !== null,
       escalationId: result.escalationId,
-      // How many actually landed, not how many were sent: a malformed entry is
-      // dropped rather than failing the call, and an agent that asked for three
-      // and filed two should be able to see that without the human telling it.
       ...(questions.length > 0 ? { questionsFiled: questions.length } : {}),
       note:
         result.escalationId === null

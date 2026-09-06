@@ -12,10 +12,6 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Agent, Decision, Issue, PullRequest, Task } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// The decision row's two columns: `rule` names what **proposed** an act,
-// `admission` what **became** of it. One column answering both is what made a
-// throttled `issue-pickup` audit as `cooldown-escalate` with the pickup lost.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
@@ -56,7 +52,6 @@ function pr(over: Partial<PullRequest> = {}): PullRequest {
   };
 }
 
-/** Three spent dispatches on `origin`, all outside the cooldown window. */
 function spentCap(origin: string, rule: string): Decision[] {
   return [1, 2, 3].map((n) => ({
     id: `dec_${n}`,
@@ -70,17 +65,11 @@ function spentCap(origin: string, rule: string): Decision[] {
   }));
 }
 
-// -- the vocabularies are two, and the types keep them apart -----------------
-
 test('only admission-kind ids are ever emitted into the admission field', async () => {
-  // The registry is the display vocabulary; `AdmissionId` is the narrow subset
-  // that may reach the column. Asserted over `string` so the property survives
-  // someone widening the type it is derived from.
   const d = new RuleDispatcher({}, {}, undefined, 'main');
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-      // The funnel has failed open, so what the cap throttles is the pickup.
       recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
     }),
   );
@@ -91,14 +80,11 @@ test('only admission-kind ids are ever emitted into the admission field', async 
   }
 });
 
-// -- the four emission sites -------------------------------------------------
-
 test('a throttled pickup names issue-pickup as its proposer, not the cap that stopped it', async () => {
   const d = new RuleDispatcher({}, {}, undefined, 'main');
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-      // The funnel has failed open, so what the cap throttles is the pickup.
       recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
     }),
   );
@@ -123,10 +109,6 @@ test("a throttled PR concern names the concern's own rule", async () => {
 });
 
 test('a branch note records no proposer at all, and says so through the admission', async () => {
-  // The one deliberate null. `fresh` folds signals from every concern on the PR,
-  // so no single rule proposed the note; `concerns[0]` is picked by the urgency
-  // order, which exists to decide who gets the one agent when the branch is free.
-  // The concerns it covers are on `originRefs`, in full.
   const task: Task = {
     id: 't1',
     kind: 'code',
@@ -178,8 +160,6 @@ test('a branch note records no proposer at all, and says so through the admissio
   assert.deepEqual(note.originRefs, ['pr:42:ci'], 'what it covers is recorded per signal, finer than a rule id');
 });
 
-// -- the column ---------------------------------------------------------------
-
 test('recordDecision lifts both ids off the action into their own columns', () => {
   const store = new Store(':memory:');
   const d = store.recordDecision({
@@ -215,9 +195,6 @@ test('an action with no admission records null, never the rule over again', () =
 });
 
 test('the migration is additive on a database created before the column', () => {
-  // `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without the
-  // `ensureColumns('decisions', …)` entry the column is invisible on every older
-  // database — and reading one would throw rather than degrade.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-migrate-'));
   const path = join(dir, 'old.db');
   const old = new Database(path);
@@ -254,7 +231,6 @@ test('the migration is additive on a database created before the column', () => 
   assert.equal(row?.rule, 'cooldown-escalate', 'and it still carries the outcome in the old place');
   assert.equal(row?.admission, null);
 
-  // The new shape writes alongside it; the two coexist forever.
   store.recordDecision({
     cycleId: 'cyc2',
     action: { type: 'escalate_to_human', reason: 'x', rule: 'issue-pickup', admission: 'cooldown-escalate' },
@@ -265,8 +241,6 @@ test('the migration is additive on a database created before the column', () => 
   assert.equal(both.length, 2);
   store.close();
 });
-
-// -- what the cockpit makes of the two shapes --------------------------------
 
 const RULES = DISPATCH_RULES as unknown as Record<string, { name: string; description: string; kind: string }>;
 
@@ -283,8 +257,6 @@ test('a new row reads as a proposer plus what became of it', () => {
 });
 
 test('an old row is rendered as an outcome, and the missing proposer is stated', () => {
-  // The cost of not rewriting history: which rule was throttled is not in the
-  // row, so the renderer says which shape it is looking at instead of guessing.
   const { entries, note } = decisionAttribution({ rule: 'cooldown-escalate', admission: null }, RULES);
   assert.deepEqual(
     entries.map((e) => [e.label, e.id]),
@@ -295,9 +267,6 @@ test('an old row is rendered as an outcome, and the missing proposer is stated',
 });
 
 test('an old row from a server that never sent the field reads the same', () => {
-  // Absent and null are different on the wire (an older server, versus a
-  // proposal admitted unchanged) but identical for a row whose one id is an
-  // admission.
   const { entries, note } = decisionAttribution({ rule: 'branch-notify' }, RULES);
   assert.deepEqual(
     entries.map((e) => e.label),

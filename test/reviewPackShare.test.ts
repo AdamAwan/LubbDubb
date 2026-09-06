@@ -16,14 +16,6 @@ import type { Agent, PoolPackDocument } from '../src/types.js';
 import type { ReviewPackPayload, ReviewPackSharing } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * Review packs, stage 6: sharing one is a **second, deliberate act**, over the
- * pool's transport, into the fleet's own namespace — with the HTML companion
- * beside it, the secret backstop over every embedded line, and a prune once the
- * pull request has been closed for `closedPrWindowMs`.
- * → docs/spec/31-review-packs.md#sharing-a-pack
- */
-
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const FLEET = 'alice@acme-api';
 
@@ -70,8 +62,6 @@ function build(over: { closedPrWindowMs?: number; transport?: FakePoolTransport 
       worktrees: new FakeWorktreeManager(),
       gitObserver: new FakeGitObserver().setDiff('main', HEAD, DIFF),
       backend: new FakePtyBackend(),
-      // Wiring a transport wires the desk: the `fake` provider leaves it off, and
-      // the point of these tests is watching a document leave.
       poolTransport: transport,
       errorMirror: () => {},
       reapProcessTree: async () => {},
@@ -90,7 +80,6 @@ function agentOn(system: System, originRef: string): Agent | undefined {
   return system.store.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
 }
 
-/** Ask for a pack and have the author land one, with `code` as the region anchor's file. */
 async function authored(system: System, code = 'line one\nline two\nline three\n'): Promise<void> {
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
@@ -133,7 +122,6 @@ test('a pack is shared only when somebody shares it, and the document and its co
   const { system, transport } = await openPrWithPack();
   const { app } = await buildApp(system);
 
-  // The ask for a pack shares nothing, and neither does a pulse.
   await system.pool!.run();
   assert.deepEqual(
     transport.published.filter((d) => d.kind === 'pack'),
@@ -143,7 +131,6 @@ test('a pack is shared only when somebody shares it, and the document and its co
   const before = (await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' })).json() as ReviewPackPayload;
   assert.deepEqual(before.sharing, { available: true, share: null });
 
-  // The second act: accepted at once, published on the pool's own clock.
   const shared = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/share' });
   assert.equal(shared.statusCode, 202, shared.body);
   const asked = (shared.json() as ReviewPackSharing).share!;
@@ -159,16 +146,12 @@ test('a pack is shared only when somebody shares it, and the document and its co
   assert.equal(document!.headSha, HEAD);
   assert.equal(document!.pack.headline, 'The module imports y.');
 
-  // In the fleet's own namespace, beside claims.json and digest.json, with the
-  // HTML companion at the same address.
   assert.ok(transport.packs.has(poolPackPath(FLEET, 7)));
   const companion = transport.companions.get(reviewPackCompanionPath(FLEET, 7));
   assert.ok(companion, 'the companion was written beside it');
   assert.match(companion!, /^<!doctype html>/);
   assert.match(companion!, /The module imports y\./);
 
-  // A shared pack is not a claim: nothing polls it, nothing corroborates it, and
-  // nothing about it reaches an agent's prompt.
   const fetched = await transport.fetch();
   assert.equal(
     fetched.some((entry) => entry.text.includes('"kind": "pack"')),
@@ -186,8 +169,6 @@ test('a pack is shared only when somebody shares it, and the document and its co
 
 test('the secret backstop runs over the embedded code, refuses, names the line, and rewrites nothing', async () => {
   const { system, transport } = await openPrWithPack();
-  // A token in a *region* anchor's code — a line the change never touched, which
-  // is exactly where a check written for one English sentence would miss it.
   const packed = system.store.getCurrentReviewPack(7)!;
   packed.pack.ideas[0]!.anchors[1]!.code = ['line one', 'const token = "ghp_0123456789abcdefghij";'];
   system.store.recordReviewPack(packed.pack);
@@ -218,7 +199,6 @@ test('a shared pack is pruned once its pull request has been closed long enough,
   await system.pool!.run();
   assert.equal(transport.packs.size, 1);
 
-  // Still open: nothing prunes a pack whose pull request is alive.
   await system.pool!.run();
   assert.equal(transport.packs.size, 1);
   assert.equal(transport.unpublished.length, 0);
@@ -232,7 +212,6 @@ test('a shared pack is pruned once its pull request has been closed long enough,
   assert.equal(system.store.getReviewPackShare(7), null);
   assert.ok(system.store.getCurrentReviewPack(7), 'the fleet keeps its own record');
 
-  // Nothing to prune twice, and nothing republishes it.
   await system.pool!.run();
   assert.equal(transport.unpublished.length, 1);
   await app.close();
@@ -248,8 +227,6 @@ test('sharing is refused with nowhere to publish to, and for a pull request with
   await app.close();
   system.store.close();
 
-  // A deployment with no pool desk at all: the page is told, rather than offered a
-  // control that could only refuse.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-share-none-'));
   const poolless = buildSystem(
     loadConfig({

@@ -3,18 +3,8 @@ import type { ChecksSpend, SpendInsights, TaskTypeSpend } from '../types.js';
 import { fmtUsd } from './util.js';
 import { fmtShare, localPhaseCostUsd } from './insightsFormat.js';
 
-/**
- * Work mix: why *this kind* of work costs what it does.
- *
- * The two tables here were the foot of the spend panel, where they were read
- * about once a month and cost every other reader a screen of scrolling. A tab
- * is a better fold than a collapsed section: it is named, it is addressable, and
- * nobody scrolls past it to reach something else.
- *
- * They are a partition of the same money the Economics tab totals, cut two ways
- * that no phase can give — review comments have a row here, and `dotnet test`
- * has one. Both obey the page's window, like everything else on it.
- */
+// → docs/spec/17-cockpit.md
+
 export function WorkMixTab({ insights }: { insights: SpendInsights }): JSX.Element {
   return (
     <div className="sp">
@@ -40,14 +30,6 @@ export function WorkMixTab({ insights }: { insights: SpendInsights }): JSX.Eleme
   );
 }
 
-/**
- * Cost per kind of work — the grain below the phase bar.
- *
- * A phase folds every pull-request concern into two rows; this is where review
- * comments, a base update and a merge each get a number of their own. The labels
- * are the dispatch registry's, shipped by the server, so a row here is named
- * exactly as the rule that produced it is named everywhere else in the cockpit.
- */
 function TaskTypes({
   types,
   total,
@@ -100,20 +82,6 @@ function TaskTypes({
   );
 }
 
-/**
- * What each failing check costs to answer.
- *
- * The one table in the cockpit that names `dotnet test` and `Qodana`, and the
- * reason the dispatcher records check names as data at all. **`Each` is the
- * column to read** — a check that goes red twice a week and takes an agent an
- * hour every time is a bigger bill than one that fails constantly and is fixed
- * in a turn, and only the per-dispatch figure says so.
- *
- * The shared-cost caveat rides in the footer rather than a tooltip, because it
- * qualifies every number in the table: an agent sent at three red checks at once
- * splits its cost three ways, and nothing in the harness knows which of them it
- * actually worked on.
- */
 function Checks({ checks }: { checks: ChecksSpend }): JSX.Element {
   const { checks: rows, seen, attributedCostUsd, unnamedCostUsd } = checks;
   if (rows.length === 0) {
@@ -170,5 +138,3 @@ function Checks({ checks }: { checks: ChecksSpend }): JSX.Element {
     </>
   );
 }
-
-/** The individual runs behind the totals — a ranking, and it says so. */

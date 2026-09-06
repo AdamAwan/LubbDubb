@@ -13,9 +13,6 @@ import { planWithOnePart } from './support/plans.js';
 import type { GoalFile, GoalNeighbour, Plan, ScratchEntry } from '../src/types.js';
 import { findTask } from './support/tasks.js';
 
-// -- the pure briefing -------------------------------------------------------
-
-/** A goal nobody has touched: every source empty. */
 function bare(): PriorWorkInput {
   return {
     plan: null,
@@ -89,9 +86,6 @@ function entry(fields: Partial<ScratchEntry> = {}): ScratchEntry {
 }
 
 test('a goal nobody has worked yet renders nothing at all', () => {
-  // The promise that makes this safe to append on *every* dispatch: a first agent's
-  // prompt is byte-identical to one composed before this existed, so the briefing
-  // costs nothing until there is something to say.
   assert.equal(priorWorkBriefing(bare()), '');
   assert.equal(priorWorkBriefing({ ...bare(), plan: planRow() }), '', 'a plan with no write-up says nothing');
   assert.equal(
@@ -109,9 +103,6 @@ test('the pad is carried over, attributed and framed as testimony rather than in
 });
 
 test("the planner's write-up reaches the agent, and its one-line reason deliberately does not", () => {
-  // The module's whole rule: it carries only what no template renders. `reason` is
-  // already rendered by `currentPlanSummary` to a replanner and as `{plan}` to a
-  // part agent, so repeating it here would be a second account of one fact.
   const text = priorWorkBriefing({
     ...bare(),
     plan: planRow({
@@ -123,8 +114,6 @@ test("the planner's write-up reaches the agent, and its one-line reason delibera
       document: '## Why\n\nBecause the schema has to land first.',
     }),
   });
-  // The root cause and the fix reach an agent through here and nowhere else: on a
-  // `single` verdict there is no `currentPlanSummary` in the prompt at all.
   assert.match(text, /the seeding proc skips IMS-only groups/);
   assert.match(text, /add the seeding rule and repair the rows already wrong/);
   assert.match(text, /the migration is the risky half/);
@@ -147,7 +136,6 @@ test("a part's rationale and acceptance are carried — they are rendered nowher
   const text = priorWorkBriefing({ ...bare(), parts });
   assert.match(text, /must merge first/);
   assert.match(text, /the table exists/);
-  // No world facts: a PR's state is live through world_read and stale in a prompt.
   assert.doesNotMatch(text, /41/, 'the briefing carries testimony, never world state');
   assert.doesNotMatch(text, /merged/, 'a part status is world state, and siblingContext already renders it');
 });
@@ -216,9 +204,6 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
 });
 
 test('the files the goal has been edited in are carried, attributed and in the order given', () => {
-  // The one section that is stored fields rather than stored prose. It is a join —
-  // which agents worked this goal, and which of them wrote a path last — and never a
-  // ranking: the order is the recency the store returned, a stored timestamp.
   const text = priorWorkBriefing({
     ...bare(),
     files: [
@@ -236,8 +221,6 @@ test('the files the goal has been edited in are carried, attributed and in the o
 });
 
 test('a part agent keeps the file list, because nothing else tells it where a sibling has been', () => {
-  // `forPart` suppresses the parts section and nothing else: `siblingContext` renders
-  // what a sibling was *for*, and renders nowhere at all where it has been.
   const files = [file()];
   assert.match(priorWorkBriefing({ ...bare(), files, forPart: true }), /src\/store\/schema\.ts/);
 });
@@ -253,8 +236,6 @@ test('an over-long file list names what it dropped, the oldest first', () => {
 });
 
 test('a neighbouring goal is named with the paths it shares and its retrospective', () => {
-  // The join with a goal on the far side of it: who else has been in this code, and
-  // the write-up that is the only account of how it went an agent can be given.
   const text = priorWorkBriefing({
     ...bare(),
     neighbours: [neighbour({ sharedPaths: ['src/store/schema.ts', 'src/store/agents.ts'] })],
@@ -295,8 +276,6 @@ test('a part agent keeps the neighbour list, which is about goals no sibling was
 });
 
 test('the neighbour seed is where the goal has been and where its planner read', () => {
-  // Two sources because a goal's own file rows are empty on the dispatch the lookup
-  // is worth most on, and a plan's evidence is written before any part is dispatched.
   const seed = neighbourSeedPaths(
     [file({ path: 'src/a.ts' }), file({ path: 'src/b.ts' })],
     planRow({
@@ -311,8 +290,6 @@ test('the neighbour seed is where the goal has been and where its planner read',
 });
 
 test('an over-long pad names what it dropped rather than truncating in silence', () => {
-  // A partial record read as a whole one is the failure mode; the count and the
-  // tool that reaches the rest are both stated.
   const entries = Array.from({ length: 20 }, (_, i) =>
     entry({
       id: `scr_${i}`,
@@ -326,8 +303,6 @@ test('an over-long pad names what it dropped rather than truncating in silence',
   assert.match(text, /5 earlier notes/);
   assert.match(text, /scratch_read/, 'the rest is reachable, and the agent is told how');
 });
-
-// -- what actually reaches a dispatched agent --------------------------------
 
 function systemFor(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prior-'));
@@ -347,11 +322,6 @@ function systemFor(): System {
   );
 }
 
-/**
- * An agent that *has run* on `originRef` and wrote `paths`, as the file-events hook
- * records it. Finished, not queued: a live task on a goal's arm is a dispatch gate,
- * and this is history rather than work in flight.
- */
 function agentThatWrote(store: Store, originRef: string, paths: string[], kind: 'code' | 'desk' = 'code'): void {
   const task = store.createTask({
     kind,
@@ -366,8 +336,6 @@ function agentThatWrote(store: Store, originRef: string, paths: string[], kind: 
 }
 
 test('the goal file join folds the whole subtree to one row per path, newest write first', () => {
-  // A clock that moves on every write, so "which write was last" is a fact of the
-  // data rather than of how fast the test ran.
   let tick = 0;
   const store = new Store(':memory:', () =>
     new Date(Date.parse('2026-07-30T00:00:00.000Z') + tick++ * 60_000).toISOString(),
@@ -375,9 +343,6 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
   try {
     agentThatWrote(store, 'issue:1:plan', ['src/a.ts']);
     agentThatWrote(store, 'issue:1:part:schema', ['src/a.ts', 'src/b.ts']);
-    // Neither of these is this goal: another issue whose ref starts with this one's
-    // (the subtree is `issue:1` or `issue:1:…`, never `issue:12`), and a desk agent
-    // whose write-up lives in a scratch directory rather than in the repository.
     agentThatWrote(store, 'issue:12:part:other', ['src/elsewhere.ts']);
     agentThatWrote(store, 'issue:1:retro', ['write-up.md'], 'desk');
 
@@ -398,7 +363,6 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
   }
 });
 
-/** A goal that has been written up — which is how this harness spells "closed". */
 function goalWithRetro(store: Store, originRef: string, paths: string[], summary: string): void {
   agentThatWrote(store, `${originRef}:part:whole`, paths);
   store.recordRetrospective({ originRef, summary, document: '# how it went', agentId: 'a_r', taskId: 't_r' });
@@ -412,10 +376,6 @@ test('the neighbour join finds written-up goals in the same paths, and only thos
   try {
     goalWithRetro(store, 'issue:300', ['src/a.ts', 'src/unrelated.ts'], 'three hundred went fine');
     goalWithRetro(store, 'issue:301', ['src/a.ts', 'src/b.ts'], 'three oh one was harder');
-    // None of these is a neighbour: a goal still being worked (no retrospective is
-    // this harness's stored answer to "closed", and `detectFileOverlaps` owns the
-    // live question), a written-up goal that has been nowhere near these paths, a
-    // desk agent's scratch directory, and this goal itself.
     agentThatWrote(store, 'issue:302:part:whole', ['src/a.ts']);
     goalWithRetro(store, 'issue:303', ['src/elsewhere.ts'], 'somewhere else entirely');
     agentThatWrote(store, 'issue:304:retro', ['src/a.ts'], 'desk');
@@ -450,8 +410,6 @@ test('the neighbour join scopes a goal by prefix, so issue:1 never reaches issue
   const store = new Store(':memory:');
   try {
     goalWithRetro(store, 'issue:12', ['src/a.ts'], 'twelve');
-    // The retrospective is `issue:1`'s, so `issue:12:part:whole` must not be read as
-    // one of its arms — the same prefix trap `listGoalFiles` answers.
     store.recordRetrospective({
       originRef: 'issue:1',
       summary: 'one',
@@ -473,9 +431,6 @@ test('the neighbour join scopes a goal by prefix, so issue:1 never reaches issue
 test("a part's agent is handed what the earlier agents on its issue wrote down", async () => {
   const system = systemFor();
   try {
-    // A one-part plan, which is where a goal delivered as one pull request now
-    // goes: its part is dispatched by rule `plan-part`, and the briefing rides on
-    // that dispatch exactly as it does on a stacked part's.
     const plan = planWithOnePart(system.store, 1, 'Ship the thing');
     system.store.upsertPlan({
       originRef: 'issue:1',
@@ -495,8 +450,6 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
       decision: null,
     });
     agentThatWrote(system.store, 'issue:1:plan', ['src/tags/registry.ts']);
-    // A finished goal that has been in the same file, so the neighbour lookup has
-    // something to say beyond this goal's own history.
     goalWithRetro(system.store, 'issue:312', ['src/tags/registry.ts'], 'the registry is generated, do not hand-edit');
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     await system.harness.runCycle('manual');
@@ -506,11 +459,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
     assert.match(task.prompt, /Ship the thing/, 'the rendered template is still first');
     assert.match(task.prompt, /the registry is the only place/i, "the planner's write-up came with it");
     assert.match(task.prompt, /labelsAddedByViewer/, 'so did the pad');
-    // The cheapest orientation there is: where the goal has already been edited,
-    // which turns a grep phase into a Read.
     assert.match(task.prompt, /src\/tags\/registry\.ts/, 'and the files the earlier agent wrote');
-    // And who else has been in them, with the write-up that is the only account of
-    // another goal's run an agent can be handed (issue #354, phase 2).
     assert.match(task.prompt, /issue:312/, 'the neighbouring goal that has been in the same file');
     assert.match(task.prompt, /do not hand-edit/, "and that goal's retrospective summary");
   } finally {
@@ -519,9 +468,6 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
 });
 
 test('an agent on a different goal is handed none of it', async () => {
-  // `padOriginFor`'s scoping, which is `outstandingForOrigin`'s widening rule at the
-  // level of a whole goal: a planner's write-up about issue #1 is neither actionable
-  // by a PR agent nor tellable apart from its own task.
   const system = systemFor();
   try {
     system.store.appendScratchEntry({

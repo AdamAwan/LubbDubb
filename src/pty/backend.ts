@@ -1,11 +1,8 @@
 import { createRequire } from 'node:module';
 import { resolveExecutable } from '../agents/resolveCommand.js';
 
-/**
- * The tiny slice of a pseudo-terminal the harness actually needs. Abstracting it
- * lets tests drive a scripted process without the native `node-pty` addon, and
- * keeps the (heuristic, fiddly) session logic in one testable place.
- */
+// → docs/spec/10-agent-runtimes.md
+
 export interface PtyProcess {
   readonly pid: number;
   onData(cb: (data: string) => void): void;
@@ -25,19 +22,11 @@ export interface PtyBackend {
   spawn(command: string, args: string[], opts: SpawnOptions): PtyProcess;
 }
 
-// Default PTY geometry. The legible-transcript emulator (terminalTranscript.ts)
-// must model the same screen size or cursor-addressed redraws land on the wrong
-// rows, so both read these constants.
 const PTY_COLS = 120;
 const PTY_ROWS = 40;
 
-/**
- * Real backend backed by node-pty. Imported lazily so environments/tests that
- * never spawn a real terminal don't need the native addon built.
- */
 export class NodePtyBackend implements PtyBackend {
   spawn(file: string, args: string[], opts: SpawnOptions): PtyProcess {
-    // Lazy require keeps the native dependency off the import path for tests.
     const require = createRequire(import.meta.url);
     const pty = require('node-pty') as typeof import('node-pty');
     const env = { ...process.env, ...opts.env } as Record<string, string>;

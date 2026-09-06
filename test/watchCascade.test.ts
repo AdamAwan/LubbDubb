@@ -10,11 +10,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Issue, IssueRelative } from '../src/types.js';
 
-// Watching a Feature means watching the work it stands for. A container is never
-// dispatched at, so a tag on one alone changes nothing an operator can see — the
-// route walks its tree and writes the tag on every descendant, and un-watching
-// walks the same tree so a dropped feature cannot leave its stories running.
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return buildSystem(
@@ -48,7 +43,6 @@ function relative(number: number): IssueRelative {
   return { number, title: `Item ${number}`, issueType: 'User Story', workItemState: 'Active', state: 'open' };
 }
 
-/** A Feature over two stories, one of which has a task of its own. */
 function seed(system: System): void {
   system.store.setWorldBaseline({
     takenAt: new Date().toISOString(),
@@ -64,7 +58,6 @@ function seed(system: System): void {
   });
 }
 
-/** Records what the outbound seam was asked to write, in order. */
 function recordLabels(system: System): { number: number; label: string; present: boolean }[] {
   const writes: { number: number; label: string; present: boolean }[] = [];
   const connector = system.connector as unknown as {
@@ -87,7 +80,6 @@ test('watching a Feature tags every item beneath it, the whole tree deep', async
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().cascaded, 3);
 
-  // The feature, its two stories, and the task under one of them.
   const watched = writes.filter((w) => w.label === 'lubbdubb-watch');
   assert.deepEqual(
     watched.map((w) => w.number),
@@ -97,7 +89,6 @@ test('watching a Feature tags every item beneath it, the whole tree deep', async
     watched.every((w) => w.present),
     true,
   );
-  // One label and no other: there is no second tag to keep it exclusive with.
   assert.deepEqual(new Set(writes.map((w) => w.label)), new Set(['lubbdubb-watch']));
 });
 
@@ -158,9 +149,7 @@ test('a partial cascade failure is reported rather than answered "watched"', asy
   assert.match(error, /Tagged 3 of 4/);
   assert.match(error, /#3/);
   assert.match(error, /work item 3 is locked/);
-  // What landed still landed — the ones that succeeded are not rolled back.
   assert.deepEqual(new Set(writes), new Set([1, 2, 4]));
-  // …and the failure is on the error log rather than swallowed into the 400.
   assert.equal(
     system.store.listErrors(50).some((e) => e.message.includes('work item 3 is locked')),
     true,

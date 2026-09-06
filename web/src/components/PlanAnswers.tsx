@@ -8,35 +8,8 @@ import { heldTitle } from './CaveatChecklist.js';
 import { HeadRow } from './panel.js';
 import type { PlanCaveat } from '../types.js';
 
-/**
- * The four answers to a plan, drawn identically wherever a plan is decided.
- *
- * There were **six**, in one flat row, five of them ghost buttons whose whole
- * meaning lived in a `title` — and two of the six were the same act. `Reject` sent
- * the plan back to a planner and `Replan` asked a planner again, six inches apart,
- * with nothing on screen distinguishing them. Beside those sat `Close the ticket`
- * and `Hold`, which are not about the plan at all, and `Discuss…`, which was the
- * only answer to "I have a question" and read as one more way to say no.
- *
- * The four that are left are the four questions an operator actually arrives with:
- * yes; not like this; I have a question; not this goal at all.
- *
- * **The note is the act, so it is asked for by the act.** One box used to serve
- * five meanings — optional for a rejection and sent to the planner, *required* for
- * a close and posted publicly on the ticket, optional for a hold, ignored by
- * Replan and the discussion — captioned `Why (optional) — recorded either way`,
- * which is false of the two that matter. Each answer that needs words now opens
- * its own drawer, captioned by what it does with them, and **is held until there
- * are some**. That is not a nicety on the change arm: the operator's note is the
- * whole content of a refusal, and without it the replan is a re-run of the
- * question that produced the plan being refused (`src/plans/planApproval.ts`).
- *
- * **Approve carries no note.** It never went anywhere — `ProposalDesk.accept`
- * stores it on the proposal row, and `releasePlan` takes no note at all — so a box
- * beside it promised a tweak the release could not apply.
- *
- * → docs/spec/08-planning.md#the-four-answers, docs/spec/17-cockpit.md
- */
+// → docs/spec/17-cockpit.md
+
 export function PlanAnswers({
   proposalId,
   issueNumber,
@@ -50,27 +23,12 @@ export function PlanAnswers({
   onBackOut,
 }: {
   proposalId: string;
-  /**
-   * The goal the plan hangs off. Null drops the Claude Code hand-off, because
-   * `plan_amend` resolves a plan *by* that number — a control that opened a
-   * session which could not find what it was sent for is worse than no control.
-   */
   issueNumber: number | null;
-  /** What Approve says starts — the count is the call site's, since only it knows the cut. */
   approveLabel: string;
-  /** Caveats still unticked. Non-empty holds Approve, and says how many in its title. */
   outstanding: PlanCaveat[];
-  /** The caveat ids ticked, sent with the accept. */
   acknowledged: string[];
-  /**
-   * What the change drawer opens with — the plan sheet's pinned objections, which
-   * an operator marks while reading. They used to be composed into the one note
-   * box and could only be sent by choosing a verdict first; here they are the
-   * first draft of the sentence the planner gets.
-   */
   seedNote?: string;
   desktopFolder: string;
-  /** What the Claude Code session does once open — forks on whether the plan is running. */
   discussExplain: string;
   onDecide: (
     id: string,
@@ -85,10 +43,6 @@ export function PlanAnswers({
   const field = useRef<HTMLInputElement>(null);
   const held = outstanding.length > 0;
 
-  // The drawer opens with the cursor in it, because the drawer *is* a request for
-  // words: an operator who has to click twice to start typing has been asked the
-  // question and handed no pen. Seeded on the change arm only — a close is about
-  // the ticket, and the pins are about the plan.
   useEffect(() => {
     if (open === null) return;
     setText(open === 'change' ? (seedNote ?? '') : '');
@@ -103,9 +57,6 @@ export function PlanAnswers({
       <HeadRow className="pa-row">
         <AsyncButton
           tone="primary"
-          // Held, not hidden: the checklist says what is outstanding and the hint
-          // says how many. The route refuses it either way — this is that answer,
-          // a step earlier.
           disabled={held}
           title={
             held ? heldTitle(outstanding) : 'Release the plan — each part gets its own agent, branch and pull request'
@@ -155,8 +106,6 @@ export function PlanAnswers({
         <div
           className={`pa-drawer ${drawer.kind}`}
           onKeyDown={(e) => {
-            // Escape closes and decides nothing. The drawer is a question, and a
-            // question you cannot back out of is a commitment.
             if (e.key === 'Escape') setOpen(null);
           }}
         >
@@ -170,11 +119,6 @@ export function PlanAnswers({
               onChange={(e) => setText(e.target.value)}
             />
             <AsyncButton
-              // Held until there are words, for the reason the caption states. The
-              // close route refuses an empty note as well; the change arm it would
-              // *accept*, and that is the worse of the two — a refusal with nothing
-              // in it reaches the planner as "a human said no" and re-runs the
-              // question that produced this plan.
               disabled={words.length === 0}
               title={words.length === 0 ? drawer.held : drawer.ready}
               onClick={() =>
@@ -196,13 +140,6 @@ export function PlanAnswers({
 
 type DrawerId = 'change' | 'close';
 
-/**
- * What each drawer asks, and what it does with the answer.
- *
- * A table rather than two branches in the markup: the two arms differ only in
- * their words, and the one thing that must never drift between them is that both
- * say where the words go. Written side by side, that is checkable by eye.
- */
 const DRAWERS: Record<
   DrawerId,
   Record<'kind' | 'question' | 'placeholder' | 'submit' | 'held' | 'ready' | 'hint', string>

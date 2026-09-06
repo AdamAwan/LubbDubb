@@ -1,55 +1,20 @@
 import type { Decision } from '../types.js';
 
-/**
- * Per-origin dispatch throttle for persistent world concerns.
- *
- * The dispatcher only de-dups against *currently active* tasks, so a code agent
- * that finishes without clearing its concern (couldn't resolve a conflict, needs
- * a human, or GitHub's merge state is still stale — see #35) leaves its origin
- * dispatchable again and gets re-spawned every heartbeat (#36). This adds the
- * missing memory: consult the audit log so a recently-attempted origin cools down
- * instead of looping, and a repeatedly-failing one escalates to a human.
- */
+// → docs/spec/05-dispatcher.md
+
 export interface CooldownPolicy {
-  /** Dispatches allowed for one origin before we stop looping and escalate. */
   maxAttempts: number;
-  /** Minimum gap between two dispatches of the same origin. */
   cooldownMs: number;
 }
 
-/** Sensible defaults: three attempts, ~15 min apart, before handing off to a human. */
 export const DEFAULT_COOLDOWN: CooldownPolicy = { maxAttempts: 3, cooldownMs: 15 * 60_000 };
 
-/**
- * The verdict for one origin this cycle:
- * - `dispatch`  — free to (re-)dispatch.
- * - `cooldown`  — attempted too recently; hold, try again after the gap.
- * - `escalate`  — the attempt cap is spent and no human has been looped in yet.
- * - `hold`      — cap spent and already escalated; do nothing (don't re-escalate).
- */
 export type DispatchVerdict =
   | { kind: 'dispatch' }
   | { kind: 'cooldown' }
   | { kind: 'escalate'; attempts: number }
   | { kind: 'hold' };
 
-/**
- * Decide whether an origin whose concern still persists may be (re-)dispatched,
- * from the recent audit log alone. Pure over `recentDecisions` + a `now`
- * timestamp (the world snapshot's `takenAt`) so it's unit-testable at the
- * dispatcher seam. Counts only *executed* dispatches — deferred ones (paused / no
- * headroom) never ran, so they're not attempts.
- *
- * An **`update_pr_branch` counts too** (issue #332), and a `requeue_ci_check`
- * (issue #395) for the same reason, which is the whole reason the script path can
- * keep the accounting it replaced: the question this answers is "how many times
- * has the harness tried to clear this origin", not "how many agents has it
- * spent". A base update that lands and does not clear `behind` is the same loop a
- * dispatch that lands and does not clear it is, and so is a build requeued three
- * times that comes back expired every time; both must escalate on the same cap
- * rather than re-firing every pulse. A *failed* one is deliberately not an
- * attempt: it never happened, and the fallback agent gets the origin's full budget.
- */
 export function dispatchVerdict(
   origin: string,
   now: string,

@@ -1,13 +1,3 @@
-/**
- * The half of the advisory gate that decides *what* is audited. The other half is the
- * OSV query, which is not exercised here: a test that reaches the network would report
- * the state of an upstream database rather than of this repo.
- *
- * What matters is the runtime/dev split. `npm ci` installs exactly what the lockfile
- * says, so the lockfile is the artefact — and `dev: true` is the only thing separating
- * a package an attacker can reach in a deployed harness from one that ships to nobody.
- * Read that flag the wrong way round and the gate goes quietly permissive.
- */
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,8 +36,6 @@ test('local code is the tree, not a package in it — only registry deps are que
   const path = lockfile({
     '': { name: 'root', version: '1.0.0' },
     'node_modules/@scope/linked': { resolved: 'packages/linked', link: true },
-    // A workspace's own entry sits outside node_modules. Queried by its path it would
-    // match nothing in OSV and report clean, which is the quiet way for a gate to lie.
     'packages/linked': { version: '1.0.0' },
     'node_modules/real': { version: '1.0.0' },
   });

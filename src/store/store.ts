@@ -180,17 +180,7 @@ import type {
   WorldSnapshot,
 } from '../types.js';
 
-/**
- * The single persistence surface. Everything else talks to the store; nothing else touches
- * SQLite. Reads return plain domain objects; writes are synchronous (better-sqlite3), which
- * is what keeps the harness logic race-free.
- *
- * The rule is about SQLite access, not about one class: the bodies live in domain modules
- * beside this file, each owning one group of tables and taking nothing but `{db, now}`, and
- * this is the composition root that instantiates them and delegates.
- * `test/storeModules.test.ts` asserts structurally that nothing outside `src/store/` imports
- * `better-sqlite3`. → `docs/spec/14-persistence.md#shape`
- */
+// → docs/spec/14-persistence.md
 
 export class Store {
   private readonly db: Database.Database;
@@ -246,18 +236,9 @@ export class Store {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    // Before the schema: `CREATE TABLE IF NOT EXISTS` would otherwise stand an empty table
-    // up under the new name and leave every pre-rename row invisible, with nothing red.
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
-    // Deleting a `CREATE TABLE IF NOT EXISTS` stops a table being made and never removes
-    // one, so a retired table lives forever without this. Derived or worthless rows only.
     dropRetiredTables(this.db, POOL_RETIRED_TABLES);
-    // Around the schema: a table whose *key* changed is renamed aside so `SCHEMA` creates
-    // the new shape, then rows are copied across. One transaction, so a crash halfway
-    // leaves the old table exactly as it was.
     rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
-    // Before any module is constructed: a module reading a migrated column on an older
-    // database reads `undefined`.
     const addedColumns: string[] = [];
     for (const columns of [
       TASK_COLUMNS,
@@ -285,30 +266,13 @@ export class Store {
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
-    // Gated on the column being *just* added: `pets.opened_at` null means "still an egg", so
-    // pre-shell pets are stamped opened once. On every boot it would open eggs operators
-    // were saving.
     if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
-    // Same shape: `local_runs.interrupted_at` null reads to a resume as "do not bring it
-    // back", which is wrong for the row this boot is upgrading over, so a live row is dated
-    // to now, once. Ungated it would re-date stale rows every boot and resume them forever.
     if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(this.db, clock());
-    // The non-column migrations, before any module is constructed. `floor_completions`
-    // becomes `issue_runs`, carrying standing dismissals so cleared cards stay cleared; the
-    // retired `single` plan shape is put back together. Ordered: the backfill reads the
-    // status, so it must see the absorbed one.
     adoptFloorCompletions(this.db);
     absorbSinglePlanStatus(this.db);
     backfillWholePlanParts(this.db, clock());
-    // What kind of work each historical task was, so the spend tables can speak about runs
-    // predating the columns. The one place a dispatch reason is ever parsed.
     backfillTaskDispatchKind(this.db);
-    // The attribution walk stopped on any `issue:`-prefixed ref, so a planned goal's
-    // landings were labelled with the part that opened the PR. Landings are relabelled and
-    // arrivals discarded for the desk to re-derive.
     repairPartRefGoals(this.db);
-    // The old reach denominator counted only landed work, so a partial planned goal could be
-    // recorded as arrived. Discard those claims; the desk re-derives once every part is in.
     const partialGoalRefs = this.db
       .prepare(
         `SELECT DISTINCT plans.origin_ref AS goal_ref
@@ -372,21 +336,14 @@ export class Store {
     this.pets = new PetStore(ctx);
   }
 
-  /**
-   * Is the handle still open? Asked by anything firing on a timer: a cycle arriving after
-   * the store closed throws inside a `void` call, where nothing is left to record it.
-   */
   get open(): boolean {
     return this.db.open;
   }
 
   close(): void {
-    // Persist anything still buffered before the handle goes away.
     this.transcripts.flushAll();
     this.db.close();
   }
-
-  // -- Tasks ---------------------------------------------------------------
 
   createTask(...args: Parameters<TaskStore['createTask']>): Task {
     return this.tasksStore.createTask(...args);
@@ -416,8 +373,6 @@ export class Store {
   findActiveTaskByBranch(branch: string): Task | null {
     return this.tasksStore.findActiveTaskByBranch(branch);
   }
-
-  // -- Jobs (operator-launched queue) --------------------------------------
 
   createJob(input: Parameters<JobStore['createJob']>[0]): Job {
     return this.jobs.createJob(input);
@@ -462,8 +417,6 @@ export class Store {
     this.jobs.deleteAttachments(targetRef);
   }
 
-  // -- Job schedules (recurring briefs) ---------------------------------
-
   createJobSchedule(input: Parameters<JobScheduleStore['createJobSchedule']>[0]): JobSchedule {
     return this.schedules.createJobSchedule(input);
   }
@@ -483,8 +436,6 @@ export class Store {
     return this.schedules.deleteJobSchedule(id);
   }
 
-  // -- Priority overrides (operator "Up next" re-ordering, issue #128) -------
-
   setPriorityOverrides(origins: string[]): void {
     this.priority.setPriorityOverrides(origins);
   }
@@ -494,8 +445,6 @@ export class Store {
   reconcilePriorityOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
     this.priority.reconcilePriorityOverrides(trackedOrigins, ttlMs);
   }
-
-  // -- Profile overrides (operator "run this queued row on X") --
 
   setProfileOverride(origin: string, profile: string | null): void {
     this.profileOverrides.setProfileOverride(origin, profile);
@@ -507,16 +456,12 @@ export class Store {
     this.profileOverrides.reconcileProfileOverrides(trackedOrigins, ttlMs);
   }
 
-  // -- Goal priority (the operator's "this goal first, and everything under it") --
-
   setGoalPriority(originRef: string, priority: boolean): void {
     this.priority.setGoalPriority(originRef, priority);
   }
   listGoalPriorities(): GoalPriority[] {
     return this.priority.listGoalPriorities();
   }
-
-  // -- Remedies (why the fleet came back to a PR, and what settled it) --------
 
   recordRemedy(input: RemedyInput): Remedy {
     return this.remedies.recordRemedy(input);
@@ -527,8 +472,6 @@ export class Store {
   listRecentRemedies(kind: RemedyKind, limit: number): Remedy[] {
     return this.remedies.listRecentRemedies(kind, limit);
   }
-
-  // -- The cross-fleet pool (docs/spec/28-cross-fleet-pool.md) ----------------
 
   replacePoolFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
     this.pool.replaceFleetDigest(fleetId, project, document);
@@ -555,8 +498,6 @@ export class Store {
     this.pool.recordPoolChecked(kind);
   }
 
-  // -- MCP calls (which tools the fleet reaches for, and which it never does) -
-
   recordMcpCall(input: McpCallInput, retainArgsDays: number): McpCall {
     return this.mcpCalls.recordMcpCall(input, retainArgsDays);
   }
@@ -573,8 +514,6 @@ export class Store {
     return this.mcpCalls.lastMcpCallByTool();
   }
 
-  // -- Surface reach (what an operator looked at, and what they did there) ----
-
   recordSurfaceReach(rows: readonly SurfaceReachInput[]): number {
     return this.surfaceReach.recordSurfaceReach(rows);
   }
@@ -587,8 +526,6 @@ export class Store {
   pruneSurfaceReach(force = false): number {
     return this.surfaceReach.pruneSurfaceReach(force);
   }
-
-  // -- Human tasks (work only a person can do) -------------------------------
 
   recordHumanTask(input: Parameters<HumanTaskStore['recordHumanTask']>[0]): { task: HumanTask; created: boolean } {
     return this.humanTasks.recordHumanTask(input);
@@ -621,8 +558,6 @@ export class Store {
   dismissHumanTask(id: string): HumanTask | null {
     return this.humanTasks.dismissHumanTask(id);
   }
-
-  // -- Plans (the multi-PR issue funnel) -----------------------------------
 
   upsertPlan(input: Parameters<PlanStore['upsertPlan']>[0]): Plan {
     return this.plans.upsertPlan(input);
@@ -701,8 +636,6 @@ export class Store {
     return this.plans.rollUpPlanStatus(planId);
   }
 
-  // -- Validation (how anyone checks the goal was met) -----------------------
-
   ingestValidation(planId: string, input: Parameters<ValidationStore['ingestValidation']>[1]): ValidationCheck[] {
     return this.validation.ingestValidation(planId, input);
   }
@@ -757,8 +690,6 @@ export class Store {
     return this.validation.recordValidationResult(planId, checkId, input);
   }
 
-  // -- Issue verdicts (conclusion / delivery / shortfall / appraisal) ------------
-
   recordIssueConclusion(input: Parameters<IssueVerdictStore['recordIssueConclusion']>[0]): IssueConclusion {
     return this.verdicts.recordIssueConclusion(input);
   }
@@ -771,8 +702,6 @@ export class Store {
   clearIssueConclusion(originRef: string): boolean {
     return this.verdicts.clearIssueConclusion(originRef);
   }
-
-  // -- Operator instructions on a goal ---------------------------------------
 
   addIssueInstruction(input: { originRef: string; text: string }): IssueInstruction {
     return this.instructions.addIssueInstruction(input);
@@ -836,8 +765,6 @@ export class Store {
     return this.verdicts.clearAppraisal(originRef);
   }
 
-  // -- Scratch pads and retrospectives (a goal's written record) ------------
-
   appendScratchEntry(input: Parameters<ScratchStore['appendScratchEntry']>[0]): ScratchEntry {
     return this.scratch.appendScratchEntry(input);
   }
@@ -856,8 +783,6 @@ export class Store {
   listRetrospectiveOrigins(): string[] {
     return this.scratch.listRetrospectiveOrigins();
   }
-
-  // -- Review packs (a change restated for a person, and what they did to it) --
 
   recordReviewPack(pack: ReviewPack): ReviewPackRecord {
     return this.reviewPacks.recordReviewPack(pack);
@@ -915,8 +840,6 @@ export class Store {
     return this.reviewPacks.listAllReviewMarks();
   }
 
-  // -- The account's Claude usage windows ------------------------------------
-
   recordRateLimits(limits: AccountRateLimits): void {
     this.rateLimits.recordRateLimits(limits);
   }
@@ -927,16 +850,12 @@ export class Store {
     return this.rateLimits.listRateLimitReadingsSince(since);
   }
 
-  // -- The harness's own build ----------------------------------------------
-
   readUpgradeIntent(): UpgradeIntent {
     return this.upgrades.readUpgradeIntent();
   }
   writeUpgradeIntent(intent: UpgradeIntent): UpgradeIntent {
     return this.upgrades.writeUpgradeIntent(intent);
   }
-
-  // -- Agents (plus usage, flags and files) ---------------------------------
 
   createAgent(input: Parameters<AgentStore['createAgent']>[0]): Agent {
     return this.agents.createAgent(input);
@@ -962,24 +881,12 @@ export class Store {
   recordAgentNote(id: string, note: string): string {
     return this.agents.recordAgentNote(id, note);
   }
-  /**
-   * What this deployment has spent since `sinceIso` — **every** source of it: `usage_events`
-   * for the fleet's agents and `local_run_cost_deltas` for the dev-environment sessions.
-   * This addition is the one place they are added, so a third source of spend goes here or
-   * the cockpit states it nowhere while claiming to state all of it.
-   */
   sumUsageCostSince(sinceIso: string): number {
     return this.agents.sumUsageCostSince(sinceIso) + this.localRuns.sumLocalRunCostSince(sinceIso);
   }
-  /**
-   * The agents' dated deltas alone, for the reader that needs to know **whose** — the
-   * reliability breakdown joins these to agents by id, which a local run's delta can never
-   * match. {@link Store.listCostDeltasSince} answers "what went out, and when".
-   */
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
     return this.agents.listUsageEventsSince(sinceIso);
   }
-  /** Every dated delta, whatever spent it, oldest first — the spend timeline's input. */
   listCostDeltasSince(sinceIso: string): CostDelta[] {
     return [
       ...this.agents.listUsageEventsSince(sinceIso).map((e) => ({ costUsd: e.costUsd, at: e.at })),
@@ -1024,8 +931,6 @@ export class Store {
     return this.agents.listGoalNeighbours(goalRef, paths);
   }
 
-  // -- Transcripts ---------------------------------------------------------
-
   appendTranscript(agentId: string, chunk: string): void {
     this.transcripts.appendTranscript(agentId, chunk);
   }
@@ -1035,8 +940,6 @@ export class Store {
   getTranscript(agentId: string): string {
     return this.transcripts.getTranscript(agentId);
   }
-
-  // -- Escalations and proposals -------------------------------------------
 
   createEscalation(input: Omit<Escalation, 'id' | 'status' | 'response' | 'createdAt' | 'answeredAt'>): Escalation {
     return this.escalations.createEscalation(input);
@@ -1080,8 +983,6 @@ export class Store {
     return this.escalations.listProposals();
   }
 
-  // -- Stack landings (a standing authorization over a whole chain) ----------
-
   recordStackLanding(ref: string, rungs: number[]): StackLanding {
     return this.landings.recordStackLanding(ref, rungs);
   }
@@ -1108,16 +1009,12 @@ export class Store {
     return this.landings.settleStackLanding(id, status, reason);
   }
 
-  // -- Branch reaps (merged branches already cleaned up) --------------------
-
   recordBranchReap(prNumber: number, branch: string): void {
     this.branchReaps.recordBranchReap(prNumber, branch);
   }
   reapedPrs(): ReadonlySet<number> {
     return this.branchReaps.reapedPrs();
   }
-
-  // -- Environments (where a goal's landed work has got to) -----------------
 
   recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
     this.environments.recordGoalLanding(input);
@@ -1173,7 +1070,6 @@ export class Store {
     return this.environments.listEnvironmentGateReleases();
   }
 
-  // -- The post-deploy watch (what a goal declared production would have to show) --
   ingestGoalWatch(originRef: string, checks: readonly GoalWatchInput[]): void {
     this.watches.ingestGoalWatch(originRef, checks);
   }
@@ -1236,8 +1132,6 @@ export class Store {
     return this.watches.listWatchReadings();
   }
 
-  // -- The local run (the machine's one dev environment) --------------------
-
   beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {
     return this.localRuns.beginLocalRun(input);
   }
@@ -1268,8 +1162,6 @@ export class Store {
   addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
     this.localRuns.addLocalRunUsage(id, delta);
   }
-
-  // -- Local validations (the fleet driving that environment) ----------------
 
   createLocalValidation(input: {
     originRef: string;
@@ -1320,8 +1212,6 @@ export class Store {
     return this.localValidations.abandonLocalValidation(id, note);
   }
 
-  // -- PR watch seeds (the harness's own PRs, already tagged) ---------------
-
   recordPrWatchSeed(prNumber: number, branch: string): void {
     this.prWatchSeeds.recordPrWatchSeed(prNumber, branch);
   }
@@ -1336,16 +1226,12 @@ export class Store {
     return this.workItemLinks.linkedWorkItemPrs();
   }
 
-  // -- Review waits (how long a PR has sat on a reviewer) -------------------
-
   foldReviewWaits(waiting: readonly number[]): void {
     this.reviewWaitStore.foldReviewWaits(waiting);
   }
   reviewWaits(): ReadonlyMap<number, string> {
     return this.reviewWaitStore.reviewWaits();
   }
-
-  // -- Fleet reviews (the harness's own read of a diff) ---------------------
 
   recordPrReview(input: PrReviewInput): PrReview {
     return this.prReviews.recordPrReview(input);
@@ -1485,17 +1371,8 @@ export class Store {
     this.obstacles.setObstacleConditionMet(id, met);
   }
 
-  /**
-   * Queue the documentation job a note is written up by, and record the write-up against it
-   * in the same transaction — either alone leaves a job nothing settles a note from, or a
-   * note on its way somewhere nothing is taking it.
-   *
-   * The job carries **no origin**: the graph adopts a job by its origin, so attributing this
-   * one to whichever goal hit the note first would file the work under somebody else's issue.
-   */
   writeUpObstacle(obstacleId: string, work: { title: string; prompt: string }): Job {
     const write = this.db.transaction((): Job => {
-      // A `code` job: it writes files in a tree, so it needs a worktree and a branch.
       const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code' });
       this.obstacles.recordObstacleWriteUp(obstacleId, job.id);
       return job;
@@ -1531,8 +1408,6 @@ export class Store {
     return this.prArchive.listArchivedPrs();
   }
 
-  // -- Decisions (audit) ---------------------------------------------------
-
   recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule' | 'admission'>): Decision {
     return this.decisions.recordDecision(input);
   }
@@ -1542,8 +1417,6 @@ export class Store {
   listDecisionsForGoal(goalRef: string, limit?: number): Decision[] {
     return this.decisions.listDecisionsForGoal(goalRef, limit);
   }
-
-  // -- World change history and connector persistence -----------------------
 
   recordWorldEvents(inputs: WorldEventInput[]): WorldEvent[] {
     return this.world.recordWorldEvents(inputs);
@@ -1577,8 +1450,6 @@ export class Store {
     this.world.setConnectorState(key, value);
   }
 
-  // -- Error log -----------------------------------------------------------
-
   recordError(input: ErrorLogInput): ErrorLogEntry {
     return this.errors.recordError(input);
   }
@@ -1591,8 +1462,6 @@ export class Store {
   clearErrors(): number {
     return this.errors.clearErrors();
   }
-
-  // -- Work graph, filings and ignores --------------------------------------
 
   recordWorkGraph(observations: WorkNodeObservation[]): void {
     this.graph.recordWorkGraph(observations);
@@ -1631,8 +1500,6 @@ export class Store {
     return this.graph.listWorkItemIgnores();
   }
 
-  // -- Bugs raised against a story ------------------------------------------
-
   createBugFiling(input: Parameters<BugFilingStore['createBugFiling']>[0]): BugFiling {
     return this.bugFilings.createBugFiling(input);
   }
@@ -1646,8 +1513,6 @@ export class Store {
     return this.bugFilings.linkBugFiling(jobId, ticketRef);
   }
 
-  // -- Runs at a goal -------------------------------------------------------
-
   recordIssueRun(input: Parameters<FloorStore['recordIssueRun']>[0]): void {
     this.floor.recordIssueRun(input);
   }
@@ -1657,8 +1522,6 @@ export class Store {
   listIssueRuns(): IssueRun[] {
     return this.floor.listIssueRuns();
   }
-
-  // -- The ticket mirror ----------------------------------------------------
 
   ensureTrackerSweep(backfillMs: number): TrackerSweepMark {
     return this.tickets.ensureTrackerSweep(backfillMs);
@@ -1698,8 +1561,6 @@ export class Store {
     return this.tickets.listFeatureSummaries();
   }
 
-  // -- Sequences ------------------------------------------------------------
-
   recordFeatureSequence(input: Parameters<SequenceStore['recordFeatureSequence']>[0]): FeatureSequence {
     return this.sequences.recordFeatureSequence(input);
   }
@@ -1712,7 +1573,6 @@ export class Store {
   listFeatureSequences(): FeatureSequence[] {
     return this.sequences.listFeatureSequences();
   }
-  // -- Pets -----------------------------------------------------------------
 
   listPets(): Pet[] {
     return this.pets.listPets();

@@ -30,17 +30,8 @@ import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
 import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
 
-/**
- * A convenience bundle: the fake integrations (source control, issues)
- * sharing one persisted world, composed behind {@link Connector} +
- * {@link ActionSink}. Equivalent to selecting the `fake` provider for every
- * capability — this is what makes the harness behave identically to before the
- * integrations were modularised, and gives tests a one-call fake with the
- * inject/reflect helpers.
- *
- * Production wiring builds the composite from config via `buildIntegrations`
- * (see `system.ts`); this facade is the same modules assembled directly.
- */
+// → docs/spec/03-world-model.md
+
 export class FakeConnector implements Connector, ActionSink {
   private readonly composite: CompositeConnector;
   private readonly github: FakeGitHubIntegration;
@@ -152,7 +143,6 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.deleteBranch(input);
   }
 
-  /** Apply an event to the fake world (routes to the owning module) and log it. */
   inject(event: InjectableEvent): void {
     this.composite.inject(event);
   }

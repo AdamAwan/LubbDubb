@@ -6,15 +6,6 @@ import type { ActionSink, IssueCreateInput, SendResult } from '../src/sink/actio
 import type { MirroredTicket } from '../src/store/tickets.js';
 import type { Config } from '../src/config.js';
 
-/**
- * The harness filing a tracker item itself (issue #394).
- *
- * What is asserted here is the half a model used to be responsible for: which
- * type the item is created as, who it belongs to, and whether it is linked back to
- * anything. Each of those was a sentence in a prompt, and each could be dropped
- * without a single thing going red.
- */
-
 function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:314'): ActionSink {
   const unused = (): never => {
     throw new Error('not scripted in this test');
@@ -24,8 +15,6 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
       created.push(input);
       return ref === null ? { ok: true } : { ok: true, ref };
     },
-    // A predicate rather than an act, so `unused` is the wrong shape: this test's
-    // subject cannot reach it, and a throw would be a stub failing on a question.
     canCloseIssue: () => false,
     canClosePr: () => false,
     closePr: (): never => {
@@ -83,9 +72,6 @@ test('the filer resolves the type, the assignee and the relation from config and
     relatedTo: null,
   });
 
-  // A bug files at its own type and carries the link back to the story. Both are
-  // facts about the *route the operator clicked*, which is why neither is an
-  // argument an agent supplies.
   await file({ title: 'CSV export 404s', body: 'The symptom.', bug: true, relatedTo: 12 });
   assert.equal(created[1]!.type, 'Bug');
   assert.equal(created[1]!.relatedTo, 12);
@@ -96,20 +82,14 @@ test('a brief’s watch label rides on the create, and an empty one is not a lab
   const file = ticketFiler(azure(), sinkRecording(created));
   await file({ title: 'Build X', body: 'the request', labels: ['lubbdubb-watch'] });
   await file({ title: 'Build Y', body: 'the request', labels: [] });
-  // The whole reason this arm stopped being an agent: a ticket without the watch
-  // label is created, linked, shown complete — and never dispatched for.
   assert.deepEqual(created[0]!.labels, ['lubbdubb-watch']);
   assert.deepEqual(created[1]!.labels, []);
 });
 
 test('a create that says nothing about what it made is a failure, not an empty ref', async () => {
   const file = ticketFiler(azure(), sinkRecording([], null));
-  // The one failure the seam cannot express as a throw. Returning `''` would write
-  // an empty ref onto a filing row and read as a ticket forever after.
   await assert.rejects(() => file({ title: 't', body: 'b' }), /did not say what it created/);
 });
-
-// -- the dedupe shortlist -----------------------------------------------------
 
 function ticket(number: number, title: string, state: 'open' | 'closed' = 'open'): MirroredTicket {
   return {
@@ -142,8 +122,6 @@ test('candidates are ranked by shared terms, and an item sharing nothing is drop
     'best overlap first; the unrelated one is not padded in',
   );
 
-  // Stopwords separate nothing, so a subject made only of them shortlists nothing
-  // rather than everything.
   assert.deepEqual(dedupeCandidates(items, 'the and for with'), []);
   assert.equal(dedupeCandidates(items, 'ingest', 1).length, 1, 'the limit is honoured');
 });
@@ -156,8 +134,6 @@ test('a closed item is still a candidate — the mirror is the only place one is
   );
   const block = renderCandidates(found)!;
   assert.match(block, /issue:9 \(closed\)/);
-  // Never a verdict: title overlap finds items worth reading, and deciding two
-  // reports are the same thing needs both bodies.
   assert.match(block, /neither exhaustive nor a verdict/);
 });
 

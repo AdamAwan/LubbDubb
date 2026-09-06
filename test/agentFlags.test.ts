@@ -15,8 +15,6 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// -- pure protocol helpers ---------------------------------------------------
-
 test('parseFlag accepts a bare ref and infers kind/label', () => {
   assert.deepEqual(parseFlag('./design.html'), { kind: 'artifact', label: 'design.html', ref: './design.html' });
 });
@@ -52,16 +50,14 @@ test('extractFlags returns every complete, boundary-guarded flag', () => {
 });
 
 test('extractFlags ignores an echoed prefix mid-token and an unterminated trailing fragment', () => {
-  assert.deepEqual(extractFlags('x@@LUBBDUBB_FLAG:./a.html@@'), []); // no boundary before the prefix
-  assert.deepEqual(extractFlags('@@LUBBDUBB_FLAG:./a.html'), []); // no closing suffix yet
+  assert.deepEqual(extractFlags('x@@LUBBDUBB_FLAG:./a.html@@'), []);
+  assert.deepEqual(extractFlags('@@LUBBDUBB_FLAG:./a.html'), []);
 });
 
 test('stripSentinels removes a complete flag sentinel; stripFlags leaves a partial for the next chunk', () => {
   assert.equal(stripSentinels('here @@LUBBDUBB_FLAG:./a.html@@ done'), 'here  done');
   assert.equal(stripFlags('tail @@LUBBDUBB_FLAG:./a.h'), 'tail @@LUBBDUBB_FLAG:./a.h');
 });
-
-// -- PTY runtime -------------------------------------------------------------
 
 test('PtySession emits a flag and strips the sentinel from output', () => {
   const backend = new FakePtyBackend();
@@ -114,8 +110,6 @@ test('PtySession still finishes on a done sentinel arriving with a flag in the s
   assert.equal(done, true);
 });
 
-// -- stream runtime ----------------------------------------------------------
-
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 4242;
   writes: string[] = [];
@@ -153,8 +147,6 @@ test('StreamJsonSession emits a flag from an assistant event and strips it from 
   assert.equal(out.join('').includes('@@LUBBDUBB_FLAG'), false);
 });
 
-// -- store -------------------------------------------------------------------
-
 test('Store.recordFlag dedupes by (agent, ref) and lists newest-first across agents', () => {
   const store = new Store(':memory:');
   const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
@@ -165,7 +157,6 @@ test('Store.recordFlag dedupes by (agent, ref) and lists newest-first across age
   const refreshed = store.recordFlag(a.id, { kind: 'design', label: 'Design', ref: './design.html' });
   store.recordFlag(b.id, { kind: 'report', label: 'Report', ref: 'r.html' });
 
-  // Same ref → same row id, updated fields; not a duplicate.
   assert.equal(refreshed.id, first.id);
   const aFlags = store.listFlags(a.id);
   assert.equal(aFlags.length, 1);
@@ -176,12 +167,9 @@ test('Store.recordFlag dedupes by (agent, ref) and lists newest-first across age
   store.close();
 });
 
-// -- server route + snapshot -------------------------------------------------
-
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -211,14 +199,10 @@ test('GET /artifacts/:id serves a confined file by flag id and refuses traversal
   assert.match(ok.headers['content-security-policy'] as string, /sandbox/);
   assert.equal(ok.body, '<h1>Design</h1>');
 
-  // A ref that escapes the worktree is refused even though the flag exists.
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${escaped.id}` })).statusCode, 404);
-  // A URL ref isn't served (the cockpit links it directly).
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${urlFlag.id}` })).statusCode, 400);
-  // An unknown flag id is a 404.
   assert.equal((await app.inject({ method: 'GET', url: '/artifacts/flag_nope' })).statusCode, 404);
 
-  // The snapshot carries the flags so the cockpit can render them.
   const snap = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
   assert.ok(snap.flags.some((f: { ref: string }) => f.ref === 'design.html'));
 
@@ -228,23 +212,19 @@ test('GET /artifacts/:id serves a confined file by flag id and refuses traversal
 
 test('absolutePrefixes keeps only the absolute docsFolderPrefix entries, resolved', () => {
   assert.deepEqual(absolutePrefixes(undefined), []);
-  assert.deepEqual(absolutePrefixes('docs'), []); // relative → not a serving root
+  assert.deepEqual(absolutePrefixes('docs'), []);
   assert.deepEqual(absolutePrefixes(['docs', 'artifacts']), []);
-  // Absolute entries survive; the resolve() is what canonicalises them.
   const abs = absolutePrefixes(['docs', join(tmpdir(), 'shared')]);
   assert.deepEqual(abs, [join(tmpdir(), 'shared')]);
 });
 
 test('GET /artifacts/:id serves an out-of-worktree file under a configured absolute prefix', async () => {
-  // The operator points docsFolderPrefix at a shared dir outside any worktree.
   const shared = mkdtempSync(join(tmpdir(), 'lubbdubb-shared-'));
   writeFileSync(join(shared, 'plan.md'), '# Plan');
   const config = loadConfig({ ...testConfig(), docsFolderPrefix: shared });
   const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
-  // The agent's worktree is a *different* dir; the flag ref is the absolute path
-  // under the configured shared prefix (as toWorktreeRelative would leave it).
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
   const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
@@ -254,13 +234,11 @@ test('GET /artifacts/:id serves an out-of-worktree file under a configured absol
   assert.equal(ok.statusCode, 200);
   assert.equal(ok.body, '# Plan');
 
-  // An absolute ref outside every configured prefix (and outside the worktree) is refused.
   const outside = mkdtempSync(join(tmpdir(), 'lubbdubb-outside-'));
   writeFileSync(join(outside, 'secret.md'), 'nope');
   const bad = system.store.recordFlag(agent.id, { kind: 'x', label: 's', ref: join(outside, 'secret.md') });
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${bad.id}` })).statusCode, 404);
 
-  // A `..` escape out of the configured prefix is still refused.
   const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'e', ref: join(shared, '..', 'etc') });
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${escaped.id}` })).statusCode, 404);
 

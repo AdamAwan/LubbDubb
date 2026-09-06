@@ -3,13 +3,8 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { AgentStatus, Escalation, EscalationContext, EscalationType } from '../types.js';
 
-/**
- * The statuses an agent never comes back from, and so the ones whose open
- * questions are un-answerable. `crashed` is deliberately absent: a crashed agent
- * is still awaiting a recovery decision and may be **restored**, and a restored
- * agent must come back to the question it parked on — `RecoveryDesk` dismisses on
- * the requeue/remove arms instead, once the operator has closed that door.
- */
+// → docs/spec/05-dispatcher.md
+
 const DEAD_AGENT_STATUSES: ReadonlySet<AgentStatus> = new Set<AgentStatus>(['done', 'failed', 'killed', 'interrupted']);
 
 interface CreateEscalationInput {
@@ -22,19 +17,9 @@ interface CreateEscalationInput {
 
 interface AnswerResult {
   escalation: Escalation;
-  /** How the answer was applied. */
   routing: 'typed_into_agent' | 'queued_for_dispatch';
 }
 
-/**
- * The human-in-the-loop surface. Anything the harness can't safely decide on its
- * own lands here as a parked item. Responses route two ways:
- *
- *   - tied to a live, parked agent  -> typed straight into that PTY session so
- *     the agent continues;
- *   - otherwise                     -> recorded so the next dispatch cycle sees
- *     the answer and acts on it.
- */
 export class EscalationInbox extends EventEmitter {
   constructor(
     private readonly store: Store,
@@ -71,14 +56,6 @@ export class EscalationInbox extends EventEmitter {
     return { escalation: updated, routing };
   }
 
-  /**
-   * Settle an escalation the harness resolved *out of band* — not by typing an
-   * answer into the agent's session. The permission backstop (issue #130) is the
-   * one caller: the agent is blocked inside a `--permission-prompt-tool` call, so
-   * the "answer" is the tool's return value, and routing text into the session
-   * (what {@link answer} does) would corrupt a session that isn't at a prompt.
-   * Marks the item answered and emits so the cockpit refreshes, nothing more.
-   */
   settleResolved(id: string, response: string): Escalation {
     const esc = this.store.getEscalation(id);
     if (!esc) throw new Error(`Escalation ${id} not found`);
@@ -88,19 +65,6 @@ export class EscalationInbox extends EventEmitter {
     return updated;
   }
 
-  /**
-   * Clear an item the operator has decided needs nothing from them — the thing was
-   * handled outside the harness, or the agent carried on regardless (see
-   * `Agent.resumedAt`). Nothing is typed into the agent: an answer that exists only
-   * to empty the inbox is a message the agent then has to make sense of, which is
-   * the workaround this replaces.
-   *
-   * It does release the agent's park latch, and that is load-bearing rather than
-   * tidy: while the latch is held `AgentManager.handleWaiting` early-returns, so an
-   * agent whose alert was dismissed would be unable to raise another one ever. The
-   * reason is recorded on the item itself (`context.dismissal`, no schema change)
-   * and in the audit log, so a cleared alert leaves a trace like any other outcome.
-   */
   dismiss(id: string, note?: string): Escalation {
     const esc = this.store.getEscalation(id);
     if (!esc) throw new Error(`Escalation ${id} not found`);
@@ -119,15 +83,6 @@ export class EscalationInbox extends EventEmitter {
     return updated;
   }
 
-  /**
-   * Cascade-dismiss every open escalation tied to an agent that has reached a
-   * terminal-dead state (server restart / kill / crash). Such an agent can never
-   * receive the answer, so leaving these `open` just clutters "Needs you" with
-   * un-actionable items — answering one would route nowhere. We flip them to the
-   * existing `dismissed` status, recording *why* in the escalation's own context
-   * (`context.dismissal`, so no schema change) and in the audit log, and emit a
-   * `dismissed` event so the cockpit refreshes. Returns the escalations dismissed.
-   */
   dismissEscalationsForAgent(agentId: string, reason: string): Escalation[] {
     const at = new Date().toISOString();
     const dismissed: Escalation[] = [];

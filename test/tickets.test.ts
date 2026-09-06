@@ -19,7 +19,6 @@ import type { TrackerItem } from '../src/types.js';
 import { statePick } from '../web/src/cockpit/place.js';
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-/** What a sweep asked from, when a test is not about the mark itself. */
 const SINCE = '2026-07-01T00:00:00.000Z';
 
 function item(over: Partial<TrackerItem> & Pick<TrackerItem, 'number'>): TrackerItem {
@@ -46,17 +45,11 @@ function mirrored(over: Partial<MirroredTicket> & Pick<MirroredTicket, 'number'>
   };
 }
 
-// ---------------------------------------------------------------------------
-// The mirror
-// ---------------------------------------------------------------------------
-
 test('the mirror keeps everything it has seen and never deletes', () => {
   const store = new Store(':memory:');
   store.ensureTrackerSweep(MONTH_MS);
 
   store.recordSweep(SINCE, [item({ number: 10, title: 'First' }), item({ number: 11 })]);
-  // A later sweep that no longer mentions #11 — the tracker stopped returning it,
-  // which is what closing, untagging or reassigning an item looks like from here.
   store.recordSweep(SINCE, [item({ number: 10, title: 'Renamed', state: 'closed' })]);
 
   const rows = store.listTrackerItems();
@@ -73,9 +66,6 @@ test('the mirror keeps everything it has seen and never deletes', () => {
 test('the backfill anchor is frozen, and the high-water mark only moves forward', () => {
   const store = new Store(':memory:');
   const first = store.ensureTrackerSweep(MONTH_MS);
-  // A second call with a *wider* window must not move the floor: rows below it are
-  // already kept, and a floor that moved would make "history from" a lie on every
-  // screen that states it.
   const again = store.ensureTrackerSweep(MONTH_MS * 12);
   assert.equal(again.anchorAt, first.anchorAt, 'the anchor is stamped once');
   assert.equal(first.sweptTo, null, 'and nothing has been swept yet');
@@ -83,8 +73,6 @@ test('the backfill anchor is frozen, and the high-water mark only moves forward'
   store.recordSweep(SINCE, [item({ number: 1, changedAt: '2026-08-05T00:00:00.000Z' })]);
   assert.equal(store.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z');
 
-  // An unordered batch carrying one older row must not walk the mark backwards —
-  // it would re-read the same window forever.
   store.recordSweep(SINCE, [item({ number: 2, changedAt: '2026-08-02T00:00:00.000Z' })]);
   assert.equal(store.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z', 'the mark is a maximum');
   store.close();
@@ -140,10 +128,6 @@ test('a fresh mirror is restated by its own first read', async () => {
 });
 
 test('a mirror written before the history carried states re-reads itself once', async () => {
-  // The database an upgrade actually finds: swept by a build whose history read
-  // dropped the provider's own word, so every row that had already closed carries
-  // no state and no state filter can reach it. The column does not exist yet
-  // either — which is what makes its absence mean *not restated*.
   const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-tickets-')), 'db.sqlite');
   const raw = new Database(path);
   raw.exec(`CREATE TABLE tracker_sweep (
@@ -227,7 +211,6 @@ test('a completed sweep that found nothing still stops the tab saying it is fill
     backfillMs: MONTH_MS,
     source: {
       tracksTicketHistory: true,
-      // An empty tracker, or a month with nothing in it.
       async listTicketHistory() {
         return [];
       },
@@ -244,10 +227,6 @@ test('a completed sweep that found nothing still stops the tab saying it is fill
   );
   store.close();
 });
-
-// ---------------------------------------------------------------------------
-// The list
-// ---------------------------------------------------------------------------
 
 const LABELS = { watchLabel: 'lubbdubb-watch' };
 
@@ -275,8 +254,6 @@ test('the axes are independent, and an item is watched only if it carries the ta
     mirrored({ number: 1, labels: ['bug'], state: 'closed', tracking: 'frozen' }),
   ];
 
-  // The four questions the ticket asks, in the order it asks them. `tracking` is
-  // the harness's reading and `watch` the operator's, and neither narrows the other.
   assert.deepEqual(
     page(items, { watch: 'watched', tracking: 'live' }).rows.map((r) => r.number),
     [4],
@@ -326,8 +303,6 @@ test('paging is keyset, so a row arriving mid-scroll cannot hide one', () => {
   assert.equal(first.total, TICKET_PAGE + 5, 'the total is the whole filtered set — what makes "40 of 45" sayable');
   assert.ok(first.nextCursor !== null);
 
-  // A newer ticket lands between the two reads. An offset would shift the window
-  // and drop the row at the boundary; a key names the row the last page stopped at.
   const grown = [mirrored({ number: 101 }), ...items];
   const second = page(grown, { cursor: first.nextCursor });
   assert.equal(second.rows.length, 5, 'exactly the tail, with nothing repeated and nothing skipped');
@@ -347,10 +322,6 @@ test('a cursor whose row has left the filtered set restarts rather than guessing
     'repeating rows is a failure a reader can see; silently skipping a page is not',
   );
 });
-
-// ---------------------------------------------------------------------------
-// The outcome word
-// ---------------------------------------------------------------------------
 
 test('a shortfall outranks a delivery, so a re-judged goal reads as fell short', () => {
   const outcomes = ticketOutcomes({
@@ -409,10 +380,6 @@ test('a delivery reads delivered, an agent’s own done reads concluded, and a d
   assert.equal(outcomes.get(99), undefined, 'and a ticket nobody judged has no word at all');
 });
 
-// ---------------------------------------------------------------------------
-// The route, at the buildSystem seam
-// ---------------------------------------------------------------------------
-
 test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () => {
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
@@ -461,12 +428,8 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
     'both untagged items, whatever else they carry',
   );
 
-  // A closed ticket is in the mirror and out of the world, which is the whole
-  // point: the snapshot's issue list can no longer answer for it.
   system.connector.inject({ kind: 'issue_state', number: 12, state: 'closed' });
   await system.harness.runCycle('manual');
-  // Spelled the old way on purpose: `state=closed` is the pre-#351 axis, and the
-  // alias is what keeps every saved link and bookmark working.
   const closed = await app.inject({ method: 'GET', url: '/api/tickets?state=closed' });
   const closedBody = closed.json() as TicketsPayload;
   assert.deepEqual(
@@ -476,9 +439,6 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
   assert.equal(closedBody.total, 1, 'the filtered set is one');
   assert.equal(closedBody.kept, 3, 'but the history is still three — a filter does not shrink it');
 
-  // A state no item carries is a filter that found nothing, not a place that does
-  // not exist: the vocabulary is the tracker's, so this file cannot hold the list to
-  // validate against and an empty answer is the honest one.
   const unknown = await app.inject({ method: 'GET', url: '/api/tickets?state=nonsense' });
   assert.equal(unknown.statusCode, 200);
   assert.deepEqual((unknown.json() as TicketsPayload).rows, []);
@@ -490,11 +450,6 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
   system.store.close();
 });
 
-// ---------------------------------------------------------------------------
-// Live and frozen (#351)
-// ---------------------------------------------------------------------------
-
-/** The live overlay a sweep is handed, narrowed to what these cases care about. */
 function fact(number: number, over: Partial<LiveTicketFacts> = {}): LiveTicketFacts {
   return { number, labels: [], workItemState: null, issueType: null, ...over };
 }
@@ -515,25 +470,18 @@ test('an item that leaves the open set freezes, keeps everything, and thaws if i
     ],
   );
 
-  // #1 is gone from the open set. It freezes, and it keeps every field it was last
-  // seen with — the whole reason a frozen row is kept rather than dropped.
   store.recordSweep(SINCE, [], [fact(2)]);
   const frozen = store.listTrackerItems().find((r) => r.number === 1);
   assert.equal(frozen?.tracking, 'frozen');
   assert.equal(frozen?.workItemState, 'Active');
   assert.deepEqual(frozen?.parent, { number: 90, title: 'Payments' });
 
-  // Reopened, so the next sweep says so. Thaw is one condition, not a judgement.
   store.recordSweep(SINCE, [], [fact(1), fact(2)]);
   assert.equal(store.listTrackerItems().find((r) => r.number === 1)?.tracking, 'live');
   store.close();
 });
 
 test('a closed item keeps the tracker’s own word for why it closed', () => {
-  // The live overlay is the open set by construction, so it is the *history* read
-  // that has to carry the native state — otherwise every closed row answers null
-  // and no state filter can reach it, which is the silence a discovered state list
-  // exists to prevent.
   const store = new Store(':memory:');
   store.ensureTrackerSweep(MONTH_MS);
   store.recordSweep(
@@ -553,8 +501,6 @@ test('a closed item keeps the tracker’s own word for why it closed', () => {
 });
 
 test('a provider with no native states never wipes one the overlay wrote', () => {
-  // GitHub and the fake hand back null on every history read. Assigning it would
-  // erase what the snapshot knew, silently, on every pulse.
   const store = new Store(':memory:');
   store.ensureTrackerSweep(MONTH_MS);
   store.recordSweep(SINCE, [item({ number: 1 })], [fact(1, { workItemState: 'Active' })]);
@@ -564,9 +510,6 @@ test('a provider with no native states never wipes one the overlay wrote', () =>
 });
 
 test('an empty live set freezes nothing at all', () => {
-  // A provider whose snapshot failed hands back its last good read, but one that is
-  // down on a first boot hands back nothing — and freezing the whole board off that
-  // is the one way this can be wrong at scale.
   const store = new Store(':memory:');
   store.ensureTrackerSweep(MONTH_MS);
   store.recordSweep(SINCE, [item({ number: 1 })], [fact(1)]);
@@ -578,21 +521,11 @@ test('an empty live set freezes nothing at all', () => {
 test('an orphan and an unreadable parent are never collapsed into each other', () => {
   const store = new Store(':memory:');
   store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(
-    SINCE,
-    [item({ number: 1 }), item({ number: 2 })],
-    [
-      // The tracker says this one hangs off nothing…
-      fact(1, { parent: null }),
-      // …and this provider reports no hierarchy at all, which is a different fact.
-      fact(2),
-    ],
-  );
+  store.recordSweep(SINCE, [item({ number: 1 }), item({ number: 2 })], [fact(1, { parent: null }), fact(2)]);
   const rows = store.listTrackerItems();
   assert.equal(rows.find((r) => r.number === 1)?.parent, null, 'a resolved absence is an orphan');
   assert.ok(!('parent' in (rows.find((r) => r.number === 2) ?? {})), 'an unresolved one says nothing');
 
-  // And a sweep that could not read the link must not erase one an earlier sweep did.
   store.recordSweep(SINCE, [], [fact(1, { parent: { number: 90, title: 'Payments' } })]);
   store.recordSweep(SINCE, [], [fact(1)]);
   assert.deepEqual(store.listTrackerItems().find((r) => r.number === 1)?.parent, { number: 90, title: 'Payments' });
@@ -603,8 +536,6 @@ test('a feature keeps its colour, and the ladder is spread rather than piled', (
   const store = new Store(':memory:');
   const first = store.ensureFeatureColors([90, 91]);
   assert.notEqual(first.get(90), first.get(91), 'two features do not draw as one');
-  // Assigned once and never moved: a colour that changed between sessions is worse
-  // than no colour, since the whole value is that it is the same tomorrow.
   const again = store.ensureFeatureColors([91, 90, 92]);
   assert.equal(again.get(90), first.get(90));
   assert.equal(again.get(91), first.get(91));
@@ -613,8 +544,6 @@ test('a feature keeps its colour, and the ladder is spread rather than piled', (
 });
 
 test('the facets count the whole mirror, not the filtered set', () => {
-  // A facet counted after its own filter shows 1 beside whichever value was picked
-  // and nothing beside the rest — a control that erases its own alternatives.
   const items = [
     mirrored({ number: 3, workItemState: 'Ready', parent: { number: 90, title: 'Payments' } }),
     mirrored({ number: 2, workItemState: 'New', parent: { number: 90, title: 'Payments' } }),
@@ -639,8 +568,6 @@ test('the facets count the whole mirror, not the filtered set', () => {
   );
   assert.equal(narrowed.orphanCount, 1);
 
-  // The feature filter, and its orphan bucket — which is the tracker's "no parent",
-  // never a parent we failed to read.
   assert.deepEqual(
     page(items, { feature: 90 }).rows.map((r) => r.number),
     [3, 2],
@@ -652,8 +579,6 @@ test('the facets count the whole mirror, not the filtered set', () => {
 });
 
 test('a state facet says how much of itself is still live', () => {
-  // `Closed` is on frozen rows by definition. Counting only the total would leave
-  // the cockpit no way to tell a pick that narrows from one that returns nothing.
   const facets = page([
     mirrored({ number: 3, workItemState: 'New' }),
     mirrored({ number: 2, workItemState: 'Closed', tracking: 'frozen', state: 'closed' }),
@@ -666,8 +591,6 @@ test('a state facet says how much of itself is still live', () => {
       ['New', 1, 1],
     ],
   );
-  // And the rows are there to be had, which is the whole point of carrying the
-  // state on a frozen row at all.
   assert.deepEqual(
     page(
       [
@@ -719,10 +642,6 @@ test('the pickup mark on a state facet is the dispatcher’s effective set, not 
     agentMode: 'raw',
     heartbeatIntervalMs: 999_999,
     startPaused: true,
-    // "Doing" is deliberately absent from the pickup list: `effectivePickupStates`
-    // folds the in-progress state in, and src/config.ts says it should not be
-    // listed. A facet built from the raw list therefore marks it not-pickup, which
-    // is the bug — cosmetic on a table, and the whole warning on a board.
     issuePickupStates: ['Ready'],
     issueInProgressState: 'Doing',
   });
@@ -734,9 +653,6 @@ test('the pickup mark on a state facet is the dispatcher’s effective set, not 
 
   system.connector.inject({ kind: 'new_issue', number: 20, title: 'Waiting' });
   system.connector.inject({ kind: 'new_issue', number: 21, title: 'In flight' });
-  // The fake has no way to inject a native state, so it is written through the
-  // provider seam the harness itself uses — which is also the only path that puts
-  // the state into the world the sweep then mirrors.
   await system.connector.setWorkItemState({ number: 20, state: 'Ready' });
   await system.connector.setWorkItemState({ number: 21, state: 'Doing' });
   await system.harness.runCycle('manual');
@@ -759,8 +675,6 @@ test('the board column order is an operator policy, shipped to the cockpit as it
     agentMode: 'raw',
     heartbeatIntervalMs: 999_999,
     startPaused: true,
-    // Not alphabetical and not count order: the whole point of the key is that the
-    // order is a judgement only the operator can make.
     issueBoardStates: ['New', 'Ready', 'Doing', 'In Review', 'Closed'],
   });
   const system = buildSystem(config, {
@@ -798,8 +712,6 @@ test('a deployment that configures no board states ships an empty list, not a gu
   await system.harness.runCycle('manual');
   const { app } = await buildApp(system);
   const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
-  // Empty means "fall back to the facets", which the cockpit decides. The server
-  // inventing an order here would be a policy no file states.
   assert.deepEqual(body.config.boardStates, []);
 });
 
@@ -826,13 +738,9 @@ test('the cockpit is told whether a state can be written, and which states the r
 
   assert.equal(body.config.canSetWorkItemState, true, 'the fake issues provider can write states');
   assert.deepEqual(body.config.stateRules, {
-    // The *effective* set, so the in-progress state is in it — the same list the
-    // dispatcher gates on, quoted rather than re-derived in the browser.
     pickup: ['Ready', 'Queued', 'Doing'],
     inProgress: 'Doing',
     inReview: 'In Review',
-    // Where `work-item-back-to-pickup` returns an item: the first *configured*
-    // pickup state, which is the operator's own "start here".
     returnsTo: 'Ready',
   });
 });
@@ -854,8 +762,5 @@ test('with no state gate configured there are no rules to report, and null says 
   await system.harness.runCycle('manual');
   const { app } = await buildApp(system);
   const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
-  // Null rather than an object of nulls: without `issuePickupStates` all three
-  // work-item rules are switched out by the registry's `workItemStates` condition,
-  // so there is nothing for a drop to disturb. The same fact the dispatcher acts on.
   assert.equal(body.config.stateRules, null);
 });

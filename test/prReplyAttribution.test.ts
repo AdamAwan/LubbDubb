@@ -21,25 +21,6 @@ import type { SentPrReplies } from '../src/prThreads.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { Agent, PullRequest } from '../src/types.js';
 
-/**
- * Who wrote a review reply is a **record of what the harness sent**, never an
- * inference from the author.
- *
- * The bug this file holds down: the credential the harness posts under is, on a
- * single-operator deployment, the operator's own account. Reading `ours` and
- * `answered` off "the author equals `config.userId`" therefore badged the
- * operator's own follow-up on their own review thread as the fleet's answer, and
- * `answered` folds to `PrComment.handled` — the only bit rule `pr-review-comment`
- * reads. Their comment was marked as work already done and never dispatched for,
- * and nothing anywhere went red.
- *
- * So attribution is `PrReplyStore`: one row per reply that actually left through
- * `sink.postPrReply`, keyed on the provider's own id for the comment it created.
- * Both providers read the same rows through the same derivation
- * (`src/prThreads.ts`), which is what stops them disagreeing about one thread.
- * → `docs/spec/07-pull-requests.md#review-threads`
- */
-
 const OPERATOR = 'the-operator';
 
 function testConfig(overrides: Record<string, unknown> = {}) {
@@ -55,11 +36,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/**
- * `worktrees` is injected because this builds a whole system: without it
- * `config.repoRoot` defaults to `process.cwd()` and a dispatch cuts a real branch
- * in whoever's checkout is running the suite.
- */
 function build(sink?: ActionSink): System {
   return buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
@@ -69,10 +45,6 @@ function build(sink?: ActionSink): System {
   });
 }
 
-/**
- * A sink that sends nothing and answers with the comment id `script` gives — or
- * with none at all, which is the provider that will not name what it created.
- */
 function replySink(script: { commentRef?: string } = {}): ActionSink & {
   replies: { prNumber: number; commentId: string | null; body: string }[];
 } {
@@ -116,7 +88,6 @@ function replySink(script: { commentRef?: string } = {}): ActionSink & {
   };
 }
 
-/** A review agent on PR #42, as rule `pr-review-comment` dispatches one. */
 function reviewAgent(system: System): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -136,11 +107,6 @@ async function reply(system: System, agent: Agent, body: string, thread: string)
   assert.notEqual(result.isError, true, 'the reply tool accepted the body');
 }
 
-// --------------------------------------------------------------------------
-// Scripted provider fakes — no network, and no reply path either: what goes out
-// is the sink's business, and what comes back is these.
-// --------------------------------------------------------------------------
-
 interface GhScript {
   comments: GhReviewComment[];
   threads?: GhReviewThread[];
@@ -151,8 +117,6 @@ function githubApi(script: GhScript): GitHubApi {
     throw new Error('not part of this test');
   };
   return {
-    // The operator's own login, because that is the deployment where the bug bit:
-    // the credential and the reviewer are one account.
     viewerLogin: async () => OPERATOR,
     listOpenPulls: async (): Promise<GhPullSummary[]> => [
       {
@@ -238,7 +202,6 @@ function azureApi(threads: AzThread[]): AzureDevOpsApi {
   } as unknown as AzureDevOpsApi;
 }
 
-/** The one open pull request the provider read, threads and all. */
 async function readPr(integration: {
   snapshot: () => Promise<{ pullRequests?: PullRequest[] }>;
 }): Promise<PullRequest> {
@@ -264,13 +227,8 @@ function azurePr(threads: AzThread[], sentReplies: SentPrReplies): Promise<PullR
   );
 }
 
-// --------------------------------------------------------------------------
-
 test('the operator replying to their own thread leaves it unhandled and unbadged', async () => {
   const system = build();
-  // Two messages, both under the operator's login — the root they left as a
-  // reviewer and the follow-up they wrote themselves. Nothing went out through
-  // the harness, so the store has no row for either.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'actually, also the caller', inReplyToId: 100 },
@@ -285,8 +243,6 @@ test('the operator replying to their own thread leaves it unhandled and unbadged
 });
 
 test('a reply the harness sent is attributed to the fleet and marks the thread answered', async () => {
-  // The whole path: the tool raises the act, the executor sends it through the
-  // sink, and the sink's `commentRef` is what gets written down.
   const sink = replySink({ commentRef: '101' });
   const system = build(sink);
   const agent = reviewAgent(system);
@@ -296,7 +252,6 @@ test('a reply the harness sent is attributed to the fleet and marks the thread a
   assert.deepEqual([...system.store.prReplyRefs(42)], ['101'], 'and the harness wrote down what it sent');
   assert.deepEqual([...system.store.prReplyRefs(43)], [], 'scoped to the pull request it was sent on');
 
-  // Same two comments, same single login on both — only the row tells them apart.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'Renamed in the latest commit.', inReplyToId: 100 },
@@ -313,9 +268,6 @@ test('a reply the harness sent is attributed to the fleet and marks the thread a
 });
 
 test('a reviewer coming back after the fleet answered reopens the work', async () => {
-  // The ordering half: the record says comment 101 is ours, and 102 is not, so the
-  // newest reply is the reviewer's and the thread is the fleet's again. Under the
-  // identity rule both replies carried the same login and this stayed answered.
   const system = build();
   system.store.recordPrReplySent(42, '100', '101');
   const comments: GhReviewComment[] = [
@@ -357,8 +309,6 @@ test('both providers read the same record and reach the same verdict on a thread
   assert.equal(gh.reviewThreads![0]!.state, 'answered');
   assert.equal(az.unresolvedComments[0]!.handled, gh.unresolvedComments[0]!.handled);
 
-  // And with no record, both hold the thread open — the two agree in the failure
-  // direction as well, which is the point of there being one derivation.
   const none: SentPrReplies = { prReplyRefs: () => new Set() };
   assert.equal((await azurePr(azThreads, none)).reviewThreads![0]!.state, 'open');
   assert.equal((await githubPr({ comments: ghComments }, none)).reviewThreads![0]!.state, 'open');
@@ -366,17 +316,13 @@ test('both providers read the same record and reach the same verdict on a thread
 });
 
 test('a send the provider will not name records no attribution, and says so out loud', async () => {
-  // The deliberate failure direction. Nothing to match on the next read means the
-  // thread keeps reading as work — a re-dispatch, which is visible and cheap —
-  // rather than a thread claimed as handled, which loses the reviewer's comment.
-  const sink = replySink(); // no commentRef
+  const sink = replySink();
   const system = build(sink);
   const agent = reviewAgent(system);
   await reply(system, agent, 'Renamed in the latest commit.', '100');
 
   assert.equal(sink.replies.length, 1, 'the reply still went out');
   assert.deepEqual([...system.store.prReplyRefs(42)], [], 'but nothing is claimed as the fleet’s');
-  // And the miss is loud: a silent slide back to the author is the whole bug.
   const errors = system.store.listErrors();
   assert.equal(errors.length, 1);
   assert.match(errors[0]!.message, /no comment id/i);
@@ -384,9 +330,6 @@ test('a send the provider will not name records no attribution, and says so out 
 });
 
 test('the record survives a restart', async () => {
-  // A file-backed store rather than the suite's usual `:memory:` — the property
-  // under test is that the row outlives the process, which an in-memory database
-  // cannot show. A thread answered before a restart must not come back as work.
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-attrib-db-')), 'lubbdubb.db');
   const before = new Store(dbPath);
   before.recordPrReplySent(42, '100', '101');

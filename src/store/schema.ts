@@ -1,5 +1,6 @@
-/** SQL schema for the LubbDubb store. Applied idempotently on boot. */
-export const SCHEMA = /* sql */ `
+// → docs/spec/14-persistence.md
+
+export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
   id          TEXT PRIMARY KEY,
   kind        TEXT NOT NULL,

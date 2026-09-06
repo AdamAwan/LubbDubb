@@ -7,12 +7,8 @@ import { relTime } from './util.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * The brief sheet: a blue page with three written lines, drawn inline rather than
- * added to a presentation layer's own icon set because this panel is shared and
- * that set is not. It is the one glyph in the cockpit that is *not* `currentColor` — a
- * brief is blue the way a warning is amber, so the colour is the noun.
- */
+// → docs/spec/17-cockpit.md
+
 function BriefMark() {
   return (
     <svg className="launch-mark" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
@@ -38,16 +34,6 @@ function BriefMark() {
   );
 }
 
-/**
- * An image waiting to be launched with the brief (issue #249). `data` is
- * base64 of the file's bytes — the same string the wire carries — so the preview
- * and the request read one value and a thumbnail can never show something other
- * than what is sent.
- *
- * `mime` is the browser's guess and is used for the preview only: the server
- * sniffs the decoded bytes and stores *its* answer, because a client-declared
- * type is not evidence.
- */
 interface Attached {
   id: string;
   name: string;
@@ -55,32 +41,19 @@ interface Attached {
   data: string;
 }
 
-/** A `File` as the composer holds it, or null for anything that is not an image. */
 async function readImage(file: File): Promise<Attached | null> {
   if (!file.type.startsWith('image/')) return null;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  // Chunked: `String.fromCharCode(...bytes)` on a multi-megabyte screenshot
-  // overflows the argument stack, which is a crash on exactly the files this
-  // feature exists for.
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return {
     id: `${file.name}:${file.size}:${file.lastModified}:${Math.random().toString(36).slice(2, 8)}`,
-    // A pasted screenshot arrives as `image.png` or with no name at all; either
-    // way the name is a label the operator reads, never a path the server uses.
     name: file.name || 'pasted image',
     mime: file.type,
     data: btoa(binary),
   };
 }
 
-/**
- * Stamp a new brief from the cockpit: a free-form prompt the harness turns
- * into an agent. It's queued server-side and drained by the dispatcher ahead of
- * all world-driven work — so it takes the next free slot, or waits in the queue
- * when the fleet is at capacity. Queued briefs are listed with their place in
- * line and a cancel button; once dispatched they graduate into the Fleet.
- */
 export function LaunchPanel({
   jobs,
   attachments,
@@ -88,11 +61,6 @@ export function LaunchPanel({
   onChanged,
 }: {
   jobs: Job[];
-  /**
-   * Every attachment in the snapshot; the strip below filters to this job's own
-   * (issue #249). Passed whole rather than pre-filtered so the panel and the issue
-   * list read one list through one component.
-   */
   attachments: AppState['attachments'];
   attachmentUrls: AppState['attachmentUrls'];
   onChanged: () => void;
@@ -101,16 +69,12 @@ export function LaunchPanel({
   const [kind, setKind] = useState<'code' | 'desk'>('code');
   const [open, setOpen] = useState(false);
   const [attached, setAttached] = useState<Attached[]>([]);
-  // The server's refusal, in its own words — how many, how big and which formats
-  // are its rules alone, so the composer states none of them and reports what it
-  // was told. Two copies of a bound is how the two come to disagree.
   const [error, setError] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const submit = useAsyncAction();
 
   const queued = jobs.filter((j) => j.status === 'queued');
 
-  /** Take whatever a paste, a drop or the picker produced, keeping the images. */
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     const read = await Promise.all(Array.from(files).map(readImage));
@@ -128,15 +92,10 @@ export function LaunchPanel({
       await api.launchJob({
         prompt: text,
         kind,
-        // Only the label and the bytes: the browser's mime is not sent, because
-        // the server decides the type from the bytes and a field it ignores would
-        // read as one it honours.
         ...(attached.length > 0 ? { attachments: attached.map((a) => ({ name: a.name, data: a.data })) } : {}),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed');
-      // Rethrown so the button flashes: the message says what went wrong, the
-      // flash says it went wrong at all, and the brief is kept for a retry.
       throw err;
     }
     setPrompt('');
@@ -162,10 +121,8 @@ export function LaunchPanel({
             e.preventDefault();
             void submit.run(launch);
           }}
-          // Drop anywhere on the composer, not only on the thumbnails: the target
-          // an operator aims at is the box they are typing in. `preventDefault` on
-          // dragover is what makes the drop fire at all; without it the browser
-          // navigates away to the image, losing the half-written prompt.
+          // TECHDEBT: `preventDefault` on dragover is what makes the drop fire at all;
+          // without it the browser navigates away to the image, losing the half-written prompt.
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -178,14 +135,10 @@ export function LaunchPanel({
             value={prompt}
             rows={3}
             onChange={(e) => setPrompt(e.target.value)}
-            // ⌘/Ctrl+V of a screenshot is the common case, so it is handled where
-            // the operator's cursor already is. Text pastes fall through
-            // untouched — `clipboardData.files` is empty for those.
             onPaste={(e) => {
               if (e.clipboardData.files.length > 0) void addFiles(e.clipboardData.files);
             }}
             onKeyDown={(e) => {
-              // ⌘/Ctrl+Enter submits, matching the drawer's respond box.
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
                 void submit.run(launch);
@@ -239,7 +192,6 @@ export function LaunchPanel({
               className="launch-file-input"
               onChange={(e) => {
                 void addFiles(e.target.files);
-                // Cleared so picking the same file twice in a row still fires.
                 e.target.value = '';
               }}
             />

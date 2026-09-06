@@ -14,10 +14,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { Agent, Plan, PlanPart } from '../src/types.js';
 
-// Azure DevOps reads `#12` as work item 12 and `!12` as pull request 12, and the
-// two are disjoint id spaces — so a pull request named with the wrong sigil links
-// confidently to an unrelated ticket. Nothing about that is red anywhere.
-
 test('the sigil follows the source-control provider, and only Azure differs', () => {
   assert.equal(prRefStyle('azure'), '!');
   assert.equal(prRefStyle('github'), '#');
@@ -40,7 +36,6 @@ test("a part agent is shown its siblings' pull requests in the provider's own sy
 test('a replanner and the plan status comment name a pull request the same way', () => {
   const parts = [part('a', 1, { status: 'merged', prNumber: 40, branch: 'issue/12/a' })];
   assert.match(currentPlanSummary(plan(), parts, '!'), /PR !40/);
-  // Published on the tracker, where the wrong sigil is a live link to a work item.
   assert.match(renderPlanComment(plan(), parts, '!'), /PR !40/);
   assert.match(renderPlanComment(plan(), parts, '#'), /PR #40/);
 });
@@ -54,7 +49,6 @@ test('open_pr tells the agent which sigil to write in the body it composes', () 
   assert.match(bodyGuidance(system, agent, '#'), /`#12`/);
 });
 
-/** The `body` argument's description, as the agent reads it before writing one. */
 function bodyGuidance(system: System, agent: Agent, style: '#' | '!'): string {
   const tool = buildTools(
     {
@@ -74,8 +68,6 @@ function bodyGuidance(system: System, agent: Agent, style: '#' | '!'): string {
   const schema = tool.inputSchema as { properties: { body: { description: string } } };
   return schema.properties.body.description;
 }
-
-// -- helpers -----------------------------------------------------------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prref-'));

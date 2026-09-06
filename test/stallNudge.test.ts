@@ -9,22 +9,6 @@ import { buildSystem } from '../src/system.js';
 import { type Spawner, type StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * The unannounced stop: a turn that ends with neither sentinel in it.
- *
- * It used to raise an escalation on the spot, and that population is dominated by
- * two things with nothing for a person to answer — an agent that finished the work
- * and narrated it instead of printing the done sentinel, and an agent that started
- * a build, a test run or a CI check and stopped as though something would wake it.
- * The operator could not tell which without reading the transcript, because the
- * card said only that the agent had stopped.
- *
- * So the agent is asked first, `agentStallNudges` times, and only a stop that
- * survives the budget is put to a human — with the agent's own last words in the
- * reason, which is the diagnosis the old sentence made you go and find.
- */
-
-/** Fake claude stream-JSON process (same shape the other stream tests drive). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 606;
   writes: string[] = [];
@@ -41,12 +25,10 @@ class FakeChild extends EventEmitter implements StreamChild {
   kill(): void {
     this.emit('exit', 143);
   }
-  /** A turn that says something and then ends with no sentinel in it. */
   stop(text: string): void {
     this.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
     this.emitLine({ type: 'result', subtype: 'success' });
   }
-  /** The reading `claude` emits when the five-hour window is spent. */
   rateLimit(): void {
     this.emitLine({
       type: 'rate_limit_event',
@@ -63,7 +45,6 @@ class FakeChild extends EventEmitter implements StreamChild {
     this.emitLine({ type: 'result', subtype: 'error_during_execution', is_error: true });
   }
 
-  /** Every message the harness has typed into this agent, prompt included. */
   sent(): string[] {
     return this.writes.map((w) => String((JSON.parse(w) as { message: { content: string } }).message.content));
   }
@@ -87,7 +68,6 @@ function streamConfig(patch: Record<string, unknown> = {}) {
   });
 }
 
-/** Boot a stream-mode system with one dispatched agent, mid-turn. */
 async function dispatched(patch: Record<string, unknown> = {}) {
   const children: FakeChild[] = [];
   const spawner: Spawner = () => {
@@ -120,7 +100,6 @@ test('a stop is put to the agent before it is ever put to a human', async () => 
     'the nudge is in the transcript, so the agent carrying on is not an unexplained jump',
   );
 
-  // The commonest answer: it had finished and had not said so.
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'All green. @@LUBBDUBB_DONE@@' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
   assert.equal(system.store.getAgent(agentId)!.status, 'done');
@@ -155,8 +134,6 @@ test('a stop that survives the budget reaches the operator, quoting the agent', 
 });
 
 test('nudges off restores the immediate park', async () => {
-  // The operator who wants every stop in the inbox keeps it, and the reason still
-  // carries the agent's last words — that half is not a policy.
   const { system, child, agentId } = await dispatched({ agentStallNudges: 0 });
 
   child.stop('Handing over.');
@@ -170,14 +147,11 @@ test('nudges off restores the immediate park', async () => {
 });
 
 test('an agent parked on a question is not nudged when the turn it asked in ends', async () => {
-  // `escalate` parks mid-turn and returns at once, so the turn that asked ends with
-  // no sentinel in it — a stop by the letter of it, and a real question in fact.
-  // Nudging here types "carry on" into an agent that is waiting on a person.
   const { system, child, agentId } = await dispatched();
 
   const asked = system.agents.ask(agentId, { question: 'Which auth provider?' });
   assert.ok(asked.ok);
-  child.emitLine({ type: 'result', subtype: 'success' }); // the turn that asked, now ended
+  child.emitLine({ type: 'result', subtype: 'success' });
 
   assert.equal(child.nudges().length, 0, 'the park owns the agent');
   assert.equal(system.store.listOpenEscalations().length, 1, 'and its question stands alone');
@@ -185,18 +159,6 @@ test('an agent parked on a question is not nudged when the turn it asked in ends
 
   system.store.close();
 });
-
-/**
- * And what happens to the item the park leaves behind.
- *
- * The stop that survives the nudges is still, overwhelmingly, an agent that
- * finished and did not say so — the operator's own answer to nearly every one of
- * these cards is "Mark work done". So the card is filed with a countdown on it and
- * the harness makes that click itself if nobody makes it: five minutes is the
- * window to disagree, not the harness's confidence. Nothing it does is
- * irrecoverable — the branch, the commits and the pull request are kept, and the
- * worktree slot goes back to the fleet rather than the checkout being deleted.
- */
 
 test('a stop nobody answers settles itself as done, and says so in the audit', async () => {
   const { system, child, agentId } = await dispatched({ agentStallNudges: 0, agentStallParkMs: 1 });
@@ -249,13 +211,10 @@ test('extending buys time, and only for a park that is actually counting', async
 });
 
 test('a question the agent asked never expires, and neither does a stop when the window is off', async () => {
-  // The two exclusions, together because they are one rule: only a stop the harness
-  // could not get an account of counts down. A question a person is genuinely
-  // blocked on, answering itself after five minutes, is worse than no question.
   const parked = await dispatched({ agentStallParkMs: 60_000 });
   const asked = parked.system.agents.ask(parked.agentId, { question: 'Which auth provider?' });
   assert.ok(asked.ok);
-  parked.child.emitLine({ type: 'result', subtype: 'success' }); // the turn that asked, ended
+  parked.child.emitLine({ type: 'result', subtype: 'success' });
   assert.equal(parked.system.agents.stallDeadlines().length, 0, 'a real question stands until it is answered');
   parked.system.store.close();
 
@@ -267,9 +226,6 @@ test('a question the agent asked never expires, and neither does a stop when the
 });
 
 test('the account running out takes the stop’s clock with it, whichever arrived first', async () => {
-  // The order the arm-time guard cannot see: the stop parks and arms the countdown,
-  // and the limit lands *after* it. `handleStalled` checked `limited` and found
-  // nothing, because there was nothing yet.
   const { system, child, agentId } = await dispatched({ agentStallNudges: 0, agentStallParkMs: 1 });
 
   child.stop('Halfway through the migration.');

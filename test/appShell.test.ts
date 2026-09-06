@@ -2,15 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { wantsAppShell } from '../src/server/app.js';
 
-/*
- * The SPA fallback's whole job is telling a deep link apart from a file that is
- * gone. The second half is the one with a silent failure behind it — a stale
- * hashed chunk answered with `200 text/html` is a cockpit that does not start and
- * a server that logged nothing — so both directions are asserted here rather than
- * through `buildApp`: the tests run in a job with no `web/dist`, where the static
- * plugin is never registered and an injected request would prove nothing.
- */
-
 test('deep links into the cockpit get the app shell', () => {
   for (const url of ['/', '/goals/42', '/agents', '/issues/ABC-1?tab=parts', '/pets/pip#top']) {
     assert.equal(wantsAppShell(url), true, url);

@@ -10,17 +10,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ObstacleBoardPayload } from '../src/wire.js';
 
-/**
- * The obstacle board's route — the cockpit's whole arm on this store.
- *
- * What is asserted here is the handful of properties that fail **silently**: the
- * page draws only figures something counted, the four controls are the only
- * writes and none of them is a step on any path, and *retiring is not rejecting*
- * — a retired row keeps what it said and a matching report reopens it. Each of
- * those renders perfectly while being wrong, which is why none of them is left to
- * the surface. → `docs/spec/27-obstacles.md#in-the-cockpit`
- */
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-obboard-'));
   return buildSystem(
@@ -38,7 +27,6 @@ function build(): System {
   );
 }
 
-/** One voice, written straight through the store — the intake's own path is `obstacleIntake`'s subject. */
 function say(system: System, what: string, goalRef: string | null, keys: { kind: 'test'; value: string }[]) {
   return system.store.recordObstacleSighting(
     { what, kind: 'obstacle', keys: keys.map((key) => ({ ...key, binds: true })), untilHours: null },
@@ -69,9 +57,6 @@ test('the board ships every row with its voices, and counts only what something 
   assert.equal(body.rows.length, 2, 'two keys, two rows');
   const standing = body.rows.find((row) => row.obstacle.state === 'standing');
   assert.ok(standing, 'two independent goals carry a row to standing');
-  // The fold is the only place the matcher can be seen working or getting it
-  // wrong, so the words and the *why* have to be on the row rather than a second
-  // fetch away.
   assert.equal(standing.sightings.length, 2);
   assert.deepEqual(
     standing.sightings.map((sighting) => sighting.goalRef),
@@ -82,8 +67,6 @@ test('the board ships every row with its voices, and counts only what something 
 
   assert.equal(body.counts.sightings, 3);
   assert.equal(body.counts.goals, 3);
-  // Nothing has been told anybody, and the page must be able to say so rather
-  // than fall back on a figure nothing recorded.
   assert.equal(body.counts.told, 0);
   assert.equal(body.counts.window.calls, 0);
   assert.equal(body.dormantMs, system.config.obstacleDormantMs);
@@ -105,7 +88,6 @@ test('muting is a person and only a person, and it goes both ways', async () => 
   assert.equal(muted.statusCode, 200);
   assert.equal(system.store.getObstacle(obstacle.id)?.state, 'muted');
 
-  // The one state whose exit is a person, so the way back is one too.
   const back = await app.inject({
     method: 'POST',
     url: `/api/obstacles/${obstacle.id}/mute`,
@@ -114,8 +96,6 @@ test('muting is a person and only a person, and it goes both ways', async () => 
   assert.equal(back.statusCode, 200);
   assert.equal(system.store.getObstacle(obstacle.id)?.state, 'standing');
 
-  // A refusal is a returned value and a 400, never a throw — and a body that says
-  // nothing is refused by name rather than defaulted.
   const bare = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/mute`, payload: {} });
   assert.equal(bare.statusCode, 400);
   assert.match(String(bare.json().error), /muted/);
@@ -141,8 +121,6 @@ test('owning takes the row through the same claim the pulse takes, and a second 
   assert.equal(owned?.state, 'owned');
   assert.equal(owned?.ownerRef, 'issue:412');
 
-  // The claim is the transition, so *do not all pile on* is a constraint rather
-  // than an instruction: a second taker is told who has it.
   const again = await app.inject({
     method: 'POST',
     url: `/api/obstacles/${obstacle.id}/own`,
@@ -166,21 +144,15 @@ test('retiring is not rejecting: the row keeps what it said, and a matching repo
   assert.equal(retired.statusCode, 200);
   const after = system.store.getObstacle(obstacle.id);
   assert.equal(after?.state, 'resolved');
-  // Its own ending, so the board never says a clock or the world ended a row a
-  // person did.
   assert.equal(after?.endedBy, 'retired');
   assert.equal(after?.what, 'e.test.ts is slow', 'it goes on saying what it said');
 
-  // Nothing here bars a claim by name. The keys survived, so the next report joins
-  // the same row and carries it back to standing with its whole history.
   const reopened = say(system, 'e.test.ts is slow', 'issue:12', key);
   assert.equal(reopened.obstacle.id, obstacle.id);
   assert.equal(reopened.obstacle.state, 'standing');
   assert.equal(reopened.obstacle.endedBy, null);
   assert.equal(system.store.listObstacleSightings(obstacle.id).length, 2);
 
-  // The ending that took a row is the first one that did, so a second retire moves
-  // nothing rather than restamping it.
   const twice = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/retire` });
   assert.equal(twice.statusCode, 200);
   const third = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/retire` });

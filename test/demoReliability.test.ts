@@ -3,15 +3,6 @@ import assert from 'node:assert/strict';
 import { demoApi } from '../web/src/demo/demoBackend.js';
 import { buildDemoState } from '../web/src/demo/fixtures.js';
 
-/**
- * The demo's Yield gauge and the panel behind it, checked against each other.
- *
- * The real pair cannot disagree — both fold `tallyRunOutcomes` over the same
- * agent rows — but the demo has no agents to fold, so both sides are authored and
- * nothing structural holds them together. That makes the demo the one place the
- * panel's central claim can quietly stop being true: click the gauge, and the
- * number changes. Two fixtures, one assertion.
- */
 test('the demo panel opens agreeing with the demo gauge', async () => {
   const { state } = buildDemoState();
   const { insights } = await demoApi.getReliability();
@@ -25,11 +16,6 @@ test('the demo panel opens agreeing with the demo gauge', async () => {
   assert.equal(insights.runs.completionRate, gauge.completionRate);
 });
 
-/**
- * The authored rows are a *partition*, exactly as the real ones are. A demo whose
- * phase table sums to more runs than the fleet ever settled teaches an operator
- * to distrust the panel's arithmetic on the day it is right.
- */
 test('the demo phase rows partition the demo fleet', async () => {
   const { insights } = await demoApi.getReliability();
   const { runs } = insights;

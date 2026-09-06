@@ -16,15 +16,12 @@ test('untagged is unwatched, for every kind of item', () => {
 });
 
 test('the retired ignore tag is just another label now', () => {
-  // It carries no watch tag, so it lands unworked by itself — which is why nothing
-  // had to be migrated when the second tag went away.
   assert.equal(watchBucket(['lubbdubb-ignore'], WATCH), 'unwatched');
   assert.equal(watchBucket(['lubbdubb-ignore', WATCH], WATCH), 'watched');
 });
 
 test('an empty label turns the gate off, so nothing is ever unwatched', () => {
   const off = watchLabelFor('');
-  // The tags an operator may still have on the item must not be read as gates.
   assert.equal(watchBucket(['lubbdubb-ignore', 'lubbdubb-watch'], off), 'watched');
   assert.equal(watchBucket([], off), 'watched');
 });

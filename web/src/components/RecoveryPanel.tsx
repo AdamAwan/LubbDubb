@@ -5,52 +5,26 @@ import { Ref } from './refs.js';
 import { HeadRow, Panel } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
 
-/**
- * What each verdict does, in the operator's terms. These are the whole of the
- * screen's argument, so they say the consequence rather than the mechanism —
- * "picks up where it left off" is the thing being chosen, `claude --resume` is not.
- */
+// → docs/spec/17-cockpit.md
+
 const VERDICT_HELP: Record<RecoveryVerdict, string> = {
   restore: 'Re-attach to the same Claude conversation in the same worktree; it picks up where it left off',
   requeue: 'Drop that conversation and queue the same work again for a fresh agent, starting from the branch as it is',
   remove: 'Abandon this work. The branch and worktree are left as they are, so nothing is lost from disk',
 };
 
-/** What the cause badge says, per way a run failed to end. */
 const DIED_LABEL: Record<OrphanedWork['died'], string> = {
   crashed: 'crashed',
   interrupted: 'shut down',
   never_started: 'never started',
 };
 
-/**
- * A crash is a fault; work that was never started is not one — a dispatch was
- * recorded and nothing ran — but it cost the same, so it is not untinted either. A
- * clean shutdown is neither, and takes no tone.
- */
 const DIED_TONE: Record<OrphanedWork['died'], TagTone | undefined> = {
   crashed: 'red',
   interrupted: undefined,
   never_started: 'amber',
 };
 
-/**
- * The blocking recovery screen: every piece of work the last run left orphaned, and
- * the three things that can be done with each.
- *
- * **It is a banner, not a panel, because the harness is doing nothing while it is
- * up.** A pulse held on an undecided fleet means no dispatch, no merges, no plan
- * reconciliation — so every other surface on the page is stale in the same way for
- * the same reason, and one card among the findings would leave an operator hunting
- * for why their fleet is frozen. The count and the "nothing else is running" line
- * are the two facts that stop that hunt before it starts.
- *
- * Restore is offered only when it can actually be done, and when it cannot the card
- * says why (`restoreBlocked`) rather than hiding the button silently: "why is there
- * no restore here" is precisely the question this screen exists to pre-empt. A
- * `never_started` orphan is the case with no agent at all, so it always reads that
- * way — there is no conversation to go back to, only requeue and remove.
- */
 export function RecoveryPanel({
   crashed,
   now,
@@ -156,7 +130,6 @@ function CrashedCard({
   );
 }
 
-/** Why this work is here at all — the tooltip on the cause badge. */
 const VERDICT_CAUSE: Record<OrphanedWork['died'], string> = {
   crashed: 'The process disappeared without an ending — a crash, an OOM kill, or a machine that went away',
   interrupted: 'The harness was shut down cleanly and interrupted this agent mid-task',

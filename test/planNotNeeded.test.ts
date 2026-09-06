@@ -13,10 +13,6 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { deliveryHold } from '../src/delivery/delivery.js';
 import type { Agent, Issue, IssueDelivery } from '../src/types.js';
 
-// The planner's other verdict: the goal is already met, so no plan is written at
-// all. What it records, what it refuses, and the thing it exists to stop — a plan
-// with a part invented so that there is something to submit.
-
 const NOW = '2026-08-26T12:00:00.000Z';
 
 function testConfig(): ReturnType<typeof loadConfig> {
@@ -59,7 +55,6 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-/** The origins the dispatcher would put an agent on this cycle. */
 function origins(actions: { type: string; originRef?: string | null }[]): string[] {
   return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
 }
@@ -85,18 +80,11 @@ test('a planner’s verdict lands as a delivery, attributed from the credential'
   assert.equal(delivery?.summary, FOUND.summary);
   assert.equal(delivery?.detail, FOUND.detail, 'the working behind the verdict is what makes it reviewable');
   assert.equal(delivery?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
-  // The verdict must not read as a plan: nothing is written to the plan graph, so
-  // no part is ever scheduled and the goal page shows no decomposition.
   assert.equal(system.store.getPlanByOrigin('issue:12'), null, 'no plan row — that is the whole point');
   assert.match(res.text, /not closed|human decision/, 'the planner must not believe it closed the ticket');
   system.store.close?.();
 });
 
-/**
- * The reason the verdict is a delivery rather than a note: the same predicate the
- * assessor's `delivered` is read through holds the issue out of *both* rules the
- * planner would otherwise be re-dispatched by.
- */
 test('the verdict parks the issue, so neither a planner nor a pickup agent goes out again', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:plan');
@@ -154,12 +142,6 @@ test('every other kind of agent is refused, and pointed at the verdict that is i
   system.store.close?.();
 });
 
-/**
- * A replan is the one planning dispatch this verdict cannot settle: the plan row
- * would go on owning the issue (`planInFlight` reads `planning` as more work) while
- * the delivery parked pickup, and any part already dispatched would keep running
- * underneath a goal marked delivered.
- */
 test('a replan is refused, because the plan it would leave standing still owns the issue', async () => {
   const system = build();
   system.store.upsertPlan({ originRef: 'issue:12', title: 'Split it', status: 'planning', reason: 'because' });
@@ -172,12 +154,6 @@ test('a replan is refused, because the plan it would leave standing still owns t
   system.store.close?.();
 });
 
-/**
- * The silent one. `recordDelivery` clears a standing shortfall through the
- * exclusion matrix, so without this refusal a planner could erase an assessor's
- * "the goal is not reached" — a verdict cast against the delivered state, by an
- * agent that had it in front of it — with nothing anywhere going red.
- */
 test('a standing shortfall is not overturned, and survives the attempt', async () => {
   const system = build();
   system.store.recordShortfall({

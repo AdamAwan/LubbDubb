@@ -2,42 +2,11 @@ import type { JSX } from 'react';
 import type { OperatorRow, SurfaceRow, UsagePayload } from '../types.js';
 import { fmtDuration } from './insightsFormat.js';
 
-/**
- * Usage — what the harness asked of a person, what they did about it, and what
- * the waiting cost. Beside Economics, Reliability and MCP, on the same window.
- *
- * Every other tab on this page is a reading about work the **fleet** did. This is
- * the one about the person beside it, and it is here rather than anywhere else
- * because the question it answers — *which parts of this are people actually
- * using, and which are ceremony nobody completes* — is decided against the same
- * window as the spend it competes with for the next month of work.
- *
- * ## Three things it does not do
- *
- * **It draws no reference.** There is nothing on this payload to link to: the
- * rows are counts over a vocabulary, and the store behind the reach half has no
- * ref, no title and no id in it by construction. A cockpit that could draw a
- * `<Ref/>` here would be drawing one from a table that must never hold one.
- *
- * **It never restates a verdict.** `never-linked` and `visited-never-operated`
- * are the server's words, shipped with the evidence behind them
- * (`src/surfaceReachInsights.ts`), for `McpUsageTab`'s reason exactly: a count of
- * zero is four different facts, and a cockpit re-deriving which one would be a
- * second opinion drawn inches from the first.
- *
- * **It never draws a zero where the server sent `null`.** A null is the record
- * behind that row being unable to answer the column — an obstacle carries no
- * stamp for the moment it started asking, a landing records the click and never
- * the offer — and a dash is the only honest mark for it.
- *
- * → docs/spec/17-cockpit.md#insights, docs/spec/34-usage-metrics.md
- */
+// → docs/spec/17-cockpit.md
+
 export function UsageTab({ payload }: { payload: UsagePayload }): JSX.Element {
   const { insights, reach } = payload;
   return (
-    // `sp` for the table width cap and the tab's shared type scale, `ug` for what
-    // is this tab's own — the same borrowing `McpUsageTab` does, and for the same
-    // reason: two spellings of one measure drift the day somebody retunes one.
     <div className="ug sp">
       <p className="sp-sub">What the harness asked of you</p>
       <Ledger rows={insights.asks} kind="ask" />
@@ -60,12 +29,6 @@ export function UsageTab({ payload }: { payload: UsagePayload }): JSX.Element {
   );
 }
 
-/**
- * One half of the ledger. Two tables rather than one, because an ask and an act
- * are two different questions: an ask is judged by whether it was answered and
- * what waiting for it cost, an act by whether it happened at all — an act nobody
- * ever performs is a control nobody needs.
- */
 function Ledger({ rows, kind }: { rows: OperatorRow[]; kind: 'ask' | 'act' }): JSX.Element {
   if (rows.length === 0) return <p className="empty">Nothing in this window.</p>;
   return (
@@ -101,16 +64,6 @@ function Ledger({ rows, kind }: { rows: OperatorRow[]; kind: 'ask' | 'act' }): J
   );
 }
 
-/**
- * The reach half — a list rather than a table, for `.mc-quiet`'s reason: each row
- * is a **verdict with its evidence**, and the reader wants one surface's whole
- * case at a time rather than a set of figures read down a column.
- *
- * Ordered by what wants doing about it, which is the server's ladder read back:
- * a surface nothing links to is the harness's own fault, a linked one nobody
- * visited is an entry point that is not landing, and a visited one nobody
- * operated is the surface's.
- */
 function Reach({ reach }: { reach: { rows: SurfaceRow[]; total: number; places: number } }): JSX.Element {
   if (reach.total === 0)
     return (
@@ -149,28 +102,14 @@ function Reach({ reach }: { reach: { rows: SurfaceRow[]; total: number; places: 
   );
 }
 
-/** What wants doing about it, worst first. */
 const ORDER = ['never-linked', 'linked-never-visited', 'visited-never-operated', 'operated', 'console-dark'];
 
-/**
- * The mark for a column the record cannot answer.
- *
- * An en dash and never `0`: a zero here would manufacture a finding out of a
- * missing column, which is the one way this reading could mislead somebody into
- * removing a control that works.
- */
 const DASH = '–';
 
 function num(value: number | null): string | number {
   return value === null ? DASH : value;
 }
 
-/**
- * The tab as a file, in the order it is drawn.
- *
- * The verdicts go out as rows rather than as prose, because on paper there is no
- * blurb under a heading to read them off.
- */
 export function usageCsv(payload: UsagePayload): string[][] {
   const { insights, reach } = payload;
   const ledger = (rows: OperatorRow[]): string[][] =>
@@ -197,7 +136,6 @@ export function usageCsv(payload: UsagePayload): string[][] {
   ];
 }
 
-/** An empty cell for a null, so a spreadsheet does not read a missing column as a zero. */
 function str(value: number | null): string {
   return value === null ? '' : String(value);
 }

@@ -10,11 +10,6 @@ import { gitRepo } from './support/gitRepo.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { findTask } from './support/tasks.js';
 
-/**
- * Build a system whose agents run through a fake PTY and whose worktrees live in
- * an isolated repo. `overrides` replaces individual sink methods — the rest still
- * reach the fake world, so a test can break one act without losing the loop.
- */
 function build(overrides: Partial<ActionSink> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
@@ -29,8 +24,6 @@ function build(overrides: Partial<ActionSink> = {}) {
     maxConcurrentAgents: 3,
   });
   const backend = new FakePtyBackend();
-  // The sink has to exist before the system it delegates to does, so it reads the
-  // real one out of a holder the build fills in.
   const held: { inner?: ActionSink } = {};
   const sink = new Proxy({} as ActionSink, {
     get: (_t, prop: string) =>
@@ -42,7 +35,6 @@ function build(overrides: Partial<ActionSink> = {}) {
   return { system, backend };
 }
 
-/** Executed respond_to_agent decisions whose note covers the given origin. */
 function notifiedFor(system: ReturnType<typeof build>['system'], origin: string) {
   return system.store.listDecisions().filter((d) => {
     if (d.outcome !== 'executed' || d.action.type !== 'respond_to_agent') return false;
@@ -83,7 +75,6 @@ test('a behind PR is brought up to date by the provider, with no agent dispatche
   assert.equal(done!.rule, 'pr-base-update', 'attributed to the rule that proposed it');
   assert.match(done!.detail, /up to date with main/i);
 
-  // Reflected back into the world, so the concern is gone rather than re-fired.
   const world = await system.connector.getState();
   assert.equal(world.pullRequests.find((p) => p.number === 45)!.mergeableState, 'clean');
   system.store.close();
@@ -91,8 +82,6 @@ test('a behind PR is brought up to date by the provider, with no agent dispatche
 
 test('a base update the provider refuses falls back to a code agent, and is recorded', async () => {
   const { system } = build({
-    // Everything else behaves; the one act under test throws, the way GitHub does
-    // when the merge it promised was clean is not.
     updatePrBranch: () => Promise.reject(new Error('update-branch refused')),
   });
   system.connector.inject({ kind: 'new_pr', number: 46, title: 'X', branch: 'feat5', baseBranch: 'main' });
@@ -103,11 +92,8 @@ test('a base update the provider refuses falls back to a code agent, and is reco
   assert.equal(failed?.outcome, 'rejected');
   assert.match(failed!.detail, /update-branch refused/);
   assert.equal(system.store.listTasks().length, 0, 'nothing dispatched on the cycle that tried');
-  // The failure is a first-class error, not a decision row nobody reads.
   assert.match(system.store.listErrors()[0]?.message ?? '', /Updating PR #46 from main failed/);
 
-  // Next pulse: the PR is still behind and the cheap path is spent, so the agent
-  // that always did this work is dispatched with the routine-update prompt.
   await system.harness.runCycle('manual');
   const task = findTask(system.store, (t) => t.originRef === 'pr:46:mergeable');
   assert.ok(task, 'the PR is not left sitting behind its base');
@@ -120,9 +106,8 @@ test('a second concern on a running branch notifies the live agent, not a duplic
   const { system, backend } = build();
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat', baseBranch: 'main' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 42 });
-  await system.harness.runCycle('manual'); // dispatches the CI agent (now running)
+  await system.harness.runCycle('manual');
 
-  // A conflict arrives while the CI agent is working the branch.
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
   await system.harness.runCycle('manual');
 
@@ -133,13 +118,10 @@ test('a second concern on a running branch notifies the live agent, not a duplic
 });
 
 test('a branch with a running agent is told its base moved, never merged under', async () => {
-  // The agent's worktree was cut from the branch's current head. Merging the base
-  // in behind its back moves the commit it is working from, so the staffed branch
-  // gets the note it always got and the cheap path stays for free branches.
   const { system, backend } = build();
   system.connector.inject({ kind: 'new_pr', number: 47, title: 'X', branch: 'feat6', baseBranch: 'main' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 47 });
-  await system.harness.runCycle('manual'); // the CI agent takes the branch
+  await system.harness.runCycle('manual');
 
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 47, mergeable: true, mergeableState: 'behind' });
   await system.harness.runCycle('manual');
@@ -158,18 +140,16 @@ test('a concern on a waiting branch is held, then delivered once the agent resum
   const { system, backend } = build();
   system.connector.inject({ kind: 'new_pr', number: 44, title: 'X', branch: 'feat3', baseBranch: 'main' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 44 });
-  await system.harness.runCycle('manual'); // CI agent running
+  await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('running')[0]!.id;
-  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@'); // park the agent on a human
+  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
 
-  // A conflict arrives while the agent is parked — it must be held.
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 44, mergeable: false, mergeableState: 'dirty' });
   await system.harness.runCycle('manual');
   assert.equal(notifiedFor(system, 'pr:44:mergeable').length, 0, 'must not inject while the agent is waiting');
 
-  // Human answers -> agent resumes -> a later cycle delivers the held note.
   const esc = system.store.listOpenEscalations()[0]!;
   system.escalations.answer(esc.id, 'go ahead');
   assert.equal(system.store.getAgent(agentId)!.status, 'running');

@@ -5,16 +5,6 @@ import { LiveConfig } from '../src/configApply.js';
 import { RuntimeControl } from '../src/runtimeControl.js';
 import type { CiPolicy } from '../src/ci/ciPolicy.js';
 
-/**
- * What a config change does to a *running* harness.
- *
- * The arms are asserted through their effect on the thing that holds the value,
- * never through the classification alone: "live" means the consumer was re-seated,
- * and a test that only checked the flag would pass on the day the arm stopped
- * doing anything.
- */
-
-/** The dispatcher's seam, recording what it was handed. */
 function recordingDispatcher(): { seen: CiPolicy[]; setCiPolicy: (ci: CiPolicy) => void } {
   const seen: CiPolicy[] = [];
   return { seen, setCiPolicy: (ci: CiPolicy) => seen.push(ci) };
@@ -82,8 +72,6 @@ test('editing a pending key twice leaves one row, saying where it started and wh
   const { live } = harness();
   const base = { maxConcurrentAgents: 3 };
 
-  // Two *different* values, so the row has somewhere to move to: with the runtimes
-  // down to two, the launch command is the restart-only key with room to edit twice.
   live.apply(loadConfig({ ...base, claudeCommand: 'claude-beta' }));
   live.apply(loadConfig({ ...base, claudeCommand: 'claude-canary' }));
 

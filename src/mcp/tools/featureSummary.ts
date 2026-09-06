@@ -2,23 +2,8 @@ import { validateFeatureSummary } from '../../summaries/featureSummary.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * Where a Feature is, said the way a developer would say it to the person who
- * asked for the Feature.
- *
- * Four fields rather than one document, and that is the load-bearing choice: the
- * card draws them as four blocks, so a reader gets "is any of this usable" without
- * finding it inside a paragraph, and an agent with nothing to put in a block leaves
- * it out rather than padding it. A single `document` would have let the shape drift
- * per Feature, which is the board's own failure — every card read differently —
- * reproduced in prose.
- *
- * **The discriminator lives in the description, not only in the prompt**
- * (`retro_submit`'s rule): the `feature-summary` template is operator-overridable,
- * so a deployment running an override written before a field existed would
- * otherwise dispatch an agent that never hears about it. A tool description always
- * arrives.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const featureSummary: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Write the summary for the Feature you were dispatched to summarise. The audience is the person ' +
@@ -75,9 +60,6 @@ export const featureSummary: ToolFactory = ({ deps, agent, ok }) => ({
     return ok({
       filed: true,
       feature: result.featureOrigin,
-      // Named rather than silent, `retro_submit`'s rule: a section quietly cut at
-      // its cap is one whose last paragraph nobody will ever read, and the agent
-      // has no other way to find out.
       trimmed: parsed.trimmed,
       note:
         "Recorded. It is drawn on the feature board above this Feature's items. Nothing is posted to " +

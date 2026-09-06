@@ -64,14 +64,11 @@ test('two concurrent code agents writing one path is an overlap', () => {
   assert.equal(overlaps[0]!.writers.length, 2);
   assert.equal(overlaps[0]!.live, true);
   assert.equal(overlaps[0]!.sameWorktree, false);
-  // Provenance is what makes it judgeable: which branch, working what.
   assert.deepEqual(overlaps[0]!.writers.map((w) => w.branch).sort(), ['branch-a', 'branch-b']);
   assert.deepEqual(overlaps[0]!.writers.map((w) => w.originRef).sort(), ['issue:a', 'issue:b']);
 });
 
 test('agents that never ran at the same time are not an overlap', () => {
-  // The later agent's worktree was cut from a base that already held the earlier
-  // one's work. Without this filter every long-lived file in the repo reports.
   const overlaps = detectFileOverlaps({
     files: [file('a', 'src/harness.ts', T(5)), file('b', 'src/harness.ts', T(30))],
     agents: [agent('a', { status: 'done', endedAt: T(10) }), agent('b', { startedAt: T(20) })],
@@ -99,8 +96,6 @@ test('desk agents are excluded — their scratch dirs make one path name two fil
 });
 
 test('two live agents on one branch are flagged as sharing a worktree', () => {
-  // WorktreeManager is reuse-first, so one branch is one directory: this is the
-  // same file on disk under two processes, with no merge to reconcile it.
   const overlaps = detectFileOverlaps({
     files: [file('a', 'src/x.ts'), file('b', 'src/x.ts')],
     agents: [agent('a'), agent('b')],
@@ -111,7 +106,6 @@ test('two live agents on one branch are flagged as sharing a worktree', () => {
 });
 
 test('only the writers that were actually concurrent are named', () => {
-  // c ran long after a and b. Naming it would be an accusation the rows don't support.
   const overlaps = detectFileOverlaps({
     files: [file('a', 'src/x.ts', T(3)), file('b', 'src/x.ts', T(4)), file('c', 'src/x.ts', T(50))],
     agents: [

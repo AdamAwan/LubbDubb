@@ -28,20 +28,8 @@ import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
 import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * Insights — one destination, one window, several readings of it.
- *
- * Three things are load-bearing. **A destination, not a modal**: the window and the open tab
- * are [`Place`](../cockpit/place.ts) fields, so "causes, last 24 hours" is a link somebody
- * can send. **The time bar sits above the tabs**, so it is page state — switching tabs keeps
- * the window and every reading under it obeys the same one. **It fetches, so it lives here
- * rather than under `console/`**, which may not reach `api.js` (asserted in
- * `test/console.test.ts`).
- *
- * → docs/spec/17-cockpit.md#insights
- */
+// → docs/spec/17-cockpit.md
 
-/** The tabs, in reading order, with the sentence each one answers. */
 const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'economics', label: 'Economics', note: 'what it cost, what it landed, what leaked' },
   { id: 'allowance', label: 'Allowance', note: 'what the account has left, and what spent it' },
@@ -59,14 +47,7 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'pool', label: 'Pool', note: 'what the whole pool spent, across fleets' },
 ];
 
-/**
- * The windows the bar offers. A cockpit-side list because `web/src/` may name nothing but the
- * wire contract, typed as `InsightsWindow` so a member dropped server-side is a type error
- * rather than a button the route refuses.
- */
 const WINDOWS: readonly { key: InsightsWindow; label: string }[] = [
-  // First: the only window an operator arrives at with a question already formed — the usage
-  // chip said the five hours are nearly spent, and this is the span that says on what.
   { key: 'session', label: '5h session' },
   { key: '6h', label: '6h' },
   { key: '24h', label: '24h' },
@@ -87,12 +68,9 @@ export function InsightsPage({
 }: {
   view: InsightsView;
   window: InsightsWindow;
-  /** Which project the pool tab is narrowed to. Null is every one, and then `byCheck` is absent. */
   poolProject: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  // The page itself, for the print sheet: PDF is the surface *printed*, so the export needs
-  // the laid-out nodes. The whole page, not the tab body, so the file carries its window.
   const page = useRef<HTMLDivElement>(null);
   const [spend, setSpend] = useState<Fetched<SpendInsights>>(PENDING);
   const [reliability, setReliability] = useState<Fetched<ReliabilityInsights>>(PENDING);
@@ -100,30 +78,15 @@ export function InsightsPage({
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
   const [mcp, setMcp] = useState<Fetched<McpInsights>>(PENDING);
   const [allowance, setAllowance] = useState<Fetched<AllowancePayload>>(PENDING);
-  // Fetched on its tab's first visit *for a given window*: it reaches eight windows of world
-  // events on top of the same agent walk. The window is in the key because a window change
-  // invalidates it — a boolean draws the trend over one stretch and the rest over another.
   const trendFetchedFor = useRef<InsightsWindow | null>(null);
-  // The MCP tab, on the trend's terms and keyed the same way: its naming evidence scans
-  // every dispatch prompt in the window, the one bulk read of `tasks.prompt`.
   const mcpFetchedFor = useRef<InsightsWindow | null>(null);
-  // The Allowance tab's own, on the same terms: it walks the readings history on top of the
-  // same agent walk.
   const allowanceFetchedFor = useRef<InsightsWindow | null>(null);
-  // The pool tab's own, and the one that does **not** hang off the window: the digest's
-  // bucket is a UTC day, so it is keyed on the project instead.
-  // The Review tab's own, on the trend's terms: it folds every pack the store holds against
-  // every mark, which nothing on the top bar needs.
   const [calibration, setCalibration] = useState<Fetched<ReviewCalibration>>(PENDING);
   const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
-  // The Usage tab's own, on the trend's terms: it sweeps every settled-record table the
-  // harness keeps about a person, plus the whole reach table.
   const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
   const usageFetchedFor = useRef<InsightsWindow | null>(null);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
-  // Re-read from scratch on a window change, never merged: a payload for the old window
-  // beside one for the new is the disagreement the single window exists to remove.
   useEffect(() => {
     let live = true;
     setSpend(PENDING);
@@ -155,11 +118,6 @@ export function InsightsPage({
     };
   }, [chosen]);
 
-  // The trend's fetch hangs off the *place*, not off the click that changed it.
-  // Arriving on `?view=trend` — a reload, a shared link — is a first visit too,
-  // and a tab that only ever fetched from its own button rendered empty for
-  // everyone who was sent a link to it. It also means one guard rather than two:
-  // the effect's `live` flag covers the click path as well.
   useEffect(() => {
     if (view !== 'trend' || trendFetchedFor.current === chosen) return;
     trendFetchedFor.current = chosen;
@@ -174,9 +132,6 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
-  // The MCP tab's own, on the same terms and for the same reason — including
-  // hanging off the *place* rather than off the click, so a shared
-  // `?view=mcp` link is a first visit too.
   useEffect(() => {
     if (view !== 'mcp' || mcpFetchedFor.current === chosen) return;
     mcpFetchedFor.current = chosen;
@@ -191,8 +146,6 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
-  // The Allowance tab's own, on the same terms and hanging off the *place* for
-  // the trend's reason — a shared `?view=allowance` link is a first visit too.
   useEffect(() => {
     if (view !== 'allowance' || allowanceFetchedFor.current === chosen) return;
     allowanceFetchedFor.current = chosen;
@@ -207,8 +160,6 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
-  // The Review tab's own, on the same terms and hanging off the *place* for the
-  // trend's reason — a shared `?view=review` link is a first visit too.
   useEffect(() => {
     if (view !== 'review' || calibrationFetchedFor.current === chosen) return;
     calibrationFetchedFor.current = chosen;
@@ -223,8 +174,6 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
-  // The Usage tab's own, on the same terms and hanging off the *place* for the
-  // trend's reason — a shared `?view=usage` link is a first visit too.
   useEffect(() => {
     if (view !== 'usage' || usageFetchedFor.current === chosen) return;
     usageFetchedFor.current = chosen;
@@ -239,8 +188,6 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
-  // On the *place* rather than off the click, for the trend's reason: arriving on a
-  // shared `?view=pool&project=acme-api` link is a first visit too.
   useEffect(() => {
     if (view !== 'pool' || poolFetchedFor.current === poolProject) return;
     poolFetchedFor.current = poolProject;
@@ -255,17 +202,11 @@ export function InsightsPage({
     };
   }, [view, poolProject]);
 
-  // The pool is a *tab* on this page rather than a place of its own, so the
-  // place-keyed `view` above says `insights` and nothing would ever say the
-  // cross-fleet digest was reached. Its own subject, emitted where the tab is.
   useEffect(() => {
     if (view === 'pool') logUsage('pool.view');
   }, [view]);
 
   const note = TABS.find((t) => t.id === view)?.note ?? '';
-  // The window as the *server* resolved it, never as this page asked: the caption
-  // and the buckets under it must be one window, and a caption derived from the
-  // key would be free to disagree with the timeline drawn from the payload.
   const resolved = spend.data?.window ?? reliability.data?.window ?? null;
 
   return (
@@ -296,8 +237,6 @@ export function InsightsPage({
               aria-pressed={w.key === chosen}
               className={w.key === chosen ? 'on' : ''}
               onClick={() => {
-                // The window and the tab are both a re-cut of this reading, and
-                // both are `ui`: nothing durable records that anybody changed one.
                 logUsage('insights.filter');
                 actions.openInsights({ insightsWindow: w.key });
               }}
@@ -354,13 +293,6 @@ export function InsightsPage({
   );
 }
 
-/**
- * What one window button says: the server's own label wherever it has answered for that
- * button, because for `session` the two deliberately differ — where the account's window
- * could not be anchored to, the control must stop calling it the session
- * ({@link SessionNote}). The static label elsewhere, where only the chosen window has a
- * payload and the two strings agree anyway.
- */
 export function windowButtonLabel(
   window: { key: InsightsWindow; label: string },
   chosen: InsightsWindow,
@@ -369,18 +301,6 @@ export function windowButtonLabel(
   return window.key === chosen && resolved?.key === window.key ? resolved.label : window.label;
 }
 
-/**
- * What the session window was anchored to — the sentence the split under it cannot say for
- * itself. Two things must be said.
- *
- * **Which five hours these are**: the account's window opened when the last one reset, not
- * five hours ago, so the three anchor cases are three different sentences — and where the
- * harness could not anchor, the control's own label changes too (`resolveSession`).
- *
- * **That the split is money and the limit is not**: the account meters something this
- * harness cannot see, and cost is the only dated per-run measure it holds. The percentage is
- * drawn beside the split because the comparison will be made either way.
- */
 function SessionNote({
   session,
   window: view,
@@ -425,7 +345,6 @@ function SessionNote({
   );
 }
 
-/** An instant as this page states one: the clock time, and how long ago or away it is. */
 function stamp(iso: string | null, now: number): string {
   if (iso === null) return 'the start of the window';
   const at = new Date(iso);
@@ -438,11 +357,6 @@ function stamp(iso: string | null, now: number): string {
   return ms < 0 ? `${clock} (${rel} ago)` : `${clock} (in ${rel})`;
 }
 
-/**
- * Which tab is drawn, and what each fetch state looks like. **A failed fetch is its own
- * answer and never an empty one**: `$0.00` and 100% are both real readings here, so neither
- * may double as the failure mode.
- */
 function Body({
   view,
   spend,
@@ -482,18 +396,12 @@ function Body({
     if (reliability.state === 'loading') return <p className="empty">Reading the run log…</p>;
     if (reliability.data === null) return <p className="empty">Could not read the run log.</p>;
     if (view === 'reliability') return <ReliabilityTab insights={reliability.data} />;
-    // Causes has a fourth state the others do not: the reading exists, and this
-    // half of it was not shipped. Drawing an empty tab there would say the fleet
-    // came back for no reason.
     if (remedies === null) return <p className="empty">No causes were reported for this window.</p>;
     return <CausesTab remedies={remedies} windowLabel={windowLabel.toLowerCase()} />;
   }
 
   if (view === 'allowance') {
     if (allowance.state === 'loading') return <p className="empty">Reading the allowance…</p>;
-    // A failed fetch is its own answer and never an empty one: a tab drawn empty
-    // here would say the account has not moved, which is the reading an operator
-    // is least able to afford being wrong about.
     if (allowance.data === null) return <p className="empty">Could not read the allowance.</p>;
     return <AllowanceTab payload={allowance.data} />;
   }
@@ -506,26 +414,18 @@ function Body({
 
   if (view === 'review') {
     if (calibration.state === 'loading') return <p className="empty">Reading the packs…</p>;
-    // A failed fetch is its own answer and never an empty one: an empty tab here
-    // would say nobody has ever overridden a label, which is a different fact.
     if (calibration.data === null) return <p className="empty">Could not read the review packs.</p>;
     return <ReviewCalibrationTab calibration={calibration.data} />;
   }
 
   if (view === 'usage') {
     if (usage.state === 'loading') return <p className="empty">Reading what was asked of you…</p>;
-    // A failed fetch is its own answer and never an empty one: an empty tab here
-    // would say the harness never asked you for anything and you never opened a
-    // thing, which is the *console-dark* verdict — a real reading, and one this
-    // page must not manufacture out of a failed request.
     if (usage.data === null) return <p className="empty">Could not read the operator ledger.</p>;
     return <UsageTab payload={usage.data} />;
   }
 
   if (view === 'pool') {
     if (pool.state === 'loading') return <p className="empty">Reading the pool…</p>;
-    // A failed fetch is its own answer and never an empty one: an empty pool page
-    // would say every other fleet knows nothing, which is a different fact.
     if (pool.data === null) return <p className="empty">Could not read the pool.</p>;
     return <PoolTab payload={pool.data} project={poolProject} actions={actions} />;
   }
@@ -535,11 +435,6 @@ function Body({
   return <SpendTrendTab trend={trend.data} />;
 }
 
-/**
- * The page as a file, following the tab. One control rather than one per tab, exporting
- * **what is on screen**. Nothing exports what it could not fetch: the control is absent
- * until there is a payload, so no file reads as a clean fleet.
- */
 function Exports({
   view,
   spend,

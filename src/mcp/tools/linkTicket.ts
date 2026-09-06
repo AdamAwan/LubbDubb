@@ -2,6 +2,8 @@ import { parseItemRef } from '../findings.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'File the tracker item for the thing you were dispatched to file — a finding, or a bug an ' +
@@ -42,9 +44,6 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
     const title = typeof args.title === 'string' ? args.title.trim() : '';
     const body = typeof args.body === 'string' ? args.body.trim() : '';
-    // Two ways to finish a filing, and naming both is a contradiction rather than a
-    // preference the harness gets to resolve: one says "this already exists", the
-    // other says "create this". Refused rather than ranked.
     if (ref && (title || body)) {
       return toolError(
         'link_ticket takes either `ref` (an existing item this duplicates) or `title` + `body` (the ' +
@@ -58,10 +57,6 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
       );
     }
 
-    // Structural identity does the whole job here: the filing is resolved from the
-    // credential (agent -> task -> its job -> the finding or bug that job was
-    // created for), so there is no argument pointing at someone else's, and an
-    // agent on any other kind of task simply has no filing to complete.
     const target = deps.agents.filingTarget(agent.id);
     if (!target.ok) return toolError(target.error);
 
@@ -77,22 +72,13 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
         ticketRef = await deps.filing({
           title,
           body,
-          // Both facts come from the credential, never from the agent: a bug is
-          // created as the project's bug type and related back to the story it was
-          // raised on, and that is exactly what a model used to have to remember.
           bug: target.kind === 'bug',
           ...(target.storyNumber === null ? {} : { relatedTo: target.storyNumber }),
         });
       } catch (err) {
-        // Handed back rather than recorded and swallowed: the agent is mid-task and
-        // is the one thing that can try again this turn.
         return toolError(`The tracker refused the item: ${(err as Error).message}`);
       }
     } else {
-      // The same parser the intake uses for the item a claim is *about*, so the ref
-      // a ticket is recorded under and the ref a claim names are the same
-      // vocabulary — the cockpit links both through one `refUrls` lookup. Only the
-      // agent-supplied arm needs it; what the harness filed is its own ref.
       const parsed = parseItemRef(ticketRef);
       if (!parsed.ok) return toolError(`Ticket rejected: ${parsed.error}`);
       if (!parsed.ref) return toolError('link_ticket requires the ref of the ticket you created.');

@@ -9,26 +9,8 @@ import { Ref } from './refs.js';
 import { fmtUsd, relAge } from './util.js';
 import { Tag } from './tag.js';
 
-/**
- * One card on the board: what it is, what the harness makes of it, and the two things
- * a click can do.
- *
- * **The reason lane is always drawn**, and it is the board's whole advantage over the
- * table — a column of cards answers "why is nothing on this?" without a click on any
- * of them. `cardReason` decides which of five readings supplies it, because that is a
- * statement about precedence and no render can show one.
- *
- * **The title opens the goal**, through the same `selectGoal` every other surface
- * that lists one calls. The `<Ref>` sits beside it rather than inside it: one click
- * cannot have two destinations.
- *
- * **The watch dot is the control.** The table's Watch/Unwatch pair does not fit here
- * and the lane has the space it would take, so the dot both reports the tag and writes
- * it — with `cascadeNote`'s phrase in the title, so a click that writes eight tags
- * says eight. It is refused in the three cases the table refuses it, each with its
- * reason in the title. The drag handle is the card body, so a drag beginning on the
- * dot moves nothing and a drag across the board cannot fire it.
- */
+// → docs/spec/17-cockpit.md
+
 export function TicketCard({
   row,
   issue,
@@ -42,15 +24,12 @@ export function TicketCard({
   onDragEnd,
 }: {
   row: TicketRow;
-  /** The live world's own row where it still holds one — the source of every live reading. */
   issue: Issue | null;
   view: CockpitView;
   actions: CockpitActions;
   now: number;
   draggable: boolean;
-  /** The state being written, while this card's own write is in flight. */
   writing?: string | null;
-  /** The provider's own sentence, after a refusal put this card back. */
   refused?: string | null;
   onDragStart?: () => void;
   onDragEnd?: () => void;

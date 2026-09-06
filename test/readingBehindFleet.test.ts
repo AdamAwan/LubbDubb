@@ -5,23 +5,6 @@ import { buildReadPlan, hydrationMaxAgeMs, prReadRef, refsFinishedSince } from '
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { PullRequest, Task, WorldSnapshot } from '../src/types.js';
 
-/**
- * **A reading older than the fleet's own last act on an entity decides nothing
- * about it.**
- *
- * The PR concerns are the rules whose "have we done this already" gate is a
- * *world* fact — `pr-review-comment` asks `comment.handled`, which GitHub answers
- * from the thread's resolution and the newest reply's author. So an agent that
- * answers three review threads and exits changes the very field the concern reads,
- * out there, where only a fresh read can bring it back. Deciding in that window —
- * which is exactly what the local cycle does, a quarter of a second after an agent
- * ends — re-dispatches an agent to answer the same three comments again.
- *
- * Two halves, held here: the dispatcher does not act on such a reading, and the
- * next real read is committed to replacing it.
- * → `docs/spec/04-harness-cycle.md#the-local-cycle`
- */
-
 const READ_AT = '2026-08-30T12:00:00.000Z';
 const BEFORE = '2026-08-30T11:30:00.000Z';
 const AFTER = '2026-08-30T12:00:30.000Z';
@@ -70,13 +53,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-// -- what the dispatcher does with it -----------------------------------------
-
 test('the comment concern is held while the reading predates the agent that just worked the branch', async () => {
-  // The regression, in one assertion: agent ends at 12:00:30 having answered the
-  // threads; the world was read at 12:00 and still reports them unhandled; the
-  // branch is free again because the task is terminal. Before the guard this was a
-  // second dispatch for the same three comments.
   const { actions, upcoming } = await new RuleDispatcher().decide(ctx({ tasks: [task()] }));
 
   assert.equal(
@@ -92,9 +69,6 @@ test('the comment concern is held while the reading predates the agent that just
 });
 
 test('the same concern dispatches once the reading is newer than the agent', async () => {
-  // The other direction, and the one that must not be broken by the guard: the
-  // agent finished *before* this reading was taken, so the comments it left
-  // unhandled are genuinely unhandled and the fleet goes back for them.
   const { actions } = await new RuleDispatcher().decide(
     ctx({ tasks: [task({ updatedAt: BEFORE, createdAt: BEFORE })] }),
   );
@@ -105,9 +79,6 @@ test('the same concern dispatches once the reading is newer than the agent', asy
 });
 
 test('an agent still running holds the concern the way it always did, not through the guard', async () => {
-  // A live task is not "the fleet has finished with this" — it is the de-dup that
-  // has always been there. Held separately so that folding the running case into
-  // the guard (or the guard into it) fails here rather than in a fleet.
   const { actions, upcoming } = await new RuleDispatcher().decide(
     ctx({ tasks: [task({ status: 'running', agentId: 'a1', updatedAt: BEFORE })] }),
   );
@@ -124,8 +95,6 @@ test('an agent still running holds the concern the way it always did, not throug
 });
 
 test('a pull request the fleet has not touched is unaffected by another that it has', async () => {
-  // The guard is per entity. A fleet that had just finished on one branch must not
-  // stop deciding about every other pull request in the world.
   const other = pr({ id: 'p2', number: 43, branch: 'feat/other' });
   const { actions } = await new RuleDispatcher().decide(
     ctx({ world: { takenAt: READ_AT, pullRequests: [pr(), other], issues: [] }, tasks: [task()] }),
@@ -135,13 +104,7 @@ test('a pull request the fleet has not touched is unaffected by another that it 
   assert.equal(dispatch?.originRef, 'pr:43:comments', 'the untouched pull request is decided as usual');
 });
 
-// -- what the next real read does with it --------------------------------------
-
 test("a finished task's entities are re-hydrated whatever their change token says", () => {
-  // The other half. Resolving a review thread moves no `updated_at`, so the change
-  // gate cannot see the one fact that retires the concern: without this the *real*
-  // cycle after the local one reuses the same hydration and reaches the same wrong
-  // answer, up to the lane's backstop.
   const previous: WorldSnapshot = { takenAt: READ_AT, pullRequests: [pr()], issues: [] };
   const plan = buildReadPlan({
     previous,
@@ -172,12 +135,7 @@ test('a task that ended before the reading leaves it alone', () => {
   );
 });
 
-// -- the primitive under both --------------------------------------------------
-
 test('a task reaches its entity by origin root and by branch alike', () => {
-  // Two routes, because a task names its pull request one way or the other: the
-  // comment concern's origin is `pr:42:comments`, where a plan part's is its issue
-  // and only the branch says which pull request it wrote.
   const byBranch = refsFinishedSince([task({ originRef: 'issue:12' })], [pr()], READ_AT);
   assert.deepEqual([...byBranch].sort(), ['issue:12', 'pr:42']);
 

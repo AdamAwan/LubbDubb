@@ -16,20 +16,11 @@ import {
   packStanding,
 } from '../web/src/view/reviewPack.js';
 
-// `tsx` compiles JSX with the classic runtime, which emits bare
-// `React.createElement`; the global goes in before the components load.
 (globalThis as { React?: typeof React }).React = React;
 
 const { ReviewPackPage } = await import('../web/src/components/ReviewPackPage.js');
 const { ReviewPackControl } = await import('../web/src/components/ReviewPackControl.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-
-/**
- * Review packs, stage 5: the cockpit rendering. The page is a pure function of
- * the payload, so the order of things on it — the four surface requirements
- * under *What a false claim does* — is asserted on static markup.
- * → docs/spec/31-review-packs.md#the-page
- */
 
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 
@@ -45,7 +36,6 @@ function idea(over: Partial<ReviewIdea> & { id: string }): ReviewIdea {
   };
 }
 
-/** A checked pack: two ideas, the second carrying a false claim and a finding on its first step. */
 function checkedPack(): ReviewPack {
   return {
     schema: REVIEW_PACK_SCHEMA,
@@ -184,8 +174,6 @@ function render(p: ReviewPackPayload, openIdea: string | null = null, askRefusal
   );
 }
 
-// -- the derivations, purely ------------------------------------------------------------
-
 test('the renderer knows the schema the harness writes', () => {
   assert.equal(KNOWN_REVIEW_PACK_SCHEMA, REVIEW_PACK_SCHEMA);
 });
@@ -254,19 +242,16 @@ test('marks lay over an idea only when every hunk it owns agrees', () => {
     seen: false,
   });
   assert.deepEqual(layMarks(pack, []).get('idea_a'), { read: false, attention: null, seen: false });
-  // A mark on a hunk the pack no longer carries lands nowhere.
   assert.deepEqual(layMarks(pack, [mark('src/a.ts', 40, 44, true)]).get('idea_a'), {
     read: false,
     attention: null,
     seen: false,
   });
-  // `seen` is its own column and rides the same hunks: a read mark leaves it alone.
   assert.deepEqual(layMarks(pack, [{ ...mark('src/a.ts', 1, 4, false), seen: true }]).get('idea_a'), {
     read: false,
     attention: null,
     seen: true,
   });
-  // Two hunks, one marked: not read, and no override.
   const twoHunks: ReviewPack = {
     ...pack,
     ideas: [
@@ -297,8 +282,6 @@ test('an idea is open by its id or by the open-all value', () => {
   assert.equal(ideaOpen('idea_b', 'idea_a'), false);
 });
 
-// -- the page, rendered ---------------------------------------------------------------------
-
 test('the page draws the masthead, then the gate, then the ideas — and the pull request is a reference', () => {
   const html = render(payload());
   const mast = html.indexOf('class="rp-mast"');
@@ -308,8 +291,6 @@ test('the page draws the masthead, then the gate, then the ideas — and the pul
   assert.match(html, /1 false claim/);
   assert.match(html, /The deleted constant is still read\. — idea 01\./);
   assert.match(html, /href="#rp-finding-1"/);
-  // The reference, drawn through <Ref>, boxed and leaving for the provider — and
-  // naming its family, since the marks say only where a reference goes.
   assert.match(html, /<a[^>]*href="https:\/\/example\.test\/pull\/7"[^>]*>PR 7<\/a>/);
   assert.match(html, /The module imports y\./);
   assert.match(html, /<strong>the import is the point<\/strong>/);
@@ -323,7 +304,6 @@ test('no gate when nothing is false, and the collapsed row still carries the fla
   clean.ideas[1]!.anchors[0]!.mark = null;
   assert.doesNotMatch(render(payload({ pack: clean })), /class="rp-gate"/);
 
-  // Nothing open: the flag is on the row, and the finding box is still after the ideas.
   const html = render(payload(), null);
   assert.match(html, /<span class="rp-flag">1 false claim<\/span>/);
   assert.doesNotMatch(html, /class="rp-walk"/, 'nothing is unfolded');
@@ -357,7 +337,6 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /rp-step [^"]*rp-dashed/, 'a region is drawn dashed');
   assert.match(other, /not in this PR/);
   assert.match(other, /the important bit/);
-  // Mixed markers, so the column is drawn — beside the code, never in front of it.
   assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
   assert.match(other, /class="rp-hl-keyword">import<\/span> y <span class="rp-hl-keyword">from<\/span>/);
   assert.match(other, /class="rp-l rp-add"/);
@@ -372,8 +351,6 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
 
 test('a mechanical stop is drawn quiet with its code folded, and a step carries its idea’s number', () => {
   const pack = checkedPack();
-  // An import block beside the walk's real work: the same rule the companion draws.
-  // → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
   pack.ideas[0]!.anchors = [
     {
       kind: 'hunk',
@@ -398,11 +375,8 @@ test('a mechanical stop is drawn quiet with its code folded, and a step carries 
   assert.match(html, /rp-step rp-w-minor/, 'the import block is drawn quiet');
   assert.match(html, /rp-w-normal/, 'the stop beside it is drawn as it always was');
   assert.match(html, />mechanical</);
-  // Folded, never dropped — the document carries its code.
   assert.match(html, /show the 2\s*lines/);
   assert.match(html, /b\.js/);
-  // A step number carries its idea's, because they restart per idea.
-  // idea_a is second in the checker's reading order, so its steps are 02.n.
   assert.match(html, /class="rp-step-n">02\.1</);
   assert.match(html, /class="rp-step-n">02\.2</);
 });
@@ -438,8 +412,6 @@ test('an idea lists the scenarios its tests cover, between the walk and the clai
   const claims = html.indexOf('What the author claims');
   assert.ok(walk < covered && covered < claims, 'the scenarios sit under the code and above the claims');
 
-  // A pack written before the field existed reads it back undefined, and draws
-  // no heading: one over an empty list reads as tests looked for and not found.
   assert.doesNotMatch(render(payload(), 'idea_a'), /Covered by/);
 });
 
@@ -462,12 +434,6 @@ test('a stale pack says how far behind, an unfetched head says unknown, and a go
   assert.doesNotMatch(gone, /class="chip small ok">current/);
 });
 
-/**
- * A refused ask is drawn, not flashed. The desk refuses one for four reasons a
- * reader can act on and records none of them in the error log — a refusal is not
- * a failure — so the page is the only place the sentence can land.
- * → docs/spec/31-review-packs.md#when-a-pack-is-made
- */
 test('a refused ask is drawn beside the ask that was refused, and nowhere when nothing was refused', () => {
   const refusal = 'dispatch is paused; resume it to ask for a pack';
   const unchecked = payload({ pack: { ...checkedPack(), order: [] }, checking: false });
@@ -490,7 +456,6 @@ test('no reference is drawn inside a button, on the page or on the row control',
   for (const [, inner] of html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)) {
     assert.doesNotMatch(inner ?? '', /<a\b|class="ref-/, `a reference inside a button: ${inner}`);
   }
-  // The control's resting state is what a static render reaches: the row before its read lands.
   const control = renderToStaticMarkup(
     createElement(ReviewPackControl, { prNumber: 7, headSha: HEAD, canAsk: true, onOpen: () => undefined }),
   );

@@ -5,26 +5,8 @@ import { PLAN_DOCUMENT_SCHEMA } from '../planDocumentSchema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * An agent's way of saying **the plan is wrong** without stopping the run.
- *
- * The agent working a part is the reader most likely to find out that the
- * decomposition was written against a repository nobody had read closely enough —
- * a dependency the other way round, a part that turns out to be two, a step the
- * code already does. Until now the only thing it could do with that was write it
- * into a conclusion and hope, or park the whole goal for a replan; both cost the
- * run, and the second re-derives a decomposition that was mostly right.
- *
- * So this proposes a correction and nothing else: the row goes to
- * `plan_amendments`, rule `plan-amendment` puts it to the operator, and **the plan
- * carries on scheduling in the meantime** — including the part this agent is
- * working, which is not stopped, held or re-dispatched by anything here.
- *
- * `plan_correct` and not `plan_amend`: the desktop channel's tool of that name
- * writes an `awaiting_approval` plan in place, and one name over two different
- * settlements is the `validation_report` trap `names.ts` spells out. They share
- * the document schema, which is one export, and nothing else.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Propose a correction to the delivery plan for the goal you are working on, when what you have found in ' +
@@ -82,9 +64,6 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
         evidence: args.evidence ?? [],
         document: args.document,
         parts: args.parts ?? [],
-        // Passed through rather than defaulted, for `plan_submit`'s reason: absent
-        // means "leave the existing checks alone", and an empty block would read at
-        // ingestion as a withdrawal of every check somebody is halfway through.
         validation: args.validation,
         watch: args.watch,
       },
@@ -98,13 +77,8 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
     return ok({
       proposed: true,
       amendmentId: proposed.proposed.amendment.id,
-      // What the operator will be shown, handed back so the agent can see the
-      // change it actually described rather than the one it meant to.
       changes: proposed.proposed.diff?.parts.filter((p) => p.kind !== 'unchanged').map((p) => `${p.kind} ${p.slug}`),
       ...(proposed.proposed.warnings.length > 0 ? { warnings: proposed.proposed.warnings } : {}),
-      // The plan as it stands *now*, which is what your part is still being judged
-      // against — said out loud because the one thing an agent must not infer from
-      // a successful call here is that the amended plan is in force.
       currentPlan: currentPlanSummary(plan, parts, deps.openPr?.prRefStyle ?? '#'),
       means:
         'the correction is recorded and an operator has been asked about it. The plan has not changed: your ' +
