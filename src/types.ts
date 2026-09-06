@@ -1190,38 +1190,20 @@ export interface IssueInstruction {
 export type IssueRunOutcome = 'judged' | 'abandoned';
 
 /**
- * One run of the harness at a goal, from the first pulse that saw work under it
- * to the operator's dismissal (issue #234).
- *
- * A run's life is **not** the tracker's answer. The tracker returns open issues,
- * so a ticket closed by hand — often by the very PR that delivered it — used to
- * take the whole goal out of `ctx.world.issues` mid-workflow, and the assessor
- * and the retrospective that come *after* a merge never ran. The row is minted at
- * pickup and lives until dismissed, which is also what gives an **abandoned**
- * goal something to dismiss: it never completes, so a record minted on completion
- * alone was never written for one.
- *
- * The five snapshot fields are the issue as it last stood while live. They are
- * here because a retained run is dispatched from: `issue-assess` and `issue-retro`
- * interpolate the body into their prompts, and every rule reads the labels through
- * the watch gate — a stub with neither would put an assessor on a goal it cannot
- * read, and hide a retained run from the gate that decides whether the operator
- * still wants it worked.
+ * One run of the harness at a goal, from the first pulse that saw work under it to the
+ * operator's dismissal. A run's life is not the tracker's answer — the tracker returns open
+ * issues, so a hand-closed ticket used to drop the goal from `ctx.world.issues` before the
+ * assessor and retrospective that come after a merge ever ran. The row is minted at pickup and
+ * lives until dismissed. The five snapshot fields are the issue as it last stood while live,
+ * carried because a retained run is dispatched from — `issue-assess`/`issue-retro` interpolate
+ * the body, and every rule reads the labels through the watch gate.
  */
 /**
- * One tracker item as the mirror keeps it (issue #329).
- *
- * Deliberately thinner than {@link Issue}: this is the row behind a *history*, so
- * it carries what a list is read and ordered by and nothing a dispatch would want.
- * No body, because the mirror holds every item the tracker has ever returned and a
- * description per row is the bulk of a tracker; a rule that needs one reads the
- * live issue, which is the only shape it is allowed to act on anyway.
- *
- * `changedAt` is the provider's own last-modified instant, and it is load-bearing
- * twice over: it is the high-water mark the next sweep asks from, and it is why
- * the one-month floor is a floor rather than a cut — an item older than the anchor
- * that someone has touched since arrives on a changed-since read and is then kept
- * like any other. → `docs/spec/14-persistence.md`
+ * One tracker item as the mirror keeps it. Deliberately thinner than {@link Issue} — the row
+ * behind a history, carrying what a list is read and ordered by and nothing a dispatch would
+ * want. No body, since a description per row is the bulk of a tracker; a rule that needs one
+ * reads the live issue. `changedAt` is the sweep's high-water mark and why the one-month floor is
+ * a floor rather than a cut. → `docs/spec/14-persistence.md`
  */
 export interface TrackerItem {
   number: number;
@@ -1229,15 +1211,9 @@ export interface TrackerItem {
   labels: string[];
   state: IssueState;
   /**
-   * The provider's own workflow word — `Closed`, `Removed`, `Ready` — or null
-   * where it has none (GitHub, the fake).
-   *
-   * Read on the *history* sweep and not only on the live overlay, which is the
-   * whole difference between a closed item that says `Closed` and one no state
-   * filter can reach: the overlay is built from the open set by construction, so
-   * an item that has left it would otherwise keep whatever state it was last seen
-   * live with — or, for everything closed before the harness ever saw it open,
-   * none at all. → `docs/spec/14-persistence.md#the-ticket-mirror`
+   * The provider's own workflow word — `Closed`, `Removed`, `Ready` — or null where it has none.
+   * Read on the history sweep, not only the live overlay, so a closed item keeps its true state
+   * rather than whatever it was last seen live with. → `docs/spec/14-persistence.md#the-ticket-mirror`
    */
   workItemState: string | null;
   /** The provider's web URL, when it gave one. */
@@ -2295,15 +2271,9 @@ export interface PlanPart {
 }
 
 /**
- * The two things that block a plan part, named so a reader can tell them apart.
- *
- * A **collision** is git's: `refs/heads/issue/12` is taken, so no part's branch
- * can be cut, and it blocks every part together or none. A **decline** is the
- * operator's: they refused one human step, and it blocks that part alone.
- *
- * One predicate answering for both is the bug in #505 — the collision's "every
- * live part is blocked" reading escalates a refusal back at the person who made
- * it, and misses the collision the moment one sibling has settled.
+ * The two things that block a plan part. A `collision` is git's — a branch name taken, blocking
+ * every part together. A `declined` is the operator's — one refused human step, blocking that
+ * part alone. Kept apart to avoid conflating "every part blocked" with a single refusal.
  */
 export type PlanPartBlocker = 'collision' | 'declined';
 
@@ -2796,11 +2766,9 @@ export interface PetWallet {
 }
 
 /**
- * One clearance of the vivarium: when it ran, and how much it released.
- *
- * Named rather than counted, because what a build asks is "has *this* clearance
- * run here", and a build that asked "has any" would leave the next one unable to
- * happen. `at` is the epoch the wallet counts fleet spend from afterwards.
+ * One clearance of the vivarium: when it ran, and how much it released. Named rather than
+ * counted, since a build asks "has this clearance run here", not "has any". `at` is the epoch the
+ * wallet counts fleet spend from afterwards.
  */
 export interface PetReset {
   id: string;
@@ -2814,17 +2782,10 @@ export interface PetReset {
 // ---------------------------------------------------------------------------
 
 /**
- * A goal's work arriving on the integration branch: the commit one of its pull
- * requests landed as, recorded against the goal it belonged to.
- *
- * **The SHA is a provider fact and cannot be recovered later.** `merge_pr` squashes,
- * and a squash-merged branch has no ancestry link to its base — so the branch tip
- * answers "is this in production" with a permanent no. What a downstream check has
- * to be handed is the commit the merge *created*, which only the provider reports
- * ({@link PullRequest.mergeCommitSha}).
- *
- * Keyed on the pull request, for {@link BranchReapStore}'s reason: a branch name is
- * reusable, and a goal can land more than once.
+ * A goal's work arriving on the integration branch: the commit one of its pull requests landed
+ * as, recorded against the goal it belonged to. The SHA is a provider fact and cannot be
+ * recovered later — `merge_pr` squashes, so the branch tip has no ancestry link to its base and
+ * cannot answer "is this in production". Keyed on the pull request, since a branch name is reusable.
  */
 export interface GoalLanding {
   /** The pull request that landed. */
@@ -2837,13 +2798,9 @@ export interface GoalLanding {
 }
 
 /**
- * Whether a commit has got to an environment.
- *
- * Three values and not two. A probe that cannot answer — the command is missing, it
- * timed out, the cluster credentials expired — must not be readable as "not
- * deployed": that is the same word the true answer uses, and the operator has no
- * way to tell which one they are looking at. `unknown` is asked again; `absent` is
- * asked again too, and only `reached` is ever final.
+ * Whether a commit has got to an environment. Three values, not two — a probe that cannot
+ * answer must not be readable as "not deployed", which is the same word the true answer uses.
+ * `unknown` and `absent` are both asked again; only `reached` is ever final.
  * → `docs/spec/24-environments.md#the-three-verdicts`
  */
 export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
@@ -3065,27 +3022,16 @@ export interface GoalWatch extends GoalWatchInput {
 }
 
 /**
- * Which writer a check's current text came from.
- *
- * Two rather than three, and `watch_declare` is neither: its output is a
- * {@link GoalWatchProposal} against a row that already has an author, and
- * accepting one applies text to that row without changing whose the row is. An
- * agent's amendment to a check the plan wrote is still the plan's, and a replan
- * is still entitled to replace it — which is the behaviour that was there before
- * this field, kept.
+ * Which writer a check's current text came from. Two rather than three — `watch_declare` is
+ * neither, since accepting its proposal applies text to a row without changing whose it is.
  */
 type GoalWatchAuthor = 'plan' | 'operator';
 
 /**
- * An agent's declaration, waiting on the operator.
- *
- * `watch_declare` writes one of these rather than the check itself, for the
- * reason the plan sheet is read-only: approving the plan is what authorises a
- * query to be run against the operator's telemetry with the operator's own
- * credential, and a query that arrived after the approval has not been approved.
- * Accepting applies it and re-runs the dry run; declining leaves the live check
- * exactly as it was.
- * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
+ * An agent's declaration, waiting on the operator. `watch_declare` writes one of these rather
+ * than the check itself, since only an approved query may run against the operator's telemetry
+ * with the operator's own credential. Accepting applies it and re-runs the dry run; declining
+ * leaves the live check unchanged. → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
  */
 export interface GoalWatchProposal {
   /** When the agent declared it. */
@@ -3097,13 +3043,10 @@ export interface GoalWatchProposal {
 }
 
 /**
- * What one open watch is: a goal's whole work confirmed in one environment, and
- * the period the harness spends asking that environment what happened next.
- *
- * One row per `(goalRef, environment)`, opened on an arrival and never on a
- * merge — between the two sit a release train and an approval gate, and a window
- * opened at merge would spend itself asking about code that is not running yet.
- * → `docs/spec/29-post-deploy-watch.md#opening`
+ * What one open watch is: a goal's whole work confirmed in one environment, and the period the
+ * harness spends asking that environment what happened next. One row per `(goalRef,
+ * environment)`, opened on an arrival and never on a merge — a window opened at merge would ask
+ * about code not running yet. → `docs/spec/29-post-deploy-watch.md#opening`
  */
 export interface WatchWindow {
   /** The goal, `issue:<n>`. */
@@ -3115,21 +3058,15 @@ export interface WatchWindow {
   /** When it is due to settle — `openedAt` plus the environment's `forMs`. */
   settlesAt: string;
   /**
-   * When it settled, or **null while it is still watching**.
-   *
-   * A null that means something, which is the whole of why a column added to this
-   * table later needs a backfill gated on `ensureColumns`' report: without one,
-   * every settled window reopens on the boot an operator takes the build.
+   * When it settled, or null while it is still watching. A null that means something — a column
+   * added to this table later needs a backfill gated on `ensureColumns`' report.
    * → `docs/spec/14-persistence.md#when-a-null-means-something`
    */
   settledAt: string | null;
   /**
-   * When an operator last **extended** it, or null where nobody has.
-   *
-   * A window that ran out before the weekly job ran is the case this answers, and
-   * extending re-opens this window rather than opening a second one — the goal's readings are one
-   * series. Null means never extended, which needs no backfill; unlike `settledAt`, null here is
-   * deliberately not meaningful. → `docs/spec/29-post-deploy-watch.md#closing`
+   * When an operator last extended it, or null where nobody has. Extending re-opens this window
+   * rather than opening a second one — the goal's readings are one series. Null means never
+   * extended, and needs no backfill. → `docs/spec/29-post-deploy-watch.md#closing`
    */
   extendedAt: string | null;
 }
@@ -3627,26 +3564,15 @@ export interface ObstacleStanding {
   voices: number;
   /** The goals that have said it, deduplicated. A priority flag expands over these. */
   goalRefs: string[];
-  /**
-   * The voices in their **own words**, oldest first — the sentences behind the
-   * one-line claim. Carried on the row because everything that puts an obstacle in
-   * front of somebody wants them: a claim in somebody else's words is exactly what
-   * this store exists because agents cannot match on.
-   */
+  /** The voices in their own words, oldest first — the sentences behind the one-line claim. */
   words: string[];
 }
 
 /**
- * One goal parked behind an obstacle — the `blocked` verdict's row.
- *
- * Its own table rather than a fifth member of the verdict matrix
- * (`src/store/verdicts.ts`), and the distinction is what keeps it safe: the four
- * verdicts there all answer *is this goal's work finished*, and each clears the
- * ones it contradicts. This answers a different question — *can it be worked at
- * all right now* — and its exit is the **obstacle**, not the issue. Folding it in
- * would have a block clear a delivery, which is delivered work handed back to the
- * fleet (`docs/spec/20-validation.md#when-a-check-fails`, the same failure from
- * the other side).
+ * One goal parked behind an obstacle — the `blocked` verdict's row. Its own table rather than a
+ * fifth member of the verdict matrix (`src/store/verdicts.ts`): those all answer "is this goal's
+ * work finished", while this answers "can it be worked at all right now" — folding it in would
+ * have a block clear a delivery, handing delivered work back to the fleet.
  */
 export interface ObstacleBlock {
   /** The goal, as `issue:<n>` — the origin every pickup gate keys on. */
@@ -3677,42 +3603,24 @@ export interface Obstacle {
   /** The newest sighting, which is what decay reads. */
   lastSeenAt: string;
   /**
-   * What ended it, or null while nothing has — the terminal states' own record of
-   * which of the four endings took the row.
-   *
-   * Null on every row a build before the endings wrote, and that is the honest
-   * reading rather than a hole a backfill has to fill: nothing could write
-   * `resolved` or `dormant` then, so no row that predates this column has ended at
-   * all. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   * What ended it, or null while nothing has. Null on every row from before the endings
+   * existed — an honest reading, not a hole to backfill. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endedBy: ObstacleEnding | null;
 }
 
 /**
- * Which of the four endings took a row.
- *
- * Recorded because the four are not interchangeable to anybody reading the board
- * afterwards: a `condition` is the world saying it cleared, a `landing` is the
- * owner's work shipping, an `expiry` is a clock running out on something no
- * reading ever settled, and `decay` is nothing having said it for
- * `obstacleDormantMs`. Read by nothing that decides.
- *
- * `retired` is the operator's own, and it is a member here rather than a second
- * column for exactly the reason the other five are recorded: the board must never
- * say a clock or the world ended a row a person did. **Retiring is not
- * rejecting** — the row keeps its claim, its keys and its sightings, and a
- * matching report reopens it at `standing` like any other terminal row, which is
- * the whole difference from `muted`. → `docs/spec/27-obstacles.md#in-the-cockpit`
+ * Which of the four endings took a row: `condition` (the world cleared it), `landing` (the
+ * owner's work shipped), `expiry` (a clock ran out unsettled), `decay` (silence for
+ * `obstacleDormantMs`). `retired` is the operator's own — retiring is not rejecting, the row
+ * keeps its claim/keys/sightings and a matching report reopens it, unlike `muted`.
+ * → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
 
 /**
- * A condition the harness can evaluate, written by the harness and **never by an
- * agent**.
- *
- * Settling one means reading a world object pulse after pulse, and the only party
- * that can promise to do that is the one already reading it — an agent naming a
- * condition would be naming something nothing watches.
+ * A condition the harness can evaluate, written by the harness and never by an agent — settling
+ * one means reading a world object pulse after pulse, which only the harness can promise to do.
  * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleCondition {
@@ -3725,22 +3633,17 @@ export interface ObstacleCondition {
   /** The branch the harness saw it failing on, as the world named it. */
   branch: string;
   /**
-   * The first of the **two consecutive real world readings** a resolution needs, or
-   * null while the condition is not currently met. A reading that finds it unmet
-   * clears it, so "consecutive" is a fact about the column rather than a promise.
+   * The first of the two consecutive real world readings a resolution needs, or null while the
+   * condition is not currently met. An unmet reading clears it.
    */
   metAt: string | null;
   createdAt: string;
 }
 
 /**
- * A note being written into the repository: the documentation job opened for it,
- * and what became of that job.
- *
- * One row per note, ever — the primary key is the obstacle. A note whose write-up
- * was abandoned is not queued again: it stays `standing` and decays like anything
- * else, where a retry on every pulse would be this subsystem spending the fleet on
- * itself. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+ * A note being written into the repository: the documentation job opened for it, and what became
+ * of that job. One row per note, ever. A note whose write-up was abandoned is not queued again —
+ * it decays like anything else. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleWriteUp {
   obstacleId: string;
@@ -3757,22 +3660,13 @@ export interface ObstacleWriteUp {
 export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';
 
 /**
- * What the model desk made of one row, as the store holds it.
- *
- * **It is a reading and never a ruling.** Nothing here moves a state, takes an
- * owner or resolves anything: the desk is the harness's secretary and deliberately
- * not its judge. What it holds is what a model may decide — what the row is *for*,
- * and the ticket prose that would be written from the sightings otherwise.
+ * What the model desk made of one row, as the store holds it. A reading, never a ruling — nothing
+ * here moves a state, takes an owner, or resolves anything.
  * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
  */
 export interface ObstacleDeskReading {
   obstacleId: string;
-  /**
-   * The row's own `lastSeenAt` as it stood when this was read, which is what makes
-   * the inbox a comparison rather than a clock: a further voice landing words on a
-   * row puts it back in the inbox, and a row nobody has said anything new about is
-   * one already read.
-   */
+  /** The row's `lastSeenAt` as it stood when this was read — makes the inbox a comparison, not a clock. */
   readAt: string;
   takenAt: string;
   /** What the desk says the row is for, or null where it did not say. */
@@ -3783,12 +3677,7 @@ export interface ObstacleDeskReading {
 }
 
 /**
- * What an obstacle is *for*: a ticket somebody fixes, or a change to the
- * documentation.
- *
- * A model may decide it, because a wrong ticket is a ticket and a ticket is
- * visible. It is the same pair of doors the `kind` column already names — an
- * obstacle is fixed and a note is written down — so the desk writes the kind
- * rather than a second field nothing else reads.
+ * What an obstacle is for: a ticket somebody fixes, or a change to the documentation. A model may
+ * decide it — the same pair of doors the `kind` column already names.
  */
 export type ObstaclePurpose = 'ticket' | 'docs';
