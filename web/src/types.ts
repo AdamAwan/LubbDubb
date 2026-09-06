@@ -196,7 +196,6 @@ export type {
   SurfaceVerdict,
   StateSection,
   TaskSummary,
-  FeatureBlockKind,
   FeatureBlockRow,
   FeatureBoardPayload,
   FeatureBriefing,

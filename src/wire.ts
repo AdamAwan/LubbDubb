@@ -1880,7 +1880,7 @@ export interface FeatureReportRow {
  * Folded into one word a reader could not tell "answer me" from "decide", which
  * are the two different things a person is being asked for.
  */
-export type FeatureBlockKind = 'question' | 'fellShort';
+type FeatureBlockKind = 'question' | 'fellShort';
 
 /** One thing standing between a Feature's work and the next step, in its author's words. */
 export interface FeatureBlockRow {
