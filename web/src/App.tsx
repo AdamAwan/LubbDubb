@@ -62,7 +62,6 @@ export function App() {
       onDecide={(id, verdict, note, acknowledged) => status.actions.decideProposal(id, verdict, note, acknowledged)}
       onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
-      onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
       onRestartPart={(id, slug) => status.actions.restartPart(id, slug)}
       canClosePr={state.config.canClosePr}

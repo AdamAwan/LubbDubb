@@ -78,7 +78,6 @@ export interface CockpitActions {
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
   deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   extendWatch(issueNumber: number, environment: string): Promise<void>;
-  setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
   viewPlan(planId: string | null): void;
   viewRetro(issueRef: string | null): void;

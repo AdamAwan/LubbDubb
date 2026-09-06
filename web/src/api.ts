@@ -325,8 +325,6 @@ const realApi = {
   extendWatch: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch/${encodeURIComponent(environment)}/extend`),
   getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
-  setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
-    post<{ ok: true }>(`/api/plans/${planId}/acceptance`, { slug, criterion, met }),
   setValidation: (
     issueNumber: number,
     checkId: string,

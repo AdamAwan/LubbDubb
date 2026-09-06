@@ -954,18 +954,6 @@ class DemoServer {
     return { ok: true };
   }
 
-  async setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<{ ok: true }> {
-    const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
-    if (part) {
-      part.acceptanceMet = met
-        ? [...part.acceptanceMet.filter((c) => c !== criterion), criterion]
-        : part.acceptanceMet.filter((c) => c !== criterion);
-      part.acceptanceCriteria = part.acceptanceCriteria.map((c) => (c.text === criterion ? { text: c.text, met } : c));
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
   getBuild(): BuildReading {
     return this.state.build;
   }
@@ -4062,8 +4050,6 @@ export const demoApi = {
   deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
-  setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
-    getServer().setAcceptance(planId, slug, criterion, met),
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
     getServer().setValidation(issueNumber, checkId, act),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),

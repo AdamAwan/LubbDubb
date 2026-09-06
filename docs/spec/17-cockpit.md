@@ -5692,9 +5692,11 @@ button and nowhere on the sheet saying where the boxes are.
 
 `diagnosis` and `approach` **side by side**, not stacked: a long "what's wrong" used to push "what
 we'll do" off the first screen, and the two answer different questions. `verification` sits under the
-approach, since "how we'll know it worked" is part of what is being agreed to. `evidence` renders
-under the diagnosis as plain monospace citations — **not links**, because the cockpit has no source
-browser and `refUrls` answers only for tracker items, so a link there would go nowhere.
+approach, since "how we'll know it worked" is part of what is being agreed to. **`evidence` is not
+drawn here.** The band is the plan in the reader's own terms, and a list of file paths under
+"what's wrong" is the one thing on it that only somebody with the checkout open can read — it
+crowded out the prose that everybody can. The citations stay on the plan record and in the
+write-up; the sheet's verdict band states the diagnosis and nothing else.
 
 **`reason` is a caption, not a heading.** Once `approach` carries the summary, the split justification
 renders as one muted line above the map — _"Split this way because: …"_ — because that is the size of
@@ -5728,13 +5730,22 @@ from. It is the cockpit's only drawing.
 
 ### The parts
 
-Each part carries its `touches` as path chips, its prose `scope` below them (suppressed when the
-planner answered both with the same thing), `size`, `rationale` (why its own PR), its `acceptance` as a
-**checklist**, its status, its PR, its "Up next" queue state (`unapproved` / `capped` / `▶ now`), and
-the stack edge spelled out as a sentence — a rejoin says _both_ out loud, which the old
-`dependsOn[0]` rendering structurally could not.
+Each part carries its prose `scope` under the heading **what this achieves**, `size`, its
+`acceptance` as a plain list under _done when_, its status, its PR, its "Up next" queue state
+(`unapproved` / `capped` / `▶ now`), and the stack edge spelled out as a sentence — a rejoin says
+_both_ out loud, which the old `dependsOn[0]` rendering structurally could not.
 
-**Acceptance is ticked by the reviewer**, through `POST /api/plans/:id/acceptance`; nothing derives it
+**The explanation is what the part achieves, not what it edits.** The card led with `touches` as
+path chips and kept the prose below them, which answered a question about the diff to somebody who
+is deciding whether the work is the right work. `touches` still rides in the part's prompt and is
+still what scope drift is measured against — it is only not the sentence the reader is given. For
+the same reason `rationale` ("why its own PR") is no longer drawn: the split is the map's argument,
+made once and in a picture, and repeating it per part put the mechanics of the decomposition where
+its purpose belongs.
+
+**Acceptance is read-only here.** The criteria say what the part is judged done by; the sheet does
+not settle them, so there is no tick to click. A checkbox invited a reader deciding whether to
+approve a plan to record a judgement about work that has not been done
 ([08](08-planning.md#acceptance-ticked)). **Scope drift** draws under a part in red when its agents
 wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
 exists to surface.
@@ -5846,11 +5857,11 @@ with what happens to what is typed, and **held until there is something** — `d
 to a 400, the same call the held Approve makes. The change drawer is tinted in the accent and the close
 drawer in the red family, because only one of them writes anything outside this harness.
 
-**Objection pins seed the change drawer.** A part can be pinned _question_ or _drop_ while reading. The
-pins used to be composed into the one free-text note and could only be sent by choosing a verdict
-first — so an operator who disagreed with one part of five had to accept or reject the whole plan to
-say so. They are the drawer's opening text now, still editable, on the one answer that does something
-with them.
+**A part carries no verdict of its own.** The card offered _question_ and _drop_ pins that seeded the
+change drawer's text. Neither did anything on its own — both were a way of typing a sentence — and a
+per-part control that looks like an act but composes a note reads as a plan that can be edited part
+by part, which it cannot. The one place to disagree with a plan is `Change something first`, in the
+operator's own words.
 
 **Escape closes a drawer and decides nothing.** A question you cannot back out of is a commitment.
 

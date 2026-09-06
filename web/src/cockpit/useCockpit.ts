@@ -222,7 +222,6 @@ export function useCockpit(): CockpitStatus {
       },
       deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
       extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
-      setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
       viewPlan: (planId) => go({ plan: planId }),
       viewRetro: (issueRef) => go({ retro: issueRef }),

@@ -2731,181 +2731,9 @@ select:disabled {
   }
 }
 
-/* Citations. Monospace and selectable rather than linked: the cockpit has no
-   source browser, and `refUrls` answers only for tracker items — a link here would
-   go nowhere. */
-.pm-cites {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px dashed var(--border);
-}
-.pm-cite {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  font-size: 11.5px;
-  flex-wrap: wrap;
-}
-.pm-cite code {
-  font-family: var(--font-mono);
-  color: var(--blue);
-  white-space: nowrap;
-}
-.pm-cite em {
-  font-style: normal;
-  color: var(--muted);
-  min-width: 0;
-}
 
-/* -- The dependency map --------------------------------------------------- */
-/* The one drawing in the cockpit. It scrolls sideways inside its own box rather
-   than scaling down: a decomposition wide enough to overflow is one whose node
-   text would stop being readable if it were fitted. */
-.pm-map {
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  padding: 8px 10px 6px;
-}
-.pm-map-svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.pm-map {
-  overflow-x: auto;
-}
-.pm-wave-label {
-  fill: var(--grey);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-.pm-edge {
-  fill: none;
-  stroke: var(--grey);
-  stroke-width: 1.5;
-}
-/* A rejoin waits for *every* one of its dependencies to merge, so nothing flows
-   down any single one of these edges — dashed says that where a solid line would
-   claim the opposite. */
-.pm-edge.rejoin {
-  stroke-dasharray: 4 3;
-}
-.pm-edge-head {
-  fill: var(--grey);
-}
-.pm-node {
-  cursor: pointer;
-}
-.pm-node-box {
-  fill: var(--panel);
-  stroke: var(--border);
-}
-.pm-node:hover .pm-node-box,
-.pm-node:focus-visible .pm-node-box {
-  stroke: var(--border-hi);
-}
-.pm-node.on .pm-node-box {
-  stroke: var(--accent);
-}
-.pm-node.human .pm-node-box {
-  stroke: var(--amber);
-  stroke-dasharray: 3 2;
-}
-.pm-node-title {
-  fill: var(--text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-}
-.pm-node-slug,
-.pm-node-pr {
-  fill: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-.pm-node-pr {
-  fill: var(--blue);
-}
-.pm-node-state {
-  font-family: var(--font-ui);
-  font-size: 10.5px;
-  fill: var(--muted);
-}
-.pm-node-stripe {
-  fill: var(--grey);
-}
-.pm-node.done .pm-node-stripe {
-  fill: var(--green);
-}
-.pm-node.done .pm-node-state {
-  fill: var(--green);
-}
-.pm-node.review .pm-node-stripe {
-  fill: var(--blue);
-}
-.pm-node.review .pm-node-state {
-  fill: var(--blue);
-}
-.pm-node.live .pm-node-stripe {
-  fill: var(--accent);
-}
-.pm-node.live .pm-node-state {
-  fill: var(--accent);
-}
-.pm-node.bad .pm-node-stripe {
-  fill: var(--red);
-}
-.pm-node.bad .pm-node-state {
-  fill: var(--red);
-}
-.pm-node.human .pm-node-state {
-  fill: var(--amber);
-}
-.pm-map-key {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--muted);
-  padding-top: 6px;
-}
-.pm-map-key i {
-  display: inline-block;
-  width: 22px;
-  border-top: 1px solid var(--muted);
-  vertical-align: 4px;
-  margin-right: 6px;
-}
-.pm-map-key i.dash {
-  border-top-style: dashed;
-}
-.pm-map-key .human {
-  color: var(--amber);
-}
 
 /* -- Parts ---------------------------------------------------------------- */
-/* Declared paths, as chips. The prose `scope` stays below them when both exist:
-   one says what the part is for, the other says what it may write, and only the
-   second can be checked against what it did write. */
-.pm-touches {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.pm-touches code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--well);
-  border: 1px solid var(--border);
-  padding: 2px 5px;
-}
 /* Where a part wrote outside its declaration, and where a held part says why.
    Loud on purpose: both are the plan disagreeing with reality, which is the one
    thing this surface exists to surface. */
@@ -2938,52 +2766,8 @@ select:disabled {
   gap: 4px;
   margin-left: auto;
 }
-/* An objection an operator pins while reading. It composes the note the two
-   verdicts already carry — no new mechanic — so it is drawn as a mark rather than
-   as a button that does something on its own. */
-.pm-pin {
-  font: 11px/1 var(--font-ui);
-  padding: 4px 7px;
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--grey);
-  cursor: pointer;
-}
-.pm-pin:hover {
-  color: var(--text);
-}
-.pm-pin.on {
-  border-style: solid;
-}
-.pm-pin.drop.on {
-  border-color: var(--red-line);
-  background: var(--red-fill);
-  color: var(--red);
-}
-.pm-pin.ask.on {
-  border-color: var(--blue-line);
-  background: var(--blue-fill);
-  color: var(--blue);
-}
-.pm-pins {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.pm-pins .pm-section-label {
-  margin-bottom: 0;
-}
-.pm-pin-x {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 0 0 0 4px;
-}
-
-/* The acceptance checklist. The tick is the reviewer's — nothing derives it. */
+/* The acceptance criteria — what this part is judged done by. Read-only: the sheet
+   states them, it does not settle them. */
 .pm-accept {
   display: flex;
   gap: 8px;
@@ -2996,16 +2780,8 @@ select:disabled {
   white-space: nowrap;
 }
 .pm-crit {
-  display: grid;
-  grid-template-columns: 15px 1fr;
-  gap: 7px;
-  align-items: start;
-  cursor: pointer;
+  display: block;
   padding: 2px 0;
-}
-.pm-crit input {
-  margin: 3px 0 0;
-  accent-color: var(--green);
 }
 .pm-crit.met > span {
   color: var(--muted);
@@ -3331,12 +3107,6 @@ select:disabled {
 .pm-part-title {
   font-weight: 600;
   min-width: 0;
-}
-.pm-scope {
-  color: var(--muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  margin-top: 2px;
 }
 .pm-field {
   font-size: 12px;
