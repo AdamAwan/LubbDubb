@@ -56,19 +56,11 @@ function build(overrides: Partial<Config> = {}) {
   return buildSystem(config, { backend: new FakePtyBackend() });
 }
 
-// --------------------------------------------------------------------------
-// The predicates
-// --------------------------------------------------------------------------
-
 test('isOurPr: the provider’s answer outranks the filter and the branch shape', () => {
-  // The bug this exists for: `prAuthor` is configured, so the fetch also returns
-  // the pull requests a colleague put the operator on — and every one of them used
-  // to read as the harness's own.
   assert.equal(isOurPr(pr({ viewerAuthored: false }), true), false);
   assert.equal(isOurPr(pr({ branch: 'issue/12', viewerAuthored: false }), true), false, 'even on a dispatch branch');
   assert.equal(isOurPr(pr({ viewerAuthored: true }), false), true);
 
-  // Unknown authorship falls back to what it always did.
   assert.equal(isOurPr(pr({}), true), true);
   assert.equal(isOurPr(pr({}), false), false);
   assert.equal(isOurPr(pr({ branch: 'issue/12' }), false), true);
@@ -78,8 +70,6 @@ test('isOurPr: the provider’s answer outranks the filter and the branch shape'
 test('isSomeoneElsesPr: only a positive answer hides a pull request', () => {
   assert.equal(isSomeoneElsesPr(pr({ viewerAuthored: false })), true);
   assert.equal(isSomeoneElsesPr(pr({ viewerAuthored: true })), false);
-  // A provider that cannot name an author must not take the whole world out of
-  // dispatch: unknown is not "somebody else's".
   assert.equal(isSomeoneElsesPr(pr({})), false);
 });
 
@@ -118,10 +108,6 @@ test('a colleague’s pull request reads as elsewhere, and as yours once they as
   assert.equal(asked.assignedToYou, 'reviewer-required');
 });
 
-// --------------------------------------------------------------------------
-// The harness
-// --------------------------------------------------------------------------
-
 test('no rule fires on a watched pull request somebody else opened', async () => {
   const system = build();
   system.connector.inject({
@@ -144,7 +130,6 @@ test('no rule fires on a watched pull request somebody else opened', async () =>
     'neither the CI fix nor the review-comment reply is dispatched for a colleague’s PR',
   );
 
-  // Still fully visible — the panel keeps the row, the fleet keeps its hands off.
   const world = await system.connector.getState();
   assert.ok(
     world.pullRequests.some((p) => p.number === 42),

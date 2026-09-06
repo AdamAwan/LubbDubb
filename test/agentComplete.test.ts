@@ -11,17 +11,6 @@ import { gitRepo } from './support/gitRepo.js';
 import { failPlanningOpen } from './support/plans.js';
 import { pinnedPool } from './support/worktrees.js';
 
-/**
- * Operator-declared done (`AgentManager.complete`). An agent reaches the clean
- * terminal only by printing the sentinel, so an agent that finished the work
- * without one used to be endable only by Kill — which records the opposite
- * (`interrupted`), keeps the worktree and reads as an abandonment.
- *
- * What these assert is that completing lands on the *same* terminal a sentinel
- * does, rather than on a second flavour of done: the task, the reap and the
- * worktree removal all come from the path the sentinel already drives.
- */
-
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function build() {
@@ -36,26 +25,15 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The assessor and the appraisal are pinned off: they default **on**, and this
-    // file is about something else — leaving them on would put an extra agent in
-    // front of every issue these assertions dispatch. Each has its own tests.
-    // (The planning funnel cannot be pinned off; a goal is planned by writing the
-    // funnel having failed open on it — `failPlanningOpen`.)
     auth: { enabled: false } as never,
   });
   const backend = new FakePtyBackend();
-  // A pool of one, so "the slot went back" is observable: with room to grow, a
-  // second branch is handed a *new* slot rather than the released one, because
-  // reuse is scoped to the branch and a hand-over wipes the tree. The pool the
-  // composition root builds follows the agent cap, so the bound is pinned by
-  // injecting the manager rather than by a config key.
   const pool = pinnedPool(config, 1);
   const system = buildSystem(config, { backend, worktrees: pool.worktrees, errorMirror: () => {} });
   pool.attach(system);
   return { system, backend };
 }
 
-/** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */
 async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: number) {
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
   failPlanningOpen(sys.store, issueNumber);
@@ -78,7 +56,6 @@ test('completing an agent lands on the done terminal, not the kill one', async (
   const task = await codeAgent(system, 7);
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
 
-  // The shape this exists for: the agent parked without a done sentinel.
   backend.last().emit('@@LUBBDUBB_WAITING:I think that is everything@@\r\n');
   assert.equal(system.store.getAgent(agent.id)!.status, 'waiting');
 
@@ -97,11 +74,6 @@ test('a completed agent is reaped as done, and its worktree slot released', asyn
   const reaps: string[] = [];
   system.agents.on('reaped', ({ status }) => reaps.push(status));
 
-  // The reap rendezvous is unchanged — it still waits on the real process exit
-  // (`worktreeCleanup.test.ts` holds that property on the sentinel path). Here the
-  // kill *is* the exit, so what this asserts is the half `kill()` suppresses:
-  // `exited` is left intact, so a completed agent is reaped where a killed one
-  // never is, and its pool slot goes back.
   system.agents.complete(agent.id);
   await waitFor(() => reaps.length > 0);
 
@@ -120,9 +92,6 @@ test('completing settles the escalation the agent was parked on', async () => {
   assert.equal(system.store.listOpenEscalations().length, 1, 'the park should raise an escalation');
 
   system.agents.complete(agent.id);
-  // An answer would route into a session that no longer exists, so leaving it
-  // open is un-actionable clutter in "Needs you" — the same reason a kill
-  // cascade-dismisses.
   assert.equal(system.store.listOpenEscalations().length, 0);
   system.store.close();
 });
@@ -149,8 +118,6 @@ test('completing an agent that is no longer live is refused', async () => {
   const ok = await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/complete` });
   assert.equal(ok.statusCode, 200);
 
-  // Liveness is the whole guard: a second completion has nothing to end, and
-  // re-labelling a finished record is a different feature.
   const again = await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/complete` });
   assert.equal(again.statusCode, 409);
 

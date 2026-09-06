@@ -20,16 +20,6 @@ import { USAGE_SUBJECTS } from '../src/usage/events.js';
 import { IDLE_INTENT } from '../src/selfUpdate/upgradePlan.js';
 import type { UsagePayload } from '../src/wire.js';
 
-/**
- * The operator ledger: the fold's arithmetic, and that the route actually passes
- * the window down to it.
- *
- * The seam test seeds settled records rather than driving the routes that settle
- * them, on purpose: the whole claim of this reading is that it sweeps the
- * *record*, so a test that could only pass by going through one settling route
- * would be asserting the arrangement `collectActions` argues against.
- */
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-ledger-'));
   return buildSystem(
@@ -80,13 +70,9 @@ test('an ask is counted asked, answered, declined and outstanding — four figur
   const insights = buildOperatorInsights({
     ...emptyInput(),
     humanTasks: [
-      // Answered inside the window, two hours after it was asked.
       task('a', iso(6 * HOUR), iso(4 * HOUR), 'done'),
-      // Declined inside the window: the harness asked for the wrong thing.
       task('b', iso(5 * HOUR), iso(3 * HOUR), 'declined'),
-      // Still open, and it was already open when this window began.
       task('c', iso(40 * HOUR), null, 'open'),
-      // Still open, but asked inside the window — outstanding, not overdue.
       task('d', iso(2 * HOUR), null, 'open'),
     ],
   });
@@ -101,13 +87,10 @@ test('an ask is counted asked, answered, declined and outstanding — four figur
 test('waiting is priced at what the fleet spends in an hour, over the same window', () => {
   const insights = buildOperatorInsights({
     ...emptyInput(),
-    // $24 over the 24h window — one dollar an hour.
     costEvents: [{ agentId: 'a1', costUsd: 24, at: iso(20 * HOUR) }],
     humanTasks: [task('a', iso(6 * HOUR), iso(3 * HOUR), 'done')],
   });
   assert.equal(insights.fleetRateUsdPerHour, 1);
-  // Three hours parked, at a dollar an hour. The product is the reading; both
-  // halves ship so a reader can see which one moved.
   assert.equal(row(insights.asks, 'human-task').parkedCostUsd, 3);
 });
 
@@ -140,11 +123,8 @@ test('a record that cannot say answers null, never zero', () => {
   });
   const obstacles = row(insights.asks, 'obstacle-ownership');
   assert.equal(obstacles.settled, 1);
-  // `updated_at` moves on every sighting, so there is no stamp to measure a wait
-  // from. A zero here would be a finding manufactured out of a missing column.
   assert.equal(obstacles.medianAnswerMs, null);
   assert.equal(obstacles.parkedCostUsd, null);
-  // An act parks nothing, and its population is not recorded either.
   const landing = row(insights.acts, 'stack-landing');
   assert.equal(landing.parkedCostUsd, null);
   assert.equal(landing.offered, null);
@@ -197,8 +177,6 @@ test('GET /api/usage sweeps the records and answers for the window it was asked 
   const res = await app.inject({ method: 'GET', url: '/api/usage?window=24h' });
   assert.equal(res.statusCode, 200);
   const { insights } = res.json() as UsagePayload;
-  // Shipped back rather than assumed, for the reason every other insights route
-  // ships it: the caption is the half a reader believes.
   assert.equal(insights.window.key, '24h');
   assert.notEqual(insights.window.since, null);
 

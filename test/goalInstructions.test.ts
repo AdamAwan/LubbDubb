@@ -14,8 +14,6 @@ import type { Agent, IssueInstruction, Plan } from '../src/types.js';
 import { planWithOnePart } from './support/plans.js';
 import { findTask } from './support/tasks.js';
 
-// -- the pure note -----------------------------------------------------------
-
 function instruction(over: Partial<IssueInstruction> = {}): IssueInstruction {
   return {
     id: 'ins_1',
@@ -28,8 +26,6 @@ function instruction(over: Partial<IssueInstruction> = {}): IssueInstruction {
 }
 
 test('a goal with no standing instruction appends nothing at all', () => {
-  // The rule every appended block follows: a goal nobody has written on composes
-  // the prompt it composed before this existed, byte for byte.
   assert.equal(operatorInstructionsNote([], 'gh issue edit 1'), '');
 });
 
@@ -57,8 +53,6 @@ test('several instructions read oldest first, all of them', () => {
 });
 
 test('a multi-line instruction stays inside its quote', () => {
-  // The block quote is what stops the second line reading as the harness speaking
-  // again — `outstandingWorkNote`'s discipline, for its reason.
   const note = operatorInstructionsNote([instruction({ text: 'fix the icon\nit spins forever' })], null);
   assert.match(note, /> fix the icon\n> it spins forever/);
 });
@@ -79,8 +73,6 @@ test('with no tracker to amend, the note says so instead of naming a command tha
 });
 
 test('the agent is told the instruction is settled by concluding', () => {
-  // The one thing it cannot discover: an instruction it decided against is one
-  // nobody hears about unless it says so, because the conclusion settles them all.
   assert.match(operatorInstructionsNote([instruction()], null), /conclude_work settles all of them/);
 });
 
@@ -109,8 +101,6 @@ function githubConfig(): Config {
     github: { owner: 'acme', repo: 'widgets' },
   } as never);
 }
-
-// -- the route, and what reaches an agent ------------------------------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-ins-'));
@@ -159,8 +149,6 @@ test('writing an instruction records the words and the verdict that gets them re
     const standing = system.store.listStandingInstructions('issue:1');
     assert.equal(standing.length, 1);
     assert.equal(standing[0]?.text, 'change the button to primary');
-    // Both halves, because either one alone does nothing: the instruction is what
-    // an agent reads, and rule `work-item-back-to-pickup` acts on the verdict.
     const conclusion = system.store.getIssueConclusion('issue:1');
     assert.equal(conclusion?.verdict, 'more_work');
     assert.equal(conclusion?.by, 'operator');
@@ -172,9 +160,6 @@ test('writing an instruction records the words and the verdict that gets them re
 });
 
 test('instructions accumulate rather than overwriting each other', async () => {
-  // The whole reason this is a table and not the conclusion's note: two things
-  // asked for before anyone worked the goal are two things, and the second
-  // silently replacing the first is the failure being fixed.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -229,8 +214,6 @@ test('withdrawing the last instruction takes its verdict with it', async () => {
 });
 
 test('an agent’s own declaration survives a withdrawal', async () => {
-  // The clear is scoped to the verdict the instruction wrote. An agent's
-  // `more_work` is about the work, and taking back a sentence must not delete it.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -273,8 +256,6 @@ test('a standing instruction is in front of the next agent dispatched on the goa
 });
 
 test('an agent on another goal’s pull request is handed none of it', async () => {
-  // `padOriginFor`'s scoping — an agent fixing CI on a PR can neither act on
-  // "change the button to primary" nor tell it apart from its own task.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -322,19 +303,7 @@ test('concluding the goal settles every instruction standing on it', async () =>
   }
 });
 
-// -- restarting a goal the funnel had already stopped at (issue #603) ----------
-//
-// The words landing was never the hard half. An operator presses **More work** on
-// a goal that looks finished, which is precisely a goal the funnel has parked: a
-// standing delivery holds it out of `eligibleIssues` altogether, and a settled
-// plan is answered `parts` by `resolvePlanRoute`, so pickup skips it as planned
-// while `plan-part` finds every part done. Both states drew the instruction in the
-// cockpit and dispatched nobody who could act on it.
-
 test('an instruction on a delivered goal takes the park down with it', async () => {
-  // The delivery is cleared through `VERDICT_EXCLUSIONS.conclusion`, not a
-  // hand-rolled delete — `delivered` and "there is more here" are opposite answers
-  // to one question, and the operator outranks the assessor on it.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -359,9 +328,6 @@ test('an instruction on a delivered goal takes the park down with it', async () 
 });
 
 test('an instruction on a goal whose plan is finished sends the plan back to a planner', async () => {
-  // `shortfallArm`'s arm A through the operator's door: one status write, and rule
-  // `issue-plan` — which was already there — dispatches a replanner primed with the
-  // plan that exists. The decomposition it draws is put to the operator as usual.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -384,9 +350,6 @@ test('an instruction on a goal whose plan is finished sends the plan back to a p
 });
 
 test('a plan still in flight is left exactly where it is', async () => {
-  // Only a *settled* plan is rewound. One mid-decomposition already has a next
-  // dispatch or a decision the operator owes, and rewinding it would throw away
-  // the plan they are in the middle of.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -401,10 +364,6 @@ test('a plan still in flight is left exactly where it is', async () => {
 });
 
 test('the goal in issue #603: delivered, plan complete, written up — and More work restarts it', async () => {
-  // The state a goal actually reaches, rather than either half on its own: the plan
-  // rolled up, the assessor parked it delivered, the desk wrote the run up. Every
-  // rule that could schedule anything had stopped, and the control that exists to
-  // say "there is more here" moved nothing.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -429,7 +388,6 @@ test('the goal in issue #603: delivered, plan complete, written up — and More 
   }
 });
 
-/** A plan with every part finished and rolled up — a goal the harness considers done. */
 function settledPlan(system: System, issueNumber: number): Plan {
   const plan = planWithOnePart(system.store, issueNumber, `Issue #${issueNumber}`);
   const [part] = system.store.listPlanParts(plan.id);

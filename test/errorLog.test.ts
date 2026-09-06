@@ -19,7 +19,6 @@ function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -31,7 +30,6 @@ function testConfig() {
   });
 }
 
-/** A system with the stderr mirror silenced so failing-path tests stay quiet. */
 function quietSystem(backend = new FakePtyBackend()): System {
   return buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
 }
@@ -67,9 +65,6 @@ test('the stderr mirror cannot be made to forge a second log entry', () => {
   const original = console.error;
   console.error = (line: string): void => void lines.push(line);
   try {
-    // The header's values reach the log from outside — an agent id off a request
-    // path, provider text off the world — so a newline in one must not be able to
-    // end the line early and start a plausible-looking entry after it.
     const log = new ErrorLog(store);
     log.record({
       source: 'agent',
@@ -83,8 +78,6 @@ test('the stderr mirror cannot be made to forge a second log entry', () => {
   assert.equal(lines.length, 1);
   const entry = lines[0]!.split('\n');
   assert.equal(entry[0], '[lubbdubb:error] agent: Agent x [lubbdubb:error] cycle: everything is fine');
-  // `detail` keeps its line structure — that is what it is for — but every line of
-  // it is indented, so none can pass as the start of a fresh entry.
   assert.deepEqual(entry.slice(1), ['  line one', '  [lubbdubb:error] server: also fine']);
   store.close();
 });
@@ -94,14 +87,12 @@ test('a harness cycle exception is recorded, not thrown away', async () => {
   system.connector.getState = async (): Promise<WorldSnapshot> => {
     throw new Error('provider exploded');
   };
-  // Must not reject (a timer cycle would become an unhandled rejection).
   const report = await system.harness.runCycle('manual');
   assert.match(report.rationale, /cycle failed: provider exploded/);
   const errors = system.store.listErrors();
   assert.equal(errors.length, 1);
   assert.equal(errors[0]!.source, 'cycle');
   assert.match(errors[0]!.message, /provider exploded/);
-  // The next cycle isn't wedged by the failed one.
   system.connector.getState = async () => ({ takenAt: '', pullRequests: [], issues: [] });
   const ok = await system.harness.runCycle('manual');
   assert.doesNotMatch(ok.rationale, /cycle failed/);
@@ -165,8 +156,6 @@ test('POST /api/errors/clear empties the log and the snapshot with it', async ()
   assert.deepEqual(system.store.listErrors(), []);
   assert.deepEqual((await buildStateSnapshot(system)).errors, []);
 
-  // Idempotent, and a fault recorded *after* a clear still lands: the clear is a
-  // delete, not a switch that stops the log recording.
   assert.deepEqual((await app.inject({ method: 'POST', url: '/api/errors/clear' })).json(), {
     ok: true,
     cleared: 0,
@@ -196,8 +185,6 @@ test('a provider failure with no prior success rejects rather than serving an em
     },
   } as unknown as GitHubApi;
   const sc = new GitHubSourceControlIntegration({ api, errors });
-  // "Last good" means a read that succeeded — with none, an empty slice would
-  // fabricate a world in which every open PR has vanished. It must fail instead.
   await assert.rejects(() => sc.snapshot(), /Bad credentials/);
   const recorded = store.listErrors();
   assert.equal(recorded.length, 1);

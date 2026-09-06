@@ -18,8 +18,6 @@ const PROFILES = {
   deep: { model: 'opus', effort: 'medium', rank: 3, description: 'work whose shape is unclear' },
 } as const;
 
-// -- resolution ---------------------------------------------------------------
-
 test('a rule with an assignment resolves to that profile', () => {
   const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
   assert.deepEqual(resolveAgentProfile(models, 'issue-plan'), {
@@ -39,8 +37,6 @@ test('a rule with no assignment falls through to the default, as does a dispatch
 
 test('no policy at all, or a policy with no default, resolves to no model', () => {
   assert.equal(resolveAgentProfile(undefined, 'issue-plan'), null);
-  // A block that assigns one rule and nothing else leaves every other kind of
-  // work exactly where it is today: no flag.
   assert.equal(resolveAgentProfile({ profiles: PROFILES, byRule: { 'issue-plan': 'deep' } }, 'pr-ci-failing'), null);
 });
 
@@ -60,9 +56,6 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
   });
 });
 
-// -- what the loader refuses --------------------------------------------------
-
-/** `loadConfig`, never `loadDeploymentConfig` — the latter reads this machine's own file. */
 function load(agentModels: Config['agentModels']) {
   return loadConfig({ selfUpdate: { enabled: false } as never, dbPath: ':memory:', agentModels });
 }
@@ -79,18 +72,11 @@ test('config load rejects a byRule entry naming a profile that does not exist', 
 });
 
 test('config load rejects a byRule key that is not a dispatch rule id', () => {
-  // A typo'd id would silently never match, which is the whole failure class.
   assert.throws(() => load({ profiles: PROFILES, byRule: { 'issue-planning': 'deep' } }), /"issue-planning"/);
-  // And an id that exists but can never appear on a dispatched action — the
-  // registry carries admission and terminal entries too.
   assert.throws(() => load({ profiles: PROFILES, byRule: { 'cooldown-escalate': 'deep' } }), /"cooldown-escalate"/);
 });
 
 test('config load rejects a profile written as a bare model string', () => {
-  // The shape before profiles carried an effort. Refused by name rather than
-  // accepted alongside the object, so one key never grows two spellings — and so
-  // a deployment on the old shape stops at boot instead of resolving a profile
-  // with no model in it.
   assert.throws(
     () => load({ profiles: { deep: 'opus' } as never }),
     /agentModels\.profiles\."deep" must be an object.*\{"model": "opus"\}/s,
@@ -110,8 +96,6 @@ test('an omitted block loads, and a well-formed one survives the loader', () => 
   assert.deepEqual(load(models).agentModels, models);
 });
 
-// -- argv ---------------------------------------------------------------------
-
 test('the launch builder omits --model and --effort entirely when neither is set', () => {
   {
     const build = buildClaudeStreamArgs;
@@ -122,8 +106,6 @@ test('the launch builder omits --model and --effort entirely when neither is set
 });
 
 test('a profile with a model and no effort carries the one flag, not an empty second', () => {
-  // The shape `fast` ships as: the smaller models refuse `--effort` outright, so
-  // an omitted level must leave the flag off rather than pass anything for it.
   {
     const build = buildClaudeStreamArgs;
     const args = build({ model: 'haiku' });
@@ -151,9 +133,6 @@ test('the launch builder puts --effort before the operator args too', () => {
   }
 });
 
-// -- the whole wiring, at the buildSystem seam --------------------------------
-
-/** Fake claude stream-JSON process — enough to be spawned and read back. */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
   private out = new EventEmitter();
@@ -183,7 +162,6 @@ function streamConfig(agentModels: Config['agentModels']) {
   });
 }
 
-/** Run one cycle that dispatches a code agent for issue `n`, and read the launch back. */
 async function dispatch(agentModels: Config['agentModels'], n: number) {
   const launches: string[][] = [];
   const spawner: Spawner = (_command, args) => {
@@ -210,8 +188,6 @@ test('an assigned rule launches on its profile, and the task row records what it
   assert.equal(task.rule, 'issue-pickup');
   assert.equal(task.model, 'opus', 'the resolved string is persisted, not the profile name');
   assert.equal(task.effort, 'medium', 'and the depth beside it, off the same profile');
-  // The regression guard for the system.ts wiring: the ArgsBuilder must forward
-  // both fields, or a flag silently never ships.
   assert.equal(args[args.indexOf('--model') + 1], 'opus');
   assert.equal(args[args.indexOf('--effort') + 1], 'medium');
   assert.equal(args.indexOf('--model') < args.indexOf('--operator-arg'), true, 'before the operator args');
@@ -222,7 +198,6 @@ test('a rule with no assignment launches on the policy default', async () => {
   const { args, task } = await dispatch({ profiles: PROFILES, default: 'fast', byRule: { 'issue-plan': 'deep' } }, 932);
   assert.equal(task.model, 'haiku');
   assert.equal(args[args.indexOf('--model') + 1], 'haiku');
-  // `fast` sets no effort, so neither the row nor the launch invents one.
   assert.equal(task.effort, null);
   assert.equal(args.includes('--effort'), false);
 });

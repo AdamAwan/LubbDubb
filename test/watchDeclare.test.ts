@@ -12,17 +12,6 @@ import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { watchDeclareNote } from '../src/plans/planning.js';
 import type { Agent } from '../src/types.js';
 
-/**
- * `watch_declare`: the working agent's half of the declaration, and the operator's
- * ruling on it.
- *
- * At the `buildSystem` seam with `dbPath: ':memory:'` and `FakeEnvironmentObserver`
- * injected. The assertions that earn their place are the silences — a declaration
- * that took effect without anybody accepting it would put an agent-authored query
- * on the operator's own telemetry with the operator's own credential, and nothing
- * about that is red.
- */
-
 interface ToolResultText {
   isError?: boolean;
   content: { text?: string }[];
@@ -70,7 +59,6 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
   });
 }
 
-/** An agent doing the work, not planning it — the one party that knows what the code emits. */
 function spawnWorker(system: System, originRef = 'issue:12'): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -88,8 +76,6 @@ async function declare(system: System, agent: Agent, args: Record<string, unknow
   assert.ok(session, 'a spawned agent has a live MCP credential');
   const result = (await session!.call('watch_declare', args)) as ToolResultText;
   const text = result.content[0]?.text ?? '{}';
-  // A refusal comes back as prose rather than as a payload, which is what an
-  // agent reads — so it is kept as prose here rather than parsed into nothing.
   return {
     isError: result.isError === true,
     text,
@@ -97,7 +83,6 @@ async function declare(system: System, agent: Agent, args: Record<string, unknow
   };
 }
 
-/** The plan-sheet slice: live checks and the ones waiting on a ruling, which is what the sheet draws. */
 function sheet(system: System) {
   return [...system.store.listGoalWatches(), ...system.store.listProposedGoalWatches()];
 }
@@ -116,8 +101,6 @@ test('a declaration is pending, and nothing is put to an environment until it is
   assert.equal(res.isError, false);
   assert.deepEqual(res.payload['declared'], ['no-timeouts']);
   assert.equal(res.payload['pending'], true);
-  // The whole authorisation story: the query runs inside the operator's own
-  // command with the operator's own credential, so nothing has been asked.
   assert.deepEqual(observer.asked, [], 'an unapproved query is never put to an environment');
   assert.deepEqual(system.store.listGoalWatches(), [], 'and it is not live');
   const pending = system.store.listProposedGoalWatches();
@@ -139,7 +122,6 @@ test('accepting makes it live and runs it once — which is where a measure gets
   assert.ok(ruled);
   assert.equal(ruled!.live, true);
   assert.equal(ruled!.proposal, null);
-  // The route runs the dry run in the same call; here it is the same seam.
   const refusals = await system.watch.run('issue:12');
   assert.deepEqual(refusals, []);
   const live = system.store.listGoalWatches();
@@ -167,8 +149,6 @@ test('it merges on the slug, and a live check is untouched until the amendment i
   });
   const system = build(observer);
   const agent = spawnWorker(system, 'issue:12:plan');
-  // The planner's declaration, through the transport that speaks for the whole
-  // block — then the working agent amending one check of it.
   const session = system.mcp.session(agent.id)!;
   await session.call('plan_submit', {
     reason: 'One part.',
@@ -204,7 +184,6 @@ test("an accepted amendment clears the reading it replaced, as a planner's amend
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
     watch: { signals: [SIGNAL] },
   });
-  // A reading taken inside a window, so there is something to be orphaned.
   system.store.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -243,16 +222,10 @@ test('a planner is refused by name — it has a transport that declares the whol
 test('the declaration refuses exactly what a plan document refuses', async () => {
   const system = build(new FakeEnvironmentObserver());
   const agent = spawnWorker(system);
-  // A signal without a presence query: it can never honestly report clean, so it
-  // is a check that cannot fail.
   const noPresence = await declare(system, agent, { note: 'x', signals: [{ ...SIGNAL, presence: undefined }] });
   assert.equal(noPresence.isError, true);
-  // A measure declaring neither a threshold nor a baseline: the same shape from
-  // the other direction.
   const noExpectation = await declare(system, agent, { note: 'x', measures: [{ ...MEASURE, expect: {} }] });
   assert.equal(noExpectation.isError, true);
-  // And a call that declared nothing at all, which would otherwise be a silent
-  // success an agent could believe it had used.
   const nothing = await declare(system, agent, { note: 'x' });
   assert.equal(nothing.isError, true);
   assert.deepEqual(sheet(system), []);
@@ -260,9 +233,6 @@ test('the declaration refuses exactly what a plan document refuses', async () =>
 });
 
 test('the working agent’s watch note is appended, and names the tool it is about', () => {
-  // Held back until the tool existed: an instruction naming a tool that is not
-  // granted reads as a harness that lost one. Empty where nothing declares
-  // telemetry, which is the off switch.
   assert.equal(watchDeclareNote([{ name: 'testUk' }]), '');
   const note = watchDeclareNote([TEST_UK]);
   assert.match(note, /watch_declare/);

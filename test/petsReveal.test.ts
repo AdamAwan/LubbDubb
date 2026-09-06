@@ -3,16 +3,6 @@ import assert from 'node:assert/strict';
 import type { PetSpecies, PetStage, PetView } from '../web/src/types.js';
 import { PET_STAGES, speciesKnown, speciesSeen } from '../web/src/pets/reveal.js';
 
-/**
- * What the catalogue is allowed to have seen.
- *
- * The failure this guards is silent in both directions and neither renders wrong:
- * a shell counted as a sighting fills the collection with animals nobody has been
- * shown, and a stage revealed off a sibling's — or off ownership alone — draws the
- * adult of a pet still in the vivarium as a hatchling. The page reads perfectly
- * either way. → `docs/spec/22-pets.md#what-it-withholds`
- */
-
 function pet(over: Partial<PetView> = {}): PetView {
   return {
     id: 'pet_1',

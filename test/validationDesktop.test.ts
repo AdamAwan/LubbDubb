@@ -27,30 +27,8 @@ import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { claimIsLive, claimStaleBefore, withLiveClaim } from '../src/validation/desktop.js';
 import type { Issue, IssueDelivery, Plan, ValidationCheck, WorldSnapshot } from '../src/types.js';
 
-/**
- * The desktop channel: the operator's own Claude Code running a validation check
- * on a machine that can reach what the fleet cannot.
- *
- * Four properties carry the whole design, and each is asserted in both
- * directions because each has a plausible twin that would be wrong:
- *
- * 1. **The tool set is its own list.** Not a filtered view of the fleet's — this
- *    credential is long-lived and lives in a home directory, so the assertion is
- *    that no fleet tool is reachable at all.
- * 2. **One claim at a time, harness-wide.** The operator's own constraint: one
- *    working copy, so two things reaching for it is the failure. A second claim
- *    is refused by name; the same session re-claiming what it holds is not.
- * 3. **A claim blocks the fleet, and a dead claim does not.** A rule that
- *    dispatched under a live claim would put two readings on one check; one that
- *    honoured an expired claim would block a check from the fleet forever.
- * 4. **A reading is attributed to `desktop`.** Neither `operator` nor `agent` —
- *    nobody dispatched it and nobody carried the steps out by hand, and the whole
- *    feature exists so that a reader can tell those apart.
- */
-
 const NOW = '2025-01-01T00:00:00.000Z';
 
-/** The Windows path separator, spelled once — a literal backslash in a test string is a reading hazard. */
 const BS = String.fromCharCode(92);
 
 interface ToolResultText {
@@ -74,8 +52,6 @@ function build(overrides: Record<string, unknown> = {}): System {
       ...overrides,
     }),
     {
-      // Without this the suite cuts a real branch in whatever checkout it is
-      // running in — see CLAUDE.md. Nothing here is about git behaviour.
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
       gitObserver: new FakeGitObserver(),
@@ -84,7 +60,6 @@ function build(overrides: Record<string, unknown> = {}): System {
   );
 }
 
-/** A live desktop server on throwaway paths — never the operator's real home directory. */
 async function desk(
   system: System,
   over: Partial<{
@@ -108,16 +83,6 @@ async function desk(
   return { server, dir, socketPath };
 }
 
-/**
- * A socket path nothing else on this machine owns.
- *
- * A named pipe on Windows, where a filesystem path is not bindable at all — the
- * channel short-circuits on `\\` and everything else refuses with EACCES.
- * Unique either way, so a test can never take the socket of a harness the
- * operator is actually running: `exclusive` is on, and that would be a refusal
- * rather than a theft, but it would also be a test that failed for a reason
- * outside itself.
- */
 function throwawaySocketPath(): string {
   const unique = randomUUID();
   return process.platform === 'win32'
@@ -149,8 +114,6 @@ function planWith(system: System, checks: Record<string, unknown>[] = CHECKS): s
   });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
-  // The **goal**, which is what the checks are keyed on — the plan id is not a
-  // handle anything about validation takes any more.
   return 'issue:12';
 }
 
@@ -173,8 +136,6 @@ function byId(system: System, goal: string, id: string): ValidationCheck {
   return found;
 }
 
-// -- the tool surface --------------------------------------------------------
-
 test('a desktop session gets its own tools and none of the fleet’s', async () => {
   const system = build();
   const { server } = await desk(system);
@@ -184,9 +145,6 @@ test('a desktop session gets its own tools and none of the fleet’s', async () 
     const names = await session.list();
     assert.deepEqual(names.sort(), [...DESKTOP_TOOL_NAMES].sort());
 
-    // The assertion that matters: this credential is long-lived and sits in a
-    // home directory, so the question is not "is the list short" but "can it
-    // reach the harness at all". Every fleet-only tool, by name.
     for (const fleetOnly of MCP_TOOL_NAMES.filter((n) => !DESKTOP_TOOL_NAMES.some((d) => d === n))) {
       assert.ok(!names.includes(fleetOnly), `${fleetOnly} is not reachable from a desktop session`);
       const refused = await call(server, 'c1', fleetOnly, {});
@@ -204,19 +162,12 @@ test('the credential is 0600, carries no configured secret, and dies with the ch
   const path = join(dir, 'desktop.json');
   try {
     const stat = statSync(path);
-    // The token is a bearer credential for write access to the store. The file is
-    // the whole reason it never has to appear in the registration an operator pastes.
     assert.equal(stat.mode & 0o777, 0o600);
     const credential = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
     assert.equal(credential.lubbdubb, 1);
     assert.equal(typeof credential.token, 'string');
-    // Read back from the helper rather than rebuilt here: the path is chosen per
-    // platform (a named pipe on Windows), and a second guess at it would assert
-    // the test's arithmetic instead of what the channel actually wrote.
     assert.equal(credential.socket, socketPath);
 
-    // Minted, never configured — the registration is a fixed command line with
-    // the bridge on it and nothing else.
     const registration = server.registration();
     assert.ok(registration.args.some((a) => a.endsWith('bridge.mjs')));
     assert.ok(registration.args.includes('--desktop'));
@@ -238,10 +189,6 @@ test('two harnesses do not fight over the stable socket', async () => {
     credentialPath: join(dir, 'second.json'),
   });
   try {
-    // The fleet socket carries a pid and unlinks whatever it finds. This one is
-    // stable so the MCP registration can be added once — which means a live
-    // socket on it is another harness's, and taking it would silently steal every
-    // future desktop session from a running process.
     assert.equal(await second.listen(), false);
     assert.ok(server.session('c1'), 'the first is untouched');
   } finally {
@@ -250,8 +197,6 @@ test('two harnesses do not fight over the stable socket', async () => {
     system.store.close();
   }
 });
-
-// -- reading a plan ----------------------------------------------------------
 
 test('validation_read hands back the whole plan, or one check’s full procedure', async () => {
   const system = build();
@@ -265,13 +210,8 @@ test('validation_read hands back the whole plan, or one check’s full procedure
       checks.map((c) => c.letter),
       ['A', 'B'],
     );
-    // Where the fixtures live. A session told to run a check and not told where
-    // its fixture is has to guess, and guessing is how a check gets reported as
-    // run when it was not.
     assert.equal(all.json().resourceRoot, '/srv/validation/issue-12');
 
-    // The letter is what a person reads off the plan sheet and types after the
-    // colon in `284:C`; the id is what the row is keyed on. Both resolve.
     const byLetter = await call(server, 'c1', 'validation_read', { issue: 12, check: 'a' });
     const byIdent = await call(server, 'c1', 'validation_read', { issue: 12, check: 'csv-opens' });
     assert.equal((byLetter.json().check as { id: string }).id, 'csv-opens');
@@ -289,14 +229,11 @@ test('validation_read hands back the whole plan, or one check’s full procedure
   }
 });
 
-// -- getting the application up ---------------------------------------------
-
 test('local_run starts the environment on a goal, and reports what it knows', async () => {
   const system = build({ localRun: { instruction: 'Run the dev server.', url: 'http://localhost:4200' } });
   planWith(system);
   const { server } = await desk(system);
   try {
-    // Before anything: not running, and saying so rather than staying silent.
     const idle = await call(server, 'c1', 'local_run', {});
     assert.ok(!idle.isError, idle.text);
     assert.equal(idle.json().running, false);
@@ -306,22 +243,15 @@ test('local_run starts the environment on a goal, and reports what it knows', as
     assert.equal(started.json().running, true);
     assert.equal(started.json().goal, 'issue:12');
     assert.equal(started.json().url, 'http://localhost:4200');
-    // The bring-up is in flight, the checkout's commit is on record, and the watch has
-    // not read anything yet — each said as itself rather than left out.
     assert.equal(started.json().turn, 'start');
     assert.equal(typeof started.json().commit, 'string');
     assert.equal(started.json().holdsSession, true);
     assert.equal(started.json().ports, null);
     assert.equal(started.json().freshness, null);
-    // The reply says the harness has not opened that port. A session that reported
-    // a check passed on the strength of a status is the one outcome the whole
-    // validation channel exists to prevent, so the tool refuses to imply it.
     assert.match(started.json().caveat as string, /does not exercise the application/);
 
     const live = system.store.liveLocalRun();
     assert.equal(live?.originRef, 'issue:12');
-    // The checkout came from the manager rather than being picked here — the pool is
-    // the only thing that hands out a directory.
     assert.ok(live !== null && live.dir !== '');
   } finally {
     await server.close();
@@ -334,18 +264,14 @@ test('local_run relays a message to the running environment, and refuses the cas
   planWith(system);
   const { server } = await desk(system);
   try {
-    // Starting a goal and talking to the running one are two calls.
     const both = await call(server, 'c1', 'local_run', { issue: 12, message: 'run the migrations' });
     assert.ok(both.isError);
     assert.match(both.text, /one of/);
 
-    // Nothing is running, so there is nobody to tell — an answer, not a throw.
     const idle = await call(server, 'c1', 'local_run', { message: 'run the migrations' });
     assert.ok(idle.isError);
     assert.match(idle.text, /Nothing is running/);
 
-    // Mid bring-up the message would queue behind the start, so the runner refuses and
-    // the tool hands the reason back in as many words.
     await call(server, 'c1', 'local_run', { issue: 12 });
     const starting = await call(server, 'c1', 'local_run', { message: 'run the migrations' });
     assert.ok(starting.isError);
@@ -370,11 +296,7 @@ test('starting a second goal locally stops the first — there is one environmen
     const second = system.store.liveLocalRun();
     assert.equal(second?.originRef, 'issue:13');
     assert.notEqual(second?.id, first?.id);
-    // The superseded row is settled rather than deleted: a start that failed is read
-    // after the fact, so the history is the point.
     assert.equal(system.store.currentLocalRun()?.originRef, 'issue:13');
-    // One live row, and it is the new one — the store's `beginLocalRun` ends the old
-    // one in the same transaction, so there is no window where both are live.
     assert.equal(system.store.liveLocalRun()?.id, second?.id);
   } finally {
     await server.close();
@@ -389,8 +311,6 @@ test('local_run refuses with the reason when nothing is configured to start', as
   try {
     const refused = await call(server, 'c1', 'local_run', { issue: 12 });
     assert.ok(refused.isError);
-    // The refusal names the field, because the operator reading it is the one who
-    // can fix it — and it is a config field precisely so they can, without a restart.
     assert.match(refused.text, /localRun\.instruction/);
     assert.equal(system.store.liveLocalRun(), null, 'a refusal starts nothing and records nothing');
   } finally {
@@ -408,21 +328,14 @@ test('one check is claimed at a time, and the refusal names what holds it', asyn
     assert.ok(!first.isError, first.text);
     assert.equal(first.json().claimed, 'A. csv-opens');
     assert.equal(byId(system, planId, 'csv-opens').claimedBy, 'studio');
-    // The procedure comes back with the claim, so a session never has to make a
-    // second call to learn what it just took on.
     assert.match(first.json().procedure as string, /Export a report and open it\./);
 
-    // The operator's own constraint, in their words: one branch at a time, and
-    // two things reaching for it is the failure. A per-check lock would have
-    // allowed this.
     const second = await call(server, 'c2', 'validation_claim', { issue: 12, check: 'B' });
     assert.ok(second.isError);
     assert.match(second.text, /already claimed by studio/);
     assert.match(second.text, /only one check can be claimed at a time/);
     assert.equal(byId(system, planId, 'chip-on-mobile').claimedBy, null);
 
-    // Re-taking what you already hold is not a conflict — a bridge that
-    // reconnected mid-run would otherwise be locked out by its own claim.
     const again = await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A', as: 'studio' });
     assert.ok(!again.isError, again.text);
   } finally {
@@ -456,14 +369,9 @@ test('a claim is released when the session ends, and expires if the harness neve
     await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A' });
     assert.notEqual(byId(system, planId, 'csv-opens').claimedBy, null);
 
-    // Closing the terminal is how a desktop run normally ends. `end()` is what
-    // the socket's close handler calls, so this is the production path.
     server.session('c1')?.end();
     assert.equal(byId(system, planId, 'csv-opens').claimedBy, null);
 
-    // The case no close can cover: a harness killed between the claim and the
-    // release. Without an expiry the check is blocked from the fleet forever and
-    // there is no way back short of editing the database.
     await call(server, 'c2', 'validation_claim', { issue: 12, check: 'A' });
     const held = byId(system, planId, 'csv-opens');
     const later = new Date(new Date(held.claimedAt ?? NOW).getTime() + 61 * 60_000).toISOString();
@@ -475,15 +383,11 @@ test('a claim is released when the session ends, and expires if the harness neve
   }
 });
 
-// -- reporting ---------------------------------------------------------------
-
 test('a report goes against the claim, and there is no reporting without one', async () => {
   const system = build();
   const planId = planWith(system);
   const { server } = await desk(system);
   try {
-    // The fence, in the shape the fleet's takes from its origin: which check a
-    // report is about is settled before the report rather than by it.
     const unclaimed = await call(server, 'c1', 'validation_report', { result: 'passed', note: 'looks right' });
     assert.ok(unclaimed.isError);
     assert.match(unclaimed.text, /have not claimed a check/);
@@ -501,14 +405,9 @@ test('a report goes against the claim, and there is no reporting without one', a
     assert.ok(!reported.isError, reported.text);
     const after = byId(system, planId, 'csv-opens');
     assert.equal(after.state, 'passed');
-    // Neither `operator` nor `agent`. Nobody dispatched this and nobody carried
-    // the steps out by hand, and a reader deciding whether to re-run a check
-    // before closing a goal is deciding on exactly that difference.
     assert.equal(after.resultBy, 'desktop');
     assert.equal(after.claimedBy, null, 'the reading is in, so the run is over');
 
-    // One reading per claim: the claim is spent, so a second report has nothing
-    // to be about rather than silently overwriting the first.
     const twice = await call(server, 'c1', 'validation_report', { result: 'failed', note: 'changed my mind' });
     assert.ok(twice.isError);
     assert.equal(byId(system, planId, 'csv-opens').state, 'passed');
@@ -530,14 +429,9 @@ test('a hand-back records no reading and gives the check back with its reason', 
     });
     assert.ok(!handed.isError, handed.text);
     assert.equal(handed.json().reported, 'handback');
-    // Said out loud rather than left to be inferred from a bare "ok": a session
-    // told only that the call succeeded would believe it had settled the check.
     assert.equal(handed.json().state, 'unrun');
 
     const after = byId(system, planId, 'chip-on-mobile');
-    // The whole reason there are three answers. This session learned nothing
-    // about the goal, and `failed` would have flagged it for something that is
-    // not about the code.
     assert.equal(after.state, 'unrun');
     assert.equal(after.resultBy, null);
     assert.equal(after.claimedBy, null);
@@ -611,8 +505,6 @@ test('a reworded claimed check refuses a result, clears the session, and keeps t
     system.store.close();
   }
 });
-
-// -- the fleet gate ----------------------------------------------------------
 
 function issue(): Issue {
   return {
@@ -720,18 +612,12 @@ function validateDispatches(actions: { type: string }[]): string[] {
 }
 
 test('the fleet does not run a check somebody is holding, and does run one whose claim died', async () => {
-  // Relative to the world's own timestamp, which is the clock the dispatcher
-  // reads — a claim stamped from the wall clock would read as live forever.
   const fresh = new Date(new Date(NOW).getTime() - 60_000).toISOString();
   const held = await runner().decide(ctx([handedOver({ claimedBy: 'desktop (studio)', claimedAt: fresh })]));
-  // Two things in one environment against one procedure, the second reading
-  // overwriting the first, and neither knowing the other existed.
   assert.deepEqual(validateDispatches(held.actions), [], 'a live claim holds the fleet off');
 
   const stale = new Date(new Date(NOW).getTime() - 61 * 60_000).toISOString();
   const expired = await runner().decide(ctx([handedOver({ claimedBy: 'desktop (studio)', claimedAt: stale })]));
-  // Read through the same helper the tools use. A rule with its own opinion about
-  // expiry would either block a check forever or dispatch under a live session.
   assert.deepEqual(
     validateDispatches(expired.actions),
     ['issue:12:validate:csv-opens'],
@@ -762,8 +648,6 @@ test('a rewording releases the claim with the hand-over and the reading', async 
       withdraw: [],
       resources: [],
     });
-    // One predicate, not two: somebody is running this against wording that no
-    // longer exists, and the amendment band is now in front of the operator.
     const after = byId(system, planId, 'csv-opens');
     assert.equal(after.claimedBy, null);
     assert.equal(after.actor, 'human');
@@ -774,72 +658,35 @@ test('a rewording releases the claim with the hand-over and the reading', async 
   }
 });
 
-// -- the skill ---------------------------------------------------------------
-
 test('the skill installs, and says what it is for without restating the procedure', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-'));
   const path = join(dir, 'skills', 'lubbdubb', 'SKILL.md');
   assert.ok(installDesktopSkill(path));
   const written = readFileSync(path, 'utf8');
   assert.equal(written, DESKTOP_SKILL);
-  // The front matter is what makes it `/lubbdubb`, and the three tools are what
-  // it tells the session to call. Everything about *how* to run a given check
-  // comes back from those calls — a skill that restated any of it would be a
-  // second copy of the procedure, drifting.
   assert.match(written, /^---\nname: lubbdubb\n/);
   for (const tool of DESKTOP_TOOL_NAMES) assert.match(written, new RegExp(tool));
-  // The three answers, and the one that is easiest to leave out.
   assert.match(written, /handback/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
-  // The managed-by comment is the one thing in the body about the file itself, so
-  // it is the one thing that goes stale silently: it used to name a switch that
-  // kept a local copy, and there is no such switch — the channel is unconditional
-  // and every start overwrites this file. An operator reading it must be told that
-  // rather than pointed at a setting the loader refuses.
   assert.match(written, /rewritten from scratch every time the harness starts/);
   assert.doesNotMatch(written, /desktopSkill\b/);
 });
 
-/**
- * The one thing in the file that is about *this machine* rather than about the
- * channel, and the reason it is appended rather than spliced in.
- *
- * The session this skill is written for opens on `repoRoot` — the repository the
- * fleet works on — and the cockpit's *Question?* control collects plenty of
- * questions that are about the harness instead: why nothing picked a goal up, why
- * a rule did not fire. Without a path, those are answered from the harness's
- * output, which is the confident wrong answer the `ask` section already warns
- * about; with one spliced into the body, there are two documents to keep in step.
- */
 test('the skill names LubbDubb\u2019s own checkout when there is one, and is unchanged when there is not', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-root-'));
   const path = join(dir, 'SKILL.md');
   assert.ok(installDesktopSkill(path, undefined, '/srv/lubbdubb'));
   const written = readFileSync(path, 'utf8');
-  // Appended: the body arrives whole, and the note is behind it.
   assert.ok(written.startsWith(DESKTOP_SKILL), 'the body is untouched');
   assert.match(written, /\/srv\/lubbdubb/);
-  // The two halves that keep it from being read as an invitation: the record is
-  // still the answer, and that checkout is the running harness.
   assert.match(written, /The record first, the source second/);
   assert.match(written, /Change nothing there/);
 
-  // A deployment running from a tarball resolves no root, and a section naming a
-  // directory that is not there is worse than no section.
   const bare = join(dir, 'BARE.md');
   assert.ok(installDesktopSkill(bare, undefined, null));
   assert.equal(readFileSync(bare, 'utf8'), DESKTOP_SKILL);
 });
 
-/**
- * What the cockpit is shipped, and why it is a projection rather than the row.
- *
- * `claimIsLive` is the single definition of "claimed", so a claim past its expiry
- * has to stop being drawn at the same instant it stops blocking `validate-check`.
- * Otherwise the fleet list shows somebody running a check the rule has already
- * decided nobody is running — two answers to one question, which is the whole
- * thing one definition exists to prevent.
- */
 test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one', () => {
   const system = build();
   const goal = planWith(system);
@@ -849,8 +696,6 @@ test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one'
   const shipped = buildStateSnapshot(system).validationChecks.find((c) => c.id === 'csv-opens')!;
   assert.equal(shipped.claimedBy, 'desktop (studio)', 'a live claim reaches the cockpit');
 
-  // The other arm, at the function the snapshot maps every check through: the row
-  // still carries the label an hour later, and what the cockpit is handed does not.
   const later = new Date(new Date(shipped.claimedAt ?? now).getTime() + 61 * 60_000).toISOString();
   const expired = withLiveClaim(shipped, later, 60);
   assert.equal(expired.claimedBy, null, 'and an expired one is not drawn at all');
@@ -858,40 +703,22 @@ test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one'
   system.store.close();
 });
 
-/**
- * What the cockpit's MCP tab hands an operator.
- *
- * The tab is the only place the one manual step in this whole channel is written
- * down where somebody looks for it, and every way of getting it wrong is silent:
- * a registration naming the fleet bridge connects and refuses every call, a
- * hand-written tool list describes a channel that has since changed, and an
- * unquoted Windows path registers a server called `C:\Program`. So the payload is
- * asserted against the channel it describes rather than against a fixture.
- */
 test('/api/mcp describes the desktop channel it is read from', async () => {
   const system = build();
   const { app } = await buildApp(system);
   const payload = (await (await app.inject({ method: 'GET', url: '/api/mcp' })).json()) as McpChannelPayload;
 
-  // Exactly the desktop three, in the order `tools/list` gives them, each with the
-  // description an operator reads. A fleet tool here would mean the tab was
-  // describing `buildTools` — the one thing this channel is narrowed against.
   assert.deepEqual(
     payload.tools.map((t) => t.name),
     [...DESKTOP_TOOL_NAMES],
   );
   for (const tool of payload.tools) assert.ok(tool.description.length > 0, `${tool.name} says what it is for`);
 
-  // The `--desktop` flag is what makes the bridge read the credential file rather
-  // than a launch config, so a registration without it is a command that connects
-  // to nothing.
   assert.equal(payload.serverId, 'lubbdubb');
   assert.equal(payload.registration.args.at(-1), '--desktop');
   assert.match(payload.registration.args[0] ?? '', /bridge\.mjs$/);
   assert.equal(payload.credentialPath, system.desktop.credentialPath());
 
-  // Nothing called `listen()` on this system's channel, and the tab says so
-  // instead of handing over a command that would reach nothing.
   assert.equal(payload.running, false);
 
   await app.close();
@@ -908,12 +735,6 @@ test('the channel reports itself running only while it is listening', async () =
   system.store.close();
 });
 
-/**
- * Windows is the case this exists for and it is not hypothetical: `process.execPath`
- * is routinely `C:\Program Files\nodejs\node.exe`, and unquoted that line registers
- * a server called `C:\Program` — which succeeds, and fails later as a channel that
- * will not connect.
- */
 test('the registration command quotes a path with spaces', () => {
   const windows = shellArgv([
     'C:' + BS + 'Program Files' + BS + 'nodejs' + BS + 'node.exe',
@@ -928,25 +749,6 @@ test('the registration command quotes a path with spaces', () => {
   );
 });
 
-// -- answering a question about a goal ---------------------------------------
-
-/**
- * `goal_read` is the channel's fourth job and the only one that settles nothing:
- * an operator asking what happened on a goal, answered from the rows the harness
- * kept rather than from a session's reading of the repository.
- *
- * Three properties, and each has a plausible twin that would be wrong:
- *
- * 1. **The history is the retrospective's, through one assembly.** Two gathers of
- *    "what happened on this goal" would be two answers free to disagree, and the
- *    disagreement would be silent — so the assertion is that the dossier a
- *    retrospective agent is briefed with is the same string this hands back.
- * 2. **What rides beside it is what the dossier does not carry.** The four extras
- *    are there; the plan and the parts are *not* repeated beside them.
- * 3. **An environment verdict is three-valued out of the door.** `unknown` folded
- *    into `absent` is the sharp edge this whole surface inherits, and it fails as
- *    a sentence rather than as an error.
- */
 function goalWith(system: System): string {
   const goal = planWith(system);
   system.store.setWorldBaseline({
@@ -983,17 +785,10 @@ test('goal_read answers with the record, and with the four things the record doe
     assert.ok(!read.isError, read.text);
     const payload = read.json();
 
-    // The ticket's own words. A question about a goal is very often a question
-    // about whether what was built is what was asked for, and half that answer is
-    // the ask — which the record below never carries.
     assert.deepEqual((payload.issue as Record<string, unknown>).body, 'The export comes out empty.');
 
-    // Property 1: one assembly, one history. Asserted against `retroDossier` over
-    // `goalRecord` rather than against a transcribed excerpt — a literal here
-    // would be a second rendering of the run, which is the thing being ruled out.
     assert.equal(payload.record, retroDossier(goalRecord(system.store, goal)));
 
-    // Property 2: the four extras are here...
     const validation = payload.validation as { letter: string; id: string }[];
     assert.deepEqual(
       validation.map((c) => c.id).sort(),
@@ -1004,14 +799,10 @@ test('goal_read answers with the record, and with the four things the record doe
     assert.ok(Array.isArray(payload.scratchpad));
     assert.ok(Array.isArray(payload.environments));
 
-    // ...and the plan is *not* repeated beside them. It is in the record already,
-    // and two renderings of one row in one reply are two things to keep in step.
     assert.equal(payload.plan, undefined, 'the plan is in the record, not beside it');
     assert.equal(payload.parts, undefined, 'so are the parts');
     assert.match(payload.record as string, /Part `whole`/);
 
-    // The reading is a pulse old and says so, exactly as `world_read` does: a
-    // session answering "has it shipped" has to know it is reading a snapshot.
     assert.equal(payload.observedAt, NOW);
   } finally {
     await server.close();
@@ -1019,11 +810,6 @@ test('goal_read answers with the record, and with the four things the record doe
   }
 });
 
-/**
- * A number nobody has ever tracked is a typo far more often than it is a goal, and
- * an empty account of one reads exactly like a goal nothing has happened on yet —
- * which is the answer a session would then give the operator, confidently.
- */
 test('goal_read refuses a number the harness holds nothing about', async () => {
   const system = build();
   goalWith(system);
@@ -1039,12 +825,6 @@ test('goal_read refuses a number the harness holds nothing about', async () => {
   }
 });
 
-/**
- * The three verdicts, out of the door. An expired credential, a probe that would
- * not run and work that genuinely has not shipped are different answers, and only
- * the last is about deployment — read as `absent` they are indistinguishable, and
- * the session says in the operator's own words that the work is not there.
- */
 test('goal_read passes an environment verdict through three-valued', async () => {
   const system = build();
   const goal = goalWith(system);
@@ -1053,7 +833,6 @@ test('goal_read passes an environment verdict through three-valued', async () =>
     { name: 'production', at: 'echo nothing' },
   ]);
   try {
-    // One landing, confirmed on hallway and never answered for on production.
     system.store.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31' });
     system.store.recordEnvironmentReach({ sha: 'sha-31', environment: 'hallway', status: 'reached', detail: null });
 
@@ -1066,14 +845,8 @@ test('goal_read passes an environment verdict through three-valued', async () =>
     const hallway = rows.find((r) => r.environment === 'hallway');
     const production = rows.find((r) => r.environment === 'production');
     assert.ok(hallway && production, 'a row per configured environment, in the operator’s order');
-    // `partial`, not `reached`: the plan's one part has yet to merge, so the
-    // denominator is the goal's *work* rather than its landings — half a feature
-    // in an environment is the fact worth having, and a rollup that called this
-    // "reached" is what `allGoalReach` exists to have already got wrong once.
     assert.equal(hallway.status, 'partial');
     assert.deepEqual([hallway.landed, hallway.total], [1, 2]);
-    // The one that matters. Nothing came back for this sha on production, and the
-    // honest answer is that nobody can say — not that the work is not there.
     assert.equal(production.status, 'unknown', 'an unanswered probe is `unknown`, never folded to `absent`');
     assert.equal(production.landed, 0);
   } finally {
@@ -1082,7 +855,6 @@ test('goal_read passes an environment verdict through three-valued', async () =>
   }
 });
 
-/** A deployment that configured no environments gets no verdict about nowhere. */
 test('goal_read draws no environment rows when none are configured', async () => {
   const system = build();
   goalWith(system);

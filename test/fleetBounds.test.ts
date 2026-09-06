@@ -11,19 +11,6 @@ import { ENDED_AGENT_TAIL, fleetHistory } from '../src/server/fleetHistory.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Agent, GoalAgentsPayload, TaskSummary } from '../src/wire.js';
 
-/**
- * What `/api/state` is allowed to *keep* carrying.
- *
- * `agents` and `tasks` were the last two collections on the snapshot with no cap
- * on them: all-time reads over tables nothing deletes from, rebuilt and
- * re-serialised on every `dirty` — which rides every file an agent writes. So
- * what the cockpit paid per action grew for the life of the deployment, and
- * nothing about it was ever red. The bound is here; the history it leaves behind
- * is `GET /api/issues/:number/agents`, and these assertions are the pair.
- *
- * → `docs/spec/16-http-api.md#bulk-collections`
- */
-
 function testSystem(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fleet-'));
   const config = loadConfig({
@@ -35,12 +22,9 @@ function testSystem(): System {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
   });
-  // `config.repoRoot` defaults to `process.cwd()`, and the real manager would cut
-  // a branch in this checkout on any path that dispatched.
   return buildSystem(config, { worktrees: new FakeWorktreeManager(), errorMirror: () => {} });
 }
 
-/** One dispatched agent, ended at `endedAt` when given. */
 function run(system: System, originRef: string, endedAt: string | null, title = 'a shift'): Agent {
   const task = system.store.createTask({ kind: 'code', title, prompt: 'x', branch: null, originRef });
   const agent = system.store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
@@ -104,8 +88,6 @@ test('the bound is on history: every live agent survives it, whatever the cap', 
 });
 
 test('the tail is the newest *ended*, not the newest started', () => {
-  // Started first and ended last: what an operator is looking for after a long
-  // run, and exactly the row a started-at cut would drop.
   const long = { ...agent('long', at(9)), startedAt: at(1) };
   const short = { ...agent('short', at(3)), startedAt: at(2) };
   const rows = [short, long];
@@ -157,7 +139,6 @@ test('a goal’s whole history is its own route, older than the tail and all', a
   const onPart = run(system, 'issue:7:part:signer', at(2), 'the part');
   const onPr = run(system, 'pr:42', at(3), 'the review round');
   const elsewhere = run(system, 'issue:8', at(4), 'another goal');
-  // Enough after them that none of the four is in the snapshot's tail.
   for (let i = 0; i < ENDED_AGENT_TAIL; i++) run(system, `issue:${100 + i}`, at(9));
 
   const snapshot = buildStateSnapshot(system);
@@ -176,12 +157,9 @@ test('a goal’s whole history is its own route, older than the tail and all', a
   assert.ok(!payload.agents.some((a) => a.id === elsewhere.id), 'and no other goal’s');
   assert.equal(payload.tasks.length, 3, 'with the tasks, so an old run still has its title');
 
-  // The pull request is the caller's claim, not the route's guess: unnamed, its
-  // agent is not this goal's as far as this read is concerned.
   const withoutPr = await app.inject({ method: 'GET', url: '/api/issues/7/agents' });
   assert.ok(!(withoutPr.json() as GoalAgentsPayload).agents.some((a) => a.id === onPr.id));
 
-  // `issue:70` must not be pulled in by a prefix match on `issue:7`.
   const cousin = run(system, 'issue:70', at(1), 'a goal that shares digits');
   const again = await app.inject({ method: 'GET', url: '/api/issues/7/agents' });
   assert.ok(!(again.json() as GoalAgentsPayload).agents.some((a) => a.id === cousin.id));

@@ -115,14 +115,9 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     queuedJobs: [],
     agentHeadroom: 5,
     ...extra,
-    // Every issue in the world is past the goal appraisal: it is unconditional and
-    // ranks in front of everything here, so without this the ranking assertions
-    // would all lead with an appraisal.
     recentDecisions: [...issues.flatMap((i) => spentAppraisalAttempts(i.number)), ...(extra.recentDecisions ?? [])],
   };
 }
-
-// -- the pure scheduling helpers ---------------------------------------------
 
 test('a part gets its own origin and a branch under the issue', () => {
   assert.equal(partOrigin(12, 'schema'), 'issue:12:part:schema');
@@ -136,17 +131,11 @@ test('depth is the chain length, and the base follows the dependency state', () 
     parts.map((p) => partDepth(p, index)),
     [0, 1, 2],
   );
-  // No dependency -> the integration branch.
   assert.equal(partBase(parts[0]!, index, 12, 'main'), 'main');
-  // Dependency still in flight -> stack on its branch. This is the whole point:
-  // part b starts once a has *pushed*, not once a has merged.
   assert.equal(partBase(parts[1]!, index, 12, 'main'), 'issue/12/a');
-  // Dependency merged -> back to the integration branch; nothing to stack on.
   const merged = bySlug([part('a', 1, { status: 'merged' }), parts[1]!]);
   assert.equal(partBase(parts[1]!, merged, 12, 'main'), 'main');
 });
-
-// -- A plan that rejoins rather than only chaining (issue #170) --------------
 
 test('dependenciesOf returns every declared dependency, skipping slugs the plan no longer holds', () => {
   const parts = [
@@ -155,8 +144,6 @@ test('dependenciesOf returns every declared dependency, skipping slugs the plan 
     part('wire', 3, { dependsOn: ['schema', 'api', 'dropped-by-a-replan'] }),
   ];
   const index = bySlug(parts);
-  // Declared order, because that is what `partBase` falls back on; and a dangling
-  // slug is not a dependency, because there is nothing left to wait for.
   assert.deepEqual(
     dependenciesOf(parts[2]!, index).map((p) => p.slug),
     ['schema', 'api'],
@@ -165,9 +152,6 @@ test('dependenciesOf returns every declared dependency, skipping slugs the plan 
 });
 
 test('partDepth is the longest path, so a rejoin never sorts ahead of what it waits on', () => {
-  // The design's own graph: pr1 -> {pr2, pr3}, pr2 -> pr4, {pr3, pr4} -> pr5.
-  // `dependsOn[0]` gets pr5 wrong — through pr3 it reads depth 2, which sorts it
-  // level with pr4, the part it is waiting for.
   const parts = [
     part('pr1', 1),
     part('pr2', 2, { dependsOn: ['pr1'] }),
@@ -183,8 +167,6 @@ test('partDepth is the longest path, so a rejoin never sorts ahead of what it wa
 });
 
 test('partDepth terminates on a cycle the store somehow holds', () => {
-  // Ingestion refuses cycles, but this runs against whatever the rows say, and a
-  // dispatch-order heuristic that spins is worse than one that answers oddly.
   const parts = [part('a', 1, { dependsOn: ['b'] }), part('b', 2, { dependsOn: ['a'] })];
   const index = bySlug(parts);
   for (const p of parts) assert.equal(Number.isFinite(partDepth(p, index)), true);
@@ -193,9 +175,6 @@ test('partDepth terminates on a cycle the store somehow holds', () => {
 test('a rejoin bases on the integration branch; one dependency still in flight is stacked on', () => {
   const wire = part('wire', 3, { dependsOn: ['schema', 'api'] });
 
-  // Every dependency settled — the case the old arity cap refused, and the base is
-  // unambiguous precisely because nothing is open. Note one of them `concluded`:
-  // it may never have pushed, so its branch is not a candidate at all.
   const settled = bySlug([
     part('schema', 1, { status: 'merged', branch: 'issue/12/schema' }),
     part('api', 2, { status: 'concluded', outcomeKind: 'report', branch: null }),
@@ -203,8 +182,6 @@ test('a rejoin bases on the integration branch; one dependency still in flight i
   ]);
   assert.equal(partBase(wire, settled, 12, 'main'), 'main');
 
-  // Exactly one unsettled: stack on that one. The reconciler is what guarantees
-  // there is never more than one to choose between (see planReconcile.test.ts).
   const oneOpen = bySlug([
     part('schema', 1, { status: 'merged', branch: 'issue/12/schema' }),
     part('api', 2, { status: 'in_review', branch: 'issue/12/api' }),
@@ -223,11 +200,8 @@ test('sibling context separates work that exists from work that is not yours', (
   assert.match(done, /The a part \[a, merged \(PR #40\)\]/);
   assert.doesNotMatch(done, /\[b,/, 'a part is never told about itself');
   assert.match(remaining, /\[c, pending\]/);
-  // The first part is told so plainly rather than being handed an empty list.
   assert.match(siblingContext(parts, parts[0]!, '#').done, /Nothing has landed yet/);
 });
-
-// -- rule `plan-part` -----------------------------------------------------------------
 
 test('rule `plan-part` dispatches a ready part on its own branch, based on its dependency', async () => {
   const parts = [
@@ -246,9 +220,7 @@ test('rule `plan-part` dispatches a ready part on its own branch, based on its d
   assert.equal(action.branch, 'issue/12/dispatcher');
   assert.equal(action.base, 'main', 'the dependency merged, so there is nothing to stack on');
   assert.equal(action.partId, 'plan_1:dispatcher');
-  // Goal 3 of the design: a part agent knows what the others did and what remains.
   assert.match(action.prompt, /The schema part \[schema, merged \(PR #40\)\]/);
-  // A part must never close the issue — the other parts still have to land.
   assert.match(action.prompt, /"part of #12" and never as "closes #12"/);
   assert.ok(DISPATCH_RULES['plan-part'], 'the rule is in the registry the cockpit ships');
 });
@@ -271,8 +243,6 @@ test('a part stacks on its dependency while that dependency is still open', asyn
 });
 
 test('parts rank after planners, before pickups, bottom of the stack first', async () => {
-  // #7 needs a planner, #9 has a two-part plan, #14 is an unplanned pickup. One
-  // ranked list: planner, then the plan bottom, then its dependent, then pickup.
   const plans: Plan[] = [{ ...plan(), id: 'plan_9', originRef: 'issue:9' }];
   const parts = [
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },
@@ -307,7 +277,6 @@ test('maxConcurrentPartsPerIssue caps how many parts of one plan get agents', as
     'the third ready part waits, even though there is headroom for it',
   );
 
-  // The cap counts *agents*, so an already-staffed part uses one of the two slots.
   const staffed = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -354,7 +323,6 @@ test('a cooling part does not consume a concurrency slot', async () => {
 });
 
 test('each part gets its own throttle, and a repeatedly failing one escalates', async () => {
-  // Three executed dispatches for part `a` and nothing to show for it.
   const attempts: Decision[] = [1, 2, 3].map((n) => ({
     id: `dec_${n}`,
     cycleId: 'cyc',
@@ -371,9 +339,6 @@ test('each part gets its own throttle, and a repeatedly failing one escalates', 
   assert.deepEqual(
     result.actions.map((a) => [a.rule, a.admission, a.type]),
     [
-      // The escalation names *both*: `plan-part` proposed the dispatch, the
-      // attempt cap turned it into a question. One column carrying only the
-      // second is what lost the proposer (issue #213 follow-up).
       ['plan-part', 'cooldown-escalate', 'escalate_to_human'],
       ['plan-part', null, 'dispatch_code_agent'],
     ],
@@ -397,8 +362,6 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
   const dispatcher = new RuleDispatcher(pickup, {}, undefined, 'main', enabled);
   const watched = issue(12, { labels: ['lubbdubb-watch'] });
 
-  // A part's PR is open and linked back to the issue — which is exactly what would
-  // park the parent under the ordinary pickup gate. Parts must keep scheduling.
   const linked = { ...watched, linkedPrNumber: 41 };
   const prs: PullRequest[] = [
     { id: 'pr_41', number: 41, title: 'Part a', branch: 'issue/12/a', ciStatus: 'passing', unresolvedComments: [] },
@@ -417,7 +380,6 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
     ['issue/12/b'],
   );
 
-  // Un-watched mid-flight: no *new* part is dispatched.
   const dropped = { ...watched, labels: [] };
   const stopped = await dispatcher.decide(context([dropped], { plans: [plan()], planParts: [part('a', 1)] }));
   assert.deepEqual(
@@ -434,7 +396,6 @@ test('the cockpit chip reports plan progress, not whichever part opened a PR las
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],
     recentDecisions: [],
-    // `linkedPrNumber` is sticky and points at a part's PR — the trap this ordering exists for.
     openPrs: [
       { id: 'pr_41', number: 41, title: 'Part b', branch: 'issue/12/b', ciStatus: 'passing', unresolvedComments: [] },
     ],
@@ -450,12 +411,7 @@ test('the cockpit chip reports plan progress, not whichever part opened a PR las
   });
 });
 
-// -- the merge gate a stack needs -------------------------------------------
-
 test('rule `pr-merge-ready` holds a stacked PR and merges one that targets the integration branch', async () => {
-  // Brought forward from stage 4 deliberately: this is the first point at which
-  // stacked PRs actually exist, and rule `pr-merge-ready` unguarded would merge part 2 *into part
-  // 1's branch* mid-flight.
   const settled = { ciStatus: 'passing' as const, approved: true, mergeable: true, unresolvedComments: [] };
   const prs: PullRequest[] = [
     { id: 'pr_40', number: 40, title: 'schema', branch: 'issue/12/schema', baseBranch: 'main', ...settled },
@@ -468,8 +424,6 @@ test('rule `pr-merge-ready` holds a stacked PR and merges one that targets the i
     'the child waits for the provider to retarget it when its parent merges',
   );
 });
-
-// -- end to end --------------------------------------------------------------
 
 function task(id: string, branch: string, originRef: string): DispatchContext['tasks'][number] {
   return {
@@ -504,8 +458,6 @@ function systemWithParts(): { system: System; repoRoot: string } {
   });
   const system = buildSystem(config, {
     backend: new FakePtyBackend(),
-    // No remote on a throwaway repo, and no scripted branch reality needed here:
-    // the parts below have no dependencies, so readiness is unconditional.
     gitObserver: new FakeGitObserver(),
     errorMirror: () => {},
   });
@@ -547,8 +499,6 @@ test('a persisted plan turns into real part branches, and the rows record it', a
       expectedKind: null,
     },
   ]);
-  // Reconciliation promotes both from `pending` to `ready` (no dependencies), and
-  // the same cycle dispatches them — that same-pulse handover is intended.
   await system.harness.runCycle('manual');
 
   const parts = system.store.listPlanParts(stored.id);
@@ -566,22 +516,15 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
-  // The plan above is written `active` — already approved — so the gate has
-  // nothing left to ask about and writes nothing at all. What it does to a plan
-  // that lands is `planApproval.test.ts`'s subject; this file is the scheduler's.
   assert.deepEqual(system.store.listProposals(), []);
   assert.deepEqual(system.store.listOpenEscalations(), []);
   system.store.close();
 });
 
-// -- Terminals that are not a merge (issue #160) ----------------------------
-
 test('partSettled counts both terminals, and partOutcomeKind derives code from a merge', () => {
   assert.equal(partSettled(part('a', 1, { status: 'merged' })), true);
   assert.equal(partSettled(part('a', 1, { status: 'concluded' })), true);
   assert.equal(partSettled(part('a', 1, { status: 'in_review' })), false);
-  // `retired` is not a terminal — it means "dropped before anything was started",
-  // which is the opposite of a part that did its work and found nothing to build.
   assert.equal(partSettled(part('a', 1, { status: 'retired' })), false);
 
   assert.equal(partOutcomeKind(part('a', 1, { status: 'merged' })), 'code');
@@ -590,8 +533,6 @@ test('partSettled counts both terminals, and partOutcomeKind derives code from a
 });
 
 test('a concluded dependency is satisfied, and its dependent bases on the default branch', () => {
-  // The guard that matters: a concluded part may never have pushed a branch at
-  // all, so basing on it would hand WorktreeManager.ensure an unresolvable ref.
   const dep = part('probe', 1, { status: 'concluded', outcomeKind: 'report', branch: null });
   const dependent = part('build', 2, { dependsOn: ['probe'] });
   const index = bySlug([dep, dependent]);
@@ -614,8 +555,6 @@ test('a part planned to produce no code is told how to finish, appended not inte
   const note = partOutcomeNote(part('a', 1, { expectedKind: 'report' }));
   assert.match(note, /conclude_part/);
   assert.match(note, /report/);
-  // Appended text, never a template: an override that never learned a {kind}
-  // placeholder would silently drop the one instruction the part needs.
   assert.doesNotMatch(note, /\{/);
 });
 
@@ -656,11 +595,8 @@ test('a part concludes without a PR, its plan completes, and a second call chang
   assert.equal(done?.outcomeRef, 'finding:f_1');
   assert.equal(done?.outcomeSummary, 'Already fixed by #98.');
 
-  // The whole point: the one part that found nothing to build no longer holds the
-  // decomposition — and its issue — open forever.
   assert.equal(system.store.rollUpPlanStatus(stored.id)?.status, 'complete');
 
-  // Idempotence lives in the write, not in a read-then-check.
   assert.equal(system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'again' }), null);
   system.store.close();
 });
@@ -688,7 +624,7 @@ test('an amendment re-declaring a concluded part leaves what it produced alone',
   system.store.updatePlanPart(row.id, { status: 'dispatched' });
   system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
 
-  declare('code'); // the declaration changes; the outcome is progress and must not
+  declare('code');
   const after = system.store.listPlanParts(stored.id)[0]!;
   assert.equal(after.expectedKind, 'code');
   assert.equal(after.outcomeKind, 'report');
@@ -716,8 +652,6 @@ test('the plan comment never describes a non-code part as merged, and names a mi
   assert.match(body, /Write it up.*report.*Findings in docs\/perf\.md/);
   assert.doesNotMatch(body, /Write it up.*merged/);
 
-  // Surfaced, never validated: a part planned as code that turned out to be a
-  // duplicate must still be able to close truthfully.
   const mismatched = renderPlanComment(
     plan({ status: 'complete' }),
     [
@@ -737,9 +671,6 @@ test('the plan comment never describes a non-code part as merged, and names a mi
   assert.match(mismatched, /planned as code/);
 });
 
-// -- rule `plan-blocked`: a released plan that is going nowhere ---------------------------
-
-/** Both parts parked by the ref-collision guard, as the reconciler leaves them. */
 function wedgedParts(): PlanPart[] {
   const blocked = {
     status: 'blocked' as const,
@@ -760,8 +691,6 @@ test('every part blocked asks a human once, and dispatches nobody', async () => 
   const asked = result.actions[0]!;
   assert.equal(asked.type === 'escalate_to_human' && asked.context.originRef, 'issue:12:plan');
   const prompt = asked.type === 'escalate_to_human' ? asked.prompt : '';
-  // The reason is quoted off the part rows, and both ways out are named — the
-  // harness will not choose between them.
   assert.match(prompt, /The branch issue\/12 exists/);
   assert.match(prompt, /Replan from the plan sheet/);
 });
@@ -780,7 +709,6 @@ test('the wedge is asked once — an open item or a recent one both settle it', 
     'an open item on the origin is the visible state',
   );
 
-  // And a decision that outlives the inbox item: each covers the other's blind spot.
   const recent = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -805,8 +733,6 @@ test('an unapproved wedged plan is not escalated — the ask already carries it'
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
     context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
   );
-  // Rule `plan-approval` proposes it; `planCaveats` puts the collision in that ask.
-  // Escalating as well would be the same sentence twice to the same person.
   assert.deepEqual(
     result.actions.map((a) => a.rule),
     ['plan-approval'],

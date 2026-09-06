@@ -11,10 +11,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { IdParams, IssueNumberParams, optionalText, readRequest, requiredBoolean } from '../src/server/validation.js';
 import { z } from 'zod';
 
-// Issue #223 — the REST surface reads its params and body through zod rather than
-// asserting them. These cover the seam itself, the wordings the routes lost when
-// their hand-written checks went, and the two orderings a route depends on.
-
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
@@ -46,13 +42,9 @@ test('readRequest parses only the halves a route declares, params first', () => 
   assert.deepEqual(both.ok && both.params, { id: 'a1' });
   assert.deepEqual(both.ok && both.body, { note: 'hi' });
 
-  // A body-only route leaves `params` undefined rather than parsing something
-  // nobody asked about.
   const bodyOnly = readRequest({ params: { id: 'a1' }, body: {} }, { body: Body });
   assert.equal(bodyOnly.ok && bodyOnly.params, undefined);
 
-  // Params before body: a request naming no such item is refused for *that*,
-  // whatever else its body got wrong.
   const bad = readRequest({ params: { number: 'abc' }, body: { note: 7 } }, { params: IssueNumberParams, body: Body });
   assert.deepEqual(bad, { ok: false, error: 'invalid issue number' });
 });
@@ -63,7 +55,6 @@ test('a missing body is read as an empty one, so an all-optional body may be omi
   assert.equal(absent.ok, true);
   assert.deepEqual(absent.ok && absent.body, {});
 
-  // …but a required field still refuses by name rather than by "Required".
   const required = readRequest({}, { body: z.object({ ok: requiredBoolean('ok must be a boolean') }) });
   assert.deepEqual(required, { ok: false, error: 'ok must be a boolean' });
 });
@@ -82,17 +73,11 @@ test('optional text trims, reads blank as absent, and refuses a non-string by na
     ok: true,
     params: undefined,
     body: { summary: 'done' },
-    // A half the caller declared no schema for reads back undefined — the same
-    // answer `params` gives here, and what the generic defaults to.
     query: undefined,
   });
-  // Blank and absent are one state — every route taking one falls back to its own
-  // default for both.
   assert.equal(readRequest({ body: { summary: '   ' } }, { body: Body }).ok, true);
   const blank = readRequest({ body: { summary: '   ' } }, { body: Body });
   assert.equal(blank.ok && blank.body.summary, undefined);
-  // The deliberate tightening: a field the caller clearly meant to set is no
-  // longer silently ignored.
   assert.deepEqual(readRequest({ body: { summary: 12 } }, { body: Body }), {
     ok: false,
     error: 'summary must be a string',
@@ -125,10 +110,6 @@ test('the number-param routes refuse a non-numeric path, each in its own words',
 });
 
 test('a body that is not JSON is refused 400, and is nobody’s fault but the caller’s', async () => {
-  // The content-type parser refuses before any handler runs, so `checked` never
-  // sees these — the property it holds has to be held by the error handler too.
-  // A 500 here would tell the caller to retry a request it will never fix, and
-  // put a row in the Errors panel for every truncated body on the port.
   const recorded: string[] = [];
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
@@ -136,7 +117,6 @@ test('a body that is not JSON is refused 400, and is nobody’s fault but the ca
     errorMirror: (entry) => recorded.push(entry.message),
   });
   const { app } = await buildApp(system);
-  // Registered before the first inject, which is what makes the instance listen.
   app.post('/api/boom', async () => {
     throw new Error('the harness broke');
   });
@@ -157,7 +137,6 @@ test('a body that is not JSON is refused 400, and is nobody’s fault but the ca
   }
   assert.deepEqual(recorded, [], 'a malformed request is not a harness fault');
 
-  // A genuine route throw still is one, which is the distinction the handler draws.
   const boom = await app.inject({ method: 'POST', url: '/api/boom', payload: {} });
   assert.equal(boom.statusCode, 500);
   assert.equal(recorded.length, 1);
@@ -171,9 +150,6 @@ test('a route that answers off the store still does so before reading its body',
   const system = build();
   const { app } = await buildApp(system);
 
-  // The filing route reads the work node first: a ref that names nothing is a 404
-  // whatever the body says. The nested `checked` is what puts the body's refusal
-  // second while keeping it the same one refusal path as everywhere else.
   const missing = await app.inject({
     method: 'POST',
     url: '/api/work/pr:404/file',
@@ -190,19 +166,16 @@ test('the shortfall route keeps an absent cause and an explicit null apart', asy
   const system = build();
   const { app } = await buildApp(system);
 
-  // Absent: an unplanned issue that simply is not finished names no cause.
   const recorded = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: {} });
   assert.equal(recorded.statusCode, 200);
   assert.equal(recorded.json().shortfall.cause, null);
   assert.ok(system.store.getShortfall('issue:12'));
 
-  // Explicit null: the same value in JSON, the opposite act.
   const cleared = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: { cause: null } });
   assert.equal(cleared.statusCode, 200);
   assert.equal(cleared.json().shortfall, null);
   assert.equal(system.store.getShortfall('issue:12'), null);
 
-  // The one cross-field rule on this surface.
   const noSlug = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: { cause: 'part' } });
   assert.equal(noSlug.statusCode, 400);
   assert.deepEqual(noSlug.json(), { error: 'cause "part" needs the part slug in `part`' });
@@ -216,20 +189,6 @@ test('the shortfall route keeps an absent cause and an explicit null apart', asy
 });
 
 test('no route reads req.params or req.body through a type assertion', () => {
-  // The claim the whole change rests on: an `as` on request input types every
-  // field a handler then reads as though something validated it. Asserted on the
-  // source rather than intended, so the 45th route cannot quietly reintroduce one.
-  //
-  // Since #237 this walks `src/server/routes/` plus the two files that still hold
-  // request-reading code (`app.ts`'s auth hook, `validation.ts` itself), so a
-  // route group added as a new module is covered on the day it is written.
-  //
-  // `req.query`'s two remaining sites (the artifact routes) assert the value to
-  // `unknown` and test its type before use, so the assertion claims nothing about
-  // the data. Since #329 a query string can be *declared* instead — `checked`
-  // takes a `query` schema — and a route whose parameters are filters should:
-  // those are the half an operator hand-edits in the address bar, so they are the
-  // half that most wants validating.
   const assertions = routeSources().flatMap(([file, source]) =>
     [...source.matchAll(/req\.(params|body)[^\n]*\bas\b/g)].map((m) => `${file}: ${m[0]}`),
   );
@@ -237,37 +196,14 @@ test('no route reads req.params or req.body through a type assertion', () => {
 });
 
 test('no route reads a request itself — every one takes checked input', () => {
-  // The half of #223 that used to be held by nothing but this file's own grep
-  // (issue #237). A handler *handed* `params` and `body` has no raw request to
-  // assert about and no `if (!input.ok)` to forget, which is why the 36 verbatim
-  // copies of the 400 line are gone: `checked` is the only caller of
-  // `readRequest` left, so the refusal path is one path by construction rather
-  // than by 36 correct repetitions.
-  //
-  // A route that needs the body read *after* a 404/409 (`/api/findings/:id/*`,
-  // `/api/work/:ref/file`) applies `checked` by hand a second time rather than
-  // reaching past it, so those are covered by this too.
   const callers = routeSources()
     .filter(([, source]) => /\breadRequest\(/.test(source))
     .map(([file]) => file);
   assert.deepEqual(callers, [], 'wrap the handler in `checked` instead of reading the request');
 });
 
-// #524 — the 400 body joins the schema's messages and drops their field paths, so
-// a field declared without one refuses with zod's stock text, which names nothing.
-// Spec 16 lists that among the properties that hold across the surface rather than
-// among its aspirations, and eleven declarations across seven modules did not.
-//
-// A structural sweep rather than eleven assertions, for the reason the two greps
-// above are structural: the value is in closing the class, and the route module
-// written next is covered on the day it is written.
 const STOCK = /^(Required|Expected |Invalid enum value|Invalid discriminator|String must|Number must|Array must)/;
 
-/**
- * One body that gets every arm wrong at once — absent by omission, and the wrong
- * type for every field name the surface declares. Which arm a given route takes is
- * not the point: no arm may answer in zod's words.
- */
 const JUNK: Record<string, unknown> = {
   state: 1,
   slug: 1,
@@ -312,8 +248,6 @@ test('no route refuses in zod stock text — every field states its own refusal'
   }
   assert.deepEqual(stock, [], 'give each of these fields a message that names it');
 
-  // The query half, which spec 16 calls the one that most wants validating: a
-  // filter is what an operator hand-edits in the address bar.
   const filters = [
     'watch=maybe',
     'tracking=zzz',
@@ -334,22 +268,18 @@ test('no route refuses in zod stock text — every field states its own refusal'
   system.store.close?.();
 });
 
-/** Every `POST`/`DELETE` path the route modules declare, with its params filled in. */
 function writeRoutes(): string[] {
   const urls = new Set<string>();
   for (const [, source] of routeSources()) {
     for (const m of source.matchAll(/app\.(?:post|delete)\(\s*\n?\s*'([^']+)'/g)) {
       const path = m[1];
       if (path === undefined) continue;
-      // A number where the route says one, an opaque key where it does not — the
-      // point is to reach the body's schema, not to find a real row.
       urls.add(path.replace(/:(\w+)/g, (_, name: string) => (name === 'number' ? '12' : 'zzz')));
     }
   }
   return [...urls].sort();
 }
 
-/** Every source that declares a route, as `[name relative to src/server/, text]`. */
 function routeSources(): [string, string][] {
   const server = new URL('../src/server/', import.meta.url);
   const files = ['app.ts'];
@@ -359,10 +289,6 @@ function routeSources(): [string, string][] {
   return files.map((file) => [file, readFileSync(new URL(file, server), 'utf8')]);
 }
 
-// #523 — the 400 body keeps only the message, so a refusal naming a field the
-// schema then strips sends the caller round the same loop forever. Driven off
-// the field each route actually accepts rather than a literal, so a route that
-// renames its body field and forgets its message is caught.
 test('the validation routes refuse a missing account by naming the field each one takes', async () => {
   const system = build();
   const { app } = await buildApp(system);
@@ -380,8 +306,6 @@ test('the validation routes refuse a missing account by naming the field each on
       const { error } = res.json() as { error: string };
       assert.ok(error.startsWith(`${route.field} is required`), `${url} refuses by naming ${route.field}: ${error}`);
     }
-    // And the field the refusal names is the one the schema keeps: sending it
-    // gets past validation, to the store's answer about the check itself.
     const accepted = await app.inject({
       method: 'POST',
       url,

@@ -29,12 +29,8 @@ test('injected world changes are recorded as world events across cycles', async 
   const emitted: WorldEvent[] = [];
   system.harness.on('world:events', ({ events }) => emitted.push(...events));
 
-  // One cycle over the empty world first, to establish the baseline (the first
-  // cycle never emits — it has nothing to diff against).
   await system.harness.runCycle('manual');
 
-  // A PR appears, then its CI goes green, then it is approved — three cycles,
-  // each diffing against the previous snapshot.
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'Add widget', branch: 'feat/widget' });
   await system.harness.runCycle('manual');
   system.connector.inject({ kind: 'ci_passed', prNumber: 42 });
@@ -47,7 +43,6 @@ test('injected world changes are recorded as world events across cycles', async 
   assert.ok(kinds.includes('pr_ci'), 'CI going green should record pr_ci');
   assert.ok(kinds.includes('pr_approved'), 'approval should record pr_approved');
 
-  // Every recorded event was also streamed to the cockpit.
   assert.deepEqual(
     emitted.map((e) => e.id).sort(),
     system.store
@@ -56,7 +51,6 @@ test('injected world changes are recorded as world events across cycles', async 
       .sort(),
   );
 
-  // A summary carries the PR number so the feed line is self-describing.
   const ci = system.store.listWorldEvents().find((e) => e.kind === 'pr_ci')!;
   assert.match(ci.summary, /#42/);
   assert.match(ci.summary, /passing/);
@@ -68,14 +62,11 @@ test('the first cycle over a fresh store only sets the baseline (no spurious eve
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
-  // Seed the world before the very first cycle, then run once.
   system.connector.inject({ kind: 'new_pr', number: 1, title: 'Seed', branch: 'seed' });
   await system.harness.runCycle('manual');
 
-  // No prior baseline existed, so the seeded PR is the baseline — not a pr_opened.
   assert.deepEqual(system.store.listWorldEvents(), []);
 
-  // A subsequent change now diffs against that baseline and does record.
   system.connector.inject({ kind: 'ci_passed', prNumber: 1 });
   await system.harness.runCycle('manual');
   assert.deepEqual(
@@ -89,18 +80,15 @@ test('the first cycle over a fresh store only sets the baseline (no spurious eve
 test('the persisted baseline survives a restart, so no re-flood on the next boot', async () => {
   const backend = new FakePtyBackend();
   const config = testConfig();
-  // Share one on-disk DB across two System instances to simulate a restart.
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-restart-')), 'db.sqlite');
   config.dbPath = dbPath;
 
   const first = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   first.connector.inject({ kind: 'new_pr', number: 7, title: 'Persist', branch: 'p' });
-  await first.harness.runCycle('manual'); // baseline set, no events
+  await first.harness.runCycle('manual');
   assert.deepEqual(first.store.listWorldEvents(), []);
   first.store.close();
 
-  // Reboot against the same DB and world; the persisted baseline means the
-  // unchanged PR is not re-emitted as new.
   const second = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   await second.harness.runCycle('manual');
   assert.deepEqual(second.store.listWorldEvents(), [], 'restart must not re-flood the feed');

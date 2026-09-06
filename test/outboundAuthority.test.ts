@@ -10,30 +10,6 @@ import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * **The harness authorizes no outbound act on its own judgement.**
- *
- * There was a confidence gate here once: a dispatcher-reported number compared
- * against a configured threshold decided whether a reply or a merge went out
- * without anyone being asked. It is gone, and this file is what holds the line it
- * left — every act the harness can publish is written as a `Proposal`, and unless
- * the operator authorized it in advance it waits.
- *
- * Two authorities do that, and both are the operator's, neither a bar the harness
- * cleared for itself:
- *
- * - a **standing stack landing**, clicked once over a named set of pull requests;
- * - **`sendPrRepliesWithoutApproval`**, their config saying a drafted review reply
- *   need not be put to them. On by default — before the harness could send a reply
- *   at all the agent posted it from its own shell with nobody asked, so the
- *   default preserves what happened and changes who signs it. The tests below that
- *   are about a reply *waiting* therefore set it off, which is the stricter
- *   posture and the one that has something to assert.
- *
- * Neither can reject: a rejection is durable, and a machine "no" would mean the
- * question is never put to anyone.
- */
-
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
@@ -77,7 +53,6 @@ function mergeDecision(system: ReturnType<typeof buildSystem>) {
   return system.store.listDecisions().find((d) => d.action.type === 'merge_pr');
 }
 
-/** A sink that counts what actually went out, so "nothing was sent" is observable. */
 function countingSink(fail = false): ActionSink & { merges: number[]; replies: number[] } {
   const merges: number[] = [];
   const replies: number[] = [];
@@ -136,9 +111,6 @@ function build(sink?: ActionSink, overrides: Record<string, unknown> = {}) {
 
 test('with sendPrRepliesWithoutApproval off, a drafted reply is never sent — it is proposed, and waits', async () => {
   const sink = countingSink();
-  // The stricter posture, and the only one in which a reply waits: on the default
-  // a reply goes out, because before the harness could send one the agent posted
-  // it from its own shell and nobody was asked either.
   const system = build(sink, { sendPrRepliesWithoutApproval: false });
   await system.executor.execute('cyc', replyPlan());
 
@@ -148,7 +120,6 @@ test('with sendPrRepliesWithoutApproval off, a drafted reply is never sent — i
   assert.equal(open[0]!.type, 'review_reply');
   assert.match(replyDecision(system)!.detail, /proposed it for approval/);
 
-  // Nobody has authorized it, so the proposal is pending and carries no decider.
   const [proposal] = system.store.listProposals();
   assert.equal(proposal!.status, 'pending');
   assert.equal(proposal!.decidedBy, null);
@@ -164,8 +135,6 @@ test('on the default the same draft goes out, and the row names the config as th
   assert.deepEqual(sink.replies, [42], 'the operator authorized this class of act in advance');
   assert.equal(system.store.listOpenEscalations().length, 0, 'nothing is being asked of anyone');
 
-  // The row is written either way: a send with no proposal behind it is an
-  // outbound act with no record of what authorized it.
   const [proposal] = system.store.listProposals();
   assert.equal(proposal!.status, 'accepted');
   assert.equal(proposal!.decidedBy, 'auto_send');
@@ -194,9 +163,6 @@ test('a pending ask is not re-asked, and a world signal is no back door to answe
   const system = build(sink);
   await system.executor.execute('cyc-1', mergePlan());
 
-  // Waiting on a human is not a rejection — a machine "no" would be durable and
-  // would suppress the ask for good — but it is also not an invitation to ask
-  // again every pulse.
   system.store.recordWorldEvents([{ kind: 'pr_ci', ref: 'pr:42', summary: 'PR #42 CI passing' }]);
   await system.executor.execute('cyc-2', mergePlan());
 
@@ -243,9 +209,6 @@ test('an authorized act that fails is escalated, never dropped, and stays author
 
   await system.executor.execute('cyc', mergePlan());
 
-  // Two things are raised, and both are wanted: the act itself failed, and the
-  // standing landing that authorized it is stopped so it does not re-authorize a
-  // merge that will not go through on every pulse.
   const open = system.store.listOpenEscalations();
   const failed = open.find((e) => e.context.autoMergeFailed === true);
   assert.ok(failed, 'a failed act must still surface for a human');
@@ -255,8 +218,6 @@ test('an authorized act that fails is escalated, never dropped, and stays author
     'and the intent that authorized it no longer stands',
   );
   assert.match(mergeDecision(system)!.detail, /failed \(merge conflict\)/);
-  // It *was* authorized, and the merge failing does not un-authorize it. Once the
-  // settle window lapses the act is proposed again if the world still warrants it.
   const [proposal] = system.store.listProposals();
   assert.equal(proposal!.status, 'accepted');
   assert.equal(proposal!.decidedBy, 'stack_landing');
@@ -281,8 +242,6 @@ test('an authorized act is not re-proposed on every pulse while the world catche
 });
 
 test('accepting a threaded reply sends it and settles the comment it answered', async () => {
-  // Off, so there is a pending proposal to accept — this is about what accepting
-  // does, not about who authorized it.
   const system = build(undefined, { sendPrRepliesWithoutApproval: false });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat' });
   system.connector.inject({ kind: 'pr_comment', prNumber: 42, author: 'bob', body: 'why this?' });

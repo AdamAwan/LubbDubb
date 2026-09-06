@@ -14,10 +14,6 @@ import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { failPlanningOpen, pastTheFunnel } from './support/plans.js';
 
-// The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
-// headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
-// for a free slot, and neither changes which actions are emitted.
-
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
@@ -26,9 +22,6 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    // The funnel has failed open on every issue in these worlds: it is
-    // unconditional, so an issue it is still working is one pickup is narrowed
-    // away from, and nothing downstream of pickup would fire for it.
     recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
     ...over,
@@ -192,10 +185,6 @@ test('an origin with an active task never enters the queue', async () => {
   assert.deepEqual(result.upcoming, [], 'staffed work is not "up next"');
 });
 
-// --------------------------------------------------------------------------
-// Operator priority overrides (issue #128): re-order the queue by origin.
-// --------------------------------------------------------------------------
-
 const queuedJob = (id: string): Job => ({
   id,
   title: `Job ${id}`,
@@ -217,8 +206,6 @@ test('an operator override jumps a world item ahead of the natural ranking', asy
       { agentHeadroom: 1, priorityOverrides: [{ origin: 'issue:103', rank: 0 }] },
     ),
   );
-  // #103 is pinned to the top, so it takes the single slot the natural ranking
-  // would have given #101.
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
@@ -239,8 +226,6 @@ test('`manual-job` items stay first whatever the override', async () => {
       { agentHeadroom: 2, queuedJobs: [queuedJob('j1')], priorityOverrides: [{ origin: 'issue:5', rank: 0 }] },
     ),
   );
-  // The override cannot outrank a queued job: a manual request always takes the
-  // next free slot.
   assert.deepEqual(
     result.upcoming?.map((q) => q.origin),
     ['job:j1', 'issue:5'],
@@ -270,7 +255,6 @@ test('an override re-orders a held item but never un-holds it', async () => {
       },
       {
         agentHeadroom: 1,
-        // Pin the cooling-down PR to the very top.
         priorityOverrides: [{ origin: 'pr:42:mergeable', rank: 0 }],
         recentDecisions: [
           ...pastTheFunnel(5),
@@ -288,8 +272,6 @@ test('an override re-orders a held item but never un-holds it', async () => {
       },
     ),
   );
-  // The held PR sits at the top (the override re-ordered it) but stays `cooldown`
-  // and claims no slot, so the free headroom still goes to the fresh issue.
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
@@ -298,10 +280,6 @@ test('an override re-orders a held item but never un-holds it', async () => {
     ],
   );
 });
-
-// --------------------------------------------------------------------------
-// Snapshot plumbing: the harness caches the last cycle's plan for /api/state
-// --------------------------------------------------------------------------
 
 function testConfig(over: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -315,15 +293,10 @@ function testConfig(over: Record<string, unknown> = {}) {
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
     ...over,
-    // Pinned off: all four default **on** now, and this file is about the queue —
-    // a planner ahead of each pickup would change every origin these assertions
-    // read. Each has its own tests.
   });
 }
 
 test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
-  // Paused → zero headroom → the whole plan sits below the cut, and nothing
-  // dispatches (so the test never touches git worktrees).
   const system = buildSystem(testConfig({ startPaused: true }), {
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
@@ -363,11 +336,7 @@ test('a priority override holds after the next pulse and after a restart', async
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
       maxConcurrentAgents: 3,
-      // Paused → zero headroom → everything waits below the cut, so the test
-      // never spawns an agent or touches a git worktree.
       startPaused: true,
-      // Pinned off, as in this file's other config: they default on, and each
-      // would add a queue item in front of the two pickups under test.
     });
 
   const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
@@ -376,14 +345,12 @@ test('a priority override holds after the next pulse and after a restart', async
   system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
   failPlanningOpen(system.store, 8102);
   await system.harness.runCycle('manual');
-  // Natural order is by issue number: 8101 then 8102.
   let snap = await buildStateSnapshot(system);
   assert.deepEqual(
     snap.upcoming!.items.map((q) => q.origin),
     ['issue:8101', 'issue:8102'],
   );
 
-  // Operator says "do #8102 next".
   system.store.setPriorityOverrides(['issue:8102']);
   await system.harness.runCycle('manual');
   snap = await buildStateSnapshot(system);
@@ -394,7 +361,6 @@ test('a priority override holds after the next pulse and after a restart', async
   );
   system.store.close();
 
-  // Restart: a fresh system on the same DB file (the fake world survives too).
   const restarted = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   await restarted.harness.runCycle('manual');
   snap = await buildStateSnapshot(restarted);
@@ -406,10 +372,6 @@ test('a priority override holds after the next pulse and after a restart', async
   restarted.store.close();
 });
 
-// --------------------------------------------------------------------------
-// Store: persistence, replace-all semantics, and stale-override pruning.
-// --------------------------------------------------------------------------
-
 test('setPriorityOverrides replaces the whole set and ranks by position', () => {
   const store = new Store(':memory:');
   store.setPriorityOverrides(['issue:1', 'pr:2:ci', 'issue:3']);
@@ -418,10 +380,8 @@ test('setPriorityOverrides replaces the whole set and ranks by position', () => 
     { origin: 'pr:2:ci', rank: 1 },
     { origin: 'issue:3', rank: 2 },
   ]);
-  // Replace-all: a re-order that drops an origin clears its override.
   store.setPriorityOverrides(['issue:3']);
   assert.deepEqual(store.listPriorityOverrides(), [{ origin: 'issue:3', rank: 0 }]);
-  // An empty list clears every override.
   store.setPriorityOverrides([]);
   assert.deepEqual(store.listPriorityOverrides(), []);
   store.close();
@@ -432,10 +392,8 @@ test('a stale override is pruned once its origin stops being tracked', () => {
   const store = new Store(':memory:', () => new Date(t).toISOString());
   store.setPriorityOverrides(['issue:1', 'issue:2']);
 
-  // Both tracked this pulse — nothing pruned.
   store.reconcilePriorityOverrides(['issue:1', 'issue:2'], 1000);
   t += 500;
-  // #1 stops being tracked, but only 500ms < the 1000ms TTL: it survives.
   store.reconcilePriorityOverrides(['issue:2'], 1000);
   assert.deepEqual(
     store.listPriorityOverrides().map((o) => o.origin),
@@ -443,7 +401,6 @@ test('a stale override is pruned once its origin stops being tracked', () => {
   );
 
   t += 2000;
-  // #1 now untracked for 2500ms > TTL → pruned; #2 refreshed → kept.
   store.reconcilePriorityOverrides(['issue:2'], 1000);
   assert.deepEqual(
     store.listPriorityOverrides().map((o) => o.origin),

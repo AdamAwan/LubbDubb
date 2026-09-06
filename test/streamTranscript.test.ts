@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderBlocks, assistantText, MAX_RESULT_LINES } from '../src/agents/streamTranscript.js';
 
-/** Strip our own SGR colour codes so assertions read against plain text. */
 function plain(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -77,7 +76,6 @@ test('renderBlocks renders assistant text and a tool call together, visually sep
   );
   assert.ok(out.includes('Let me list the files.'));
   assert.ok(out.includes('Bash'));
-  // A newline boundary separates prose from the tool line.
   assert.ok(out.indexOf('Bash') > out.indexOf('\n'), 'tool label sits on its own line');
 });
 
@@ -104,9 +102,6 @@ test('an error result is labelled and counted the same way', () => {
   assert.match(out, /↳ error · 2 lines/);
 });
 
-// -- timestamps ------------------------------------------------------------
-
-/** What the renderer should print for an instant: local time, seconds included. */
 const at = (iso: string): string => `[${new Date(iso).toTimeString().slice(0, 8)}]`;
 
 const T1 = '2026-08-20T09:14:02.000Z';
@@ -134,8 +129,6 @@ test('a sent message is stamped', () => {
 });
 
 test("a block's own time wins over the batch's", () => {
-  // The PTY runtime replays a whole session file in one pass, so the batch time is
-  // never the truth there — each record dates itself.
   const out = plain(renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'ls' }, at: T1 }], T2));
   assert.ok(out.includes(at(T1)), 'the record dates the line');
   assert.ok(!out.includes(at(T2)), 'the batch time does not override it');
@@ -147,8 +140,6 @@ test('an unstamped render is byte-for-byte what it was before stamps', () => {
     { type: 'tool_result', content: 'a\nb' },
     { type: 'human', text: 'carry on' },
   ];
-  // No time is a supported state — an older session file carries no `timestamp` —
-  // and it must degrade to the plain line rather than to `[]` or `[Invalid Date]`.
   assert.equal(renderBlocks(blocks), renderBlocks(blocks, undefined));
   assert.equal(renderBlocks(blocks, 'not a date'), renderBlocks(blocks));
 });
@@ -157,12 +148,6 @@ test('prose is never stamped', () => {
   assert.equal(renderBlocks([{ type: 'text', text: 'Hello there' }], T1), 'Hello there');
 });
 
-/**
- * The stripped sentinel used to leave nothing behind, so a turn that announced it
- * had finished and one that simply stopped read identically. These lock the record
- * that replaces it — and, just as importantly, that the harness's *own* messages
- * cannot forge one: `STALL_NUDGE` quotes both sentinels at an agent verbatim.
- */
 test('renderBlocks records that a done sentinel was in the text it stripped', () => {
   const out = plain(renderBlocks([{ type: 'text', text: 'Pushed and green. @@LUBBDUBB_DONE@@' }]));
   assert.ok(!out.includes('@@LUBBDUBB_DONE@@'), 'the token still never leaks');
@@ -183,8 +168,6 @@ test('a sentinel marker is stamped like every other labelled line', () => {
 });
 
 test('a message sent *to* the agent never marks, however it quotes the protocol', () => {
-  // The stall nudge names both sentinels at the agent. Marking that would put an
-  // "announced done" in the transcript for the harness asking whether it had.
   const out = plain(
     renderBlocks([{ type: 'human', text: 'print @@LUBBDUBB_DONE@@ if you finished, else @@LUBBDUBB_WAITING:x@@' }]),
   );

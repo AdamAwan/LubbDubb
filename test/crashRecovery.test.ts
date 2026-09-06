@@ -20,7 +20,6 @@ function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -33,7 +32,6 @@ function testConfig(overrides: Partial<Config> = {}): Config {
   });
 }
 
-/** A system with one agent already dispatched, then orphaned the way a crash orphans one. */
 async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<{
   system: System;
   backend: FakePtyBackend;
@@ -54,14 +52,6 @@ async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<
   return { system, backend, agentId, taskId };
 }
 
-/**
- * A system holding the *other* kind of orphan: a task the executor recorded and a
- * restart caught before `agents.spawn`, so there is no agent row at all.
- *
- * `bootedAt` in the far future is how a test says "everything already in the store
- * belongs to a previous run" — the fence that keeps a live dispatch's own transient
- * agentless moment out of the candidate set.
- */
 function systemWithOrphanedTask(): { system: System; taskId: string; origin: string; branch: string } {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), {
@@ -79,8 +69,6 @@ function systemWithOrphanedTask(): { system: System; taskId: string; origin: str
   });
   return { system, taskId: task.id, origin: task.originRef!, branch: task.branch! };
 }
-
-// -- The hold ---------------------------------------------------------------
 
 test('the pulse is held while a crashed agent awaits a decision, and resumes once it lands', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
@@ -122,10 +110,7 @@ test('the hold is asked before the world is fetched', async () => {
   system.store.close();
 });
 
-// -- The three verdicts -----------------------------------------------------
-
 test('restore is refused (leaving the decision open) when the runtime cannot resume', async () => {
-  // The `raw` runtime pins no session id, so there is nothing to `--resume`.
   const { system, taskId, backend } = await systemWithCrashedAgent();
   const pending = system.recovery.pending();
   assert.equal(pending[0]!.restorable, false);
@@ -161,9 +146,6 @@ test('the rule that produced the original does not dispatch it again while a req
   const origin = system.store.getTask(taskId)!.originRef!;
   system.recovery.decide(taskId, 'requeue');
 
-  // Cycle one dispatches the job; cycle two is the one that used to put a second
-  // agent on the same work, because the job's task says `job:<id>` and nothing
-  // else in the store still claimed the origin (issue #249).
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
@@ -207,7 +189,6 @@ test('remove settles the work and is not re-offered on the next boot', async () 
 
   assert.equal(system.recovery.pendingCount(), 0);
   assert.equal(system.store.listQueuedJobs().length, 0, 'nothing is queued in its place');
-  // A second boot's detection must not resurrect it: the settled task is what says so.
   assert.equal(system.recovery.detect().length, 0);
   system.store.close();
 });
@@ -229,13 +210,6 @@ test('every verdict lands in the decision log', async () => {
   );
   system.store.close();
 });
-
-// -- An orphaned task with no agent at all ----------------------------------
-//
-// The wedge: a restart between `store.createTask` and `agents.spawn` leaves a
-// `queued` task nothing is working, which every dispatch gate reads as "already
-// being done". Before this, nothing detected it and the origin and branch were shut
-// for good — an unbroken run of "nothing actionable" against an idle fleet.
 
 test('a task the last run left with no agent is parked for a decision', () => {
   const { system, taskId } = systemWithOrphanedTask();
@@ -284,7 +258,6 @@ test('requeue settles the task, freeing the origin and the branch, and files a j
   const result = system.recovery.decide(taskId, 'requeue');
   assert.equal(result.ok, true);
   assert.equal(system.store.getTask(taskId)!.status, 'interrupted');
-  // The whole point: these two are what the `queued` row was holding shut.
   assert.equal(system.store.findActiveTaskByOrigin(origin), null);
   assert.equal(system.store.findActiveTaskByBranch(branch), null);
 
@@ -331,9 +304,6 @@ test('a task that has already reached a terminal status is not a candidate', () 
 });
 
 test('a task dispatched by this run is not mistaken for an orphan of the last one', async () => {
-  // The default fence is this process's start, so everything the harness itself
-  // creates is on the near side of it — including the instant between `createTask`
-  // and `spawn` that this whole feature exists to clean up after.
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add login' });
@@ -343,8 +313,6 @@ test('a task dispatched by this run is not mistaken for an orphan of the last on
   assert.equal(system.recovery.pendingCount(), 0);
   system.store.close();
 });
-
-// -- The HTTP surface -------------------------------------------------------
 
 test('POST /api/recovery/:id applies a verdict and reports what remains', async () => {
   const { system, agentId, taskId } = await systemWithCrashedAgent();
@@ -411,8 +379,6 @@ test("answering a crashed agent's escalation is refused, pointing at the recover
   system.store.close();
 });
 
-// -- The pure half ----------------------------------------------------------
-
 const agentRow = (patch: Partial<Agent> = {}): Agent => ({
   id: 'agent_1',
   taskId: 'task_1',
@@ -471,8 +437,6 @@ test('restorability names the missing precondition rather than just saying no', 
 });
 
 test('restore is refused for work no agent ever started, and says so first', () => {
-  // Ahead of the runtime and worktree checks: there is no conversation to resume,
-  // so *why* the runtime cannot resume one is not the operator's answer.
   const verdict = restorability(null, { resumable: true, worktreeExists: true });
   assert.equal(verdict.restorable, false);
   assert.match(verdict.blocked!, /no agent ever started/);
@@ -506,15 +470,10 @@ test('the agentless candidate is fenced to work older than this run', () => {
   const orphan = taskRow({ status: 'queued', agentId: null, createdAt: '2026-01-01T00:00:00.000Z' });
   assert.equal(isAgentlessCandidate(orphan, { hasAgent: false, bootedAt }), true);
 
-  // The window this feature cleans up after is the window it must not fire inside:
-  // a dispatch is agentless for the instant between `createTask` and `spawn`.
   const inFlight = taskRow({ status: 'queued', agentId: null, createdAt: '2026-01-03T00:00:00.000Z' });
   assert.equal(isAgentlessCandidate(inFlight, { hasAgent: false, bootedAt }), false);
 
-  // An agent row exists ⇒ the *other* arm owns it; counting it here would list one
-  // piece of work twice.
   assert.equal(isAgentlessCandidate(orphan, { hasAgent: true, bootedAt }), false);
-  // Settled work is history, not a question — the same rule as the agent arm.
   assert.equal(
     isAgentlessCandidate(taskRow({ status: 'interrupted', agentId: null }), { hasAgent: false, bootedAt }),
     false,

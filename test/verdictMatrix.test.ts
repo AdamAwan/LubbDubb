@@ -4,13 +4,6 @@ import { Store } from '../src/store/store.js';
 import { SCHEMA } from '../src/store/schema.js';
 import { VERDICT_EXCLUSIONS, VERDICT_KINDS, VERDICT_TABLES, type VerdictKind } from '../src/store/verdicts.js';
 
-// Issue #222. The mutual-exclusion matrix used to be four half-rows, one inline
-// DELETE per writer, covered pairwise where somebody remembered — so a fifth
-// verdict table's row was covered only if its author thought to add a test. This
-// walks the *declaration* instead, so a cell nobody thought to assert cannot
-// exist: the fixture map is `Record<VerdictKind, …>`, which makes a new kind a
-// compile error here as well as in `VERDICT_EXCLUSIONS` itself.
-
 type Fixture = {
   write(store: Store, originRef: string): void;
   read(store: Store, originRef: string): unknown | null;
@@ -68,13 +61,9 @@ test('every declared cell: writing a verdict clears exactly what the matrix says
 });
 
 test('a kind that clears nothing is a declared empty row, not an omission', () => {
-  // The one cell the prose could not distinguish from "nobody considered this".
   assert.deepEqual(VERDICT_EXCLUSIONS.appraisal, []);
 
   const s = new Store(':memory:');
-  // A shortfall and a conclusion may stand together — the assessor's verdict does
-  // not overwrite the working agent's own statement about its own run — so this
-  // is the widest honest state, and an appraisal written over it disturbs none of it.
   FIXTURES.shortfall.write(s, 'issue:12');
   FIXTURES.conclusion.write(s, 'issue:12');
   FIXTURES.appraisal.write(s, 'issue:12');
@@ -98,8 +87,6 @@ test('the matrix is applied per issue', () => {
 });
 
 test('every kind names a real table', () => {
-  // The walk above exercises a table name only where some kind clears it, so
-  // `appraisal`'s would otherwise be unchecked until a later row named it.
   for (const kind of VERDICT_KINDS) {
     assert.ok(
       SCHEMA.includes(`CREATE TABLE IF NOT EXISTS ${VERDICT_TABLES[kind]}`),

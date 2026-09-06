@@ -12,16 +12,6 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Issue, Task } from '../src/types.js';
 
-// Overruling a shortfall: the operator saying the assessment itself is wrong.
-//
-// The gap it closes is a loop rather than a missing button. The card offered
-// accept — which spends an agent on a follow-up part for work already done — and
-// reject, which deliberately leaves the verdict standing, so rule `issue-assess`
-// dispatched again, the fresh assessor read the same repository and recorded the
-// same shortfall. Neither arm is "that finding is mistaken", and nothing typed
-// into the card survived: `shortfallRef` is nobody's dispatch origin, so
-// `rejectionGuidance` reaches no agent with the note.
-
 const NOW = '2026-08-18T12:00:00.000Z';
 
 function build(): System {
@@ -58,17 +48,11 @@ test('an overrule records the verdict and the correction, in the operator’s wo
     const res = await app.inject({ method: 'POST', url: '/api/issues/1/shortfall/overrule', payload: { text: WHY } });
     assert.equal(res.statusCode, 200);
 
-    // The verdict. It clears the shortfall through the exclusion matrix rather
-    // than by a `DELETE` of its own — the thing `recordVerdict` exists to stop a
-    // new writer hand-rolling.
     assert.equal(system.store.getShortfall('issue:1'), null, 'the assessment it overrules does not stand as well');
     const delivery = system.store.getDelivery('issue:1');
     assert.equal(delivery?.summary, WHY, 'the operator’s reason is the delivery’s reason');
     assert.equal(delivery?.by, 'operator');
 
-    // The correction. The harness never edits the ticket itself, so the
-    // instruction block — which carries the tracker's own read/amend commands —
-    // is the whole of how these words reach it.
     assert.deepEqual(
       system.store.listStandingInstructions('issue:1').map((i) => i.text),
       [WHY],
@@ -80,12 +64,6 @@ test('an overrule records the verdict and the correction, in the operator’s wo
 });
 
 test('an overrule writes no conclusion, because one would clear the delivery it just wrote', async () => {
-  // The sharp edge, and it is silent both ways: `VERDICT_EXCLUSIONS.conclusion`
-  // lists `delivery`, so the `more_work` that ordinarily makes there *be* a next
-  // dispatch would delete the park instead — un-holding the assessor and
-  // re-blocking `issue-retro`, `validate-check` and the close-out, all three of
-  // which gate on `deliveryParked`. Nothing errors; the goal simply goes back
-  // round.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -106,14 +84,6 @@ test('an overrule writes no conclusion, because one would clear the delivery it 
 });
 
 test('an ordinary instruction on a delivered goal retracts the delivery, where an overrule keeps it', async () => {
-  // The same edge reached by the other door, and the two doors mean opposite
-  // things. An overrule says *the assessment is wrong and the goal is delivered*,
-  // so it writes the delivery. The **More work** control says the goal is not
-  // finished — so the `more_work` conclusion is written whatever is standing, and
-  // `VERDICT_EXCLUSIONS.conclusion` takes the park down with it (issue #603).
-  // Leaving it up used to be justified by the retrospective reading the words, and
-  // it does; but `issue-retro` dispatches a desk agent with no worktree, so the one
-  // agent the instruction reached was the one that could not act on it.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -136,9 +106,6 @@ test('an ordinary instruction on a delivered goal retracts the delivery, where a
 });
 
 test('an overrule with nothing standing is refused, and writes nothing', async () => {
-  // Refused rather than degraded into a plain "mark it delivered": this route
-  // says one specific thing — *that* verdict is wrong — and with nothing standing
-  // there is no verdict to be wrong.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -153,9 +120,6 @@ test('an overrule with nothing standing is refused, and writes nothing', async (
 });
 
 test('an overrule with no words is refused, and the shortfall is left where it was', async () => {
-  // The words *are* the act. An overrule with an empty box records "delivered"
-  // for a reason nobody can read, which is the assessment problem again with the
-  // operator's name on it.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -175,8 +139,6 @@ test('an overrule with no words is refused, and the shortfall is left where it w
     system.store.close();
   }
 });
-
-// -- what it stops, at the dispatcher ----------------------------------------
 
 function issue(over: Partial<Issue> = {}): Issue {
   return {
@@ -223,10 +185,6 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 test('the delivery an overrule writes is what stops the assessor re-deriving the shortfall', async () => {
-  // The loop, and the proof it is closed. `hasPriorWork` is satisfied and nothing
-  // is in flight, so this issue is `issue-assess`'s exact precondition — the
-  // shape that had a fresh assessor reading the same repository every cycle and
-  // recording the same finding.
   const dispatcher = (): RuleDispatcher => new RuleDispatcher({}, {}, undefined, 'main');
   const assessments = (actions: { rule?: unknown }[]): number =>
     actions.filter((a) => a.rule === 'issue-assess').length;

@@ -20,20 +20,16 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-// -- pure record parsing -----------------------------------------------------
-
 test('parseFileEventRecord reads path + tool, and rejects junk', () => {
   assert.deepEqual(parseFileEventRecord('{"path":"/wt/out/r.md","tool":"Write"}'), {
     path: '/wt/out/r.md',
     tool: 'Write',
   });
-  assert.deepEqual(parseFileEventRecord('{"path":" x "}'), { path: 'x', tool: null }); // trimmed, tool optional
+  assert.deepEqual(parseFileEventRecord('{"path":" x "}'), { path: 'x', tool: null });
   assert.equal(parseFileEventRecord('not json'), null);
-  assert.equal(parseFileEventRecord('{"tool":"Write"}'), null); // no path
-  assert.equal(parseFileEventRecord('{"path":"  "}'), null); // blank path
+  assert.equal(parseFileEventRecord('{"tool":"Write"}'), null);
+  assert.equal(parseFileEventRecord('{"path":"  "}'), null);
 });
-
-// -- classification (report vs. code change) ---------------------------------
 
 test('classifyArtifact promotes reports/docs, not code changes', () => {
   for (const p of ['out/report.md', 'design.html', 'notes.txt', 'paper.pdf', 'data.csv', 'diagram.svg']) {
@@ -52,16 +48,12 @@ test('classifyArtifact promotes anything under a reports/ segment and picks a ki
 });
 
 test('classifyArtifact promotes any extension under the configured docsFolderPrefix', () => {
-  // A file the heuristic would ignore is promoted once it lands under the prefix.
   assert.equal(classifyArtifact('src/index.ts').promoted, false);
-  assert.equal(classifyArtifact('src/index.ts', 'docs').promoted, false); // outside the prefix
-  assert.equal(classifyArtifact('docs/index.ts', 'docs').promoted, true); // under it → promoted
-  assert.equal(classifyArtifact('docs/plan', 'docs').promoted, true); // even with no extension
-  // Multi-segment prefix, separator-agnostic; a trailing slash is tolerated.
+  assert.equal(classifyArtifact('src/index.ts', 'docs').promoted, false);
+  assert.equal(classifyArtifact('docs/index.ts', 'docs').promoted, true);
+  assert.equal(classifyArtifact('docs/plan', 'docs').promoted, true);
   assert.equal(classifyArtifact('out/reports/x.bin', 'out/reports/').promoted, true);
-  // A sibling folder that merely shares a name prefix is not "under" it.
   assert.equal(classifyArtifact('docsy/x.ts', 'docs').promoted, false);
-  // The prefix folder file still gets a sensible kind from its extension.
   assert.equal(classifyArtifact('docs/report.md', 'docs').kind, 'report');
 });
 
@@ -70,32 +62,22 @@ test('classifyArtifact accepts an array of prefixes; a file promotes under any e
   assert.equal(classifyArtifact('docs/x.ts', prefixes).promoted, true);
   assert.equal(classifyArtifact('artifacts/y.bin', prefixes).promoted, true);
   assert.equal(classifyArtifact('src/z.ts', prefixes).promoted, false);
-  // An empty list is inert, like an unset prefix.
   assert.equal(classifyArtifact('docs/x.ts', []).promoted, false);
 });
 
 test('classifyArtifact matches an absolute prefix, subfolders included', () => {
-  // An out-of-worktree write is left absolute by toWorktreeRelative; an absolute
-  // prefix matches it (and its subfolders), case-insensitively.
   assert.equal(classifyArtifact('D:/docs/plans/cat.md', 'D:/docs').promoted, true);
   assert.equal(classifyArtifact('D:\\Docs\\plans\\cat.md', 'D:/docs').kind, 'report');
   assert.equal(classifyArtifact('/srv/shared/reports/out.bin', '/srv/shared/reports').promoted, true);
-  // A relative prefix never matches an absolute path and vice versa — separate
-  // spaces. Use a non-report extension so only the prefix decides promotion.
-  assert.equal(classifyArtifact('D:/docs/x.ts', 'docs').promoted, false); // absolute path, relative prefix
-  assert.equal(classifyArtifact('docs/x.ts', 'D:/docs').promoted, false); // relative path, absolute prefix
-  // Mixed array: relative for in-worktree, absolute for the shared area.
+  assert.equal(classifyArtifact('D:/docs/x.ts', 'docs').promoted, false);
+  assert.equal(classifyArtifact('docs/x.ts', 'D:/docs').promoted, false);
   assert.equal(classifyArtifact('D:/docs/plan', ['docs', 'D:/docs']).promoted, true);
 });
-
-// -- settings wiring ---------------------------------------------------------
 
 test('the file-events hook targets the file-writing tools and reads $LUBBDUBB_EVENTS_DIR', () => {
   const post = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!;
   assert.match(post.matcher, /Write/);
   assert.match(post.matcher, /Edit/);
-  // Exec form: `node` is the executable, the script (carrying the env guard) rides
-  // in args — never a shell string, so it can't be mangled by PowerShell/cmd.
   const hook = post.hooks[0]!;
   assert.equal(hook.command, 'node');
   assert.deepEqual(hook.args?.slice(0, 1), ['-e']);
@@ -103,10 +85,6 @@ test('the file-events hook targets the file-writing tools and reads $LUBBDUBB_EV
 });
 
 test('the file-events hook actually captures a write when spawned shell-free (Windows-safe)', () => {
-  // Replicate exactly what Claude Code does with exec form: spawn the executable
-  // with the argv, no shell tokenization. This is the regression guard for the
-  // Windows failure — a POSIX `if [ -n … ]` string here would write nothing under
-  // PowerShell/cmd; the exec form must work regardless of the ambient shell.
   const hook = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!.hooks[0]!;
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-hook-'));
   const res = spawnSync(process.execPath, hook.args!, {
@@ -122,7 +100,6 @@ test('the file-events hook actually captures a write when spawned shell-free (Wi
     tool: 'Write',
   });
 
-  // No env var → the guard short-circuits inside the script; nothing is written.
   const dir2 = mkdtempSync(join(tmpdir(), 'lubbdubb-hook-'));
   const bare = { ...process.env };
   delete bare.LUBBDUBB_EVENTS_DIR;
@@ -137,33 +114,26 @@ test('the file-events hook actually captures a write when spawned shell-free (Wi
 
 test('LUBBDUBB_EVENTS_DEBUG makes the hook drop a breadcrumb (and readDebug reads it); off by default', () => {
   const hook = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!.hooks[0]!;
-  // A key'd spool dir, exactly as the harness lays it out (base/<key>).
   const base = mkdtempSync(join(tmpdir(), 'lubbdubb-dbg-'));
   const spool = new FileEventsSpool(base);
   const key = 'agentX';
   const dir = spool.dirFor(key);
 
-  // Debug on: the hook both spools the record AND leaves a breadcrumb naming the
-  // tool, the input key names, and the path.
   const res = spawnSync(process.execPath, hook.args!, {
     input: '{"tool_name":"Write","tool_input":{"file_path":"docs/plan.md","content":"x"}}',
     env: { ...process.env, LUBBDUBB_EVENTS_DIR: dir, LUBBDUBB_EVENTS_DEBUG: '1' },
     encoding: 'utf8',
   });
   assert.equal(res.status, 0, res.stderr);
-  // The record still spools, and drain ignores the `.log` breadcrumb file.
   assert.deepEqual(spool.drain(key), [{ path: 'docs/plan.md', tool: 'Write' }]);
   const crumbs = spool.readDebug(key);
   assert.equal(crumbs.length, 1);
   assert.match(crumbs[0]!, /fired tool=Write/);
   assert.match(crumbs[0]!, /path=docs\/plan\.md/);
-  // Key *names* are logged (diagnostic), never their values — no content leak.
   assert.match(crumbs[0]!, /keys=file_path,content/);
   assert.doesNotMatch(crumbs[0]!, /"x"/);
-  // readDebug is non-destructive — the breadcrumb survives a re-read.
   assert.equal(spool.readDebug(key).length, 1);
 
-  // Debug off: no breadcrumb file at all, so readDebug is empty.
   const dir2 = spool.dirFor('agentY');
   spawnSync(process.execPath, hook.args!, {
     input: '{"tool_name":"Write","tool_input":{"file_path":"a.md"}}',
@@ -184,16 +154,12 @@ test('the launch wires the file-events hook into --settings, and nothing when it
 
 test('docsFolderPrefix is carried through loadConfig (string or array, unresolved)', () => {
   assert.equal(loadConfig({ agentMode: 'raw', docsFolderPrefix: 'artifacts' }).docsFolderPrefix, 'artifacts');
-  // An array carries through verbatim — relative entries are NOT resolved (they're
-  // worktree-relative), and absolute entries are left absolute.
   assert.deepEqual(loadConfig({ agentMode: 'raw', docsFolderPrefix: ['docs', 'D:/shared'] }).docsFolderPrefix, [
     'docs',
     'D:/shared',
   ]);
   assert.equal(loadConfig({ agentMode: 'raw' }).docsFolderPrefix, undefined);
 });
-
-// -- spool round-trip --------------------------------------------------------
 
 test('FileEventsSpool drains each record once, then dispose removes the dir', () => {
   const spool = new FileEventsSpool(mkdtempSync(join(tmpdir(), 'lubbdubb-ev-')));
@@ -211,8 +177,6 @@ test('FileEventsSpool drains each record once, then dispose removes the dir', ()
   spool.dispose('agent-key');
   assert.throws(() => readdirSync(dir), /ENOENT/);
 });
-
-// -- end-to-end through AgentManager -----------------------------------------
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-'));
@@ -235,7 +199,6 @@ test('a captured write records a file for every path and an artifact chip only f
     errorMirror: () => {},
   });
 
-  // Drive a real spawn so the agent gets a spool key (a store.createAgent would not).
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Write a report' });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0];
@@ -253,12 +216,10 @@ test('a captured write records a file for every path and an artifact chip only f
 
   const files = system.store.listFiles(agent!.id);
   assert.equal(files.length, 2, 'both writes tracked');
-  // Absolute paths inside the worktree are stored worktree-relative.
   assert.deepEqual(files.map((f) => f.path).sort(), ['out/summary.md', 'src/index.ts']);
   assert.equal(files.find((f) => f.path === 'out/summary.md')?.promoted, true);
   assert.equal(files.find((f) => f.path === 'src/index.ts')?.promoted, false);
 
-  // Only the report became an artifact chip (via the shared flag path).
   const allFlags = system.store.listFlags(agent!.id);
   assert.equal(allFlags.length, 1);
   assert.equal(allFlags[0]?.ref, 'out/summary.md');
@@ -267,7 +228,6 @@ test('a captured write records a file for every path and an artifact chip only f
   system.store.close();
 });
 
-/** Spawn one agent in a fake-terminal system and hand back it plus the driving backend. */
 async function spawnedPtyAgent(): Promise<{
   system: ReturnType<typeof buildSystem>;
   backend: FakePtyBackend;
@@ -287,15 +247,11 @@ async function spawnedPtyAgent(): Promise<{
 }
 
 test('a captured write surfaces when the agent parks on a human', async () => {
-  // The escalation is often "review the file I just wrote", and a waiting agent
-  // reaches no terminal drain — so parking must flush the spool.
   const { system, backend, agent } = await spawnedPtyAgent();
 
   const dir = system.agents.fileEventsDir(agent.id);
   writeFileSync(join(dir!, '1-a.json'), JSON.stringify({ path: join(agent.cwd, 'reports/x.md'), tool: 'Write' }));
 
-  // The sentinel is stripped, so the settled text never changes: no output and no
-  // transcript update fire, leaving `waiting` as the only drain trigger.
   backend.last().emit('@@LUBBDUBB_WAITING:Review reports/x.md@@\r\n');
   await tick(300);
 

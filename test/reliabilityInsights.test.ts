@@ -5,21 +5,6 @@ import { ciStatusOf, diffWorlds } from '../src/world/worldDiff.js';
 import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent, WorldSnapshot } from '../src/types.js';
 import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
 
-/**
- * The reading beside the spend one. What it has to get right is not the
- * arithmetic — these are counts — but four things that are each a different way
- * for a rate to lie:
- *
- * - a **live** run counted as an outcome, which would drop the rate every time
- *   the fleet got busy;
- * - a **stopped** run counted as a fault, which would tell an operator who
- *   killed something that they broke the harness;
- * - a red span **read backwards or ended by a pending**, which would report a
- *   flaky pipeline as recovering instantly;
- * - the **gauge and the panel** disagreeing, which is the whole reason the tally
- *   is one exported fold rather than two.
- */
-
 const T0 = Date.parse('2026-08-04T00:00:00.000Z');
 const NOW = Date.parse('2026-08-04T12:00:00.000Z');
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -72,14 +57,6 @@ function ciEvent(ref: string, status: string, at: number): WorldEvent {
   return { id: `we_${ref}_${at}`, kind: 'pr_ci', ref, summary: `PR #${ref.slice(3)} CI ${status}`, createdAt: iso(at) };
 }
 
-/**
- * A fold over a stated window.
- *
- * `30d` rather than the fortnight the CI half used to hard-code, because the
- * window is a parameter now and a test that did not name one would be asserting
- * whatever the default happened to be — which is exactly the kind of coupling
- * the constant's removal was for. The fixtures all sit inside a month.
- */
 function build(
   over: { agents?: Agent[]; tasks?: Task[]; ciEvents?: WorldEvent[]; usageEvents?: UsageEvent[] },
   key: InsightsWindow = '30d',
@@ -111,8 +88,6 @@ test('a live run is not an outcome, and a stopped run is not a fault', () => {
   assert.equal(runs.lost, 1, 'only the failure is a fault');
   assert.equal(runs.stopped, 1, 'the killed run is someone’s decision, counted apart');
   assert.equal(runs.completionRate, 0.5);
-  // The waste is the faults' money and not the stops': a killed run cost what it
-  // cost, and the panel says so in its own column.
   assert.equal(runs.lostCostUsd, 1);
 });
 
@@ -121,8 +96,6 @@ test('the tally the gauge draws is the one the panel opens with', () => {
   const { runs } = build({ agents, tasks: agents.map((a) => task(a.id, 'issue:9')) });
   const gauge = tallyRunOutcomes(agents);
 
-  // Not a re-derivation of the same numbers — the same fold, asserted field by
-  // field, because a second fold agreeing today is what drift looks like on day one.
   assert.equal(runs.settled, gauge.settled);
   assert.equal(runs.live, gauge.live);
   assert.equal(runs.completed, gauge.completed);
@@ -147,11 +120,11 @@ test('phases come from the spend classifier, so both panels split the same runs'
     agent('a5', 'done'),
   ];
   const tasks = [
-    task('a1', 'issue:12:part:schema'), // build
-    task('a2', 'issue:12:part:api'), // build
-    task('a3', 'issue:12:plan'), // deliberation
-    task('a4', 'pr:41:ci'), // ci
-    task('a5', 'job:j1'), // job
+    task('a1', 'issue:12:part:schema'),
+    task('a2', 'issue:12:part:api'),
+    task('a3', 'issue:12:plan'),
+    task('a4', 'pr:41:ci'),
+    task('a5', 'job:j1'),
   ];
   const { runs } = build({ agents, tasks });
   const byPhase = new Map(runs.byPhase.map((p) => [p.phase, p]));
@@ -205,8 +178,6 @@ test('a CI summary is read back by the matcher that wrote it', () => {
     ],
   });
 
-  // The round trip, not a hand-written string: the point of the shared matcher is
-  // that a reworded summary breaks here rather than silently reading zero reds.
   const events = diffWorlds(world('passing'), world('failing'));
   const ci = events.find((e) => e.kind === 'pr_ci');
   assert.ok(ci, 'the status change is recorded');
@@ -218,9 +189,9 @@ test('a CI summary is read back by the matcher that wrote it', () => {
 test('a red span ends at the next green and a pending does not end it', () => {
   const events = [
     ciEvent('pr:41', 'failing', NOW - 300 * MIN),
-    ciEvent('pr:41', 'pending', NOW - 280 * MIN), // a rerun, not a recovery
+    ciEvent('pr:41', 'pending', NOW - 280 * MIN),
     ciEvent('pr:41', 'passing', NOW - 240 * MIN),
-    ciEvent('pr:42', 'failing', NOW - 120 * MIN), // still red at the read
+    ciEvent('pr:42', 'failing', NOW - 120 * MIN),
   ];
   const { ci } = build({ ciEvents: events });
 
@@ -233,8 +204,6 @@ test('a red span ends at the next green and a pending does not end it', () => {
 
   const stillRed = ci.flakiest.find((s) => s.ref === 'pr:42');
   assert.equal(stillRed?.stillRed, true);
-  // Its red time runs to *now* rather than to its last event, or the pull request
-  // nobody has fixed would show the least red time on the board.
   assert.equal(stillRed?.redMs, 120 * MIN);
   assert.equal(ci.flakiest.find((s) => s.ref === 'pr:41')?.redMs, 60 * MIN);
 });
@@ -250,8 +219,6 @@ test('a second failure while already red is another red on the same span', () =>
 
   assert.equal(ci.reds, 2, 'a rerun that failed again is a second failure');
   assert.equal(ci.recoveries, 1);
-  // One continuous span: the pull request was unlandable from the first failure,
-  // and restarting the clock on the second would under-report it by 20 minutes.
   assert.equal(ci.medianToGreenMs, 60 * MIN);
   assert.equal(ci.prsAffected, 1);
   assert.equal(ci.prsObserved, 1);
@@ -275,28 +242,16 @@ test('the CI and landing figures are the windowed money, from dated deltas', () 
   const usageEvents: UsageEvent[] = [
     { agentId: 'a1', costUsd: 0.5, at: iso(NOW - 60 * MIN) },
     { agentId: 'a1', costUsd: 0.25, at: iso(NOW - 30 * MIN) },
-    // Outside the window: the caller's `since` and the fold's must agree, and a
-    // delta older than the buckets belongs to a stretch this figure is not about.
     { agentId: 'a1', costUsd: 9, at: iso(NOW - 30 * 24 * 60 * MIN) },
-    // Build, not landing — the classifier decides, not the caller.
     { agentId: 'a2', costUsd: 4, at: iso(NOW - 30 * MIN) },
     { agentId: 'a3', costUsd: 1.5, at: iso(NOW - 30 * MIN) },
     { agentId: 'a4', costUsd: 0.4, at: iso(NOW - 20 * MIN) },
   ];
-  // A week, so the month-old delta above is genuinely outside it. The window is
-  // named here rather than left to the helper's default precisely because this
-  // test is *about* the boundary.
   const { ci } = build({ agents, tasks, usageEvents }, '7d');
   assert.equal(ci.ciCostUsd, 1.15, 'a blocked gate is the same pipeline’s bill as a failing check');
   assert.equal(ci.landingCostUsd, 1.5, 'answering review is landing, and never in the CI figure');
 });
 
-/**
- * The reading the split exists for. A count of reds says how often the pipeline
- * breaks; only this says what breaking costs — and it has to reach the row of the
- * pull request whose checks the money was actually spent on, which is a join from
- * `pr:41:ci` to the `pr:41` the verdicts are recorded against.
- */
 test('CI spend lands on the pull request whose checks it answered', () => {
   const agents = [agent('a1', 'done'), agent('a2', 'done')];
   const tasks = [task('a1', 'pr:41:ci'), task('a2', 'pr:88:ci')];
@@ -324,11 +279,6 @@ test('CI spend lands on the pull request whose checks it answered', () => {
   assert.equal(ci.ciCostUsd, 4, 'the rows are a partition of the fleet’s CI spend');
 });
 
-/**
- * A CI agent whose pull request reported no verdict inside the window has no row
- * to land on. Its money must still reach the total, or the tile the panel leads
- * with would be a sum of the table rather than of the fleet.
- */
 test('CI spend on a pull request with no verdict counts in the total and in no row', () => {
   const { ci } = build({
     agents: [agent('a1', 'done')],
@@ -363,14 +313,6 @@ test('the timelines bucket by day and end at now', () => {
   );
 });
 
-/**
- * The store read the CI half is folded from, at the seam it is used through.
- *
- * Ascending order is the one property here that is load-bearing and invisible:
- * the fold pairs each failing with the *next* passing, so a descending read pairs
- * every red with the green that preceded it and reports the flakiest pipeline in
- * the repository as recovering instantly.
- */
 test('the CI read is bounded by kind and comes back oldest first', async () => {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -419,17 +361,6 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
   assert.deepEqual(system.store.listWorldEventsOfKindsSince(since, []), [], 'no kinds, no query');
 });
 
-/**
- * Both halves take the window, and that is the change this reading was rebuilt
- * around.
- *
- * The run half used to be all-time and the CI half a rolling fortnight, so a
- * completion rate and a red rate sat side by side on one surface describing two
- * different stretches of the fleet's life with nothing saying so. The cut is made
- * once, at the door, and both folds read the list it produces — so a run outside
- * the window is in the outcome bar, the phase table and the repeats no more than
- * it is in the headline count.
- */
 test('the run half obeys the window, in every table and not only the headline', () => {
   const day = 24 * 60 * 60 * 1000;
   const inside = agent('a1', 'done');
@@ -451,19 +382,12 @@ test('the run half obeys the window, in every table and not only the headline', 
   );
   assert.equal(week.runs.byPhase.reduce((n, p) => n + p.settled, 0), 1); // prettier-ignore
 
-  // Widen it and the same fold sees both, which is what the control is for: a
-  // rate over few runs moves a long way on one more failure, and the way to find
-  // out whether it holds is to ask for a longer stretch.
   const all = build({ agents: [inside, outside], tasks }, 'all');
   assert.equal(all.runs.settled, 2);
   assert.equal(all.runs.completionRate, 0.5);
   assert.equal(all.runs.lostCostUsd, 99);
 });
 
-// #543 — a run that reported tokens and no dollar figure is measured to the four
-// spend folds, and was unmeasured to this one. `resultUsage` writes
-// `costUsd: ev.total_cost_usd ?? null`, so the shape is one the CLI is permitted
-// to send.
 test('a run that reported tokens and no price is measured, as it is to every spend fold', () => {
   const priced = agent('a1', 'done');
   const tokensOnly = agent('a2', 'done', { costUsd: null, inputTokens: 4000, outputTokens: 200 });
@@ -476,10 +400,6 @@ test('a run that reported tokens and no price is measured, as it is to every spe
 });
 
 test('under `all` the axis spans the CI history too, not just the runs', () => {
-  // The unbounded window is the one whose whole purpose is to show everything, so
-  // a graph that starts after history the headline is counting is the one place
-  // the two must not disagree. `timelineSpan` takes the earliest datum the caller
-  // holds — and the caller holds two populations here, not one.
   const DAY = 24 * 60 * MIN;
   const events = [
     ciEvent('pr:41', 'failing', NOW - 45 * DAY),
@@ -492,23 +412,17 @@ test('under `all` the axis spans the CI history too, not just the runs', () => {
     green: ci.timeline.buckets.reduce((n, b) => n + b.green, 0),
   });
 
-  // No agents at all: a deployment that watched pull requests before it
-  // dispatched anything. The axis used to fall back to the 7-day floor.
   const bare = build({ ciEvents: events }, 'all').ci;
   assert.equal(bare.reds, 2);
   assert.equal(bare.greens, 2);
   assert.deepEqual(totals(bare), { red: 2, green: 2 }, 'every counted event is on the graph');
 
-  // And with an agent younger than the oldest CI event, which is the commoner
-  // shape: a harness whose CI history outruns its oldest surviving agent row.
   const young = build(
     { agents: [agent('a1', 'done', { startedAt: iso(NOW - DAY), endedAt: iso(NOW - DAY) })], ciEvents: events },
     'all',
   ).ci;
   assert.deepEqual(totals(young), { red: young.reds, green: young.greens });
 
-  // The other direction is the case that always worked, kept so the assertion
-  // pins "the earliest of both" rather than "the earliest event".
   const old = build(
     {
       agents: [agent('a1', 'done', { startedAt: iso(NOW - 60 * DAY), endedAt: iso(NOW - 60 * DAY) })],

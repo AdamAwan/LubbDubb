@@ -120,19 +120,13 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
   };
 }
 
-// -- CI attribution, as pure predicates --------------------------------------
-
 test('the base PR of a stack is resolved from the world, not from a plan', () => {
   const bottom = pr(40, 'issue/12/schema');
   const middle = pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema' });
   const prs = [bottom, middle];
   assert.equal(basePrOf(middle, prs)?.number, 40);
-  // A PR on the integration branch has no base PR, and neither does one whose
-  // base the provider never reported.
   assert.equal(basePrOf(bottom, prs), null);
   assert.equal(basePrOf(pr(42, 'x', { baseBranch: undefined }), prs), null);
-  // A merged base is not a base worth attributing to: its commits are in the
-  // integration branch and the provider retargets its children.
   assert.equal(basePrOf(middle, [{ ...bottom, merged: true }, middle]), null);
 });
 
@@ -144,16 +138,10 @@ test('a red PR under a red base is inheriting; the bottom of the stack owns the 
   assert.equal(inheritedCiFailure(bottom, prs), null, 'the bottom is where the failure actually is');
   assert.equal(inheritedCiFailure(middle, prs)?.number, 40);
   assert.equal(inheritedCiFailure(top, prs)?.number, 41);
-  // A green PR inherits nothing, whatever is underneath it.
   assert.equal(inheritedCiFailure(pr(43, 'z', { baseBranch: 'issue/12/schema' }), prs), null);
 });
 
 test('an Optional failure on the base is attributed, so no agent lands on the child', () => {
-  // A non-blocking check runs the base's commits exactly as a required one does,
-  // so it propagates up the stack the same way. Attribution reads
-  // `ciNeedsAttention` rather than the aggregate for precisely this: otherwise
-  // one red format check at the bottom puts an agent on every PR above it, each
-  // of them unable to fix anything.
   const optional = [{ name: 'Typescript Code Formatter Validation', status: 'failing' as const, blocking: false }];
   const base = pr(40, 'part-one', { ciStatus: 'passing', ciChecks: optional });
   const child = pr(41, 'part-two', { baseBranch: 'part-one', ciStatus: 'passing', ciChecks: optional });
@@ -162,9 +150,6 @@ test('an Optional failure on the base is attributed, so no agent lands on the ch
 });
 
 test('attribution walks past a base whose own CI has not reported yet', () => {
-  // The middle PR is still building. Without the walk its `pending` would read as
-  // "the failure above is yours", and an agent would be sent to fix the bottom
-  // PR's bug on the top PR's branch.
   const prs = [
     pr(40, 'a', { ciStatus: 'failing' }),
     pr(41, 'b', { baseBranch: 'a', ciStatus: 'pending' }),
@@ -182,12 +167,9 @@ test('health names the PR a failure was inherited from', () => {
   const bottom = pr(40, 'a', { ciStatus: 'failing' });
   const top = pr(41, 'b', { baseBranch: 'a', ciStatus: 'failing' });
   assert.deepEqual(prHealth(top, [bottom, top]).reasons, ['CI failing on base PR #40']);
-  // Without stack context (and for the bottom of the stack) it reads as it always did.
   assert.deepEqual(prHealth(top).reasons, ['CI failing']);
   assert.deepEqual(prHealth(bottom, [bottom, top]).reasons, ['CI failing']);
 });
-
-// -- CI attribution, in the dispatcher ---------------------------------------
 
 test('rule `pr-ci-failing` fires on the bottom of a red stack and is suppressed above it', async () => {
   const prs = [
@@ -203,9 +185,6 @@ test('rule `pr-ci-failing` fires on the bottom of a red stack and is suppressed 
 });
 
 test('an ignored PR still counts as the base its children inherit from', async () => {
-  // The operator took the watch tag off the bottom PR, so the harness hides it from
-  // the dispatch world. If attribution only looked at that filtered view, the
-  // child's inherited failure would read as its own and get an agent it cannot use.
   const bottom = pr(40, 'issue/12/schema', { ciStatus: 'failing', labels: [] });
   const child = pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing' });
   const result = await new RuleDispatcher().decide({
@@ -219,9 +198,6 @@ test('an ignored PR still counts as the base its children inherit from', async (
 });
 
 test('suppressing CI does not suppress restacking — a stack keeps following its parent', async () => {
-  // Part 1 pushed, so part 2 went behind *and* red with part 1's failure. The CI
-  // rule is held, but rule `pr-base-update` must still fire: without it the stack stops
-  // restacking the moment its parent goes red, which is exactly when it moves.
   const prs = [
     pr(40, 'issue/12/schema', { ciStatus: 'failing' }),
     pr(41, 'issue/12/api', {
@@ -231,8 +207,6 @@ test('suppressing CI does not suppress restacking — a stack keeps following it
     }),
   ];
   const result = await new RuleDispatcher().decide({ ...context([]), world: world([], prs) });
-  // The rung behind its parent is restacked without an agent (issue #332); the
-  // red bottom of the stack still gets one.
   assert.deepEqual(
     result.actions.map((a) => [a.rule, a.type]),
     [
@@ -247,8 +221,6 @@ test('suppressing CI does not suppress restacking — a stack keeps following it
 });
 
 test('a conflict on an inheriting PR is still notified to its running agent', async () => {
-  // The notify path is fed by the same concern list the dispatch path is, so a
-  // suppressed CI concern must not take the surviving concerns down with it.
   const prs = [
     pr(40, 'issue/12/schema', { ciStatus: 'failing' }),
     pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing', mergeableState: 'dirty' }),
@@ -265,8 +237,6 @@ test('a conflict on an inheriting PR is still notified to its running agent', as
   assert.match(note.response, /base branch issue\/12\/schema now conflicts/);
   assert.doesNotMatch(note.response, /CI is now failing/, "the child is not told to fix its parent's build");
 });
-
-// -- the concurrency cap stops being silent ----------------------------------
 
 test('a part held by the per-plan cap is queued as `capped`, not skipped', async () => {
   const dispatcher = new RuleDispatcher({ priorityLabels: {}, defaultPriority: 0 }, {}, undefined, 'main', {
@@ -287,14 +257,11 @@ test('a part held by the per-plan cap is queued as `capped`, not skipped', async
     'the third part is visible and explained, rather than vanishing',
   );
   assert.match(queue[2]!.reason, /2-part concurrency cap/);
-  // Visible is not dispatchable: headroom is 5, so only the cap is holding it.
   assert.deepEqual(
     result.actions.filter((a) => a.rule === 'plan-part').map((a) => (a.type === 'dispatch_code_agent' ? a.branch : '')),
     ['issue/12/a', 'issue/12/b'],
   );
 });
-
-// -- replan ------------------------------------------------------------------
 
 test('an amended plan retires what it dropped, but never what has work in the world', () => {
   const existing = [
@@ -303,14 +270,12 @@ test('an amended plan retires what it dropped, but never what has work in the wo
     part('c', 3, { status: 'ready' }),
     part('d', 4, { status: 'pending' }),
   ];
-  // The amendment keeps only "a" and "c".
   const retired = partsToRetire(existing, ['a', 'c']);
   assert.deepEqual(
     retired.map((p) => p.slug),
     ['d'],
     'b has an open PR — un-declaring it does not withdraw it',
   );
-  // Already-retired rows are not retired twice, and a re-declared part comes back.
   assert.deepEqual(partsToRetire([part('e', 5, { status: 'retired' })], []), []);
 });
 
@@ -338,13 +303,10 @@ test('a replan carries the current plan into the prompt, slugs included', async 
   assert.match(planner.prompt, /Amend the existing plan/);
   assert.match(planner.prompt, /"a": The a part \[merged, PR #40\]/);
   assert.match(planner.prompt, /"b": The b part \[ready, no branch yet, stacks on "a"\]/);
-  // The state summary itself is pure and directly testable.
   assert.match(currentPlanSummary(plan({ status: 'planning' }), parts, '#'), /It was split because: Schema first\./);
 });
 
 test('a replan is not throttled by the planner that produced the plan it is amending', () => {
-  // The original planner ran two minutes ago; the cooldown is fifteen. Without a
-  // window that starts at the replan request, the button would appear to do nothing.
   const attempt: Decision = {
     id: 'd1',
     cycleId: 'c1',
@@ -362,16 +324,10 @@ test('a replan is not throttled by the planner that produced the plan it is amen
   const now = '2026-07-25T12:00:00.000Z';
   const requested = plan({ status: 'planning', updatedAt: '2026-07-25T11:59:00.000Z' });
   assert.equal(plannerVerdict(12, requested, now, [attempt], DEFAULT_COOLDOWN).kind, 'dispatch');
-  // A first-time planner (no plan row) still gets the full throttle.
   assert.equal(plannerVerdict(12, null, now, [attempt], DEFAULT_COOLDOWN).kind, 'cooldown');
 });
 
 test('an attempt stamped in the same millisecond as the replan request is the *previous* planner’s', () => {
-  // The two writes are ordered by construction: the dispatch decision is recorded
-  // by the cycle that ran *before* the operator asked, and `/replan` moves the plan
-  // afterwards. A millisecond clock can still stamp them identically, and reading
-  // that tie as "this replan already had an attempt" throttles the button for
-  // fifteen minutes — the exact failure the narrowed window exists to prevent.
   const at = '2026-07-25T11:59:00.000Z';
   const attempt: Decision = {
     id: 'd1',
@@ -393,12 +349,9 @@ test('an attempt stamped in the same millisecond as the replan request is the *p
 
 test('a replan that spends its attempts falls back to the existing parts, never to unplanned', () => {
   const spent = { kind: 'hold' } as const;
-  // Failing open here would point rule `issue-pickup` at the flat `issue/12`
-  // branch, which git cannot create beside the existing `issue/12/<slug>` refs.
   assert.deepEqual(resolvePlanRoute({ plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }), {
     route: 'parts',
   });
-  // With nothing to fall back to, the original fail-open still applies.
   assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), { route: 'unplanned' });
 });
 
@@ -419,7 +372,6 @@ test('a complete plan says how to get out of it, rather than reading as still in
   const verdict = issuePickupStatus(issue(12), ctx);
   assert.equal(verdict.status, 'planning');
   assert.match(verdict.reasons[0]!, /plan complete — all 2 parts finished; close the issue or replan/);
-  // And replan really is the way out: the same plan back in `planning` owes a planner.
   assert.equal(
     resolvePlanRoute({
       plan: plan({ status: 'planning' }),
@@ -429,8 +381,6 @@ test('a complete plan says how to get out of it, rather than reading as still in
     'planning',
   );
 });
-
-// -- end to end --------------------------------------------------------------
 
 function task(id: string, branch: string, originRef: string): DispatchContext['tasks'][number] {
   return {
@@ -454,7 +404,6 @@ function systemWithPlans(): { system: System; repoRoot: string } {
   const repoRoot = gitRepo();
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
-    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -510,8 +459,6 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
     },
   ]);
 
-  // The graph is in the snapshot — until now it existed only in the database, and
-  // the per-issue chip's "n/m parts done" was all a human could see.
   const snapshot = await buildStateSnapshot(system);
   assert.deepEqual(
     snapshot.planParts.map((p) => [p.slug, p.status]),
@@ -525,13 +472,10 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
   const replanned = await app.inject({ method: 'POST', url: `/api/plans/${stored.id}/replan` });
   assert.equal(replanned.statusCode, 200);
   assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'planning');
-  // Nothing was torn down: the parts are exactly as they were, so a replan that
-  // never lands leaves the issue where it was rather than parking it.
   assert.deepEqual(
     system.store.listPlanParts(stored.id).map((p) => p.slug),
     ['schema', 'api'],
   );
-  // And the cycle the endpoint kicked put a planner on the plan branch.
   const planner = findTask(system.store, (t) => t.originRef === 'issue:12:plan');
   assert.equal(planner?.branch, 'plan/issue/12');
   assert.match(planner!.prompt, /Amend the existing plan/);
@@ -543,10 +487,6 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
 });
 
 test("a part's stale stored base is harmless, because `ensure` is reuse-first", async () => {
-  // When part 1 merges, the provider retargets part 2's PR onto the default
-  // branch, and the store's idea of part 2's base goes stale. It never matters:
-  // `ensure` hands back an existing branch untouched and ignores `base` entirely,
-  // so a second dispatch onto a live part cannot move it out from under its agent.
   const repoRoot = gitRepo();
   const worktrees = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   const manager = new WorktreeManager(repoRoot, worktrees, { size: 4, held: () => false }, join(repoRoot, '.preview'));
@@ -555,7 +495,6 @@ test("a part's stale stored base is harmless, because `ensure` is reuse-first", 
   const first = await manager.ensure('issue/12/api', 'issue/12/schema');
   const parentSha = execFileSync('git', ['rev-parse', 'issue/12/api'], { cwd: repoRoot, encoding: 'utf8' }).trim();
 
-  // Same branch, a *different* base — the stale-base case. Reuse wins.
   const second = await manager.ensure('issue/12/api', 'main');
   assert.equal(second, first);
   assert.equal(
@@ -563,7 +502,5 @@ test("a part's stale stored base is harmless, because `ensure` is reuse-first", 
     parentSha,
   );
 
-  // An unresolvable base still throws rather than silently forking off HEAD —
-  // the property the parameter exists for, unchanged by the above.
   await assert.rejects(() => manager.ensure('issue/12/ui', 'no/such/branch'), /resolves to no commit/);
 });

@@ -10,23 +10,6 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * Issue #249, second half: an operator's screenshot survives the ticket-filing
- * fork.
- *
- * A code brief with a tracker configured is **not** dispatched — it is filed
- * as a watched ticket and the planning funnel takes over (issue #198). Left keyed
- * on the brief, the images would be visible to exactly one agent: whoever
- * writes the code for a job that no longer exists.
- *
- * Since #394 the harness files the ticket itself, on the request, so it knows the
- * issue number **before** anything is written to disk — the images land under
- * `issue:<n>` and never move. These tests are about the two things left: the
- * goal-scoped append at every later dispatch, and the strip the cockpit draws off
- * the same rows.
- */
-
-/** A real PNG: the 8-byte signature is what the sniffer reads, the rest is filler. */
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 7)]);
 const GIF = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(32, 3)]);
 
@@ -35,9 +18,6 @@ function testConfig() {
   return loadConfig({
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
-    // The watch gate off: this file is about where an image goes, not about
-    // which issues the harness picks up, and an unlabelled injected issue would
-    // otherwise never be dispatched for at all.
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -49,7 +29,6 @@ function testConfig() {
   });
 }
 
-/** A system whose *issue tracker* is GitHub while its world stays the fake one. */
 function build(): System {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
@@ -61,7 +40,6 @@ function build(): System {
   return system;
 }
 
-/** Launch a code brief carrying `images`, and return the ticket it was filed as. */
 async function fileBrief(system: System, images: { name: string; data: Buffer }[]): Promise<string> {
   const { app } = await buildApp(system);
   const res = await app.inject({
@@ -85,10 +63,6 @@ test('a brief’s images are written under the ticket it was filed as', async ()
     { name: 'after.gif', data: GIF },
   ]);
 
-  // Under the goal from the first write. Nothing is keyed on the brief and
-  // then moved — the harness files the ticket itself, so the issue number is known
-  // before any byte is written, and there is no window in which the image belongs
-  // to something that is about to stop existing.
   const stored = system.store.listAttachments(ticketRef);
   assert.deepEqual(
     stored.map((a) => [a.index, a.label, a.mime]),
@@ -124,8 +98,6 @@ test('two briefs keep their own images, under their own tickets', async () => {
     b.map((x) => x.label),
     ['two.gif'],
   );
-  // Distinct files, both still there: a shared stem would have silently replaced
-  // the first operator's screenshot with the second's.
   assert.notEqual(a[0]!.path, b[0]!.path);
   assert.deepEqual(readFileSync(a[0]!.path), PNG);
   assert.deepEqual(readFileSync(b[0]!.path), GIF);
@@ -138,12 +110,7 @@ test('every agent dispatched for the goal is handed the images, and only that go
   const ticketRef = await fileBrief(system, [{ name: 'panel.png', data: PNG }]);
   const attachment = system.store.listAttachments(ticketRef)[0]!;
 
-  // A second, unrelated goal beside it — the images must not follow *that* one
-  // anywhere. The brief's own ticket is already in the world: the harness
-  // filed it, so it is a real issue on the fake provider from that moment.
   system.connector.inject({ kind: 'new_issue', number: 315, title: 'Something else entirely', body: 'No image.' });
-  // Twice: the cap is shared and the first cycle spends its headroom on whichever
-  // goal it reaches first.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
@@ -153,13 +120,8 @@ test('every agent dispatched for the goal is handed the images, and only that go
     .map((t) => system.store.getTask(t.id)!);
   assert.ok(mine.length > 0, 'the funnel picked the goal up');
   for (const task of mine) {
-    // The funnel dispatches for `issue:<n>:appraisal`, `:plan`, `:part:<slug>` — never
-    // for `issue:<n>` exactly until the parts are gone. An exact-origin lookup
-    // would therefore hand the screenshot to nobody, which is the bug this scoping
-    // is the fix for.
     assert.ok(task.prompt.includes(attachment.path), `${task.originRef} is given the absolute path`);
     assert.match(task.prompt, /The operator attached an image/);
-    // Appended, never interpolated: whatever the template rendered is still first.
     assert.ok(!task.prompt.startsWith('---'), 'the note is appended to a rendered prompt, not the whole of it');
   }
 
@@ -179,16 +141,12 @@ test('the cockpit is shipped the images and a URL that serves them', async () =>
   const ticketRef = await fileBrief(system, [{ name: 'panel.png', data: PNG }]);
   const { app } = await buildApp(system);
 
-  // The strip hangs off the issue, which is where the operator now finds the goal —
-  // there is no queued brief to hang it off, because nothing was queued.
   const state = buildStateSnapshot(system);
   const attachment = state.attachments[0]!;
   assert.equal(attachment.targetRef, ticketRef);
   const url = state.attachmentUrls[attachment.id]!;
   assert.equal(url, `/attachments/${attachment.id}`, 'auth is off here, so no capability is minted');
 
-  // The route serves the stored bytes under the *sniffed* mime, and outside the
-  // `/api` prefix — an `<img>` load carries no bearer token to get past the guard.
   const served = await app.inject({ method: 'GET', url });
   assert.equal(served.statusCode, 200);
   assert.equal(served.headers['content-type'], 'image/png');

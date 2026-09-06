@@ -15,10 +15,6 @@ import { observePartPr } from '../src/plans/parts.js';
 import { prState } from '../src/prHealth.js';
 import type { PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 const NOW = Date.parse('2026-07-25T12:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
 
@@ -74,10 +70,6 @@ function part(over: Partial<PlanPart> = {}): PlanPart {
   };
 }
 
-// ---------------------------------------------------------------------------
-// The window itself
-// ---------------------------------------------------------------------------
-
 test('closedWindowStart is the window measured back from the caller‑supplied clock', () => {
   assert.equal(closedWindowStart(NOW, 6 * HOUR), '2026-07-25T06:00:00.000Z');
 });
@@ -86,8 +78,6 @@ test('withinClosedWindow keeps the boundary and drops a PR with no recorded clos
   const since = '2026-07-25T06:00:00.000Z';
   assert.equal(withinClosedWindow(since, since), true, 'inclusive at the boundary');
   assert.equal(withinClosedWindow('2026-07-25T05:59:59.000Z', since), false);
-  // A row we cannot place in the window is dropped: inventing "closed just now"
-  // would put a stale PR in front of the reconciler as fresh evidence.
   assert.equal(withinClosedWindow(null, since), false);
   assert.equal(withinClosedWindow(undefined, since), false);
 });
@@ -96,18 +86,10 @@ test('prState never invents `closed`: an unobserved PR is open or merged, never 
   assert.equal(prState(pr(1)), 'open');
   assert.equal(prState(pr(1, { merged: true })), 'merged');
   assert.equal(prState(pr(1, { state: 'closed', merged: false })), 'closed');
-  // The explicit state wins — that is the only way `closed` can ever be reached.
   assert.equal(prState(pr(1, { state: 'merged' })), 'merged');
 });
 
-// ---------------------------------------------------------------------------
-// worldDiff — pr_merged becomes real, pr_closed appears
-// ---------------------------------------------------------------------------
-
 test('a PR leaving the open set as merged emits pr_merged — the transition real providers never showed', () => {
-  // The regression this fixes: `!before.merged && pr.merged` needs the PR to still
-  // be in `pullRequests`, and neither provider lists a merged PR, so the event was
-  // unreachable outside the fake.
   const before = world({ pullRequests: [pr(42)] });
   const after = world({
     closedPullRequests: [pr(42, { merged: true, state: 'merged', closedAt: '2026-07-25T11:00:00.000Z' })],
@@ -132,13 +114,10 @@ test('a closed PR lingering in the retention window is not re-announced every cy
   const first = world({ pullRequests: [pr(42)] });
   const second = world({ closedPullRequests: closed });
   assert.equal(diffWorlds(first, second).length, 1);
-  // Same list next pulse — it stays for the whole window, and says nothing new.
   assert.deepEqual(diffWorlds(second, world({ closedPullRequests: closed })), []);
 });
 
 test('a merge already announced from the open list is not announced a second time when the PR closes', () => {
-  // The fake marks a PR merged in place (so the loop settles) before it ever
-  // leaves the open set, which is two observations of one merge.
   const merged = pr(42, { merged: true });
   const before = world({ pullRequests: [merged] });
   const after = world({ closedPullRequests: [{ ...merged, state: 'merged' as const }] });
@@ -156,10 +135,6 @@ test('the closed list does not disturb the open-PR diff', () => {
     ['pr_ci', 'pr_merged'],
   );
 });
-
-// ---------------------------------------------------------------------------
-// The GitHub provider
-// ---------------------------------------------------------------------------
 
 function ghClosed(over: Partial<GhClosedPull> = {}): GhClosedPull {
   return {
@@ -280,10 +255,6 @@ test('mapClosedPull (github) carries no CI or comment signal — nothing acts on
   assert.equal(mapped.branch, 'issue/12/api', 'the branch survives — reconciliation joins on it');
 });
 
-// ---------------------------------------------------------------------------
-// The Azure provider
-// ---------------------------------------------------------------------------
-
 function azClosed(over: Partial<AzClosedPull> = {}): AzClosedPull {
   return {
     pullRequestId: 42,
@@ -396,10 +367,6 @@ test('mapClosedPull (azure) blanks the signals only an active PR has', () => {
   assert.equal(mapped.merged, false);
 });
 
-// ---------------------------------------------------------------------------
-// Plan reconciliation reads the truth instead of guessing
-// ---------------------------------------------------------------------------
-
 test('observePartPr: a part whose PR was closed unmerged goes back to ready, not merged', () => {
   const inReview = part({ status: 'in_review', prNumber: 42 });
   const patch = observePartPr(inReview, 'issue/12/api', [], [pr(42, { state: 'closed', merged: false })]);
@@ -413,17 +380,11 @@ test('observePartPr: a merged PR in the closed window completes the part', () =>
 });
 
 test('observePartPr: absence still means merged — a PR that closed outside the window must not reopen the part', () => {
-  // The property that keeps this fix from being worse than the bug: the observed
-  // signal *replaces* the inference only inside the retention window.
   const inReview = part({ status: 'in_review', prNumber: 42 });
   assert.deepEqual(observePartPr(inReview, 'issue/12/api', [], []), { status: 'merged' });
 });
 
 test('observePartPr: an abandoned PR does not yank the part back on every later pulse', () => {
-  // A dead PR sits in the window for hours. Matching it by *branch* would re-ready
-  // the part every cycle — including after it was re-dispatched — so the closed
-  // reading is keyed on the number the part was actually tracking, and clearing
-  // that number is what makes the transition fire once.
   const abandoned = pr(42, { state: 'closed', merged: false, branch: 'issue/12/api' });
 
   const readied = part({ status: 'ready', prNumber: null });
@@ -432,7 +393,6 @@ test('observePartPr: an abandoned PR does not yank the part back on every later 
   const redispatched = part({ status: 'dispatched', prNumber: null });
   assert.equal(observePartPr(redispatched, 'issue/12/api', [], [abandoned]), null, 'the retry is left alone');
 
-  // ...and the retry's own PR is picked up normally.
   const retryPr = pr(51, { branch: 'issue/12/api' });
   assert.deepEqual(observePartPr(redispatched, 'issue/12/api', [retryPr], [abandoned]), {
     status: 'in_review',
@@ -465,10 +425,6 @@ test('observePartPr: an open PR still wins over anything in the closed list', ()
   );
   assert.deepEqual(patch, { status: 'in_review', branch: 'issue/12/api', prNumber: 51 });
 });
-
-// ---------------------------------------------------------------------------
-// End to end through the fake world
-// ---------------------------------------------------------------------------
 
 test('the fake world models a PR leaving the open set, and the diff calls it', async () => {
   const store = new Store(':memory:');

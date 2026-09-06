@@ -22,26 +22,6 @@ import type {
   ValidationCheckState,
 } from '../src/types.js';
 
-/**
- * What happens when a validation check comes back **failed**.
- *
- * Before this rule, nothing did: the one verdict in the harness that says the
- * delivered thing does not work wrote a note and waited for a person. The
- * properties asserted here are the ones a later edit would break silently:
- *
- * 1. **A failed check is looked at; every other state is not.** A `passed`,
- *    `waived` or `deferred` check has an answer, and an `unrun` one is rule
- *    `validate-check`'s.
- * 2. **The delivery survives it.** The tempting wiring — record the failure as a
- *    shortfall and reuse the three arms that exist — clears the goal's delivery
- *    row, which un-parks the goal and settles the obligation the reading was
- *    taken for.
- * 3. **The agent cannot record a reading.** Its origin is not one
- *    `validation_report` parses, so the refusal is structural.
- * 4. **Each reading gets its own budget.** A check that failed, was fixed and
- *    failed again is looked at again rather than meeting a spent attempt cap.
- */
-
 const NOW = '2025-01-01T12:00:00.000Z';
 const ORIGIN = 'issue:12:validate-failure:csv-opens';
 const READING = '2025-01-01T11:00:00.000Z';
@@ -172,7 +152,6 @@ function runner(): RuleDispatcher {
   return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, '/srv/validation');
 }
 
-/** The origins this rule dispatched on, in order. */
 function diagnoses(actions: { type: string }[]): string[] {
   return actions
     .filter((a) => a.type.startsWith('dispatch_'))
@@ -180,7 +159,6 @@ function diagnoses(actions: { type: string }[]): string[] {
     .filter((o) => o.includes(':validate-failure:'));
 }
 
-/** One executed dispatch on an origin, as the audit log records it. */
 function attempt(origin: string, at: string): Decision {
   return {
     id: `d-${at}`,
@@ -206,15 +184,11 @@ test('a failed check gets an agent; every other state does not', async () => {
   const failed = await runner().decide(ctx({ validationChecks: [check()] }));
   assert.deepEqual(diagnoses(failed.actions), ['issue:12:validate-failure:csv-opens']);
 
-  // `unrun` is rule `validate-check`'s, and the other three carry an answer
-  // somebody settled on. Only `failed` says the delivered thing does not work.
   for (const state of ['unrun', 'passed', 'waived', 'deferred'] as ValidationCheckState[]) {
     const other = await runner().decide(ctx({ validationChecks: [check({ state, resultBy: null })] }));
     assert.deepEqual(diagnoses(other.actions), [], `a ${state} check is not a finding about the goal`);
   }
 
-  // Its own plan stopped asking for it, so the reading it withdrew is not worth
-  // an agent either.
   const withdrawn = await runner().decide(ctx({ validationChecks: [check({ supersededReason: 'the screen went' })] }));
   assert.deepEqual(diagnoses(withdrawn.actions), []);
 });
@@ -224,30 +198,18 @@ test('it is a read-only code agent on the default branch, in its own namespace',
   const action = decided.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-failure:csv-opens');
   assert.equal(action?.type, 'dispatch_code_agent');
   const dispatch = action as unknown as { branch: string; base: string; readOnly?: boolean; prompt: string };
-  // The delivered work is *on* the default branch, which is the only checkout the
-  // failure can be reproduced in.
   assert.equal(dispatch.base, 'main');
-  // Its own namespace: git cannot put a ref beneath another ref, and `validate/`
-  // is the run's.
   assert.equal(dispatch.branch, 'validate-failure/issue/12/csv-opens');
-  // It diagnoses; it does not fix. A branch nothing opens a pull request from is
-  // a ref nothing would ever reap.
   assert.equal(dispatch.readOnly, true);
-  // The two halves it cannot start without, appended rather than interpolated.
   assert.match(dispatch.prompt, /Export a report and open it\./);
   assert.match(dispatch.prompt, /columns are shifted one to the right/);
-  // Who took the reading, because "an agent says this failed" and "I ran it and
-  // it failed" are different facts.
   assert.match(dispatch.prompt, /A person ran it/);
 });
 
 test('a goal that is not delivered, and a check somebody is re-running, are left alone', async () => {
-  // A reading taken against half-built work is a finding about the calendar.
   const inFlight = await runner().decide(ctx({ deliveries: [], validationChecks: [check()] }));
   assert.deepEqual(diagnoses(inFlight.actions), []);
 
-  // A desktop session has the check back: its reading is about to replace the one
-  // this dispatch would have been sent to explain.
   const claimed = await runner().decide(ctx({ validationChecks: [check({ claimedBy: 'laptop', claimedAt: NOW })] }));
   assert.deepEqual(diagnoses(claimed.actions), []);
 });
@@ -258,14 +220,9 @@ test('each reading gets its own attempt budget', async () => {
     attempt(ORIGIN, '2025-01-01T09:30:00.000Z'),
     attempt(ORIGIN, '2025-01-01T10:00:00.000Z'),
   ];
-  // Three attempts against the *previous* reading. Counted, they would leave a
-  // check that failed again after a fix with a spent cap and no second look —
-  // exactly where a repeat failure is worth most.
   const again = await runner().decide(ctx({ recentDecisions: spent, validationChecks: [check()] }));
   assert.deepEqual(diagnoses(again.actions), ['issue:12:validate-failure:csv-opens']);
 
-  // Attempts against *this* reading do count: three of them and the rule stops,
-  // silently, because the flag and the note are already in front of the operator.
   const thisReading = spent.map((_, i) => attempt(ORIGIN, `2025-01-01T11:${10 + i}:00.000Z`));
   const capped = await runner().decide(ctx({ recentDecisions: thisReading, validationChecks: [check()] }));
   assert.deepEqual(diagnoses(capped.actions), []);
@@ -278,10 +235,6 @@ test('each reading gets its own attempt budget', async () => {
 
 test('the diagnosis dispatch clears no verdict: the goal stays delivered and parked', async () => {
   const decided = await runner().decide(ctx({ validationChecks: [check()] }));
-  // The whole reason this is not wired through a shortfall. A shortfall clears the
-  // delivery, which un-parks the goal, settles its close-out obligation and
-  // declines the validation bench row — the failed check would delete the rows it
-  // was reported into.
   for (const action of decided.actions) {
     assert.notEqual(action.type, 'record_issue_shortfall' as string);
     assert.notEqual(action.type, 'clear_issue_delivery' as string);
@@ -317,9 +270,6 @@ test('the agent it sends may not record a reading on the check', async () => {
     note: 'I could not reproduce it, so it must be fine',
   })) as ToolResultText;
 
-  // Structural, not a sentence in a prompt: the tool resolves its check from the
-  // dispatch origin, and a diagnosis origin is not one it parses. The reading
-  // belongs to whoever took it.
   assert.equal(result.isError, true);
   assert.match(result.content[0]?.text ?? '', /validation_amend/);
   const after = system.store.listValidationChecks('issue:12').find((c) => c.id === 'csv-opens');

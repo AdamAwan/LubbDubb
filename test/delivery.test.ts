@@ -7,11 +7,6 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// The pure hold predicate: what a `delivered` verdict holds, and what ends it.
-// No store, no world snapshot — the two arms are decidable from a row, an issue
-// and a list of transitions, which is what lets the rule and the cockpit chip
-// ask the same question and get the same answer.
-
 function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
   const decidedAt = over.decidedAt ?? '2026-07-28T10:00:00.000Z';
   return {
@@ -22,10 +17,6 @@ function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
     agentId: 'a1',
     taskId: 't1',
     decidedAt,
-    // A verdict nothing has re-cast, where the two instants coincide. `updatedAt`
-    // is what the hold measures against — a case about a *re-cast* verdict has to
-    // set it apart from `decidedAt` deliberately, which is what makes the
-    // distinction visible in a fixture rather than invisible in all of them.
     updatedAt: decidedAt,
     ...over,
   };
@@ -69,8 +60,6 @@ test('a standing verdict holds, and names who cast it', () => {
   assert.match(byOperator ?? '', /^you marked it delivered/);
 });
 
-// -- arm 1: the tracker move -------------------------------------------------
-
 test('the operator moving the ticket back to a pickup state clears it', () => {
   const held = deliveryHold(delivery(), issue({ workItemState: 'Ready' }), { pickupStates: ['Ready', 'Doing'] });
   assert.equal(held, null, 'moving the ticket in the tracker is the override');
@@ -82,12 +71,9 @@ test('the review state is not a pickup state, so the verdict still stands there'
 });
 
 test('a provider with no work-item states leaves arm 1 unable to fire', () => {
-  // GitHub: `workItemState` is undefined, so only the signal arm can clear it.
   assert.ok(deliveryHold(delivery(), issue(), { pickupStates: ['Ready'] }));
   assert.ok(deliveryHold(delivery(), issue({ workItemState: 'Ready' })), 'no configured pickup states, no arm 1');
 });
-
-// -- arm 2: world signal -----------------------------------------------------
 
 test('any transition on the issue after the verdict clears it', () => {
   assert.equal(deliveryHold(delivery(), issue(), { signals: [event()] }), null);
@@ -110,14 +96,9 @@ test('a transition on a different issue does not clear it', () => {
 });
 
 test('there is no timer arm — an untouched issue is held indefinitely', () => {
-  // The asymmetry with `proposalHold`'s settle window is deliberate: an accepted
-  // act waits on the world to reflect something done (a duration), a delivered
-  // issue waits on it to become something else (an event).
   const ancient = delivery({ decidedAt: '2020-01-01T00:00:00.000Z' });
   assert.ok(deliveryHold(ancient, issue(), { signals: [] }));
 });
-
-// -- the query ---------------------------------------------------------------
 
 test('the signal query is null when nothing stands, so no read happens at all', () => {
   assert.equal(deliverySignalQuery([]), null);
@@ -141,8 +122,6 @@ test('an off-vocabulary origin is never expired by a signal it cannot be matched
   );
 });
 
-// -- the gate, asked in both places off the one predicate ---------------------
-
 test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup through', async () => {
   const world = {
     takenAt: '2026-07-28T12:00:00.000Z',
@@ -150,10 +129,6 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     issues: [issue()],
   };
   const d = new RuleDispatcher();
-  // A delivered goal also gets a retrospective — unconditionally, and rightly (it
-  // is `test/retrospective.test.ts`'s subject). So the assertion below is about
-  // the *code* agent pickup would have sent, not about the cycle being empty:
-  // there is no longer a switch that would let this file assert one rule alone.
   const codeDispatches = (actions: { type: string }[]) =>
     actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => a.type);
 
@@ -163,8 +138,6 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    // The funnel has failed open: this is about the park standing pickup down,
-    // and an issue the planner still owns would never reach pickup at all.
     recentDecisions: pastTheFunnel(12),
     agentHeadroom: 3,
     plans: [],
@@ -172,7 +145,6 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
   });
   assert.deepEqual(codeDispatches(parked.actions), [], 'the issue is parked, so no pickup agent');
 
-  // The same world with a transition after the verdict: the park is over.
   const released = await d.decide({
     world,
     tasks: [],
@@ -224,8 +196,6 @@ test('an open PR or a live agent outranks the park — the honest reason wins', 
     deliveries: [delivery()],
   };
 
-  // A delivered issue that somehow has an open PR belongs to the PR rules, and
-  // saying "delivered" would send the operator looking in the wrong place.
   const withPr = issuePickupStatus(issue(), {
     ...base,
     openPrs: [{ id: 'p', number: 40, title: 'X', branch: 'issue/12', ciStatus: 'passing', unresolvedComments: [] }],

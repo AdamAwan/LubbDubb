@@ -23,7 +23,6 @@ function initRepo(): string {
   return dir;
 }
 
-/** Commit a file on `branch`, creating it from wherever HEAD is. */
 function commitOn(dir: string, branch: string, file: string): void {
   git(dir, ['checkout', '-q', '-B', branch]);
   writeFileSync(join(dir, file), file);
@@ -65,8 +64,6 @@ test('divergence is null when either side names nothing', async () => {
 
 test('a branch has commits beyond its base only once it carries work', async () => {
   const repo = initRepo();
-  // A branch cut from the base but not committed on is exactly what a dispatched
-  // part looks like before it pushes — existing, but nothing to stack on.
   git(repo, ['branch', 'empty', 'trunk']);
   commitOn(repo, 'pushed', 'work.txt');
   const observer = new GitCliObserver(repo);
@@ -82,7 +79,6 @@ test('a branch name resolves through origin/<name> ahead of the local ref', asyn
   const staleLocal = git(repo, ['rev-parse', 'part']);
   commitOn(repo, 'part', 'two.txt');
   git(repo, ['update-ref', 'refs/remotes/origin/part', git(repo, ['rev-parse', 'part'])]);
-  // Roll the local ref back so the two disagree, then check which one is counted.
   git(repo, ['checkout', '-q', 'trunk']);
   git(repo, ['update-ref', 'refs/heads/part', staleLocal]);
   const observer = new GitCliObserver(repo);
@@ -99,7 +95,6 @@ test('the fake answers what it was scripted with, and records the questions', as
   assert.deepEqual(await observer.divergence('issue/12/schema', 'main'), { ahead: 3, behind: 1 });
   assert.equal(await observer.hasCommitsBeyond('issue/12/schema', 'main'), true);
 
-  // Undeclared branches read as "nowhere", so a test states only what it cares about.
   assert.deepEqual(await observer.presence('issue/12/dispatcher'), { local: false, remote: false });
   assert.equal(await observer.divergence('issue/12/dispatcher', 'main'), null);
   assert.equal(await observer.hasCommitsBeyond('issue/12/dispatcher', 'main'), false);

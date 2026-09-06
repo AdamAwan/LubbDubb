@@ -1,9 +1,3 @@
-/**
- * The check lock, exercised the way it fails: several real processes racing for one
- * lockfile. Every test here spawns `test/support/checkLockChild.ts`, because the bug
- * this guards against — two `npm run check` runs budgeting the same cores — is
- * cross-process by construction and invisible to a single-process test.
- */
 import assert from 'node:assert/strict';
 import { type ChildProcess, spawn } from 'node:child_process';
 import {
@@ -35,7 +29,6 @@ after(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** A fresh lock/log pair per test, so a leaked lockfile cannot leak between them. */
 const paths = (): { lock: string; log: string } => {
   seq += 1;
   return { lock: join(dir, `${seq}.lock`), log: join(dir, `${seq}.log`) };
@@ -46,7 +39,6 @@ const spawnChild = (lock: string, log: string, holdMs: number): ChildProcess =>
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-/** Resolves when the child reports the lock is in hand, rejects if it exits first. */
 const acquired = (child: ChildProcess): Promise<void> =>
   new Promise((resolve, reject) => {
     let seen = '';
@@ -63,21 +55,18 @@ const stderrOf = (child: ChildProcess): { text: () => string } => {
   return { text: () => text };
 };
 
-/** The non-throwing view of `acquired`: what the child has said so far, if anything. */
 const stdoutOf = (child: ChildProcess): { text: () => string } => {
   let text = '';
   child.stdout?.on('data', (c: Buffer) => (text += c.toString()));
   return { text: () => text };
 };
 
-/** Puts a record under the lock's name the way the lock does: complete, in one step. */
 const publishRecord = (lock: string, pid: number): void => {
   const staging = `${lock}.seed`;
   writeFileSync(staging, JSON.stringify({ pid, startedAt: Date.now() }));
   renameSync(staging, lock);
 };
 
-/** A reading of the lockfile, or undefined if those bytes are not a whole record. */
 const recordIn = (raw: string): { pid: number } | undefined => {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -89,12 +78,10 @@ const recordIn = (raw: string): { pid: number } | undefined => {
   }
 };
 
-/** So a failed assertion cannot leave a child holding the lock and the suite open. */
 const reap = (child: ChildProcess): void => {
   if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
 };
 
-/** Whatever a take staged beside the lock and did not clean up. */
 const litter = (): string[] => readdirSync(dir).filter((name) => name.endsWith('.staged'));
 
 const exited = (child: ChildProcess): Promise<number | null> =>
@@ -118,7 +105,6 @@ describe('check lock', () => {
     assert.deepEqual(codes, [0, 0, 0, 0]);
     const lines = readFileSync(log, 'utf8').trim().split('\n');
     assert.equal(lines.length, 8, 'every child both entered and exited');
-    // An overlap shows up as two `enter`s in a row — the only shape a lock forbids.
     for (const [i, line] of lines.entries()) {
       assert.match(line, i % 2 === 0 ? /^enter / : /^exit /);
     }
@@ -130,10 +116,6 @@ describe('check lock', () => {
 
   it('never shows a lockfile that names nobody', async () => {
     const { lock, log } = paths();
-    // A take is one `link` of an already-written file, so every reading of the
-    // lockfile — the first one included — is a whole record. The two-step take this
-    // replaces created the name empty and filled it in afterwards, and a waiter that
-    // read it in between cleared a live holder's lock.
     const readings: string[] = [];
     const watcher = { stop: false };
     const watching = (async () => {
@@ -152,8 +134,6 @@ describe('check lock', () => {
       await acquired(holder);
       watcher.stop = true;
       await watching;
-      // The holder is still in, so this last one is not a race with anything: how
-      // many of the arrival the loop caught is up to the machine, but not this.
       readings.push(readFileSync(lock, 'utf8'));
 
       for (const raw of readings) {
@@ -169,9 +149,6 @@ describe('check lock', () => {
 
   it('leaves a lockfile that names nobody alone while it could still be arriving', async () => {
     const { lock, log } = paths();
-    // The window itself, held open: the name is taken and the record is not there
-    // yet. Nothing in the file says who holds it, and that is not grounds to clear
-    // it — the age of the bytes is what separates litter from an arrival.
     writeFileSync(lock, '');
 
     const waiter = spawnChild(lock, log, 0);
@@ -182,7 +159,6 @@ describe('check lock', () => {
       assert.equal(out.text().includes('acquired'), false, 'a lockfile that named nobody was taken as free');
       assert.equal(readFileSync(lock, 'utf8'), '', 'and it was left exactly as it was found');
 
-      // Now it names its holder, the way it does a moment after the name is claimed.
       publishRecord(lock, process.pid);
       await waitFor(() => err.text().includes(`waiting ${process.pid}`));
     } catch (failure) {
@@ -211,7 +187,6 @@ describe('check lock', () => {
     const { lock, log } = paths();
     const holder = spawnChild(lock, log, -1);
     await acquired(holder);
-    // SIGKILL is the case no handler can cover: the lockfile outlives the process.
     holder.kill('SIGKILL');
     await exited(holder);
     assert.equal(existsSync(lock), true, 'the stale lockfile is still there');
@@ -244,8 +219,6 @@ describe('check lock', () => {
 
   it('breaks a lock held by a live but unrelated pid', async () => {
     const { lock, log } = paths();
-    // Our own pid is alive, so liveness alone would wait forever: pids get reused,
-    // and the age ceiling is the only thing that tells the two cases apart.
     writeFileSync(lock, JSON.stringify({ pid: process.pid, startedAt: Date.now() - 7_200_000 }));
 
     const child = spawnChild(lock, log, 0);
@@ -256,8 +229,6 @@ describe('check lock', () => {
   it('discards a lockfile it cannot read once it has stopped changing', async () => {
     const { lock, log } = paths();
     writeFileSync(lock, 'not json');
-    // Backdated past the grace an arriving lock gets: these bytes name nobody, and
-    // nothing is going to fill them in.
     const settled = new Date(Date.now() - 60_000);
     utimesSync(lock, settled, settled);
 

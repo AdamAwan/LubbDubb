@@ -5,21 +5,10 @@ import { inkFor, paletteFor } from '../web/src/pets/palette.js';
 import { SPECIES } from '../src/pets/catalogue.js';
 import type { PetRarity, PetSpecies, PetStage } from '../src/wire.js';
 
-/**
- * The rarity ladder, and the passes under it.
- *
- * These are properties of the *dressing*, not of the drawings: what a creature
- * looks like is a judgement, but that every character it emits has a colour, that
- * the ladder never runs downhill, and that a sparkle drawn twice at one phase is
- * the same sparkle are all things a change can quietly break with nothing red.
- * → `docs/spec/22-pets.md#the-rarity-ladder`
- */
-
 const STAGES: readonly (PetStage | 'egg')[] = ['egg', 'hatchling', 'juvenile', 'adult'];
 const EVERY_SPECIES = Object.keys(SPECIES) as PetSpecies[];
 const rarityOf = (species: PetSpecies): PetRarity => SPECIES[species].rarity;
 
-/** Every form the cockpit can draw, dressed as it would be drawn. */
 function everyForm(phase = 0): { species: PetSpecies; stage: PetStage | 'egg'; grid: readonly string[] }[] {
   return EVERY_SPECIES.flatMap((species) =>
     STAGES.map((stage) => ({
@@ -99,7 +88,6 @@ test('the sparkle is a function of its phase, not of when it was drawn', () => {
     dressSprite(spriteFor('ouroboros', 'mythic', 'adult'), 'mythic', 'upgrade:up_318', phase).join('\n');
   assert.equal(draw(3), draw(3), 'the same phase drew two different sprites');
   assert.notEqual(draw(3), draw(5), 'two phases drew the same sprite');
-  // The cycle is what a caller's modulo relies on: phase 8 is phase 0 again.
   assert.equal(draw(0), draw(8));
 });
 

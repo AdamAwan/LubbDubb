@@ -3,18 +3,6 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { StreamJsonSession, type StreamChild } from '../src/agents/streamJsonSession.js';
 
-/**
- * `claude` is not the only writer on its stdout, and a line-per-event parser that
- * assumes it is loses whole events silently.
- *
- * Anything writing to that pipe **without a trailing newline** lands on the front of
- * the next one. A `Stop` hook returning a `terminalSequence` does exactly that: the
- * OSC title escape carries no newline, so the `result` closing the turn arrives with
- * it glued on. Dropped, that is a turn end that never happened — and done, waiting
- * and the unannounced stop are all decided there, so an agent that printed
- * `@@LUBBDUBB_DONE@@` and finished goes quiet with its session still live, still
- * holding its worktree lease, and still accepting messages. Nothing is red.
- */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
   writes: string[] = [];
@@ -28,7 +16,6 @@ class FakeChild extends EventEmitter implements StreamChild {
       this.stdinEnded = true;
     },
   } as unknown as NodeJS.WritableStream;
-  /** A write with no newline of its own — the shape that glues onto the next event. */
   raw(s: string): void {
     this.out.emit('data', s);
   }
@@ -54,7 +41,6 @@ function session(): { child: FakeChild; session: StreamJsonSession; events: stri
   return { child, session: s, events };
 }
 
-// The Stop hook's terminal-title write, verbatim in shape: OSC, no trailing newline.
 const OSC_TITLE = '\x1b]2;✅ a tab title\x07';
 
 test('a done survives a hook writing a terminal escape onto the front of the result', () => {
@@ -96,8 +82,6 @@ test('an unannounced stop is still reported through the noise, not swallowed', (
 });
 
 test('a whole JSON object glued to the front does not hide the event behind it', () => {
-  // A hook that prints its own JSON without a newline: the first `{` opens something
-  // that parses but is not the event, so the scan must not stop at it.
   const { child, session: s, events } = session();
   s.send('go');
   child.emitLine({

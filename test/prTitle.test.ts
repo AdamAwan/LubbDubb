@@ -54,10 +54,6 @@ test('an unknown placeholder is left standing rather than silently blanked', () 
   assert.equal(renderPrTitle('{nope} {summary}', fields), '{nope} cursor');
 });
 
-// ---------------------------------------------------------------------------
-// Rename, and the two arms of the prAuthor gate
-// ---------------------------------------------------------------------------
-
 function pr(over: Partial<PullRequest> & { number: number; branch: string }): PullRequest {
   return {
     id: `pr_${over.number}`,
@@ -111,8 +107,6 @@ test('with prAuthor unset, only PRs on branches the harness mints are renamable'
 });
 
 test('with prAuthor unset, a linked PR on a foreign branch is still left alone', () => {
-  // It resolves to an issue, so the *naming* half would happily rename it; the gate
-  // is what stops it, and this is the case that proves the gate is doing the work.
   const linked: Issue[] = [{ ...issues[1]!, linkedPrNumber: 77 }];
   const out = renamablePrs(
     [pr({ number: 77, title: 'theirs', branch: 'their/branch' })],

@@ -21,24 +21,15 @@ import { refusePlan, releasePlan } from '../src/plans/planApproval.js';
 import { liveParts } from '../src/plans/parts.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// -- the reserved filename ---------------------------------------------------
-
 test('isPlanFile matches only the reserved path, separator-agnostically', () => {
   assert.equal(isPlanFile(PLAN_FILE), true);
-  assert.equal(isPlanFile('.lubbdubb\\plan.json'), true); // Windows-reported write
+  assert.equal(isPlanFile('.lubbdubb\\plan.json'), true);
   assert.equal(isPlanFile('docs/plan.json'), false);
   assert.equal(isPlanFile('sub/.lubbdubb/plan.json'), false);
   assert.equal(isPlanFile('.lubbdubb/plan.jsonc'), false);
 });
 
-// -- document validation (the zod boundary) ----------------------------------
-
 test('a plan needs at least one part, and one part is an ordinary plan', () => {
-  // The refusal that replaces the `single` verdict. A document declaring no parts
-  // used to be the *commonest* plan there was — "one pull request" meant zero
-  // rows — and is now the one shape the schema will not take. Refused rather than
-  // defaulted, so an operator override written against the old shape is corrected
-  // on its first submission instead of quietly ingesting as something else.
   const none = parsePlanDocument('{"version":1,"verdict":"single","reason":"One small fix."}');
   assert.equal(none.ok, false);
   assert.match(none.ok ? '' : none.error, /at least one part/);
@@ -104,11 +95,8 @@ test('parsePlanDocument rejects malformed plans with a reason, never throwing', 
   const one = '[{"slug":"a","title":"A","scope":"s"}]';
   assert.match(bad(`{"version":2,"reason":"x","parts":${one}}`), /version/);
   assert.match(bad(`{"version":1,"parts":${one}}`), /reason/);
-  // Every plan must actually carry parts, and this is the one refusal an operator
-  // override written against the retired `verdict` field will meet.
   assert.match(bad('{"version":1,"reason":"x","parts":[]}'), /at least one part/);
   assert.match(bad('{"version":1,"verdict":"single","reason":"x"}'), /at least one part/);
-  // Structural integrity: unique slugs, resolvable and non-self dependencies.
   const part = (slug: string, dependsOn: string[]): Record<string, unknown> => ({
     slug,
     title: 't',
@@ -121,8 +109,6 @@ test('parsePlanDocument rejects malformed plans with a reason, never throwing', 
   assert.match(bad(doc([part('a', ['ghost'])])), /unknown part "ghost"/);
   assert.match(bad(doc([{ slug: 'Not Kebab', title: 't', scope: 's', dependsOn: [] }])), /kebab-case/);
 });
-
-// -- store round-trip --------------------------------------------------------
 
 test('a plan upserts by issue origin and its parts merge on slug', () => {
   const store = new Store(':memory:');
@@ -154,7 +140,6 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
     },
   ]);
 
-  // A part that has since gone into flight keeps its progress across a replan.
   const parts = store.listPlanParts(plan.id);
   assert.deepEqual(
     parts.map((p) => p.slug),
@@ -209,12 +194,6 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
 });
 
 test('a re-declared slug is un-retired, so Reject then Replan is not a goal-killer', () => {
-  // `refusePlan` retires every unstarted part, and a replan **must** reuse the
-  // slugs — the slug is the merge key and spec 08 says it has to survive one. With
-  // `retired` preserved as though it were progress, every re-declared part merged
-  // onto a retired row and the plan was released with nothing live in it: rule
-  // `plan-part` scheduled nothing, `rollUpPlanStatus` returned early, nothing was
-  // wedged, and the goal sat `active` and idle for good.
   const store = new Store(':memory:');
   const plan = store.upsertPlan({
     originRef: 'issue:12',
@@ -231,7 +210,6 @@ test('a re-declared slug is un-retired, so Reject then Replan is not a goal-kill
     ['retired', 'retired'],
   );
 
-  // The replan, with the same slugs and revised titles — what a planner produces.
   store.upsertPlanParts(plan.id, [part('schema', 1, 'Schema, revised'), part('reader', 2, 'Reader, revised')]);
   const back = store.listPlanParts(plan.id);
   assert.deepEqual(
@@ -246,17 +224,9 @@ test('a re-declared slug is un-retired, so Reject then Replan is not a goal-kill
 });
 
 test('a dropped part re-declared by a later amendment comes back, reason and all', () => {
-  // The same row reached without any rejection: drop `b`, then bring it back. The
-  // tracker comment used to contradict itself — the part carried the amendment's
-  // new title *and* the retired mark, so an operator who approved two parts got
-  // one delivered and the other announced as dropped under a title only the new
-  // declaration ever used.
   const store = new Store(':memory:');
   const plan = store.upsertPlan({ originRef: 'issue:13', title: 'Thing', status: 'active', reason: null });
   store.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B')]);
-  // The drop, as ingestion performs it: `partsToRetire` picks the slugs the new
-  // document no longer declares and the retirement is a status write, with
-  // whatever reason the part was carrying left on the row.
   store.updatePlanPart(`${plan.id}:b`, { status: 'blocked', blockedReason: 'a branch is in the way' });
   store.updatePlanPart(`${plan.id}:b`, { status: 'retired' });
   store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
@@ -266,16 +236,11 @@ test('a dropped part re-declared by a later amendment comes back, reason and all
   const b = store.listPlanParts(plan.id).find((p) => p.slug === 'b');
   assert.equal(b?.status, 'pending');
   assert.equal(b?.title, 'B, back again');
-  // The reason explained a status that is gone. Left standing it would be drawn on
-  // the Held plate beside a part nothing is holding.
   assert.equal(b?.blockedReason, null);
   store.close();
 });
 
 test("progress survives an amendment — only retirement is the declaration's to lift", () => {
-  // The un-retirement above must not have widened `upsertPlanParts` into something
-  // that writes progress: a part in flight keeps its status, its branch and its
-  // blocked reason across every re-declaration.
   const store = new Store(':memory:');
   const plan = store.upsertPlan({ originRef: 'issue:14', title: 'Thing', status: 'active', reason: null });
   store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
@@ -303,12 +268,10 @@ test('a plan with no live parts is refused rather than released into silence', (
   const released = releasePlan(store, plan.id, 'issue:15');
   assert.equal(released.ok, false);
   assert.match(released.detail, /no live parts/);
-  // And the plan is left where it was, so the approval card is still there to press.
   assert.equal(store.getPlan(plan.id)?.status, 'awaiting_approval');
   store.close();
 });
 
-/** One declared part — the fields a planner document carries, and nothing else. */
 function part(slug: string, seq: number, title: string): PlanPartInput {
   return {
     slug,
@@ -324,8 +287,6 @@ function part(slug: string, seq: number, title: string): PlanPartInput {
   };
 }
 
-// -- end-to-end through the file-events drain --------------------------------
-
 function planningConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-plan-'));
   return loadConfig({
@@ -339,10 +300,6 @@ function planningConfig() {
   });
 }
 
-/**
- * Stand up an agent whose task looks like a planning dispatch, without needing a
- * real git worktree: the drain reads `agent.cwd`, so a temp dir is enough.
- */
 function plannerAgent(system: System, originRef: string): Agent {
   const cwd = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   const task = system.store.createTask({
@@ -356,7 +313,6 @@ function plannerAgent(system: System, originRef: string): Agent {
   return system.agents.spawn(task, cwd);
 }
 
-/** Queue a captured write of `relPath` (with `body`) into the agent's spool. */
 function writeThroughHook(system: System, agent: Agent, relPath: string, body: string): void {
   const target = join(agent.cwd, relPath);
   mkdirSync(dirname(target), { recursive: true });
@@ -374,8 +330,6 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
     errorMirror: () => {},
   });
 
-  // A `parts` verdict: the plan row *and* its parts land, even though nothing
-  // reads the parts yet — the data only ever arrives here.
   const a = plannerAgent(system, 'issue:12:plan');
   writeThroughHook(
     system,
@@ -392,10 +346,6 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
   );
   const plan = system.store.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan was ingested from the worktree');
-  // `awaiting_approval`, because every plan lands as a proposal — the file
-  // transport persists a verdict on exactly the terms `plan_submit` does, which is
-  // the property one shared ingestion exists to keep. The gate itself is
-  // `planApproval.test.ts`'s subject.
   assert.equal(plan!.status, 'awaiting_approval');
   assert.equal(plan!.reason, 'Schema first.');
   assert.equal(plan!.title, 'Big thing', 'the issue title, not the task title');
@@ -404,10 +354,6 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
     ['schema', 'reader'],
   );
 
-  // A one-part plan is a first-class row on exactly the same terms — one part, one
-  // branch, one pull request, and no second write path to get there. A document
-  // carrying no parts at all is refused by the schema, so nothing reaches ingestion
-  // claiming to be a plan without saying what the work is.
   const b = plannerAgent(system, 'issue:13:plan');
   writeThroughHook(
     system,
@@ -438,15 +384,11 @@ test('an invalid or non-planner plan.json records no plan (and an invalid one is
   });
   system.errors.on('logged', (e) => errors.push(e.message));
 
-  // Malformed: no plan row, so the funnel keeps the issue and the attempt cap
-  // eventually fails it open rather than persisting nonsense.
   const bad = plannerAgent(system, 'issue:12:plan');
   writeThroughHook(system, bad, PLAN_FILE, '{"version":1,"verdict":"parts","reason":"x","parts":[]}');
   assert.equal(system.store.getPlanByOrigin('issue:12'), null);
   assert.equal(errors.filter((m) => m.includes('invalid')).length, 1);
 
-  // A pickup agent is not a planner: its plan.json is ignored, so it can't flip
-  // its own issue to `parts` and strand it while nothing schedules parts.
   const pickup = plannerAgent(system, 'issue:14');
   writeThroughHook(
     system,
@@ -486,37 +428,23 @@ test('a part may declare several dependencies, and the graph must still be acycl
   const part = (slug: string, deps: string[]): string =>
     `{"slug":"${slug}","title":"T","scope":"s","dependsOn":[${deps.map((d) => `"${d}"`).join(',')}]}`;
 
-  // Several dependencies is a *rejoin*, and accepted since #170. The arity cap here
-  // was the static form of "at most one *open* dependency", which is a rule about
-  // the world rather than the document — a part naming two starts only once both
-  // have settled, at which point neither is open. It now lives in
-  // `PlanReconciler.readiness`, which can see what is in flight; see planReconcile.
   const rejoin = parsePlanDocument(doc([part('a', []), part('b', []), part('c', ['a', 'b'])].join(',')));
   assert.equal(rejoin.ok, true);
   assert.deepEqual(rejoin.ok ? rejoin.document.parts[2]?.dependsOn : null, ['a', 'b']);
 
-  // A cycle deadlocks every part in it — none is ever ready, and the issue silently
-  // stops progressing. Reject the document so the planner is retried instead.
   const cycle = parsePlanDocument(doc([part('a', ['b']), part('b', ['a'])].join(',')));
   assert.equal(cycle.ok, false);
   assert.match(cycle.ok === false ? cycle.error : '', /dependency cycle/);
 
-  // And a cycle reachable only through a *second* dependency, which is the case the
-  // walk had to be widened for: while arity was capped at one, following
-  // `dependsOn[0]` was the whole graph, and `a -> [x, b]`, `b -> [a]` slips straight
-  // through it. A multi-entry array makes that a real, silently deadlocking plan.
   const deep = parsePlanDocument(doc([part('x', []), part('a', ['x', 'b']), part('b', ['a'])].join(',')));
   assert.equal(deep.ok, false);
   assert.match(deep.ok === false ? deep.error : '', /dependency cycle/);
 
-  // Self-dependency and unknown slugs are refused whatever the arity.
   const bad = parsePlanDocument(doc([part('a', []), part('b', ['a', 'nope'])].join(',')));
   assert.equal(bad.ok, false);
   assert.match(bad.ok === false ? bad.error : '', /unknown part "nope"/);
 
-  // A chain is fine — that is exactly what a stack is, and unchanged.
   assert.equal(parsePlanDocument(doc([part('a', []), part('b', ['a']), part('c', ['b'])].join(','))).ok, true);
-  // A diamond: two independent lanes off one root, rejoining. The shape #170 exists for.
   assert.equal(
     parsePlanDocument(
       doc([part('root', []), part('l', ['root']), part('r', ['root']), part('join', ['l', 'r'])].join(',')),
@@ -524,8 +452,6 @@ test('a part may declare several dependencies, and the graph must still be acycl
     true,
   );
 });
-
-// -- the widened document (risks/outOfScope/document, per-part rationale/acceptance) --
 
 test('the widened plan document round-trips through ingestion', () => {
   const store = new Store(':memory:');
@@ -558,8 +484,6 @@ test('the widened plan document round-trips through ingestion', () => {
     title: 'Serve artifacts outside /api',
   });
 
-  // The two the plan modal leads with, and the reason they are not folded into
-  // `reason`: all three are present here and each says a different thing.
   assert.equal(plan.diagnosis, 'the route sits inside the prefix guard, and a navigation cannot carry the header');
   assert.equal(plan.approach, 'move it out and gate it on a signed capability minted into the snapshot');
   assert.equal(plan.reason, 'the signer must exist before the route verifies one');
@@ -573,10 +497,6 @@ test('the widened plan document round-trips through ingestion', () => {
 });
 
 test('a document from an older planner still validates, and reads as absent', () => {
-  // Every field added after v1 is optional precisely so a planner that has never
-  // heard of them — or an operator-overridden prompt that does not mention them —
-  // keeps working. Absent must read as null, never as an empty string, or the
-  // cockpit cannot tell "wrote nothing" from "wrote ''".
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
@@ -596,9 +516,6 @@ test('a document from an older planner still validates, and reads as absent', ()
 });
 
 test('an over-long write-up is trimmed and stored, never refused', () => {
-  // The opposite of `report_finding`, and deliberately: a finding is testimony an
-  // operator acts on, so it is refused when it cannot be trusted; a write-up is
-  // prose, and refusing it would reject the whole plan submission over its length.
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
@@ -620,7 +537,6 @@ test('a part may declare an expected outcome kind, and a bad one is refused at t
   assert.equal(ok.ok, true);
   assert.equal(ok.ok && planPartInputs(ok.document)[0]?.expectedKind, 'report');
 
-  // Synchronously, through plan_submit, rather than a pulse later.
   const bad = validatePlanDocument({
     version: 1,
     reason: 'x',
@@ -628,8 +544,6 @@ test('a part may declare an expected outcome kind, and a bad one is refused at t
   });
   assert.equal(bad.ok, false);
 
-  // Optional, so a plan written before the field existed still validates and reads
-  // as unstated — which everything downstream treats as `code`.
   const older = validatePlanDocument({
     version: 1,
     reason: 'x',
@@ -639,8 +553,6 @@ test('a part may declare an expected outcome kind, and a bad one is refused at t
 });
 
 test('a parts verdict may be entirely non-code', () => {
-  // The case the feature exists for: "investigate why deploys are slow" decomposes
-  // honestly instead of the planner inventing pull requests it can never merge.
   const result = validatePlanDocument({
     version: 1,
     reason: 'this is an investigation, not a build',

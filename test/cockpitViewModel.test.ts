@@ -3,12 +3,6 @@ import assert from 'node:assert/strict';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { AppState, Agent } from '../web/src/types.js';
 
-/**
- * These derivations lived inside `App`'s render body until the view model split the
- * cockpit into layers, which is why none of them had a test: a pure function
- * trapped in a component is only reachable through a browser.
- */
-
 const AGENT = (over: Partial<Agent>): Agent =>
   ({ id: 'a1', status: 'running', taskId: 't1', startedAt: '2026-01-01T00:00:00.000Z', ...over }) as Agent;
 
@@ -27,10 +21,6 @@ function stateWith(over: Partial<AppState>): AppState {
     dispatchRules: [],
     jobs: [],
     world: { pullRequests: [], issues: [] },
-    // A build with nothing waiting. Every snapshot carries one — `AppState.build`
-    // is not optional — and a current one is the neutral answer: the two update
-    // asks are derived from this reading, so a fixture that left it out would put
-    // two rows nobody asked about into every assertion in this file.
     build: {
       state: 'current',
       label: 'current',
@@ -104,8 +94,6 @@ test('live and past split on the agent statuses that mean a process exists', () 
   );
 });
 
-// A `crashed` row is neither live nor terminal, and the cockpit's whole top-line
-// story ("the pulse is held") hangs off its presence rather than off a flag.
 test('outstanding recovery decisions hold the pulse', () => {
   assert.equal(build(stateWith({})).pulseHeld, false);
   const held = build(stateWith({ recovery: [{ agentId: 'a1' }] as never }));
@@ -122,15 +110,10 @@ test('the heartbeat counts down within the interval and wraps', () => {
   assert.equal(halfway.nextPulseIn, 30);
   assert.equal(halfway.pulseProgress, 50);
 
-  // A pulse that never lands must not produce a negative countdown — it wraps,
-  // so the bar keeps sweeping and the reading stays honest rather than absurd.
   const overdue = build(state, { now: 1_150_000, lastPulseAt: 1_000_000 });
   assert.ok(overdue.nextPulseIn > 0 && overdue.nextPulseIn <= 60);
 });
 
-// Files are no longer folded here at all: they are `GET /api/agents/:id/files`,
-// fetched by the drawer that draws them. Flags still ride the snapshot — they are
-// a chip per agent, not a list per agent.
 test('flags group by agent, and an agent with none is absent', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1' }), AGENT({ id: 'a2' })],
@@ -144,8 +127,6 @@ test('flags group by agent, and an agent with none is absent', () => {
   assert.equal(view.flagsByAgent.get('a2'), undefined);
 });
 
-// The proposal is keyed by the escalation it hangs off, which is what lets a
-// decision-bearing inbox item offer accept/reject instead of a text box.
 test('proposals are keyed by their escalation', () => {
   const view = build(
     stateWith({
@@ -170,13 +151,6 @@ test('only open escalations and live overlaps count toward the nudges', () => {
   assert.equal(view.liveOverlapCount, 1);
 });
 
-/**
- * The join behind #245: a bot on the floor draws its own question, and it must be
- * the *same* reading the alerts desk lists — both off `status === 'open'`, so an
- * answer settles one row and clears both surfaces on the next snapshot. Keyed off
- * `agentId` rather than off the agent's status, because parking is only a request:
- * an agent that carried on working still owes the answer.
- */
 test('an open question joins to the agent that asked it', () => {
   const view = build(
     stateWith({
@@ -191,7 +165,6 @@ test('an open question joins to the agent that asked it', () => {
   assert.equal(view.escalationByAgent.get('a1')?.id, 'e1', 'a resumed agent still owes its answer');
   assert.equal(view.escalationByAgent.get('a2'), undefined, 'an answered question clears the bot too');
   assert.equal(view.escalationByAgent.size, 1, 'an escalation nobody raised belongs to no bot');
-  // The desk lists both open ones; only the join drops the agent-less row.
   assert.deepEqual(
     view.openEscalations.map((e) => e.id),
     ['e1', 'e3'],
@@ -209,8 +182,6 @@ test('streamed output is exposed only for the open drawer', () => {
   assert.equal(build(state, { selected: 'a1', liveOutput: output }).selectedAgent?.id, 'a1');
 });
 
-// An agent row outlives its task in a few paths (a requeue rewrites it), so the
-// join has to tolerate a miss rather than assume one.
 test('taskFor tolerates an agent whose task is gone', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1', taskId: 't1' }), AGENT({ id: 'a2', taskId: 'gone' })],
@@ -221,14 +192,6 @@ test('taskFor tolerates an agent whose task is gone', () => {
   assert.equal(view.taskFor(view.state.agents[1]!), null);
 });
 
-/**
- * A desktop claim is in flight and is **not** an agent: it is synthesised from
- * the claim on the check, so nothing that counts a live agent can reach it.
- *
- * The cap is the assertion worth having. A claim that ever landed in `live` would
- * take a slot from work, which is the one thing validation promises never to do —
- * and it would do so through the fleet cap, which is read in three places.
- */
 test('a claimed check becomes a keyboard entry, and never a live agent', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1' })],
@@ -257,12 +220,6 @@ test('a claimed check becomes a keyboard entry, and never a live agent', () => {
   );
 });
 
-/**
- * The pulse that dispatches a candidate writes it into `upcoming` as `dispatching`
- * and creates the task that staffs it, in that order — so for one interval the
- * queue names work that is already out. Both bands of the Fleet card read the
- * joined list, so the same issue cannot be drawn as an agent and as up next.
- */
 test('up next drops the rows the fleet is already out on', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1', taskId: 't1' }), AGENT({ id: 'a2', taskId: 't2', status: 'done' })],
@@ -305,12 +262,6 @@ test('up next is the whole queue when nothing is staffed', () => {
   );
 });
 
-/**
- * A crash recovery's requeue is dispatched at `job:<id>` and carries the origin it
- * is redoing on the job row, so a cockpit that reads only the task's origin loses
- * the goal entirely: the fleet row draws an opaque id, and — silently — the goal
- * whose work is out on the fleet reads as unstaffed.
- */
 test('a requeued job stands in for its origin, so the goal it redoes still reads as staffed', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1', taskId: 't1', endedAt: null })],

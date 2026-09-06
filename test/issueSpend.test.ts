@@ -12,10 +12,6 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 
-// What a goal cost is spread across three origin shapes — the issue subtree, the
-// pull requests its work opened, and an operator's job — and nothing added them
-// up. These are the three, plus the remainder that reaches no goal at all.
-
 const T = '2026-08-04T09:00:00.000Z';
 
 function agent(id: string, over: Partial<Agent> = {}): Agent {
@@ -101,13 +97,11 @@ function node(ref: string, parentRef: string | null, kind: WorkNode['kind'] = 'p
   };
 }
 
-// -- attribution by name -----------------------------------------------------
-
 test('the whole issue subtree is one goal, deliberation included', () => {
   const { byIssue, unattributedCostUsd } = rollUpIssueSpend({
     agents: [
       agent('a', { costUsd: 1.5 }),
-      agent('b', { costUsd: 4 }), // the planner: money spent on the goal, whatever it built
+      agent('b', { costUsd: 4 }),
       agent('c', { costUsd: 0.25 }),
       agent('d', { costUsd: 2 }),
     ],
@@ -140,13 +134,10 @@ test('a goal keeps its own spend, and issue:120 is not issue:12', () => {
   assert.equal(byIssue.get('issue:120')!.costUsd, 3);
 });
 
-// -- attribution by lineage --------------------------------------------------
-
 test("a pull request's agents are charged to the goal that produced it, sub-refs and all", () => {
   const { byIssue, unattributedCostUsd } = rollUpIssueSpend({
     agents: [agent('ci', { costUsd: 0.5 }), agent('rev', { costUsd: 0.75 }), agent('conf', { costUsd: 0.25 })],
     tasks: [task('ci', 'pr:41:ci'), task('rev', 'pr:41:comments'), task('conf', 'pr:41:mergeable')],
-    // The part's PR, two levels down: the walk has to climb both edges.
     nodes: [node('pr:41', 'issue:12:part:auth'), node('issue:12:part:auth', 'issue:12', 'part')],
     localRuns: [],
   });
@@ -175,15 +166,11 @@ test('a job reaches its goal only once the graph has adopted it', () => {
   assert.equal(adopted.unattributedCostUsd, 0);
 });
 
-// -- the second spender: local runs ------------------------------------------
-
 test('a local run is the goal’s money too, counted apart from its agents', () => {
   const { byIssue, localRunAttribution } = rollUpIssueSpend({
     agents: [agent('a', { costUsd: 2 })],
     tasks: [task('a', 'issue:12')],
     nodes: [],
-    // Its origin *is* the goal, so it needs no lineage hop — the one thing about a
-    // local run that makes it the simplest source here.
     localRuns: [localRun('r1', 'issue:12', { costUsd: 0.5 }), localRun('r2', 'issue:12', { costUsd: 0.25 })],
   });
   const spend = byIssue.get('issue:12')!;
@@ -206,8 +193,6 @@ test('a local run of nothing the graph knows lands in the remainder', () => {
 });
 
 test('an unmeasured local run is no row and no count', () => {
-  // Every local run on a PTY deployment: the runtime has no usage channel, so the
-  // row carries nulls for ever. A count without money would read as a free preview.
   const { byIssue } = rollUpIssueSpend({
     agents: [],
     tasks: [],
@@ -217,13 +202,11 @@ test('an unmeasured local run is no row and no count', () => {
   assert.equal(byIssue.size, 0);
 });
 
-// -- the remainder, and what is deliberately not counted ---------------------
-
 test('spend that reaches no goal is shipped as the remainder, never dropped', () => {
   const { byIssue, unattributedCostUsd } = rollUpIssueSpend({
     agents: [agent('a', { costUsd: 1 }), agent('x', { costUsd: 0.3 }), agent('y', { costUsd: 0.7 })],
     tasks: [task('a', 'issue:12'), task('x', null), task('y', 'pr:99:ci')],
-    nodes: [], // pr:99 is in no graph: nothing says which goal it came out of
+    nodes: [],
     localRuns: [],
   });
   assert.equal(byIssue.get('issue:12')!.costUsd, 1);
@@ -231,8 +214,6 @@ test('spend that reaches no goal is shipped as the remainder, never dropped', ()
 });
 
 test('a runtime that measured nothing contributes no row and no agent count', () => {
-  // PTY mode reports no usage at all. Counting these would put "$0.00 · 2 agents"
-  // on a goal two agents worked, which reads as free rather than as unmeasured.
   const { byIssue } = rollUpIssueSpend({
     agents: [
       agent('p', { costUsd: null, inputTokens: null, outputTokens: null, numTurns: null }),
@@ -264,8 +245,6 @@ test('a token-only report still counts, and float sums stay readable', () => {
 });
 
 test('a cycle in the lineage cannot hang the walk', () => {
-  // `parent_ref` is write-once and therefore acyclic by construction; this is the
-  // belt to that brace, and the assertion is that it terminates at all.
   const { byIssue, unattributedCostUsd } = rollUpIssueSpend({
     agents: [agent('a', { costUsd: 1 })],
     tasks: [task('a', 'pr:1:ci')],
@@ -276,9 +255,6 @@ test('a cycle in the lineage cannot hang the walk', () => {
   assert.equal(unattributedCostUsd, 1);
 });
 
-// -- end to end: a stream agent's report lands on its goal's card -------------
-
-/** Minimal fake claude stream-JSON process (the shape `usage.test.ts` uses). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 778;
   private out = new EventEmitter();

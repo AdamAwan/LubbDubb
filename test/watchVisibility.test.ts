@@ -11,22 +11,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Issue, IssueRelative, PullRequest, TrackerItem } from '../src/types.js';
 import type { TicketsPayload } from '../src/wire.js';
 
-// The cockpit draws the watch toggle from `/api/state`, which serves the world
-// baseline and never a live provider read (16). So a tag the provider has just
-// accepted stays invisible until something writes it onto that baseline — and
-// the pulse cannot be that something: `runCycle` coalesces while a cycle is in
-// flight, so the click that lands during one is followed by no world read at
-// all and the button keeps its old state until the next beat. Every test here
-// clicks with a cycle parked mid-read, which is that case, and asserts on what
-// the cockpit's next refetch would draw.
-//
-// The Tickets tab is a *second* reader of the same tag and has to be asserted
-// separately: it draws from `/api/tickets`, built from the mirror rather than
-// the baseline, and the mirror's own writer — `TicketSweep` — runs last in the
-// very cycle that coalesced. It is also the one surface carrying an explicit
-// Unwatch, so a stale reading there is what an operator reports as a ticket
-// they cannot un-watch (issue #417).
-
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return buildSystem(
@@ -86,11 +70,6 @@ function seed(system: System): void {
   });
 }
 
-/**
- * A cycle parked with its world read outstanding — the ordinary shape of a busy
- * harness, and the one where the `runCycle('manual')` a watch route ends with
- * answers "coalesced" and reads nothing. Returns the release.
- */
 function parkCycle(system: System): () => Promise<void> {
   let release = (): void => {};
   const held = new Promise<void>((resolve) => (release = resolve));
@@ -109,21 +88,18 @@ function parkCycle(system: System): () => Promise<void> {
 
 type App = Awaited<ReturnType<typeof buildApp>>['app'];
 
-/** The labels `/api/state` would draw the toggle from, for one issue. */
 async function issueLabels(app: App, number: number): Promise<string[]> {
   const res = await app.inject({ method: 'GET', url: '/api/state' });
   const body = res.json() as { world: { issues: { number: number; labels?: string[] }[] } };
   return body.world.issues.find((i) => i.number === number)?.labels ?? [];
 }
 
-/** The same, for a pull request. */
 async function prLabels(app: App, number: number): Promise<string[]> {
   const res = await app.inject({ method: 'GET', url: '/api/state' });
   const body = res.json() as { world: { pullRequests: { number: number; labels?: string[] }[] } };
   return body.world.pullRequests.find((p) => p.number === number)?.labels ?? [];
 }
 
-/** One mirrored row, as a sweep would have written it. */
 function tracked(number: number, labels: string[]): TrackerItem {
   return {
     number,
@@ -137,7 +113,6 @@ function tracked(number: number, labels: string[]): TrackerItem {
   };
 }
 
-/** Put the seeded issues in the mirror too, which is what the Tickets tab reads. */
 function seedMirror(system: System): void {
   system.store.ensureTrackerSweep(30 * 24 * 60 * 60 * 1000);
   system.store.recordSweep('2026-07-01T00:00:00.000Z', [
@@ -147,13 +122,11 @@ function seedMirror(system: System): void {
   ]);
 }
 
-/** The bucket the Tickets tab would draw for one row, and what its filter says. */
 async function ticketWatch(app: App, number: number): Promise<string | undefined> {
   const res = await app.inject({ method: 'GET', url: '/api/tickets' });
   return (res.json() as TicketsPayload).rows.find((r) => r.number === number)?.watch;
 }
 
-/** The numbers one watch filter returns — the other half of the same reading. */
 async function ticketsFiltered(app: App, watch: 'watched' | 'unwatched'): Promise<number[]> {
   const res = await app.inject({ method: 'GET', url: `/api/tickets?watch=${watch}` });
   return (res.json() as TicketsPayload).rows.map((r) => r.number);
@@ -285,10 +258,6 @@ test('the gate switched off writes no empty tag onto the baseline', async () => 
   await finish();
 });
 
-// ---------------------------------------------------------------------------
-// The Tickets tab's reading of the same tag (issue #417)
-// ---------------------------------------------------------------------------
-
 test('un-watching shows on the very next tickets read, not a sweep later', async () => {
   const system = build();
   seed(system);
@@ -358,8 +327,6 @@ test('an item the mirror has never seen is skipped rather than invented', async 
   const { app } = await buildApp(system);
   const finish = parkCycle(system);
 
-  // #9 is in the mirror; a number it has never swept is not, and the tab must not
-  // grow a row for it — this table is a record of what the tracker handed us.
   const before = (await app.inject({ method: 'GET', url: '/api/tickets' })).json() as TicketsPayload;
   system.store.patchTicketLabels({ numbers: [4242], label: 'lubbdubb-watch', present: true });
   const after = (await app.inject({ method: 'GET', url: '/api/tickets' })).json() as TicketsPayload;

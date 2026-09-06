@@ -20,21 +20,6 @@ import type {
 } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * Review packs, stage 7: the three things stage 6 left open.
- *
- * - The **attention overrides surfaced to the operator**, with the plumbing ratio
- *   beside them — one reading, `GET /api/review-calibration`, never shown to the
- *   checker and never fed into a prompt.
- * - A **`seen` mark on a false claim**, the third column on the same
- *   `review_marks` row, and the counter it makes possible.
- * - **Unshare**: the inverse of the share, immediate, over the pool's own arm.
- *
- * → docs/spec/31-review-packs.md#the-operators-reading,
- *   docs/spec/31-review-packs.md#whether-prominence-works,
- *   docs/spec/31-review-packs.md#unsharing-a-pack
- */
-
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const FLEET = 'alice@acme-api';
 
@@ -55,9 +40,6 @@ function build(): { system: System; transport: FakePoolTransport } {
       pool: { project: 'acme-api' } as never,
     }),
     {
-      // A pack is never dispatched for here — the documents are seeded — but the
-      // fake worktree manager still goes in: `config.repoRoot` defaults to the
-      // checkout, and nothing in a test may cut a branch in it.
       worktrees: new FakeWorktreeManager(),
       gitObserver: new FakeGitObserver(),
       backend: new FakePtyBackend(),
@@ -128,14 +110,11 @@ test('the overrides and the plumbing ratio are one reading, and it never reaches
     pack(7, [
       idea({ id: 'idea_a', attention: 'skim', hunks: [hunk('src/a.ts', 1, 4)] }),
       idea({ id: 'idea_b', attention: 'decide', hunks: [hunk('src/b.ts', 1, 4)] }),
-      // The reserved id, and the one the ratio counts: two of this pack's four
-      // hunks are hunks the author declined to explain.
       idea({ id: 'plumbing', attention: 'skim', hunks: [hunk('src/c.ts', 1, 2), hunk('src/d.ts', 1, 2)] }),
     ]),
   );
   const { app } = await buildApp(system);
 
-  // A reviewer upgrades one label and downgrades nothing.
   const over = await app.inject({
     method: 'POST',
     url: '/api/prs/7/review-pack/ideas/idea_a/attention',
@@ -159,8 +138,6 @@ test('the overrides and the plumbing ratio are one reading, and it never reaches
   assert.equal(calibration.plumbing.ratio, 0.5);
   assert.equal(calibration.plumbing.worst[0]?.prNumber, 7);
 
-  // The reading is the operator's, and nothing about it reaches an agent: the
-  // pack the checker would be handed is untouched, and nothing was filed.
   assert.equal(system.store.getCurrentReviewPack(7)!.pack.ideas[0]!.attention, 'skim');
   assert.deepEqual(system.store.listObstacles(), []);
   await app.close();
@@ -175,12 +152,9 @@ test('a seen mark is its own column on the same row, and counts a merge nobody r
       idea({ id: 'idea_b', attention: 'read', hunks: [hunk('src/b.ts', 1, 4)], falseClaim: true }),
     ]),
   );
-  // The durable record of the merge — the world drops a closed pull request, and
-  // this reading is about merges that already happened.
   system.store.recordWorkGraph([{ ref: 'pr:7', kind: 'pr', title: 'Add y', status: 'merged', terminal: true }]);
   const { app } = await buildApp(system);
 
-  // The reader takes one finding and leaves the other.
   await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/ideas/idea_a/read', payload: { read: true } });
   const seen = await app.inject({
     method: 'POST',
@@ -191,8 +165,6 @@ test('a seen mark is its own column on the same row, and counts a merge nobody r
   const marks = (seen.json() as ReviewMarksPayload).marks;
   const marked = marks.find((m) => m.hunk.path === 'src/a.ts')!;
   assert.equal(marked.seen, true);
-  // Each write names only its own column: taking the finding left the read mark
-  // alone, and the override on the same row is untouched.
   assert.equal(marked.read, true, 'the read mark survived the seen write');
   assert.equal(marked.attention, null);
 
@@ -211,7 +183,6 @@ test('a seen mark is its own column on the same row, and counts a merge nobody r
   assert.equal(calibration.prominence.seen, 1);
   assert.deepEqual(calibration.prominence.mergedUnseen, [7], 'it merged with one finding nobody took');
 
-  // Taking the second one clears the count: the number is about findings nobody read.
   await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/ideas/idea_b/seen', payload: { seen: true } });
   const after = (
     await app.inject({ method: 'GET', url: '/api/review-calibration?window=all' })
@@ -241,12 +212,10 @@ test('unsharing takes the pack out on the next pulse, and the route does no netw
   await system.pool!.run();
   assert.deepEqual(transport.unpublished, [{ fleetId: FLEET, prNumber: 7 }]);
   assert.equal(transport.packs.has(poolPackPath(FLEET, 7)), false);
-  // The share row is gone and the local pack is kept: it is the fleet's own record.
   assert.equal(system.store.getReviewPackShare(7), null);
   assert.ok(system.store.getCurrentReviewPack(7));
   assert.equal(system.store.listErrors().length, 0);
 
-  // Unsharing again is not an error — the caller wanted it out of the pool, and it is.
   const again = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/unshare' });
   assert.equal(again.statusCode, 202);
   assert.equal((again.json() as ReviewPackSharing).share, null);

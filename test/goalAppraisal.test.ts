@@ -20,10 +20,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { spentPlannerAttempts } from './support/plans.js';
 import { Store } from '../src/store/store.js';
 
-// Rule `issue-appraisal` — the goal appraisal. The one gate in front of an issue that asks about its
-// *content*. What makes it fire, what it must never do (park an issue with no way
-// out), and the one thing on the ticket's side that ends a hold: the ticket changing.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 const EARLIER = '2026-07-28T10:00:00.000Z';
 
@@ -78,9 +74,6 @@ function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
     taskId: null,
     commentRef: null,
     decidedAt: over.decidedAt ?? EARLIER,
-    // A verdict nothing has re-cast, where the two instants coincide. `updatedAt`
-    // is what the hold measures against, so a case about a re-cast verdict sets
-    // the two apart deliberately.
     updatedAt: over.updatedAt ?? over.decidedAt ?? EARLIER,
     ...over,
   };
@@ -99,7 +92,6 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** The dispatcher with the appraisal on — everything else default. */
 function appraiser(): RuleDispatcher {
   return new RuleDispatcher();
 }
@@ -108,7 +100,6 @@ function origins(actions: { type: string; originRef?: string | null }[]): string
   return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
 }
 
-/** A spent attempt cap on an origin — three executed dispatches, all outside the cooldown. */
 function spentCap(origin: string, branch: string): Decision[] {
   return [1, 2, 3].map((i) => ({
     id: `d${i}`,
@@ -121,8 +112,6 @@ function spentCap(origin: string, branch: string): Decision[] {
     createdAt: '2026-07-27T00:00:00.000Z',
   })) as Decision[];
 }
-
-// -- the headline ------------------------------------------------------------
 
 test('a fresh issue is appraised before anything is dispatched against it', async () => {
   const { actions } = await appraiser().decide(ctx());
@@ -142,8 +131,6 @@ test('a fresh issue is appraised before anything is dispatched against it', asyn
   );
   assert.equal(dispatch.base, 'main', 'cut from the default branch: the goal is judged against the repo as it stands');
   assert.equal(dispatch.rule, 'issue-appraisal');
-  // The verdict is fingerprinted off these two fields, so a dispatch that dropped
-  // them would stamp every verdict with the fingerprint of an empty goal.
   assert.equal(dispatch.originTitle, 'Make it better');
   assert.equal(dispatch.originSummary, 'the thing should be better');
 });
@@ -166,12 +153,7 @@ test('the planner is suppressed too — decomposing an unanswerable question is 
   assert.deepEqual(origins(actions), ['issue:12:appraisal'], 'ranked ahead of the planner, and standing it down');
 });
 
-// -- what it does not fire on ------------------------------------------------
-
 test('an issue that has already had work is the assessor’s, not the appraisal’s', async () => {
-  // `hasPriorWork` is the discriminator both rules read, each taking one arm:
-  // nothing started means the goal is all there is to judge; something started
-  // means the question was answered by someone acting on it.
   const { actions } = await appraiser().decide(ctx({ tasks: [task()] }));
   assert.ok(!origins(actions).includes('issue:12:appraisal'), 'the goal is not the open question any more');
 });
@@ -231,11 +213,7 @@ test('an issue already judged against this exact text is not re-appraised', asyn
   }
 });
 
-// -- failing open: the property that makes blocking safe ---------------------
-
 test('a spent attempt cap returns the issue to the funnel, with no escalation', async () => {
-  // Narrowing pickup without this makes the appraisal the most effective way to stop
-  // the harness working — issue #158's own first decision.
   const { actions } = await appraiser().decide(
     ctx({ recentDecisions: spentCap('issue:12:appraisal', 'appraisal/issue/12') }),
   );
@@ -267,7 +245,7 @@ test('a cooling appraiser still suppresses pickup for that cycle, and stays visi
       rule: 'issue-appraisal',
       admission: null,
       detail: '',
-      createdAt: '2026-07-28T11:55:00.000Z', // inside the 15-minute window
+      createdAt: '2026-07-28T11:55:00.000Z',
     },
   ];
   const { actions, upcoming } = await appraiser().decide(ctx({ recentDecisions: recent }));
@@ -278,8 +256,6 @@ test('a cooling appraiser still suppresses pickup for that cycle, and stays visi
     'visible, not silently gone',
   );
 });
-
-// -- the hold, and the two things that end it --------------------------------
 
 test('an unclear verdict holds the issue out of pickup and planning alike', async () => {
   const d = new RuleDispatcher();
@@ -301,7 +277,6 @@ test('a workable verdict releases the issue into the funnel and holds nothing', 
 
 test('editing the ticket ends the hold, with no event to have witnessed', async () => {
   const edited = issue({ body: 'the p99 of /search should be under 200ms, measured by the existing bench' });
-  // The verdict was cast against the old text, so it no longer describes this item.
   assert.equal(appraisalHold(appraisal(), edited), null);
   assert.equal(isAppraised(appraisal(), edited), false, 'and it is appraised again rather than merely released');
 
@@ -312,9 +287,6 @@ test('editing the ticket ends the hold, with no event to have witnessed', async 
 });
 
 test('an appraisal of its own is not "work has started" — a crashed appraiser is retryable', () => {
-  // `issue:12:appraisal` is inside the subtree `hasPriorWork` matches, so without the
-  // exclusion one failed appraisal would retire the cooldown, the attempt cap and the
-  // assessor's arm of the same discriminator in a single stroke.
   assert.equal(hasWorkStarted(12, [task({ originRef: 'issue:12:appraisal' })]), false);
   assert.equal(hasWorkStarted(12, [task({ originRef: 'issue:12' })]), true);
   assert.equal(hasWorkStarted(12, [task({ originRef: 'issue:12:assess' })]), true, 'downstream evidence work happened');
@@ -327,10 +299,6 @@ test('the title counts as much as the body, and moving words between them is a c
 });
 
 test('nothing but the ticket changing ends the hold — a link, a reopen or a reply is not an answer', () => {
-  // There used to be a second arm, any world transition on the issue, described as
-  // covering a human who answers in a comment. `worldDiff` emits nothing for a
-  // comment, so what it released on was a reopen or a link — and the release put
-  // the same unanswerable text straight into the funnel with no re-appraisal.
   const held = appraisal();
   assert.ok(appraisalHold(held, issue()), 'stands on the unedited ticket');
   assert.ok(appraisalHold(held, issue({ linkedPrNumber: 41 })), 'a link answers nothing about the goal');
@@ -342,16 +310,12 @@ test('there is no timer arm — a verdict the world has not moved on still stand
   assert.ok(appraisalHold(ancient, issue()), 'age alone is not an answer, so it must not re-ask the question');
 });
 
-// -- the cockpit chip cannot disagree with the rule --------------------------
-
 function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) {
   return {
     policy: { priorityLabels: {}, defaultPriority: 0 },
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    // The funnel has failed open, so pickup is reachable at all — every case here
-    // is about the appraisal in front of it, not about the planner in front of that.
     recentDecisions: spentPlannerAttempts(12),
     openPrs: [],
     headroom: 3,
@@ -360,20 +324,12 @@ function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) 
   };
 }
 
-/**
- * The reason names *what happened*; the appraiser's own words live on the
- * `IssueAppraisal` row beside it, which every surface that quotes them already reads
- * (the World panel's chip title, the Goal Floor's plate). They used to be folded
- * into this string as well, which made it the longest thing the cockpit renders —
- * a paragraph and an ISO timestamp inside a chip built to be scanned.
- */
 test('the chip reports the hold, and leaves the appraiser’s words to the row', () => {
   const status = issuePickupStatus(issue(), pickupCtx({ appraisals: [appraisal()] }));
   assert.equal(status.eligible, false);
   assert.equal(status.status, 'appraisal');
   assert.equal(status.reasons[0], 'the goal appraisal could not act on this goal');
   assert.doesNotMatch(status.reasons[0] ?? '', /Better how\?/, 'the verdict’s prose is not a reason');
-  // Still one hover away, and from the record rather than from a rendered string.
   assert.match(appraisal().summary, /Better how\?/);
 });
 
@@ -403,8 +359,6 @@ test('an unwatched issue is reported as unwatched, never as awaiting an appraisa
   );
   assert.equal(status.status, 'unwatched');
 });
-
-// -- the tool, through the same dispatch an agent's bridge reaches ------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-appraisal-'));
@@ -474,8 +428,6 @@ test('a verdict is attributed from the credential and fingerprinted off the text
 
 test('a verdict cast against text the ticket no longer has holds nothing', async () => {
   const system = build();
-  // The issue was edited while the appraiser was running: the fingerprint is of what
-  // it read, so the hold simply does not apply to what is there now.
   const agent = spawnAgent(system, 'issue:12:appraisal', { originSummary: 'the old wording' });
   await callTool(system, agent, 'appraise_issue', {
     status: 'unclear',
@@ -525,21 +477,16 @@ test('a rejected appraisal writes nothing', async () => {
   const call = (args: Record<string, unknown>) => callTool(system, agent, 'appraise_issue', args);
   assert.equal((await call({ status: 'unclear', summary: ' ', missing: ['x'] })).isError, true);
   assert.equal((await call({ status: 'vague', summary: 'x' })).isError, true);
-  // An unclear verdict with no list is a refusal with no next step — the exact
-  // shape that leaves an author stuck, so it is refused rather than posted.
   const bare = await call({ status: 'unclear', summary: 'too vague' });
   assert.equal(bare.isError, true);
   assert.match(bare.text, /missing is required/);
   assert.equal((await call({ status: 'unclear', summary: 'x', missing: [] })).isError, true);
   assert.equal(system.store.getAppraisal('issue:12'), null);
-  // A workable verdict never carries one, whatever the agent sent.
   const ok = await call({ status: 'workable', summary: 'make search faster', missing: ['stray'] });
   assert.equal(ok.isError, false);
   assert.deepEqual(system.store.getAppraisal('issue:12')?.missing, []);
   system.store.close?.();
 });
-
-// -- the store ---------------------------------------------------------------
 
 test('a re-appraisal keeps the instant the first verdict was cast', () => {
   const system = build();
@@ -596,9 +543,6 @@ test('a verdict about new text gets a new comment rather than overwriting the ol
   system.store.close?.();
 });
 
-// -- the comment: what the person who wrote the ticket sees ------------------
-
-/** A sink that records comment writes and hands back a stable ref. */
 function commentSink(): { sink: ActionSink; writes: { number: number; body: string; commentRef?: string | null }[] } {
   const writes: { number: number; body: string; commentRef?: string | null }[] = [];
   const sink = {
@@ -690,8 +634,6 @@ test('the comment body is pure, and a multi-line summary stays inside its quote'
   assert.match(body, /> line one\n> line two/);
 });
 
-// -- the operator's escape hatch ---------------------------------------------
-
 test('an operator verdict is a first-class one, and clearing it is a delete', () => {
   const system = build();
   const i = issue();
@@ -720,8 +662,6 @@ test('an operator verdict is a first-class one, and clearing it is a delete', ()
   system.store.close?.();
 });
 
-// -- the cockpit's half ------------------------------------------------------
-
 test('/api/state ships the verdict beside the pickup reason, not inside it', async () => {
   const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   const system = build();
@@ -733,10 +673,6 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
   });
   system.store.setWorldBaseline(await system.connector.getState());
 
-  // Nothing appraised: **null**, and that is a third reading rather than a synonym
-  // for `workable`. The Goal Floor draws no drill at all for it, where a refusal
-  // draws one that is stopped and says why — telling those apart by reading
-  // `pickup.reasons[0]` is what `signalPolarity` refuses to do.
   const untouched = buildStateSnapshot(system);
   assert.equal(untouched.world.issues.find((i) => i.number === 12)!.appraisal, null);
 
@@ -753,17 +689,11 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
   assert.equal(shipped.verdict, 'unclear');
   assert.equal(shipped.summary, 'Name one behaviour that is wrong today.');
   assert.equal(shipped.by, 'appraiser');
-  // The fingerprint is what the hold is measured against, not a reading, so it
-  // does not go on the wire — and now it *cannot*, since the shipped shape is the
-  // declared one rather than whatever a local cast happened to name.
   assert.equal('goalRef' in shipped, false);
   system.store.close?.();
 });
 
 test('a re-cast refusal on the unedited ticket still holds, whatever happened around it', () => {
-  // The ticket text is left unedited throughout, and world events land on the
-  // issue between verdicts. None of it moves the hold: the only thing that can
-  // answer the appraiser is the ticket, and the ticket has not changed.
   let clock = Date.parse('2026-08-01T00:00:00.000Z');
   const s = new Store(':memory:', () => new Date(clock).toISOString());
   const goal = issue();

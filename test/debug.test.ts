@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { debugEnabled, debugLog } from '../src/debug.js';
 
-// Capture console.error around a body, restoring it after. Returns what was logged.
 function captureStderr(body: () => void): string[] {
   const orig = console.error;
   const lines: string[] = [];
@@ -28,7 +27,6 @@ test('debugEnabled / debugLog gate on LUBBDUBB_DEBUG', () => {
 
     process.env.LUBBDUBB_DEBUG = '1';
     assert.equal(debugEnabled(), true);
-    // The message is JSON-encoded (hence quoted) so control chars are escaped.
     assert.deepEqual(
       captureStderr(() => debugLog('agent', 'hello')),
       ['[lubbdubb:debug:agent] "hello"'],
@@ -43,14 +41,13 @@ test('debugLog escapes control chars so an agent-influenced value cannot forge a
   const prev = process.env.LUBBDUBB_DEBUG;
   try {
     process.env.LUBBDUBB_DEBUG = '1';
-    // A path carrying a newline + a fake "second entry" must stay a single line.
     const lines = captureStderr(() => debugLog('fileEvents', 'path=a.md\ninjected tool=Write\r\ttab'));
     assert.equal(lines.length, 1, 'exactly one log line');
     assert.match(lines[0]!, /^\[lubbdubb:debug:fileEvents] /);
-    assert.doesNotMatch(lines[0]!, /\n/); // no real newline survives
-    assert.match(lines[0]!, /\\n/); // newline escaped to backslash-n
-    assert.match(lines[0]!, /\\r/); // carriage return escaped
-    assert.match(lines[0]!, /\\t/); // tab escaped
+    assert.doesNotMatch(lines[0]!, /\n/);
+    assert.match(lines[0]!, /\\n/);
+    assert.match(lines[0]!, /\\r/);
+    assert.match(lines[0]!, /\\t/);
   } finally {
     if (prev === undefined) delete process.env.LUBBDUBB_DEBUG;
     else process.env.LUBBDUBB_DEBUG = prev;

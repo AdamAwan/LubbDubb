@@ -3,10 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// `fileURLToPath`, never `URL.pathname`: on Windows the latter yields
-// `/C:/…`, which `fs` reads as the relative path `C:\C:\…` — so every
-// structural guard in this file threw ENOENT rather than asserting, and a
-// violation of the rule it pins would have merged green on that platform.
 
 import * as React from 'react';
 import { createElement, isValidElement } from 'react';
@@ -21,9 +17,6 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 
-// `tsx` compiles JSX with the classic runtime, which emits bare
-// `React.createElement`; the bundle uses the automatic one. The global goes in
-// before the console's modules load so the test exercises the same sources.
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -66,11 +59,6 @@ function view(over: Partial<CockpitView> = {}): CockpitView {
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
-/**
- * The console as the shell mounts it — inside `RefLinks`, because every reference
- * it draws resolves against that and a `<Ref>` outside it throws rather than
- * quietly rendering a number with no link on it.
- */
 const render = (v: CockpitView) =>
   renderToStaticMarkup(
     createElement(RefLinks, {
@@ -83,10 +71,7 @@ const render = (v: CockpitView) =>
     }),
   );
 
-/** `renderToStaticMarkup` escapes text nodes, so an assertion on fixture prose must decode first. */
 function decode(html: string): string {
-  // &amp; must decode last — decoding it first would turn a literal `&amp;lt;`
-  // into `<`, which is a different string than the page actually renders.
   return html
     .replace(/&#x27;/g, "'")
     .replace(/&quot;/g, '"')
@@ -116,15 +101,6 @@ test('console.css never targets a shared component’s class', () => {
   }
 });
 
-/**
- * The same rule, at the one selector shape that gets past the check above. `.cn`
- * *contains* nearly every shared component the cockpit embeds, so `.cn textarea`
- * names no shared class and reaches all of them anyway — at (0,1,1), which outranks
- * the single class each one styles itself with. There was one, and it was silently
- * redrawing five components' note boxes and overriding the `rows` their callers
- * chose. The console's own fields wear `.cn-in`, which reaches only what it is put
- * on. → docs/spec/17-cockpit.md#fields
- */
 test('console.css reaches no form control through .cn', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
   const offenders = [...css.matchAll(/^\s*(\.cn[\w-]*\s+(?:input|textarea|select|option)\b[^,{]*)/gm)].map((m) =>
@@ -133,23 +109,6 @@ test('console.css reaches no form control through .cn', () => {
   assert.deepEqual(offenders, [], 'a descendant element rule restyles the components the console embeds');
 });
 
-/**
- * The why marker's bubble, which is positioned against the **row** rather than
- * against the 16px marker so that it cannot leave the card whatever the marker's
- * position in the row — and stays positioned against the row past its own cap.
- *
- * `left` + `right` + `max-width` is an over-constrained absolutely positioned box,
- * and CSS resolves that by dropping the `right` offset: the bubble silently stopped
- * spanning the row on every card wider than the cap and hugged the row's left edge
- * instead, 420px of it under the *title* rather than under the marker it explains.
- * An auto inline margin is what is not dropped — the slack goes to the margins and
- * the two edges keep the box between them.
- *
- * Asserted here because nothing else in `npm run check` reads a stylesheet, and the
- * failure has nothing to show for itself: the sheet is valid, both offsets are
- * written down, and only a wide card renders the difference.
- * → docs/spec/17-cockpit.md#the-row-grammar
- */
 test('the why bubble is held between the row’s two edges, cap and all', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
   const rule = /^\.cn-why-tip\s*\{([^}]*)\}/m.exec(css)?.[1];
@@ -166,25 +125,6 @@ test('the why bubble is held between the row’s two edges, cap and all', () => 
   }
 });
 
-/**
- * The Usage chip (docs/spec/17-cockpit.md#the-usage-chip). Four things about it are
- * load-bearing and not one of them shows in a screenshot of the resting state.
- *
- * **Both windows are drawn, in a fixed order.** Either one parks the fleet, so a chip
- * carrying only the five-hour reads fine on the morning a weekly allowance runs out —
- * and a chip that reordered itself by which is worse would move the number an
- * operator glances at without reading.
- *
- * **The binding window is marked and the tone follows it**, or the chip is two
- * numbers and a shrug: the comparison is the work it exists to have already done.
- *
- * **A window nothing reported is an em dash**, because each is independently nullable
- * and `0%` would claim a fresh allowance nobody measured.
- *
- * **The fallback is the whole of what the chip does on API-key auth** and on a fleet
- * that has not taken a turn — `rateLimits` is null far more often than not, and a chip
- * that went blank there is a hole in the bar where the reading was.
- */
 test('the usage chip carries both windows, and marks the one that binds', () => {
   const now = Date.parse('2026-01-01T12:00:00Z');
   const at = (msAgo: number) => new Date(now - msAgo).toISOString();
@@ -198,8 +138,6 @@ test('the usage chip carries both windows, and marks the one that binds', () => 
     unattributedCostUsd: 0,
   });
 
-  // The weekly is the one about to stop the fleet; the five-hour has room. A chip
-  // reading only the five-hour would call this fine.
   const weekly = usageReading(limits(31, 93), now);
   assert.deepEqual(
     weekly.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
@@ -209,7 +147,6 @@ test('the usage chip carries both windows, and marks the one that binds', () => 
   assert.equal(weekly.tone, 'spent', 'the tone reads the window that binds, not the first one');
   assert.equal(weekly.age, null, 'a minute-old reading is current — the age is the stale caveat, not a timestamp');
 
-  // The other direction, and the resting state: same order, the other slot marked.
   const fiveHour = usageReading(limits(62, 30), now);
   assert.deepEqual(
     fiveHour.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
@@ -217,7 +154,6 @@ test('the usage chip carries both windows, and marks the one that binds', () => 
   );
   assert.equal(fiveHour.tone, 'plain');
 
-  // An unreported window never binds, whatever the reported one says.
   const half = usageReading(limits(68, null), now);
   assert.deepEqual(
     half.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
@@ -243,16 +179,6 @@ test('the usage chip carries both windows, and marks the one that binds', () => 
   assert.equal(nothing.tone, 'quiet', 'nothing spent is a muted reading, never a missing one');
 });
 
-/**
- * And it is on the bar, both windows and all — the demo fixture reports 62% / 30%.
- *
- * **No `Usage` label, and that is asserted.** A percentage on this bar is the
- * account and nothing else here is one, so the chip's own name was width spent
- * saying what the figures already say. What each window *is* stays, as the two
- * superscript tags: position alone is not enough — the pair is always five-hour
- * then weekly, but an operator glancing at one number cannot tell which of the two
- * they landed on, which is the whole question the chip answers.
- */
 test('the usage chip is on the top bar, tagged and unlabelled', () => {
   const html = render(view());
   assert.ok(!/<span>Usage<\/span>/.test(html), 'the chip is back to spending width on its own name');
@@ -262,21 +188,6 @@ test('the usage chip is on the top bar, tagged and unlabelled', () => {
   assert.ok(html.includes('cn-usage-sep'), 'the two figures run together with no divider');
 });
 
-/**
- * The bar's strip is two gauges and a menu button, and everything else it used to
- * carry is behind that button.
- *
- * The cut is what each thing is *for*, not what it costs to draw. Usage and Local
- * are numbers that move on their own and are glanced at on every pulse; the seven
- * behind the button are counts that are usually zero (Faults, Launch), a state
- * that is `current` nearly all its life (Build, Env) and three surfaces that are
- * aimed at rather than read (Signals, Record, Config). Spread across the strip they
- * wrapped the bar to two rows at laptop widths.
- *
- * Both halves are asserted, because either alone is a bar that lost something: the
- * seven are all still reachable, and the two that stayed are still *on the glass*
- * rather than an eighth row in the menu.
- */
 test('the bar folds its ways-in behind one menu, and keeps the two gauges out of it', () => {
   const keys = menuEntries(view(), actions).map((entry) => entry.key);
   assert.deepEqual(
@@ -290,23 +201,12 @@ test('the bar folds its ways-in behind one menu, and keeps the two gauges out of
   assert.ok(!html.includes('cn-menu-row'), 'the menu draws its rows before anybody has opened it');
   assert.ok(html.includes('cn-pill'), 'the usage and local gauges left the strip');
 
-  // Every row carries a glyph and a word — the menu is the one surface here where a
-  // reading has to name itself, since nothing around it says what it is.
   for (const entry of menuEntries(view(), actions)) {
     assert.ok(entry.label.length > 0, `the ${entry.key} row has no word`);
     assert.ok(entry.title.length > 0, `the ${entry.key} row has no sentence behind it`);
   }
 });
 
-/**
- * An unsaved theme edit reaches the Config row **and** the button in front of it.
- *
- * The mark exists because the theme section's save bar does not leave the section,
- * so once you walk away an unsaved theme looks exactly like a saved one (issue
- * #680). It shipped on a cog on the strip; Config is behind a menu now, and a mark
- * visible only once that menu is open is the same invisibility one fold further in
- * — so `pending` is what lights the button's flag dot beside the tones.
- */
 test('an unsaved theme edit marks the Config row and the menu button in front of it', () => {
   const saved = menuEntries(view(), actions, false).find((entry) => entry.key === 'config');
   assert.equal(saved?.pending, false, 'a saved theme marks Config anyway');
@@ -315,28 +215,12 @@ test('an unsaved theme edit marks the Config row and the menu button in front of
   assert.equal(pending?.pending, true, 'an unsaved theme edit leaves Config unmarked');
   assert.match(pending.title, /unsaved theme edit/, 'and the row does not say what is pending');
 
-  // The button's own dot reads `pending` beside the tones, which is what carries the
-  // mark off the closed menu. Asserted through the same predicate `BarMenu` uses.
   assert.ok(
     menuEntries(view(), actions, true).some((entry) => entry.tone !== null || entry.pending === true),
     'nothing in front of the menu says an edit is pending',
   );
 });
 
-/**
- * `Issue!` and the Claude Code hand-off sit at the readings' end of the bar, not
- * against the wordmark — and they stay together.
- *
- * They are the same moment (something looks wrong) offered two ways, and the
- * cheaper one is only offered first while it is beside the other. They moved off
- * the ident because that is where every *control* on this strip is, and because
- * inheriting the wordmark's 600 read them as a second half of the product name.
- *
- * The ask control is matched on `Question?`, which is the bar's own label and the
- * one exception to the name every other deep link carries: the other five are drawn
- * beside the thing they open and are named for the destination, and this one
- * addresses nothing and is the offer to ask.
- */
 test('the two ways out ride the readings, together, online and off', () => {
   for (const connected of [true, false]) {
     const html = render(view({ connected }));
@@ -348,16 +232,6 @@ test('the two ways out ride the readings, together, online and off', () => {
   }
 });
 
-/**
- * Pets is not a nav slot any more: the vivarium is drawn at full size in the
- * corner already, on a strip that was itself a button, so the tab was a second way
- * to a surface the eye lands on anyway — and a nav slot is the most expensive
- * space in the cockpit.
- *
- * The strip has to *read* as a destination, which is the half that is easy to lose:
- * a caption naming the enclosure and a way into it look identical without a word
- * and a mark, and the word is the nav's own label rather than the panel's.
- */
 test('Pets left the nav for the vivarium strip, which says so', () => {
   const html = render(view());
   const nav = html.split('</nav>')[0] ?? '';
@@ -377,44 +251,14 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
   assert.ok(!html.includes('cn-sit'), 'the situation area must not render while offline');
 });
 
-/**
- * The compose control's own title, and how it is matched now that both faces of
- * `Issue!` are the shared button rather than a console class: the marker class the
- * wrapper used to carry went with the wrapper.
- */
 const COMPOSE_TITLE = 'Write an issue about LubbDubb';
 
-/**
- * The way to report a fault in LubbDubb is on the bar whether the harness is
- * talking to us or not (#404), and the offline arm is a whole second return in
- * `TopBar` — the one a change would forget, and the state an operator is most
- * likely to have something to file about.
- *
- * The href is pinned to the new-issue *form*, not the repo or the issue list: the
- * feature is the click count, and a link that lands one page short of writing
- * anything down still reads as done.
- */
 test('the bar offers LubbDubb’s own tracker, online and off', () => {
-  // One anchor carrying both, rather than two `includes` — the console draws other
-  // external refs, so a loose `rel` assertion would pass on somebody else's link.
   const link = /<a[^>]*href="https:\/\/github\.com\/AdamAwan\/LubbDubb\/issues\/new"[^>]*rel="noopener noreferrer"/;
   assert.ok(link.test(render(view({ connected: false }))), 'no new-issue link that keeps the opener while offline');
-  // Connected, the same destination is reached through the compose modal instead —
-  // which is the point of #449: two faces, one repository.
   assert.ok(render(view({ connected: true })).includes(COMPOSE_TITLE), 'no compose button while connected');
 });
 
-/**
- * Issues #413 and #449. The bar's control has two faces and the fallback is the
- * load-bearing one: the compose modal posts to this harness's own server, so on a
- * dropped socket — the state an operator is most likely to have something to file
- * about — there is nothing behind it.
- *
- * `canFileTickets` is deliberately **not** in this gate. It says whether the
- * tracker the fleet is pointed at accepts new items, and since #449 the report goes
- * somewhere else entirely: the demo fixtures carry `false`, and a connected cockpit
- * composes anyway.
- */
 test('the bar composes whenever it is connected, and links out when it is not', () => {
   const filing = (canFileTickets: boolean, connected: boolean): CockpitView => {
     const v = view({ connected });
@@ -435,13 +279,6 @@ test('the bar composes whenever it is connected, and links out when it is not', 
   }
 });
 
-/**
- * The resting state, which is the one `renderToStaticMarkup` can reach: effects do
- * not run, so this is the modal exactly as it paints before the probe answers. That
- * is the state worth pinning — both fields disabled and the submit dead — because
- * everything the modal is for depends on nobody being invited to type a paragraph
- * the harness may turn out to be unable to file.
- */
 test('the compose modal is unusable until the probe has answered', () => {
   const html = renderToStaticMarkup(
     createElement(RaiseIssueModal, {
@@ -451,18 +288,11 @@ test('the compose modal is unusable until the probe has answered', () => {
       onClose: () => undefined,
     }),
   );
-  // Two, not three: the watch opt-in is not drawn at all until the probe says this
-  // fleet is one that could act on the label (issue #449).
   assert.equal(html.match(/<(?:input|textarea)[^>]*disabled/g)?.length, 2, 'title and body');
   assert.ok(/<button[^>]*disabled[^>]*>raise issue<\/button>/.test(html), 'the submit must start dead');
   assert.ok(decode(html).includes('checking where this would go'), 'and must say why it is waiting');
 });
 
-/**
- * The two rules the control turns on, as rules rather than as a rendering of them.
- * `null` is a reading and not a missing one — "not yet" and "no" disable the same
- * fields for opposite reasons, and only one of them ever becomes typeable.
- */
 test('the probe decides three readings, and only one of them can file', () => {
   assert.equal(composeGate(null), 'checking');
   assert.equal(
@@ -478,8 +308,6 @@ test('the probe decides three readings, and only one of them can file', () => {
   for (const [title, body] of [
     ['', 'a body'],
     ['a title', ''],
-    // Trimmed, so a page of spaces is empty — the route trims before it refuses,
-    // and a live button over it would promise a 400.
     ['   ', 'a body'],
     ['a title', '\n  '],
   ] as const) {
@@ -489,7 +317,6 @@ test('the probe decides three readings, and only one of them can file', () => {
       `submit live on title=${JSON.stringify(title)} body=${JSON.stringify(body)}`,
     );
   }
-  // No amount of text unlocks a target that cannot be filed into.
   assert.equal(canFile('checking', 'a title', 'a body'), false);
   assert.equal(canFile('unavailable', 'a title', 'a body'), false);
 });
@@ -503,20 +330,11 @@ test('the recovery banner sits outside the situation area', () => {
 });
 
 test('decode reverses text-node escaping, and only in that order', () => {
-  // &amp; last: decoding it first would turn a literal `&amp;lt;` into `<`,
-  // which is not what the page rendered.
   assert.equal(decode('&amp;lt;'), '&lt;');
   assert.equal(decode('&#x27;'), "'");
 });
 
 test('a panel draws its backdrop and its close button, both of them ways out', () => {
-  // The third way out is Escape, registered in an effect. `renderToStaticMarkup`
-  // runs no effects, so the listener is out of reach here — the two exits that
-  // are in the markup are the ones this pins.
-  //
-  // Rendered through the console rather than by calling the shell directly: the
-  // panel is `Modal`'s `panel` face plus a head, and both of those are reached the
-  // way an operator reaches them — by opening one.
   const html = render(view({ consolePanel: 'faults' }));
 
   assert.ok(html.includes('cn-backdrop'), 'the backdrop is an exit and must be drawn');
@@ -580,14 +398,6 @@ test('one part is held, not "1 parts" — the count and the noun agree', () => {
   assert.ok(!html.includes('holding 1 parts'));
 });
 
-/**
- * One DOM for every width, so where the vivarium lands when the shell collapses to
- * one column is decided by document order alone — and last is the foot of the page.
- * Inside the rail it drew between the queue and the work, which is the position
- * this pins it out of. The wide arrangement is grid placement over the same order,
- * so a move back into `.cn-rail` would still read correctly at 1400px.
- * → docs/spec/17-cockpit.md#the-console-at-width
- */
 test('the vivarium comes after the situation area, not inside the rail', () => {
   const html = render(view());
   const rail = html.indexOf('cn-rail');
@@ -641,9 +451,6 @@ test('a group with no rows draws no heading; a group with rows draws its own', (
 });
 
 test('the rail renders array order within a group, never a re-sort', () => {
-  // Deliberately out of canonical order: a `yours` row before `blocking`, and
-  // the lower-holding blocking row before the higher-holding one — the rail
-  // must not undo either choice.
   const rows = [
     {
       id: 'yours-1',
@@ -683,8 +490,6 @@ test('the rail renders array order within a group, never a re-sort', () => {
   const highPos = html.indexOf('Blocking high holder');
 
   assert.ok(yoursPos !== -1 && lowPos !== -1 && highPos !== -1, 'every row must still render');
-  // Within the blocking group, array order (low before high) is preserved —
-  // a re-sort by holding would put the high-holder first.
   assert.ok(lowPos < highPos, 'the blocking group must keep array order, not re-sort by holding');
 });
 
@@ -702,9 +507,6 @@ test('every row that opens something is a button; only the recovery hold is not'
       raisedAt: '2026-01-01T00:00:00.000Z',
     },
     {
-      // The escalation a pull request raised: no goal page to be answered on, so
-      // it opens the ask panel. Before that destination existed it drew as a
-      // `div` and a click on it did nothing at all.
       id: 'no-goal',
       kind: 'escalation',
       group: 'blocking',
@@ -730,17 +532,10 @@ test('every row that opens something is a button; only the recovery hold is not'
 
   const html = render(view({ needsYou: rows }));
 
-  // The row wrapper is the element whose class starts `cn-q ` and is followed by
-  // its tone and, when an agent is parked on it, its weight — anchoring on the
-  // whole attribute rules out `cn-qin`/`cn-qkind`, which are unrelated inner
-  // elements that happen to share the `cn-q` prefix.
   const rowWrapper = (title: string): string => {
     const titlePos = html.indexOf(title);
     assert.ok(titlePos !== -1, `row "${title}" must render`);
     const before = html.slice(0, titlePos);
-    // Attribute order differs between the two tags (`<button type="button"
-    // class="…">` vs `<div class="…">`), so match the whole opening tag and
-    // check its attributes rather than assuming `class` comes first.
     const matches = [...before.matchAll(/<(button|div)\b([^>]*)>/g)].filter(([, , attrs]) =>
       /class="cn-q cn-t-(?:red|amber|blue|green)(?: cn-parked)?(?: cn-dim)?"/.test(attrs ?? ''),
     );
@@ -764,31 +559,12 @@ test('every row that opens something is a button; only the recovery hold is not'
   );
 });
 
-/**
- * **Every act a card carries is in the card's action bar**, and this is the rule
- * the shape exists for. The acts had grown three placements — a config row's fix
- * strip, an update ask's near-copy of it, and the assigned row's reference out in a
- * third column beside the body — so *what can I do with this row?* was answered
- * somewhere different on each kind.
- *
- * Asserted by position rather than by class, because the failure this pins is a
- * control drawn back into the body: a card whose button sits above its bar reads
- * fine and renders fine, and is exactly the drift that produced the three shapes.
- * The nesting rule is the other half of it and `test/refLinks.test.ts` holds that
- * one — a reference inside the body would be a second destination for one click.
- * → docs/spec/17-cockpit.md#the-action-bar
- */
 test('every act a rail card carries is in the card’s action bar', () => {
   const html = render(view());
   const rail = html.slice(html.indexOf('cn-rail'), html.indexOf('cn-sit'));
-  // The cards, cut at their own opening tags. `cn-q` is matched with its closing
-  // quote or a space after it, so `cn-qin`, `cn-qkind` and `cn-qfoot` — all inner
-  // elements sharing the prefix — do not start a card of their own.
   const cards = rail.split(/(?=<(?:button|div)[^>]*class="cn-q(?: |"))/).filter((c) => /class="cn-q(?: |")/.test(c));
   assert.ok(cards.length > 0, 'the demo snapshot must fill the rail');
 
-  // What counts as an act: a button of the app's one family, a reference, and the
-  // two controls a config fix draws that are neither.
   const ACT = /class="btn btn|ref-pair|ref-goal|cn-copy|cn-inline/g;
   let withActs = 0;
   for (const card of cards) {
@@ -801,24 +577,9 @@ test('every act a rail card carries is in the card’s action bar', () => {
       assert.ok(at > bar, `an act above the bar is an act back in the body: ${card.slice(at - 40, at + 40)}`);
     }
   }
-  // The fixtures carry the upgrade ask's three buttons, the auto-pull ask's one and
-  // the assigned row's reference, so this is three kinds of act and not one.
   assert.ok(withActs >= 3, 'the demo must exercise the bar on more than one kind of card');
 });
 
-/**
- * The rail's two readings, and the one thing that keeps them from collapsing back
- * into each other: **hue is the kind, weight is the group**. The palette used to
- * spend both on the group — red blocking, amber yours — which meant every ask
- * that ever landed on the bench arrived in an alarm colour, a delivered goal's
- * close-out included.
- *
- * Totality is the typechecker's, so what is left to assert is what a `Record`
- * cannot say: that no two kinds are told apart by the word alone, and that the
- * glyphs carry no emoji presentation — a codepoint with one renders as a
- * full-colour sticker inside a 10px monospace tag on some platforms and as
- * lettering on others, which is a difference no test on this machine would show.
- */
 test('every kind of ask draws in its own tone, under its own glyph', () => {
   const kinds = Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[];
 
@@ -828,18 +589,12 @@ test('every kind of ask draws in its own tone, under its own glyph', () => {
     assert.equal([...sym].length, 1, `"${sym}" must be a single character`);
     const cp = sym.codePointAt(0) ?? 0;
     assert.ok(cp < 0x10000, `"${sym}" must be a BMP glyph, not an emoji codepoint`);
-    // U+FE0F would force emoji presentation; U+FE0E would force text. Neither
-    // belongs here — the set is chosen from codepoints that have no emoji variant
-    // at all, so the platform has nothing to choose between.
     assert.ok(!/[\uFE0E\uFE0F]/.test(sym), `"${sym}" must carry no variation selector`);
   }
 
   const rows = kinds.map((kind, i) => ({
     id: `row-${i}`,
     kind,
-    // Alternated on purpose: the group must not be what decides the tone, so a
-    // sweep that held it constant would pass on a rail that had quietly gone back
-    // to colouring by group.
     group: i % 2 === 0 ? 'blocking' : 'yours',
     title: `The ${kind} row`,
     goalRef: null,
@@ -861,12 +616,6 @@ test('every kind of ask draws in its own tone, under its own glyph', () => {
   }
 });
 
-/**
- * The other half: the group is still said, and it is said on the row rather than
- * only in the sub-heading above it. Two rows of one kind, one parked and one not,
- * must differ — a rail that dropped the weight when it took the hue would have
- * lost the bit it sorts by, silently, since both rows still render.
- */
 test("the group is drawn as weight within the kind's own hue", () => {
   const rows = [
     {
@@ -900,15 +649,7 @@ test("the group is drawn as weight within the kind's own hue", () => {
   assert.ok(html.includes('class="cn-q cn-t-red"'), 'and a row nothing is parked on carries the tone alone');
 });
 
-/**
- * The demo goal to open: the first ask that names one. Asserted rather than
- * defaulted to an arbitrary issue — a fixture set with no goal-scoped ask would
- * make every assertion below vacuous instead of failing.
- */
 function goalRef(): string {
-  // The plan ask's goal (#395): a goal with a plan, no pull request and no
-  // validation run, which is the page these tests are written against. The demo
-  // also carries a merge ask that ranks above it (#390), whose page has both.
   const ref = view().needsYou.find((n) => n.kind === 'plan' && n.goalRef !== null)?.goalRef;
   assert.ok(ref, 'the demo fixtures must carry a plan ask that names a goal');
   return ref;
@@ -917,12 +658,7 @@ function goalRef(): string {
 function goalView(
   mutate: (state: CockpitView['state']) => void = () => {},
   ref: string = goalRef(),
-  /**
-   * The sections the operator has opened — `[]` is the page at whatever the goal's
-   * own progress makes it, which is what a bare URL means.
-   */
   goalOpen: readonly string[] = [],
-  /** And the ones they have folded away. Both, because neither is the default. */
   goalShut: readonly string[] = [],
 ): CockpitView {
   const state = buildDemoState().state;
@@ -951,13 +687,6 @@ function goalView(
   });
 }
 
-/**
- * A pull request's page, opened over the goal the demo's threads hang on.
- *
- * `selectedPr` alone would draw it over the tab; the goal is set beside it because
- * that is how it is actually reached, and the crumb naming the goal is half of what
- * makes the page a rung of the ladder rather than a fourth destination.
- */
 function prView(prNumber: number, ref: string | null = 'issue:412'): CockpitView {
   const state = buildDemoState().state;
   return buildViewModel({
@@ -987,20 +716,9 @@ test('a pull request outranks the goal it was reached from, and the crumb leads 
   const html = decode(render(prView(412)));
   assert.ok(html.includes('PR #412'), 'the crumb names where you are');
   assert.ok(html.includes('Review threads'), 'and the page draws the review');
-  // The goal page is *not* also drawn: one situation area, one page, and the ladder
-  // decides which. Its pull-request card is the giveaway — it heads "Pull requests",
-  // which the pull request's own page never does.
   assert.ok(!html.includes('>Pull requests<'), 'the goal page underneath is replaced, not stacked with');
 });
 
-/**
- * The crumb is the ladder, not a back button.
- *
- * Three rungs deep — tab, goal, pull request — and the trail draws all three, so
- * the tab a page is hanging off is on screen rather than inferred from the one
- * label the old crumb had room for. That is the half a reader sees; `homeTab` is
- * the half that makes it true. → `docs/spec/17-cockpit.md#nesting`
- */
 test('the crumb draws every rung of the ladder, not just the one beneath', () => {
   const view = prView(412);
   const html = decode(render(view));
@@ -1011,20 +729,10 @@ test('the crumb draws every rung of the ladder, not just the one beneath', () =>
   assert.ok(goal, 'the fixture opens the pull request over a goal');
   assert.ok(crumb.includes(`#${goal.number}`), 'and so is the goal it was reached from');
   assert.ok(crumb.includes('PR #412'), 'with the page itself as the last rung');
-  // Every rung but the last is a control: a trail whose middle is inert is a list
-  // of words that looks like navigation.
   assert.equal((crumb.match(/<button/g) ?? []).length, 2, 'both rungs above are controls');
   assert.ok(/cn-crumbnow[^>]*>PR #412/.test(crumb), 'and the page you are on is not one');
 });
 
-/**
- * The first element of a named component in a rendered tree, without a DOM.
- *
- * `renderToStaticMarkup` answers what a page *looks* like; a crumb rung is a
- * handler, and what it does is only visible by holding the element. Components
- * are not called on the way down — the tree above a crumb is host elements and
- * fragments, and calling the rest would run hooks with no renderer under them.
- */
 function findComponent(node: unknown, name: string): ReactElement | null {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -1038,15 +746,6 @@ function findComponent(node: unknown, name: string): ReactElement | null {
   return findComponent((node.props as { children?: unknown }).children, name);
 }
 
-/**
- * The middle rung has to *go* to the goal, not merely leave the pull request.
- *
- * The overview's pull-request rack opens this page with no goal underneath — the
- * place holds `pr` and nothing else — so `selectPr(null)`, which relies on the
- * goal already being there, dropped straight past the rung the operator had just
- * clicked and landed on the tab. The label said "the goal" and the click said
- * "the overview". → `docs/spec/17-cockpit.md#the-pull-request-page`
- */
 test('the goal rung leads to the goal even when the page was opened without one', () => {
   const view = prView(412, null);
   const goal = view.prPage?.goal;
@@ -1057,8 +756,6 @@ test('the goal rung leads to the goal even when the page was opened without one'
     { get: (_t, name: string) => (arg: unknown) => calls.push([name, arg]) },
   ) as CockpitActions;
 
-  // Called rather than rendered: `ConsoleRoot` holds no hooks, and one call is
-  // the whole of the way to the element that carries the handler.
   const crumb = findComponent(ConsoleRoot({ view, actions: recorder }), 'PrCrumb');
   assert.ok(crumb, 'the pull request page draws its crumb');
   const trail = (crumb.type as (props: unknown) => ReactElement)(crumb.props).props.trail as ReadonlyArray<{
@@ -1071,11 +768,6 @@ test('the goal rung leads to the goal even when the page was opened without one'
   assert.deepEqual(calls, [['selectGoal', view.prPage?.goalRef]], 'and standing on it opens that goal');
 });
 
-/**
- * A goal has one rung under it and a tab has none, so the trail is exactly as
- * deep as the place is. A fixed two-rung crumb drew the tab as the goal's parent
- * *and* as a pull request's, which is how the middle rung came to be missing.
- */
 test('a goal page draws one rung and a tab draws no crumb at all', () => {
   const goal = decode(render(goalView()));
   const crumb = /<nav class="cn-crumb"[^>]*>([\s\S]*?)<\/nav>/.exec(goal)?.[1];
@@ -1089,52 +781,23 @@ test('a thread is drawn with its state, its conversation and where it hangs', ()
   for (const state of ['open', 'answered', 'resolved']) {
     assert.ok(html.includes(`cn-th-${state}`), `the demo's ${state} thread must be drawn as one`);
   }
-  // The reply, and the mark that says who wrote it: on a single-operator
-  // deployment the fleet posts under the operator's own credential, so the name
-  // alone cannot say the fleet has already answered — which is the fact a reader
-  // needs before reopening anything.
   assert.ok(html.includes('the cut alone would drop the tail it needs'), 'a reply is part of the thread');
-  // The violet tag, which is what `cn-thmark` became when the badge families folded
-  // into one: the hue is the mark, and violet is what the console says "a person or
-  // the fleet, not a court" in. → docs/spec/17-cockpit.md#the-tag
   assert.match(html, /class="tag t-violet[^"]*"[^>]*>fleet</, 'and a reply the fleet wrote says so');
   assert.ok(html.includes('src/context/rank.ts'), 'a thread names the place it hangs');
 });
 
-/**
- * The provider's own page, which the masthead's `<Ref>` used to be. A ref onto
- * this pull request now opens *this* page, so the way out to the provider needs a
- * control of its own — the shape a goal's `Open ticket ↗` already has.
- */
 test('the pull request page carries the way out to the provider', () => {
   const html = decode(render(prView(412)));
   assert.ok(html.includes('Open pull request ↗'), 'the page a ref lands on must still reach the provider');
 });
 
 test('a pull request the world has lost is said so, rather than falling through to the goal', () => {
-  // The address bar naming something the screen does not show is a click that
-  // reads as doing nothing — the same reason a missing goal gets its own screen.
   const html = decode(render(prView(9999)));
   assert.ok(html.includes('is not in the current world'), 'the page says what happened');
   assert.ok(!html.includes('Review threads'), 'and draws no page for a pull request it does not have');
 });
 
-/**
- * The record on the goal page (the work tab's history, moved to where it is read).
- *
- * Asserted on the *page* rather than on the component, because the whole change is
- * a placement: `WorkRecord` renders identically wherever it is mounted, and the
- * defect this guards against is it quietly ceasing to be mounted here — which
- * types, lints and every component test would go on passing through.
- *
- * The pre-fetch wording is what a static render shows, since effects do not run:
- * that is also the honest first paint in the browser, so pinning it costs nothing
- * and catches a card that renders an empty box while its route is in flight.
- */
 test('a goal draws its own durable record, not only the live snapshot', () => {
-  // Folded away as the page arrives, and *named* all the same: the heading is what
-  // says the history is here to be had, and a card that drew nothing at all would
-  // be indistinguishable from a page that had lost it.
   const shut = render(goalView());
   assert.ok(shut.includes('The record'), 'the goal page must carry the history the snapshot forgets');
   assert.ok(
@@ -1146,20 +809,10 @@ test('a goal draws its own durable record, not only the live snapshot', () => {
   assert.ok(open.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
 });
 
-/**
- * "Give instructions" is how an operator says what they want done next, in words — and
- * the verdict it writes is what puts the goal back in front of pickup once no PR
- * is open. Losing the control loses both, silently and with every type still
- * checking. The floor carried the verdict; this pins that the goal page carries
- * the way to write one.
- */
 test('a goal can still be sent back for more work, not only marked done', () => {
   const html = render(goalView());
   assert.ok(html.includes('Give instructions'), 'the goal page must offer the way to say what is left');
 
-  // Offered *again* on a goal already sent back, unlike the verdict-only control
-  // it replaced: a second thing the operator wants is a second instruction, and a
-  // hidden button would be a goal they can no longer say anything about.
   const already = goalView((s) => {
     const issue = s.world.issues.find((i) => `issue:${i.number}` === goalRef());
     assert.ok(issue, 'the fixture goal must be in the world');
@@ -1180,17 +833,6 @@ test('a goal can still be sent back for more work, not only marked done', () => 
   assert.ok(standing.includes('Withdraw'), 'and there is a way to take it back');
 });
 
-/**
- * The header's three groups say what they are for, in words, above their
- * controls — and the run's three states are one control rather than two buttons
- * at opposite ends of the row.
- *
- * Both halves were confusions nothing could catch: `Mark done` and `End the run…`
- * looked alike and read alike while one writes a verdict and the other kills the
- * goal's agents, and `More work` was the name of a control *and* of the verdict
- * the chip above it draws, pointing opposite ways. A rename or a regrouping that
- * quietly drops a caption puts both back, with every type still checking.
- */
 test('the goal header captions its groups and draws the run state as one control', () => {
   const html = render(goalView());
 
@@ -1198,27 +840,14 @@ test('the goal header captions its groups and draws the run state as one control
     assert.ok(html.includes(caption), `the group caption "${caption}" is what explains the controls under it`);
   }
 
-  // One segmented control, and every state in it — including the one the goal is
-  // not in, which is how the control says what the alternatives are.
   assert.match(html, /class="cn-ctlseg"/, 'the run states share one control');
   for (const state of ['Working', 'Done']) {
     assert.ok(html.includes(state), `${state} is a segment of the run state`);
   }
 
-  // The verdict chip is prefixed, so "more work" as a reading can never be
-  // mistaken for "Give instructions" as a control.
   assert.ok(!html.includes('More work'), 'no control or chip carries the old ambiguous words');
 });
 
-/**
- * The goal-profile gate (#342) reaches the rail, and it draws through the same
- * band on both surfaces.
- *
- * It holds every dispatch for its goal and expires on nothing but the answer, so
- * a gate legible only on the goal's own page is a goal stopped for good with
- * nobody told — the page is not one an operator opens for a goal that looks like
- * it merely has not come up yet.
- */
 test('an unanswered profile proposal reaches the rail, not only the goal page', () => {
   const ref = goalRef();
   const gated = (state: CockpitView['state']) => {
@@ -1244,19 +873,9 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
   assert.ok(html.includes('Use “deep”'), 'the band offers the proposal');
   assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
 
-  // One band, not two: the page draws the gate through the rail's own component,
-  // so a second copy here would be a second set of buttons to keep in step with
-  // the write.
   assert.equal(html.split('Use “deep”').length - 1, 1, 'the gate is drawn once on the goal page');
 });
 
-/**
- * A row and the band it opens are one ask, and hue plus glyph is most of how an
- * operator recognises that they are. The band's own weight is deliberately *not*
- * carried over — it is a single ask already in front of them, with nothing to
- * rank it against — so tone and symbol are the whole of the agreement, and both
- * have to hold.
- */
 test('the band on the goal page wears the tone and glyph its rail row does', () => {
   const ref = goalRef();
   const v = goalView();
@@ -1269,13 +888,6 @@ test('the band on the goal page wears the tone and glyph its rail row does', () 
   assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
 });
 
-/**
- * The shared card is embedded rather than reimplemented compactly, and this is
- * what that buys: the options an agent offered through `escalate` stay one click
- * on the goal page, and a proposal arrives with its verdict buttons instead of a
- * reply box that cannot be branched on. A second implementation would be a second
- * set of refusal rules to keep right — the reason `EscalationCard` has one.
- */
 test('the goal page answers with the shared card’s rules rather than its own', () => {
   const row = view().needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
   assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
@@ -1290,8 +902,6 @@ test('the goal page answers with the shared card’s rules rather than its own',
   assert.match(withOptions, /class="esc-quick"/, 'offered choices stay one click in the band');
   assert.match(withOptions, />Take theirs</);
 
-  // This question alone, turned into a decision — so the absence of a reply box
-  // below is this card's, and not read off a second band on the same page.
   const proposal = render(
     goalView((s) => {
       s.escalations = s.escalations.filter((e) => e.id === row.id);
@@ -1311,12 +921,6 @@ test('a selected goal draws its page instead of the overview', () => {
   assert.ok(decode(html).includes(String(v.goalPage!.issue.title)));
 });
 
-/**
- * The rail's rows and the page are one reading, so while a goal is open the rail
- * must say which of its asks are the ones on screen. Dimming rather than
- * filtering: the rail is the fleet's whole queue, and a blocker dropped from it
- * is a blocker nobody answers.
- */
 test('the rail marks the open goal’s asks and mutes the rest', () => {
   const ref = goalRef();
   const rows = [
@@ -1358,8 +962,6 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
   const opened = render({ ...goalView(), needsYou: rows });
   const wrapper = (title: string): string => {
     const before = opened.slice(0, opened.indexOf(title));
-    // `class="cn-q…"` bounded by the closing quote or a space — `cn-qkind` and
-    // `cn-qin` share the prefix and would otherwise match as row wrappers.
     const tag = [...before.matchAll(/<(?:button|div)\b[^>]*class="cn-q(?: [^"]*)?"[^>]*>/g)].at(-1);
     assert.ok(tag, `no cn-q wrapper found before "${title}"`);
     return tag[0];
@@ -1374,8 +976,6 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
     'the recovery hold blocks every goal, so it is nobody else’s business to mute',
   );
 
-  // With no goal on screen there is nothing to be current *against*: a rail that
-  // dimmed here would mute every row it draws.
   const overview = render(view({ needsYou: rows }));
   assert.ok(!overview.includes('cn-dim'), 'the rail mutes nothing while the overview is drawn');
   assert.ok(!overview.includes('aria-current'), 'no row is current while no goal is open');
@@ -1383,7 +983,7 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
 
 test('the ask is drawn above the plan, which is the whole point of the page', () => {
   const v = goalView();
-  if ((v.goalPage?.needs.length ?? 0) === 0) return; // fixtures carry no ask on this goal
+  if ((v.goalPage?.needs.length ?? 0) === 0) return;
   const html = render(v);
   assert.ok(html.indexOf('cn-needs') < html.indexOf('cn-waves'));
 });
@@ -1399,7 +999,7 @@ test('a held part quotes the reconciler’s own reason rather than inventing one
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
   const first = page.parts[0];
-  if (!first) return; // the fixture goal has no plan; the grouping tests cover this
+  if (!first) return;
 
   const parts: GoalPartView[] = [
     {
@@ -1430,20 +1030,11 @@ test('a plan with no live parts draws what it proposed rather than only saying s
     },
   });
 
-  // The sentence alone left the operator told about a plan they could not read.
   assert.ok(decode(html).includes('Every part of this plan was retired'));
   assert.ok(decode(html).includes('split the store in two'));
   assert.ok(html.includes('cn-retired'));
 });
 
-/**
- * The waves are the shape of the work and nothing else. Everything a plan also is
- * — the diagnosis, the map, each part's acceptance, the decision that was made on
- * it — is the sheet's, and the goal page reached it only through the validation
- * card's aside about amending the checks. This pins the way in on the card that
- * draws the plan, and pins that it is keyed on a plan existing rather than drawn
- * as a dead control over a goal that has none.
- */
 test('the plan card is a way into the whole plan, not only its shape', () => {
   const planned = view().state.plans?.[0];
   assert.ok(planned, 'the demo fixtures must carry a plan');
@@ -1477,18 +1068,6 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
 });
 
-/**
- * The ticket arrives folded on a goal already under way, and its state is the
- * address bar's.
- *
- * Folded, because it has been read: on a goal with a plan, pull requests and a
- * validation sheet it is a screen of prose between the track and the work. Named
- * while folded, because a section that vanished would be a page that had lost it.
- *
- * And it is a `Place`, so a link to a goal's ticket body opens on it and the back
- * button steps out of a disclosure it stepped into. Held in a `useState` all of
- * that fails silently, which is why it is pinned here rather than left to reading.
- */
 test('the ticket arrives folded on a goal under way, and opens from the place', () => {
   const shut = render(goalView());
   assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
@@ -1498,15 +1077,6 @@ test('the ticket arrives folded on a goal under way, and opens from the place', 
   assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
 });
 
-/**
- * The other half of the same rule: a goal nobody has planned yet opens *on* its
- * ticket, because that is the only thing on the page with anything in it.
- *
- * And the operator's word outranks the reading in both directions — `?shut=ticket`
- * folds the one the goal's own progress would have opened. Without that arm the
- * two lists collapse to one and a card folded away springs back the moment the
- * goal moves, which is the silent half of this change.
- */
 test('a goal nobody has planned opens on its ticket, unless the operator folded it', () => {
   const fresh = goalView((s) => {
     s.plans = [];
@@ -1525,15 +1095,6 @@ test('a goal nobody has planned opens on its ticket, unless the operator folded 
   );
 });
 
-/**
- * The pipeline cards a goal has not reached yet are named and shut, and the
- * track's own jump is what opens one.
- *
- * A card drawn open on "no checks", "nothing declared" and "not shipped" is three
- * screens of furniture between the plan and the work; a card that *vanished* would
- * be a feature announcing itself as broken. Folded is the third answer, and the
- * heading still carries the count.
- */
 test('validation and signals are folded on a goal that has not shipped', () => {
   const v = goalView();
   const page = v.goalPage;
@@ -1559,10 +1120,6 @@ test('validation and signals are folded on a goal that has not shipped', () => {
 });
 
 test('a held goal is a way into the goal it names', () => {
-  // One way into a goal, from every surface that lists one — the queue row, the
-  // overview row and this. The intake hold is raised on the rail rather than on
-  // the tickets tab, so the row that names it is a queue row, and its click opens
-  // the goal like every other row's.
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
   assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
@@ -1570,18 +1127,6 @@ test('a held goal is a way into the goal it names', () => {
   assert.ok(decode(render(v)).includes(row.title), 'and the rail draws it');
 });
 
-/**
- * Every section in the strip has a render arm.
- *
- * The other half of registering a config section. `cockpitPlace.test.ts` proves
- * `?section=x` survives the URL; this proves the page has something to draw when it
- * arrives. A section in `TABS` with no arm draws the *previous* section's body under
- * its own heading, which reads as the wrong content rather than as a bug.
- *
- * Asserted over the source rather than a render because `ConfigPage` draws nothing
- * but "Loading…" until `api.getConfig()` resolves, and stubbing the api to reach the
- * strip would be testing the stub.
- */
 test('every config section in the strip has a render arm', () => {
   const source = readFileSync('web/src/components/ConfigPage.tsx', 'utf8');
   const strip = /const TABS: readonly \{ id: ConfigTab; label: string \}\[\] = \[([\s\S]*?)\];/.exec(source);
@@ -1593,15 +1138,6 @@ test('every config section in the strip has a render arm', () => {
   }
 });
 
-/**
- * One colour control, used by two features that are otherwise unrelated.
- *
- * Asserted structurally because the sharing is the point and un-sharing it is a
- * one-line temptation: a caller that wants "just a swatch here" writes its own
- * `<input type="color">`, and then only one of the two picks up the next fix to the
- * alpha handling or the `onInput` behaviour. The tracker-state colours had exactly
- * that control before the theme work gave them a better one.
- */
 test('every colour input in the cockpit is the shared field', () => {
   const owners: string[] = [];
   for (const path of readdirSync('web/src/components').filter((f) => f.endsWith('.tsx'))) {
@@ -1611,14 +1147,6 @@ test('every colour input in the cockpit is the shared field', () => {
   assert.deepEqual(owners, ['ColourField.tsx'], 'a second colour input has appeared beside the shared one');
 });
 
-/**
- * And the tracker-state colours really do draw it — the structural check above proves
- * no *other* colour input exists, which is a different claim from this one.
- *
- * Rendered from a fixture rather than in the browser because the demo backend answers
- * `/api/config` with no groups at all, on purpose: it refuses config writes rather than
- * faking them, so there is nothing for the Values tab to draw there.
- */
 test('the tracker-state colour picker draws the shared field', () => {
   const entry = {
     path: 'issueStateColours',
@@ -1656,20 +1184,9 @@ test('the tracker-state colour picker draws the shared field', () => {
   assert.match(html, /class="cf"/, 'and the swatch is the shared colour field');
   assert.ok(html.includes('value="#ff8800"'), 'showing the operator’s colour');
   assert.ok(html.includes('aria-label="Colour for In Review"'), 'named for the state it colours');
-  // The state the map does not colour is offered, the one it does is not.
   assert.ok(html.includes('value="Done"'), 'an uncoloured state is offered in the datalist');
 });
 
-/**
- * A key another key requires, drawn while the requirement is raised by an edit
- * that has not been written yet.
- *
- * The whole point of the requirement living in the browser: the pool provider is
- * `fake` in the config this page was handed, and `git` only in what is staged. A
- * `required` computed on the server would answer for the running config and let
- * the operator write a file the next boot refuses — over a key whose row would
- * not have been drawn at all, since an unset optional is not.
- */
 test('a key the staged config requires is marked, offered a value, and blocks the write', () => {
   const html = renderToStaticMarkup(
     createElement(ConfigValues, {
@@ -1725,10 +1242,6 @@ test('a key the staged config requires is marked, offered a value, and blocks th
   assert.ok(html.includes('cfg-need'), 'the row is marked as needed');
   assert.ok(html.includes('cfg-suggest'), 'the suggestion is offered as a control');
   assert.ok(html.includes('adam@lubbdubb'), 'and it is userId@pool.project');
-  // Matched on the attributes rather than on their order: the control is a
-  // `<Button>`, which spreads the caller's attributes before it resolves the
-  // class, so a rendering-order assertion here would fail on a change that moved
-  // nothing an operator can see.
   assert.match(
     html,
     /<button[^>]*\bdisabled=""[^>]*>Review &amp; write<\/button>/,
@@ -1739,12 +1252,9 @@ test('a key the staged config requires is marked, offered a value, and blocks th
     /<button[^>]*class="btn btn primary small"[^>]*>Review &amp; write<\/button>/,
     'and it is still the surface\u2019s primary control',
   );
-  // Named rather than counted: the row is usually in a group the operator has
-  // already navigated away from.
   assert.ok(html.includes('fleetId is needed while'), 'and the save bar says which key and why');
 });
 
-/** The same page with the requirement satisfied writes normally. */
 test('a required key that is filled in does not block the write', () => {
   const html = renderToStaticMarkup(
     createElement(ConfigValues, {
@@ -1798,7 +1308,6 @@ test('a required key that is filled in does not block the write', () => {
     }),
   );
   assert.ok(!html.includes('cfg-need'), 'nothing is marked as needed');
-  // The suggestion is an offer for an empty field, so a filled one does not draw it.
   assert.ok(!html.includes('cfg-suggest'), 'and the offer is gone');
 });
 
@@ -1807,7 +1316,6 @@ test('the shared colour field keeps the alpha a picker cannot express', () => {
   const html = renderToStaticMarkup(
     createElement(ColourField, { value: '#00000099', label: 'Modal scrim', onChange: (v) => seen.push(v) }),
   );
-  // The picker only ever sees six digits; the field still shows all eight.
   assert.ok(html.includes('value="#000000"'), 'the picker is handed #rrggbb');
   assert.ok(html.includes('value="#00000099"'), 'the hex field shows the whole value');
   assert.equal(seen.length, 0);
@@ -1823,16 +1331,12 @@ test('a refused colour is marked and still shown', () => {
 
 test('the theme section draws a preset picker, the token rows and the save bar', () => {
   const html = renderToStaticMarkup(createElement(ThemeSettings));
-  // The swatches read `var(--bg)` and friends, which resolve through the same
-  // declaration block as the theme — so the attribute is what makes a card honest.
   for (const preset of PRESETS) {
     assert.ok(html.includes(`data-theme-swatch="${preset.id}"`), `${preset.id} has no preview card`);
   }
   assert.ok(html.includes('--panel-2'), 'a row names the property, not only its label');
   assert.ok(html.includes('The slightly recessed face inside a card'), 'and says what moving it changes');
   assert.ok(html.includes('Dark, unmodified'), 'the bar states where the theme stands');
-  // Advanced is folded away on arrival, so the ninety-odd derived tokens are not
-  // the first thing an operator meets.
   assert.ok(!html.includes('--cn-violet-line'), 'an advanced group must start folded');
 });
 
@@ -1862,8 +1366,6 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
   assert.ok(measured.includes('$6.40'), 'a measured goal states what it cost');
   assert.ok(!measured.includes('Local runs'), 'a goal nobody ran locally names no such row');
 
-  // The total holds a local run's money, so the card has to name it: the row above
-  // says "Agents", and a figure that outruns the agents behind it reads as an error.
   const previewed = render({
     ...v,
     goalPage: {
@@ -1893,30 +1395,15 @@ test('with no goal selected the overview draws its cards, and neither feed is on
   for (const title of ['Fleet', 'Goals in flight', 'Pull requests']) {
     assert.ok(html.includes(title), `the overview is missing ${title}`);
   }
-  // World signals went the queue's way and for the queue's reason: it is read
-  // when something wants explaining, not watched. Both halves again — the card
-  // being gone is only an improvement if the way to it came with it.
   assert.ok(!html.includes('World signals'), 'world signals is still drawing on the overview');
   assert.ok(
     html.includes('Up next is determined by world signals'),
     'the fleet card offers no way to the signals the queue is decided off',
   );
-  // Up next is a band on the Fleet card now, collapsed, so its heading is not on
-  // the page at all — what is, is the way in, carrying the count a card header
-  // used to. Both halves matter: the card being gone is only an improvement if
-  // the reading it carried came with it.
   assert.ok(!html.includes('<h3>Up next'), 'the queue is still drawing as a card of its own');
   assert.match(html, /\d+ queued/, 'the fleet card does not say how much is queued behind it');
 });
 
-/**
- * Environments left the overview for the bar, and the move is only an improvement
- * if what the card carried came with it: the chip has to be on the bar with the
- * check's own words behind it, and the card has to be gone from the page.
- *
- * Pinned on the *rendered* console rather than on the fold below, because the whole
- * of this change is where the reading is drawn.
- */
 test('an unwell environment reads on the bar, and no card draws it', () => {
   const v = view();
   const html = render(v);
@@ -1924,34 +1411,18 @@ test('an unwell environment reads on the bar, and no card draws it', () => {
   assert.ok(!html.includes('<h3>Environments'), 'the overview is still drawing the card');
 });
 
-/**
- * What the card carried has to still be reachable, or the move is a deletion: the
- * chip and the menu row are two ways to one panel, and the panel is where the
- * check's own sentences are drawn verbatim.
- */
 test('the environments panel draws every reading, in the check’s own words', () => {
   const v = view();
   const html = decode(render({ ...v, consolePanel: 'environments' }));
   assert.ok(html.includes('Pipeline failing'), 'the check’s own words, drawn verbatim');
   assert.ok(html.includes('not well'), 'and what they add up to, in the operator’s words');
 
-  // Reachable by URL where nothing declares a check, which is the one arm no click
-  // can reach — so it says so rather than drawing an empty box.
   const none = decode(render({ ...v, consolePanel: 'environments', state: { ...v.state, environmentHealth: [] } }));
   assert.ok(none.includes('No environment declares a health check'), 'an empty panel that explains nothing');
 });
 
-/**
- * What a folded band could cost, and the one thing the way in has to say out loud.
- *
- * The queue's sentences are behind the disclosure now and `test/panelRows.test.ts`
- * pins them there, against the model. What cannot go behind it is a row that is
- * the operator's move: `unapproved` waits on a person, and a person who cannot see
- * it is a person who never answers. So the count is on the disclosure's label.
- */
 test('the queue’s asks are counted on the glass, not folded away with the rows', () => {
   const v = view();
-  // The card's own list — the queue joined against the fleet, not the raw snapshot.
   const items = v.upNext;
   const asking = items.filter((i) => i.status === 'unapproved').length;
   const text = decode(render(v).replace(/<[^>]*>/g, ''));
@@ -1982,27 +1453,11 @@ test('an unwatched PR is drawn spent, not at the same weight as the ones being w
     ...v,
     state: { ...v.state, world: { ...v.state.world, pullRequests: [ignored, ...prs.slice(1)] } },
   });
-  // The row this PR is drawn in, not "some row on the page": the overview draws
-  // several kinds of row and one of them being spent proves nothing.
   const row = html.split('<div class="cn-row').find((chunk) => chunk.includes(ignored.title));
   assert.ok(row, 'the unwatched PR is still listed — one that vanishes is the other bug');
-  // The class list, not its order: a row carries the grammar's own class as well
-  // as its tone, and which comes first is not what this pins.
   assert.ok(row.slice(0, row.indexOf('"')).includes('cn-spent'), 'the unwatched PR’s row carries the spent tone');
-  // The **switch** is what says which arm this is, and it is the only thing that
-  // does: the dimming alone is not a reading — a spent row is also what a settled
-  // pull request looks like — and its hover is the offer to tag the PR, which is
-  // only ever made to one the harness is leaving alone.
   assert.ok(row.includes('Tag this PR'), 'the watch switch does not read as one that is off');
-  // The word is gone: a column that read `unwatched` down four of five rows
-  // restated what the switch and the tone had each already said, and drowned the
-  // one arm that is somebody's move.
   assert.ok(!row.includes('>unwatched</button>'), 'the rack drew the court as a word again');
-  // And so is the sub-line. Both halves of it answer *why is this not moving*, and
-  // the struck eye has already given the only answer that matters: nobody asked it
-  // to. A row nothing will happen to spending a second line on what it is waiting
-  // for is the state word's mistake one line lower, drawn on the rows least worth
-  // reading. → docs/spec/17-cockpit.md#the-row-grammar
   assert.ok(!row.includes('cn-rowsub'), 'an unwatched row spent a second line on what it is waiting for');
   assert.ok(!row.includes('the harness is leaving it alone'), 'the row drew a reason nobody will read');
 });
@@ -2012,19 +1467,6 @@ test('a goal row is a way into its page', () => {
   assert.ok(html.includes('cn-goal-row'));
 });
 
-/**
- * The backlog's four groups became the tickets tab's watch filter (#351), and its
- * intake group became an ask on the queue rail. What the group *argued* — that an
- * `unclear` appraisal is the one intake reading that stops dispatch, so it must be
- * pulled out rather than greyed inside the watched rows — is what these assert,
- * one surface further along: it is pulled out onto the rail, where the operator
- * reads what is waiting on them, rather than onto a page they open to groom the
- * backlog.
- *
- * The tab's rows arrive from its own route, which a static render does not fetch,
- * so the arrangement those groups used to cover is tested against `featureBlocks`
- * in `test/issueGroups.test.ts` instead.
- */
 test('a goal the appraisal refused is raised on the rail, quoted whole, with its override under it', () => {
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
@@ -2032,8 +1474,6 @@ test('a goal the appraisal refused is raised on the rail, quoted whole, with its
   const appraisal = v.state.world.issues.find((i) => `issue:${i.number}` === row.goalRef)?.appraisal;
   assert.ok(appraisal);
 
-  // The band the row opens, drawn in front rather than behind the rail: it is the
-  // ask panel's body, and the same one the goal page draws.
   const decoded = decode(render({ ...v, consolePanel: { ask: row.id } }));
   assert.ok(decoded.includes('could not say this is workable'), 'the band names what is holding the work');
   assert.ok(decoded.includes(appraisal.summary), 'the appraiser’s own words are quoted, never reworded');
@@ -2041,34 +1481,17 @@ test('a goal the appraisal refused is raised on the rail, quoted whole, with its
 });
 
 test('a goal nothing is holding raises no intake row at all', () => {
-  // A call-out is an exception being raised, and an exception nobody has is not a
-  // heading, it is silence — the same rule the rail keeps for every other kind.
   const v = view();
   const issues = v.state.world.issues.map((i) => ({ ...i, appraisal: null }));
   const cleared = buildNeedsYou({ ...v.state, world: { ...v.state.world, issues } });
   assert.equal(cleared.filter((r) => r.kind === 'intake').length, 0, 'no goal is held, so nothing claims one is');
 });
 
-/**
- * Unrecorded work went to the tickets tab when the work tab was retired, because
- * `File a work item` / `Ignore` is a triage decision and this is the surface
- * triage happens on.
- *
- * Asserted structurally rather than on the markup: the call-out reads `/api/work`
- * on mount and nothing fetches in a static render, so what a render proves is only
- * that it draws nothing when it has nothing — which is the *other* half of this,
- * below. What matters here is that the tab mounts it at all, since a call-out
- * nothing renders is a triage list an operator can no longer reach from anywhere.
- */
 test('the tickets tab is where unrecorded work is triaged', () => {
   const src = readFileSync(fileURLToPath(new URL('../web/src/components/TicketsPanel.tsx', import.meta.url)), 'utf8');
   assert.ok(/import\s+\{[^}]*UnrecordedWork/.test(src), 'the tickets tab must mount the unrecorded-work call-out');
   assert.ok(src.includes('<UnrecordedWork'), 'and render it, not merely import it');
 
-  // Nothing outstanding draws nothing: this is a call-out above somebody else's
-  // list, and a permanent "nothing to record" heading over the tickets table is a
-  // row of chrome saying so on every visit. The overview's cards are the opposite
-  // rule and for the opposite reason — those are gauges glanced at in a fixed spot.
   assert.ok(!render(view({ tab: 'tickets' })).includes('Unrecorded work'));
 });
 
@@ -2098,13 +1521,6 @@ test('a reading opens the panel behind it, in front of the console', () => {
   }
 });
 
-/**
- * The picker's whole job is that you can see the choice before you make it: which
- * branch a goal would run, and what has happened on **that** branch. A row that
- * named only the goal is the thing this replaced — the ref was resolved server-side
- * at start time, so the first you knew of it was after the environment came up on
- * it.
- */
 test('the local run panel names the ref each goal would run', () => {
   const v = view({ consolePanel: 'localRun' });
   const runnable = v.state.localRunTargets.filter((t) => t.runnable);
@@ -2112,18 +1528,10 @@ test('the local run panel names the ref each goal would run', () => {
   const html = decode(render(v));
   for (const target of runnable) assert.ok(html.includes(target.target.ref), `no row names ${target.target.ref}`);
 
-  // A ref with no pull request of its own says so. Silence reads as a row that
-  // forgot to say, and one glance at another goal's PR number answers a question
-  // nobody asked.
   const orphan = runnable.find((t) => t.target.pr === null);
   if (orphan) assert.ok(html.includes('no pull request of its own'));
 });
 
-/**
- * What the environment currently up has cost. It is the one spend figure an operator
- * sees while the money is still being spent, and it is on the panel rather than only
- * in the breakdown because that is where the decision to keep it running is made.
- */
 test('the local run panel states what the run holding the environment has cost', () => {
   const v = view({ consolePanel: 'localRun' });
   const run = v.state.localRun;
@@ -2131,21 +1539,12 @@ test('the local run panel states what the run holding the environment has cost',
   const html = decode(render(v));
   assert.ok(html.includes(`$${run.costUsd.toFixed(2)}`), 'the run’s own cost is not on the panel');
 
-  // Unmeasured is not free: a PTY deployment reports no usage at all, and $0.00 there
-  // would be the panel inventing a reading.
   const unmeasured = decode(
     render({ ...v, state: { ...v.state, localRun: { ...run, costUsd: null, numTurns: null } } }),
   );
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
 
-/**
- * Two empty pickers that look identical and are not: a filter holding every row
- * back, and nothing to hold back. Only the first has a control that would help, and
- * the count behind that control has to be taken from the **same** population the
- * rows are — counting hidden targets instead let the checkbox disappear at exactly
- * the moment somebody needed it, under a message telling them to tick it.
- */
 test('the local run panel offers its filter when the filter is what is hiding the rows', () => {
   const base = view({ consolePanel: 'localRun' });
   const withState = (localRunTargets: CockpitView['state']['localRunTargets']): CockpitView => ({
@@ -2157,19 +1556,11 @@ test('the local run panel offers its filter when the filter is what is hiding th
   assert.ok(held.includes('show every goal'), 'the control that would reveal them must be on screen');
   assert.ok(held.includes('would run the integration branch'), 'and the message must say what ticking it does');
 
-  // Nothing to reveal: no control offered, and the panel says which situation it is
-  // rather than leaving somebody hunting for a filter that would not help.
   const nothing = decode(render(withState([])));
   assert.ok(nothing.includes('nowhere to run yet') || nothing.includes('anywhere to run yet'));
   assert.ok(!nothing.includes('show every goal'), 'a filter that can reveal nothing must not be drawn');
 });
 
-/**
- * The readings, and the one control they earn. Ports and freshness are the first
- * things about the run that are observed rather than presumed, and each is
- * three-valued: a null is "not checked", never a zero, and a Refresh is drawn only
- * while there is something to pick up — absent otherwise, not disabled.
- */
 test('the local run panel draws the readings and offers Refresh only while behind the tip', () => {
   const v = view({ consolePanel: 'localRun' });
   const run = v.state.localRun;
@@ -2191,11 +1582,6 @@ test('the local run panel draws the readings and offers Refresh only while behin
   assert.ok(unreadable.includes('>could not read<'), 'and a lister that could not say says so');
 });
 
-/**
- * Typing into the session is offered only when there is a session to type into and
- * it is between turns. A restart that could not bring the run back leaves a live row
- * and nobody to tell; a turn in flight is one the message would queue behind.
- */
 test('the local run panel offers the message box only while something holds an idle session', () => {
   const v = view({ consolePanel: 'localRun' });
   const run = v.state.localRun;
@@ -2208,11 +1594,6 @@ test('the local run panel offers the message box only while something holds an i
   assert.ok(busy.includes('replying'), 'and the stage line says which turn is in flight');
 });
 
-/**
- * The demo carries no goal-less ask on purpose — every fixture pull request has a
- * ticket that owns it — so the orphan is built here: the state the harness does
- * reach when it works a ticketless PR, which is the case the panel exists for.
- */
 function orphanAsk(): { v: CockpitView; row: CockpitView['needsYou'][number] } {
   const base = view();
   const found = base.needsYou.find((n) => n.kind === 'escalation' || n.kind === 'plan' || n.kind === 'permission');
@@ -2230,23 +1611,15 @@ test('an ask with no goal page is answered in the ask panel', () => {
     html.includes(`<h2>${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}</h2>`),
     'the panel names the ask the rail named, under the same glyph',
   );
-  // The shared card, not a second wiring: its own controls are what answer the ask.
   assert.ok(html.includes('escalation-prompt'), 'the panel embeds the shared escalation card');
 });
 
-/**
- * The panel is the one surface with nothing drawn around the ask, so it has to
- * name the subject itself — and "no goal" has to read as a fact rather than as a
- * line that failed to load.
- */
 test('the ask panel says what the ask is about, and says so when there is no goal', () => {
   const { v, row } = orphanAsk();
   const orphan = decode(render({ ...v, consolePanel: { ask: row.id } }));
   assert.match(orphan, /No linked goal/, 'an ask with no goal must say so in those words');
   assert.match(orphan, /#9999/, 'and still name the pull request it was raised on');
 
-  // The same panel opened from a goal's band: the subject is that goal, and it is
-  // a way back onto its page rather than a label.
   const onGoal = v.needsYou.find((n) => n.goalRef !== null);
   assert.ok(onGoal, 'the demo fixtures must carry an ask that names a goal');
   const linked = decode(render({ ...v, consolePanel: { ask: onGoal.id } }));
@@ -2259,8 +1632,6 @@ test('the ask panel closes itself once the row it was drawing is settled', () =>
   const row = v.needsYou[0];
   assert.ok(row, 'the demo fixtures must carry an ask');
 
-  // What answering it looks like in the next snapshot: the row is gone from the
-  // queue, so a panel still holding its id has nothing left to offer a verdict on.
   const html = render({ ...v, consolePanel: { ask: row.id }, needsYou: v.needsYou.filter((n) => n.id !== row.id) });
   assert.ok(!html.includes('cn-backdrop'), 'a settled ask must not leave a panel standing');
 });
@@ -2279,32 +1650,12 @@ test('each tab replaces the last, and a selected goal outranks every one of them
   assert.ok(!render(view({ tab: 'tickets' })).includes('Goals in flight'), 'a tab replaces the one before it');
   assert.ok(!render(view({ tab: 'insights' })).includes('Goals in flight'));
 
-  // A queue row selects a goal without moving the nav, so the goal has to win —
-  // otherwise clicking an ask lands on a triage list, or on a reading.
   const v = goalView();
   for (const tab of ['tickets', 'insights'] as const) {
     assert.ok(render({ ...v, tab }).includes('cn-goal'), `a goal must outrank the ${tab} tab`);
   }
 });
 
-/**
- * The nav is the surfaces work happens **on**, and the work graph is not one.
- *
- * It hung off the bottom of the shell, then held the second nav slot, and now it
- * is a panel — because by the end the tab drew a disclosure triangle over an index
- * of pages that are one click away anyway: a goal's record reads on its goal page,
- * and the triage list that was its only acted-on part reads on the tickets tab.
- *
- * Both halves are asserted. Every label, so a tab added to `ConsoleTab` and
- * forgotten in the nav fails here rather than being a view nothing can reach — and
- * `Work` explicitly *not* among them, since the whole change is that the slot went
- * back. And the record reachable from the bar at every tab, since a panel nothing
- * opens is the graph unreachable rather than relocated.
- *
- * The way in is read off `menuEntries` rather than the bar's markup: the six
- * ways-in that are not gauges are behind the bar's menu button now, and a rendered
- * bar draws that list only once somebody has opened it.
- */
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
   for (const label of ['Overview', 'Tickets', 'Obstacles', 'Insights']) {
@@ -2321,21 +1672,9 @@ test('the work graph is a panel reached from the bar, not a nav destination', ()
   assert.ok(panel.includes('The record'), 'the panel names itself');
   assert.ok(!render(view()).includes('The record'), 'and nothing draws it unopened');
 
-  // A goal outranks every tab, so a record that was one could not be read beside
-  // the goal that sent you looking for it. A panel is drawn over whatever is there.
   assert.ok(render({ ...goalView(), consolePanel: 'record' as ConsolePanel }).includes('The record'));
 });
 
-/**
- * Insights is a destination, and the three readings it replaced are gone from the
- * bar.
- *
- * Both halves matter and they are one change. Spend, Yield and Output were three
- * readings of one subject — what the fleet cost, what it landed, how much of that
- * survived — and each had grown a version of the other two on the panel behind
- * it. Leaving any of them on the bar beside the page would be the cockpit stating
- * one subject twice, which is the rule the strip is built on.
- */
 test('Insights is where the three cost readings went, and they did not stay behind', () => {
   const bar = render(view()).split('</div>')[0] ?? '';
   const full = render(view());
@@ -2344,9 +1683,6 @@ test('Insights is where the three cost readings went, and they did not stay behi
   }
   assert.ok(!bar.includes('Yield'), 'the bar states a subject once');
 
-  // The page itself draws under the nav rather than over the console: the rail is
-  // where the ask that sends an operator here comes from, and a sheet that covers
-  // it hides the row being answered.
   const page = render(view({ tab: 'insights' }));
   assert.ok(page.includes('insights-bar'), 'the Insights tab draws its window control');
   assert.ok(!page.includes('read-backdrop'), 'Insights is a destination, not a modal over the console');
@@ -2357,31 +1693,11 @@ test('Insights is where the three cost readings went, and they did not stay behi
 test('the shell renders the console, and the drawer that the console only asks for', () => {
   const src = readFileSync(fileURLToPath(new URL('../web/src/App.tsx', import.meta.url)), 'utf8');
   assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
-  // The drawer is overlaid rather than placed, and which agent is open is cockpit
-  // state — the subscription is tied to it. The console asks with
-  // `actions.select(id)` and the shell answers; without this the three call sites
-  // that open an agent do nothing at all.
   assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
-  // The graph moved into the console — its nav first, and since the tab was
-  // retired, the record panel. Left here as well it would draw twice, once below
-  // everything, which is the surface this replaced. Asserted on the import and the
-  // element, not on the name: the shell's own comments cite the panel as the
-  // precedent for what else hangs off the shell, and a substring test made writing
-  // down the reason a build failure.
   assert.ok(!/import\s+\{[^}]*RecordPanel/.test(src), 'the shell must not import the work graph');
   assert.ok(!src.includes('<RecordPanel'), 'the work graph is a console panel, not a strip under the shell');
 });
 
-/**
- * The way to the tracker is always drawn, and it never leads to the wrong thing.
- *
- * Two faults, and both were silent. The control was drawn only when a URL
- * resolved, so on a goal whose ticket could not be addressed it simply was not
- * there — indistinguishable from the cockpit having forgotten it, and absent
- * exactly where finding the ticket by hand is hardest. And it resolved through
- * `#<n>` alone, a key `buildRefUrls` writes for pull requests *first*: on a tracker
- * carrying both issue 412 and PR 412, "Open ticket" opened the pull request.
- */
 test('the way to the tracker is always drawn, and prefers the unambiguous key', () => {
   const v = goalView();
   const page = v.goalPage;
@@ -2389,8 +1705,6 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   const n = page.issue.number;
   const noUrl = { ...page, issue: { ...page.issue, url: undefined } };
 
-  // `#<n>` is shared with pull requests and the pull requests are keyed first, so
-  // the colon form is the only one that certainly names this goal.
   const both = render({
     ...v,
     state: {
@@ -2403,14 +1717,10 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
     },
     goalPage: noUrl,
   });
-  // Read off the control itself rather than off the page: `#<n>` is a ref other
-  // surfaces here legitimately draw, so a whole-page search would pass on their
-  // links and never see this one.
   const opener = /<a[^>]*href="([^"]*)"[^>]*>(?:<svg(?:(?!<\/svg>)[\s\S])*<\/svg>)?Open ticket/.exec(both);
   assert.ok(opener, 'the control is drawn as a link when there is somewhere to go');
   assert.equal(opener[1], 'https://tracker/browse/right', 'the goal’s own ref wins over the number a PR shares');
 
-  // Nothing resolves at all: still drawn, still named, and no longer a link.
   const nowhere = render({ ...v, state: { ...v.state, refUrls: {} }, goalPage: noUrl });
   assert.ok(nowhere.includes('Open ticket'), 'the row’s shape must not depend on what a provider resolved');
   assert.ok(nowhere.includes('aria-disabled="true"'), 'and it says it is unavailable rather than pretending');
@@ -2420,11 +1730,6 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   );
 });
 
-/**
- * The Environments chip on the top bar — the fold, which is where its whole
- * judgement lives: which reading is worst, what to call it, and how many share
- * that word.
- */
 const envRead = (over: Partial<EnvironmentHealthReading> & { environment: string }): EnvironmentHealthReading => ({
   state: 'healthy',
   tier: null,
@@ -2445,15 +1750,11 @@ test('the environments chip reads the worst environment, as a count and a word',
     ],
     now,
   );
-  // A bare number would leave an operator opening the card to find out which of
-  // three quite different things it meant.
   assert.equal(red.value, '1 red');
   assert.equal(red.tone, 'ill');
   assert.equal(red.quiet, false);
   assert.match(red.title, /testUk is not well/);
 
-  // The count is of the worst word only: `2 red` and `1 orange` must never add up
-  // into one figure that describes neither.
   const two = environmentsReading(
     [
       envRead({ environment: 'a', state: 'unhealthy', tier: 'red' }),
@@ -2466,8 +1767,6 @@ test('the environments chip reads the worst environment, as a count and a word',
 });
 
 test('an untiered unhealthy ranks and draws with a red, not below an orange', () => {
-  // An unstated severity is not a reason to draw an outage quietly — the card's
-  // rule for the tone, read here as an ordering.
   const reading = environmentsReading(
     [
       envRead({ environment: 'liveEu', state: 'unhealthy', tier: 'orange' }),
@@ -2500,9 +1799,6 @@ test('a well fleet mutes the chip rather than moving it', () => {
 });
 
 test('the environments row is absent, not zeroed, where no environment declares a check', () => {
-  // The old card's exception, kept: a row reading `0 well` on a deployment that
-  // configured none announces a feature as broken. Read off `menuEntries`, since
-  // the row lives in the bar's menu and a closed menu draws none of them.
   const v = view();
   const none = menuEntries({ ...v, state: { ...v.state, environmentHealth: [] } }, actions);
   assert.ok(!none.some((entry) => entry.key === 'env'), 'no environment health, no row');
@@ -2520,18 +1816,12 @@ test('the environments row is absent, not zeroed, where no environment declares 
 });
 
 test('the chip is absent while every environment is well, and while none declares a check', () => {
-  // The chip's one departure from the strip's rule that a quiet reading is dimmed
-  // rather than removed: an environment is well nearly all of its life, and its
-  // absence *is* that reading. Pinned in all three arms — a healthy fleet, a
-  // deployment that configured no check, and the outage that must never be missed.
   const v = view();
   const envs = (readings: EnvironmentHealthReading[]): string =>
     render({ ...v, state: { ...v.state, environmentHealth: readings } });
 
   assert.ok(!envs([]).includes('cn-env-'), 'no environment health, no chip');
   assert.ok(!envs([envRead({ environment: 'liveUk' })]).includes('cn-env-'), 'a well environment says nothing');
-  // `unknown` is not a claim that anything is right, so it is never folded into
-  // the healthy silence — it draws, in the amber a mild outage takes.
   assert.ok(
     envs([envRead({ environment: 'liveEu', state: 'unknown', detail: 'exit 127' })]).includes('cn-env-watch'),
     'a check that could not answer went quiet',
@@ -2542,20 +1832,12 @@ test('the chip is absent while every environment is well, and while none declare
   );
 });
 
-/**
- * Validating a goal on the operator's own machine, drawn.
- *
- * The control's absence is asserted in all three of its arms, because absence is
- * what this surface uses instead of a disabled button — and an absence with no
- * sentence beside it is indistinguishable from a feature that does not work here.
- */
 test('the goal header offers Validate locally only where an agent could run it', () => {
   const ref = 'issue:390';
   const offered = render(goalView(() => undefined, ref));
   assert.ok(offered.includes('Validate locally'), 'a runnable, configured goal with nothing in flight');
   assert.ok(offered.includes('Check the work'), 'the group caption is what explains the control under it');
 
-  // No branch of its own: there is nothing to check out, so there is nothing to run.
   const noBranch = decode(
     render(
       goalView((state) => {
@@ -2567,7 +1849,6 @@ test('the goal header offers Validate locally only where an agent could run it',
   assert.ok(!noBranch.includes('Validate locally'));
   assert.ok(noBranch.includes('no branch of its own'), 'the card says why the control is not there');
 
-  // Nothing configured to start the project at all.
   const unconfigured = decode(
     render(
       goalView((state) => {
@@ -2578,7 +1859,6 @@ test('the goal header offers Validate locally only where an agent could run it',
   assert.ok(!unconfigured.includes('Validate locally'));
   assert.ok(unconfigured.includes('localRun.instruction'), 'and names the field that would fix it');
 
-  // One already running: the chip replaces the control rather than sitting beside it.
   const inFlight = decode(
     render(
       goalView((state) => {
@@ -2592,11 +1872,6 @@ test('the goal header offers Validate locally only where an agent could run it',
   assert.ok(inFlight.includes('running the plan'), 'the chip says which minute of it we are in');
 });
 
-/**
- * Each phase gets its own words, and they come off the server's fold rather than
- * being worked out here — a cockpit with its own opinion about which stage a run is
- * in would be a second reading drawn beside the row it describes.
- */
 test('the local validation chip words each phase of a run in flight', () => {
   const ref = 'issue:390';
   const said: [string, string][] = [
@@ -2623,11 +1898,6 @@ test('the local validation chip words each phase of a run in flight', () => {
   }
 });
 
-/**
- * The report is the deliverable, and every part of it is a thing an operator would
- * otherwise have to go and reproduce: what was found, where, and what was actually
- * exercised.
- */
 test('the local validation card draws the findings, the pages and the plan it ran', () => {
   const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'])));
   assert.ok(html.includes('A job with no schema is accepted'), 'the finding');
@@ -2635,11 +1905,9 @@ test('the local validation card draws the findings, the pages and the plan it ra
   assert.ok(html.includes('http://localhost:5173/jobs/new'), 'the page it was found on');
   assert.ok(html.includes('The test plan it wrote'), 'the plan, folded');
   assert.ok(html.includes('<details'), 'a browser-owned fold, not a Place');
-  // What tells this card apart from the validation plan above it.
   assert.ok(html.includes('an agent, in your own dev environment'));
 });
 
-/** A settled pass reads a step back, the way a settled check does one card over. */
 test('a passed local validation reads settled and offers nothing to do', () => {
   const html = decode(
     render(
@@ -2659,14 +1927,7 @@ test('a passed local validation reads settled and offers nothing to do', () => {
   assert.ok(!html.includes('blocker'), 'and nothing outstanding to draw');
 });
 
-/**
- * The panel's own button, on the environment it is about. The swap question cannot
- * arise here — the run in front of it *is* the goal — so the only gate left is that
- * nothing else is going on in the session.
- */
 test('the local run panel offers Validate only while the environment is idle', () => {
-  // The panel over a mutated state — `view` takes a view and this test is about
-  // what the run underneath it says.
   const panel = (mutate: (state: CockpitView['state']) => void = () => undefined): string => {
     const state = buildDemoState().state;
     mutate(state);

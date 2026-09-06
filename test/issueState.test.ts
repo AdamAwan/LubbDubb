@@ -9,16 +9,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { CockpitState, TicketsPayload } from '../src/wire.js';
 import type { TrackerItem, WorldSnapshot } from '../src/types.js';
 
-/**
- * The two halves of one confirmed state write — the baseline `/api/state` serves,
- * and the mirror the Tickets tab is built from.
- *
- * Both are patched for the reason the label pair documents: the baseline is what the
- * cockpit redraws from, and the sweep that would carry the mirror runs last in a
- * cycle that coalesces away while another is in flight. Only ever called for a write
- * the provider took, so each is observed fact arriving early rather than a guess.
- */
-
 const SINCE = '2026-07-01T00:00:00.000Z';
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -66,8 +56,6 @@ test('a confirmed state lands on the baseline, and only on the item named', () =
 test('an item the baseline no longer holds is skipped rather than invented', () => {
   const store = new Store(':memory:');
   store.setWorldBaseline(world());
-  // The world this came from has aged out. Inventing a row would put an issue in
-  // the cockpit that no snapshot ever described.
   store.patchWorldState({ number: 99, state: 'Doing' });
   assert.equal(store.getWorldBaseline()?.issues.length, 2);
   store.close();
@@ -97,10 +85,6 @@ test('a number the mirror does not hold is skipped — the mirror is a record of
   );
   store.close();
 });
-
-// ---------------------------------------------------------------------------
-// The route, at the buildSystem seam
-// ---------------------------------------------------------------------------
 
 function boardSystem() {
   const config = loadConfig({
@@ -136,12 +120,9 @@ test('POST /api/issues/:number/state writes the tracker and patches both reading
   assert.equal(moved.statusCode, 200);
   assert.deepEqual(moved.json(), { ok: true, state: 'In Review' });
 
-  // The baseline, which is what `/api/state` serves and the cockpit redraws from.
   const state = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
   assert.equal(state.world.issues.find((i) => i.number === 30)?.workItemState, 'In Review');
 
-  // And the mirror, which is what the board's own columns are built from. Asserted
-  // separately because they are two readings, and patching only one is the bug.
   const page = (await app.inject({ method: 'GET', url: '/api/tickets?tracking=any' })).json() as TicketsPayload;
   assert.equal(page.rows.find((r) => r.number === 30)?.workItemState, 'In Review');
 });
@@ -152,8 +133,6 @@ test('a provider refusal is quoted back as a 400, and neither reading moves', as
   await system.connector.setWorkItemState({ number: 31, state: 'Ready' });
   await system.harness.runCycle('manual');
 
-  // The provider is the authority on its own process template, so the refusal is
-  // the provider's sentence rather than a guess this route made first.
   system.connector.setWorkItemState = () => Promise.reject(new Error('TF401347: invalid transition'));
 
   const { app } = await buildApp(system);
@@ -167,7 +146,6 @@ test('a provider refusal is quoted back as a 400, and neither reading moves', as
 
   const page = (await app.inject({ method: 'GET', url: '/api/tickets?tracking=any' })).json() as TicketsPayload;
   assert.equal(page.rows.find((r) => r.number === 31)?.workItemState, 'Ready', 'the mirror is untouched');
-  // A refusal is recorded, never swallowed.
   assert.ok(system.store.listErrors().some((e) => /invalid transition/.test(e.message)));
 });
 

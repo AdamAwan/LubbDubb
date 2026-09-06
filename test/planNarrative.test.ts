@@ -21,15 +21,6 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
 
-/**
- * The plan document's second version, and the three readings it made possible:
- * the amendment diff, the scope check and the acceptance checklist.
- *
- * Everything here is either the store or a pure function, so none of it needs a
- * system — the paths that *dispatch* on these fields are covered where they live
- * (`test/planPart.test.ts`, `test/planIngestion.test.ts`).
- */
-
 function store(): Store {
   return new Store(':memory:');
 }
@@ -68,8 +59,6 @@ const DOC = {
     },
   ],
 };
-
-// -- the document ------------------------------------------------------------
 
 test('the v2 fields round-trip through the schema and onto the plan row', () => {
   const parsed = parsePlanDocument(JSON.stringify(DOC));
@@ -118,14 +107,10 @@ test('an amendment that omits the narrative leaves the previous one standing', (
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
-  // The same discipline `risks` already had: a caller updating only what it knows
-  // about must not erase a narrative some other write put there.
   const plan = s.upsertPlan({ originRef: 'issue:12', title: 'Issue 12', status: 'active' });
   assert.equal(plan.alternatives, DOC.alternatives);
   assert.deepEqual(plan.evidence.length, 1);
 });
-
-// -- revisions and the diff --------------------------------------------------
 
 test('every ingestion records a revision, numbered in order', () => {
   const s = store();
@@ -142,7 +127,6 @@ test('every ingestion records a revision, numbered in order', () => {
   );
   assert.equal(revisions[0]?.narrative.diagnosis, DOC.diagnosis);
   assert.equal(revisions[0]?.parts.length, 2);
-  // The declaration is stored whole, so a replan can be read as a change to it.
   assert.deepEqual(revisions[0]?.parts[0]?.touches, ['src/store/']);
 });
 
@@ -152,7 +136,6 @@ test('a revision records what was proposed, not what the store made of it', () =
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   const { plan } = ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
-  // `schema` is in review, so an amendment dropping it cannot retire it.
   const schema = s.listPlanParts(plan.id).find((p) => p.slug === 'schema');
   assert.ok(schema);
   s.updatePlanPart(schema.id, { status: 'in_review', prNumber: 7 });
@@ -162,8 +145,6 @@ test('a revision records what was proposed, not what the store made of it', () =
   if (!amended.ok) return;
   ingestPlanDocument(s, { doc: amended.document, originRef: 'issue:12', title: 'Issue 12' });
 
-  // Live on the plan — `partsToRetire` spared it — and absent from the new
-  // revision, because the planner did not declare it. Both readings are true.
   assert.equal(s.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.status, 'in_review');
   const diff = latestPlanDiff(s.listPlanRevisions(plan.id));
   assert.equal(diff?.parts.find((p) => p.slug === 'schema')?.kind, 'dropped');
@@ -175,8 +156,6 @@ test('the diff names changed fields, and is null for a plan with one verdict', (
     { slug: 'b', seq: 2, title: 'B', scope: 'y', touches: [], dependsOn: ['a'], size: null },
   ]);
   const after = revision(2, [
-    // `seq` moved and nothing else — deliberately *not* a change, or inserting one
-    // part would mark half a decomposition as amended.
     { slug: 'a', seq: 2, title: 'A', scope: 'x', touches: ['src/a/'], dependsOn: [], size: 's' },
     { slug: 'c', seq: 1, title: 'C', scope: 'z', touches: [], dependsOn: [], size: null },
   ]);
@@ -219,8 +198,6 @@ test('narrative changes are named, and a written field is told apart from a rewr
   ]);
 });
 
-// -- scope drift -------------------------------------------------------------
-
 test('scope drift reports writes outside a declared prefix, and nothing for an undeclared part', () => {
   const declared = part('schema', { touches: ['src/store/', 'src/system.ts'] });
   const silent = part('reader', { touches: [] });
@@ -228,8 +205,6 @@ test('scope drift reports writes outside a declared prefix, and nothing for an u
   const files: AgentFile[] = [
     file('agent-1', 'src/store/plans.ts'),
     file('agent-1', 'src/system.ts'),
-    // Outside: the prefix test is on a path segment, so `src/storefront` is not
-    // covered by `src/store/`.
     file('agent-1', 'src/storefront/x.ts'),
     file('agent-1', 'docs/spec/14-persistence.md'),
     file('agent-2', 'anything/at/all.ts'),
@@ -241,12 +216,6 @@ test('scope drift reports writes outside a declared prefix, and nothing for an u
   assert.deepEqual(drift[0]?.paths, ['src/storefront/x.ts', 'docs/spec/14-persistence.md']);
 });
 
-/**
- * The declaration a sweep or a tree-wide rename writes. `.` is the spelling
- * `pathIsInside`'s own comment names first, and the one that used to survive
- * normalisation as a literal prefix nothing matches — so a part that declared the
- * widest possible scope had every file it wrote drawn under a drift line.
- */
 test('the four spellings of the repository are one declaration, and none of them drift', () => {
   const tasks: Task[] = [task('issue:12:part:sweep', 'agent-1')];
   const files: AgentFile[] = [file('agent-1', 'src/store/plans.ts'), file('agent-1', 'README.md')];
@@ -264,12 +233,8 @@ test('scope drift reads every agent a part had, not only its last', () => {
   const declared = part('schema', { touches: ['src/store/'] });
   const tasks: Task[] = [task('issue:12:part:schema', 'agent-1'), task('issue:12:part:schema', 'agent-2')];
   const files: AgentFile[] = [file('agent-1', 'src/wire.ts'), file('agent-2', 'src/store/plans.ts')];
-  // The first attempt stalled and was re-dispatched; its writes are on the branch
-  // just as much as the second's.
   assert.deepEqual(planScopeDrift(12, [declared], tasks, files)[0]?.paths, ['src/wire.ts']);
 });
-
-// -- acceptance --------------------------------------------------------------
 
 test('acceptance splits on lines, strips list markers and folds in the ticks', () => {
   const p = part('schema', {
@@ -289,16 +254,12 @@ test('a re-worded criterion loses its tick, because the text is the key', () => 
   assert.deepEqual(acceptanceCriteria(p), [{ text: 'The table exists and is indexed.', met: false }]);
 });
 
-// -- what the part agent is told ---------------------------------------------
-
 test('the declaration note carries the paths and the criteria, and is empty without them', () => {
   const note = partDeclarationNote(part('schema', { touches: ['src/store/'], acceptance: 'The table exists.' }));
   assert.match(note, /src\/store\//);
   assert.match(note, /done when/i);
   assert.equal(partDeclarationNote(part('bare', { touches: [], acceptance: null })), '');
 });
-
-// -- the tracker comment -----------------------------------------------------
 
 test('the status comment carries the planner narrative, folded, once there is one', () => {
   const plan = {
@@ -328,12 +289,9 @@ test('the status comment carries the planner narrative, folded, once there is on
   assert.match(body, /Considered and rejected/);
   assert.match(body, /src\/cache\.ts:88/);
   assert.match(body, /The full write-up/);
-  // Caveats *on the verdict*, addressed to whoever was deciding whether the work
-  // happens — and that decision is already made by the time this is written.
   assert.doesNotMatch(body, /Whether the TTL shrinks/);
   assert.doesNotMatch(body, /A clock seam is missing/);
 
-  // A plan whose planner wrote none of it renders exactly as it did before.
   const bare = renderPlanComment(
     {
       ...plan,
@@ -350,8 +308,6 @@ test('the status comment carries the planner narrative, folded, once there is on
   );
   assert.doesNotMatch(bare, /<details>/);
 });
-
-// -- helpers -----------------------------------------------------------------
 
 function part(slug: string, over: Partial<PlanPart>): PlanPart {
   return {
@@ -383,7 +339,6 @@ function part(slug: string, over: Partial<PlanPart>): PlanPart {
   };
 }
 
-/** The declaration half of a part, with the three fields these graphs never vary. */
 type Declared = Omit<PlanRevision['parts'][number], 'rationale' | 'acceptance' | 'expectedKind'>;
 
 function revision(seq: number, parts: Declared[], narrative: Partial<PlanRevision['narrative']> = {}): PlanRevision {
@@ -438,8 +393,6 @@ function file(agentId: string, path: string): AgentFile {
   };
 }
 
-// -- the routes --------------------------------------------------------------
-
 test('GET /api/plans/:id/history ships the revisions and the last amendment as a diff', async () => {
   const { system, app } = await buildTestApp();
   const plan = seedPlan(system);
@@ -479,9 +432,6 @@ test('POST /api/plans/:id/acceptance ticks a criterion, and refuses one the part
     'The table exists.',
   ]);
 
-  // Refused rather than stored: a tick against text no criterion carries could
-  // never be drawn again, so accepting it would report a confirmation the sheet
-  // would then not show.
   const bogus = await app.inject({
     method: 'POST',
     url: `/api/plans/${plan.id}/acceptance`,
@@ -496,7 +446,6 @@ test('POST /api/plans/:id/acceptance ticks a criterion, and refuses one the part
   });
   assert.equal(unknownPart.statusCode, 404);
 
-  // Un-ticking is the same route, and leaves nothing behind.
   await app.inject({
     method: 'POST',
     url: `/api/plans/${plan.id}/acceptance`,
@@ -516,9 +465,6 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    // A throwaway repo rather than the ambient `cwd` default — see
-    // `test/planDiscussion.test.ts` for why a plan test must never point the real
-    // worktree manager at the checkout the suite is running in.
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
   });
@@ -532,7 +478,6 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
   return { system, app };
 }
 
-/** The two-part plan above, ingested against a real issue. */
 function seedPlan(system: System): Plan {
   system.connector.inject({ kind: 'new_issue', number: 231, title: 'Big thing', body: 'Several PRs.' });
   const doc = parsePlanDocument(JSON.stringify(DOC));

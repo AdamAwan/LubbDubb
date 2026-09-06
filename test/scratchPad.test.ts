@@ -12,7 +12,6 @@ import type { Agent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildApp } from '../src/server/app.js';
 
-/** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
   isError?: boolean;
@@ -36,7 +35,6 @@ function build(): System {
   );
 }
 
-/** Spawn an agent on `originRef`. A temp cwd is enough — nothing here touches git. */
 function spawnAgent(system: System, originRef: string): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -66,8 +64,6 @@ test('padOriginFor maps every origin in an issue subtree to the issue', () => {
 });
 
 test('padOriginFor refuses everything outside one issue or one pull request', () => {
-  // A pull request's agents have a pad of their own — see witnessLog.test.ts —
-  // and it is never the issue's.
   assert.equal(padOriginFor('pr:42:ci'), 'pr:42');
   assert.equal(padOriginFor('job:job_abc'), null);
   assert.equal(padOriginFor('epic:e-1:work'), null);
@@ -146,8 +142,6 @@ test('an empty note is refused; a topic is collapsed to one short line', () => {
   assert.equal(withTopic.trimmed, false);
 });
 
-// -- the tool channel --------------------------------------------------------
-
 test('the pad is shared across one issue and reached only through the credential', async () => {
   const system = build();
   const partA = spawnAgent(system, 'issue:12:part:schema');
@@ -161,13 +155,11 @@ test('the pad is shared across one issue and reached only through the credential
   assert.equal(wrote.isError, false);
   assert.match(wrote.text, /issue:12/);
 
-  // The point of the pad: a sibling reads what it never saw happen.
   const read = await callTool(system, partB, 'scratch_read', {});
   assert.equal(read.isError, false);
   assert.match(read.text, /PRAGMA check/);
   assert.match(read.text, /issue:12:part:schema/, 'entries are attributed to the origin that wrote them');
 
-  // ...and another goal's agent sees none of it, without having to be told.
   const elsewhere = await callTool(system, other, 'scratch_read', {});
   assert.equal(elsewhere.isError, false);
   assert.doesNotMatch(elsewhere.text, /PRAGMA check/);
@@ -214,8 +206,6 @@ test('nothing in the dispatcher reads the pad', () => {
   );
 });
 
-// -- what the cockpit is served ----------------------------------------------
-
 test('the snapshot ships the pad reading and the trail is fetched on demand', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
@@ -237,11 +227,7 @@ test('the snapshot ships the pad reading and the trail is fetched on demand', as
     entries: 2,
     updatedAt: system.store.listScratchEntries('issue:12')[1]?.createdAt,
   });
-  // A goal nobody wrote about is null, never a zero: the control that opens the
-  // pad is keyed on this, and a button whose only answer is "nothing here" is
-  // worse than no button.
   assert.equal(issues.find((i) => i.number === 13)?.scratchpad, null);
-  // The snapshot is polled continuously, so the prose itself must not ride on it.
   assert.doesNotMatch(state.body, /PRAGMA check/);
 
   const pad = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:12' });
@@ -253,18 +239,13 @@ test('the snapshot ships the pad reading and the trail is fetched on demand', as
     'the trail is served oldest first, the order it was written in',
   );
 
-  // The route resolves a ref through the same `padOriginFor` an agent's write goes
-  // through, so any origin on the goal names the one pad — the cockpit and the
-  // tool channel cannot disagree about which pad a ref means.
   const viaPart = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:12:part:schema' });
   assert.equal(viaPart.json().padRef, 'issue:12');
   assert.equal((viaPart.json().entries as unknown[]).length, 2);
 
-  // An untouched pad is an empty trail, which is an ordinary answer...
   const untouched = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:13' });
   assert.equal(untouched.statusCode, 200);
   assert.deepEqual(untouched.json().entries, []);
-  // ...while a ref that names no pad at all is a bad request, not an empty one.
   const notAPad = await app.inject({ method: 'GET', url: '/api/scratchpads/job:job_abc' });
   assert.equal(notAPad.statusCode, 400);
 

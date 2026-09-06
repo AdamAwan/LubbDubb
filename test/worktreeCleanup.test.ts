@@ -25,29 +25,14 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The assessor and the appraisal are pinned off: they default **on**, and this
-    // file is about something else — leaving them on would put an extra agent in
-    // front of every issue these assertions dispatch. Each has its own tests.
-    // (The planning funnel cannot be pinned off; a goal is planned by writing the
-    // funnel having failed open on it — `failPlanningOpen`.)
   });
   const backend = new FakePtyBackend();
-  // A pool of one, so "is the slot free again" is observable: with room to grow, a
-  // second branch is handed a *new* slot rather than the released one, because
-  // reuse is scoped to the branch and a hand-over wipes the tree. The pool the
-  // composition root builds follows the agent cap, so the bound is pinned by
-  // injecting the manager rather than by a config key.
   const pool = pinnedPool(config, 1);
   const system = buildSystem(config, { backend, worktrees: pool.worktrees });
   pool.attach(system);
   return { system, backend };
 }
 
-/**
- * A fake headless `claude` child whose `kill()` is deliberately silent — a real
- * signalled process dies *later*, and `exit` must land as its own event for the
- * kill/reap rendezvous to be worth testing at all. `crash()` drives that later exit.
- */
 class FakeStreamChild extends EventEmitter implements StreamChild {
   pid = 555;
   stdout = { on: () => {} } as unknown as NodeJS.ReadableStream;
@@ -62,8 +47,6 @@ class FakeStreamChild extends EventEmitter implements StreamChild {
   kill(): void {}
 }
 
-/** Same pool/config shape as {@link build}, but on the stream runtime so a kill's
- * exit is a later, separate event instead of firing synchronously off `kill()`. */
 function buildStream() {
   const dir = tmpDir();
   const config = loadConfig({
@@ -89,7 +72,6 @@ function buildStream() {
   return { system, children };
 }
 
-/** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */
 async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: number) {
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
   failPlanningOpen(sys.store, issueNumber);
@@ -99,11 +81,6 @@ async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: n
   return task!;
 }
 
-/**
- * Whether the slot is free — asked the only way that is observable from here. With
- * the pool at one, a held slot makes `ensure` throw rather than hand back another
- * directory, and that refusal is the same answer.
- */
 async function reissued(sys: ReturnType<typeof build>['system'], cwd: string, branch: string): Promise<boolean> {
   try {
     return (await sys.worktrees.ensure(branch, 'main')) === cwd;
@@ -121,8 +98,6 @@ test('a finished code agent has its worktree slot released once the process exit
 
   backend.last().emit('@@LUBBDUBB_DONE@@\r\n');
   assert.equal(system.store.getTask(task.id)!.status, 'done');
-  // The release waits for the actual process exit — the agent is still sitting in
-  // that directory, and the next occupant cleans and switches it.
   await tick(50);
   assert.equal(await reissued(system, cwd, 'someone/else'), false, 'held until the process is reaped');
   await system.worktrees.remove('someone/else');
@@ -146,8 +121,6 @@ test('a failed agent keeps its worktree for debugging, but not its lease', async
   await tick(100);
 
   assert.ok(existsSync(cwd), 'a failed agent worktree must not be removed');
-  // Nothing else releases a lease, so skipping the failed ones would shrink the
-  // pool by one per failure with nothing at all to say so.
   assert.equal(await reissued(system, cwd, 'someone/else'), true, 'the slot goes back to the pool');
   system.store.close();
 });
@@ -181,7 +154,6 @@ test('a shared-branch slot is not released while another task on the branch is a
   const task = await codeAgent(system, 9);
   const cwd = system.store.listAgentsByStatus('starting', 'running')[0]!.cwd;
 
-  // A second, still-active task on the same branch shares the checkout.
   system.store.createTask({
     kind: 'code',
     title: 'follow-up on same branch',

@@ -27,14 +27,6 @@ function build() {
   return buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
 }
 
-/**
- * The window forgets, and the archive is what is left.
- *
- * `world.closedPullRequests` carries a pull request for `closedPrWindowMs` and then
- * drops it, and the goal page's closed rows were drawn off that list alone — so a
- * goal's pull requests disappeared from its page a few hours after they merged.
- * The archive is written from the same window, on the pulse, and kept for good.
- */
 test('a closed pull request is archived by the pulse and outlives the world’s window', async () => {
   const system = build();
 
@@ -49,9 +41,6 @@ test('a closed pull request is archived by the pulse and outlives the world’s 
     [{ number: 42, merged: true, title: 'Add widget' }],
   );
 
-  // The window expires: the provider stops reporting the close at all. The row
-  // stands, which is the whole point of it — nothing re-fetches an archived pull
-  // request, so what is kept is the last thing the world said.
   system.store.setWorldBaseline({ takenAt: new Date().toISOString(), pullRequests: [], issues: [] });
   const kept = system.store.listArchivedPrs();
   assert.deepEqual(
@@ -71,12 +60,6 @@ test('a closed pull request is archived by the pulse and outlives the world’s 
   system.store.close();
 });
 
-/**
- * Upserted on the number rather than appended to: the window re-reports the same
- * merge on every pulse it holds it, so an insert-only archive would have one row
- * per pulse per pull request — and the goal page would draw the same merge eight
- * times.
- */
 test('re-reporting the same closed pull request refreshes its row rather than adding one', () => {
   const system = build();
   const pr = {

@@ -10,8 +10,6 @@ import { FakeEnvironmentHealthProber } from '../src/environments/fakeHealthProbe
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 
-// --- the output contract ---------------------------------------------------
-
 test('a healthy report is read as healthy, with no tier and nothing to say', () => {
   const report = parseHealthReport('{ "state": "Healthy" }');
   assert.deepEqual(report, { state: 'healthy', tier: null, reasons: [], detail: null });
@@ -30,13 +28,10 @@ test('an unhealthy report carries its tier and its own sentences', () => {
 });
 
 test('the state vocabulary is generous on the way in and closed on the way out', () => {
-  // This contract is written once, from an example, so case and punctuation are
-  // not the thing a fleet's health reading is allowed to turn on.
   for (const word of ['Healthy', 'healthy', 'HEALTHY', 'ok'])
     assert.equal(parseHealthReport(`{"state":"${word}"}`).state, 'healthy', word);
   for (const word of ['NotHealthy', 'not-healthy', 'not healthy', 'unhealthy'])
     assert.equal(parseHealthReport(`{"state":"${word}"}`).state, 'unhealthy', word);
-  // A check that knows it cannot tell says so, and keeps its own account of why.
   const cannot = parseHealthReport('{"state":"Unknown","reasons":["the credential expired"]}');
   assert.deepEqual(cannot, {
     state: 'unknown',
@@ -47,8 +42,6 @@ test('the state vocabulary is generous on the way in and closed on the way out',
 });
 
 test('an untiered unhealthy report is still unhealthy', () => {
-  // The state is the signal and the tier is the detail. Refusing this would turn a
-  // real outage into `unknown` on a script that simply says the thing that matters.
   const report = parseHealthReport('{"state":"NotHealthy","reasons":["Solr down"]}');
   assert.equal(report.state, 'unhealthy');
   assert.equal(report.tier, null);
@@ -64,8 +57,6 @@ test('every unreadable answer lands on unknown, and says why', () => {
     ['{}', /named no state/],
     ['{"state":"NotHealthy","tier":"Puce"}', /"tier" must be red or orange/],
     ['{"state":"NotHealthy","reasons":"Solr down"}', /"reasons" must be a list/],
-    // A healthy report carrying a tier is a script with a bug in it, and the two
-    // halves disagree about the only thing the reading is for.
     ['{"state":"Healthy","tier":"Red"}', /carries no tier/],
   ];
   for (const [stdout, why] of cases) {
@@ -88,17 +79,12 @@ test('the reason list is bounded, and non-sentences are dropped from it', () => 
   assert.equal(long.reasons[0]?.length, 200, 'a stack trace pasted into the list is not a reason');
 });
 
-// --- the command -----------------------------------------------------------
-
 test('the report is read from stdout whatever the exit code', async () => {
   const prober = new CommandEnvironmentHealthProber(process.cwd(), 10_000);
 
   const well = await prober.check('prod', 'node -e "console.log(JSON.stringify({state:\'Healthy\'}))"');
   assert.deepEqual(well, { state: 'healthy', tier: null, reasons: [], detail: null });
 
-  // The shape half the world already writes: `set -e`, a `curl -f`, a pipeline
-  // task's own convention. Refusing it would turn every real outage into
-  // `unknown` on exactly the deployments whose script works.
   const ill = await prober.check(
     'prod',
     "node -e \"console.log(JSON.stringify({state:'NotHealthy',tier:'Red',reasons:['Solr down']})); process.exit(1)\"",
@@ -107,8 +93,6 @@ test('the report is read from stdout whatever the exit code', async () => {
   assert.equal(ill.tier, 'red');
   assert.deepEqual(ill.reasons, ['Solr down']);
 
-  // Only when stdout said nothing readable does the exit code become the
-  // explanation — and then it is the better account of the silence.
   const broken = await prober.check('prod', 'node -e "console.error(\'no kubeconfig\'); process.exit(3)"');
   assert.equal(broken.state, 'unknown');
   assert.match(broken.detail ?? '', /exited 3/);
@@ -118,9 +102,6 @@ test('the report is read from stdout whatever the exit code', async () => {
   assert.equal(missing.state, 'unknown', 'a command that does not exist has not said the environment is well');
 });
 
-// --- the whole system ------------------------------------------------------
-
-/** A system with environments configured and a scripted health check — no shell, no network. */
 function build(environments: EnvironmentConfig[], healthProber: FakeEnvironmentHealthProber, healthIntervalMs = 0) {
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
@@ -146,8 +127,6 @@ test('only an environment that declares a health check is asked, and its answer 
     [
       { name: 'testUk', at: 'unused', health: 'unused' },
       { name: 'liveUk', at: 'unused', health: 'unused' },
-      // Declares none: observed for reach and nothing more. A row of question
-      // marks here would be the feature announcing itself as broken.
       { name: 'liveEu', at: 'unused' },
     ],
     prober,
@@ -167,8 +146,6 @@ test('only an environment that declares a health check is asked, and its answer 
 });
 
 test('a check that cannot answer is written down as unknown, never as well', async () => {
-  // The whole reason the state is three-valued: an expired credential and a
-  // healthy environment must not read the same, in either direction.
   const system = build([{ name: 'testUk', at: 'unused', health: 'unused' }], new FakeEnvironmentHealthProber());
 
   await system.harness.runCycle();
@@ -188,9 +165,6 @@ test('a health reading stands for its interval, and an episode keeps its start',
 
   const first = system.store.listEnvironmentHealth()[0];
   assert.ok(first);
-  // The same answer again does not restart the clock: a check whose reason list
-  // shifts while an outage runs is the same outage, and a `since` restarting
-  // under it every five minutes would report a fresh one forever.
   system.store.recordEnvironmentHealth({
     environment: 'testUk',
     state: 'unhealthy',
@@ -229,9 +203,6 @@ test('the cockpit is shipped the environments that declare a check today, in the
     'the operator’s list is the order the work travels in, and the order it is drawn in',
   );
 
-  // Nothing deletes a stored reading, so the configuration is what says whether
-  // the question is still being asked — otherwise a removed check would be drawn
-  // with its last answer for ever.
   const after = build([{ name: 'liveUk', at: 'unused' }], new FakeEnvironmentHealthProber());
   assert.deepEqual(buildStateSnapshot(after).environmentHealth, [], 'no check declared, no health surface at all');
 });
@@ -241,6 +212,5 @@ test('an empty health command is refused rather than left to answer nothing', ()
     () => validateEnvironments([{ name: 'testUk', at: 'git rev-parse HEAD', health: '  ' }]),
     /"health" must be a non-empty command/,
   );
-  // Left out entirely is the honest way to say the question is not asked here.
   validateEnvironments([{ name: 'testUk', at: 'git rev-parse HEAD' }]);
 });

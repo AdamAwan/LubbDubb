@@ -31,7 +31,6 @@ import type {
 } from '../src/integrations/github/githubApi.js';
 import type { MergeMethod } from '../src/sink/actionSink.js';
 
-/** Everything a test wants to script. Every field defaults to empty/benign. */
 interface Script {
   viewer?: string;
   pulls?: GhPullSummary[];
@@ -42,13 +41,7 @@ interface Script {
   reviewThreads?: Record<number, GhReviewThread[]>;
   combinedStatus?: Record<string, GhCombinedStatus>;
   checkRuns?: Record<string, GhCheckRun[]>;
-  /**
-   * Issues the two listings serve. Timestamps are optional here and defaulted by
-   * {@link scriptedIssue} — a fixture about labels or linked PRs has no business
-   * stating a `created_at` to satisfy the mirror's ordering.
-   */
   issues?: Array<Omit<GhIssue, 'createdAt' | 'updatedAt'> & Partial<Pick<GhIssue, 'createdAt' | 'updatedAt'>>>;
-  /** What `listIssuesChangedSince` was asked from, in call order. */
   historySince?: string[];
   timeline?: Record<number, GhTimelineEvent[]>;
   throwOn?:
@@ -59,17 +52,13 @@ interface Script {
     | 'updatePullBranch'
     | 'getJobLog'
     | 'viewerLogin';
-  /** Check-run annotations by check-run id — the structured half of CI evidence. */
   annotations?: Record<number, GhAnnotation[]>;
-  /** Actions job logs by job id — the fallback half. */
   jobLogs?: Record<number, string>;
   createdPullNumber?: number;
   createdIssueNumber?: number;
-  /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
 }
 
-/** A scripted issue with the timestamps the mirror reads defaulted in. */
 function scriptedIssue(
   i: Omit<GhIssue, 'createdAt' | 'updatedAt'> & Partial<Pick<GhIssue, 'createdAt' | 'updatedAt'>>,
 ): GhIssue {
@@ -82,11 +71,9 @@ interface Recorded {
   commentEdits: Array<{ commentId: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
-  /** Instants `listIssuesChangedSince` was called with. */
   historySince: string[];
   labelSets: Array<{ number: number; label: string; present: boolean }>;
   closed: Array<{ number: number; reason: string }>;
-  /** PR numbers `closePull` was called for — the restart's close. */
   closedPulls: number[];
   closedSince: string[];
   annotationReads: number[];
@@ -95,10 +82,8 @@ interface Recorded {
   createdIssues: Array<{ title: string; body: string; labels: string[]; assignee: string | null }>;
   titleSets: Array<{ number: number; title: string }>;
   baseSets: Array<{ number: number; base: string }>;
-  /** PR numbers `updatePullBranch` was called for — the server-side base merge. */
   branchUpdates: number[];
   deletedBranches: string[];
-  /** Threads `resolveReviewThread` was called for — the resolution write. */
   resolvedThreads: Array<{ number: number; rootCommentId: number }>;
 }
 
@@ -200,7 +185,6 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async listIssuesChangedSince(since, label) {
       recorded.historySince.push(since);
       recorded.issueLabelQueries.push(label);
-      // Every state, unlike the open list above — the whole point of the seam.
       return (script.issues ?? []).map(scriptedIssue);
     },
     async listIssueTimeline(number) {
@@ -253,16 +237,6 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
   };
 }
 
-// --------------------------------------------------------------------------
-// Pure helpers
-// --------------------------------------------------------------------------
-
-/**
- * The comment list as the provider now ships it: the threads, folded. The
- * assertions below are written against `handled` because that is the bit every
- * dispatch rule reads, and folding here rather than restating each case is what
- * keeps them assertions about the provider's own derivation.
- */
 const buildUnresolvedComments = (
   comments: GhReviewComment[],
   ourReplies: ReadonlySet<string>,
@@ -312,7 +286,6 @@ test('computeApproved: an outstanding CHANGES_REQUESTED cancels an approval', ()
 });
 
 test('computeApproved: uses the latest review per reviewer', () => {
-  // Bob first requested changes, then approved — his latest state is APPROVED.
   const reviews: GhReview[] = [
     { reviewerLogin: 'bob', state: 'CHANGES_REQUESTED', submittedAt: '2026-01-01T00:00:00Z' },
     { reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T02:00:00Z' },
@@ -338,7 +311,6 @@ test('buildUnresolvedComments: handled when the latest reply is one the harness 
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'here is why', inReplyToId: 100 },
   ];
   assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
-  // And not on the author alone: the same reply with no row for it is not ours.
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
@@ -351,17 +323,12 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
 });
 
 test('buildUnresolvedComments: the reviewer resolving the thread settles it', () => {
-  // The primary arm, and the reviewer's own verdict. GitHub exposes it only in
-  // GraphQL, which is the entire reason this function ever had to infer anything.
   const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
   const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: true }];
   assert.equal(buildUnresolvedComments(comments, new Set(), threads)[0]!.handled, true);
 });
 
 test('buildUnresolvedComments: an unresolved thread the bot already replied to is still handled', () => {
-  // The arms are independent: an unresolved verdict does not reopen a thread the
-  // harness has answered, or every reply would be re-litigated until a human
-  // clicked resolve.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null },
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
@@ -371,16 +338,10 @@ test('buildUnresolvedComments: an unresolved thread the bot already replied to i
 });
 
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
-  // The bug this closes, on the fallback arm: the credential is the operator's own
-  // on a single-operator deployment, so any identity comparison marked the review
-  // comments they left as handled the instant they wrote them, and the harness
-  // silently ignored exactly the reviews a human took the time to write. Nothing
-  // was sent here, so nothing is recorded, so nothing is the fleet's.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
   ];
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
-  // And unchanged when resolution was read and said nothing about it.
   assert.equal(
     buildUnresolvedComments(comments, new Set(), [{ rootCommentId: 100, isResolved: false }])[0]!.handled,
     false,
@@ -388,24 +349,17 @@ test('buildUnresolvedComments: an unanswered thread the operator opened is not h
 });
 
 test('buildUnresolvedComments: missing resolution degrades to the reply arm, never to handled', () => {
-  // `threads` is empty when the GraphQL read failed or a caller supplied none.
-  // Absence means "no verdict", never "resolved" — a thread must fail open.
   const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
   assert.equal(buildUnresolvedComments(comments, new Set(), [])[0]!.handled, false);
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: the operator reviewing under their own token still settles on a reply the harness sent', () => {
-  // The other half: once a reply *has* gone out under that same identity, the
-  // thread is answered. The fix must not turn every settled thread back on — but
-  // it is the row for comment 101, not its author, that settles it.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: 'the-operator', body: 'done', inReplyToId: 100 },
   ];
   assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
-  // The operator answering their own thread by hand is the case identity could
-  // not see: same author, no row, still the fleet's to answer.
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
@@ -425,18 +379,12 @@ test('linkedPrFromTimeline: null when nothing links a PR', () => {
   );
 });
 
-// --------------------------------------------------------------------------
-// GitHubSourceControlIntegration.snapshot
-// --------------------------------------------------------------------------
-
 test('a PR somebody assigned to you is kept by the owner filter and reported as yours', async () => {
   const { api } = fakeApi({
     viewer: 'lubbdubb-bot',
     pulls: [
       pull({ number: 7, authorLogin: 'lubbdubb-bot' }),
-      // Somebody else's, put on you: the whole case the widened filter exists for.
       pull({ number: 8, authorLogin: 'carol', assigneeLogins: ['lubbdubb-bot'] }),
-      // Somebody else's, and nothing to do with you.
       pull({ number: 9, authorLogin: 'carol' }),
     ],
     detail: {
@@ -454,8 +402,6 @@ test('a PR somebody assigned to you is kept by the owner filter and reported as 
   );
   assert.equal(slice.pullRequests!.find((p) => p.number === 7)?.viewerAssignment, undefined);
   assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAssignment, 'assignee');
-  // And which of the two the fleet may act on: the filter admits both, authorship
-  // is what separates them. → `src/prOwnership.ts`
   assert.equal(slice.pullRequests!.find((p) => p.number === 7)?.viewerAuthored, true);
   assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAuthored, false);
 });
@@ -473,8 +419,6 @@ test('an assignment carries who asked, and your own review is what ends it', asy
   };
 
   const open = await snap([]);
-  // The login is the only name GitHub puts on the list payload, and it is the
-  // name a reviewer is asked by.
   assert.equal(open.author, 'carol');
   assert.equal(open.viewerApproved, undefined);
 
@@ -483,13 +427,10 @@ test('an assignment carries who asked, and your own review is what ends it', asy
     true,
   );
 
-  // A colleague's approval is not an answer to the review *you* were asked for.
   const theirs = await snap([{ reviewerLogin: 'dave', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }]);
   assert.equal(theirs.approved, true);
   assert.equal(theirs.viewerApproved, undefined);
 
-  // Latest-per-reviewer: a later verdict takes an earlier one back, and a
-  // `COMMENTED` in between moves nothing.
   const takenBack = await snap([
     { reviewerLogin: me, state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' },
     { reviewerLogin: me, state: 'CHANGES_REQUESTED', submittedAt: '2026-01-02T00:00:00Z' },
@@ -551,16 +492,12 @@ test('snapshot leaves mergeable undefined when GitHub is still computing (null)'
   store.close();
 });
 
-// --------------------------------------------------------------------------
-// resolvePullDetail: chase GitHub's lazily-computed merge state (#35)
-// --------------------------------------------------------------------------
-
 const noSleep = async (): Promise<void> => {};
 
 test('resolvePullDetail re-polls past a transient unknown until a concrete state lands', async () => {
   const details: GhPullDetail[] = [
-    { mergeable: null, mergeableState: 'unknown', merged: false }, // first read only triggers the compute
-    { mergeable: false, mergeableState: 'dirty', merged: false }, // concrete on the second read
+    { mergeable: null, mergeableState: 'unknown', merged: false },
+    { mergeable: false, mergeableState: 'dirty', merged: false },
   ];
   let calls = 0;
   const detail = await resolvePullDetail(async () => details[calls++]!, { sleep: noSleep });
@@ -652,8 +589,6 @@ test('a first-read failure rejects rather than serving an empty world', async ()
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenPulls' });
   const sc = new GitHubSourceControlIntegration({ api: bad.api });
-  // With no successful read to fall back on, an empty slice would fabricate a
-  // world in which every open PR has vanished. It must fail instead.
   await assert.rejects(() => sc.snapshot(), /boom/);
   store.close();
 });
@@ -665,13 +600,12 @@ test('a failure after a successful read serves the last-good slice, marked stale
     detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
   });
   const sc = new GitHubSourceControlIntegration({ api: good.api });
-  const first = await sc.snapshot(); // warm the last-good cache
+  const first = await sc.snapshot();
   assert.deepEqual(
     first.pullRequests!.map((p) => p.number),
     [7],
   );
 
-  // Fail the second read, in place, on the same integration.
   good.api.listOpenPulls = async () => {
     throw new Error('boom');
   };
@@ -696,10 +630,6 @@ test('a slice served fresh is not marked stale', async () => {
 });
 
 test('a failing resolution read costs the verdict, not the snapshot', async () => {
-  // The GraphQL read is the one call in the snapshot allowed to fail alone: it is
-  // reachable for reasons the REST reads are not (token scope, Enterprise schema,
-  // a proxy that passes /repos and not /graphql), and letting it throw would
-  // freeze the whole world on `lastGood` over a field that only refines a verdict.
   const store = new Store(':memory:');
   const errors: string[] = [];
   const { api } = fakeApi({
@@ -716,16 +646,11 @@ test('a failing resolution read costs the verdict, not the snapshot', async () =
   const prs = slice.pullRequests ?? [];
 
   assert.equal(prs.length, 1, 'the PR is still in the world');
-  // Degraded to the reply arm — which fails toward the thread staying open.
   assert.equal(prs[0]!.unresolvedComments[0]!.handled, false);
   assert.equal(errors.length, 1, 'and the operator is told the verdict is degraded');
   assert.match(errors[0]!, /review-thread resolution/);
   store.close();
 });
-
-// --------------------------------------------------------------------------
-// Outbound
-// --------------------------------------------------------------------------
 
 test('postPrReply threads under a review comment when commentId is set', async () => {
   const { api, recorded } = fakeApi();
@@ -761,8 +686,6 @@ test('resolvePrThread resolves the thread keyed on the root comment the reply th
 });
 
 test('resolvePrThread reports a thread the pull request does not carry, rather than claiming one closed', async () => {
-  // A stale reading rather than a fault: the executor says so on the reply's own
-  // audit line and leaves the thread alone.
   const { api } = fakeApi({ reviewThreads: { 7: [{ rootCommentId: 100, isResolved: false }] } });
   const store = new Store(':memory:');
   const sc = new GitHubSourceControlIntegration({ api });
@@ -805,10 +728,6 @@ test('setPrLabel adds or removes a label through the API', async () => {
   store.close();
 });
 
-// --------------------------------------------------------------------------
-// Ref → URL resolution (RefResolvable)
-// --------------------------------------------------------------------------
-
 test('sourceControl resolves refs to canonical URLs using its owner/repo', () => {
   const { api } = fakeApi();
   const store = new Store(':memory:');
@@ -826,10 +745,6 @@ test('issues provider is also a ref resolver', () => {
   assert.equal(issues.resolveRefUrl('#7'), 'https://github.com/octo/demo/issues/7');
   store.close();
 });
-
-// --------------------------------------------------------------------------
-// GitHubIssuesIntegration.snapshot
-// --------------------------------------------------------------------------
 
 test('issues snapshot drops PRs and maps state / labels / linked PR', async () => {
   const { api } = fakeApi({
@@ -881,7 +796,6 @@ test('viewerAddedLabels: ignores a since-removed label even if the viewer once a
   const events: GhTimelineEvent[] = [
     { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
   ];
-  // The label is no longer on the issue, so it must not count.
   assert.deepEqual(viewerAddedLabels(events, 'me', ['bug']), []);
 });
 
@@ -911,10 +825,8 @@ test('issues snapshot resolves tag ownership when the ownership gate is on', asy
   const issues = new GitHubIssuesIntegration({ api, ownershipLabel: 'agent-ready' });
   const slice = await issues.snapshot();
   const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
-  // Both tagged issues carry the label, but only #1's was added by the viewer.
   assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
   assert.deepEqual(byNumber.get(2)!.labelsAddedByViewer, []);
-  // #3 doesn't carry the gate label, so authorship is left untracked.
   assert.equal(byNumber.get(3)!.labelsAddedByViewer, undefined);
   store.close();
 });
@@ -945,8 +857,6 @@ test('closeIssue closes with the reason GitHub draws on the timeline', async () 
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
   const issues = new GitHubIssuesIntegration({ api });
-  // `not_planned` rather than `completed`: the plan back-out is "we are not doing
-  // this", and the two read very differently to whoever finds the ticket later.
   await issues.closeIssue({ number: 7, reason: 'not_planned' });
   assert.deepEqual(recorded.closed, [{ number: 7, reason: 'not_planned' }]);
   store.close();
@@ -973,15 +883,11 @@ test('createIssue files an issue with its labels and assignee on the create itse
     title: 'CSV export 404s on Safari',
     body: 'Reported by the operator.',
     labels: ['lubbdubb-watch', 'bug'],
-    // GitHub has no work item type — the field is dropped rather than turned into
-    // a label nobody asked for on the repository.
     type: 'User Story',
     assignee: 'adamawan',
     relatedTo: null,
   });
 
-  // The harness's own vocabulary, not a provider id: that is what a filing row
-  // stores and what `link_ticket` speaks.
   assert.deepEqual(res, { ok: true, ref: 'issue:314' });
   assert.deepEqual(recorded.createdIssues, [
     {
@@ -1004,9 +910,6 @@ test('a related item becomes the cross-reference GitHub draws on both issues', a
     assignee: null,
     relatedTo: 12,
   });
-  // Naming `#12` in the body *is* GitHub's related link — the closest thing it has
-  // to Azure's relation — so it is appended here rather than left to a caller who
-  // would have to know which tracker they were filing into.
   assert.match(recorded.createdIssues[0]!.body, /The symptom\.\n\nRelated to #12\./);
 });
 
@@ -1056,9 +959,6 @@ test('closePr closes a pull request that will not be merged', async () => {
   const { api, recorded } = fakeApi();
   const sc = new GitHubSourceControlIntegration({ api });
 
-  // The plan part restart's first step. Idempotent by GitHub's own contract — the
-  // patch is accepted whatever state the pull request is in — so pressing restart
-  // twice is two successes rather than a failure the operator has to interpret.
   assert.deepEqual(await sc.closePr({ prNumber: 7 }), { ok: true, ref: 'pr:7' });
   assert.deepEqual(await sc.closePr({ prNumber: 7 }), { ok: true, ref: 'pr:7' });
   assert.deepEqual(recorded.closedPulls, [7, 7]);
@@ -1069,9 +969,6 @@ test('deleteBranch reaps a merged branch, and an already-absent one is still a s
   const sc = new GitHubSourceControlIntegration({ api });
 
   assert.deepEqual(await sc.deleteBranch({ branch: 'issue/12' }), { ok: true, ref: 'issue/12' });
-  // A repository with "automatically delete head branches" on removed it at merge
-  // time. That is the common case, not a failure — throwing here would put a
-  // permanent stream of noise in the error log on the best-configured repos.
   assert.deepEqual(await sc.deleteBranch({ branch: 'issue/13' }), {
     ok: true,
     ref: 'issue/13 (already absent)',
@@ -1083,13 +980,9 @@ test('updatePrBranch merges the base in server-side, and a refusal throws', asyn
   const { api, recorded } = fakeApi();
   const sc = new GitHubSourceControlIntegration({ api });
 
-  // No worktree, no clone, no push — one call, and the base named back for the
-  // audit line.
   assert.deepEqual(await sc.updatePrBranch({ prNumber: 12, base: 'main' }), { ok: true, ref: 'main' });
   assert.deepEqual(recorded.branchUpdates, [12]);
 
-  // GitHub refusing the merge it called clean is the fallback's signal: it has to
-  // reach the caller, never be swallowed into an ok result.
   const refusing = new GitHubSourceControlIntegration({ api: fakeApi({ throwOn: 'updatePullBranch' }).api });
   await assert.rejects(() => refusing.updatePrBranch({ prNumber: 12, base: 'main' }), /merge conflict/);
 });
@@ -1103,19 +996,6 @@ test('setPullTitle and setPullBase each write only their own field', async () =>
   assert.deepEqual(recorded.baseSets, [{ number: 42, base: 'main' }]);
 });
 
-/**
- * `issue_closed` is unreachable on a real provider (issue #577).
- *
- * `diffWorlds` needs an in-place open→closed transition, and the issues provider
- * snapshots the **open set** only — so a closed issue simply leaves the world, and
- * "a removal emits nothing" is absolute. `pr_merged` has the identical defect and
- * arrives on `closedPullRequests` instead; there is no closed-issue list, so the
- * closure signal a reader wants is the ticket mirror and never `world_events`.
- *
- * `test/worldDiff.test.ts` exercises the branch with a hand-built pair of
- * snapshots in which a closed issue is still present — a world no provider
- * produces — so this drives the real integration instead.
- */
 test('a closed issue produces no world event, because it leaves the world instead', async () => {
   const open: Script['issues'] = [
     { number: 10, title: 'Bug', body: '', labels: [], state: 'open', url: 'https://i/10', isPullRequest: false },
@@ -1128,8 +1008,6 @@ test('a closed issue produces no world event, because it leaves the world instea
     ['#10(open)'],
   );
 
-  // The tracker closes it. The open list stops carrying it — which is the whole
-  // point: `state: 'closed'` never reaches a snapshot.
   const closedScript: Script['issues'] = [{ ...open[0]!, state: 'closed' }];
   const after = await new GitHubIssuesIntegration({ api: fakeApi({ issues: closedScript }).api }).snapshot();
   assert.deepEqual(after.issues, [], 'the issue left the world rather than changing state in it');
@@ -1141,7 +1019,6 @@ test('a closed issue produces no world event, because it leaves the world instea
     'no issue_closed, ever — a disappearance is not a progress signal',
   );
 
-  // The one thing this lifecycle does report: a reopen is an appearance.
   assert.deepEqual(
     diffWorlds(world(after.issues!), world(before.issues!)).map((e) => e.kind),
     ['issue_opened'],

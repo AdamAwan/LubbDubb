@@ -11,10 +11,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { validatePlanDocument, type PlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 
-// Issue #475, "make a passed validation check's note optional" — the note stays
-// required for a failed reading, and a passed one recorded with no note keeps its
-// `resultBy: 'operator'` attribution rather than reading like a reset.
-
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
@@ -38,7 +34,6 @@ function build(): System {
   });
 }
 
-/** A goal carrying one live validation check, ready for a result to be posted to it. */
 function seedCheck(system: System, originRef = 'issue:12'): void {
   const parsed = validatePlanDocument({
     version: 1,

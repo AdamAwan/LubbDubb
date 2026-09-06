@@ -15,9 +15,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// Marking a goal a priority: everything the harness dispatches under it ranks
-// ahead of the natural cross-rule order, and nothing about what may run changes.
-
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
@@ -26,7 +23,6 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    // The funnel has failed open on every issue in these worlds, as in upNext.test.ts.
     recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
     ...over,
@@ -54,8 +50,6 @@ const pr = (number: number, branch: string, over: Partial<PullRequest> = {}): Pu
   ...over,
 });
 
-// -- the expansion -----------------------------------------------------------
-
 const emptyWorld = { openPrs: [], issues: [], plans: [], parts: [] };
 
 test('a flagged goal covers its whole origin subtree', () => {
@@ -73,9 +67,6 @@ test('a flagged goal covers its whole origin subtree', () => {
 });
 
 test('the subtree stops at the goal it names', () => {
-  // A bare `startsWith('issue:1')` matches `issue:19:plan`, which would hand
-  // another goal's whole funnel the priority — the reason this asks
-  // `issueOriginRole` rather than testing a prefix.
   const covers = expeditedOrigins([{ originRef: 'issue:1', since: 'now' }], emptyWorld);
   assert.equal(covers('issue:19'), false);
   assert.equal(covers('issue:19:plan'), false);
@@ -92,11 +83,11 @@ test('an unflagged goal, a job and a ticketless PR all answer false', () => {
 test('the pull requests a flagged goal opened are covered, by all three readings', () => {
   const covers = expeditedOrigins([{ originRef: 'issue:12', since: 'now' }], {
     openPrs: [
-      pr(50, 'issue/12'), // the pickup branch
-      pr(51, 'issue/12/signer'), // a part's branch
-      pr(52, 'issue/120'), // a different goal whose number starts the same
-      pr(53, 'hand-cut'), // linked to the issue but off-convention
-      pr(54, 'also-hand-cut'), // a part's own explicit branch
+      pr(50, 'issue/12'),
+      pr(51, 'issue/12/signer'),
+      pr(52, 'issue/120'),
+      pr(53, 'hand-cut'),
+      pr(54, 'also-hand-cut'),
     ],
     issues: [issue(12, { linkedPrNumber: 53 })],
     plans: [{ id: 'pl1', originRef: 'issue:12' } as Plan],
@@ -119,12 +110,8 @@ test('a part of an unflagged plan is not covered by another goal being flagged',
   assert.equal(covers('pr:60:ci'), false);
 });
 
-// -- the ranking -------------------------------------------------------------
-
 test("a flagged goal's pickup jumps the natural cross-rule order", async () => {
   const d = new RuleDispatcher();
-  // A red build outranks an issue pickup by pipeline position, so without the flag
-  // `pr:1:ci` takes the only slot.
   const world = { pullRequests: [pr(1, 'unrelated')], issues: [issue(101)] };
   const natural = await d.decide(ctx(world, { agentHeadroom: 1 }));
   assert.deepEqual(
@@ -148,9 +135,6 @@ test("a flagged goal's pickup jumps the natural cross-rule order", async () => {
 });
 
 test("a flagged goal's pull request is lifted with it", async () => {
-  // The half a per-origin drag cannot express: the goal's own pickup is not queued
-  // at all here — its PR is open — and the thing between it and the line is a red
-  // build on an origin that never names the goal.
   const d = new RuleDispatcher();
   const result = await d.decide(
     ctx(
@@ -196,7 +180,6 @@ test('a manual job still takes the next free slot ahead of a flagged goal', asyn
 });
 
 test('a flagged goal is still held by its cooldown', async () => {
-  // The whole contract of the flag: it orders, and it un-holds nothing.
   const d = new RuleDispatcher();
   const result = await d.decide(
     ctx(
@@ -226,8 +209,6 @@ test('a flagged goal is still held by its cooldown', async () => {
   );
   assert.ok(!result.actions.some((a) => a.type.startsWith('dispatch_')));
 });
-
-// -- the store and the route -------------------------------------------------
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prio-'));
@@ -274,9 +255,6 @@ test('the route flags a goal, clears it, and is idempotent both ways', async () 
 });
 
 test('a flag survives the pulse that prunes stale queue arrangements', () => {
-  // The reason this is not reconciled like `priority_overrides`: a flagged goal
-  // waiting on a human queues no origin at all, which is exactly when the flag
-  // has to still be there when the wait ends.
   const system = build();
   try {
     system.store.setGoalPriority('issue:4', true);

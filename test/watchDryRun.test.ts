@@ -14,17 +14,10 @@ import { WatchSchema } from '../src/validation/watchDocument.js';
 import { watchNote } from '../src/plans/planning.js';
 import type { Agent } from '../src/types.js';
 
-/** What a tool call comes back as, on the wire the agent's bridge reads. */
 interface ToolResultText {
   isError?: boolean;
   content: { text?: string }[];
 }
-
-/**
- * The declaration, the dry run, and the refusals it hands back — at the
- * `buildSystem` seam with `dbPath: ':memory:'` and `FakeEnvironmentObserver`
- * injected. Nothing here spawns a shell or touches a network.
- */
 
 const TEST_UK: EnvironmentConfig = {
   name: 'testUk',
@@ -32,7 +25,6 @@ const TEST_UK: EnvironmentConfig = {
   watch: { observe: './scripts/telemetry.sh testUk', schema: 'Structured logs land in `traces`.' },
 };
 
-/** One signal, declared as a planner would. */
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
@@ -89,8 +81,6 @@ async function submit(system: System, agent: Agent, watch: unknown) {
 }
 
 test('a signal whose presence query answers zero is unknown, not clean', async () => {
-  // The commonest real case, and the one that reads as success: an acceptance
-  // environment where the scheduled job does not run. Everything answers zero.
   const observer = new FakeEnvironmentObserver({
     'no-timeouts:presence': '[]',
     'no-timeouts:signal': '[]',
@@ -103,8 +93,6 @@ test('a signal whose presence query answers zero is unknown, not clean', async (
   assert.equal(check.dryRunPresence, 'zero');
   assert.equal(check.dryRunVerdict, 'unknown', 'zero presence is unknown, never a clean reading');
   assert.match(check.dryRunDetail!, /never heard of this code path/);
-  // And the check's own query is not even asked: whatever it would say about a
-  // defect inside a code path the telemetry does not know is not a reading.
   assert.deepEqual(
     observer.asked.map((a) => a.kind),
     ['presence'],
@@ -119,8 +107,6 @@ test('a dry run that cannot resolve is returned to the author, not swallowed', a
   });
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
-  // The plan is kept — a refusal about one query is not a reason to lose a
-  // decomposition — and the reason comes back in the same turn, where it is cheap.
   assert.ok(system.store.getPlanByOrigin('issue:12'), 'the plan landed');
   const refusals = res.payload['watchDryRun'] as string[];
   assert.equal(refusals.length, 1);
@@ -129,8 +115,6 @@ test('a dry run that cannot resolve is returned to the author, not swallowed', a
 });
 
 test('a result that omits the id echo is unknown, not clean', async () => {
-  // A stale wrapper script: it ran something, and it was not the query it was
-  // given. Read as an answer, it is a verdict about a different question.
   const observer = new FakeEnvironmentObserver({
     'no-timeouts:presence': JSON.stringify([{ role: 'worker' }]),
   });
@@ -145,8 +129,6 @@ test('a result that omits the id echo is unknown, not clean', async () => {
 });
 
 test('an observation that answers nothing at all is unknown', async () => {
-  // Nothing scripted: the fake answers "could not say", which is what an expired
-  // credential and a missing binary both look like. Never folded into zero.
   const system = build(new FakeEnvironmentObserver());
   await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
   const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
@@ -203,7 +185,6 @@ test('no environment declares telemetry, so nothing is asked and nothing is refu
   const observer = new FakeEnvironmentObserver();
   const system = build(observer, [{ name: 'testUk', at: 'echo unused' }]);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
-  // Declared and drawn, with no reading: the feature is off, not broken.
   assert.equal(system.store.listGoalWatches().length, 1);
   assert.equal(system.store.listGoalWatches()[0]!.dryRunVerdict, null);
   assert.deepEqual(observer.asked, []);
@@ -221,9 +202,6 @@ test('an amendment merges on the id and clears the reading it replaced', async (
   await submit(system, agent, { signals: [SIGNAL] });
   assert.equal(system.store.listGoalWatches()[0]!.dryRunRows, 1);
 
-  // The same id, a different query. The reading is a reading of *that* query, so
-  // the amendment must re-ask rather than leave the old answer standing under the
-  // new text — which is what the ingest's cleared columns and the re-run buy.
   await submit(system, agent, { signals: [{ ...SIGNAL, id: 'no-timeouts', query: 'traces | where 1 == 2' }] });
   const rows = system.store.listGoalWatches();
   assert.equal(rows.length, 1, 'merged on the id rather than filed beside it');
@@ -249,9 +227,6 @@ test('a check an amendment stopped declaring stops being asked about', async () 
   system.store.close();
 });
 
-// --- measures and the baseline ----------------------------------------------
-
-/** One measure, declared as a planner would: no threshold, and the before it is compared against. */
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
@@ -274,9 +249,6 @@ test('a measure captures its baseline on the dry run it already rides', async ()
   assert.ok(check.baselineAt !== null);
   assert.equal(check.dryRunVerdict, 'fires');
   assert.equal(res.payload['watchDryRun'], undefined, 'a measure that answered has nothing to hand back');
-  // One call, not two: the baseline is the dry run's own reading, so a second
-  // spawn would be free to ask a different question of a system that had already
-  // changed. And no presence query — a measure declares none.
   assert.deepEqual(
     observer.asked.map((a) => a.kind),
     ['measure'],
@@ -309,9 +281,6 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
   await submit(system, agent, { measures: [MEASURE] });
   assert.equal(system.store.listGoalWatches()[0]!.baselineValue, 8400);
 
-  // A baseline is a reading of *that* query. The re-declaration clears it and the
-  // dry run takes a new one, rather than leaving a before standing under text
-  // nobody has put to an environment.
   await submit(system, agent, { measures: [{ ...MEASURE, query: 'requests | summarize value = avg(duration)' }] });
   const after = system.store.listGoalWatches()[0]!;
   assert.equal(after.query, 'requests | summarize value = avg(duration)');
@@ -325,8 +294,6 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
 });
 
 test('a measure whose dry run never answered carries no baseline at all', async () => {
-  // Nothing scripted: the observation did not answer, so there is no before —
-  // which is the state the fold reads as `unknown` rather than as clean.
   const system = build(new FakeEnvironmentObserver());
   await submit(system, spawnPlanner(system), { measures: [MEASURE] });
   const check = system.store.listGoalWatches()[0]!;
@@ -336,31 +303,23 @@ test('a measure whose dry run never answered carries no baseline at all', async 
   system.store.close();
 });
 
-// --- the declaration's own refusals ----------------------------------------
-
 test('a signal without a presence query is refused', () => {
   const parsed = WatchSchema.safeParse({ signals: [{ ...SIGNAL, presence: undefined }] });
   assert.equal(parsed.success, false);
 });
 
 test('a measure declaring neither a threshold nor a baseline is refused at ingestion', () => {
-  // The shape most likely to be written by somebody who meant to come back to it:
-  // it reads as a check and cannot fail. `arrival.opens: []`'s refusal.
   assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, expect: {} }] }).success, false);
   assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, expect: { under: 500 } }] }).success, true);
   assert.equal(WatchSchema.safeParse({ measures: [MEASURE] }).success, true);
-  // A measure declares no presence — the field belongs to the other kind.
   assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, presence: 'x' }] }).success, false);
 });
 
 test('a watch block declares only signals and measures, and duplicate ids are refused', () => {
   assert.equal(WatchSchema.safeParse({ signals: [], rumours: [] }).success, false);
   assert.equal(WatchSchema.safeParse({ signals: [SIGNAL, SIGNAL] }).success, false);
-  // Unique across the two kinds: the store's key is the slug alone, so a signal
-  // and a measure sharing one would be a single row.
   assert.equal(WatchSchema.safeParse({ signals: [SIGNAL], measures: [{ ...MEASURE, id: SIGNAL.id }] }).success, false);
   assert.equal(WatchSchema.safeParse({ signals: [SIGNAL] }).success, true);
-  // `tolerate` defaults to zero — the thing should not be happening at all.
   const parsed = WatchSchema.parse({ signals: [{ ...SIGNAL, tolerate: undefined }] });
   assert.equal(parsed.signals[0]!.tolerate, 0);
 });
@@ -369,15 +328,12 @@ test('an id that is not kebab-case is refused, because it is interpolated into t
   assert.equal(WatchSchema.safeParse({ signals: [{ ...SIGNAL, id: 'no"; drop table --' }] }).success, false);
 });
 
-// --- the environment config's own refusals ---------------------------------
-
 test('validateEnvironments refuses a watch that cannot mean what it says', () => {
   const refuse = (watch: unknown, why: RegExp) =>
     assert.throws(() => validateEnvironments([{ name: 'testUk', at: 'x', watch } as EnvironmentConfig]), why);
   refuse({ observe: '  ' }, /unanswerable forever/);
   refuse({ observe: 'x', holds: ['deploy'] }, /not an obligation the harness files/);
   refuse({ observe: 'x', forMs: 0 }, /positive number of milliseconds/);
-  // A `describe` without an `observe` is a schema for a question nothing asks.
   assert.throws(
     () => validateEnvironments([{ name: 'testUk', at: 'x', describe: 'y' } as unknown as EnvironmentConfig]),
     /belongs inside "watch"/,
@@ -385,22 +341,15 @@ test('validateEnvironments refuses a watch that cannot mean what it says', () =>
   assert.doesNotThrow(() => validateEnvironments([TEST_UK]));
 });
 
-// --- the prompt, and the lens boundary -------------------------------------
-
 test('the planner’s watch guidance is appended, and is empty where nothing declares telemetry', () => {
   assert.equal(watchNote([{ name: 'testUk' }]), '');
   const note = watchNote([TEST_UK]);
   assert.match(note, /testUk/);
   assert.match(note, /presence/);
-  // The operator's own schema prose rides along — appended, so an override that
-  // never learned a `{watch}` token cannot drop it.
   assert.match(note, /Structured logs land in/);
 });
 
 test('nothing under src/dispatcher/ imports src/environments/', () => {
-  // Structural, the way the other lens boundaries are kept. `src/environments/` is
-  // a read-only view: a rule consulting one would be a second opinion about a
-  // decision made elsewhere, and a watch could then spend an agent by accident.
   const offenders: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {

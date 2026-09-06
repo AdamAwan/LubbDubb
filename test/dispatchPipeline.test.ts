@@ -7,10 +7,6 @@ import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js
 import type { Decision, Escalation, Issue, PullRequest, Task } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
 
-// The rules/admission split. Two vocabularies that used to be one registry, and
-// the invisibility that hid between them: a rule superseded by an earlier one
-// `continue`d, so its candidate vanished with no queue entry and no reason.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 
 function issue(over: Partial<Issue> = {}): Issue {
@@ -43,8 +39,6 @@ function queued(upcoming: QueueItem[] | undefined, origin: string): QueueItem | 
   return upcoming?.find((q) => q.origin === origin);
 }
 
-// -- the pipeline is the only ordering ---------------------------------------
-
 test('the pipeline holds every rule, and nothing that is not one', () => {
   for (const entry of DISPATCH_PIPELINE) {
     assert.ok(entry.id in DISPATCH_RULES, `${entry.id} is in the registry`);
@@ -55,12 +49,6 @@ test('the pipeline holds every rule, and nothing that is not one', () => {
 });
 
 test('the non-rules stay in the registry but take no position', () => {
-  // `decisions.rule` is persisted, so a row written months ago naming one of
-  // these must still resolve to something the Decision log can render. That is
-  // the whole reason the registry is a superset of the pipeline.
-  // `StageRuleId` already makes the last assertion a compile-time one — these ids
-  // are not in the type `DISPATCH_PIPELINE` entries carry. Asserted anyway, over
-  // `string`, so the property survives someone widening that type.
   const positions: string[] = DISPATCH_PIPELINE.map((e) => e.id);
   for (const id of ['branch-notify', 'cooldown-escalate', 'idle'] as const) {
     assert.ok(id in DISPATCH_RULES, `${id} still resolves for an old decision row`);
@@ -70,17 +58,11 @@ test('the non-rules stay in the registry but take no position', () => {
 });
 
 test('no entry carries a position of its own', () => {
-  // The rot this change removed: a hand-written `number` on each entry claiming
-  // to mirror an order it had drifted from. If one comes back, so does the drift.
   for (const [id, rule] of Object.entries(DISPATCH_RULES)) {
     assert.ok(!('number' in rule), `${id} names itself and nothing else`);
   }
 });
 
-// -- superseded: the hole the split exposed ----------------------------------
-
-// The planner rather than the pickup, and it cannot be otherwise: a pickup needs
-// a plan row saying `single`, and a plan row is what takes an issue past the appraisal.
 test('a planner the appraisal supersedes is queued with the reason, not dropped', async () => {
   const d = new RuleDispatcher();
   const { upcoming } = await d.decide(ctx());
@@ -123,8 +105,6 @@ test('nothing is superseded when no rule in front of pickup is on', async () => 
   assert.equal(pickup?.status, 'dispatching', 'the default path is untouched by any of this');
 });
 
-// -- concern urgency comes off the pipeline ----------------------------------
-
 test('a review comment outranks CI on one PR, because that is their pipeline order', async () => {
   const pr: PullRequest = {
     id: 'p1',
@@ -148,8 +128,6 @@ test('a review comment outranks CI on one PR, because that is their pipeline ord
 });
 
 test('a review comment outranks a merge conflict, because the review is about to rewrite the hunks', async () => {
-  // The reason the comment concern leads: resolving a conflict against code the
-  // reviewer is asking to be written differently resolves it twice.
   const pr: PullRequest = {
     id: 'p1',
     number: 42,
@@ -167,16 +145,12 @@ test('a review comment outranks a merge conflict, because the review is about to
   const dispatch = actions.find((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatch?.rule, 'pr-review-comment');
   assert.equal(dispatch?.originRef, 'pr:42:comments');
-  // The conflict is not lost — it is simply not what this branch's one agent was
-  // sent for, and no second candidate exists for a branch already staffed.
   assert.equal(
     upcoming?.some((q) => q.origin === 'pr:42:mergeable'),
     false,
     'one agent per branch: the losing concern does not become a queue entry of its own',
   );
 });
-
-// -- ask once ----------------------------------------------------------------
 
 test('askedAlready reads both records, because each outlives the other', () => {
   const origin = 'pr:42:ci';

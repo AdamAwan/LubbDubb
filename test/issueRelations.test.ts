@@ -31,10 +31,6 @@ const POLICY: IssuePickupPolicy = {
   containerTypes: [...DEFAULT_CONTAINER_TYPES],
 };
 
-// --------------------------------------------------------------------------
-// Container types
-// --------------------------------------------------------------------------
-
 test('isContainerIssue matches the configured types case-insensitively', () => {
   assert.equal(isContainerIssue(issue({ issueType: 'Feature' }), ['Feature']), true);
   assert.equal(isContainerIssue(issue({ issueType: 'feature' }), ['Feature']), true);
@@ -42,7 +38,6 @@ test('isContainerIssue matches the configured types case-insensitively', () => {
   assert.equal(isContainerIssue(issue({ issueType: 'Bug' }), DEFAULT_CONTAINER_TYPES), false);
 });
 
-/** The whole GitHub path: no item type means no type gate, whatever the config says. */
 test('an issue with no type is never a container', () => {
   assert.equal(isContainerIssue(issue(), DEFAULT_CONTAINER_TYPES), false);
   assert.equal(containerPickupReason(issue(), DEFAULT_CONTAINER_TYPES), null);
@@ -70,10 +65,6 @@ test('containerPickupReason says so when a container has nothing under it', () =
   );
 });
 
-// --------------------------------------------------------------------------
-// The pickup gate
-// --------------------------------------------------------------------------
-
 test('a Feature is never eligible for pickup, whatever its tags and state say', () => {
   const policy: IssuePickupPolicy = { ...POLICY, watchLabel: 'lubbdubb-watch', pickupStates: ['Active'] };
   const feature = issue({
@@ -99,10 +90,6 @@ test('a story under the same policy is unaffected by the type gate', () => {
   assert.equal(isIssuePickupEligible(story, policy).eligible, true);
 });
 
-/**
- * The chip has its own arm because tagging a Feature is not the fix — reporting
- * it as `unwatched` would point the operator at the one control that can't help.
- */
 test('issuePickupStatus reports a container as `container`, not `unwatched`', () => {
   const ctx: IssuePickupContext = {
     policy: { ...POLICY, watchLabel: 'lubbdubb-watch' },
@@ -120,17 +107,12 @@ test('issuePickupStatus reports a container as `container`, not `unwatched`', ()
   assert.match(verdict.reasons[0] ?? '', /container/);
 });
 
-// --------------------------------------------------------------------------
-// Orphans
-// --------------------------------------------------------------------------
-
 test('a parentless story is an orphan; one with a parent is not', () => {
   assert.equal(isOrphanIssue(issue({ issueType: 'User Story', parent: null }), DEFAULT_CONTAINER_TYPES), true);
   assert.equal(isOrphanIssue(issue({ issueType: 'Bug', parent: null }), DEFAULT_CONTAINER_TYPES), true);
   assert.equal(isOrphanIssue(issue({ issueType: 'User Story', parent: relative() }), DEFAULT_CONTAINER_TYPES), false);
 });
 
-/** `undefined` is "the tracker has no hierarchy", which is every GitHub issue. */
 test('an issue from a tracker without hierarchy is never an orphan', () => {
   assert.equal(isOrphanIssue(issue(), DEFAULT_CONTAINER_TYPES), false);
   assert.equal(isOrphanIssue(issue({ issueType: 'Bug' }), DEFAULT_CONTAINER_TYPES), false);
@@ -141,13 +123,6 @@ test('a Feature at the top of the tree is not an orphan, and nor is a Task', () 
   assert.equal(isOrphanIssue(issue({ issueType: 'Task', parent: null }), DEFAULT_CONTAINER_TYPES), false);
 });
 
-/**
- * The type names are the operator's, exactly as `issueContainerTypes` is, and the
- * failure of a closed word list in here is silent in the direction that costs: a
- * project whose process template calls the thing it works something else has every
- * item read as "wanted no parent" — no orphan note in any prompt, no candidate
- * containers offered, no proposal, and no missing-parent question ever asked.
- */
 test('which types are expected to have a parent is the operator’s policy, not a word list', () => {
   const defect = issue({ issueType: 'Defect', parent: null });
   assert.equal(isOrphanIssue(defect, DEFAULT_CONTAINER_TYPES), false, 'not one of the stock template names');
@@ -163,16 +138,10 @@ test('which types are expected to have a parent is the operator’s policy, not 
     true,
     'and the default is what an unset policy falls back to',
   );
-  // The note is the other half of the same predicate: the appraiser is told the
-  // item hangs off nothing and offered the containers only where it holds.
   const candidates = [relative({ number: 12, title: 'Checkout revamp', issueType: 'Feature' })];
   assert.equal(relatedWorkNote(defect, DEFAULT_CONTAINER_TYPES, candidates), '');
   assert.match(relatedWorkNote(defect, DEFAULT_CONTAINER_TYPES, candidates, ['Defect']), /might belong to/);
 });
-
-// --------------------------------------------------------------------------
-// The appended note
-// --------------------------------------------------------------------------
 
 test('relatedWorkNote is empty for an issue with no relations at all', () => {
   assert.equal(relatedWorkNote(issue()), '');
@@ -222,11 +191,9 @@ test('an orphan is offered the open features it might belong to, as a suggestion
   assert.match(note, /Open features it might belong to:/);
   assert.match(note, /- Feature #12 "Checkout revamp"/);
   assert.match(note, /- Feature #20 "Billing"/);
-  // The harness reads the hierarchy and never writes it.
   assert.match(note, /do not link, re-parent or edit any work item yourself/);
 });
 
-/** The suggestion is the orphan's alone — beside a parented item it invites re-filing. */
 test('an item that already has a parent is offered no candidates', () => {
   const note = relatedWorkNote(
     issue({ issueType: 'Bug', parent: relative({ number: 12, issueType: 'Feature' }) }),
@@ -266,7 +233,6 @@ test('candidateParents drops closed features and de-duplicates', () => {
   );
 });
 
-/** A flat tracker offers nothing, so the orphan branch never draws on the GitHub path. */
 test('candidateParents is empty for a world with no hierarchy', () => {
   assert.deepEqual(candidateParents([issue({ number: 1 }), issue({ number: 2 })], DEFAULT_CONTAINER_TYPES), []);
 });
@@ -281,10 +247,6 @@ test('a long parent description is truncated rather than shipped whole', () => {
   assert.match(note, /…\(truncated\)/);
   assert.ok(note.length < 6000, 'the note must not carry a whole feature document');
 });
-
-// --------------------------------------------------------------------------
-// Reading the hierarchy off Azure DevOps
-// --------------------------------------------------------------------------
 
 test('hierarchyIds reads the related work-item ids out of relation urls', () => {
   const relations = [
@@ -318,7 +280,6 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
   };
 }
 
-/** A minimal `AzureDevOpsApi` — only the two reads the work-items snapshot makes. */
 function relationApi(
   listed: AzWorkItem[],
   pool: AzWorkItem[],
@@ -390,14 +351,12 @@ test('the work-items snapshot hydrates parent, children and siblings', async () 
   const [i] = issues;
   assert.equal(i?.issueType, 'User Story');
   assert.equal(i?.parent?.number, 12);
-  // The parent's description rides along — it is the goal the story serves.
   assert.equal(i?.parent?.body, 'One-page checkout.');
   assert.deepEqual(
     i?.siblings?.map((s) => [s.number, s.state]),
     [[102, 'closed']],
   );
   assert.deepEqual(i?.children, []);
-  // Two rounds: the parent first, then the parent's other children.
   assert.deepEqual(reads, [[12], [102]]);
 });
 
@@ -407,15 +366,9 @@ test('a parentless work item reports `null` — the orphan the note reports on',
   const { issues = [] } = await new AzureDevOpsWorkItemsIntegration({ api }).snapshot();
   assert.equal(issues[0]?.parent, null);
   assert.equal(isOrphanIssue(issues[0]!, DEFAULT_CONTAINER_TYPES), true);
-  // Nothing to fetch, so no request was made at all.
   assert.deepEqual(reads, []);
 });
 
-/**
- * A link the identity cannot read must not be reported as *no* link: that would
- * make an unreadable parent indistinguishable from a missing one, and the note
- * would tell the agent to work an orphan that isn't one.
- */
 test('an unreadable parent leaves the relation unknown rather than claiming there is none', async () => {
   const reads: number[][] = [];
   const api = relationApi([workItem({ id: 101, workItemType: 'Bug', parentId: 999 })], [], reads);
@@ -456,10 +409,6 @@ test('a Feature in the snapshot carries its stories as children', async () => {
   assert.equal(containerPickupReason(issues[0]!, DEFAULT_CONTAINER_TYPES) !== null, true);
 });
 
-// --------------------------------------------------------------------------
-// The watch cascade
-// --------------------------------------------------------------------------
-
 test('watchCascadeTargets is the item alone when it is not a container', () => {
   const story = issue({ number: 5, issueType: 'User Story', children: [relative({ number: 6 })] });
   assert.deepEqual(watchCascadeTargets(story, [story], DEFAULT_CONTAINER_TYPES), [5]);
@@ -475,8 +424,6 @@ test('watchCascadeTargets reaches a container’s children, in issue order', () 
 });
 
 test('watchCascadeTargets descends through a child the world holds, not through a relation summary', () => {
-  // The epic names the feature; the feature is an issue of its own, so its own
-  // children are reached. #99 is named only as a relative, so it is a leaf here.
   const story = issue({ number: 20, issueType: 'User Story' });
   const feature = issue({
     number: 10,

@@ -15,10 +15,6 @@ import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/server/app.js';
 import type { Issue, IssueRun, Task } from '../src/types.js';
 
-// A run lives until the operator dismisses it, not until the tracker stops
-// returning the issue (issue #234): the record, the union it feeds into the
-// dispatcher's issue list, and the dismissal that ends both.
-
 const NOW = '2026-07-28T12:00:00.000Z';
 
 function build(overrides: Record<string, unknown> = {}): System {
@@ -53,7 +49,6 @@ function issue(over: Partial<Issue> = {}): Issue {
   };
 }
 
-/** A finished pickup task — what `hasPriorWork` reads as "this goal has been worked". */
 function task(over: Partial<Task> = {}): Task {
   return {
     id: 't1',
@@ -103,8 +98,6 @@ const RECORD = {
   complete: false,
 };
 
-// -- the store row -----------------------------------------------------------
-
 test('a run upserts, refreshes its snapshot, and freezes both instants', () => {
   const store = new Store(':memory:');
   assert.deepEqual(store.listIssueRuns(), []);
@@ -117,7 +110,6 @@ test('a run upserts, refreshes its snapshot, and freezes both instants', () => {
   assert.deepEqual(first[0]!.labels, ['lubbdubb-watch'], 'the labels ride the row, for the watch gates');
   const startedAt = first[0]!.startedAt;
 
-  // A later pulse re-records it with a fresher snapshot and the goal now finished.
   store.recordIssueRun({ ...RECORD, title: 'Add the thing, renamed', body: 'reworded', complete: true });
   const again = store.listIssueRuns();
   assert.equal(again.length, 1, 'one row, not two');
@@ -127,7 +119,6 @@ test('a run upserts, refreshes its snapshot, and freezes both instants', () => {
   const completedAt = again[0]!.completedAt;
   assert.ok(completedAt, 'the completion instant is stamped once the signals say so');
 
-  // And a later pulse that no longer reads it as complete does not un-finish it.
   store.recordIssueRun(RECORD);
   assert.equal(store.listIssueRuns()[0]!.completedAt, completedAt, 'the completion instant is frozen too');
   store.close();
@@ -144,20 +135,15 @@ test('dismissing is one-way, idempotent, and stamps how the run ended', () => {
   assert.ok(abandoned.dismissedAt, 'the dismissal stands');
   assert.equal(abandoned.outcome, 'abandoned', 'a run nothing had judged was abandoned');
 
-  // A dismissed run that re-records stays dismissed — the operator ended it.
   store.recordIssueRun({ ...RECORD, complete: true });
   assert.ok(store.listIssueRuns()[0]!.dismissedAt, 'a re-record does not un-dismiss');
 
-  // The other route in: a run the harness had judged finished.
   store.recordIssueRun({ ...RECORD, originRef: 'issue:13', issueNumber: 13, complete: true });
   store.dismissIssueRun('issue:13');
   assert.equal(store.listIssueRuns().find((r) => r.issueNumber === 13)!.outcome, 'judged');
   store.close();
 });
 
-// The migration nobody sees fail: a live database holds dismissals the operator
-// has already made, and losing one puts every cleared card back on the floor —
-// now with the dispatcher acting on it again.
 test('floor_completions is carried into issue_runs, dismissals and all, then dropped', () => {
   const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-migrate-')), 'db.sqlite');
   const raw = new Database(path);
@@ -186,13 +172,10 @@ test('floor_completions is carried into issue_runs, dismissals and all, then dro
   assert.equal(old, undefined, 'the old table is gone, so the copy cannot run twice');
   check.close();
 
-  // A second boot carries nothing and breaks nothing.
   const reopened = new Store(path);
   assert.equal(reopened.listIssueRuns().length, 2);
   reopened.close();
 });
-
-// -- the pure fold -----------------------------------------------------------
 
 test('isGoalComplete reads any of the four completion signals, but not more_work', () => {
   const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [], planParts: [] };
@@ -294,9 +277,6 @@ test('isGoalComplete reads any of the four completion signals, but not more_work
   );
 });
 
-// The two faces of reading the conclusion and the plan raw instead of asking the
-// one resolver: an operator argued with by a derivation, and an assessor's
-// verdict losing to the stale `done` of the agent it was assessing.
 test('a standing verdict of more_work outranks every piece of evidence', () => {
   const base = {
     retrospectiveOrigins: ['issue:12'],
@@ -353,9 +333,6 @@ test('a standing verdict of more_work outranks every piece of evidence', () => {
   );
 });
 
-// The observed defect, end to end: worked `single`, the agent declared done, an
-// accepted shortfall sent the plan back to `planning` — and the next pulse minted
-// a completion for a goal whose only PR was still open.
 test('a goal whose plan is being re-drawn is not stamped complete', () => {
   const signals = {
     retrospectiveOrigins: ['issue:12'],
@@ -384,7 +361,6 @@ test('a goal whose plan is being re-drawn is not stamped complete', () => {
   );
   assert.equal(runsToRecord([issue()], [task()], signals)[0]!.complete, false, 'the run is minted, unfinished');
 
-  // The boundary: the gate is on stamping, never on a goal that genuinely finished.
   const settled = {
     ...signals,
     plans: [{ id: 'p1', originRef: 'issue:12', title: '', status: 'complete', discussing: false } as never],
@@ -392,8 +368,6 @@ test('a goal whose plan is being re-drawn is not stamped complete', () => {
   assert.equal(isGoalComplete(12, settled), true);
 });
 
-// The #234 change to what mints a row: pickup, not completion. A goal nobody
-// finished is exactly the one an operator needs something to dismiss.
 test('runsToRecord mints at pickup, with the snapshot a retained run is dispatched from', () => {
   const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [], planParts: [] };
   const worked = issue({ labels: ['lubbdubb-watch'], linkedPrNumber: 31 });
@@ -405,8 +379,6 @@ test('runsToRecord mints at pickup, with the snapshot a retained run is dispatch
   assert.deepEqual(record!.labels, ['lubbdubb-watch'], 'and the labels, for the watch gates');
   assert.equal(record!.linkedPrNumber, 31);
 
-  // #203's arm, intact: a goal declared finished without the harness ever staffing
-  // it is still worth retaining.
   const declared = { ...none, retrospectiveOrigins: ['issue:12'] };
   assert.equal(runsToRecord([worked], [], declared)[0]!.complete, true);
 });
@@ -428,8 +400,6 @@ test('retainedRunIssues is the forgotten, undismissed runs — and only those', 
   assert.deepEqual(retained[0]!.labels, ['lubbdubb-watch']);
 });
 
-// -- the union, at the rule level --------------------------------------------
-
 function dispatchCtx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [] },
@@ -445,10 +415,6 @@ function dispatchCtx(over: Partial<DispatchContext> = {}): DispatchContext {
 
 const closedIssue = issue({ state: 'closed' });
 
-// The observed defect (#229 after PR #231 merged): the delivering PR carried
-// `closes #N`, so the gap `issue-assess` fires in was zero — no delivery row was
-// written, and `issue-retro`, whose only precondition is that row, never fired
-// either. Satellite *Not yet built*, Manifest *Nothing written*, permanently.
 test('a retained run is still assessed after its ticket closed', async () => {
   const assessor = new RuleDispatcher();
 
@@ -499,10 +465,6 @@ test('a retained run is written up after its ticket closed', async () => {
   assert.equal(dispatched[0]!.originRef, 'issue:12:retro');
 });
 
-// The other half of the union, and the reason it is a gate rather than a
-// coincidence: a retained issue reads `closed`, which most rules refuse anyway.
-// This one is asked of an *open* issue named as retained, so what is asserted is
-// the gate itself rather than the state that usually stands in for it.
 test('a retained run is never picked up again, whatever the tracker says about it', async () => {
   const dispatcher = new RuleDispatcher();
   const live = await dispatcher.decide(dispatchCtx({ world: { takenAt: NOW, pullRequests: [], issues: [issue()] } }));
@@ -522,17 +484,12 @@ test('a retained run is never picked up again, whatever the tracker says about i
   );
 });
 
-// -- the pulse records it ----------------------------------------------------
-
 test('the pulse mints a run for a goal it has work under, before anything finishes it', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
   await system.harness.runCycle('manual');
   assert.deepEqual(system.store.listIssueRuns(), [], 'a goal nothing has started is not a run');
 
-  // A finished pickup attempt on the issue — the funnel in front of pickup is on
-  // by default, so this is seeded rather than waited for. The next pulse sees it
-  // and mints the run, unfinished, which is the whole #234 change.
   const seeded = system.store.createTask({
     kind: 'code',
     title: 'Resolve issue #12',
@@ -548,7 +505,6 @@ test('the pulse mints a run for a goal it has work under, before anything finish
   assert.equal(rows[0]!.completedAt, null, 'nothing has judged it yet');
   assert.equal(rows[0]!.dismissedAt, null);
 
-  // And the completion instant lands on the pulse after the verdict does.
   system.store.recordDelivery({
     originRef: 'issue:12',
     summary: 'shipped',
@@ -560,8 +516,6 @@ test('the pulse mints a run for a goal it has work under, before anything finish
   assert.ok(system.store.listIssueRuns()[0]!.completedAt, 'the completion is stamped once a verdict stands');
   system.store.close();
 });
-
-// -- what the cockpit is served ----------------------------------------------
 
 test("the snapshot marks a live goal's run and rebuilds a forgotten one", async () => {
   const system = build();
@@ -577,8 +531,6 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   store.updateTask(seeded.id, { status: 'done' });
   await system.harness.runCycle('manual');
 
-  // #99 ran and then left the world (closed by hand): seed the record and a report
-  // directly, since the fake keeps its issues and cannot drop one.
   store.recordIssueRun({
     originRef: 'issue:99',
     issueNumber: 99,
@@ -624,14 +576,9 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   assert.equal(one!.body, 'the goal, as it last stood', 'and so is the goal itself');
   assert.equal(one!.state, 'closed');
   assert.equal(one!.run?.dismissed, false);
-  // The chip reads the run, not the tracker: `done` would say "nothing to do"
-  // about the one goal on the floor still waiting for the operator to end it.
   assert.equal(one!.pickup.status, 'retained');
   assert.deepEqual(one!.pickup.reasons, ['closed; run kept until you dismiss it']);
   assert.equal(one!.retrospective?.summary, 'It shipped in two parts.', 'its report rides the rebuilt issue');
-  // Marked stale rather than dropped: the tracker's copy is dated to the last
-  // pulse the run row was refreshed by a live issue, and with no mirror the
-  // tracker's own word is not claimed. A live issue carries no marking at all.
   assert.equal(one!.stale?.lastSeenAt, store.listIssueRuns().find((r) => r.issueNumber === 99)!.updatedAt);
   assert.equal(one!.stale?.tracker, null, 'no mirror, so no reading of what the tracker says now');
   assert.equal((present as { stale?: unknown }).stale, undefined, 'a live issue is never marked stale');
@@ -640,12 +587,6 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   store.close();
 });
 
-/**
- * With a ticket mirror the marking carries the tracker's own word — which is the
- * operator's real question about a goal that left the world: not "is this copy
- * old" but "what did someone do to the ticket". Azure keeps reporting a
- * `Resolved` item on the history sweep; the open set never sees it again.
- */
 test('a retained run says what the tracker now calls the item, off the mirror', async () => {
   const system = build();
   const { store } = system;
@@ -683,8 +624,6 @@ test('a retained run says what the tracker now calls the item, off the mirror', 
     }[]
   ).find((i) => i.number === 99);
   assert.ok(one);
-  // The harness's copy stays what the goal last was when live — it is what the
-  // dispatcher's stub reads too — and the marking is where the tracker's word goes.
   assert.equal(one!.workItemState, 'Doing');
   assert.deepEqual(one!.stale?.tracker, {
     state: 'closed',
@@ -734,7 +673,6 @@ test('dismissing ends the run — the card goes and it persists', async () => {
   assert.ok(row.dismissedAt, 'the dismissal persisted to the store');
   assert.equal(row.outcome, 'abandoned', 'nothing had judged it, so that is how it ended');
 
-  // Idempotent: nothing left to dismiss.
   const again = await app.inject({ method: 'POST', url: '/api/issues/99/dismiss-run' });
   assert.equal(again.statusCode, 409);
 

@@ -7,7 +7,6 @@ import type { IntegrationSelection } from '../src/integrations/integration.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';
 
-/** Run `fn` with GITHUB_TOKEN set to `token` (or unset when null), then restore it. */
 function withToken(token: string | null, fn: () => void): void {
   const prev = process.env.GITHUB_TOKEN;
   if (token === null) delete process.env.GITHUB_TOKEN;
@@ -28,8 +27,6 @@ test('loadConfig carries a github block (owner/repo) from overrides', () => {
   const config = loadConfig({ github: { owner: 'acme', repo: 'app' }, userId: 'bot' });
   assert.equal(config.github?.owner, 'acme');
   assert.equal(config.github?.repo, 'app');
-  // Who the harness acts as is not in the provider block: it is one `userId` for
-  // every provider, so the coordinates and the identity cannot drift apart.
   assert.equal(config.userId, 'bot');
 });
 
@@ -64,7 +61,7 @@ test('registry throws a clear error when github is selected without GITHUB_TOKEN
 test('registry throws a clear error when github is selected without owner/repo config', () => {
   withToken('ghp_test', () => {
     const store = new Store(':memory:');
-    const config = loadConfig(); // no github block
+    const config = loadConfig();
     assert.throws(
       () => buildIntegrations(selection({ issues: 'github' }), { store, config, now: FIXED }),
       /github.*(owner|repo)/is,

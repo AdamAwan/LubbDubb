@@ -12,17 +12,6 @@ import { loadConfig } from '../src/config.js';
 import type { Agent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-/**
- * Raising a **bug** against a story: the operator ran the thing and it does not do
- * what they expect.
- *
- * The distinction these hold in place is what the feature is for. Every other
- * operator control on a story row writes the harness's own verdict about *that
- * story*; this one files new work into the tracker and leaves the story exactly
- * where it found it. Fold the two together and the operator's words — the one fact
- * about a goal no agent on it can derive — end up on a row that carries no words.
- */
-
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-raisebug-'));
   return loadConfig({
@@ -39,12 +28,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/**
- * A system whose issue tracker is GitHub while its world stays the fake one —
- * `findingTickets.test.ts`'s seam, for its reason: the coordinates are read from
- * config at request time, so pointing the selection at a real provider after the
- * build exercises the route's actual branch without a token or a network.
- */
 function build(withTracker = true): System {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
@@ -58,7 +41,6 @@ function build(withTracker = true): System {
   return system;
 }
 
-/** The world the route checks against — an issue it has never seen is a 404. */
 async function seedWorld(system: System, number = 12): Promise<number> {
   system.connector.inject({
     kind: 'new_issue',
@@ -70,12 +52,6 @@ async function seedWorld(system: System, number = 12): Promise<number> {
   return number;
 }
 
-/**
- * The agent working the filing job, whose credential resolves the bug back.
- * Spawned rather than waited for, as in `findingTickets.test.ts`: the dispatch of
- * a queued job is another suite's subject, and what is under test here is the
- * handshake.
- */
 function filingAgent(system: System, job: { id: string; title: string; prompt: string }): Agent {
   const task = system.store.createTask({
     kind: 'desk',
@@ -95,8 +71,6 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-// -- the pure half ------------------------------------------------------------
-
 test('the prompt carries the operator’s words verbatim and says whose they are', () => {
   const { title, vars } = bugTicketFields(
     { number: 12, title: 'Export the ledger as CSV' },
@@ -108,23 +82,14 @@ test('the prompt carries the operator’s words verbatim and says whose they are
   const prompt = defaultPromptTemplates().render('raise-bug', vars);
   assert.match(prompt, /The export button still 404s on Safari\./);
   assert.match(prompt, /Worked in the PR preview, not on main\./);
-  assert.match(prompt, /#12/); // the story it came from
-  assert.match(prompt, /the GitHub repository a\/b\./); // where it goes
-  assert.match(prompt, /link_ticket/); // and how the words get there
-  // The agent writes the bug; it does not create it (issue #394). A prompt still
-  // carrying a create command would have the item filed twice.
+  assert.match(prompt, /#12/);
+  assert.match(prompt, /the GitHub repository a\/b\./);
+  assert.match(prompt, /link_ticket/);
   assert.doesNotMatch(prompt, /gh issue create|az boards work-item/);
-  // File it, don't fix it — the same rule the other filing prompts state, and the
-  // reason this is a desk job.
   assert.match(prompt, /do not fix it/i);
-  // The operator is not an agent, and an agent that treats their report as one
-  // more opinion will narrow the bug to whatever it happened to find.
   assert.match(prompt, /operator speaking, not an agent/i);
-  // No placeholder is left unfilled — a `{token}` reaching an agent is a prompt bug.
   assert.doesNotMatch(prompt, /\{\w+\}/);
 });
-
-// -- the route ----------------------------------------------------------------
 
 test('raising a bug queues a desk job carrying the report, and files nothing yet', async () => {
   const system = build();
@@ -142,14 +107,11 @@ test('raising a bug queues a desk job carrying the report, and files nothing yet
     filing: { status: string; ticketRef: string | null; originRef: string };
   };
 
-  // Desk, not code: filing touches no repository.
   assert.equal(body.job.kind, 'desk');
   assert.equal(body.job.branch, null);
   assert.match(body.job.prompt, /The export button still 404s on Safari\./);
   assert.match(body.job.prompt, /the GitHub repository AdamAwan\/LubbDubb/);
 
-  // `filing`, not `filed`: nothing exists in the tracker yet, and claiming a ref
-  // here would be a link to nowhere.
   assert.equal(body.filing.status, 'filing');
   assert.equal(body.filing.ticketRef, null);
   assert.equal(body.filing.originRef, `issue:${number}`);
@@ -163,9 +125,6 @@ test('the story’s own verdict is left exactly where it was', async () => {
   const before = system.store.getIssueConclusion(`issue:${number}`);
   await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload: { summary: 'Still broken.' } });
 
-  // The whole design turns on this: the bug carries the work, so nothing about the
-  // story changes. A `more_work` written here would put a second agent on a goal
-  // whose brief carries none of the operator's words.
   assert.deepEqual(system.store.getIssueConclusion(`issue:${number}`), before);
   assert.equal(system.store.getShortfall(`issue:${number}`), null);
 });
@@ -179,8 +138,6 @@ test('a story can carry several bugs, because it can be wrong in several ways', 
     const res = await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload: { summary } });
     assert.equal(res.statusCode, 200);
   }
-  // Two rows, not one refused — the difference from `work_item_filings`, whose
-  // target key deliberately allows a node exactly one filing.
   const filings = system.store.listBugFilings().filter((b) => b.originRef === `issue:${number}`);
   assert.equal(filings.length, 2);
   assert.equal(new Set(filings.map((f) => f.jobId)).size, 2, 'each raise gets its own job');
@@ -191,8 +148,6 @@ test('an empty report asks for nothing, and an unseen issue is a 404', async () 
   const { app } = await buildApp(system);
   const number = await seedWorld(system);
 
-  // Required where every other body on this surface takes an optional summary: the
-  // operator's report *is* the feature.
   for (const payload of [{}, { summary: '   ' }]) {
     const res = await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload });
     assert.equal(res.statusCode, 400, `${JSON.stringify(payload)} is refused`);
@@ -212,15 +167,11 @@ test('with no tracker configured there is nothing to file into, and the cockpit 
   assert.match((res.json() as { error: string }).error, /no issue tracker/);
   assert.equal(system.store.listBugFilings().length, 0);
 
-  // The button is hidden off the same flag the route refuses on, so the cockpit
-  // never offers a click that cannot work.
   const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
     config: { canFileTickets: boolean };
   };
   assert.equal(snap.config.canFileTickets, false);
 });
-
-// -- link_ticket, the other half of the handshake -----------------------------
 
 test('link_ticket completes the raise, once, and only with an issue ref', async () => {
   const system = build();
@@ -235,8 +186,6 @@ test('link_ticket completes the raise, once, and only with an issue ref', async 
   const { job } = res.json() as { job: { id: string; title: string; prompt: string } };
   const agent = filingAgent(system, job);
 
-  // A work item is an issue in both trackers the harness reads, so a `pr:` ref is
-  // refused rather than recorded as a bug nobody can open.
   const wrong = await callTool(system, agent, 'link_ticket', { ref: 'pr:42' });
   assert.equal(wrong.isError, true);
   assert.match(wrong.text, /issue:314|must be an issue ref/);
@@ -248,8 +197,6 @@ test('link_ticket completes the raise, once, and only with an issue ref', async 
   assert.equal(filed.status, 'filed');
   assert.equal(filed.ticketRef, 'issue:314');
 
-  // Idempotence lives in the write: a second call links nothing rather than
-  // overwriting the ref with a later one.
   const again = await callTool(system, agent, 'link_ticket', { ref: 'issue:999' });
   assert.equal(again.isError, true);
   assert.equal(system.store.findBugFilingByJobId(job.id)!.ticketRef, 'issue:314');
@@ -267,7 +214,6 @@ test('an agent on any other task has no bug to link', async () => {
   });
   const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 
-  // The access check is structural: there is no id to point at someone else's.
   const res = await callTool(system, agent, 'link_ticket', { ref: 'issue:314' });
   assert.equal(res.isError, true);
   assert.match(res.text, /raise a bug an operator reported|none of them/);
@@ -286,9 +232,6 @@ test('link_ticket files the bug the agent wrote, related to the story, without b
   const { job } = res.json() as { job: { id: string; title: string; prompt: string } };
   const agent = filingAgent(system, job);
 
-  // Title and body, and nothing else. The relation back to the story is the whole
-  // point of the change: it was a *second* command in the prompt, so a model that
-  // ran the first and stopped left a bug nobody could trace, with nothing red.
   const ok = await callTool(system, agent, 'link_ticket', {
     title: 'CSV export 404s on Safari',
     body: 'Reported by the operator; reproduced against `main`.',
@@ -299,8 +242,6 @@ test('link_ticket files the bug the agent wrote, related to the story, without b
   assert.equal(filed.status, 'filed');
   assert.ok(filed.ticketRef?.startsWith('issue:'), 'the harness reports back the ref it created');
 
-  // It really exists in the tracker, and it names the story. The fake issues
-  // provider draws a relation the way GitHub does — a cross-reference in the body.
   const world = await system.connector.getState();
   const bug = world.issues.find((i) => `issue:${i.number}` === filed.ticketRef)!;
   assert.equal(bug.title, 'CSV export 404s on Safari');
@@ -320,8 +261,6 @@ test('link_ticket refuses a call that both names an existing item and writes a n
   const { job } = res.json() as { job: { id: string; title: string; prompt: string } };
   const agent = filingAgent(system, job);
 
-  // Two different acts — "this already exists" and "create this" — and ranking them
-  // would have the harness choose which of the agent's two claims to believe.
   const both = await callTool(system, agent, 'link_ticket', { ref: 'issue:7', title: 't', body: 'b' });
   assert.equal(both.isError, true);
   assert.match(both.text, /not both/);

@@ -11,17 +11,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { PtySession } from '../src/pty/ptySession.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
-/**
- * A message *sent to* an agent belongs in that agent's transcript.
- *
- * The stream runtime — the default — renders only what comes back, so an answer
- * typed into the drawer used to leave no trace whatsoever: the pane sat unchanged,
- * the cockpit deliberately does not refetch after an answer, and the only evidence
- * the message went anywhere was the agent eventually replying to a question the
- * transcript never showed. That reads as a feature that does not work.
- */
-
-/** Fake claude stream-JSON process (same shape the other stream tests drive). */
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 707;
   writes: string[] = [];
@@ -38,7 +27,6 @@ class FakeChild extends EventEmitter implements StreamChild {
   kill(): void {
     this.emit('exit', 143);
   }
-  /** The reading `claude` emits when the five-hour window is spent. */
   rateLimit(): void {
     this.emitLine({
       type: 'rate_limit_event',
@@ -71,7 +59,6 @@ function streamConfig(patch: Record<string, unknown> = {}) {
   });
 }
 
-/** Boot a stream-mode system with one dispatched agent, mid-turn. */
 async function dispatched(patch: Record<string, unknown> = {}) {
   const children: FakeChild[] = [];
   const spawner: Spawner = () => {
@@ -147,8 +134,6 @@ test('ending a usage-limit park says so in the transcript', async () => {
 });
 
 test('the terminal runtime carries its own sent messages, so the manager must not echo them', () => {
-  // A terminal echoes what is typed into it, and that echo *is* the transcript —
-  // a manager-side echo on top of it would double every message.
   const session = new PtySession(new FakePtyBackend(), { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   assert.equal(session.recordsSentMessages, true);
 });

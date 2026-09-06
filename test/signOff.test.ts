@@ -23,7 +23,6 @@ import type {
 
 const DISCLAIMER = 'Automated comment from';
 
-/** Records what actually reached a provider, which is the only place the sign-off can be observed. */
 class RecordingIntegration
   implements Integration, PrReplyCapable, PrCreateCapable, IssueCreateCapable, IssueCommentCapable, PrLabelCapable
 {
@@ -81,7 +80,6 @@ test('the HTML flavour ships markup rather than Markdown punctuation', () => {
 test('signing is idempotent, so a body round-tripped through a provider gains no second footer', () => {
   const once = signOff('Body.', 'markdown');
   assert.equal(signOff(once, 'markdown'), once);
-  // And the flavour of a re-sign cannot change what is already there.
   assert.equal(signOff(once, 'html'), once);
 });
 

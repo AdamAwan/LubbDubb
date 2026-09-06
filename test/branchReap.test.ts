@@ -11,8 +11,6 @@ import { reapableBranches, type BranchReapContext } from '../src/branchReap.js';
 import type { PullRequest, Task } from '../src/types.js';
 import type { ActionSink, BranchDeleteInput, SendResult } from '../src/sink/actionSink.js';
 
-// --- the predicate ---------------------------------------------------------
-
 function pr(over: Partial<PullRequest> & { number: number; branch: string }): PullRequest {
   return {
     id: `pr_${over.number}`,
@@ -102,7 +100,6 @@ test('a branch with an agent still on it waits', () => {
   for (const status of ['queued', 'running', 'waiting'] as const) {
     assert.deepEqual(reapableBranches([], [landed], ctx({ tasks: [task({ branch: 'issue/7', status })] })), []);
   }
-  // A finished task is no reason to wait.
   assert.deepEqual(reapableBranches([], [landed], ctx({ tasks: [task({ branch: 'issue/7', status: 'done' })] })), [
     { prNumber: 7, branch: 'issue/7' },
   ]);
@@ -114,8 +111,6 @@ test('a PR already reaped yields nothing — the closed window would otherwise r
 });
 
 test('a reap recorded for an earlier PR does not suppress a re-cut branch of the same name', () => {
-  // `issue/7` landed as PR 7 and was reaped; a later dispatch cut it again and it
-  // landed as PR 9. The row is keyed on the PR for exactly this.
   const second = merged({ number: 9, branch: 'issue/7' });
   assert.deepEqual(reapableBranches([], [second], ctx({ reaped: new Set([7]) })), [{ prNumber: 9, branch: 'issue/7' }]);
 });
@@ -126,14 +121,6 @@ test('two merged PRs on one branch delete it once', () => {
   assert.deepEqual(reapableBranches([], [first, second], ctx()), [{ prNumber: 7, branch: 'issue/7' }]);
 });
 
-// --- the desk, through a whole system --------------------------------------
-
-/**
- * The real fake world, with the one outbound call this file is about recorded on
- * the way through. A wrapper rather than a stub sink: the retarget test needs
- * `setPullBase` to actually move the child in the fake world, which only the real
- * connector does.
- */
 function build(over: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-reap-'));
   const config = loadConfig({
@@ -148,8 +135,6 @@ function build(over: Record<string, unknown> = {}) {
   });
   const worktrees = new FakeWorktreeManager(join(dir, 'wt'));
   const deletedOnRemote: string[] = [];
-  // The sink has to exist before the system it delegates to does, so it reads the
-  // real one out of a holder the build fills in.
   const held: { inner?: ActionSink } = {};
   const sink = new Proxy({} as ActionSink, {
     get(_t, prop: string) {
@@ -207,13 +192,10 @@ test('a merged rung is not reaped until the rung above it has been retargeted of
   });
   landPr(system, 7, 'issue/7/part-1');
 
-  // Pulse one: the retarget is written from this snapshot, so the child still reads
-  // as based on the merged parent and the parent's branch is held.
   await system.harness.runCycle('manual');
   assert.deepEqual(worktrees.deleted, [], 'the parent branch is still an open PR base');
   assert.deepEqual(deletedOnRemote, []);
 
-  // Pulse two reads the retargeted world.
   await system.harness.runCycle('manual');
   assert.deepEqual(worktrees.deleted, ['issue/7/part-1']);
   assert.deepEqual(deletedOnRemote, ['issue/7/part-1']);

@@ -23,10 +23,8 @@ test('mid-stream getTranscript flushes the buffer so reads see everything', () =
 
   store.appendTranscript(agentId, 'aaa');
   store.appendTranscript(agentId, 'bbb');
-  // A read before any threshold flush must still return the buffered data.
   assert.equal(store.getTranscript(agentId), 'aaabbb');
 
-  // Appending after a read keeps concatenation order intact.
   store.appendTranscript(agentId, 'ccc');
   assert.equal(store.getTranscript(agentId), 'aaabbbccc');
   store.close();
@@ -43,15 +41,14 @@ test('explicit flushTranscript persists buffered data', () => {
 });
 
 test('batching writes far fewer rows than chunks appended', () => {
-  // Use a real file so a second connection can count rows independently.
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-transcript-'));
   const dbPath = join(dir, 'store.db');
   const store = new Store(dbPath);
   const agentId = 'agent_rows';
 
-  const chunks = Array.from({ length: 400 }, (_, i) => `small-${i};`); // each tiny, well under 16KB
+  const chunks = Array.from({ length: 400 }, (_, i) => `small-${i};`);
   for (const c of chunks) store.appendTranscript(agentId, c);
-  store.getTranscript(agentId); // force a flush of the remaining buffer
+  store.getTranscript(agentId);
 
   const reader = new Database(dbPath);
   const { n } = reader.prepare(`SELECT COUNT(*) AS n FROM agent_transcripts WHERE agent_id=?`).get(agentId) as {

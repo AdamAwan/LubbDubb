@@ -4,15 +4,9 @@ import type { AppState, Escalation, OpenPullRequest, Proposal } from '../web/src
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { featureHolds, goalPullRequests } from '../web/src/view/featureHolds.js';
 
-// buildDemoState returns { state, transcripts }; this suite only needs the state.
 const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
 const buildDemoState = () => buildDemoSeed().state;
 
-/**
- * The demo world with the rail's fixture noise taken out, the way
- * `test/needsYou.test.ts` does it: no appraisal verdicts (an `intake` row per
- * refused goal), no assigned pull request, and a build with nothing to take.
- */
 function stateWith(over: Partial<AppState>): AppState {
   const base = buildDemoState();
   const world = {
@@ -33,7 +27,6 @@ function stateWith(over: Partial<AppState>): AppState {
   return { ...base, world, build, escalations: [], humanTasks: [], proposals: [], recovery: [], ...over };
 }
 
-/** The demo state with one open pull request's attention replaced. */
 function withAttention(state: AppState, number: number, attention: OpenPullRequest['attention']): AppState {
   return {
     ...state,
@@ -77,11 +70,6 @@ function mergeProposal(prNumber: number, escalationId: string): Proposal {
 
 const holds = (state: AppState, goals: number[]) => featureHolds(state, buildNeedsYou(state), goals);
 
-// The demo's fixed points this suite leans on: #388 owns PR #412 (attention
-// `harness`, agent-a1 running on `pr:412`); #376 owns PR #409 (agent-a2 waiting
-// on `pr:409`, a `gateHold` on its reach row); #345 is on cooldown; #390 is a
-// three-part plan whose open rungs #413 and #414 stack.
-
 test('a rail row on one of the goals is a `you` hold carrying the row id', () => {
   const state = stateWith({
     escalations: [escalation({ id: 'q-1', agentId: 'agent-a1', context: { originRef: 'issue:388' } })],
@@ -114,7 +102,6 @@ test('a merge rail row and its pull request’s `you` verdict are one hold — t
   assert.equal(deduped[0]?.kind, 'merge');
   assert.equal(deduped[0]?.needId, 'merge-412');
 
-  // Without the row, the verdict stands on its own as a `pr` hold in the PR's words.
   const withoutRow = withAttention(stateWith({}), 412, verdict);
   const bare = holds(withoutRow, [388]).you;
   assert.deepEqual(
@@ -213,7 +200,6 @@ test('a gate hold on the reach row is a world hold in the desk’s sentence', ()
   assert.ok(expected, 'the demo holds #376 on staging');
   const gate = holds(state, [376]).world.find((h) => h.kind === 'gate');
   assert.deepEqual([gate?.title, gate?.ref, gate?.goal, gate?.since], [expected, 'issue:376', 376, null]);
-  // The goal with no hold draws none.
   assert.equal(
     holds(state, [388]).world.some((h) => h.kind === 'gate'),
     false,
@@ -228,14 +214,12 @@ test('an agent parked on the usage limit is a fleet hold on the goal its task wa
   assert.equal(limit.agentId, 'agent-a2');
   assert.equal(limit.goal, 376);
   assert.equal(limit.ref, 'pr:409');
-  // The rail's own row for the park, so the card opens the same resume control.
   assert.equal(limit.needId, 'agent-a2');
   assert.equal(
     you.some((h) => h.kind === 'limit'),
     false,
     'the limit row is never the operator’s',
   );
-  // Another goal's park is not this Feature's.
   assert.equal(
     holds(state, [388]).fleet.some((h) => h.kind === 'limit'),
     false,
@@ -300,7 +284,6 @@ test('an agent with no note is named by its task title, and an agent on another 
 
 test('goalPullRequests puts the stack bottom rung first, then the rest, then closed newest first', () => {
   const rows = goalPullRequests(stateWith({}), 390);
-  // #406 closed half an hour ago; #388 (`issue/390/bench`) is the archive's, closed weeks back.
   assert.deepEqual(
     rows.map((r) => [r.pr.number, r.open, r.position, r.stackSize]),
     [

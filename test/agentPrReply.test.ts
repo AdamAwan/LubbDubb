@@ -11,23 +11,6 @@ import { replyOrigin, replyToolNote } from '../src/dispatcher/reviewThreads.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { Agent } from '../src/types.js';
 
-/**
- * An agent's reply to a review thread goes through the harness, never out of the
- * agent.
- *
- * The behaviour this file holds is one sentence: `reply_to_review` raises the
- * same `reply_on_pr` act a rule raises and sends nothing itself. Everything the
- * harness has built around that act — the hold, the operator's rejection, the
- * authority, the sign-off, the escalation on a failed send — then applies to an
- * agent's reply because it is the *same* act, and none of it applies to a `gh`
- * call from inside a worktree.
- *
- * The sign-off itself is `test/signOff.test.ts`': these inject a counting sink,
- * which is deliberately the unsigned seam — what is asserted here is that the
- * body reaches `ActionSink.postPrReply` at all, which is the one path
- * `CompositeConnector.signed` wraps.
- */
-
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-reply-'));
   return loadConfig({
@@ -40,7 +23,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/** What actually went out, so "nothing was sent" is observable. */
 function countingSink(
   script: { canResolve?: boolean; resolveThrows?: string; noSuchThread?: boolean } = {},
 ): ActionSink & {
@@ -95,11 +77,6 @@ function countingSink(
   };
 }
 
-/**
- * `worktrees` is injected because this builds a whole system: without it
- * `config.repoRoot` defaults to `process.cwd()` and a dispatch cuts a real branch
- * in whoever's checkout is running the suite.
- */
 function build(sink: ActionSink, overrides: Record<string, unknown> = {}): System {
   return buildSystem(testConfig(overrides), {
     worktrees: new FakeWorktreeManager(),
@@ -109,7 +86,6 @@ function build(sink: ActionSink, overrides: Record<string, unknown> = {}): Syste
   });
 }
 
-/** A review agent on PR #42, as rule `pr-review-comment` dispatches one. */
 function reviewAgent(system: System, originRef = 'pr:42:comments'): Agent {
   const task = system.store.createTask({
     kind: 'code',
@@ -134,9 +110,6 @@ async function callReply(system: System, agent: Agent, args: Record<string, unkn
 
 test('with sendPrRepliesWithoutApproval off, the reply is proposed — and accepting it sends that body', async () => {
   const sink = countingSink();
-  // The stricter posture. On the default the reply goes out, which the test below
-  // covers: an agent already posted its own replies with nobody asked, so what the
-  // harness changes there is who signs and records it, not whether it goes.
   const system = build(sink, { sendPrRepliesWithoutApproval: false });
   const agent = reviewAgent(system);
 
@@ -169,8 +142,6 @@ test('the pull request comes from the origin, so an agent cannot answer another 
   const res = await callReply(system, agent, { body: 'Looks fine to me.', thread: 'c-1' });
   assert.equal(res.isError, true);
   assert.match(res.text, /only for an agent dispatched to answer/);
-  // And the refusal says what to do instead, rather than leaving the habit it
-  // is displacing as the only option the agent can see.
   assert.match(res.text, /do not post to the thread yourself/i);
   assert.equal(system.store.listProposals().length, 0);
   system.store.close();
@@ -190,7 +161,6 @@ test('an empty reply is refused, and nothing is proposed for it', async () => {
 
 test('on the default the reply goes out, and the row says which authority sent it', async () => {
   const sink = countingSink();
-  // No override: the key is on unless an operator turns it off.
   const system = build(sink);
   const agent = reviewAgent(system);
 
@@ -203,8 +173,6 @@ test('on the default the reply goes out, and the row says which authority sent i
   assert.equal(proposal!.status, 'accepted', 'the row is still written — it is the audit trail');
   assert.equal(proposal!.decidedBy, 'auto_send');
   assert.equal(proposal!.escalationId, null);
-  // Six weeks later, a reply the operator clicked has to be tellable from one
-  // their config sent, and the key's own name is what says the second.
   assert.match(proposal!.note ?? '', /sendPrRepliesWithoutApproval/);
   const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /authorized by auto-send/);
@@ -215,11 +183,6 @@ test("the reply the fleet sends spends the operator's reopen of that thread", as
   const sink = countingSink();
   const system = build(sink);
   const agent = reviewAgent(system);
-  // The operator put this thread back to the fleet. The mark is what makes the
-  // thread read as unanswered, so it has to end the moment the fleet answers —
-  // left standing it would hold the thread open against every later reading and
-  // rule `pr-review-comment` would dispatch for it every pulse, forever.
-  // → docs/spec/07-pull-requests.md#reopening-a-thread
   system.store.setPrThreadReopened(42, 'c-1', true);
 
   await callReply(system, agent, { body: 'Answered properly this time.', thread: 'c-1' });
@@ -249,8 +212,6 @@ test('auto-send never overrides a rejection the operator already gave', async ()
   const system = build(sink);
   const agent = reviewAgent(system);
 
-  // The operator refused a reply on this very thread. "I do not need to be asked"
-  // is not "ignore what I said no to", so the hold still governs.
   const refused = system.store.createProposal({
     kind: 'reply_draft',
     ref: 'pr:42:comment:c-1',
@@ -285,14 +246,11 @@ test('the review prompt names the tool and forbids posting to the thread by hand
   const note = replyToolNote();
   assert.match(note, /reply_to_review/);
   assert.match(note, /Do not post to a review thread yourself/);
-  // The three ways an agent with a shell actually does it.
   for (const habit of ['gh', 'az', 'REST API']) assert.ok(note.includes(habit), `${habit} is named`);
 });
 
 test('the fence reads the pull request out of the origin', () => {
   assert.deepEqual(replyOrigin('pr:42:comments'), { ok: true, prNumber: 42, originRef: 'pr:42:comments' });
-  // A CI agent is answering a red check; a reply from it lands on a thread
-  // another agent is working.
   assert.equal(replyOrigin('pr:42:ci').ok, false);
   assert.equal(replyOrigin(null).ok, false);
 });
@@ -314,8 +272,6 @@ test('resolved: true closes the thread as the reply goes out', async () => {
     [{ prNumber: 42, commentId: 'c-1' }],
     'the harness resolves what the agent says it dealt with',
   );
-  // The agent is told what it asked for; whether it has *happened* is the
-  // executor's account, which rides in `note`.
   assert.match(res.text, /"resolveRequested": true/);
   const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /Resolved thread c-1/);
@@ -368,9 +324,6 @@ test('resolved: true with no thread resolves nothing — there is no thread to c
 });
 
 test('a failed resolve never costs the reply: it is not escalated and not re-proposed', async () => {
-  // The sharp edge. A throw read as "the send failed" would escalate a reply that
-  // is already in the thread, and re-propose it once the settle window lapsed —
-  // the reviewer reads the same answer twice because a thread would not close.
   const sink = countingSink({ resolveThrows: 'graphql unavailable' });
   const system = build(sink);
   const agent = reviewAgent(system);
@@ -414,6 +367,5 @@ test('a thread the provider no longer carries is reported, not guessed at', asyn
 test('the review prompt teaches the resolved flag, and when not to set it', () => {
   const note = replyToolNote();
   assert.match(note, /resolved: true/);
-  // Both halves: an agent told only to set it resolves the threads it is arguing with.
   assert.match(note, /defending an approach/);
 });

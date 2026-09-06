@@ -13,17 +13,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { isStateColour, stateColour, stateColourKey } from '../web/src/stateColour.js';
 
-/**
- * Issue #405. A tracker with a rich workflow reports a dozen state words and the
- * cockpit drew every one of them the same grey, so the column said nothing at a
- * glance. The colours are the operator's — the harness reads none of them — which
- * is why the only server-side claim worth asserting is that the map reaches the
- * cockpit whole.
- */
-
-// `tsx` compiles JSX with the classic runtime, which emits bare
-// `React.createElement`; the global goes in before the component's module loads,
-// as `console.test.ts` does it.
 (globalThis as { React?: typeof React }).React = React;
 
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');

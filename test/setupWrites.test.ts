@@ -11,23 +11,6 @@ import { buildSetupReading, type SetupCheck } from '../src/setup/reading.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
 import { buildSystem } from '../src/system.js';
 
-/**
- * The contract between what Setup offers to write and what the config route will
- * accept — and the one nothing stated, which is how it came to be broken.
- *
- * `resolveFromRepo` used to emit nested objects (`integrations`, `github`) while
- * `POST /api/config` validates every key against `CONFIG_FIELDS`, a registry of
- * **leaf** paths. So the first key refused the whole save, at the *preview*, with
- * the operator's entire answer one field name away from working — and it refused
- * for every real repository, which is to say Setup had never once completed
- * against one. Both sides typecheck: the writes are a `Record<string, unknown>`
- * and the validator takes strings.
- *
- * So this asserts the join rather than a literal. A key here that is not a
- * configurable leaf, is `fileOnly`, or is beaten by an environment variable is a
- * key the route will refuse, and the failure is silent at every layer above it.
- */
-
 function probes(over: Partial<SetupProbes> = {}): SetupProbes {
   return {
     originUrl: () => Promise.resolve('git@github.com:acme/app.git'),
@@ -48,7 +31,6 @@ function config(over: Parameters<typeof loadConfig>[0] = {}) {
   return loadConfig({ dbPath: ':memory:', ...over });
 }
 
-/** What `prepare()` in `src/server/routes/state.ts` walks, for one key. */
 function refuseReason(path: string): string | null {
   const field = configField(path);
   if (!field) return `${path} is not a configurable field`;
@@ -71,11 +53,6 @@ test('every key Setup would write is a key the config route accepts', async (t) 
   }
 });
 
-/**
- * The same join, for the fixes a check offers. These are written by one click from
- * the rail rather than after a preview, so a refusal here is one an operator meets
- * with no file in front of them to read it against.
- */
 test('every config fix a check offers is a key the config route accepts', async () => {
   const readings = await Promise.all([
     buildSetupReading({
@@ -105,13 +82,6 @@ test('every config fix a check offers is a key the config route accepts', async 
   }
 });
 
-/**
- * A check that is not `ok` must give the operator something to do about it.
- *
- * The failure this catches is the one the whole redesign started from: a reading
- * that counted two outstanding things and offered no way to correct either. A
- * remedy is the floor; a `fix` is the offer.
- */
 test('every outstanding check says what to do about it', async () => {
   const reading = await buildSetupReading({
     config: config({
@@ -131,16 +101,6 @@ test('every outstanding check says what to do about it', async () => {
   }
 });
 
-/**
- * A value the harness could not corroborate never reaches a one-click button.
- *
- * `userId` is the sharp one: with it set, pickup reads *who added* each watch tag,
- * so a wrong login is a fleet that picks nothing up and reports nothing wrong. The
- * local part of an email is a plausible GitHub login and is right often enough to
- * be dangerous — so a GitHub deployment with no credential to ask proposes nothing
- * at all, and an Azure one, where the address genuinely *is* the identity, proposes
- * it as `assumed` so the cockpit puts it in a field before it puts it in the file.
- */
 test('an identity nothing could confirm is never offered as a one-click fix', async () => {
   const github = await buildSetupReading({
     config: config({
@@ -174,16 +134,6 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
   assert.equal(asked?.fix?.kind === 'config' ? asked.fix.set.userId : null, 'adamawan');
 });
 
-/**
- * Which repository a reading is talking about.
- *
- * `repoRoot` is the project the fleet works on; LubbDubb's own checkout is resolved
- * from the running module and is not configurable. They coincide only when the
- * harness is dogfooding — and since `repoRoot` defaults to `process.cwd()`, that is
- * exactly what a default start proposes. Stated rather than refused, because
- * dogfooding is how this repo is developed; what it costs is the confidence to put
- * that directory on a button.
- */
 test('a repoRoot that is the harness’s own checkout is reported as such', async () => {
   const own = mkdtempSync(join(tmpdir(), 'lubbdubb-self-'));
   const reading = await buildSetupReading({

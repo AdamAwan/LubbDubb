@@ -5,12 +5,6 @@ import { parseWatchResult, unanswered } from '../src/environments/watchResult.js
 import { watchRow } from '../src/environments/fakeObserver.js';
 import type { GoalWatch } from '../src/types.js';
 
-/**
- * The verdict fold, on its own. Pure, so the two rules that matter — `unknown`
- * never folding to `clean`, and nothing rolling up to a word — are unit
- * assertions rather than things a server has to be stood up to observe.
- */
-
 const CHECK: GoalWatch = {
   originRef: 'issue:12',
   id: 'no-timeouts',
@@ -38,10 +32,6 @@ const CHECK: GoalWatch = {
   authored: 'plan',
 };
 
-/**
- * A measure: one number, no presence query, and an expectation that is either a
- * threshold or the baseline taken at declaration.
- */
 const MEASURE: GoalWatch = {
   ...CHECK,
   id: 'orders-p95',
@@ -53,10 +43,8 @@ const MEASURE: GoalWatch = {
   unit: 'ms',
 };
 
-/** A measure's stdout, through the real parser — the one-row, numeric-`value` contract. */
 const measured = (rows: Record<string, unknown>[]) => parseWatchResult(JSON.stringify(rows), MEASURE.id, 'measure');
 
-/** The command's own stdout, through the real parser — never a hand-made result. */
 const answered = (rows: Record<string, unknown>[]) => parseWatchResult(JSON.stringify(rows), CHECK.id, 'signal');
 
 test('presence answering and no matching rows is clean', () => {
@@ -70,8 +58,6 @@ test('presence answering and no matching rows is clean', () => {
 });
 
 test('a presence query answering zero is unknown, and says why in words', () => {
-  // The case that reads as success: an acceptance environment where the scheduled
-  // job does not run, the queue is empty and no real traffic arrives.
   const verdict = watchCheckVerdict({
     check: CHECK,
     environment: 'testUk',
@@ -89,7 +75,6 @@ test('an observation that did not answer is unknown, never a quiet one', () => {
     unanswered('the observation was killed after SIGTERM'),
     parseWatchResult('', CHECK.id, 'signal'),
     parseWatchResult('not json', CHECK.id, 'signal'),
-    // A stale wrapper: it ran something, and it was not the query it was given.
     parseWatchResult(JSON.stringify([{ role: 'worker' }]), CHECK.id, 'signal'),
   ]) {
     const verdict = watchCheckVerdict({
@@ -108,8 +93,6 @@ test('a presence that could not be read is unknown, and the check is not consult
     check: CHECK,
     environment: 'liveUk',
     presence: unanswered('the observation exited 127: az: not found'),
-    // Whatever the check's own query would say about a code path the telemetry
-    // could not be asked about is not a reading.
     reading: answered([]),
   });
   assert.equal(verdict.verdict, 'unknown');
@@ -148,8 +131,6 @@ test('a tolerance is a tolerance, not a synonym for zero', () => {
 });
 
 test('a check that declares no presence query is read on its own answer', () => {
-  // Null presence is the only shape in which a missing presence read is
-  // acceptable: it says the check declared none, not that one went unanswered.
   const verdict = watchCheckVerdict({
     check: { ...CHECK, presence: null },
     environment: 'liveUk',
@@ -158,8 +139,6 @@ test('a check that declares no presence query is read on its own answer', () => 
   });
   assert.equal(verdict.verdict, 'clean');
 });
-
-// --- measures ---------------------------------------------------------------
 
 test('a measure inside its baseline is clean, and the number is the reading', () => {
   const verdict = watchCheckVerdict({
@@ -185,9 +164,6 @@ test('a measure worse than its baseline is regressed, and says both numbers', ()
 });
 
 test('a measure whose baseline was never taken is unknown, not clean', () => {
-  // The shape this whole guard exists for: a comparison against nothing is not a
-  // comparison that passed, and read as clean it would report an optimisation
-  // verified on a number nobody ever had a before for.
   const verdict = watchCheckVerdict({
     check: { ...MEASURE, baselineValue: null },
     environment: 'liveUk',
@@ -200,9 +176,6 @@ test('a measure whose baseline was never taken is unknown, not clean', () => {
 });
 
 test('a measure answering two rows is unknown, not the first row', () => {
-  // Refused by `parseWatchResult` rather than here — one implementation of the
-  // output contract, and the fold folds its `unknown` forward rather than
-  // re-deciding it.
   const verdict = watchCheckVerdict({
     check: { ...MEASURE, baselineValue: 8400 },
     environment: 'liveUk',
@@ -225,8 +198,6 @@ test('a measure whose value is not a number is unknown', () => {
 });
 
 test('an absolute threshold needs no baseline, and a reading past it is regressed', () => {
-  // The right shape for new behaviour, which has no before. A threshold-only
-  // measure is never held `unknown` for want of a baseline it never declared.
   const under: typeof MEASURE = { ...MEASURE, expectBaseline: false, expectUnder: 500, baselineValue: null };
   assert.equal(
     watchCheckVerdict({
@@ -260,8 +231,6 @@ test('a floor is the other direction, for a measure whose good news is a bigger 
 });
 
 test('a signal keeps its own arm — a measure is a second one, not a reinterpretation', () => {
-  // The regression this guards: folding both through one comparison would make a
-  // signal's verdict depend on columns a signal never declares.
   const verdict = watchCheckVerdict({
     check: { ...CHECK, expectUnder: 0, expectBaseline: true, baselineValue: null },
     environment: 'liveUk',

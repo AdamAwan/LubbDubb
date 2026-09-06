@@ -36,13 +36,8 @@ test('malformed capabilities are refused, never thrown on', () => {
 });
 
 test('the capability is not usable as a general credential — its shape is not a bearer token', () => {
-  // A capability is `<expiry>.<sig>` and carries an id-bound signature; it is
-  // meaningless to any route that expects the cockpit token, and to any flag id
-  // other than the one it was minted for. This is the property #129 requires:
-  // whatever grants artifact access must not be replayable against /api.
   const cap = mintArtifactCapability(KEY, 'flag_1', NOW + TTL);
   assert.match(cap, /^\d+\.[A-Za-z0-9_-]+$/);
-  // Tampering with the expiry to extend it invalidates the signature.
   const [, sig] = cap.split('.');
   assert.equal(verifyArtifactCapability(KEY, `${NOW + TTL * 100}.${sig}`, 'flag_1', NOW), false);
 });

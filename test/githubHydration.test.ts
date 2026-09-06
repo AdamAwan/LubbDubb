@@ -14,17 +14,6 @@ import type {
   GitHubApi,
 } from '../src/integrations/github/githubApi.js';
 
-/**
- * Change-gated hydration (`hydrationCache.ts`): a snapshot over a world nothing
- * has moved in must cost the list requests and nothing else, and a cache hit is a
- * *current* reading — never `stale`, which means a read failed.
- *
- * Every assertion here is about the **request tape**, because the saving is the
- * requests: a test that only compared the two snapshots' output would pass on an
- * implementation that fetched everything twice.
- */
-
-/** Every per-entity read, in call order — the tape the reuse is asserted against. */
 interface Tape {
   listOpenPulls: number;
   getPull: number[];
@@ -46,17 +35,10 @@ interface Script {
   combinedStatus?: Record<string, GhCombinedStatus>;
   checkRuns?: Record<string, GhCheckRun[]>;
   timeline?: Record<number, GhTimelineEvent[]>;
-  /** GraphQL is unavailable — the one snapshot read allowed to fail on its own. */
   threadsThrow?: boolean;
-  /** The list read is down — the failure the `lastGood` degradation exists for. */
   listThrows?: boolean;
 }
 
-/**
- * A `GitHubApi` that answers from `script` and records what it was asked for.
- * `script` is captured by reference, so a test moves the world between snapshots
- * by mutating it — which is exactly what the gating has to notice.
- */
 function fakeApi(script: Script): { api: GitHubApi; tape: Tape } {
   const tape: Tape = {
     listOpenPulls: 0,
@@ -170,10 +152,6 @@ function issue(over: Partial<GhIssue> = {}): GhIssue {
 
 const green: GhCheckRun[] = [{ name: 'build', status: 'completed', conclusion: 'success' }];
 
-// --------------------------------------------------------------------------
-// Pull requests
-// --------------------------------------------------------------------------
-
 test('hydration: a second snapshot over an unmoved world issues no per-PR detail requests', async () => {
   const script: Script = {
     pulls: [pull({ number: 7 }), pull({ number: 8, headSha: 'sha8' })],
@@ -187,7 +165,6 @@ test('hydration: a second snapshot over an unmoved world issues no per-PR detail
   assert.deepEqual(tape.getCombinedStatus, ['sha7', 'sha8']);
 
   const second = await scm.snapshot();
-  // The list is still read every pulse — it is what says nothing moved.
   assert.equal(tape.listOpenPulls, 2);
   assert.deepEqual(tape.getPull, [7, 8]);
   assert.deepEqual(tape.listPullReviews, [7, 8]);
@@ -195,7 +172,6 @@ test('hydration: a second snapshot over an unmoved world issues no per-PR detail
   assert.deepEqual(tape.listPullReviewThreads, [7, 8]);
   assert.deepEqual(tape.getCombinedStatus, ['sha7', 'sha8']);
   assert.deepEqual(tape.listCheckRuns, ['sha7', 'sha8']);
-  // A hit is a current reading, not a degraded one. `stale` means the read failed.
   assert.equal(second.stale, undefined);
   assert.equal(second.pullRequests?.length, 2);
 });
@@ -231,7 +207,6 @@ test('hydration: a moved `updated_at` re-hydrates the detail reads', async () =>
   assert.deepEqual(tape.getPull, [7, 7]);
   assert.deepEqual(tape.listPullReviewComments, [7, 7]);
   assert.equal(second.pullRequests?.[0]?.unresolvedComments.length, 1);
-  // CI is gated separately: the head SHA did not move and the verdict was settled.
   assert.deepEqual(tape.listCheckRuns, ['sha7']);
 });
 
@@ -257,13 +232,11 @@ test('hydration: pending CI is re-read even though `updated_at` has not moved', 
   script.checkRuns = { sha7: [{ name: 'build', status: 'completed', conclusion: 'failure' }] };
   const second = await scm.snapshot();
 
-  // The check reads happened again; the reads `updated_at` covers did not.
   assert.deepEqual(tape.listCheckRuns, ['sha7', 'sha7']);
   assert.deepEqual(tape.getCombinedStatus, ['sha7', 'sha7']);
   assert.deepEqual(tape.getPull, [7]);
   assert.equal(second.pullRequests?.[0]?.ciStatus, 'failing');
 
-  // Now settled on the same SHA — the one CI reading that cannot change.
   await scm.snapshot();
   assert.deepEqual(tape.listCheckRuns, ['sha7', 'sha7']);
 });
@@ -297,7 +270,6 @@ test('hydration: a failed review-thread read is not held as a hit', async () => 
 
   await scm.snapshot();
   await scm.snapshot();
-  // Degradation is retried every pulse, exactly as before the cache existed.
   assert.deepEqual(tape.listPullReviewThreads, [7, 7]);
   assert.deepEqual(tape.getPull, [7, 7]);
 });
@@ -322,8 +294,6 @@ test('hydration: an entry past its reuse window is re-read even with every token
   let clock = 1_000;
   const scm = new GitHubSourceControlIntegration({ api, now: () => clock });
 
-  // The bound is the lane's, handed in per read — the cache states none of its own
-  // (`src/world/readPlan.ts`).
   const lane = { hot: 'all' as const, hotMaxAgeMs: 5 * 60_000, coldMaxAgeMs: 10 * 60_000 };
   await scm.snapshot(lane);
   clock += 60_000;
@@ -335,11 +305,6 @@ test('hydration: an entry past its reuse window is re-read even with every token
   assert.deepEqual(tape.listCheckRuns, ['sha7', 'sha7']);
 });
 
-/**
- * The lane split, where it actually bites: the backstop that re-reads an entity
- * nothing has moved is the **lane's** number, so two pull requests on one pulse
- * are re-hydrated on different clocks. → `docs/spec/04-harness-cycle.md#hot-and-cold`
- */
 test('hydration: the hot lane re-reads on its backstop while the cold one holds', async () => {
   const script: Script = {
     pulls: [pull({ number: 7 }), pull({ number: 8, headSha: 'sha8' })],
@@ -348,7 +313,6 @@ test('hydration: the hot lane re-reads on its backstop while the cold one holds'
   const { api, tape } = fakeApi(script);
   let clock = 1_000;
   const scm = new GitHubSourceControlIntegration({ api, now: () => clock });
-  // PR 7 is moving; PR 8 is not. Nothing on either token moves for the whole test.
   const plan = { hot: new Set(['pr:7']), hotMaxAgeMs: 60_000, coldMaxAgeMs: 600_000 };
 
   await scm.snapshot(plan);
@@ -407,10 +371,6 @@ test('hydration: reuse and staleness stay distinct — a hit is clean, a failure
   assert.equal(degraded.pullRequests?.length, 1);
 });
 
-// --------------------------------------------------------------------------
-// Issues
-// --------------------------------------------------------------------------
-
 test('hydration: a second issues snapshot over an unmoved world reads no timelines', async () => {
   const script: Script = { issues: [issue({ number: 5 }), issue({ number: 6 })] };
   const { api, tape } = fakeApi(script);
@@ -439,10 +399,6 @@ test('hydration: a moved issue is re-hydrated, and its linked PR with it', async
   assert.equal(third.issues?.[0]?.linkedPrNumber, 42);
 });
 
-/**
- * The sharp edge this whole cache has to survive: `labelsAddedByViewer` gates
- * pickup fleet-wide, and a wrong answer stops the fleet with nothing red.
- */
 test('hydration: a reused issue still reports the viewer-added labels', async () => {
   const script: Script = {
     issues: [issue({ labels: ['agent-ready'] })],
@@ -469,7 +425,6 @@ test('hydration: a label removed since the cached timeline cannot come back thro
   const issues = new GitHubIssuesIntegration({ api, ownershipLabel: 'agent-ready' });
   await issues.snapshot();
 
-  // Only the list payload moves — a hand-edited label the timeline hasn't caught up on.
   script.issues = [issue({ labels: ['agent-ready'] })];
   assert.deepEqual((await issues.snapshot()).issues?.[0]?.labelsAddedByViewer, ['agent-ready']);
 });

@@ -10,17 +10,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { AgentTranscript } from '../src/wire.js';
 
-/**
- * `GET /api/agents/:id/transcript?from=` — the range the agent drawer's poll
- * needs (issue #639).
- *
- * The drawer re-reads the transcript every five seconds while a run is live,
- * because the socket only carries what an agent produced since the drawer
- * subscribed and so can never fill in the part before it. Re-fetching the whole
- * record per poll would ship megabytes of unchanged text per open drawer, so the
- * poll names what it holds and is answered with the tail.
- */
-
 function build() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
@@ -36,7 +25,6 @@ function build() {
   return buildSystem(config, { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager() });
 }
 
-/** An agent row with `chunks` appended to its transcript, and the app to read it through. */
 async function withTranscript(chunks: string[]) {
   const system = build();
   const { app } = await buildApp(system);
@@ -86,8 +74,6 @@ test('a poll on a run that has printed nothing new costs an empty string, not th
 });
 
 test('an offset past the end is clamped rather than refused', async () => {
-  // A transcript only grows, so this is a client that read across a flush — it
-  // wants to be told where the end is, not handed a 400 it can do nothing with.
   const { system, app, read } = await withTranscript(['short']);
 
   const over = await read(9999);
@@ -100,8 +86,6 @@ test('an offset past the end is clamped rather than refused', async () => {
 });
 
 test('successive ranged reads reassemble exactly the whole transcript', async () => {
-  // What the drawer actually does: seed, then append each tail onto it. The
-  // concatenation must equal the record, or the pane draws output with a hole in it.
   const chunks = Array.from({ length: 40 }, (_, i) => `line ${i}\n`);
   const { system, app, read } = await withTranscript([]);
 

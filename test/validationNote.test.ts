@@ -8,27 +8,6 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { ValidationVerdict } from '../src/wire.js';
 
-/**
- * The sentence the flag costs, and the fact that there is somewhere to say it.
- *
- * Two routes refuse a close with no note while a goal's validation plan is
- * flagged — `POST /api/human-tasks/:id/done` on a `close_out`, and
- * `POST /api/issues/:number/dismiss-run` ([20](../docs/spec/20-validation.md#where-it-lands)).
- * Both refusals were correct and both were unreachable: the cockpit's Done posted
- * no note and had no box to type one in, End the run posted none either, and the
- * 400 came back to a `catch` that dropped it and an unhandled rejection. The
- * operator saw two controls that did nothing when clicked — which is the one
- * outcome a rule stated as "it costs a sentence" must not have.
- *
- * So the assertions are in two halves: the browser can *say* it (the note reaches
- * the route as the route asks for it), and the browser *asks* for it at the
- * moment the route would refuse — mirrored in its condition only, the counts
- * staying the server's fold.
- *
- * `tsx` compiles JSX with the classic runtime, which emits bare
- * `React.createElement`; the global goes in before the console's modules load so
- * the test exercises the same sources the bundle does.
- */
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -51,7 +30,6 @@ const CLEAR: ValidationVerdict = { state: 'clear', total: 4, passed: 4, failed: 
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
-/** The goal the demo's close-out obligation hangs off — the row both halves are about. */
 function closeOutGoal(state: CockpitView['state']): string {
   const task = (state.humanTasks ?? []).find((t) => t.kind === 'close_out' && t.status === 'open');
   assert.ok(task?.originRef, 'the demo fixtures must carry an open close-out on a goal');
@@ -96,7 +74,6 @@ const render = (v: CockpitView) =>
     }),
   );
 
-/** Give the goal a verdict, and a run for the header's End-the-run control to end. */
 function goalWith(verdict: ValidationVerdict | null): CockpitView {
   return goalView((state) => {
     const issue = goalIssue(state, closeOutGoal(state));
@@ -118,23 +95,15 @@ test('a close-out on a flagged goal asks for the note before posting, not after 
     'the bench verdict must offer the box the route requires, not a bare Done the route refuses',
   );
 
-  // The other polarity, `validationFlag.test.ts`'s discipline: a guard that asked
-  // either way is friction, and friction is what gets the flag ignored.
   const clear = render(goalWith(CLEAR));
   assert.ok(!clear.includes('Done…'), 'a clear plan costs nothing to say, so it stays one click');
   assert.ok(clear.includes('>Done<'), 'and the one click is still there');
 
-  // A goal nobody wrote a plan for is not "flagged" — null is "no checks", and
-  // the route reads it that way too.
   const none = render(goalWith(null));
   assert.ok(!none.includes('Done…'), 'no plan is not a flagged plan');
 });
 
 test('ending the run is one destructive control that confirms on every goal', () => {
-  // The note's condition is still mirrored — it is the modal's, now, rather than
-  // the button's — but the *confirmation* is unconditional: the route kills the
-  // goal's agents, cancels its jobs and settles its instructions, and none of that
-  // may fire on a stray click at a goal whose plan happens to be clear.
   for (const verdict of [FLAGGED, CLEAR, null]) {
     const html = render(goalWith(verdict));
     assert.ok(html.includes('Abandon…'), 'the control always says it will ask first');
@@ -158,9 +127,6 @@ test('the note the cockpit sends is the one the routes read, and a refusal survi
   try {
     await api.completeHumanTask('hum_1', 'closed it; A and C run on Monday');
     await api.dismissRun(12, 'shipping it anyway');
-    // The refusal reaches the caller as the server's own words rather than a
-    // status line: that string is what the button now draws, and dropping it is
-    // the whole failure this file is about.
     await assert.rejects(api.completeHumanTask('hum_1'), /Validation is not clear/);
   } finally {
     globalThis.fetch = original;
@@ -171,7 +137,5 @@ test('the note the cockpit sends is the one the routes read, and a refusal survi
     body: { note: 'closed it; A and C run on Monday' },
   });
   assert.deepEqual(calls[1], { url: '/api/issues/12/dismiss-run', body: { note: 'shipping it anyway' } });
-  // Absent rather than empty on the arm that has nothing to say: the routes read
-  // absence, and `''` would be that absence spelled a second way.
   assert.deepEqual(calls[2], { url: '/api/human-tasks/hum_1/done', body: undefined });
 });

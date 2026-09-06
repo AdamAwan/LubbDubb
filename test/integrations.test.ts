@@ -54,7 +54,6 @@ test('inject routes each event kind to the integration that owns it', async () =
 });
 
 test('inject with no owning integration is recorded as unhandled, not thrown', () => {
-  // Only the issues fake is enabled, so a PR event has no owner.
   const store = new Store(':memory:');
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
     (i) => i.capability === 'issues',
@@ -186,9 +185,6 @@ test('updatePrBranch routes to the sourceControl provider and the PR stops being
 });
 
 test('updatePrBranch answers ok:false — never throws — when no provider can do it', async () => {
-  // The one outbound act with a second way to get done, so an absent capability
-  // (Azure DevOps has no update-branch endpoint) is a configuration rather than a
-  // fault: the caller reads `ok: false` and falls back to a code agent.
   const store = new Store(':memory:');
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
     (i) => i.capability !== 'sourceControl',
@@ -204,7 +200,6 @@ test('setPrLabel routes to the sourceControl provider and tags the PR', async ()
   const result = await connector.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
   assert.equal(result.ok, true);
   assert.deepEqual((await connector.getState()).pullRequests[0]!.labels, ['lubbdubb-ignore']);
-  // Removing it is idempotent and clears the tag.
   await connector.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
   assert.deepEqual((await connector.getState()).pullRequests[0]!.labels, []);
   store.close();
@@ -225,9 +220,6 @@ test('setPrLabel throws when no PrLabelCapable integration is enabled', async ()
 
 test('a stale slice names its integration on the snapshot, and a fresh world says nothing', async () => {
   const store = new Store(':memory:');
-  // Two integrations, one of which is serving its last-good lists. The composite
-  // has to name *which*, since a stale issue list and a stale PR list mean
-  // different things about the decisions taken against them.
   const connector = new CompositeConnector(
     [
       {
@@ -241,8 +233,6 @@ test('a stale slice names its integration on the snapshot, and a fresh world say
   );
   assert.deepEqual((await connector.getState()).staleSources, ['sourceControl:flaky']);
 
-  // Absent rather than empty when everything is current: nothing downstream should
-  // have to tell "no stale sources" from "this snapshot predates the field".
   const { store: s2, connector: healthy } = build();
   assert.equal((await healthy.getState()).staleSources, undefined);
   s2.close();

@@ -4,22 +4,6 @@ import { DEFAULT_COOLDOWN } from '../../src/dispatcher/dispatchCooldown.js';
 import { planOrigin } from '../../src/plans/planning.js';
 import { appraisalOrigin } from '../../src/intake/appraisal.js';
 
-/**
- * The state in which rule `issue-pickup` works an issue: **the funnel gave up on
- * it.**
- *
- * The funnel is unconditional, so an issue with no plan is an issue a planner is
- * owed and pickup is narrowed away from it. There is exactly one arm left where
- * pickup fires — `unplanned`, reached when the planner has spent its attempt cap —
- * so a test about anything downstream of pickup has to put the issue there.
- *
- * This used to be a plan row saying "one pull request", because that verdict
- * *meant* no parts and was worked by pickup. It is not a thing a planner can say
- * any more: a plan that is one pull request is a plan with one part, and rule
- * `plan-part` schedules it. Writing a partless plan row here would now park the
- * issue instead of releasing it to pickup — the same silence
- * `backfillWholePlanParts` exists to keep off real databases.
- */
 export function spentPlannerAttempts(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
   const origin = planOrigin(issueNumber);
   return Array.from({ length: DEFAULT_COOLDOWN.maxAttempts }, (_, i) => ({
@@ -42,16 +26,6 @@ export function spentPlannerAttempts(issueNumber: number, at = '2026-07-25T00:00
   }));
 }
 
-/**
- * The appraisal's half of the same story: **the goal appraisal gave up on it.**
- *
- * The appraisal is unconditional and sits in front of the planner, so a fresh issue is
- * one an appraiser is owed and every rule behind it is narrowed away from. Spending
- * its attempt cap is the fail-open arm — deliberately the same shape as the
- * planner's above, because it is the same statement, and a verdict row would say
- * something stronger (that a goal *was* judged) than a test downstream of the
- * funnel means.
- */
 export function spentAppraisalAttempts(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
   const origin = appraisalOrigin(issueNumber);
   return Array.from({ length: DEFAULT_COOLDOWN.maxAttempts }, (_, i) => ({
@@ -74,30 +48,14 @@ export function spentAppraisalAttempts(issueNumber: number, at = '2026-07-25T00:
   }));
 }
 
-/**
- * Everything in front of rule `issue-pickup`, failed open at once.
- *
- * The funnel is two gates deep now — appraisal, then plan — and a test about anything
- * downstream of pickup wants to be past both. Naming them together keeps the next
- * gate from having to be found in twenty test files one failure at a time.
- */
 export function pastTheFunnel(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
   return [...spentAppraisalAttempts(issueNumber, at), ...spentPlannerAttempts(issueNumber, at)];
 }
 
-/**
- * The same fact, persisted, for a test that runs a whole cycle rather than calling
- * a rule directly — the decisions are read back off the store there rather than
- * handed to a context. Covers both gates, for {@link pastTheFunnel}'s reason.
- */
 export function failPlanningOpen(store: Store, issueNumber: number): void {
   record(store, pastTheFunnel(issueNumber));
 }
 
-/**
- * Just the appraisal's gate, persisted — for a whole-cycle test that wants the
- * *planner* to run, which the appraisal would otherwise pre-empt.
- */
 export function failAppraisalOpen(store: Store, issueNumber: number): void {
   record(store, spentAppraisalAttempts(issueNumber));
 }
@@ -108,12 +66,6 @@ function record(store: Store, decisions: Decision[]): void {
   }
 }
 
-/**
- * A plan of one part, as a store write — what a planner writes for work that is
- * one pull request, which is an ordinary plan and not a shape of its own.
- *
- * For a test that wants the *planned* path rather than the fail-open one above.
- */
 export function planWithOnePart(store: Store, issueNumber: number, title = `Issue #${issueNumber}`): Plan {
   const plan = store.upsertPlan({
     originRef: `issue:${issueNumber}`,

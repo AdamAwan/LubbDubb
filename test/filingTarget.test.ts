@@ -10,32 +10,6 @@ import { fleetWorksUpstream, UPSTREAM_REPO } from '../src/tickets/upstream.js';
 import type { Config } from '../src/config.js';
 import type { FilingTargetProbe, IssueFiled } from '../src/wire.js';
 
-/**
- * Issues #413 and #449: raising an issue **about LubbDubb** from the cockpit, and
- * the live probe that says whether it can be raised at all.
- *
- * Both routes go past the connector entirely — the report is about the tool, not
- * about the work, so it belongs on the tool's own tracker whatever repo the fleet
- * is pointed at. That is what makes the seam here `system.upstream` and not
- * `system.filing`, and it is what these tests are mostly about: the destination,
- * the byline, and the one thing that still depends on the configured tracker (the
- * watch label, which only means something where the fleet works this repo itself).
- *
- * Every case injects {@link FakeUpstreamIssues}. The real one spawns `gh` against
- * the real repository, so a test that reached it would either file an issue
- * somebody has to close or fail by whose machine ran it.
- */
-
-/**
- * A system whose *issues provider* is really GitHub, because which repository the
- * fleet sweeps is exactly what these two routes must not follow — and a fake
- * provider cannot state one.
- *
- * The token is a placeholder and nothing ever authenticates with it: the routes
- * under test never touch the connector, and neither runs a cycle. It exists only
- * because the registry refuses to build the provider without one, which is a boot
- * check and not a call.
- */
 function system(opts: { upstream?: FakeUpstreamIssues; github?: { owner: string; repo: string } } = {}): System {
   const previous = process.env.GITHUB_TOKEN;
   if (opts.github) process.env.GITHUB_TOKEN = 'placeholder-never-sent';
@@ -47,8 +21,6 @@ function system(opts: { upstream?: FakeUpstreamIssues; github?: { owner: string;
       agentMode: 'raw',
       heartbeatIntervalMs: 999_999,
       startPaused: true,
-      // The issues provider only: source control stays fake, since nothing here
-      // reads a branch and a second real provider would be a second boot check.
       ...(opts.github
         ? { integrations: { sourceControl: 'fake', issues: 'github', pool: 'fake' }, github: opts.github }
         : {}),
@@ -65,12 +37,7 @@ function system(opts: { upstream?: FakeUpstreamIssues; github?: { owner: string;
   }
 }
 
-/** The dogfooding deployment: the fleet's own tracker *is* the upstream repository. */
 const DOGFOOD = { owner: 'AdamAwan', repo: 'LubbDubb' };
-
-// ---------------------------------------------------------------------------
-// Which deployments can watch what they raise
-// ---------------------------------------------------------------------------
 
 test('only a fleet pointed at LubbDubb itself can watch a report raised here', () => {
   const config = (github?: { owner: string; repo: string }, issues = 'github'): Config =>
@@ -87,13 +54,7 @@ test('only a fleet pointed at LubbDubb itself can watch a report raised here', (
   assert.equal(fleetWorksUpstream(config(undefined)), false, 'nothing configured is not a match either');
 });
 
-// ---------------------------------------------------------------------------
-// GET /api/issues/filing-target
-// ---------------------------------------------------------------------------
-
 test('GET /api/issues/filing-target names LubbDubb’s own repo, not the fleet’s', async () => {
-  // A fleet working somebody else's repository — the deployment issue #449 was
-  // raised from, and the one where the destination must *not* follow config.
   const built = system({ github: { owner: 'acme', repo: 'product' } });
   const { app } = await buildApp(built);
 
@@ -149,10 +110,6 @@ test('a probe the CLI refuses is a 200 saying why, and lands in the error log', 
   built.store.close();
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/issues
-// ---------------------------------------------------------------------------
-
 test('POST /api/issues files onto LubbDubb’s tracker and answers its address', async () => {
   const upstream = new FakeUpstreamIssues();
   const built = system({ upstream, github: { owner: 'acme', repo: 'product' } });
@@ -201,9 +158,6 @@ test('POST /api/issues carries the watch label only where the fleet could act on
   await ownApp.close();
   own.store.close();
 
-  // The same click on a deployment working somebody else's repo. The label is
-  // dropped rather than applied: these agents never sweep that tracker, so tagging
-  // it would be a promise nothing keeps.
   const elsewhere = new FakeUpstreamIssues();
   const other = system({ upstream: elsewhere, github: { owner: 'acme', repo: 'product' } });
   const otherApp = (await buildApp(other)).app;

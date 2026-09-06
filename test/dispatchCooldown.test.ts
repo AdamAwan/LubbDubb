@@ -5,7 +5,6 @@ import type { Decision } from '../src/types.js';
 
 const POLICY: CooldownPolicy = { maxAttempts: 3, cooldownMs: 60_000 };
 
-/** A dispatch decision for `origin`, executed at `createdAt`. */
 function dispatched(origin: string, createdAt: string): Decision {
   return {
     id: `d_${createdAt}`,
@@ -88,7 +87,6 @@ test('cooldown and attempts are scoped to one origin', () => {
     dispatched('pr:1:mergeable', '2026-07-21T00:00:31Z'),
     dispatched('pr:1:mergeable', '2026-07-21T00:00:32Z'),
   ];
-  // A different origin is unaffected by pr:1's spent attempts.
   const v = dispatchVerdict('pr:2:ci', '2026-07-21T00:00:45Z', decisions, POLICY);
   assert.equal(v.kind, 'dispatch');
 });

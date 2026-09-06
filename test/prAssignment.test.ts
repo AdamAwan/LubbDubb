@@ -60,9 +60,6 @@ test('a pull request nobody tagged is still yours once somebody assigns it to yo
   const mine = prAttentionStatus(pr({ viewerAssignment: 'assignee' }), watched);
   assert.equal(mine.status, 'you');
   assert.equal(mine.assignedToYou, 'assignee');
-  // The assignment leads, and the watch tag's absence survives as the reason
-  // nothing else is coming — an operator who reads only the first line still
-  // knows what to do, and one who reads both knows why the fleet is silent.
   assert.equal(mine.reasons[0], 'assigned to you');
   assert.match(mine.reasons[1] ?? '', /not tagged/);
 });
@@ -75,8 +72,6 @@ test('the clause names the person who asked, and reads without one when nobody i
     named({ viewerAssignment: 'reviewer-optional', author: 'Priya Raman' }),
     'Priya Raman marked you as a reviewer',
   );
-  // Required and optional say the same sentence on purpose: the distinction is
-  // `assignedToYou`, a field, so no rewording can silently drop it.
   assert.equal(
     named({ viewerAssignment: 'reviewer-required', author: 'Priya Raman' }),
     'Priya Raman marked you as a reviewer',
@@ -85,8 +80,6 @@ test('the clause names the person who asked, and reads without one when nobody i
     named({ viewerAssignment: 'assignee', author: 'Priya Raman' }),
     'Priya Raman assigned this pull request to you',
   );
-  // Whitespace is not a name: an author the provider padded rather than reported
-  // must not put a sentence with a hole in it on the rail.
   assert.equal(named({ viewerAssignment: 'assignee', author: '  ' }), 'assigned to you');
 });
 
@@ -97,8 +90,6 @@ test("your own approval ends the assignment, and the provider's silence does not
   assert.equal(open.assignedToYou, 'reviewer-required');
 
   const answered = prAttentionStatus({ ...asked, viewerApproved: true }, ctx());
-  // Demoted to a reason, exactly as an agent on the branch demotes it: the court
-  // is the arm's own again and no row is raised.
   assert.equal(answered.status, 'elsewhere');
   assert.equal(answered.assignedToYou, undefined);
   assert.deepEqual(answered.reasons, [
@@ -106,15 +97,11 @@ test("your own approval ends the assignment, and the provider's silence does not
     'Priya Raman marked you as a reviewer — you have approved it',
   ]);
 
-  // Somebody *else* approving is not an answer to the review this operator was
-  // asked for, and neither is a provider that reports no vote at all.
   const theirs = prAttentionStatus({ ...asked, approved: true }, ctx());
   assert.equal(theirs.assignedToYou, 'reviewer-required');
 });
 
 test('"waiting on review" is not the answer when the reviewer it means is you', () => {
-  // Green, unapproved, nothing staffed: the `elsewhere` tail, which on an
-  // unassigned PR is somebody else's obligation and on this one is the operator's.
   const theirs = prAttentionStatus(pr(), ctx());
   assert.equal(theirs.status, 'elsewhere');
   assert.deepEqual(theirs.reasons, ['waiting on review']);
@@ -127,7 +114,6 @@ test('"waiting on review" is not the answer when the reviewer it means is you', 
 
 test('an optional reviewer is told which of the two they are', () => {
   const verdict = prAttentionStatus(pr({ viewerAssignment: 'reviewer-optional' }), ctx());
-  // Not in the sentence — in the field, which is what the rail draws it from.
   assert.equal(verdict.assignedToYou, 'reviewer-optional');
   assert.deepEqual(verdict.reasons, ['you have been marked as a reviewer', 'waiting on review']);
 });
@@ -136,13 +122,9 @@ test('an assigned pull request says how long it has been waiting on you', () => 
   const WAITING_SINCE = '2026-07-20T09:00:00.000Z';
   const waits = new Map([[7, WAITING_SINCE]]);
 
-  // The arm that already carried the age: `waiting on review`, about the operator
-  // now rather than about somebody else.
   const reviewing = prAttentionStatus(pr({ viewerAssignment: 'reviewer-required' }), ctx({ reviewWaits: waits }));
   assert.equal(reviewing.reviewWaitingSince, WAITING_SINCE);
 
-  // The one the rail shows most, and the one that carried no age at all: an
-  // assigned pull request nobody tagged never reaches the `waiting on review` arm.
   const untagged = prAttentionStatus(
     pr({ viewerAssignment: 'reviewer-required' }),
     ctx({ watchLabel: 'lubbdubb-watch', reviewWaits: waits }),
@@ -150,13 +132,9 @@ test('an assigned pull request says how long it has been waiting on you', () => 
   assert.equal(untagged.status, 'you');
   assert.equal(untagged.reviewWaitingSince, WAITING_SINCE);
 
-  // Unassigned, the same untagged pull request is nobody's wait to draw: the arm
-  // is `unwatched` and the clock is about a reviewer who is not the operator.
   const theirs = prAttentionStatus(pr(), ctx({ watchLabel: 'lubbdubb-watch', reviewWaits: waits }));
   assert.equal(theirs.reviewWaitingSince, undefined);
 
-  // A clock that is not running draws no age — a reviewer cannot be late for work
-  // that is not ready, and the watermark is deleted the moment it stops waiting.
   const notReady = prAttentionStatus(pr({ viewerAssignment: 'reviewer-required' }), ctx());
   assert.equal(notReady.reviewWaitingSince, undefined);
 });
@@ -164,7 +142,6 @@ test('an assigned pull request says how long it has been waiting on you', () => 
 test('an agent on the branch keeps the court, and the assignment rides as a reason', () => {
   const verdict = prAttentionStatus(pr({ viewerAssignment: 'assignee' }), ctx({ tasks: [task()] }));
   assert.equal(verdict.status, 'harness');
-  // Not a row: raising one would ask the operator to do what an agent is doing.
   assert.equal(verdict.assignedToYou, undefined);
   assert.deepEqual(verdict.reasons, ['an agent is working this branch', 'assigned to you']);
 });
@@ -176,7 +153,6 @@ test('a merged pull request assigned to you says nothing about the assignment', 
   assert.equal(verdict.assignedToYou, undefined);
 });
 
-/** The demo snapshot, with its pull requests replaced by the ones a test names. */
 function stateWithPrs(prs: AppState['world']['pullRequests']): AppState {
   const base = buildDemoSeed().state;
   const world = {
@@ -215,32 +191,15 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
   assert.equal(mine[0]?.id, 'assigned:pr:9101');
   assert.equal(mine[0]?.group, 'yours');
   assert.equal(mine[0]?.originRef, 'pr:9101');
-  // Who asked, and what about — and not the arm's own reason, which on this row
-  // is either the operator's own obligation said back to them or the fleet's
-  // silence explained. Both still stand on the pull request row.
   assert.match(
     mine[0]?.title ?? '',
     /^Priya Raman marked you as a reviewer on “Retry the reconciliation sweep on a 429”/,
   );
   assert.doesNotMatch(mine[0]?.title ?? '', /waiting on review/);
-  // Which kind of reviewer is the metadata line's, off the field.
   assert.equal(mine[0]?.note, 'Optional reviewer');
-  // How long it has been waiting on the operator — the review-wait watermark, not
-  // an invented "when it became yours", which no provider reports and which
-  // stamping "now" for would refresh on every poll.
   assert.equal(mine[0]?.raisedAt, '2026-07-20T09:00:00.000Z');
 });
 
-/**
- * **The card goes to the pull request on the provider; the ask is a control beside
- * it.** The row carried a `<Ref>` to the PR beside a body that opened the harness's
- * summary of it, which put a stop on the road between the operator and the one
- * thing a colleague is waiting for them to read — the diff, the review, the checks,
- * none of which the cockpit draws. Both destinations are decided here rather than
- * in the rail, for `NeedDestination`'s reason: only the derivation can tell a ref
- * that has a page — or an address — from one that merely looks like it does.
- * → docs/spec/17-cockpit.md#the-queue-rail--needs-you
- */
 test('an assigned row opens the pull request on the provider, and carries the ask as its second destination', () => {
   const base = buildDemoSeed().state;
   const sample = base.world.pullRequests[0];
@@ -266,9 +225,6 @@ test('an assigned row opens the pull request on the provider, and carries the as
     'which is the ask read in context: the goal’s page where there is one, the ask panel otherwise',
   );
 
-  // An address the provider never gave — the `fake` provider resolves nothing —
-  // leaves the body on the ask. A card whose click lands nowhere reads, to an
-  // operator, as a console that is broken.
   const unaddressed = buildNeedsYou({ ...state, refUrls: {} }).find((r) => r.kind === 'assigned');
   assert.ok(
     unaddressed?.opens === 'goal' || unaddressed?.opens === 'ask',
