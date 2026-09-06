@@ -37,12 +37,15 @@ it on does.
 | `feature-timeline.md` | What landed when, from the walking skeleton onwards — features, not commits.                   |
 | `prompt-templates/`   | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
 | `plans/`              | Build plans for specs still marked unbuilt. Each is deleted by the change that finishes it.    |
+| `proposals/`          | Design proposals under discussion: the options weighed before a spec is written or changed.    |
 
-`spec/` holds the specification and nothing else. Dated design documents — the proposals that
-preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
-of agreement with the code the moment it moves, and a reader cannot tell by looking which of two
-documents describes the application. The reasoning that is still load-bearing lives in the spec
-document that owns the behaviour; the rest is in the git history.
+`spec/` holds the specification and nothing else. A **design proposal** — the options weighed before
+a feature is built or changed, and the one recommended — lives under `proposals/` **while it is being
+discussed**. It is not a description of the application and must not be read as one: the moment the
+work it argues for lands, the reasoning that is still load-bearing moves into the spec document that
+owns the behaviour and the proposal is **deleted by that change**, for the reason build plans are —
+two documents describing the application, and a reader cannot tell by looking which is true. A
+proposal that is declined is deleted too; the rest is in the git history.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
