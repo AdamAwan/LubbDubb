@@ -6,20 +6,8 @@ import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { Tag } from './tag.js';
 
-/**
- * Causes: what keeps sending the fleet back.
- *
- * A tab of its own rather than the third block of the reliability panel, and it
- * is the section that gained most from the move — three tables and a quotation
- * list read below two other readings is where an operator stops scrolling, and
- * this is the one surface on the page that shows the taxonomy is being *used*
- * rather than guessed at.
- *
- * It still reads **below** the counts it explains in the sense that matters: the
- * Reliability tab holds how often the pipeline broke and what it cost, and this
- * holds what it was. A cause table read with no denominator anywhere is a list
- * of anecdotes, so the section states its own total and its own shortfall.
- */
+// → docs/spec/17-cockpit.md
+
 export function CausesTab({ remedies, windowLabel }: { remedies: RemedyInsights; windowLabel: string }): JSX.Element {
   return (
     <div className="rl">
@@ -67,34 +55,11 @@ export function causeRows(remedies: RemedyInsights | null): (string | number | n
     [`The ${remedies.recent.length} most recent of ${remedies.accounts} accounts.`],
   ];
 }
-/**
- * Causes — why the fleet came back to a pull request, and what would have caught
- * it earlier.
- *
- * The panel's other two readings are folds of things the harness *observed*; this
- * one is a fold of what agents **said**, which is the whole reason it can answer
- * "why" and the whole reason it has to be read differently. Two properties keep
- * that honest, and neither is decoration:
- *
- * - **The unaccounted count is drawn with the total, not in a footnote.** Every
- *   share below it is a share of the accounts that were filed, and with half of
- *   them missing a cause table is a minority report an operator reads as the
- *   whole one.
- * - **The guard split comes before the cause tables.** A cause says what went
- *   wrong; the guard says whether anything could have caught it, and that is the
- *   only axis here an operator can act on. Ordered by what acting costs — run the
- *   gate, hand over what is already written, write down what is not, accept the
- *   rest.
- */
 function Causes({ remedies, windowLabel }: { remedies: RemedyInsights; windowLabel: string }): JSX.Element {
   return (
     <>
       <p className="sp-sub">Causes, {windowLabel}</p>
       {remedies.accounts === 0 ? (
-        // Two different silences, and the difference is the operator's next move:
-        // a fleet that has not been back to a pull request has nothing to explain,
-        // and a fleet that has been back and said nothing has a tool nobody is
-        // calling. Neither of them is "no causes".
         <p className="empty">
           {remedies.unaccounted === 0
             ? 'Nothing has come back to a pull request in this window, so there is nothing to account for.'
@@ -120,7 +85,6 @@ function Causes({ remedies, windowLabel }: { remedies: RemedyInsights; windowLab
   );
 }
 
-/** The four guards as one bar and its legend — the section's headline reading. */
 function GuardSplit({ remedies }: { remedies: RemedyInsights }): JSX.Element {
   const total = remedies.accounts;
   return (
@@ -184,16 +148,10 @@ function GuardSplit({ remedies }: { remedies: RemedyInsights }): JSX.Element {
   );
 }
 
-/** One kind's causes, most accounts first, with the empty ones kept at the foot. */
 function CauseTable({ kind }: { kind: RemedyKindHealth }): JSX.Element {
   if (kind.accounts === 0) {
     return <p className="empty">Nothing has been accounted for here in this window.</p>;
   }
-  // Sorted here rather than in the fold, which ships them in taxonomy order: the
-  // payload's order is the vocabulary's and stays stable for the file an operator
-  // takes away, and the panel wants the ranking. A cause with no accounts still
-  // draws, at the foot — "nothing was a flake this fortnight" is a reading, and a
-  // table that dropped its own zero rows could not make it.
   const rows = [...kind.byCause].sort((a, b) => b.accounts - a.accounts || b.costUsd - a.costUsd);
   const checks = kind.kind === 'ci';
   return (
@@ -245,14 +203,6 @@ function CauseTable({ kind }: { kind: RemedyKindHealth }): JSX.Element {
   );
 }
 
-/**
- * The most recent accounts, in the agents' own words.
- *
- * The tables above are what an operator acts on; this is what makes them
- * believable. "Twelve missed gates" is a claim about a taxonomy, and three
- * sentences underneath it saying what those actually were is the only thing on
- * the panel that shows the taxonomy is being used rather than guessed at.
- */
 function Lately({ remedies }: { remedies: RemedyInsights }): JSX.Element {
   return (
     <div>

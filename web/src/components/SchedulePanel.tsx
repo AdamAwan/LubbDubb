@@ -7,12 +7,8 @@ import { relTime } from './util.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * A clock face, drawn inline beside the brief sheet for the same reason that
- * one is: this panel is shared, and a presentation layer's icon set is not. It is
- * `currentColor` — a recurrence is not a *kind* of thing the way a brief is,
- * it is the same brief on a timer.
- */
+// → docs/spec/17-cockpit.md
+
 function ClockMark() {
   return (
     <svg className="launch-mark" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
@@ -22,7 +18,6 @@ function ClockMark() {
   );
 }
 
-/** A few recurrences worth having in front of somebody who has not written cron in a while. */
 const EXAMPLES = [
   { cron: '0 9 * * 1-5', label: 'weekdays at 09:00' },
   { cron: '0 3 * * *', label: 'every night at 03:00' },
@@ -30,12 +25,6 @@ const EXAMPLES = [
   { cron: '0 */4 * * *', label: 'every 4 hours' },
 ];
 
-/**
- * When the next firing lands, in the same register as {@link relTime} — which
- * clamps a future instant to "0s ago" and so cannot say this. Both halves of the
- * panel are about a time that has not happened yet, which is exactly what the rest
- * of the cockpit never has to render.
- */
 function untilTime(iso: string, now: number = Date.now()): string {
   const secs = Math.max(0, Math.round((new Date(iso).getTime() - now) / 1000));
   if (secs < 60) return `in ${secs}s`;
@@ -44,28 +33,11 @@ function untilTime(iso: string, now: number = Date.now()): string {
   return `in ${Math.round(secs / 86_400)}d`;
 }
 
-/**
- * Recurring briefs: the prompts an operator wants queued on a clock rather
- * than by hand.
- *
- * It sits under the launch composer because it is the same act with a `when`
- * attached, and every control on it bottoms out in the same place: a firing writes
- * the identical `jobs` row the composer above writes, so nothing here can put an
- * agent on the fleet that "+ New brief" could not.
- *
- * What the rows show is the two things a standing intention is judged on — when it
- * next runs, and when it last did. A schedule that has never fired and a schedule
- * that fired last night look different at a glance, which is the whole reason the
- * panel lists them rather than leaving them in the database.
- */
 export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule[]; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [cron, setCron] = useState('0 9 * * 1-5');
   const [prompt, setPrompt] = useState('');
   const [kind, setKind] = useState<'code' | 'desk'>('code');
-  // The server's refusal, in its own words. The cron parser names the field and
-  // what that field accepts, which is the only thing that helps somebody who has
-  // just mistyped an expression — a second wording here would be a worse one.
   const [error, setError] = useState<string | null>(null);
   const submit = useAsyncAction();
 
@@ -76,9 +48,6 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
       await api.createSchedule({ cron: cron.trim(), prompt: text, kind });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the schedule');
-      // Rethrown so the button flashes, and the form is kept for a retry — the
-      // composer's rule, and the same reason: a rejected cron expression is one
-      // character away from a good one.
       throw err;
     }
     setPrompt('');
@@ -137,7 +106,6 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
             rows={3}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              // ⌘/Ctrl+Enter submits, matching the brief composer above.
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
                 void submit.run(create);

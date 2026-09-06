@@ -15,19 +15,8 @@ import { CourtChip } from './GoalPage.js';
 import { HeadRow } from '../components/panel.js';
 import { Tag, type TagTone } from '../components/tag.js';
 
-/**
- * One pull request, in full — the page the review-pack control used to sit on a
- * row because there was nowhere else to put it.
- *
- * What it is *for* is the review: which threads are still on the fleet, which are
- * with the reviewer, which are finished, and the one control that moves a thread
- * between those — the reopen. Everything else on the page is context for that
- * question, and every reading of it is quoted from the server rather than re-made
- * here: `attention`, `health` and `ciVerdict` are the harness's own three
- * verdicts, and a client-side second opinion about a merge is the drift that
- * outlives the change that introduces it.
- * → `docs/spec/17-cockpit.md#the-pull-request-page`
- */
+// → docs/spec/17-cockpit.md
+
 export function PrPage({
   page,
   view,
@@ -53,7 +42,6 @@ export function PrPage({
   );
 }
 
-/** The chip a pull request's own state takes. A closed one is spent; a merged one landed. */
 const STATE_TONE: Record<string, TagTone | undefined> = { merged: 'green', closed: undefined, open: 'blue' };
 
 function Masthead({
@@ -132,12 +120,10 @@ function Masthead({
   );
 }
 
-/** Whether the server folded this row's three verdicts — true of every open pull request. */
 function isOpenPr(pr: PullRequest): pr is OpenPullRequest {
   return pr.attention !== undefined && pr.health !== undefined && pr.ciVerdict !== undefined;
 }
 
-/** What each thread state is called on the page, and the tone it carries. */
 const THREAD_TONE: Record<PrThreadState, TagTone> = {
   reopened: 'amber',
   open: 'amber',
@@ -145,10 +131,6 @@ const THREAD_TONE: Record<PrThreadState, TagTone> = {
   resolved: 'green',
 };
 
-/**
- * What each state *means*, on the chip's own title — the sentence that stops an
- * operator having to learn the vocabulary from the counts.
- */
 const THREAD_SAID: Record<PrThreadState, string> = {
   reopened: 'You put this back to the fleet — it reads as unanswered and will be picked up again',
   open: 'Nobody from the fleet has answered this yet',
@@ -196,17 +178,6 @@ function Threads({
   );
 }
 
-/**
- * One thread: where it hangs, who said what, and where it stands.
- *
- * The reopen is offered on a thread the fleet is **not** already going to answer
- * — an `answered` or `resolved` one — because that is the whole of what it is
- * for: an open thread is already work, and a control that claimed to reopen it
- * would be a button that changes nothing. On a reopened thread the same control
- * takes the ask back, which is the only way out of a mark the operator set by
- * mistake. Both are refused on a pull request that has left the open set: nothing
- * acts on one, so the fleet would never come back to the thread.
- */
 function Thread({
   thread,
   page,
@@ -263,12 +234,6 @@ function Thread({
   );
 }
 
-/**
- * One message in a thread. A reply the harness wrote is marked as such — on a
- * single-operator deployment the fleet posts under the operator's own credential,
- * so the name alone cannot say who is talking, and "the fleet already answered
- * this" is the thing the reader most needs to know before reopening it.
- */
 function Message({ message, view }: { message: PrThreadMessage; view: CockpitView }): JSX.Element {
   return (
     <div className={`cn-thmsg ${message.ours ? 'cn-thours' : ''}`}>
@@ -285,14 +250,8 @@ function Message({ message, view }: { message: PrThreadMessage; view: CockpitVie
   );
 }
 
-/** The tone a check's classification takes — the policy's three categories, and the aggregate. */
 const CHECK_TONE: Record<string, TagTone | undefined> = { dispatch: 'red', escalate: 'amber', ignored: undefined };
 
-/**
- * The checks behind the aggregate, in the policy's own three categories: what the
- * harness will fix, what it will put to a person, and what it has been told to
- * leave alone. Every name comes off `ciVerdict` — none is written here.
- */
 function Checks({ pr }: { pr: PullRequest }): JSX.Element {
   const verdict = pr.ciVerdict;
   const rows = [
@@ -306,9 +265,6 @@ function Checks({ pr }: { pr: PullRequest }): JSX.Element {
         Checks <i className="cn-n">{pr.ciStatus}</i>
       </h3>
       {rows.length === 0 ? (
-        // Withheld and unreported are the same silence to a reader and are worded
-        // as one: nothing here is a claim that the build is green — the aggregate
-        // above it is the only thing that speaks.
         <p className="cn-empty">
           {pr.ciChecksWithheld === true
             ? 'This deployment withholds the per-check detail; the aggregate above is the whole reading.'
@@ -332,21 +288,6 @@ function Checks({ pr }: { pr: PullRequest }): JSX.Element {
   );
 }
 
-/**
- * Why this pull request cannot merge, in the server's own words (`prHealth`), and
- * nothing when it can. A card that said "healthy" on every green pull request
- * would be furniture; the masthead's chips already say the state.
- */
-/**
- * What the fleet's reviewer said, in full — the mode, why the triage chose it,
- * and what it found.
- *
- * Nothing at all where the deployment has no fleet review, which is the same
- * silence the mark keeps: a card headed "Fleet review" saying nothing was
- * reviewed is a claim about a feature nobody turned on. The console owns the card
- * around it and the shared component owns what is in it, so the two surfaces that
- * draw this record cannot come to word it differently.
- */
 function Review({ page, view }: { page: PrPageView; view: CockpitView }): JSX.Element | null {
   const review = page.pr.review;
   if (review === undefined) return null;
@@ -381,11 +322,6 @@ function Merge({ page }: { page: PrPageView }): JSX.Element | null {
   );
 }
 
-/**
- * Every dispatch onto this branch, newest first — what the fleet has already been
- * asked to do here, which is the context a reopen is decided in. The row is a way
- * into the run, as every row naming an agent is.
- */
 function Work({ page, view, actions }: { page: PrPageView; view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
     <section className="cn-card">

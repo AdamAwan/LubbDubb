@@ -34,31 +34,8 @@ import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
- *
- * It replaced a two-tab modal, and each of the four changes answers something the
- * modal could not say:
- *
- * - **The shape is drawn** ({@link PlanMap}), because a decomposition is a graph
- *   and the modal rendered it as a list with one sentence per part. The stack edge
- *   decides which branch a part is cut from, and it is the one planning mistake
- *   that is expensive to undo.
- * - **The decision states its consequence.** The footer used to offer Approve /
- *   Reject / Discuss with no account of what approving *starts* — how many
- *   branches, how many agents at once, what begins on the click.
- * - **An amendment is read as a change.** A replan and a discussion both rewrite
- *   the plan row, so ten minutes of conversation came back as the whole
- *   decomposition again, with nothing saying which two parts moved. The History
- *   view is the server's own diff over the stored revisions.
- * - **The write-up is a section, not a tab.** A tab is a thing you have to know to
- *   click; the rail above jumps to it, and scrolling reaches it anyway.
- *
- * The reading order is answer, then work, then caveats: what's wrong and what
- * we'll do, the map, the parts, the four caveats, the write-up. `reason` is a
- * caption on the shape rather than a section, because it answers only the narrow
- * question of why *this split*.
- */
+// → docs/spec/17-cockpit.md
+
 export function PlanModal({
   plan,
   parts,
@@ -86,68 +63,31 @@ export function PlanModal({
 }: {
   plan: Plan;
   parts: PlanPartView[];
-  /** This plan's validation checks, superseded ones included. Drawn read-only. */
   checks: ValidationCheck[];
-  /**
-   * This goal's post-deploy watch — what a running system would have to show once
-   * the work ships. Empty where the plan declared none, and then nothing draws.
-   */
   watches: GoalWatch[];
-  /** The last pulse's ranked plan, joined per part by origin — the dispatch cut. */
   upcoming: QueueItem[];
-  /** The pending approval this plan is waiting on, when it is waiting on one. */
   proposal?: Proposal;
-  /** What this goal has cost so far. Null is "nothing was ever measured", not zero. */
   spend: IssueSpend | null;
-  /** The funnel's policy — what the approval bar states about rate. */
   planning: PlanningPolicy;
   now: number;
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
-  /** The operator's ruling on a check `watch_declare` wrote — see {@link WatchDigest}. */
   onWatchProposal: (issueNumber: number, checkId: string, accept: boolean) => Promise<unknown> | unknown;
-  /**
-   * The verdict, with the caveat ids the operator ticked. Approving a plan that
-   * raises caveats is refused server-side until they are named — see
-   * `web/src/components/CaveatChecklist.tsx`.
-   */
   onDecide: (
     id: string,
     verdict: 'accept' | 'reject',
     note?: string,
     acknowledged?: string[],
   ) => Promise<unknown> | unknown;
-  /**
-   * The two answers that are about the **ticket** rather than the plan — close it
-   * with the note as its comment, or hold it by dropping the watch tag. Offered
-   * here as well as on the inbox card because this is the surface where the
-   * operator has actually read the plan, and reading it is what tends to produce
-   * "this is not really an issue".
-   */
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
-  /** Open the goal this plan hangs off — where its checks are now recorded. */
   onOpenGoal: (issueRef: string) => void;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
-  /** Override which profile one part runs on, or clear it back to inheriting the goal's pin (#342). */
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
-  /**
-   * Close a part's pull request, drop its branch and hand the part back to the
-   * fleet — the way out of an amendment that rewrote work already in review.
-   */
   onRestartPart: (planId: string, slug: string) => Promise<unknown> | unknown;
-  /**
-   * `config.canClosePr` — whether this deployment's provider can close a pull
-   * request at all. False draws no restart control anywhere on the sheet, the way
-   * the board draws no drag where `canSetWorkItemState` is false: a button that
-   * closed nothing would take the part back to `ready` and let the reconciler put
-   * it straight back into review.
-   */
   canClosePr: boolean;
-  /** The profiles a part may be pinned to, cheapest first, and what an unpinned one falls back to. */
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
-  /** `config.desktopFolder` — the checkout Discuss opens the operator's own Claude Code on. */
   desktopFolder: string;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
@@ -158,57 +98,22 @@ export function PlanModal({
   const sections = useRef<Record<string, HTMLElement | null>>({});
 
   const live = parts.filter((p) => p.status !== 'retired');
-  // Both terminals — a part can finish as a write-up or a determination, and
-  // counting only merges would show a finished plan as still in flight.
   const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
   const liveChecks = checks.filter((c) => c.supersededReason === null);
   const settledChecks = liveChecks.filter((c) => c.state === 'passed' || c.state === 'waived').length;
   const issueNumber = planIssueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
-  // A verdict is only on offer while the plan is still the thing that was
-  // proposed. A discussion at the operator's own keyboard does not change that:
-  // it settles by *amending*, and the amendment withdraws this card and puts a
-  // fresh one up, so the one drawn here is always about the plan on screen.
   const decidable = proposal?.status === 'pending' ? proposal : null;
-  // The same list the inbox card draws and the accept route enforces, read off the
-  // proposal rather than re-derived from the plan sheet's own caveat sections: the
-  // operator ticks ids, and two derivations of one list is the drift this repo has
-  // fixed before. Drawn here as well because this is the surface where the plan has
-  // actually been read, and it is the other button that releases it.
   const caveats = planCaveatsOf(decidable ?? undefined);
   const ack = useAcknowledgements(caveats);
   const held = ack.outstanding.length > 0;
-  // `approach` is the summary once a planner writes one; `reason` stands in for it
-  // on every plan stored before the field existed, which is why the fallback is
-  // here rather than in the store.
   const headline = plan.approach ?? plan.reason;
-  // And once `approach` carries the summary, `reason` is demoted to what it
-  // actually answers — a caption on the split, next to the split.
   const shapeNote = plan.approach ? plan.reason : null;
   const cutAt = live.findIndex((p) => {
     const q = queued.get(partOriginOf(issueNumber, p.slug));
     return q !== undefined && q.status !== 'dispatching';
   });
   const originOf = (slug: string): string => partOriginOf(issueNumber, slug);
-  // Discuss is a link, not a dispatch. It opens the operator's own Claude Code on
-  // this repository with the `/lubbdubb` skill's own argument already in the box;
-  // the session reads the plan through `plan_read`, argues about it with the code
-  // in front of it, and ends by calling `plan_amend` — which withdraws the card
-  // below and puts a fresh one up. Nothing is written here, so there is nothing to
-  // undo if they close the window and change their mind.
-  //
-  // Null on a plan whose origin names no goal number: `plan_amend` resolves a plan
-  // *by* that number, so there is no conversation to link to — and a control that
-  // opened a session which could not find what it was sent for is worse than no
-  // control.
-  // The two Discuss controls below are the same control in two places, so the
-  // sentence is written once here and handed to both. It used to be written twice
-  // and said neither time what command the session would arrive with — the deep
-  // link's standing rule, which `DesktopLink` now keeps rather than each site.
-  // And it forks on the status, because what the session can do at the end of the
-  // conversation does: a released plan is *proposed against*, and telling an
-  // operator their running work is about to be rewritten would be the wrong half
-  // of that.
   const discuss =
     plan.status === 'active'
       ? 'so the plan is talked through with a session that can propose a change to it — the plan keeps running while you decide, and nothing changes until you accept.'
@@ -216,9 +121,6 @@ export function PlanModal({
 
   const jump = (key: string): void => {
     setView('plan');
-    // Deferred a frame: on a jump from the History view the target section does
-    // not exist until `view` has re-rendered, and scrolling to a missing node is
-    // silently nothing at all.
     requestAnimationFrame(() => sections.current[key]?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   };
   const focusPart = (slug: string): void => {
@@ -230,9 +132,6 @@ export function PlanModal({
     <Modal
       face="sheet"
       title={plan.title}
-      /* The goal the plan hangs off, as the way onto its page: the sheet is
-         opened from several surfaces and is the one place a plan is read, so a
-         number here that led nowhere was the longest way back. */
       lead={<Ref to={plan.originRef} />}
       chips={
         <>
@@ -457,9 +356,6 @@ export function PlanModal({
               <WatchDigest
                 watches={watches}
                 refUrls={refUrls}
-                // Null where the sheet cannot name the goal: the ruling is keyed
-                // on the issue, and a control that could not say which goal it
-                // was accepting for would be a button with no destination.
                 onRule={
                   issueNumber === null ? null : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)
                 }
@@ -484,9 +380,6 @@ export function PlanModal({
                   label="Least sure about"
                   body={plan.openQuestions}
                   refUrls={refUrls}
-                  // Opened by default while a verdict is pending: it is the field
-                  // written for exactly this moment, and folded shut it is one more
-                  // thing that has to be clicked before it can change a mind.
                   open={decidable !== null}
                 />
               )}
@@ -517,9 +410,6 @@ export function PlanModal({
               {plan.document ? (
                 <div className="pm-doc">{renderMarkdown(plan.document, refUrls)}</div>
               ) : (
-                // Said rather than hidden: an absent section reads as "the planner
-                // had nothing to add", which is indistinguishable from "the planner
-                // ignored the instruction" — and only one of those is your problem.
                 <p className="empty">
                   This planner wrote no write-up. Replan to ask again, or discuss it if you want the reasoning.
                 </p>
@@ -585,11 +475,6 @@ export function PlanModal({
               ghost
               title="Ask the planner again from the plan's current state. Nothing is torn down."
               onClick={() => {
-                // The replan route flips the plan's status and settles what hung
-                // off it; no row anywhere records that a *person* sent it back, so
-                // this call site is the only witness there will ever be. The other
-                // arm needs none: "Change something first" settles a proposal, and
-                // that writes a decision row under `human:<proposal id>`.
                 logUsage('plan.reject');
                 return onReplan(plan.id);
               }}
@@ -603,19 +488,8 @@ export function PlanModal({
   );
 }
 
-/** An operator's mark on one part while they read — see {@link PinList}. */
 type Pin = 'drop' | 'ask';
 
-/**
- * A plan's revisions, fetched when the sheet opens.
- *
- * Keyed on `plan.updatedAt` as well as the id, so an amendment that lands while
- * the sheet is open refetches: the whole point of the History view is to be
- * current about a plan that has just changed under the reader.
- *
- * A failure resolves to null and the rail simply offers no History — an error
- * banner for a view nobody has asked for yet would be louder than the fact.
- */
 function usePlanHistory(planId: string, updatedAt: string): PlanHistory | null {
   const [history, setHistory] = useState<PlanHistory | null>(null);
   useEffect(() => {
@@ -635,16 +509,6 @@ function usePlanHistory(planId: string, updatedAt: string): PlanHistory | null {
   return history;
 }
 
-/**
- * What approving this plan actually starts, in numbers the operator would
- * otherwise have to count off the list themselves.
- *
- * Every figure is read off state that already exists — the parts, the last pulse's
- * queue, and `maxConcurrentPartsPerIssue`. **Nothing here is a forecast**: there is
- * no estimate of what the work will cost, because the harness has no way to make
- * one and a made-up number on the button that authorises spending is worse than no
- * number. The spend shown is what has already been spent.
- */
 function Decision({
   parts,
   planning,
@@ -662,8 +526,6 @@ function Decision({
 }) {
   const human = parts.filter((p) => p.expectedKind === 'human');
   const agentParts = parts.filter((p) => p.expectedKind !== 'human');
-  // A part that ends in a report or a determination produces no pull request, so
-  // counting every part as one would overstate what lands in review.
   const prs = agentParts.filter((p) => p.expectedKind === null || p.expectedKind === 'code');
   const startsNow = agentParts.filter((p) => queued.get(originOf(p.slug)) !== undefined && p.dependsOn.length === 0);
   const large = parts.filter((p) => p.size === 'l');
@@ -696,7 +558,6 @@ function Decision({
   );
 }
 
-/** The Approve button says what starts, because that is what the click does. */
 function approveLabel(
   parts: PlanPartView[],
   queued: Map<string, QueueItem>,
@@ -710,14 +571,6 @@ function approveLabel(
   return `Approve — start ${count} agent${count === 1 ? '' : 's'} now`;
 }
 
-/**
- * The objections an operator pinned while reading, gathered above the note box.
- *
- * **They compose the note the two verdicts already carry** — no new mechanic, no
- * new route, nothing the server has to learn. Reading a five-part plan and
- * disagreeing with one of them is the ordinary case, and until now the only way to
- * say so was to remember the slug and type it into a free-text box at the bottom.
- */
 function PinList({
   pins,
   parts,
@@ -748,16 +601,6 @@ function pinText(slug: string, pin: Pin): string {
   return pin === 'drop' ? `drop “${slug}”` : `question “${slug}”`;
 }
 
-/**
- * The pinned objections as the first draft of the note the change drawer opens
- * with.
- *
- * They used to be joined to a free-text box and sent *with a verdict* — so an
- * operator who had marked one part of five could only say so by accepting or
- * rejecting the whole plan. The words are the same; what changed is that they now
- * arrive in a field the operator can still edit, on the one answer that does
- * something with them.
- */
 function composeNote(pins: Record<string, Pin>, parts: PlanPartView[]): string | undefined {
   const lines = Object.entries(pins)
     .filter(([slug]) => parts.some((p) => p.slug === slug))
@@ -771,14 +614,6 @@ function without(pins: Record<string, Pin>, slug: string): Record<string, Pin> {
   return next;
 }
 
-/**
- * The planner's citations, as links into the code it read.
- *
- * Rendered as plain monospace rather than as repository links: the cockpit has no
- * source browser and `refUrls` answers only for tracker items, so a link here
- * would go nowhere. The path and line are what someone with the repository open
- * needs, and they are selectable.
- */
 function Evidence({ evidence }: { evidence: PlanEvidence[] }) {
   return (
     <div className="pm-cites">
@@ -795,15 +630,6 @@ function Evidence({ evidence }: { evidence: PlanEvidence[] }) {
   );
 }
 
-/**
- * One folded caveat — the planner's prose about what it rejected, what it is
- * unsure of, what could go wrong, or what it left alone. Shut by default with its
- * opening words on the summary line, because each runs to several hundred words at
- * the length a planner naturally writes them, and four of them open above the
- * Approve button is four walls where the answer to "what are we doing" is none of
- * them. Folded is not hidden: the preview line is there so the fold is a decision
- * you make, not one made for you.
- */
 function Caveat({
   kind,
   label,
@@ -835,18 +661,8 @@ function Caveat({
   );
 }
 
-/**
- * The first line's worth of a markdown block as plain text. The markers are
- * stripped rather than rendered: a teaser is one line of a flex row, and a
- * `**bold**` lead-in — which is how a planner opens nearly every one of these —
- * would otherwise spend that line on the label it was going to give the first
- * point anyway.
- */
 function teaser(body: string): string {
   const flat = body
-    // List markers first, and per line: a block that opens as a bullet would
-    // otherwise lead with a stray dash, and the `*` form is indistinguishable
-    // from emphasis once the markers are gone.
     .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, '')
     .replace(/[*`#>]/g, '')
     .replace(/\s+/g, ' ')
@@ -873,15 +689,10 @@ function PartBlock({
   queue: QueueItem | undefined;
   focused: boolean;
   pin: Pin | undefined;
-  /** Pins are offered only while there is a verdict for them to ride on. */
   pinnable: boolean;
   onPin: (pin: Pin) => void;
   onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
   onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
-  /**
-   * Undefined where this deployment's provider cannot close a pull request — the
-   * control is then absent rather than drawn and refused.
-   */
   onRestart: (() => Promise<unknown> | unknown) | undefined;
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
@@ -1028,13 +839,11 @@ function PartBlock({
   );
 }
 
-/** Did the planner answer `scope` and `touches` with the same thing? */
 function sameAsTouches(part: PlanPartView): boolean {
   const flat = (text: string): string => text.replace(/[\s,]+/g, ' ').trim();
   return flat(part.scope) === flat(part.touches.join(' '));
 }
 
-/** How this part is based, in the words that say what it waits for. */
 function stackLine(part: PlanPartView): string {
   if (part.expectedKind === 'human') {
     return part.dependsOn.length === 0
@@ -1052,16 +861,6 @@ function quoteList(slugs: string[]): string {
   return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
-/**
- * A part's acceptance criteria, as a checklist a reviewer ticks.
- *
- * **The tick is the reviewer's, never the harness's.** Nothing here derives
- * whether a criterion holds: inferring a positive terminal from incidental
- * evidence is what the harness refuses everywhere else, and a criterion the
- * cockpit ticked itself would be a claim nobody made. What this adds is that the
- * criteria are in front of the merged pull request instead of in a plan nobody
- * reopens.
- */
 function Acceptance({
   criteria,
   onAcceptance,
@@ -1084,14 +883,6 @@ function Acceptance({
   );
 }
 
-/**
- * What the last amendment did — the view a replan or a discussion opens on.
- *
- * The diff is the server's (`diffPlanRevisions`), so what is drawn here and what
- * the store believes about the merge on slug are one reading. Prose fields are
- * **named rather than diffed word by word**: a planner rewrites a paragraph whole,
- * so a word-level diff of one is two paragraphs marked entirely changed.
- */
 function HistoryView({ history, now }: { history: PlanHistory | null; now: number }) {
   if (history === null) return <p className="empty">The history for this plan could not be read.</p>;
   const { diff, pending, revisions } = history;
@@ -1118,23 +909,6 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
   );
 }
 
-/**
- * The change waiting on the operator, on the sheet where the plan is actually
- * read.
- *
- * The inbox card asks the question; this says the same thing where somebody has
- * gone to look at the plan itself, because the two readings would otherwise
- * disagree by omission — a plan sheet that showed a running decomposition with no
- * sign that a correction to it was pending reads as a plan nobody has questioned.
- *
- * **No verdict here.** Accepting or declining is the proposal's, on its card, and
- * a second pair of buttons over one decision is two places for it to be answered
- * differently. What this surface owes the reader is the case and its consequences.
- *
- * The diff is the server's `proposedPlanDiff` and is drawn through the same
- * {@link DiffBody} as an applied one: a change must not look like a different kind
- * of thing either side of the decision that applies it.
- */
 function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now: number }) {
   return (
     <section className="pm-pending">
@@ -1169,12 +943,6 @@ function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now
   );
 }
 
-/**
- * The tag's tone alias per kind of change, beside the kind's own class: the class
- * is what the row is, the alias is where the hue, the border and the fill come
- * from. An unchanged part is never drawn here, and prose has no tone at all.
- * → docs/spec/17-cockpit.md#the-tag
- */
 const DIFF_TONE: Record<PlanDiff['parts'][number]['kind'], TagTone | undefined> = {
   added: 'green',
   dropped: 'red',
@@ -1242,10 +1010,6 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
   );
 }
 
-/**
- * What a part produced, or is expected to produce — null when that is code, which
- * is every ordinary part and would be noise on each row.
- */
 function kindOf(part: PlanPartView): string | null {
   const kind = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : (part.expectedKind ?? null);
   return kind && kind !== 'code' ? kind : null;

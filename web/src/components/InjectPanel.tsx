@@ -5,14 +5,8 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { Label } from './label.js';
 import { Button } from './button.js';
 
-/**
- * The "make the world move" panel — a **demo-only** control, rendered only under
- * `view.demo` (the static Pages build). This is how the demo simulates the
- * outside world: a CI failure, a review comment, a new PR, a new issue. The
- * in-browser fake applies each one and runs a cycle over it, exactly as a real
- * observation would provoke. Every button spins while its injection is in flight
- * so the click reads as "saving".
- */
+// → docs/spec/17-cockpit.md
+
 export function InjectPanel({ onInjected, world }: { onInjected: () => void; world: WorldSnapshot }) {
   const [raw, setRaw] = useState('');
   const [open, setOpen] = useState(false);

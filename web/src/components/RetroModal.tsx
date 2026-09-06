@@ -5,19 +5,8 @@ import { renderMarkdown } from './markdown.js';
 import { Modal } from './Modal.js';
 import { Tag } from './tag.js';
 
-/**
- * A goal's retrospective, on demand — what shipped, and how the run went.
- *
- * Fetched on open rather than read off `/api/state`, for the reason the work graph
- * is: that snapshot is polled continuously, and a write-up per issue would be paid
- * for on every poll by every open cockpit. The station that opens this already has
- * the summary, which is all it needs to draw itself.
- *
- * Three states, and the third is the point: loading, the document, and **an error**
- * — because a fetch that failed must not render as "nobody wrote this up". Silence
- * is a real answer here (the Manifest station draws it), so it cannot also be the
- * failure mode.
- */
+// → docs/spec/17-cockpit.md
+
 export function RetroModal({ issueRef, onClose }: { issueRef: string; onClose: () => void }) {
   const [retro, setRetro] = useState<RetrospectiveView | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');

@@ -1,13 +1,8 @@
 import { api } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
 
-/**
- * Live fleet controls in the topbar: nudge the concurrency cap up/down and
- * pause/resume dispatch. Both fire POST /api/control; the resulting
- * `control:changed` broadcast (handled in App) flows the new state back, so this
- * component stays stateless and always renders the server's truth. Each button
- * shows a spinner while its POST is in flight so the nudge registers visibly.
- */
+// → docs/spec/17-cockpit.md
+
 export function FleetControl({ live, cap, paused }: { live: number; cap: number; paused: boolean }) {
   const setCap = (next: number): Promise<unknown> | void => {
     if (next < 0) return;

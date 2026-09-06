@@ -13,29 +13,13 @@ import { fmtDuration, fmtShare, share } from './insightsFormat.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { Label } from './label.js';
 
-/**
- * Allowance: what the account has spent, when it went, and on what — the series
- * behind the usage chip, drawn four ways (the timeline, where it went, the week, and
- * per landed change).
- *
- * **Nothing here is derived in the browser**, `EconomicsTab`'s rule: the reset test,
- * the gap threshold and the apportionment are statements about what the readings
- * *mean*, and a cockpit computing its own would draw a line the server's totals
- * disagree with. The cockpit owns presentation only — the `--al-*` goal colours.
- *
- * **A point is one percent of the window, and the word is used on purpose**: money is
- * measured, a percentage per goal is apportioned, and every surface says which.
- * → docs/spec/17-cockpit.md#allowance
- */
+// → docs/spec/17-cockpit.md
+
 export function AllowanceTab({ payload }: { payload: AllowancePayload }): JSX.Element {
   const { allowance, refUrls } = payload;
   const now = Date.parse(allowance.generatedAt);
   const { apportionment } = allowance;
 
-  // Two readings make a change; one makes a level. A window that caught fewer is
-  // a real state on a paused fleet and not an empty one, and drawing zeros over
-  // it would say the account did not move when what happened is that nothing
-  // watched it.
   if (allowance.readings.length < 2) {
     return (
       <p className="empty">
@@ -48,9 +32,6 @@ export function AllowanceTab({ payload }: { payload: AllowancePayload }): JSX.El
     );
   }
 
-  // The route's own URLs merged over the shell's, which is what makes the goal
-  // numbers on this tab links: a goal that spent inside the window has usually
-  // closed, and the snapshot's map is built from the world it has since left.
   return (
     <RefLinksExtended refUrls={refUrls}>
       <div className="sp al">
@@ -78,11 +59,6 @@ export function AllowanceTab({ payload }: { payload: AllowancePayload }): JSX.El
   );
 }
 
-/**
- * What the window came to, in the three figures the rest of the tab breaks down. The
- * calibration constant sits here because it is *about* the apportionment rather than
- * a product of it: drift in it says something outside the fleet is eating the account.
- */
 function Headline({ allowance, now }: { allowance: AllowanceInsights; now: number }): JSX.Element {
   const { observedPoints, attributedPoints, unattributedPoints, pointsPerUsd } = allowance.apportionment;
   const observed = observedPoints ?? 0;
@@ -118,39 +94,14 @@ function Headline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   );
 }
 
-/**
- * Geometry of the plot. The lane band below it is HTML on the same fractions of
- * the same box, which is what lets a row carry a link and a readout that arrives
- * with the pointer rather than a second later.
- */
 const T = { left: 210, right: 962, top: 26, bottom: 196 };
-/** The viewBox the plot is laid out in. Wider than the page's others: it has a gutter to pay for. */
 const VIEW = 1000;
-/** How many goal rows are drawn before the rest are folded into a count. */
 const MAX_ROWS = 8;
 
-/** A fraction of the chart's width, as the percentage the band is laid out in. */
 function pct(units: number): string {
   return `${(units / VIEW) * 100}%`;
 }
 
-/**
- * The percentage over the window, with the agent runs beneath it.
- *
- * **The lanes are the point**: adjacency drawn honestly, without the chart claiming
- * the tallest run caused the rise. **A row is a goal, not a run**, so it can carry a
- * `<Ref>` name in the gutter, and rows come in the apportionment's order so the table
- * at the foot is the same list twice.
- *
- * **The band is HTML and the plot is SVG, on one set of fractions** — the document
- * buys a gutter that can hold a link and a readout that is not the browser's
- * `<title>` tooltip. Both are laid out in percentages of the same box.
- *
- * Two things are deliberately *not* joined: a reset breaks the line rather than
- * drawing a cliff that would read as spend given back, and a gap is a shaded column
- * with a dashed connector — the rise across it is real, what happened inside is not
- * known.
- */
 function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: number }): JSX.Element {
   const { readings } = allowance;
   const startMs = Date.parse(allowance.window.startsAt);
@@ -163,9 +114,6 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   const rows = allRows.slice(0, MAX_ROWS);
   const { tip, show, hide, wrap } = useTip();
 
-  // Each unbroken run of readings is its own path: a break is a reset or a gap,
-  // and a single path through them would draw a line across a discontinuity the
-  // data explicitly marks.
   const segments: AllowanceReading[][] = [];
   for (const reading of readings) {
     if (reading.fiveHour === null) continue;
@@ -178,9 +126,6 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   const held = tip?.at ?? null;
   const marked = held === null ? null : (drawn.find((r) => r.at === held) ?? null);
 
-  // The idle stretches, as one list both panels read: the plot shades them and
-  // every lane track shades the same fractions, which is the whole of why the
-  // band can be a different element and still agree with the line above it.
   const idle = readings.flatMap((reading, i) => {
     const previous = readings[i - 1];
     if (!reading.afterGap || previous === undefined) return [];
@@ -194,9 +139,6 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
           viewBox={`0 0 ${VIEW} ${T.bottom + 28}`}
           role="img"
           aria-label={`Account five-hour window over ${allowance.window.label.toLowerCase()}`}
-          // The whole plot is the hover target, and the reading it answers with is
-          // the nearest one: a dot is three units across, and a chart that asks a
-          // pointer to find one is a chart with no hover at all.
           onMouseMove={(e) => {
             const at = readingAt(e, drawn, startMs, span);
             if (at === null) hide();
@@ -328,7 +270,6 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
                 ))}
                 {row.lanes.map((lane) => {
                   const from = Math.max(0, frac(lane.startedAt));
-                  // A run still going is drawn to now, which is where its money still is.
                   const to = Math.min(1, frac(lane.endedAt ?? new Date(now).toISOString()));
                   const lines = laneTip(lane, now);
                   return (
@@ -344,10 +285,6 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
                       aria-label={lines.join(' · ')}
                       onMouseMove={(e) => show(e, lines, null)}
                       onMouseLeave={hide}
-                      // A run is not a control — there is nowhere in the cockpit to
-                      // send a click from here — but focus is how a reader without a
-                      // pointer reaches the readout, and only a focusable element has
-                      // any. The goal's own way through is the `<Ref>` in the gutter.
                       onFocus={(e) => showOn(e.currentTarget, lines, show)}
                       onBlur={hide}
                     />
@@ -370,22 +307,13 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   );
 }
 
-/** What the readout says and where it stands, in the chart's own coordinates. */
 interface Tip {
   x: number;
   y: number;
   lines: string[];
-  /** The reading it is about, so the plot can mark it. Null for a lane. */
   at: string | null;
 }
 
-/**
- * The chart's one readout.
- *
- * One for the plot and the band together, because two would be two answers on
- * one screen: a pointer is in one place, and the thing under it is either a
- * reading or a run.
- */
 function useTip(): {
   tip: Tip | null;
   show: (e: { clientX: number; clientY: number }, lines: string[], at: string | null) => void;
@@ -402,12 +330,6 @@ function useTip(): {
   return { tip, show, hide: () => setTip(null), wrap };
 }
 
-/**
- * The readout itself, drawn over whichever chart is holding it.
- *
- * It never takes the pointer: a tooltip that can be hovered is one that flickers
- * as the pointer crosses onto it and off again.
- */
 function TipLayer({ tip }: { tip: Tip | null }): JSX.Element | null {
   if (tip === null) return null;
   return (
@@ -419,7 +341,6 @@ function TipLayer({ tip }: { tip: Tip | null }): JSX.Element | null {
   );
 }
 
-/** The readout put on an element rather than under a pointer — what focus gets. */
 function showOn(
   el: HTMLElement,
   lines: string[],
@@ -429,7 +350,6 @@ function showOn(
   show({ clientX: box.left + box.width / 2, clientY: box.top }, lines, null);
 }
 
-/** The reading nearest the pointer, or null where the pointer is off the plot. */
 function readingAt(
   e: { clientX: number; currentTarget: SVGSVGElement },
   drawn: readonly (AllowanceReading & { fiveHour: number })[],
@@ -446,7 +366,6 @@ function readingAt(
   );
 }
 
-/** What the readout says about one reading. */
 function readingTip(reading: AllowanceReading & { fiveHour: number }, now: number): string[] {
   const lines = [`${fmtPoints(reading.fiveHour)} of the five-hour window used`, relTime(reading.at, now)];
   if (reading.afterReset) lines.push('the window reset just before this');
@@ -454,25 +373,16 @@ function readingTip(reading: AllowanceReading & { fiveHour: number }, now: numbe
   return lines;
 }
 
-/** Where the grid stands and the axis is labelled, as fractions of the window. */
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
 
-/** One row of the lane band: a goal, and every run of the window that reached it. */
 type LaneRow = {
   key: string;
-  /** Null on the row the runs that reached no goal share — an absence has no ref. */
   issueNumber: number | null;
   title: string | null;
   slot: number | null;
   lanes: AllowanceLane[];
 };
 
-/**
- * The window's runs, gathered into one row per goal. Ordered by the apportionment
- * rather than by start time, so the band and the table at the foot are the same list
- * in the same order. Goals the apportionment does not carry follow, and runs that
- * reached no goal share the last row.
- */
 function laneRows(allowance: AllowanceInsights): LaneRow[] {
   const rows = new Map<string, LaneRow>();
   const keyOf = (issue: number | null): string => (issue === null ? 'none' : `#${issue}`);
@@ -496,18 +406,9 @@ function laneRows(allowance: AllowanceInsights): LaneRow[] {
     row.lanes.push(lane);
     rows.set(key, row);
   }
-  // A goal with no run in this window is a row of empty track, which says nothing
-  // the table does not; the band is about what ran.
   return [...rows.values()].filter((row) => row.lanes.length > 0);
 }
 
-/**
- * A step path through one unbroken run of readings.
- *
- * Steps rather than a smooth line, because that is what the data is: the
- * percentage is known at each reading and unknown between two, so a diagonal
- * would draw a rate of consumption nothing measured.
- */
 function stepPath(
   segment: readonly AllowanceReading[],
   x: (iso: string) => number,
@@ -523,17 +424,12 @@ function stepPath(
     .join('');
 }
 
-/** A lane's colour: its goal's slot, or the muted one where it reached none. */
 function laneFill(lane: AllowanceLane): string {
   if (!lane.measured) return 'var(--al-unmeasured)';
   if (lane.slot === null) return 'var(--al-unattributed)';
   return `var(--al-goal-${lane.slot})`;
 }
 
-/**
- * What the readout says about one run — a line at a time, because the readout is
- * this cockpit's own element rather than a browser tooltip and can hold them.
- */
 function laneTip(lane: AllowanceLane, now: number): string[] {
   const goal = lane.issueNumber === null ? 'reached no goal' : `#${lane.issueNumber}`;
   const when = lane.endedAt === null ? 'still running' : `ended ${relTime(lane.endedAt, now)}`;
@@ -542,20 +438,9 @@ function laneTip(lane: AllowanceLane, now: number): string[] {
   return lines;
 }
 
-/**
- * The rise, split — one bar rather than a second graph over time, since the time
- * dimension is the timeline's above and two x axes would need reconciling.
- *
- * **The residual is a segment, not a rounding error**: the part of the rise no fleet
- * spend explains, drawn at full width at the end rather than divided among the goals,
- * which is the one thing the readings cannot support.
- */
 function GoalBar({ apportionment }: { apportionment: AllowanceApportionment }): JSX.Element {
   const { goals, observedPoints, unattributedPoints } = apportionment;
   const total = observedPoints ?? 0;
-  // The timeline's readout, on the timeline's reasoning: a segment is a few
-  // pixels tall, and a browser tooltip over it arrives a second late, unstyled,
-  // and never at all under a finger.
   const { tip, show, hide, wrap } = useTip();
   return (
     <>
@@ -612,15 +497,8 @@ function GoalBar({ apportionment }: { apportionment: AllowanceApportionment }): 
   );
 }
 
-/** Geometry for the burn-down, which is a different shape from the timeline's. */
 const P = { left: 44, right: 596, top: 12, bottom: 96 };
 
-/**
- * The weekly burn-down: does this pace reach the limit before the limit resets. The
- * only reading here that can be acted on **before** the fact, so it is always about
- * the seven-day window whatever span the page is on. The projection is drawn dashed
- * and its fit stated, because it can be a line through very few dots.
- */
 function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
   const p = allowance.projection;
   if (p === null) {
@@ -636,15 +514,9 @@ function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Elemen
 
   const startMs = Date.parse(p.capturedAt);
   const ends = [p.resetsAt, p.exhaustsAt].filter((iso): iso is string => iso !== null).map((iso) => Date.parse(iso));
-  // A margin past the last mark, so the reset line is never *on* the right edge —
-  // its label has to sit somewhere, and a label on the boundary is a label half
-  // outside the viewBox whichever way it is anchored.
   const endMs = Math.max(startMs + 3_600_000, ...ends.map((ms) => startMs + (ms - startMs) * 1.08));
   const span = Math.max(1, endMs - startMs);
   const x = (ms: number): number => P.left + ((ms - startMs) / span) * (P.right - P.left);
-  // Headroom down the panel the way a tank empties: full at the top, spent at the
-  // floor. Inverted, a line running *out* of allowance climbs — which reads as
-  // the one thing it is not.
   const y = (pct: number): number => P.bottom - (pct / 100) * (P.bottom - P.top);
 
   return (
@@ -726,31 +598,15 @@ function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Elemen
   );
 }
 
-/** Kept off the left edge, where a centred label would collide with `now`. */
 function mark(at: number): number {
   return Math.max(P.left + 46, at);
 }
 
-/**
- * True when the reset line has room for its own span beside the exhaustion mark.
- *
- * The two are often within a day of each other, which is the whole of what the
- * verdict below is about — and two spans a few pixels apart read as one figure
- * disagreeing with itself. The sentence carries both either way, so the chart
- * drops the second rather than crowding it.
- */
 function farApart(resetX: number, exhaustsAt: string | null, x: (ms: number) => number): boolean {
   if (exhaustsAt === null) return true;
   return Math.abs(resetX - x(Date.parse(exhaustsAt))) > 80;
 }
 
-/**
- * The burn-down in one sentence — the thing an operator reads and acts on.
- *
- * The spans are `fmtDuration`, not the cockpit's usual `untilTime`: these are days
- * and hours away, and a countdown that stops at minutes turns "about a day and a
- * half" into a four-digit number of minutes nobody reads at a glance.
- */
 function verdict(p: AllowanceProjection): string {
   const left = `${fmtPoints(100 - p.usedPercentage)} of the weekly allowance is left`;
   if (p.exhaustsAt === null) return `${left}, and the last two days show no rise to project forward.`;
@@ -764,13 +620,6 @@ function verdict(p: AllowanceProjection): string {
     : `${left}, and at this pace the window resets ${resetsIn}, before it runs out.`;
 }
 
-/**
- * The Economics tab's sentence in percentage rather than dollars.
- *
- * A goal that consumed a tenth of the account and landed nothing is the most
- * important row here, so it renders as that sentence rather than as a symbol —
- * `pointsPerLanded` is null rather than `Infinity` on the wire for exactly this.
- */
 function Goals({ goals, unattributed }: { goals: readonly AllowanceGoal[]; unattributed: number }): JSX.Element {
   return (
     <table className="sp-tbl">
@@ -814,11 +663,6 @@ function Goals({ goals, unattributed }: { goals: readonly AllowanceGoal[]; unatt
   );
 }
 
-/**
- * What the figures on this tab are, said level with the numbers they qualify rather
- * than at the foot of the page: an apportioned percentage read as a measured one is
- * the single misreading this tab can cause.
- */
 function Method({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
   const { pointsPerUsd } = allowance.apportionment;
   return (
@@ -834,18 +678,10 @@ function Method({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
   );
 }
 
-/** The most recent reading's instant — what the headline dates itself by. */
 function lastAt(allowance: AllowanceInsights): string {
   return allowance.readings.at(-1)?.at ?? allowance.generatedAt;
 }
 
-/**
- * A point, to one place.
- *
- * One place rather than the wire's six: the readings themselves arrive at two
- * decimal places at best, and a share printed to more than the source carries
- * claims a precision the account never reported.
- */
 function fmtPoints(points: number): string {
   return `${points < 0.05 && points > 0 ? '<0.1' : points.toFixed(1)}%`;
 }

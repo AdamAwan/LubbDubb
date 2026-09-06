@@ -8,6 +8,8 @@ import { HeadRow } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
+// → docs/spec/17-cockpit.md
+
 /**
  * The goal's declared checks, on the goal's own page, with the controls that
  * change them.
@@ -33,18 +35,12 @@ export function SignalsSection({
   onDelete,
   onRule,
 }: {
-  /** Every check on this goal, an agent's unruled declaration included, in the store's order. */
   signals: GoalWatch[];
   refUrls: Record<string, string>;
-  /** Write one check. Answers with what the dry run refused, which is empty on a clean one. */
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onDelete: (checkId: string) => Promise<void>;
-  /** The ruling on a check an agent declared — the same control the plan sheet carries. */
   onRule: (checkId: string, accept: boolean) => Promise<void>;
 }) {
-  // One at a time, and the same slot for both: `null` is nothing open, a check id
-  // is that row being edited, and a kind is a new check of that kind. Two pieces
-  // of state would be free to disagree and draw two forms.
   const [open, setOpen] = useState<string | GoalWatchKind | null>(null);
   const taken = new Set(signals.map((c) => c.id));
 
@@ -95,7 +91,6 @@ export function SignalsSection({
   );
 }
 
-/** One check at rest: what it asks, what it expects, and what the dry run read. */
 function SignalRow({
   check,
   refUrls,
@@ -109,9 +104,6 @@ function SignalRow({
   onDelete: () => Promise<void>;
   onRule: (checkId: string, accept: boolean) => Promise<void>;
 }) {
-  // A row awaiting a ruling is toned by that rather than by a verdict: nothing has
-  // been put to an environment, so `unread` would say the same thing about it as
-  // about a live check nobody has run, and only one of those is somebody's to answer.
   const tone = !check.live ? 'pending' : (check.dryRunVerdict ?? 'unread');
   return (
     <div className={`cn-sig-row ${tone}`}>
@@ -170,7 +162,6 @@ function SignalRow({
   );
 }
 
-/** The form's own state: every field a string, because that is what an input holds. */
 interface Draft {
   kind: GoalWatchKind;
   id: string;
@@ -217,17 +208,6 @@ function blankDraft(kind: GoalWatchKind): Draft {
   };
 }
 
-/**
- * Writing one check.
- *
- * **The form states its own refusals before the server does**, and they are the
- * server's own rules said in the operator's words — a signal without a presence
- * query and a measure with nothing that could fail it are both refused by
- * `WatchCheckSchema`, and a form that let them be submitted would answer a click
- * with a 400 the operator has to translate. It is not a second opinion: what it
- * cannot know is whether the query resolves, which is what the dry run answers on
- * the way back.
- */
 function CheckForm({
   initial,
   kind,
@@ -236,29 +216,18 @@ function CheckForm({
   onClose,
   onDelete,
 }: {
-  /** The check being edited, or absent for a new one. */
   initial?: GoalWatch;
-  /** The kind a new check is being written under. Read only where {@link initial} is absent. */
   kind?: GoalWatchKind;
-  /** Every id the goal already carries — a new check may not take one. */
   taken: Set<string>;
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onClose: () => void;
-  /** Absent on a new check, which has nothing to delete. */
   onDelete: (() => Promise<void>) | null;
 }) {
   const [draft, setDraft] = useState<Draft>(initial === undefined ? blankDraft(kind ?? 'signal') : draftOf(initial));
-  // What came back from the dry run, kept until the next save: a query that
-  // resolved against nothing is the failure this subsystem is least able to
-  // notice later, and the form is where it is cheap to see.
   const [refusals, setRefusals] = useState<string[]>([]);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const refusal = refuse(draft, taken, initial !== undefined);
-  // A changed question has never been run, so the reading and — for a measure —
-  // the baseline go with it. Said before the save rather than after, because the
-  // baseline is the one thing here that cannot be retaken: it is a reading from
-  // before the work arrived, and the work has arrived.
   const rereads =
     initial !== undefined && (initial.query !== draft.query || (initial.presence ?? '') !== draft.presence);
 
@@ -391,9 +360,6 @@ function CheckForm({
             onClick={async () => {
               const said = await onSave(declaration(draft));
               setRefusals(said);
-              // Held open on a refusal, because the refusal is about the text in
-              // front of them: a form that closed would leave the operator with a
-              // check the environment could not answer and nowhere it was said.
               if (said.length === 0) onClose();
             }}
           >
@@ -409,14 +375,6 @@ function CheckForm({
   );
 }
 
-/**
- * Why this draft cannot be saved, or null.
- *
- * Every arm is a rule `WatchCheckSchema` already enforces, phrased for somebody
- * looking at the field rather than at a zod path. **A rule that is only here is a
- * rule the plan document does not have**, which is the drift this whole module is
- * written to avoid — so nothing is checked here that the server would accept.
- */
 function refuse(draft: Draft, taken: Set<string>, editing: boolean): string | null {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(draft.id)) return 'The id is lowercase letters, digits and dashes.';
   if (!editing && taken.has(draft.id)) return `This goal already carries a check called “${draft.id}”.`;
@@ -435,7 +393,6 @@ function refuse(draft: Draft, taken: Set<string>, editing: boolean): string | nu
   return null;
 }
 
-/** The draft as the wire's own declaration. Only called on a draft {@link refuse} passed. */
 function declaration(draft: Draft): GoalWatchDeclaration {
   const why = draft.why.trim() === '' ? {} : { why: draft.why.trim() };
   if (draft.kind === 'signal')

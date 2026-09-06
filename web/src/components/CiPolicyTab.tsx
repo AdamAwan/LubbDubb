@@ -3,24 +3,8 @@ import { api } from '../api.js';
 import type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from '../types.js';
 import { Tag, type TagTone } from './tag.js';
 
-/**
- * What the harness does about a red pull request, check by check.
- *
- * `ci.checks` was only ever readable by opening `lubbdubb.config.json` on the
- * host — and even then the file does not say what it means: a rule that omits
- * `onFailure` **ignores** the check, and a check no rule claims **dispatches**.
- * A mis-scoped glob was therefore invisible until a PR behaved oddly (#244).
- *
- * **Every effective value is computed on the server** (`describeCiPolicy`), not
- * here. The cockpit re-deriving `onFailure ?? 'ignore'` would be a second copy of
- * a default `classifyCiFailures` owns, free to drift with nothing to catch it —
- * so this component renders the payload and asserts nothing of its own about it.
- *
- * **Read-only**, which the config form becoming writable (#401) did not change:
- * `ci.checks` is an *ordered* rule list where the order is the semantics, so
- * editing it rule-by-rule is its own shape and its own decision. The config tab
- * saves the list whole, and this tab is what says what the list means.
- */
+// → docs/spec/17-cockpit.md
+
 export function CiPolicyTab() {
   const [policy, setPolicy] = useState<CiPolicyDescription | null>(null);
 
@@ -148,7 +132,6 @@ function PolicyKindRow({ kind }: { kind: PolicyKindDescription }) {
   );
 }
 
-/** One of the three routings, coloured by how much of a hold it puts on the PR. */
 function ActionChip({ action }: { action: CiRuleDescription['onFailure'] }) {
   const tone: TagTone | undefined = action === 'dispatch' ? 'green' : action === 'escalate' ? 'amber' : undefined;
   return <Tag tone={tone}>{action}</Tag>;

@@ -7,40 +7,13 @@ import { Panel } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * The values section: every configurable leaf, grouped, editable.
- *
- * Three things the server decides and this only draws, because a browser that
- * decided them would be a second copy free to drift:
- *
- * - **What each value is** — the widget comes from `entry.type`, declared once in
- *   `src/configFields.ts`.
- * - **When saving it takes effect** — `entry.live` is true only because an arm in
- *   `src/configApply.ts` re-seats whoever holds the value.
- * - **What a reset means** — clearing the key, never writing the default back. The
- *   browser is deliberately never told what a default *is*; it is told
- *   `isDefault`, which is the answer to the question an operator asks.
- *
- * The one judgement that is made here is whether a key another key requires has
- * been filled in, and it is made here because it is a question about the **edit**:
- * `entry.requiredWhen` is the server's declaration, and the value it is judged
- * against is the staged one. Left to the server it would be the answer for the
- * config the harness is running — so an operator who switches the pool on and
- * saves gets the next boot's own refusal as a 400, over a key with no row on the
- * page to fix it.
- *
- * Nothing is written from here. Edits stage, and the write goes through the
- * review step — which is drawn from the server's own candidate bytes rather than
- * a guess at them.
- */
+// → docs/spec/17-cockpit.md
 
-/** What the page holds between an edit and the write: paths to set, paths to clear. */
 export interface Staged {
   set: Record<string, unknown>;
   clear: string[];
 }
 
-/** A staged edit's text, and why it is not a value. */
 interface Draft {
   raw: string;
   error: string | null;
@@ -63,20 +36,12 @@ export function ConfigValues({
   saved: readonly ConfigChange[] | null;
   group: string | null;
   control: { cap: number; paused: boolean };
-  /**
-   * The state words the tracker is actually reporting, so the colour picker
-   * offers the vocabulary in front of the operator rather than asking them to
-   * spell it. Not a closed list: a state that has left the board is still one you
-   * can colour, so the control takes a typed word too.
-   */
   states: readonly string[];
   onGroup: (group: string | null) => void;
   onStage: (staged: Staged) => void;
   onReview: () => void;
   onReloaded: () => void;
 }): React.JSX.Element {
-  // What was *typed*, which is not what is staged: a half-typed number is a draft
-  // and never a value, so it cannot reach the write.
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,8 +49,6 @@ export function ConfigValues({
 
   const shown = payload.groups.find((entry) => entry.title === group) ?? payload.groups[0];
   const broken = Object.values(drafts).some((draft) => draft.error !== null);
-  // Judged over staged ∪ running, so switching the pool provider raises the
-  // requirement in the same keystroke rather than at the next boot.
   const unmet = unmetRequirements(payload, staged);
 
   const edit = (entry: RunningConfigEntry, raw: string): void => {
@@ -96,9 +59,6 @@ export function ConfigValues({
       set: { ...staged.set },
       clear: staged.clear.filter((path) => path !== entry.path),
     };
-    // Typing a value back to what is running is not an edit. Without this a write
-    // carries a key it does not change, and the file grows a line saying what it
-    // already said.
     if (JSON.stringify(parsed.value) === JSON.stringify(entry.value)) delete next.set[entry.path];
     else next.set[entry.path] = parsed.value;
     onStage(next);
@@ -286,10 +246,7 @@ export function ConfigValues({
             {broken
               ? 'one of them is not a value this field takes'
               : unmet.length > 0
-                ? // Named, not counted: the row that needs filling in is usually in
-                  // a group the operator is no longer looking at — they got here by
-                  // changing the key that raised the requirement.
-                  `${unmet[0]?.entry.path ?? ''} is needed while ${unmet[0]?.because ?? ''}`
+                ? `${unmet[0]?.entry.path ?? ''} is needed while ${unmet[0]?.because ?? ''}`
                 : `nothing has been written to ${payload.file} yet`}
           </span>
           <div className="cfg-dirtyacts">
@@ -319,7 +276,6 @@ export function ConfigValues({
   );
 }
 
-/** What has reached the file and is waiting for a restart. */
 function PendingCard({
   pending,
   canRestart,
@@ -382,15 +338,11 @@ function Row({
   draft: Draft | undefined;
   staged: 'set' | 'cleared' | null;
   states: readonly string[];
-  /** Another key requires this one, and nothing has filled it in yet. */
   required: boolean;
   onEdit: (raw: string) => void;
   onReset: () => void;
   onUndo: () => void;
 }): React.JSX.Element {
-  // A field the environment sets, one the file owns alone, and one this build
-  // does not declare are all un-editable — for different reasons, each stated on
-  // the row rather than left as a control that does nothing.
   const locked = entry.env !== null || entry.access === 'fileOnly';
   const raw = draft?.raw ?? rawOf(entry.value);
 
@@ -404,9 +356,6 @@ function Row({
 
       <div className="cfg-inwrap">
         {staged === 'cleared' ? (
-          // Naming the layer rather than saying "default", because with a project
-          // config in play those are two different values and only one of them is
-          // what clearing leaves behind.
           <span className="muted">
             {entry.fromProject ? 'will fall back to the project’s value' : 'will fall back to its default'}
           </span>
@@ -492,9 +441,6 @@ function Widget({
   if (locked) return <input className="cfg-in locked" value={raw} readOnly />;
   if (entry.type === 'colourMap') {
     const map = readColourMap(raw);
-    // A value no picker can draw — an array, a number, a hand-edited half-map —
-    // is handed back as JSON rather than silently replaced. Losing an operator's
-    // typo is worse than showing it to them.
     if (map) return <ColourMap map={map} states={states} onEdit={onEdit} />;
   }
   if (entry.type === 'boolean') {
@@ -516,10 +462,6 @@ function Widget({
       </select>
     );
   }
-  // `text` joins the textarea cases rather than the input one, and is otherwise a
-  // plain string all the way down: no parse on the way in, no serialise on the way
-  // out. It is here because several sentences in a one-line input is a field an
-  // operator cannot read back what they typed into.
   if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap' || entry.type === 'text') {
     return (
       <textarea
@@ -535,32 +477,14 @@ function Widget({
       className="cfg-in"
       inputMode={entry.type === 'number' ? 'numeric' : 'text'}
       value={raw}
-      // Greyed rather than filled in, for the button's reason: a placeholder is
-      // legible as "not yet a value", and a prefilled field reads as one the
-      // operator has already answered.
       placeholder={entry.suggestion ?? ''}
       onChange={(e) => onEdit(e.target.value)}
     />
   );
 }
 
-/** What a state starts on when it is first given a colour. Neutral, and not grey. */
 const NEW_COLOUR = '#7fb3ff';
 
-/**
- * The state → colour control: one swatch per coloured state, and one way to add
- * another.
- *
- * Drawn rather than typed because the value is a *colour*: JSON is the wrong
- * instrument for picking one, and a hex an operator typed is a hex nobody looked
- * at next to the chip it lands on. Each row previews itself in the chip's own
- * shape, so what is picked here is what the backlog draws.
- *
- * The add control is a text input over a `datalist` on purpose. A closed dropdown
- * of the states the tracker is reporting would refuse the one case that most needs
- * colouring — a state no open item is sitting in — and a bare text box would make
- * the operator spell a word the cockpit already knows. This is both.
- */
 function ColourMap({
   map,
   states,
@@ -636,13 +560,6 @@ function ColourMap({
   );
 }
 
-/**
- * The map a colour picker can draw, or null for a value it cannot.
- *
- * Two callers with the same answer and different jobs: {@link Widget} asks so it
- * can fall back to the textarea, and {@link parseValue} asks so a rescued edit is
- * refused rather than written.
- */
 function asColourMap(value: unknown): Record<string, string> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const out: Record<string, string> = {};
@@ -653,7 +570,6 @@ function asColourMap(value: unknown): Record<string, string> | null {
   return out;
 }
 
-/** The same, from the row's raw text. Unparseable text is not a map. */
 function readColourMap(raw: string): Record<string, string> | null {
   try {
     return asColourMap(JSON.parse(raw));
@@ -662,30 +578,12 @@ function readColourMap(raw: string): Record<string, string> | null {
   }
 }
 
-/** A key another key requires, which nothing has filled in yet. */
 interface Unmet {
   entry: RunningConfigEntry;
-  /** The group its row is in, so the save bar can offer a way to it. */
   group: string;
-  /** Why it is needed, in the words of the key that raised it. */
   because: string;
 }
 
-/**
- * Every declared requirement the staged config does not satisfy.
- *
- * Judged over **staged ∪ running**, which is the whole reason this is here and
- * not on the server: the requirement an operator runs into is the one their edit
- * raises, and the server only ever sees the config the harness booted on. The
- * rule itself is still the server's — `entry.requiredWhen`, declared once in
- * `src/configFields.ts`.
- *
- * A **cleared** path is the one thing this cannot read, because the browser is
- * never told what a default is. So a cleared *raiser* lifts the requirement (it
- * is falling back to a value this side cannot name, and the save is still
- * refused by `loadConfigFromText` if that value keeps it standing), and a cleared
- * *required* key counts as unfilled unless the project layer is setting it.
- */
 function unmetRequirements(payload: RunningConfigPayload, staged: Staged): Unmet[] {
   const out: Unmet[] = [];
   for (const group of payload.groups) {
@@ -732,10 +630,6 @@ function configured(payload: RunningConfigPayload, path: string): string {
   return hit ? rawOf(hit.value) : '—';
 }
 
-/**
- * The value as text to edit. A list is one entry per line and an object is JSON —
- * both are what an operator would type, and both parse back the same way.
- */
 function rawOf(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -747,13 +641,6 @@ function render(value: unknown): string {
   return typeof value === 'string' ? `"${value}"` : JSON.stringify(value);
 }
 
-/**
- * Parse what was typed into the value the route will be sent.
- *
- * Stated here as well as on the server, and that is not a second opinion: this
- * one is about the keystroke in front of the operator, and the server's is about
- * anything that reaches the route. The server's is the one that decides.
- */
 function parseValue(entry: RunningConfigEntry, raw: string): { value: unknown; error: string | null } {
   switch (entry.type) {
     case 'number': {
@@ -783,8 +670,6 @@ function parseValue(entry: RunningConfigEntry, raw: string): { value: unknown; e
         return { value: null, error: (err as Error).message };
       }
     case 'colourMap': {
-      // The picker only ever writes this shape; the rescue textarea can write
-      // anything, and the refusal is what stops it reaching the file.
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
@@ -799,11 +684,6 @@ function parseValue(entry: RunningConfigEntry, raw: string): { value: unknown; e
   }
 }
 
-/**
- * A duration's own reading beside the number. Every interval in the config is
- * named `…Ms`, and `21600000` is not a value anyone checks at a glance — which is
- * exactly what somebody opens this to do.
- */
 function humanizeMs(ms: number): string {
   if (ms === 0) return 'off';
   for (const [unit, size] of [

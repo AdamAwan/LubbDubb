@@ -4,22 +4,8 @@ import { Modal } from './Modal.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * Where the operator says this goal is never going to reach an environment.
- *
- * A modal for {@link InstructionModal}'s reason: the note is prose they have to
- * compose, and every other control on the goal page is a verdict — one click,
- * done. It is not a verdict, either. Releasing a gate does not say the work is
- * good or finished; it says the evidence the harness is waiting for is never
- * arriving, which is a different claim and the one thing a reader six weeks later
- * has no other way to recover.
- *
- * That is why the note is required rather than optional, here and in
- * `GateReleaseBody`: the row it writes is the only account of why a goal was
- * closed out with no environment ever confirming it.
- *
- * A failed post keeps the modal open with the text intact.
- */
+// → docs/spec/17-cockpit.md
+
 export function GateReleaseModal({
   issueNumber,
   issueTitle,
@@ -29,7 +15,6 @@ export function GateReleaseModal({
 }: {
   issueNumber: number;
   issueTitle: string;
-  /** What is being waited on, in the server's own words — the sentence the card draws. */
   hold: string;
   onSubmit: (note: string) => Promise<unknown>;
   onClose: () => void;
@@ -45,8 +30,6 @@ export function GateReleaseModal({
       onClose();
     } catch (err) {
       setFailed(true);
-      // Rethrown so the button flashes its own error ring: swallowing it would
-      // leave the control reporting a success the message below denies.
       throw err;
     }
   }
@@ -86,7 +69,6 @@ export function GateReleaseModal({
         placeholder="Documentation only — nothing in this goal is deployed."
         onChange={(e) => setNote(e.target.value)}
         onKeyDown={(e) => {
-          // ⌘/Ctrl+Enter submits, matching the composer and the other two modals.
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault();
             void submit();

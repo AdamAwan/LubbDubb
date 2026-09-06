@@ -9,16 +9,8 @@ import type { ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * Whether a resource's absence is worth drawing.
- *
- * `present` is the file fact — `existsSync` on the path the name resolves to
- * under the goal's validation directory — and for an `access` resource there was
- * never going to be a file: it names a login or an environment, which is a
- * precondition the check's own `do` carries. Warned about, it is a chip that says
- * "missing" on every draw for the life of the goal, and a sheet whose warnings
- * mean nothing is a sheet whose real one is not read.
- */
+// → docs/spec/17-cockpit.md
+
 function isMissingFile(resource: ValidationResourceView): boolean {
   return !resource.present && resource.kind !== 'access';
 }
@@ -56,21 +48,11 @@ export function ValidationSection({
   onReset,
   onHandover,
 }: {
-  /** Superseded checks included — drawing what a plan withdrew is half the point. */
   checks: ValidationCheck[];
-  /** The goal these checks hang off, for the desktop prompt's `<issue>:<letter>`. */
   issueNumber: number;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
-  /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
   desktopFolder: string;
-  /**
-   * The station's own button tone, the seam `HumanTaskActions` and
-   * `EscalationCard` already take — [`Button`](./button.tsx)'s props rather than a
-   * class string, so the caller cannot hand down a base class this section then
-   * prefixes a second one onto. One component, two faces; the alternative is a
-   * second wiring of five verbs, and five more places for the refusals to drift.
-   */
   look?: ButtonLook;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -78,10 +60,6 @@ export function ValidationSection({
   onReset: (checkId: string) => Promise<unknown> | unknown;
   onHandover: (checkId: string, to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
-  // The goal's checks were reached. Emitted on mount rather than from whatever
-  // navigation drew the goal page, for `placeReach`'s reason one rung in: this
-  // section is drawn from a goal page and from a plan sheet, and a `view` written
-  // at either would count only the half that went through it.
   useEffect(() => {
     logUsage('validation.view');
   }, []);
@@ -93,9 +71,6 @@ export function ValidationSection({
 
   if (checks.length === 0) {
     return (
-      // Said rather than hidden, the write-up section's rule: an absent section
-      // reads as "there was nothing to check", which is indistinguishable from
-      // "nobody wrote one" — and only one of those is a problem.
       <p className="empty">
         No validation plan. Nothing checks that this goal actually works beyond what the parts merged, so closing it is
         a judgement call rather than a verdict.
@@ -204,7 +179,6 @@ export function ValidationDigest({
 }: {
   checks: ValidationCheck[];
   refUrls: Record<string, string>;
-  /** Null when the plan hangs off no goal — then there is nowhere to send anyone. */
   onOpenGoal: (() => void) | null;
 }) {
   const live = checks.filter((c) => c.supersededReason === null);
@@ -252,9 +226,6 @@ export function ValidationDigest({
         </div>
       ))}
       {withdrawn.length > 0 && (
-        // The withdrawn checks stay on the sheet rather than moving with the
-        // controls: what an amendment dropped is a fact about *this plan*, and the
-        // goal's card lists what is still to be checked.
         <details className="pm-vgone">
           <summary>
             {withdrawn.length} check{withdrawn.length === 1 ? '' : 's'} an amended plan withdrew
@@ -282,7 +253,6 @@ export function ValidationDigest({
   );
 }
 
-/** Which verb an operator has open on a check, or none. */
 type Verb = 'passed' | 'failed' | 'deferred' | 'waived';
 
 const VERB_PROMPT: Record<Verb, string> = {
@@ -292,18 +262,6 @@ const VERB_PROMPT: Record<Verb, string> = {
   waived: 'Why is this one not being checked?',
 };
 
-/**
- * One check, collapsed to its head until somebody opens it.
- *
- * Six checks at full height is most of a screen, and the card sits above the plan —
- * so the steps fold away and the head keeps what a glance is for: the letter, the
- * title, the state, and who is on it.
- *
- * **The bands draw whether the row is open or shut.** An amendment and a hand-back
- * are the two things a reader must not be able to scroll past without seeing, and a
- * collapsed row that hid them would do exactly that. Folding away the steps costs a
- * click; folding away "the check you already ran was rewritten" costs the reading.
- */
 function CheckBlock({
   check,
   resources,
@@ -337,8 +295,6 @@ function CheckBlock({
 
   const submit = (): void => {
     const text = note.trim();
-    // The server refuses a blank note in the same words, for every verb but a
-    // pass; refusing here saves the round trip and never instead of it.
     if (verb === null || (text.length === 0 && verb !== 'passed')) return;
     void send.run(async () => {
       if (verb === 'passed' || verb === 'failed') await onResult(verb, text);
@@ -510,16 +466,10 @@ function CheckBlock({
                   />
                 </>
               ) : (
-                // One way back from every settled state, and it takes no note for a
-                // dismissal's reason: it says nothing about the work, only that what
-                // was recorded no longer holds.
                 <AsyncButton
                   {...look}
                   title="Withdraw what was recorded and put it back to unrun"
                   onClick={() => {
-                    // A withdrawn reading leaves the check `unrun`, which is
-                    // indistinguishable from one nobody ever ran — so no table
-                    // holds this act and the click is the only witness.
                     logUsage('validation.undo');
                     return onReset();
                   }}
@@ -558,34 +508,16 @@ function CheckBlock({
   );
 }
 
-/**
- * What an amendment changed, drawn above the check it changed.
- *
- * **This is the whole of "you are told when the plan changes".** A validation plan
- * is written by the one agent that has not done the work yet, so it has to be
- * correctable — and a check that can be quietly rewritten under an operator who
- * already ran it is worse than one that cannot change at all: they would go on
- * believing they had checked something the plan no longer asks for. So the band is
- * loud, it says what the check used to say, and it says what the change cost.
- *
- * It clears itself when the operator records a reading against the new wording,
- * which is the only acknowledgement worth having — a dismiss button would clear it
- * for somebody who had merely seen it.
- */
 function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record<string, string> }) {
   const prior = check.revision;
   return (
     <div className="pm-vamend">
       <div className="pm-vamend-head">
         {prior === null ? (
-          // No prior wording: this check was *added* after the plan was read. Not
-          // a withdrawal of anything, and saying "amended" would imply one.
           <b>Added by an amendment</b>
         ) : prior.state === null ? (
           <b>Reworded by an amendment</b>
         ) : (
-          // The case the band exists for, stated in the operator's own terms: they
-          // did the work, and it no longer counts for the check as it now reads.
           <b>
             Reworded after you recorded <i>{prior.state}</i> — that reading was withdrawn
           </b>
@@ -615,7 +547,6 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
   );
 }
 
-/** The tag's tone. `deferred` is deliberately not green: it is a check still owed. */
 function stateTone(state: ValidationCheckState): TagTone | undefined {
   if (state === 'passed') return 'green';
   if (state === 'failed') return 'red';

@@ -14,14 +14,10 @@ import { untriagedCount } from '../worldBuckets.js';
 import { useThemeUnsaved } from '../hooks.js';
 import { signalRows } from './WorldSignals.js';
 
-/** The nav's destinations, in reading order. → `docs/spec/27-obstacles.md#in-the-cockpit` */
+// → docs/spec/17-cockpit.md
+
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'insights'];
 
-/**
- * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
- * deliberately not derived from `github.owner`/`github.repo`, which name the repo the
- * harness *works on*.
- */
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
@@ -34,10 +30,6 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   config: 'Config',
 };
 
-/**
- * Where you are, and the other places you can be. In the top bar rather than the scrolling
- * situation area: primary navigation must not be a thing you scroll away from.
- */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
   const go = (tab: ConsoleTab) => () => {
@@ -45,13 +37,6 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
-  // Features is **inserted** rather than appended, because
-  // it belongs beside Tickets: the two are the same backlog read at two altitudes,
-  // and a reader moving between them should not cross the board to do it. It is
-  // absent unless the deployment has a board at all — the operator's flag *and* a
-  // provider with a hierarchy, folded server-side by `featureBoardOn` so the tab
-  // and the route can never disagree. A tab that opens on a page explaining a
-  // hierarchy this tracker does not have is worse than no tab.
   const tabs: readonly ConsoleTab[] = view.state.config.featureBoard
     ? ['overview', 'tickets', 'features', 'obstacles', 'insights']
     : TABS;
@@ -66,8 +51,6 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
             type="button"
             className={goal === null && view.tab === tab ? 'cn-on' : ''}
             onClick={go(tab)}
-            // The sentence the badge used to be. A tab with no number to carry
-            // needs none: its own label already says where it goes.
             {...(badge === null ? {} : { title: badge.title })}
           >
             {TAB_LABEL[tab]}
@@ -79,11 +62,6 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
   );
 }
 
-/**
- * What is waiting behind a nav button, as a number and the sentence that explains it — or
- * null for a tab with no number. **Obstacles has none**, and never gains one. →
- * `docs/spec/27-obstacles.md#in-the-cockpit`
- */
 function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: string } | null {
   if (tab === 'tickets') {
     const count = untriagedCount(view.state.world.issues, view.state.config.watchLabel);
@@ -92,10 +70,6 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
   return null;
 }
 
-/**
- * The wordmark and the link lamp — the one thing on this bar about LubbDubb rather than the
- * work.
- */
 function Ident({ view }: { view: CockpitView }): JSX.Element {
   return (
     <div className="cn-ident">
@@ -106,26 +80,9 @@ function Ident({ view }: { view: CockpitView }): JSX.Element {
   );
 }
 
-/**
- * The bar's two ways out — file one, or ask one — drawn together at the right-hand end
- * beside the readings. **Beside each other, always**: they are the same moment, and split
- * up the expensive one ends up the only one on the bar.
- */
 function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  // Local state and not `Place`: a half-typed report is not somewhere you can come
-  // back to, so it is not somewhere the URL should be able to send you.
-  // `GoalPage`'s compose modals are held the same way.
   const [composing, setComposing] = useState(false);
 
-  // One cut, made before a round trip is spent, and it is deliberately **not**
-  // `config.canFileTickets` any more (issue #449). That flag says whether the
-  // tracker *the fleet is pointed at* accepts new items, which since #449 has
-  // nothing to do with this control: the report goes to LubbDubb's own repository
-  // through the operator's `gh` login, so an Azure deployment and a read-only
-  // tracker can both compose one. What is left is the half that always mattered
-  // most — a modal that posts to this harness's own server has nothing to post to
-  // with the socket down, which is exactly when an operator has something to
-  // report. The live half of the gate is the probe, and it runs inside the modal.
   const canCompose = view.connected;
 
   return (
@@ -182,53 +139,30 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
   );
 }
 
-/**
- * What the Environments chip draws: the worst reading, said in one count and one word, and
- * the sentence behind it.
- */
 interface EnvironmentsReading {
-  /** `1 red`, `2 not well`, `1 no answer`, `4 well`. */
   value: string;
-  /** True while the worst environment is well — the state it spends nearly all its life in. */
   quiet: boolean;
-  /** Which tint the chip takes, or none. */
   tone: 'ill' | 'watch' | null;
   title: string;
 }
 
-/**
- * Worst first, and an **untiered `unhealthy` ranks with a red**: an unstated severity is
- * not a reason to rank an outage below one that stated it, which is the card's rule for the
- * tone read as an ordering.
- */
 function healthRank(reading: EnvironmentHealthReading): number {
   if (reading.state === 'unhealthy') return reading.tier === 'orange' ? 1 : 0;
   if (reading.state === 'unknown') return 2;
   return 3;
 }
 
-/**
- * What one reading is called on the chip — the tier where it named one, else the state's
- * word.
- */
 function healthWord(reading: EnvironmentHealthReading): string {
   if (reading.tier !== null) return reading.tier;
   return reading.state === 'healthy' ? 'well' : reading.state === 'unknown' ? 'no answer' : 'not well';
 }
 
-/**
- * Fold the readings to the one thing a glance can settle: is anything out there broken, and
- * how many.
- */
 export function environmentsReading(readings: readonly EnvironmentHealthReading[], now: number): EnvironmentsReading {
   const worst = [...readings].sort((a, b) => healthRank(a) - healthRank(b))[0]!;
   const word = healthWord(worst);
   const count = readings.filter((r) => healthWord(r) === word).length;
   const rank = healthRank(worst);
   const read = `read ${relTime(worst.observedAt, now)}`;
-  // The check's own sentences, verbatim — or the harness's account of why it has
-  // none, which is a different thing and never dressed as one. They were the card's
-  // `why`, and with the card gone the chip is the only place they are said at all.
   const said = worst.reasons.length > 0 ? worst.reasons.join(' · ') : worst.detail;
   const title =
     rank === 3
@@ -242,19 +176,10 @@ export function environmentsReading(readings: readonly EnvironmentHealthReading[
   };
 }
 
-/**
- * The Environments chip — **drawn only while something out there is not well**, and beside
- * the fleet cap rather than on the overview. Nothing here re-decides anything — the word is
- * the check's own tier and the reasons ride the `title` verbatim. →
- * docs/spec/24-environments.md#in-the-cockpit
- */
 function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
   const readings = view.state.environmentHealth ?? [];
   if (readings.length === 0) return null;
   const reading = environmentsReading(readings, view.now);
-  // `unknown` counts as not-well here, on the panel's rule: a check that could not
-  // answer is not a claim that anything is right, and folding it into the healthy
-  // silence is the one way this chip could hide an outage.
   if (reading.quiet) return null;
   const title = `${reading.title} Open the readings.`;
   return (
@@ -272,11 +197,6 @@ function Environments({ view, actions }: { view: CockpitView; actions: CockpitAc
   );
 }
 
-/**
- * The pulse countdown, and the way to force one — drawn **inside the fleet reading, beside
- * the pause control**, because the two are one subject: what the fleet is allowed to do,
- * and when it next gets to.
- */
 function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const stopped = view.pulseHeld || view.state.control.paused;
   const reading = view.pulseHeld ? 'held' : view.state.control.paused ? 'paused' : `${view.nextPulseIn}s`;
@@ -298,10 +218,6 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
   );
 }
 
-/**
- * Where the harness's own build stands — the one reading in this menu about the process
- * rather than the work.
- */
 function buildReading(view: CockpitView): MenuReading {
   const build = view.state.build;
   const due = build.state === 'behind' || build.state === 'ready';
@@ -323,17 +239,10 @@ function buildReading(view: CockpitView): MenuReading {
   };
 }
 
-/**
- * Whether anything is running on this machine, and which goal's code it is. Quiet when
- * nothing is up, which is the reading rather than the absence of one.
- */
 function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const run = view.state.localRun;
   const live = run !== null && run.live;
   const number = run === null ? null : originIssueNumber(run.originRef);
-  // Behind the tip of its own branch: the environment is showing old code. Said on
-  // the reading itself, because the panel is where you find out and this is where
-  // you would not think to look.
   const stale = live && run.freshness !== null && run.freshness.behindTip !== null && run.freshness.behindTip > 0;
   const title = live
     ? `Goal #${String(number)} is running locally${run.url === null ? '' : ` on ${run.url}`}${stale ? ' · behind the branch tip' : ''} — open to stop it or swap goals`
@@ -354,42 +263,22 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   );
 }
 
-/**
- * How stale a limits reading has to be before the chip says so beside the figures. →
- * docs/spec/18-observability.md
- */
 const USAGE_STALE_MS = 10 * 60 * 1000;
 
-/**
- * One window's slot on the chip. Both are always drawn and always in the same order — see
- * {@link usageReading}.
- */
 interface UsageSlot {
-  /** `5h` / `7d`, drawn above-left of the figure it labels. */
   label: string;
-  /** The percentage, or `—` for a window the wire reported nothing for. */
   value: string;
-  /** Whether this is the window nearer its limit, and so the one lettered at full strength. */
   binds: boolean;
 }
 
-/**
- * What the Usage chip draws: the figures, the tone they carry, and the sentence behind
- * them.
- */
 interface UsageReading {
-  /** The two windows, five-hour then weekly. Empty when nothing reported either. */
   slots: UsageSlot[];
-  /** The five-hour spend, drawn instead of the slots when no window was reported at all. */
   cost: string | null;
-  /** `plain` is the resting state, `quiet` mutes; the other two tint the chip. */
   tone: 'quiet' | 'plain' | 'warn' | 'spent';
   title: string;
-  /** The reading's age, drawn beside the figures once it is stale enough to matter. */
   age: string | null;
 }
 
-/** How far off a window's reset is, at the scale it is actually read: `42m`, `3h`, `2d`. */
 function resetIn(iso: string, now: number): string {
   const mins = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60_000));
   if (mins < 60) return `${mins}m`;
@@ -397,12 +286,6 @@ function resetIn(iso: string, now: number): string {
   return `${Math.round(mins / (24 * 60))}d`;
 }
 
-/**
- * The account's allowance as one reading — **both** subscriber windows where an agent has
- * reported them, and the rolling cost where none has. **A stale reading is drawn stale,
- * never hidden and never freshened.** →
- * docs/spec/10-agent-runtimes.md#the-account-usage-windows
- */
 export function usageReading(usage: CockpitView['state']['usage'], now: number): UsageReading {
   const limits = usage.rateLimits;
   const five = limits?.fiveHour ?? null;
@@ -413,8 +296,6 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
     return {
       slots: [],
       cost: fmtUsd(fiveHourCostUsd),
-      // Nothing spent is a reading and not the absence of one — the mute rule the
-      // fault and launch counts follow.
       tone: fiveHourCostUsd === 0 && sevenDayCostUsd === 0 ? 'quiet' : 'plain',
       title:
         'No subscriber usage windows have been reported — API-key auth, or no agent has taken a turn yet. ' +
@@ -423,8 +304,6 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
     };
   }
 
-  // A window that reported nothing cannot be the one nearer its limit, whatever the
-  // other says — so the comparison is only ever between windows that exist.
   const weekBinds = five === null || (seven !== null && seven.usedPercentage > five.usedPercentage);
   const binding = weekBinds ? seven : five;
   const pct = (w: typeof five) => (w === null ? '—' : `${Math.round(w.usedPercentage)}%`);
@@ -447,12 +326,6 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
   };
 }
 
-/**
- * What the account has left, in the one row an operator glances at — the only gauge
- * here that can stop everything. It is also a way-in to a whole page: the `session`
- * window is the same five hours the account meters, anchored to the reset this chip
- * already reads ([18](../../../docs/spec/18-observability.md#the-window)).
- */
 function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
   const tone = reading.tone === 'quiet' ? 'cn-quiet' : reading.tone === 'plain' ? '' : `cn-usage-${reading.tone}`;
@@ -462,10 +335,6 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
     <button
       type="button"
       className={`cn-sub cn-act ${tone} ${stale}`}
-      // Economics, because "where did it go" is a question about money and that is
-      // the tab that splits it. The window is the point of the trip: landing on the
-      // page's own default would answer for a week, which is a different question
-      // with a bigger number — and the number is what an operator would remember.
       onClick={() => actions.openInsights({ insightsView: 'economics', insightsWindow: 'session' })}
       title={title}
       aria-label={title}
@@ -502,44 +371,28 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
   );
 }
 
-/** `issue:284` → 284. The panel and this both address a goal by its number. */
 function originIssueNumber(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;
 }
 
-/** What a menu row draws: its value, the tint it takes, and the sentence behind it. */
 interface MenuReading {
   value: string | null;
   tone: 'ill' | 'watch' | null;
-  /** A zero, or a state saying nothing — dimmed, never removed. */
   quiet: boolean;
   title: string;
 }
 
-/** One row of the bar's menu — a glyph, a word, and what that word currently reads. */
 interface MenuEntry extends MenuReading {
   key: string;
   icon: 'alert' | 'rocket' | 'download' | 'globe' | 'bolt' | 'book' | 'gear';
   label: string;
-  /**
-   * Something is waiting on this row that its value cannot say — an unsaved theme edit on
-   * Config, and so far only that (issue #680).
-   */
   pending?: boolean;
   onPick: () => void;
 }
 
-/**
- * The seven ways-in the bar keeps folded away, in reading order. **Environments is absent,
- * not zeroed, where no environment declares a check** — a row reading `0 well` announces a
- * feature as broken.
- */
 export function menuEntries(view: CockpitView, actions: CockpitActions, themeUnsaved = false): MenuEntry[] {
   const faults = view.state.errors.length;
-  // The queue, not the history: a launched brief that has been dispatched is
-  // an agent in the Fleet, and counting it here would have the reading climb as
-  // work starts rather than as it waits.
   const queued = view.state.jobs.filter((job) => job.status === 'queued').length;
   const health = view.state.environmentHealth ?? [];
   const env = health.length === 0 ? null : environmentsReading(health, view.now);
@@ -576,10 +429,6 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       title: build.title,
       onPick: () => actions.openPanel('build'),
     },
-    // Env stays in the menu even though the bar carries a chip for it, because the
-    // two answer different questions: the chip is *is something broken*, drawn only
-    // when it is, and the row is *what did every environment say*, which is where an
-    // operator goes to confirm that nothing is. Both open the one panel.
     ...(env === null
       ? []
       : [
@@ -594,11 +443,6 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
             onPick: () => actions.openPanel('environments'),
           },
         ]),
-    // What the world did, which was the overview's fourth card until it turned
-    // out to be read rather than watched — the same reason everything else in
-    // this menu is in it. The count is the whole feed, so the row says whether
-    // there is anything in there before it is opened; the Up next band carries
-    // the other way in, beside the queue these signals decide.
     {
       key: 'signals',
       icon: 'bolt',
@@ -635,17 +479,8 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
   ];
 }
 
-/**
- * The bar's menu: one button, and the seven ways-in behind it. The button takes a dot
- * whenever a row inside has a tint, so the fold costs no visibility.
- */
 function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [open, setOpen] = useState(false);
-  // The theme's live preview persists when you leave its section, on purpose, but
-  // the bar that states what that costs does not — so an unsaved theme was
-  // indistinguishable from a saved one everywhere else in the cockpit (#680). It
-  // has to reach the *button*, not only the row it belongs to: a mark visible only
-  // once the menu is open is the same invisibility one fold further in.
   const entries = menuEntries(view, actions, useThemeUnsaved());
   const flagged = entries.some((entry) => entry.tone !== null || entry.pending === true);
   const title = flagged
@@ -700,11 +535,6 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
   );
 }
 
-/**
- * The control-room strip: ident, the nav, the pulse, the fleet cap, and the readings. The
- * nav is here because this is the only row of the shell that never scrolls. →
- * docs/spec/17-cockpit.md#insights
- */
 export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { state } = view;
 

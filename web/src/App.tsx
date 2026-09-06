@@ -11,12 +11,8 @@ import { RefLinks } from './components/refs.js';
 import { hasPrPage } from './view/prPage.js';
 import { goalIssue, standsFor } from './view/goalPage.js';
 
-/**
- * What the cockpit shows when the harness refuses its credential. Worth a screen
- * rather than a silent retry: the fix is a URL only the operator's terminal has,
- * so an unexplained "Connecting…" would leave them looking at the browser for a
- * problem whose answer is in the server log.
- */
+// → docs/spec/17-cockpit.md
+
 function LockedOut({ error }: { error: UnauthorizedError }) {
   return (
     <div className="loading locked-out">
@@ -39,48 +35,12 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
   );
 }
 
-/**
- * The cockpit shell, and deliberately nothing more: acquire state, hand the
- * console a finished view-model. Everything that decides what the operator sees
- * lives in `console/`; everything that decides what is true lives in `cockpit/`
- * and `view/`.
- *
- * The two screens below stay here rather than moving into the console because
- * neither has a view-model to draw — the console cannot render a cockpit whose
- * state never arrived.
- *
- * The work graph is **not** here: it is a destination in the console's nav, drawn
- * by `ConsoleRoot` the way the launch desk is. It still rides its own routes
- * rather than the view-model — fetched on open rather than on every poll — but
- * that never made it the shell's, since embedding a component that reaches
- * `api.js` is not `console/` importing it, and the import ban is the whole rule.
- *
- * The prompt book is fetched rather than polled for the same reason the graph is:
- * it is read once at boot and cannot change while the harness is up, so it has
- * its own route and no place in the view-model. It rides in the settings modal,
- * which *is* the shell's, for the reason below.
- *
- * `RefLinks` wraps the lot, which is why it is here and not in the console: the
- * drawer and the modals draw references too, and a provider inside `ConsoleRoot`
- * would leave every one of them throwing. It carries the two things a reference
- * needs and no surface should have to be handed — the provider's URLs, and the
- * way onto a goal's page.
- *
- * `AgentDrawer` and the modals are here because each is *overlaid* rather than
- * placed: which one is open is cockpit state — the drawer's subscription is tied
- * to it — and every surface that opens one is somewhere else on the page. The
- * console asks the way it asks for a plan (`actions.select(id)`, a flag on the
- * seam) and the shell answers.
- */
 export function App() {
   const status = useCockpit();
 
   if (status.kind === 'denied') return <LockedOut error={status.error} />;
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
-  // The modal hangs off the shell for the same reason the drawer does — it is
-  // shared, and the seam forbids the presentation layer reaching `api.js` to open
-  // it another way.
   const state = status.view.state;
   const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
   const planModal = viewedPlan ? (
@@ -92,9 +52,6 @@ export function App() {
       watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
-      // What the goal has cost so far, for the approval bar. Read off the enriched
-      // issue rather than summed here: it is `rollUpIssueSpend`'s own figure, and a
-      // second sum could print a total that disagreed with the goal page's.
       spend={state.world.issues.find((i) => `issue:${i.number}` === viewedPlan.originRef)?.spend ?? null}
       planning={state.planning}
       now={status.view.now}
@@ -121,14 +78,8 @@ export function App() {
     <RefLinks
       refUrls={state.refUrls}
       openGoal={(ref) => status.actions.selectGoal(ref)}
-      // Whether a ref has a page, asked the one way the queue rail asks it: a
-      // link onto a goal the snapshot does not carry opens a surface that draws
-      // nothing, and the tracker's page is the honest destination for one.
       hasGoal={(ref) => goalIssue(state, ref) !== undefined}
       openPr={(prNumber) => status.actions.selectPr(prNumber)}
-      // The same question for a pull request, asked the same way and for the same
-      // reason: the page is built from the snapshot, so a pull request the world
-      // no longer carries has no page to open.
       hasPr={(prNumber) => hasPrPage(state, prNumber)}
     >
       <ConsoleRoot view={status.view} actions={status.actions} />

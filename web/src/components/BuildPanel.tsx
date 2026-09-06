@@ -4,25 +4,10 @@ import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { logUsage } from '../cockpit/usage.js';
-// The headline is the rail row's sentence too — one wording for one fact, said on
-// the surface that asks and on the surface that explains.
 import { upgradeHeadline } from '../view/updateAsks.js';
 
-/**
- * What the running build is, what is waiting for it, and how to take it.
- *
- * **The panel's job is to make the choice, not the update.** Nothing here pulls
- * anything: an upgrade is applied by the supervisor between two dead processes, and
- * every control on this screen either records an intent or takes a reading. What it
- * therefore owes the operator is the two facts that decide which control to press —
- * what changed upstream, and what the fleet is doing right now — and it puts them
- * next to each other for exactly that reason.
- *
- * **Draining is the recommended path and is drawn first.** Applying with agents
- * live is not lossy — they are interrupted resumably and restored on the way back
- * up without anyone being asked — but it is still a thing done to work in flight,
- * so it sits behind the second button and says what it will do.
- */
+// → docs/spec/17-cockpit.md
+
 export function BuildPanel({
   build,
   project,
@@ -32,7 +17,6 @@ export function BuildPanel({
   onPull,
 }: {
   build: BuildReading;
-  /** The worked checkout's name — `projectName`, so it is shortened one way. */
   project: string;
   now: number;
   onUpgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) => Promise<unknown> | unknown;
@@ -88,33 +72,6 @@ export function BuildPanel({
   );
 }
 
-/**
- * The **worked** repository, under the harness's own: what has landed on the branch
- * the fleet integrates onto that this clone has not got, and whether the checkout
- * is clean.
- *
- * It was a card on the Overview beside one for the harness's own build, and both
- * came here for one reason: a reading that says `current` nearly all its life spends a page's worth of
- * room saying so, and the moment upgrading became a request on the rail the cards
- * had nothing left but the changelog this panel already draws in full.
- *
- * Under the build rather than beside it, and read on the same timer by the same
- * reader — two answers to one question an operator asks once. They are still two
- * different repositories: `repoRoot` and the install directory coincide only when
- * the harness is dogfooding itself ([21](../../../docs/spec/21-self-update.md)).
- *
- * **The git status is on the glass**, because it is not merely informative: an
- * upgrade is refused over uncommitted changes in *either* checkout, so this line is
- * half of the answer to why the controls above it are missing.
- *
- * **The one control the cockpit offers on a repository it does not own** is Pull,
- * and it survives on exactly one deployment: the one that turned
- * `selfUpdate.projectAutoPull` off. With auto-pull on, a checkout that *could* be
- * pulled has been. Every refusal stays in its own words either way, because "why is
- * this three commits behind" is the question this section is read for — and the rail
- * asks about it too, but only where auto-pull was supposed to have handled it.
- * → `web/src/view/updateAsks.ts`
- */
 function Project({
   build,
   name,
@@ -171,13 +128,6 @@ function Project({
   );
 }
 
-/**
- * What the checkout is and how it stands, in one sentence.
- *
- * The status is said in the words of what it *costs*, never as the bare adjective:
- * `dirty` is a git term for a state whose consequence here is that the harness will
- * not upgrade, and the consequence is the half worth reading.
- */
 function projectLine(standing: BuildReading['project'], name: string): string {
   if (standing === null) return `${name} is not being watched — no reading of the project checkout is configured.`;
   if (standing.unavailable !== null) return standing.unavailable;
@@ -192,14 +142,6 @@ function projectLine(standing: BuildReading['project'], name: string): string {
   return `${name}${on} — ${waiting}, ${status}`;
 }
 
-/**
- * The controls, which depend on where the upgrade already is.
- *
- * An unsupervised deployment gets the commands instead of the buttons: the app
- * exits on Apply and nothing would start it again, and a button that stops the
- * fleet permanently is worse than no button. It is not hidden silently — the line
- * above it says what to run to get the button.
- */
 function Controls({
   build,
   onUpgrade,
@@ -237,9 +179,6 @@ function Controls({
         <AsyncButton
           ghost
           onClick={() => {
-            // Declining puts the intent back to idle, which is the state it was
-            // in before — so nothing durable distinguishes a declined upgrade
-            // from one nobody was ever offered.
             logUsage('upgrade.reject');
             return onUpgrade('cancel');
           }}

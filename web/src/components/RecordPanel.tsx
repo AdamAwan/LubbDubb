@@ -6,32 +6,8 @@ import { WorkRow } from './workTree.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * The durable record of what the harness did — the one surface that outlives the
- * world. Every other panel draws the snapshot, so each of them forgets a PR the
- * moment it ages out of `closedPrWindowMs`; this one still knows that PR #40
- * merged, and which issue it delivered.
- *
- * **A panel rather than a nav tab.** It was the console's second destination, and
- * by the end it was drawing almost nothing at full weight: a goal's own subtree
- * moved onto its goal page, where the reader already is, and the triage list that
- * was left at its head belongs with the other triage, on the tickets tab. What
- * remains is a record you consult — an archive, opened when a question sends you
- * to it — and the nav is for the surfaces work happens *on*. Kept rather than
- * dropped, because it is the only way to a root whose ticket the world has
- * forgotten: `Ref` is what knows whether a ref still has a goal page, and a
- * surface that assumed one would make those records unreachable rather than
- * relocated.
- *
- * **Fetched on open, never polled.** The graph rides its own routes rather than
- * `/api/state` because that endpoint comes round every couple of seconds and the
- * graph only ever grows — the roots are read once, a subtree when one is expanded.
- * That is the whole reason `/api/work` and `/api/work/:ref` are two routes, and a
- * panel is what makes "on open" honest: nothing fetches until it is opened.
- *
- * It is a lens: nothing here (and nothing in the dispatcher) decides anything from
- * what it draws. → `docs/spec/17-cockpit.md#the-record-panel`
- */
+// → docs/spec/17-cockpit.md
+
 export function RecordPanel({ now }: { now: number }) {
   const [roots, setRoots] = useState<WorkNodeView[]>([]);
   const [rootUrls, setRootUrls] = useState<Record<string, string>>({});
@@ -44,13 +20,10 @@ export function RecordPanel({ now }: { now: number }) {
       setRoots(r.roots);
       setRootUrls(r.refUrls);
     });
-    // Read once on mount — the panel is fetched, never polled.
   }, []);
 
   useEffect(() => {
     if (open === null) return;
-    // Cleared first, so an expanded root never shows the previous one's tree
-    // while its own is in flight.
     setSubtree(null);
     let live = true;
     void api.getWorkSubtree(open).then((r) => {
@@ -64,9 +37,6 @@ export function RecordPanel({ now }: { now: number }) {
   if (roots.length === 0) {
     return <p className="empty">Nothing recorded yet — the graph fills in from the next pulse.</p>;
   }
-  // A goal root is the one kind of record with somewhere better to be: its whole
-  // subtree is drawn on its goal page. What is left at full weight is what has no
-  // page — operator jobs, and the work items filed for them.
   const goals = roots.filter((r) => r.ref.startsWith('issue:'));
   const loose = roots.filter((r) => !r.ref.startsWith('issue:'));
   return (

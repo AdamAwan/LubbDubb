@@ -4,28 +4,8 @@ import type { McpChannelPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
 
-/**
- * How to point the operator's **own** Claude Code at this harness.
- *
- * The desktop channel is unconditional — every start binds the stable socket,
- * mints the credential and rewrites the `/lubbdubb` skill — but the one thing an
- * operator has to do by hand, exactly once, is register the bridge with
- * `claude mcp add`. Until #244's config page grew this tab that command existed in
- * two places, neither of which is where somebody looks for it: a boot line that
- * has scrolled away, and `docs/spec/11-mcp-tools.md`. A channel nobody registered
- * is a **Copy desktop prompt** button that reaches nothing, and it fails exactly
- * the way this repo's sharp edges do — silently, looking like a harness that
- * simply never asks for a check to be run here.
- *
- * **Every value is read off the running channel** (`/api/mcp`), not written down
- * here: the bridge path is resolved from the server module's own URL, so it is
- * right in a checkout and in a `dist` install; the paths come from `validation.*`,
- * so an operator who moved either sees where it went; and the tool list is what
- * `tools/list` would answer. A tab that restated any of it would be a second copy
- * of the install instructions, correct on the day it was written.
- *
- * → `docs/spec/11-mcp-tools.md#the-desktop-channel`
- */
+// → docs/spec/17-cockpit.md
+
 export function McpTab() {
   const [mcp, setMcp] = useState<McpChannelPayload | null>(null);
 
@@ -120,14 +100,6 @@ export function McpTab() {
   );
 }
 
-/**
- * One paste-able line, with the copy button beside it.
- *
- * The command is selectable as well as copyable for the desktop prompt's reason:
- * a copy that silently did nothing — no clipboard permission, a browser that
- * refuses it over plain HTTP — would leave an operator with nothing, and the text
- * is the thing they came for.
- */
 function Command({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -149,15 +121,6 @@ function Command({ text }: { text: string }) {
   );
 }
 
-/**
- * The argv as a shell would need it back.
- *
- * Windows is the case this exists for, and it is not hypothetical: the bridge
- * lives under the harness's install directory and `process.execPath` is routinely
- * `C:\Program Files\nodejs\node.exe`. Unquoted, the line an operator pastes
- * registers a server called `C:\Program` — which succeeds, and fails later as a
- * channel that will not connect.
- */
 export function shellArgv(argv: readonly string[]): string {
   return argv.map((arg) => (/[\s"]/.test(arg) ? `"${arg.replaceAll('"', '\\"')}"` : arg)).join(' ');
 }

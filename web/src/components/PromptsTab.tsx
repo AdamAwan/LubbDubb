@@ -5,36 +5,12 @@ import { Modal } from './Modal.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
-/**
- * What the harness says to its agents. Every agent-facing prompt the rule
- * dispatcher composes has a stable id and a wording an operator may replace, and
- * until now the only way to read either was the source: the built-in text lives
- * in `src/dispatcher/promptTemplates.ts` and the override in a file on the
- * server's disk, neither of which the person watching the cockpit necessarily
- * has to hand.
- *
- * **Fetched on open, never polled** — the mirror of the work graph's reason
- * rather than a copy of it. The graph is fetched because it only ever grows;
- * this is fetched because it never changes at all: `loadPromptTemplates` reads
- * the override directory once at boot, so re-sending the book on every
- * `/api/state` poll would be paying for a constant.
- *
- * **Read-only.** Overriding a prompt stays a file drop into `promptTemplatesDir`,
- * which is why the panel names that path for each id whether or not one exists —
- * that is what makes a viewer actionable without a write route whose only honest
- * answer to "when does this take effect" is "at the next restart".
- *
- * A **tab of the settings modal** since #244, rather than a disclosure hanging
- * under the Work panel. The book is operator-facing configuration and belongs
- * beside the rest of it; the disclosure toggle is gone because a tab already
- * answers "is this open", and two collapse states in one panel is one too many.
- */
+// → docs/spec/17-cockpit.md
+
 export function PromptsTab() {
   const [book, setBook] = useState<{ dir: string | null; templates: PromptTemplateView[] } | null>(null);
   const [shown, setShown] = useState<PromptTemplateView | null>(null);
 
-  // Fetched when the tab first mounts. The modal keeps every tab's body mounted
-  // once visited, so switching away and back does not re-fetch a constant.
   useEffect(() => {
     let live = true;
     void api.getPrompts().then((b) => {
@@ -57,20 +33,12 @@ export function PromptsTab() {
   );
 }
 
-/**
- * The file an operator would create (or has created) to override prompt `id`.
- * The separator is taken from the directory rather than assumed: the server
- * resolves `promptTemplatesDir` to an absolute path, so on Windows it arrives
- * backslashed and a hardcoded `/` would hand the operator a path in two
- * dialects — one they cannot paste into a shell.
- */
 export function overridePath(dir: string | null, id: string): string {
   if (!dir) return `<promptTemplatesDir>/${id}.md`;
   const trimmed = dir.replace(/[/\\]$/, '');
   return `${trimmed}${trimmed.includes('\\') ? '\\' : '/'}${id}.md`;
 }
 
-/** The doc's opening sentence — enough to tell the rows apart in the list. */
 function firstSentence(doc: string): string {
   return /^[^.]*\./.exec(doc)?.[0] ?? doc;
 }

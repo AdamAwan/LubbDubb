@@ -15,34 +15,10 @@ import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
 import { Label } from './label.js';
 
-/**
- * Reliability: did the work finish, and did it go green?
- *
- * The Economics tab says what the window cost and what landed; this says what
- * happened to the runs in between. It was the Yield panel, and the two changes
- * that came with the move are both about honesty rather than layout.
- *
- * **It is measured over the page's window, both halves.** The run half used to
- * be all-time and the CI half a rolling fortnight, so a completion rate and a
- * red rate sat side by side describing two different stretches of the fleet's
- * life with nothing on the glass saying so.
- *
- * **The causes moved to a tab of their own.** They were the third block here,
- * read below two other readings, which is where an operator stops scrolling —
- * and they are the one surface that shows the taxonomy is being used rather than
- * guessed at.
- *
- * What the cockpit owns is presentation: the outcome colours, in the stylesheet
- * as `--rl-<outcome>`. Grey is doing real work in that palette — a killed run is
- * not a fault, and colouring it like one makes every steered fleet look broken.
- *
- * → docs/spec/17-cockpit.md#reliability
- */
+// → docs/spec/17-cockpit.md
+
 export function ReliabilityTab({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   const { runs, ci } = insights;
-  // Nothing settled is a real state and not an empty one: a harness whose first
-  // agents are still out has no outcomes yet, and every rate below would be a
-  // zero standing in for "not yet". Say which it is.
   if (runs.settled === 0) {
     return (
       <p className="empty">
@@ -86,21 +62,6 @@ export function ReliabilityTab({ insights }: { insights: ReliabilityInsights }):
   );
 }
 
-/**
- * The panel as a file: six sections in the order the panel draws them, parted by
- * blank lines and each headed by its own name. Spend's export read across, so
- * these two can be opened side by side — which is what the panels are for.
- *
- * **Figures go out raw**, and here that matters more than on the spend panel: a
- * rate is shipped as a fraction rather than the rounded percent on screen, and a
- * duration in milliseconds rather than `3.4h`. `fmtDuration` is the reading a
- * person wants and the one nothing can be recomputed from.
- *
- * The three caveats the panel argues in prose are rows here — the two halves
- * measured over different windows, a red being a verdict rather than a pull
- * request, and stopped not being failed. On paper there is no method note to read
- * them off.
- */
 export function reliabilityCsv(insights: ReliabilityInsights, remedies: RemedyInsights | null): string {
   const { runs, ci } = insights;
 
@@ -127,18 +88,10 @@ export function reliabilityCsv(insights: ReliabilityInsights, remedies: RemedyIn
     ['Still red', ci.unrecovered],
     ['Red checks cost (USD)', ci.ciCostUsd],
     ['Landing cost over the window (USD)', ci.landingCostUsd],
-    // One window for both halves now, and the file says which — a reader six
-    // months from now has no time bar beside it to work it out from.
     ['Window', insights.window.label],
     ['Window opened (ISO)', insights.window.since ?? 'no lower bound — all time'],
-    // A red is a verdict, not a pull request: one PR that failed nine times is
-    // nine reds, and a reader summing the red column needs to know which.
     ['A red is', 'one CI verdict, not one pull request'],
-    // One CI agent often answers several reds at once, so a PR that went red four
-    // times and was fixed once divides the same money four ways.
     ['Cost per red is', 'per verdict, not per fix — the price of breaking, not of repairing'],
-    // Stopped is somebody's decision, and a fleet an operator steers is not an
-    // unreliable one — only faults count against the rate.
     ['Counts against the completion rate', 'failed and crashed only — stopped runs do not'],
     ['Generated (ISO)', insights.generatedAt],
     [],
@@ -148,8 +101,6 @@ export function reliabilityCsv(insights: ReliabilityInsights, remedies: RemedyIn
     ...runs.byOutcome.map((o) => [o.outcome, o.label, o.blurb, o.runs, o.costUsd]),
     [],
 
-    // Rolling 24h buckets, so the label is the instant each one opens and never a
-    // calendar date — the panel's `now` axis, written out.
     ['CI verdicts by day'],
     ['Bucket start (ISO)', 'Red', 'Green'],
     ...ci.timeline.buckets.map((b) => [b.startsAt, b.red, b.green]),
@@ -182,21 +133,10 @@ export function reliabilityCsv(insights: ReliabilityInsights, remedies: RemedyIn
     [`The ${runs.repeats.length} most-repeated of ${runs.repeatedOrigins} origins that ran more than once.`],
     [],
 
-    // The Causes half, on the same file rather than one of its own: it is a
-    // section of this panel and shares its window, and an operator taking two
-    // files away would have two fortnights to reconcile.
     ...causeRows(remedies),
   ]);
 }
 
-/**
- * The four headline figures.
- *
- * Completion and red rate are the two the panel exists for. The other two are
- * their prices — money on runs that failed, and the time a pull request spends
- * unlandable — because a rate with no cost beside it is a statistic, and the
- * question an operator opened this on was whether to do something about it.
- */
 function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   const { runs, ci } = insights;
   return (
@@ -254,7 +194,6 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   );
 }
 
-/** Every settled run as one bar, in the order the outcomes are worth reading. */
 function OutcomeBar({ outcomes, total }: { outcomes: readonly RunOutcomeTotal[]; total: number }): JSX.Element {
   return (
     <div className="sp-bar sp-well" role="img" aria-label={outcomes.map((o) => `${o.label} ${o.runs}`).join(', ')}>
@@ -270,7 +209,6 @@ function OutcomeBar({ outcomes, total }: { outcomes: readonly RunOutcomeTotal[];
   );
 }
 
-/** The legend, which is also the table: what each ending is, and what it came to. */
 function OutcomeKey({ outcomes, total }: { outcomes: readonly RunOutcomeTotal[]; total: number }): JSX.Element {
   return (
     <table className="sp-tbl">
@@ -302,24 +240,10 @@ function OutcomeKey({ outcomes, total }: { outcomes: readonly RunOutcomeTotal[];
   );
 }
 
-/**
- * CI verdicts a day at a time, red stacked on green.
- *
- * Stacked rather than two series, because the reading is a *ratio*: what matters
- * is how much of each day's bar is red, and two lines make that a comparison
- * instead of a glance. Bars for the spend graph's reason — these are counts over
- * a period, not samples of a rate, and a line between two days would imply the
- * pipeline ran smoothly between them.
- *
- * The buckets roll: the last one is the last 24 hours, not today, because a
- * calendar day needs a timezone the harness has no opinion about.
- */
 function CiTimeline({ ci }: { ci: CiHealth }): JSX.Element {
   const { buckets } = ci.timeline;
   const days = buckets.length;
   const peak = Math.max(...buckets.map((b) => b.red + b.green), 0);
-  // Counts, so the axis is whole verdicts — a gridline at 2.5 CI runs is a lie
-  // about what is being measured.
   const top = Math.max(1, peak);
   const width = (PLOT.right - PLOT.left) / days;
   const height = PLOT.bottom - PLOT.top;
@@ -372,15 +296,6 @@ function CiTimeline({ ci }: { ci: CiHealth }): JSX.Element {
   );
 }
 
-/**
- * Completion by phase — where a fleet-wide rate stops being one number.
- *
- * The phases are the spend panel's own, named by the server from the same
- * classifier, so a row here and a row there are about the same set of runs. That
- * is the join the two panels are built for: `landing` costing a fortune is a
- * question, and `landing` costing a fortune *while finishing 60% of the time* is
- * an answer.
- */
 function Phases({ phases }: { phases: readonly RunPhaseHealth[] }): JSX.Element {
   if (phases.length === 0) return <p className="empty">Nothing has settled yet.</p>;
   return (
@@ -433,7 +348,6 @@ function Phases({ phases }: { phases: readonly RunPhaseHealth[] }): JSX.Element 
   );
 }
 
-/** The pull requests CI kept sending back, reddest first. */
 function Flakiest({ ci }: { ci: CiHealth }): JSX.Element {
   if (ci.flakiest.length === 0) {
     return (
@@ -489,14 +403,6 @@ function Flakiest({ ci }: { ci: CiHealth }): JSX.Element {
   );
 }
 
-/**
- * Origins the harness ran more than once.
- *
- * A ranking, never a count of mistakes — a part agent that lands and then answers
- * review comments legitimately runs twice. It earns a table because the expensive
- * kind of repetition is invisible everywhere else: a goal whose card shows one
- * number quietly went round four times.
- */
 function Repeats({
   repeats,
   repeatedOrigins,
@@ -543,20 +449,6 @@ function Repeats({
   );
 }
 
-/**
- * What the numbers are, stated where they are read.
- *
- * The sentence about the two halves being measured over different windows is
- * gone, because they no longer are — which was the point of the time bar. What
- * replaces it is the one thing a single window makes newly worth saying: a rate
- * over a short window is a rate over few runs, and the reader deciding whether
- * to act on 60% wants to know it is 60% of five.
- *
- * The rest stands: a red is a rate over CI *verdicts*, not over pull requests,
- * so a single pull request that failed nine times is nine reds; and stopped is
- * not failed. Both are the kind of thing a reader would otherwise discover by
- * disbelieving the tab.
- */
 function Method({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   const { runs, ci } = insights;
   return (

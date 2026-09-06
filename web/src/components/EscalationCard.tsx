@@ -11,6 +11,8 @@ import { Panel } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
+// → docs/spec/17-cockpit.md
+
 export function EscalationCard({
   escalation,
   proposal,
@@ -32,72 +34,27 @@ export function EscalationCard({
   onViewPlan,
 }: {
   escalation: Escalation;
-  /** The act this item asks you to authorize, when it is a decision and not a question. */
   proposal?: Proposal;
-  /**
-   * When the agent that raised this was last seen working *after* it parked, if it
-   * was — parking is only a request, so an agent may carry on and leave the question
-   * standing with nobody waiting. Shown as a chip rather than clearing the item.
-   */
   resumedAt?: string | null;
   now?: number;
   refUrls: Record<string, string>;
-  /** `config.desktopFolder` — the checkout a Claude Code hand-off opens on. */
   desktopFolder: string;
   onAnswer: (text: string) => Promise<unknown> | unknown;
-  /**
-   * Answer a questionnaire: one entry per question, positional, null for the ones
-   * left blank. Separate from {@link onAnswer} because the server folds these into
-   * the single reply the agent reads — the cockpit must not invent that wording,
-   * or two clients would say the same thing differently.
-   */
   onAnswerQuestions?: (answers: (string | null)[]) => Promise<unknown> | unknown;
-  /**
-   * The verdict, with the caveat ids the operator ticked. `acknowledged` is what
-   * releases the accept server-side — the glass holding the button is the same
-   * answer given earlier, not the enforcement.
-   */
   onDecide?: (
     id: string,
     verdict: 'accept' | 'reject',
     note?: string,
     acknowledged?: string[],
   ) => Promise<unknown> | unknown;
-  /**
-   * A plan proposal's other two answers: close the ticket (the note becomes its
-   * comment), or hold it (the watch tag comes off and the plan waits). Separate from
-   * {@link onDecide} because neither is a verdict on the plan — rejecting sends the
-   * goal back to a planner, which is the wrong answer to both.
-   */
   onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
-  /**
-   * A shortfall proposal's third arm: the assessment is wrong, and the note says why.
-   * Separate from {@link onDecide} because it is a verdict on the finding behind the
-   * act rather than on the act — neither accept nor reject can say it.
-   */
   onOverrule?: (issueNumber: number, proposalId: string, text: string) => Promise<unknown> | unknown;
-  /** Allow or deny a permission request an agent is blocked on (issue #130). */
   onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
-  /** Clear the item without answering it — the note rides along and is recorded. */
   onDismiss?: (id: string, note?: string) => Promise<unknown> | unknown;
-  /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
-  /**
-   * End the originating agent on the *done* terminal. The commonest item in this
-   * panel is an agent that ended its turn without a done sentinel and is asking
-   * for direction — and often the direction is "you're finished".
-   */
   onComplete?: (agentId: string) => Promise<unknown> | unknown;
-  /**
-   * When the harness will record this agent done by itself — set only for the park
-   * it applies to, an agent that ended a turn without saying whether it had
-   * finished. Everything else on this panel is a question somebody asked, and a
-   * question that expires is worse than no question at all.
-   */
   stallExpiresAt?: string | null;
-  /** Buy more of that time. Offered only alongside {@link stallExpiresAt}. */
   onExtend?: (agentId: string) => Promise<unknown> | unknown;
-  /** Open the full plan behind a `plan` proposal — the card carries what it does, not how it is cut up. */
   onViewPlan?: (planId: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -105,70 +62,22 @@ export function EscalationCard({
   const send = useAsyncAction();
   const { context } = escalation;
   const signal = describeSignal(context.originRef, context.prNumber);
-  // A live permission request: the agent is blocked inside a tool call awaiting the
-  // operator's allow/deny. Like a proposal, free text can't stand in for the verdict.
   const permission = context.permission && onPermission ? context.permission : null;
-  // Options the agent supplied through the `escalate` tool beat the prompt-text
-  // heuristic: the agent knows what the choices are, where `quickAnswers` can only
-  // guess from wording. Fall back to the guess when it didn't say (the sentinel path).
   const offered = agentOptions(context.options);
   const quick = offered ?? quickAnswers(escalation.prompt);
-  // Several questions asked at once. The list does not unpack into the panel —
-  // "Needs you" is a list of things needing you, and one item that becomes three
-  // is a list that no longer reads as one — so the card carries a count and a
-  // button, and the questions live in the modal.
   const questions = onAnswerQuestions ? questionnaire(context.questions) : null;
-  // A decision, not a question. Free text can't be branched on — that is the
-  // whole reason the proposal exists — so the text box is replaced rather than
-  // supplemented: the note rides *with* the verdict instead of standing in for it.
   const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
-  // What this plan raises, and the ticks against it. Read off the proposal — the
-  // same row the accept route reads — so the boxes and the gate cannot disagree.
-  // `useAcknowledgements` is called unconditionally: it is a hook, and a card whose
-  // proposal is settled simply gets an empty list.
   const caveats = planCaveatsOf(decidable ?? undefined);
   const ack = useAcknowledgements(caveats);
   const held = ack.outstanding.length > 0;
-  // Only a plan has a ticket behind it to close or hold, a planner to send it back
-  // to, and a conversation to open: a merge and a reply draft are acts on a pull
-  // request, and a shortfall is about work already delivered. So it is the one kind
-  // that draws `PlanAnswers` rather than the two-verdict row.
   const planDecidable = decidable?.kind === 'plan' && onDecide && onBackOut ? decidable : null;
-  // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
-  // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
-  // The countdown, drawn only where there is an agent to settle: a stall park is
-  // always attached to one, and a card without the agent has no control to offer.
   const expiring = escalation.agentId && stallExpiresAt ? stallExpiresAt : null;
   const [headline, prose] = splitPrompt(escalation.prompt);
   const [ask, caution] = splitCaution(prose);
-  // What the card draws under its headline, and the whole of what a plan approval
-  // dropped. A plan's ask is four paragraphs the plan panel says better — why the
-  // planner split it that way, and what approving and rejecting do, which is what
-  // the two buttons' own hints say — and above it sits `detail`, the planner's
-  // diagnosis and approach, the same summary the plan sheet leads with. Drawing
-  // both made the card on the goal page taller than the goal page. What is kept
-  // is the appended caution, because it is the one part that is about *this*
-  // decision and appears nowhere else.
-  //
-  // A drafted reply drops its prose for the same reason and a plainer one: its
-  // body *is* the draft, which the card already draws in a block of its own with
-  // a label on it.
   const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
-  // The caution *is* the caveat list in prose, so drawing both would ask the
-  // operator to read the same three sentences twice — once as a paragraph and once
-  // beside a box. The checklist wins: it is the half that has to be acted on.
   const body = proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose;
-  // The plan behind a `plan` proposal. Drawn as its own control below the body
-  // rather than as one more ghost link among the agent actions: the card carries
-  // what the plan diagnosed and what it will do, and everything else about it —
-  // the split as a diagram, the evidence, the risks, what it ruled out — is in
-  // that panel. Reading it is the thing to do before approving, so it is the
-  // thing the card looks like it wants.
   const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
-  // The shortfall card's third arm. Offered only where it can act: it writes a
-  // verdict against a goal, so a proposal whose context lost the issue number gets
-  // the two arms it always had rather than a button that would 400.
   const overrulable =
     decidable?.kind === 'shortfall' && onOverrule && typeof context.issueNumber === 'number'
       ? { proposalId: decidable.id, issueNumber: context.issueNumber }
@@ -335,12 +244,6 @@ export function EscalationCard({
           </AsyncButton>
         </div>
       ) : planDecidable ? (
-        /* A plan's four answers, the same component the plan sheet draws below the
-           decomposition. The other three kinds keep the two-verdict row below: a
-           merge, a reply draft and a shortfall have no ticket to close, no planner
-           to send anything back to, and no conversation to open — which is what
-           made one row serving all four kinds a row that could only be labelled for
-           the commonest of them. */
         <>
           <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
           <PlanAnswers
@@ -368,10 +271,6 @@ export function EscalationCard({
             />
             <AsyncButton
               tone="primary"
-              // Disabled rather than hidden, and rather than left to 400: the button
-              // is where the operator is looking, so what is holding it belongs in
-              // its own hint. The route refuses it either way — this is the same
-              // answer given a step earlier.
               disabled={held}
               title={held ? heldTitle(ack.outstanding) : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')}
               onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined, ack.acknowledged)}
@@ -388,10 +287,6 @@ export function EscalationCard({
             {overrulable && (
               <AsyncButton
                 ghost
-                // Disabled rather than hidden until there are words, because the words
-                // *are* the act: an overrule with nothing in the box records "delivered"
-                // for a reason nobody can read, which is the assessment problem again
-                // with the operator's name on it.
                 disabled={text.trim().length === 0}
                 title={
                   text.trim().length === 0
@@ -457,60 +352,28 @@ export function EscalationCard({
   );
 }
 
-/**
- * A prompt's headline and its body: everything up to the first blank line, and
- * everything after it. Split here rather than at the authoring end because the two
- * halves are one author's words; text the harness quotes from an agent has a field of
- * its own (`context.detail`). A prompt with no blank line has no body.
- */
 function splitPrompt(prompt: string): [headline: string, body: string] {
   const at = prompt.search(/\r?\n\s*\r?\n/);
   return at === -1 ? [prompt.trim(), ''] : [prompt.slice(0, at).trim(), prompt.slice(at).trim()];
 }
 
-/**
- * A body's own prose and the caution the harness appended to it. `caveatNotice`
- * (`src/plans/planCaveats.ts`) writes its bullets under a `Before you decide:` line,
- * appended rather than interpolated, so no operator override can lose the marker.
- *
- * A card that drops the prose must keep the caution — except where the same caveats
- * are drawn as boxes to tick. No marker means no caution.
- */
 function splitCaution(body: string): [prose: string, caution: string] {
   const at = body.search(/(^|\n)Before you decide:/);
   return at === -1 ? [body, ''] : [body.slice(0, at).trim(), body.slice(at).trim()];
 }
 
-/**
- * Who wrote the block under the headline. **Declared by whoever quoted the text,
- * never derived here** — deriving it from `agentId` mislabels every plan approval,
- * since an assessor and a planner both arrive with no agent behind them. The fallback
- * names only what is known rather than guessing at a role.
- */
 function detailLabel(context: Record<string, unknown>, agentId: string | null | undefined): string {
   const declared = context.detailFrom;
   if (typeof declared === 'string' && declared.trim()) return declared.trim();
   return agentId ? 'Detail from the agent' : 'Detail';
 }
 
-/**
- * Why the button says something different on the two kinds that carry a verdict.
- * Dismissing must mean one thing everywhere — nothing goes out, nobody is left
- * blocked — so a permission request and a proposal are each routed to their own "no"
- * rather than dropped, and the label says so before it is pressed.
- */
 const DISMISS_HINT: Record<string, string> = {
   question: 'Clear this from "Needs you" without sending the agent anything',
   permission: 'Clear this by denying the command — the agent is told and carries on',
   proposal: 'Clear this by rejecting the proposal — nothing goes out',
 };
 
-/**
- * What each verdict does, per kind. Spelled out because they differ in a way the
- * word "reject" hides: refusing an outbound act is refusing to *do* something,
- * whereas refusing a plan sends it back to a planner — the button has to say so
- * before it is pressed.
- */
 const ACCEPT_LABEL: Record<string, string> = {
   merge: 'Approve merge',
   reply_draft: 'Approve & send',
@@ -527,10 +390,6 @@ const REJECT_HINT: Record<string, string> = {
   plan: 'Sends the plan back to a planner with your note; parts nothing has started for are retired',
 };
 
-/**
- * Turn a task's `originRef` (or a bare PR number) into a friendly label for the
- * signal chip, so the human sees which PR/issue triggered the work.
- */
 function describeSignal(originRef?: string | null, prNumber?: number): string | null {
   if (typeof prNumber === 'number') return `PR #${prNumber}`;
   if (!originRef) return null;
@@ -545,32 +404,18 @@ function describeSignal(originRef?: string | null, prNumber?: number): string | 
   }
 }
 
-// Words that mark a prompt as a yes/no decision worth a one-click answer.
 const YESNO = /\b(should|shall|can|may|is it ok|ok to|approve|proceed|do you want|would you like)\b/i;
 
-/** Quick-answer buttons for prompts that read like a yes/no decision. */
 function quickAnswers(prompt: string): string[] {
   return prompt.includes('?') && YESNO.test(prompt) ? ['Yes', 'No'] : [];
 }
 
-/**
- * The options an agent offered through the `escalate` tool, or null if it offered
- * none — null rather than `[]` so the caller can tell "the agent said nothing" from
- * "the agent offered no choices". `context` is an open bag from an agent's tool
- * arguments, so anything non-string is dropped rather than rendered.
- */
 function agentOptions(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const options = value.filter((o): o is string => typeof o === 'string' && o.trim() !== '');
   return options.length > 0 ? options : null;
 }
 
-/**
- * The questionnaire an agent raised, or null if it raised none. Defensive for the
- * same reason as {@link agentOptions}: `context` is an open bag whose contents
- * reached us from a model's tool arguments, so an entry without a question is
- * dropped rather than rendered as an empty card nobody can answer.
- */
 function questionnaire(value: unknown): AgentAskQuestion[] | null {
   if (!Array.isArray(value)) return null;
   const questions = value.flatMap((raw): AgentAskQuestion[] => {

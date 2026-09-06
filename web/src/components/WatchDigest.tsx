@@ -3,6 +3,8 @@ import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 
+// → docs/spec/17-cockpit.md
+
 /**
  * The post-deploy watch, as the plan sheet draws it: each declared check with its
  * query, what it expects, and what the dry run read against the environment.
@@ -31,7 +33,6 @@ export function WatchDigest({
 }: {
   watches: GoalWatch[];
   refUrls: Record<string, string>;
-  /** The operator's ruling on one pending declaration, or null where the goal is unknown. */
   onRule: ((checkId: string, accept: boolean) => void) | null;
 }) {
   if (watches.length === 0) return null;
@@ -81,14 +82,6 @@ export function WatchDigest({
   );
 }
 
-/**
- * What the check declared, in the words of the kind it is.
- *
- * The two are phrased apart because they are different claims: a signal declares
- * a count it must not exceed, and a measure declares a number against a threshold
- * or against what the same query read before the work arrived. One sentence over
- * both would have to be vague enough to be true of either.
- */
 export function expectation(check: GoalWatchInput & { baselineValue?: number | null }): string {
   if (check.kind !== 'measure')
     return check.tolerate === 0
@@ -109,18 +102,6 @@ export function expectation(check: GoalWatchInput & { baselineValue?: number | n
   return `${parts.join(', and ')}.`;
 }
 
-/**
- * What the environment said the one time it was asked.
- *
- * Shared with the goal page's own card rather than written twice: the two surfaces
- * draw the same reading, and a second copy of these words is one edit from two
- * surfaces disagreeing about what `unknown` means.
- *
- * **An `unknown` says why in words, and never in the vocabulary of a clean one.**
- * A failed observation, a timeout, a result that came back without the id echo and
- * a presence query answering zero are all the watch failing to *read* the
- * environment — and only a reading that came back can say anything about the work.
- */
 export function WatchReadingLine({ check, className = 'pm-wread' }: { check: GoalWatch; className?: string }) {
   if (check.dryRunVerdict === null || check.dryRunEnvironment === null)
     return (
@@ -136,15 +117,6 @@ export function WatchReadingLine({ check, className = 'pm-wread' }: { check: Goa
   );
 }
 
-/**
- * An agent's declaration, waiting on the operator.
- *
- * Drawn as a change rather than as a check, because that is what it is: the live
- * declaration above it still stands, and nothing here has been put to an
- * environment. Accepting applies it and runs it once; declining leaves the live
- * check exactly as it was, and drops a check that was never anything but a
- * proposal.
- */
 function Pending({ check, onRule }: { check: GoalWatch; onRule: ((id: string, accept: boolean) => void) | null }) {
   const proposal = check.proposal;
   if (proposal === null) return null;
@@ -180,12 +152,9 @@ function Pending({ check, onRule }: { check: GoalWatch; onRule: ((id: string, ac
   );
 }
 
-/** The three readings in the operator's words. `unknown` is never phrased as an absence of trouble. */
 function readingWords(verdict: WatchReadingVerdict, rows: number | null, baseline: number | null): string {
   if (verdict === 'unknown') return 'the watch could not read this environment';
   if (verdict === 'zero') return 'the query resolved and matched nothing';
-  // A measure's answer is its number, not its row count — and that number is the
-  // baseline, which is the whole reason the reading is kept rather than discarded.
   if (baseline !== null) return `the query is live and read ${baseline}, which is the baseline`;
   return rows === null
     ? 'the query is live and matching'

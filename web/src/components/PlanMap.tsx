@@ -1,34 +1,7 @@
 import type { PlanPartView, QueueItem } from '../types.js';
 
-/**
- * The decomposition, drawn.
- *
- * A plan is a directed graph — parts that stack, lanes that run in parallel, a
- * rejoin that waits for several — and until now the cockpit rendered it as a
- * vertical list with one sentence per part ("stacks on schema — based on that
- * part's branch"). That is the one thing in a plan only a picture can carry, and
- * it is also the one that is expensive to get wrong: the stack edge decides which
- * branch each part is cut from.
- *
- * **Waves left to right, one column per `depth`.** The depth is the server's own
- * (`partDepth`, a longest-path walk, shipped on the part) rather than one computed
- * here — a second implementation could draw a rejoin in a wave before the thing it
- * waits for, be internally consistent, and disagree with what actually runs.
- *
- * **The two edge kinds are drawn differently because they mean different things.**
- * A part with one dependency *stacks*: it starts as soon as that sibling pushes,
- * and is cut from its branch — a solid line, work flowing along it. A part with
- * several *rejoins*: it starts only once every one of them has merged, and is cut
- * from the integration branch — dashed, because nothing flows down any single one
- * of those edges. An operator who reads a rejoin as a stack expects work to start
- * far earlier than it will.
- *
- * SVG rather than boxes and CSS lines: the edges are the content, and orthogonal
- * connectors between arbitrary rows are what CSS cannot do without a grid of
- * spacer cells that lies about the structure.
- */
+// → docs/spec/17-cockpit.md
 
-/** Laid out in one pass so the edges can be drawn behind the nodes they connect. */
 interface Node {
   part: PlanPartView;
   x: number;
@@ -40,9 +13,7 @@ const NODE_H = 62;
 const COL_GAP = 58;
 const ROW_GAP = 14;
 const PAD = 12;
-/** Room above the first row for the wave captions. */
 const HEAD = 20;
-/** Room below the last row for the bus every wave-skipping edge is routed along. */
 const BUS = 30;
 
 export function PlanMap({
@@ -52,9 +23,7 @@ export function PlanMap({
   selected,
   onSelect,
 }: {
-  /** Live parts only — a retired one is not in the plan and has no wave. */
   parts: PlanPartView[];
-  /** The last pulse's ranked plan, by part origin. */
   queued: Map<string, QueueItem>;
   originOf: (slug: string) => string;
   selected: string | null;
@@ -67,8 +36,6 @@ export function PlanMap({
   const rows = Math.max(...waves.map((w) => w.length));
   const bottom = HEAD + PAD + rows * (NODE_H + ROW_GAP) - ROW_GAP;
   const bySlug = new Map(nodes.map((n) => [n.part.slug, n]));
-  // The bus lane only exists if something needs it — an ordinary chain leaves no
-  // gap under the last row it never uses.
   const skips = nodes.some((n) => n.part.dependsOn.some((slug) => spansAWave(bySlug.get(slug), n)));
   const height = bottom + PAD + (skips ? BUS : 0);
 
@@ -102,9 +69,6 @@ export function PlanMap({
         {nodes.flatMap((node) =>
           node.part.dependsOn.flatMap((slug) => {
             const from = bySlug.get(slug);
-            // A dependency the amendment dropped: drawn as nothing rather than as a
-            // line to the edge of the diagram, which would read as an edge to
-            // something off-screen.
             if (from === undefined) return [];
             const rejoin = node.part.dependsOn.length > 1;
             return [
@@ -193,13 +157,6 @@ function PartNode({
   );
 }
 
-/**
- * What a node says it is doing, and which colour says it.
- *
- * The queue is consulted only for a part that has not started, and only to say
- * *now* — a part the last pulse ranked for dispatch. Everything else is read off
- * the row, so the map cannot claim a state the parts list below it disagrees with.
- */
 function stateOf(part: PlanPartView, queue: QueueItem | undefined): { label: string; tone: string } {
   switch (part.status) {
     case 'merged':
@@ -217,8 +174,6 @@ function stateOf(part: PlanPartView, queue: QueueItem | undefined): { label: str
       if (queue?.status === 'dispatching') return { label: '▶ next', tone: 'live' };
       if (queue?.status === 'unapproved') return { label: 'unapproved', tone: 'wait' };
       if (queue?.status === 'capped') return { label: 'capped', tone: 'wait' };
-      // Said as what it is waiting for, not as `pending`: "waits for both" is the
-      // rejoin's whole behaviour and the thing a reader most often gets wrong.
       if (part.dependsOn.length > 1) return { label: `waits for all ${part.dependsOn.length}`, tone: 'wait' };
       if (part.dependsOn.length === 1) return { label: 'after the one above', tone: 'wait' };
       return { label: 'not started', tone: 'wait' };
@@ -226,13 +181,6 @@ function stateOf(part: PlanPartView, queue: QueueItem | undefined): { label: str
   }
 }
 
-/**
- * Columns by depth, rows by declared order within a column.
- *
- * Rows are packed rather than aligned to a dependency's row: a wave of six behind
- * a wave of one would otherwise be six rows tall with five gaps, and the vertical
- * position carries no meaning to lose — every edge is drawn explicitly.
- */
 function layout(parts: PlanPartView[]): Node[][] {
   const depth = Math.max(0, ...parts.map((p) => p.depth));
   const waves: Node[][] = [];
@@ -245,26 +193,12 @@ function layout(parts: PlanPartView[]): Node[][] {
   return waves;
 }
 
-/**
- * An orthogonal connector from one node's right edge to the next one's left.
- *
- * Straight when the rows line up and the waves are adjacent; otherwise out into
- * the gutter, across, and in — the turn is made at the midpoint of the column gap
- * so parallel edges share a spine instead of crossing each other diagonally.
- *
- * **An edge that skips a wave is routed along the bus below the diagram.** Drawn
- * directly it would pass straight through whatever sits between its ends, and a
- * line crossing a node reads as an edge *to* that node — which on a rejoin is
- * exactly the wrong reading, since the whole point is that the part waits for a
- * dependency two waves back as well as the one beside it.
- */
 function edge(from: Node, to: Node, bus: number): string {
   const x1 = from.x + NODE_W;
   const y1 = from.y + NODE_H / 2;
   const x2 = to.x;
   const y2 = to.y + NODE_H / 2;
   if (spansAWave(from, to)) {
-    // Down into the bus just after the source, along it, and up into the target.
     const drop = x1 + COL_GAP / 3;
     const rise = x2 - COL_GAP / 3;
     return `M${x1},${y1} H${drop} V${bus} H${rise} V${y2} H${x2}`;
@@ -274,17 +208,14 @@ function edge(from: Node, to: Node, bus: number): string {
   return `M${x1},${y1} H${mid} V${y2} H${x2}`;
 }
 
-/** Are these two nodes more than one wave apart — i.e. is there a column between them? */
 function spansAWave(from: Node | undefined, to: Node): boolean {
   return from !== undefined && to.x - from.x > NODE_W + COL_GAP + 1;
 }
 
-/** Long titles are clipped rather than wrapped: SVG text does not wrap, and the card below has the full one. */
 function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
-/** The map in one sentence, for a reader who is not looking at it. */
 function describe(parts: PlanPartView[]): string {
   const waves = Math.max(0, ...parts.map((p) => p.depth)) + 1;
   const rejoins = parts.filter((p) => p.dependsOn.length > 1).length;

@@ -3,38 +3,8 @@ import type { SpendPhase, SpendTrend, SpendTrendComparison, SpendTrendPhaseShift
 import { fmtTokens, fmtUsd } from './util.js';
 import { Label } from './label.js';
 
-/**
- * The trend behind the breakdown: three questions on one axis.
- *
- * The breakdown answers *where the money went* and every table on it is
- * all-time. This answers the question an operator has while actively trying to
- * spend less — **is what I did working** — which a total over time cannot, since
- * cost falls when a fleet is idle exactly as readily as when it is efficient.
- *
- * Three sections, in the order the questions arrive, and the shared axis is the
- * whole design: every chart is the same eight weeks at the same x, so a change
- * that shows up in one is read against the other two without a click.
- *
- * 1. **Are goals getting cheaper** — median cost of the goals that closed each
- *    week, with every goal drawn as a point beside it. The spread is drawn rather
- *    than summarised because goals differ in size, and a median alone would let a
- *    week that happened to close three small goals read as progress.
- * 2. **Which stages moved** — the cohort's phase split as a share band, and the
- *    same shift as **dollars** in the table beneath it. Both, always: a share
- *    column alone cannot tell planning-more-to-review-less from planning more for
- *    nothing, and that distinction is the reason this tab exists.
- * 3. **Did it still land** — completion rate and red checks per goal on the same
- *    weeks, plus the reading none of the others can make: goals that closed and
- *    came back. A fleet that got cheaper by giving up earlier looks like progress
- *    everywhere else here.
- *
- * The panel draws figures and never derives them. Medians, the two halves and
- * the phase shift are all `buildSpendTrend`'s — a second implementation of "the
- * median goal" a tab away from the first is exactly the disagreement the spend
- * module opens by refusing to have about a goal's cost.
- */
+// → docs/spec/17-cockpit.md
 
-/** Reading order, matching the breakdown's — the legend and the band agree by construction. */
 const PHASE_ORDER: readonly SpendPhase[] = [
   'deliberation',
   'build',
@@ -46,27 +16,9 @@ const PHASE_ORDER: readonly SpendPhase[] = [
   'other',
 ];
 
-/**
- * The plot box every chart shares, so one week sits at one x on all three — and
- * the viewBox they all draw into, which must be shared for the same reason. Two
- * charts at different widths scale to the same container at different rates, and
- * the shared axis this tab is built on quietly stops being shared.
- *
- * The right margin is wider than the box needs because one chart has a second
- * axis out there. Paying for it on all three is what keeps them aligned.
- */
 const PLOT = { left: 44, right: 600, top: 12, bottom: 128 };
 const VIEW_BOX = '0 0 646 150';
 
-/**
- * What one bar on this axis is called.
- *
- * The axis is **eight of whatever window the page is set to**, so the word is
- * the window's rather than a fixed "week": at 24h the bars are days, at 7d they
- * are weeks. Derived from the shipped bucket length rather than from the key,
- * because the unbounded window's period is computed from the history the
- * deployment actually has and has no key to look up.
- */
 function periodWord(trend: SpendTrend): string {
   const hours = trend.bucketMs / 3_600_000;
   if (hours <= 12) return `${Math.round(hours)}h period`;
@@ -76,20 +28,12 @@ function periodWord(trend: SpendTrend): string {
   return 'quarter';
 }
 
-/** A share as a rounded percentage, with `<1%` for a slice that is small but not absent. */
 function fmtPct(fraction: number): string {
   const pct = fraction * 100;
   if (pct === 0) return '0%';
   return pct < 1 ? '<1%' : `${Math.round(pct)}%`;
 }
 
-/**
- * A change as a signed percentage — `null` when there was nothing to change from.
- *
- * A phase that cost nothing earlier and something now has no ratio, and drawing
- * it as `+100%` or `—` would both be claims: the first arithmetic that is not
- * true, the second silence about a real new cost. It gets `new` instead.
- */
 function fmtChange(ratio: number | null): string {
   if (ratio === null) return 'new';
   const pct = Math.round(ratio * 100);
@@ -97,22 +41,11 @@ function fmtChange(ratio: number | null): string {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`;
 }
 
-/** Which way a change reads. Falling money is good; falling completion is not. */
 function toneOf(ratio: number | null, fallingIsGood: boolean): string {
   if (ratio === null || Math.round(ratio * 100) === 0) return 'level';
   return ratio < 0 === fallingIsGood ? 'good' : 'bad';
 }
 
-/**
- * The gap between two rates, in points — **taken from the percentages actually
- * drawn**, never from the fractions behind them.
- *
- * Both tiles that use this put the two rates on screen right above the gap, and
- * rounding each of 0.0833 and 0.0769 to `8%` while reporting their difference as
- * `−1 pts` is a panel visibly disagreeing with itself. Subtracting after
- * rounding is the only version an operator can check by eye, which is the only
- * check this figure will ever get.
- */
 function fmtPts(now: number | null, then: number | null): { text: string; delta: number | null } {
   if (now === null || then === null) return { text: 'no comparison', delta: null };
   const delta = Math.round(now * 100) - Math.round(then * 100);
@@ -120,13 +53,11 @@ function fmtPts(now: number | null, then: number | null): { text: string; delta:
   return { text: `${delta > 0 ? '+' : '−'}${Math.abs(delta)} pts`, delta };
 }
 
-/** A points gap's tone, from the same rounded figure the text states. */
 function ptsTone(delta: number | null, fallingIsGood: boolean): string {
   if (delta === null || delta === 0) return 'level';
   return delta < 0 === fallingIsGood ? 'good' : 'bad';
 }
 
-/** The x of a week's centre, and the width of its column. */
 function columns(count: number): { width: number; centre: (i: number) => number } {
   const width = (PLOT.right - PLOT.left) / count;
   return { width, centre: (i: number) => PLOT.left + i * width + width / 2 };
@@ -134,10 +65,6 @@ function columns(count: number): { width: number; centre: (i: number) => number 
 
 export function SpendTrendTab({ trend }: { trend: SpendTrend }): JSX.Element {
   const { buckets, comparison } = trend;
-  // Nothing has closed in the whole window, which is a real state and not an
-  // empty one: a fleet can be busy for a fortnight and land nothing. Every figure
-  // below would be a null standing in for "no goals yet", so say which it is
-  // rather than drawing eight empty weeks.
   if (buckets.every((w) => w.goalsClosed === 0)) {
     const unmeasured = buckets.reduce((n, w) => n + w.goalsUnmeasured, 0);
     return (
@@ -177,13 +104,6 @@ export function SpendTrendTab({ trend }: { trend: SpendTrend }): JSX.Element {
   );
 }
 
-/**
- * The four headline figures, each the recent half against the earlier one.
- *
- * Deltas rather than levels, because a level is what the breakdown already
- * shows: an operator on this tab has the number and wants to know which way it is
- * going.
- */
 function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
   const { comparison } = trend;
   const closed = trend.buckets.reduce((n, w) => n + w.goalsClosed, 0);
@@ -249,20 +169,10 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
   );
 }
 
-/**
- * Median cost per closed goal, with the cohort drawn as points.
- *
- * Bars for the medians because these are *totals for a period* rather than
- * samples of a rate — the breakdown's own argument for bars over a line, one
- * grain up. The partial week is outlined rather than filled: it is an under-count
- * by construction, and a hollow bar is the only way to draw a figure that is
- * going to grow.
- */
 function CostPerGoal({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { width, centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
   const peak = Math.max(...buckets.flatMap((w) => w.costs), 0);
-  // A floor, so a fortnight of very cheap goals does not draw full-height bars.
   const top = Math.max(peak, 0.01);
   const y = (cost: number) => PLOT.bottom - (cost / top) * height;
 
@@ -344,7 +254,6 @@ function CostPerGoal({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX
   );
 }
 
-/** What the first chart says, in a sentence, with the caveat it cannot draw. */
 function CostNote({
   buckets,
   comparison,
@@ -372,14 +281,6 @@ function CostNote({
   );
 }
 
-/**
- * The cohort's phase split, as a share band per week.
- *
- * A share rather than dollars, deliberately, and it is the chart most able to
- * mislead on its own — which is why the table underneath is not optional. A phase
- * whose share doubles while its dollars fall is a fleet doing the same work more
- * cheaply everywhere else, and the band alone draws that as a regression.
- */
 function PhaseBand({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { width, centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
@@ -439,14 +340,6 @@ function PhaseBand({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.E
   );
 }
 
-/**
- * The same shift in dollars — the one table this tab exists for.
- *
- * Share and absolute side by side, because they answer different questions and
- * the interesting cases are the ones where they disagree: a phase taking a larger
- * share of a smaller goal is money *saved*, and a share column on its own reports
- * it as a rise.
- */
 function PhaseShift({ phases }: { phases: readonly SpendTrendPhaseShift[] }): JSX.Element {
   const earlierTotal = phases.reduce((n, p) => n + p.earlierUsd, 0);
   const recentTotal = phases.reduce((n, p) => n + p.recentUsd, 0);
@@ -506,20 +399,9 @@ function PhaseShift({ phases }: { phases: readonly SpendTrendPhaseShift[] }): JS
   );
 }
 
-/**
- * Completion and red checks on the same weeks.
- *
- * Two axes, which is a thing to do sparingly and is earned here: the question is
- * whether these two move *together*, and that is a shape rather than a pair of
- * numbers. Completion is a rate on the left and reds are a count per goal on the
- * right, and neither is meaningful in the other's units.
- */
 function Landing({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
-  // The left axis floors at 50% rather than 0: a completion rate that has never
-  // been below half would otherwise draw as a flat line across the top, which is
-  // a picture of nothing.
   const rateY = (rate: number) => PLOT.bottom - Math.max(0, (rate - 0.5) / 0.5) * height;
   const peakReds = Math.max(...buckets.map((w) => w.redsPerGoal ?? 0), 1);
   const redY = (reds: number) => PLOT.bottom - (reds / peakReds) * height;
@@ -597,7 +479,6 @@ function Landing({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Ele
   );
 }
 
-/** What cheapness cost, if anything — the four readings a cost chart cannot make. */
 function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null }): JSX.Element {
   if (comparison === null) {
     return <p className="empty">Not enough complete weeks yet to compare the halves.</p>;
@@ -662,17 +543,6 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
   );
 }
 
-/**
- * What the numbers are, stated where they are read.
- *
- * The cohort/period distinction is the one that has to be here. Cost, tokens, the
- * phase split and reopens are properties of the goals that *closed* that week and
- * follow them back through however long they took; completion and reds are what
- * was observed *inside* the week. Both are right and they are right about
- * different spans — and a reader comparing a spike in one against a dip in the
- * other, which is exactly what the shared axis invites, will be comparing two
- * things unless something says so.
- */
 function Method({ trend }: { trend: SpendTrend }): JSX.Element {
   return (
     <div className="sp-method sp-well">

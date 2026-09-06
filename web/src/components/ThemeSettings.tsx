@@ -15,38 +15,10 @@ import { THEME_TOKENS, TOKEN_GROUPS, type ThemeToken, type TokenGroup } from '..
 import { ColourField } from './ColourField.js';
 import { Button } from './button.js';
 
-/**
- * The theme: a preset, and any token moved off it.
- *
- * Writable, like Notifications and unlike the rest of this page, and for the same
- * reason — it is a preference of this browser rather than of the harness, so it
- * answers "now" rather than "at the next restart". Nothing here reaches the server.
- *
- * ## Live preview is a DOM write, not a render
- *
- * A dragged colour input fires continuously. `onInput` does two things and they are
- * deliberately different in kind: {@link applyToken} writes the property straight to
- * `documentElement`, which *is* the preview, and `setDraft` records it so the rows
- * and the counts can redraw. React never sits in the drag path, which is what keeps
- * it smooth over a five-thousand line stylesheet.
- *
- * `onInput` rather than `onChange` is load-bearing: Chrome fires `change` on a
- * colour input only when the picker is dismissed, so `onChange` alone would give no
- * live preview at all while dragging.
- *
- * ## Leaving with unsaved edits keeps the preview
- *
- * On purpose — the whole point is to go and look at a real goal page in the theme
- * you are building. So the applier is a plain call and **never an effect whose
- * cleanup reverts it**, and the bar says what that costs: a reload drops them.
- *
- * Which is also why {@link setThemeUnsaved} is published from an effect with **no
- * cleanup**: the marker on the cog is the bar's sentence for everywhere the bar is
- * not, so unmounting this section must not clear it.
- */
+// → docs/spec/17-cockpit.md
+
 const SEARCH_HINT = 'Search by name, by what it is called, or by what it does';
 
-/** A row's current value: the operator's override, else what the sheet computes. */
 function shownValue(token: ThemeToken, draft: Readonly<Record<string, string>>): string {
   const override = draft[token.name];
   if (override !== undefined) return override;
@@ -58,8 +30,6 @@ export function ThemeSettings() {
   const [saved, setSaved] = useState<ThemePrefs>(() => loadThemePrefs());
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>(() => loadThemePrefs().overrides);
   const [preset, setPreset] = useState<PresetId>(() => loadThemePrefs().preset);
-  // Not on `Place`, for the reason the review step is not: a filter inside an
-  // unsaved edit is a step, not a destination. `?keys=` is the values tab's besides.
   const [query, setQuery] = useState('');
   const [onlyChanged, setOnlyChanged] = useState(false);
   const [advanced, setAdvanced] = useState(false);
@@ -69,8 +39,6 @@ export function ThemeSettings() {
 
   const dirty = preset !== saved.preset || THEME_TOKENS.some((t) => draft[t.name] !== saved.overrides[t.name]);
 
-  // No cleanup, on purpose — see the note above. Save and Revert both land here
-  // with `dirty` false, so nothing else has to clear it.
   useEffect(() => setThemeUnsaved(dirty), [dirty]);
 
   const choosePreset = (id: PresetId): void => {
@@ -102,8 +70,6 @@ export function ThemeSettings() {
     if (root) applyTheme(saved, root);
   };
 
-  // A statement about the preset rather than about the edit, which is why it sits
-  // beside the picker and not in the save bar.
   const resetAll = (): void => {
     setDraft({});
     setJustSaved(false);
@@ -255,9 +221,6 @@ export function ThemeSettings() {
       <div className="th-bar">
         <span className="th-barn">
           {dirty ? (
-            /* A preset change sets `dirty` but moves no token, so the count would
-               read zero of the thing the sentence says is unsaved — which reads as
-               "nothing pending" (issue #680). The message names what changed. */
             changed === 0 ? (
               <>
                 Preset <b>{presetLabel}</b>, unsaved — a reload drops it

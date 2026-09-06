@@ -1,85 +1,21 @@
 import type { ButtonHTMLAttributes, JSX, ReactNode } from 'react';
 
-/**
- * The cockpit's button: **one** control that does something when pressed, drawn
- * one way everywhere in the app.
- *
- * It exists for the same reason [`Tag`](./tag.tsx) and the
- * [control kit](./controls.tsx) do, and the copy it replaced had drifted four
- * ways at once:
- *
- * - **There were two button families.** The shared sheet's `.btn` and the
- *   console's `.cn-btn` were two vocabularies for the same four readings, and they
- *   had already parted company on shape, radius and accent: a 7px steel-blue
- *   primary in a modal and a 4px vivid-blue one on the goal page, both called
- *   "primary", with nothing saying which was meant.
- * - **`.cn-btn` rendered with no ground and no border.** `console.css` resets its
- *   own markup with `.cn button` at (0,1,1), which outranks a single class — so
- *   `.cn-btn.cn-primary` at (0,2,0) drew correctly while every plain console
- *   button beside it drew as bare text. That reset is *why* the second family
- *   grew; `.btn.btn` answers it at the source, so one rule now dresses a button
- *   wherever it sits.
- * - **`AsyncButton` prepended `btn` unconditionally**, so a console-family async
- *   button went out as `class="btn cn-btn"`: two base families on one element,
- *   settled by source order rather than by anything anybody wrote down.
- * - **Tone travelled as a class string**, including *through props* —
- *   `buttonClass="ghost small"` — and half the sites that received one prefixed
- *   `btn` themselves while half did not (`HumanTaskActions.tsx`, two lines
- *   apart). A string cannot say which half it is.
- *
- * **The rules the button keeps:**
- *
- * - **One button, one look.** There is no family, no surface variant and no
- *   opt-out. A primary button is the same button in a modal, on the config page
- *   and on a console card, because those are the same act.
- * - **Tone is a prop, never a class string.** `primary` for the one control a
- *   surface expects to be pressed, `danger` for one that destroys something,
- *   `secondary` — the default — for everything else. A caller cannot invent a
- *   fourth, and cannot spell one two ways.
- * - **Weight is `ghost`, not a third tone** — the same bargain `Tag` makes with
- *   `fill`. The quiet button and the ordinary one are the same box in the same
- *   colour and the ground is what ranks them, so a *destructive* button can also
- *   be a quiet one (`tone="danger" ghost`) without the two readings having to be
- *   spelled as one word. Written as a tone they could not combine, and
- *   `ConfirmButton`'s two quiet call sites would have had to give up their red to
- *   get their transparency.
- * - **`className` carries shape, never tone.** A surface that needs its own
- *   geometry — a header row, a drop target, a close cross — passes that class
- *   beside the tone, which is the bargain the review mark already makes with
- *   `t-green`. What it may not pass is a weight the props already spell.
- *
- * {@link buttonClass} is the seam for the components that are not buttons: the
- * async ones in [`AsyncButton`](./AsyncButton.tsx) and
- * [`ConfirmButton`](./ConfirmButton.tsx), which own a lifecycle this component
- * does not, and `DesktopLink`, which is an `<a>` because a deep link is a
- * destination.
- *
- * → docs/spec/17-cockpit.md#the-button
- */
+// → docs/spec/17-cockpit.md
+
 type ButtonTone = 'primary' | 'secondary' | 'danger';
 
-/** The weights a button may be drawn at. Omitted is the ordinary one. */
 export type ButtonSize = 'small';
 
-/**
- * The modifier each tone wears. `secondary` is the plain button and carries no
- * class of its own — it is spelled anyway, because a caller who means "the quiet
- * one beside the primary" should be able to say so rather than say nothing.
- */
 const TONE: Record<ButtonTone, string> = {
   primary: 'primary',
   secondary: '',
   danger: 'danger',
 };
 
-/** What a button wears. The one place the button's class names are spelled. */
 export type ButtonLook = {
-  /** What pressing this does. Omitted is `secondary`. */
   tone?: ButtonTone;
-  /** The quiet weight — the same tone with no ground. Never a tone of its own. */
   ghost?: boolean;
   size?: ButtonSize;
-  /** Shape only — a surface's own geometry, never a weight the props spell. */
   className?: string;
 };
 
@@ -127,14 +63,6 @@ export function withShape(look: ButtonLook, ...shape: (string | false | null | u
   return classes.length === 0 ? look : { ...look, className: classes.join(' ') };
 }
 
-/**
- * One button that acts.
- *
- * `type="button"` is the default and is the point of it being a component: a
- * `<button>` inside a `<form>` submits it, and the cockpit's forms have their own
- * submit in `SubmitButton`. A surface that genuinely wants the form's submit says
- * so.
- */
 export function Button({
   tone,
   ghost,

@@ -6,28 +6,8 @@ import { HeadRow } from './panel.js';
 import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
 
-/**
- * The shared insights page: what the whole pool spent, across fleets.
- *
- * It reads the pulled documents live. **It is not a committed artefact and there is
- * no generated file**, so there is nothing for two fleets to conflict on — which is
- * the whole of why the pool is a distribution mechanism and not a shared page that
- * tooling edits.
- *
- * Two things about it are load-bearing, and both are about what it refuses to draw.
- *
- * **`byCheck` appears only inside a project.** Three fleets on one problem produce
- * `test (windows)`, `ci/test-windows` and `Build & Test (win-latest)`; summed across
- * projects that is three rows of one instead of one row of three, and it renders
- * perfectly — a chart saying no single check causes much pain, with nothing red. So
- * the server answers `null` rather than a list, and this draws the reason.
- *
- * **A null cost is never `$0.00`.** A window in which nothing was measured and a
- * window that cost nothing are different facts, and the second is a claim that the
- * fleet worked for free.
- *
- * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`
- */
+// → docs/spec/17-cockpit.md
+
 export function PoolTab({
   payload,
   project,
@@ -48,8 +28,6 @@ export function PoolTab({
             aria-pressed={project === null}
             className={project === null ? 'on' : ''}
             onClick={() => {
-              // Narrowing the pool to a project is a re-cut of the reading, and
-              // nothing durable records that anybody did it.
               logUsage('pool.filter');
               actions.openInsights({ insightsView: 'pool', poolProject: null });
             }}
@@ -161,24 +139,6 @@ function Section({ title, note, rows }: { title: string; note: string; rows: Poo
   );
 }
 
-/**
- * What people did, across the pool.
- *
- * A table of its own rather than a {@link Section}, and the two columns are why.
- *
- * **The event count and the fleet count are drawn side by side and never summed.**
- * One operator amending forty plans and forty operators amending one each are the
- * same `Times` and opposite findings; a page that showed only the first would report
- * the two identically. The fleet count is drawn against the fleets publishing at
- * all, because a fleet is an engineer and that ratio is the whole of "how many
- * people" — no per-operator field exists anywhere behind this, which is what makes
- * the reading safe to draw.
- *
- * **No cost column.** What a person did has no dollar figure anywhere in the
- * harness, and a column of dashes is worse than no column.
- *
- * → `docs/spec/34-usage-metrics.md#the-digest-section`
- */
 function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
   return (
     <section className="pool-section">
@@ -230,14 +190,6 @@ function Caveat({ label, row, note }: { label: string; row: PoolRollupRow; note:
   );
 }
 
-/**
- * Who is in the pool, and what this build could make of each of them.
- *
- * A fleet **ahead of this build** is drawn as such rather than as a fleet that has
- * published nothing — the three verdicts' discipline, one level up: read as
- * absence, an unreadable document says in the operator's words that nobody else
- * knows anything.
- */
 function Fleets({ fleets }: { fleets: PoolFleetReading[] }): JSX.Element | null {
   if (fleets.length === 0) return null;
   return (

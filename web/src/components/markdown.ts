@@ -1,27 +1,8 @@
 import { createElement, Fragment, type ReactNode } from 'react';
 import { linkify } from './util.js';
 
-/**
- * A markdown subset, rendered to React nodes.
- *
- * Hand-written rather than a dependency, for the reason `ansi.ts` is: the
- * surface actually needed is small, and the text is **agent-authored**. A
- * renderer that produces React children never interprets HTML — React escapes
- * text — so there is no sanitiser to get wrong and no `dangerouslySetInnerHTML`
- * anywhere in the path. Anything it does not understand renders as its own
- * literal text, which is the right failure for a write-up: legible, never
- * executable.
- *
- * Supported: ATX headings (#..###), unordered and ordered lists, fenced code,
- * blockquotes, paragraphs, and inline `code`, **strong** and *emphasis*.
- *
- * `refUrls` turns `#142` and `issue:12` in prose into links, exactly as
- * {@link linkify} does for plain text. Passing it is what stops moving text *into*
- * a markdown block from silently unlinking it — the failure mode when an
- * escalation's body moved out of the linkified prompt and into `detail`. Code
- * spans and fenced blocks are reached by neither, which is the point: a ref
- * inside backticks is being shown to you, not offered to click.
- */
+// → docs/spec/17-cockpit.md
+
 export function renderMarkdown(source: string, refUrls: Record<string, string> = {}): ReactNode[] {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const out: ReactNode[] = [];
@@ -38,8 +19,6 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
 
-    // Fenced code first: everything inside is literal, including markdown that
-    // would otherwise be parsed (a write-up explaining markdown is not rare).
     const fence = /^```/.exec(line);
     if (fence) {
       flushParagraph();
@@ -99,21 +78,9 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
   return out;
 }
 
-/**
- * Inline spans, in one pass over a single alternation so the segments cannot
- * overlap — `code` wins, because a backticked `**x**` is showing you the
- * asterisks, not asking for bold.
- */
 function inline(text: string, k: () => string, refUrls: Record<string, string>): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)/g;
-  // Only the runs *between* spans: what falls to `code` is being shown, and
-  // strong/em carry their own text through here again on the next pass down.
-  //
-  // An empty map short-circuits to the bare string rather than running `linkify`
-  // for nothing: it wraps every ref token it finds in a `<span>` whether or not a
-  // URL resolved, so a caller that passes no refs would silently gain markup it
-  // never had. Every existing caller is in exactly that position.
   const prose = (slice: string) =>
     out.push(
       Object.keys(refUrls).length === 0 ? slice : createElement(Fragment, { key: k() }, linkify(slice, refUrls)),

@@ -6,39 +6,10 @@ import { Ref } from './refs.js';
 import { toCsv } from './Downloads.js';
 import { Label } from './label.js';
 
-/**
- * Economics: is the fleet worth what it costs?
- *
- * The Insights page opens here, and this tab is the answer to the question the
- * three panels it replaced each held a third of. Spend answered *how much*,
- * Output answered *how fast*, Yield answered *how much of it survived* — and
- * they were the numerator, the denominator and the leakage of a single ratio,
- * drawn on three surfaces over five different windows.
- *
- * **The ratio is the headline**, read left to right as one sentence: what the
- * window cost, what landed in it, what one landed change therefore cost, and how
- * much of the spend never landed at all. Every figure in it comes from one
- * payload over one window, which is what stops the sentence being a comparison
- * between two different fortnights.
- *
- * Under it, the same four readings the spend panel carried — where the money
- * went, when it went, which goal it went on, and which runs were dearest — with
- * the outcome columns folded into the phase table rather than repeated in a
- * second one on another tab.
- *
- * **Nothing here is derived in the browser.** The server ships the splits, for
- * `PrAttention`'s reason: a cockpit-side re-derivation of which goal a pull
- * request's money belongs to would be a second opinion about a decision made
- * elsewhere, drawn inches from the first. What the cockpit owns is presentation
- * — the phase colours, which live in the stylesheet as `--sp-<phase>`.
- *
- * → docs/spec/17-cockpit.md#economics
- */
+// → docs/spec/17-cockpit.md
+
 export function EconomicsTab({ insights }: { insights: SpendInsights }): JSX.Element {
   const { totals } = insights;
-  // Nothing measured is a real state and not an empty one: a fleet run entirely
-  // in PTY mode reports no usage at all, and every figure below would be a zero
-  // standing in for "unknown". Say which it is.
   if (totals.measuredRuns === 0) {
     return (
       <p className="empty">
@@ -79,20 +50,6 @@ export function EconomicsTab({ insights }: { insights: SpendInsights }): JSX.Ele
   );
 }
 
-/**
- * The one sentence the page exists to say: **spent ÷ landed = per landed
- * change**, with what never landed beside it.
- *
- * Four tiles rather than four unrelated figures, and the operators between them
- * are drawn because they are the reading — a page that put "$118" and "71" in
- * separate boxes would leave the division to the reader, which is exactly what
- * three separate panels used to do.
- *
- * **A window with nothing landed in it draws no ratio at all.** Dividing by zero
- * gives `Infinity`, and a fleet that spent forty dollars and landed nothing is
- * the single most important state this tile has to render honestly — as the
- * sentence it is, not as a symbol.
- */
 function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
   const { totals, landed, lostCostUsd } = insights;
   const perLanded = landed > 0 ? totals.costUsd / landed : null;
@@ -156,25 +113,6 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
   );
 }
 
-/**
- * The panel as a file: seven sections in the order the panel draws them, parted by
- * blank lines and each headed by its own name.
- *
- * Seven tables rather than one grid, because that is what the panel is — a total,
- * three splits, a trend and two rankings — and folding them into a single sheet
- * would lose which figure was a whole and which was a part.
- *
- * **Figures go out raw.** `fmtUsd` rounds to the cent and `fmtTokens` to three
- * significant figures, which is right for a glance and wrong for a sum: a
- * hundred rows of `$0.00` add up to real money. The formatting is presentation
- * and stops at the screen.
- *
- * Every truncation and every remainder the panel states in prose is stated here
- * as a row. A file read six months from now has no panel beside it, so a cap it
- * does not carry is a cap nobody will know about — and this section list grows
- * with the panel: a table the export forgets is the same silent under-report,
- * arriving as a complete-looking file.
- */
 export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = null): string {
   const { totals, phases, goals, runs, timeline, taskTypes, checks } = insights;
   const order = phases.map((p) => p.phase);
@@ -183,9 +121,6 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
   return toCsv([
     ['Totals'],
     ['Measure', 'Value'],
-    // The window leads, because without it every figure under it is a number
-    // with no denominator: a file read six months from now has no time bar
-    // beside it to say what stretch it was taken over.
     ['Window', insights.window.label],
     ['Window opened (ISO)', insights.window.since ?? 'no lower bound — all time'],
     ['Cost in window (USD)', totals.costUsd],
@@ -208,29 +143,20 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
     ...phases.map((p) => [p.phase, p.label, p.blurb, p.costUsd, p.runs, p.inputTokens, p.outputTokens]),
     [],
 
-    // Rolling 24h buckets, so the label is the instant each one opens and never a
-    // calendar date — the panel's `now` axis, written out.
     ['Daily'],
     ['Bucket start (ISO)', 'Cost (USD)'],
     ...timeline.buckets.map((b) => [b.startsAt, b.costUsd]),
     [],
 
-    // The dispatch rule that sent each run, so "what does answering a review
-    // comment cost us" is a row rather than an arithmetic exercise.
     ['Task types'],
     ['Rule', 'Label', 'Rationale', 'Cost (USD)', 'Runs', 'Per run (USD)'],
     ...taskTypes.map((t) => [t.rule, t.label, t.description, t.costUsd, t.runs, t.perRunUsd]),
-    // The remainder, stated for the reason every other one is: a rule-keyed table
-    // cannot hold a run that was never dispatched by a rule.
     ...(localCost > 0 ? [['', 'Local runs — no dispatch rule', localCost]] : []),
     [],
 
     ['Failing checks'],
     ['Check', 'Cost (USD)', 'Runs', 'Sole-cause runs', 'Per run (USD)', 'Last (ISO)'],
     ...checks.checks.map((c) => [c.name, c.costUsd, c.runs, c.soleRuns, c.perRunUsd, c.lastAt]),
-    // The remainder, for the reason the goal table carries its own: a check
-    // column that does not name the CI money nothing could place reads as a
-    // partition of all of it.
     ['Named no check', checks.unnamedCostUsd],
     ['Attributed to a check', checks.attributedCostUsd],
     [
@@ -251,15 +177,11 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
       g.lastAt,
       ...order.map((p) => g.byPhase[p]),
     ]),
-    // The remainder is a row here for the reason it is a row on the panel: these
-    // figures are a partition, and one that does not carry its own remainder
-    // reads as complete.
     ['', 'Reached no goal', insights.unattributedCostUsd],
     [],
 
     ['Runs'],
     [
-      // Not 'Agent': half of these can be a local run, and its id is not one.
       'Run',
       'Kind',
       'Origin',
@@ -289,25 +211,12 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
     ]),
     [`The ${runs.length} costliest of ${insights.rankedFrom} measured runs.`],
 
-    // The trend rides in the same file rather than a second one, because it is
-    // the same money on a different axis — and it is only here once its tab has
-    // been opened, which is the one place this export can be incomplete. It says
-    // so in a row rather than being silently absent, since a file read six months
-    // from now has no panel beside it to explain the gap.
     ...(trend === null
       ? [[], ['Trend'], ['The trend tab was not opened, so its weeks are not in this file.']]
       : trendCsv(trend, order)),
   ]);
 }
 
-/**
- * The trend tab's sections, in the order it draws them.
- *
- * `costs` is joined into one cell rather than exploded into a row per goal: the
- * spread is a property *of the week*, and a row per goal would silently turn a
- * table of eight weeks into a table of every goal that closed — a different
- * document with the same heading.
- */
 function trendCsv(trend: SpendTrend, order: readonly SpendPhase[]): (string | number | null)[][] {
   const { comparison } = trend;
   return [
@@ -398,10 +307,7 @@ function trendCsv(trend: SpendTrend, order: readonly SpendPhase[]): (string | nu
   ];
 }
 
-/** The whole fleet's spend as one bar, in funnel order. */
 function PhaseBar({ phases, total }: { phases: readonly SpendPhaseTotal[]; total: number }): JSX.Element {
-  // A phase that cost nothing still has runs behind it (an agent that reported
-  // tokens but no cost), and a zero-width segment is invisible rather than wrong.
   return (
     <div
       className="sp-bar sp-well"
@@ -420,7 +326,6 @@ function PhaseBar({ phases, total }: { phases: readonly SpendPhaseTotal[]; total
   );
 }
 
-/** The legend, which is also the table: what each phase is, and what it came to. */
 function PhaseKey({ phases, total }: { phases: readonly SpendPhaseTotal[]; total: number }): JSX.Element {
   return (
     <table className="sp-tbl">
@@ -454,36 +359,12 @@ function PhaseKey({ phases, total }: { phases: readonly SpendPhaseTotal[]; total
   );
 }
 
-/**
- * Daily spend, as bars rather than the production graph's lines.
- *
- * Bars because these are *totals over a period* and not samples of a rate: a line
- * between two buckets implies the money moved smoothly between them, which is
- * exactly what a fleet that ran for one afternoon did not do.
- *
- * The buckets roll — the last one ends now, not at midnight — because a calendar
- * day needs a timezone the harness has no opinion about. The axis says `now` for
- * that reason rather than a date.
- *
- * **Both ends come off the shipped window, never off the bucket count.** They
- * were `${buckets.length}d ago` and "the 24h from …" back when the timeline was
- * daily and nothing else, and they stayed literal through the window control: a
- * `6h` window is twelve half-hour buckets, and it was captioned `12d ago` under a
- * graph covering six hours. That is precisely the failure the window is shipped
- * back to prevent — a caption free to disagree with the buckets the server cut,
- * in the half a reader believes — and it read as merely odd until the session
- * window put "20d ago" beside a line naming the exact five hours.
- */
 function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
   const { buckets } = insights.timeline;
   const count = buckets.length;
-  // Dated against the payload's own clock rather than the browser's, so the axis
-  // and the figures above it are one reading even on a page left open.
   const opened = relAge(insights.window.startsAt, Date.parse(insights.generatedAt));
   const each = fmtSpan(insights.window.bucketMs);
   const peak = Math.max(...buckets.map((b) => b.costUsd), 0);
-  // A flat zero window would divide by nothing and draw full-height bars; the
-  // floor of one cent keeps an empty fortnight empty.
   const top = Math.max(peak, 0.01);
   const width = (PLOT.right - PLOT.left) / count;
   const height = PLOT.bottom - PLOT.top;
@@ -537,13 +418,6 @@ function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
   );
 }
 
-/**
- * A bucket's width as a reader says it: `30m`, `6h`, `1d`.
- *
- * Off the window's `bucketMs` rather than its `bucketLabel`, which is a caption
- * for the time bar ("6h buckets") and reads wrongly inside a sentence about one
- * of them.
- */
 function fmtSpan(ms: number): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
   if (minutes < 60) return `${minutes}m`;
@@ -551,7 +425,6 @@ function fmtSpan(ms: number): string {
   return hours < 24 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)}d`;
 }
 
-/** The phase split inside one goal, as a bar the width of its share of the fleet. */
 function GoalBar({ goal, total }: { goal: SpendGoal; total: number }): JSX.Element {
   const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'obstacle', 'job', 'other'];
   return (
@@ -570,14 +443,6 @@ function GoalBar({ goal, total }: { goal: SpendGoal; total: number }): JSX.Eleme
   );
 }
 
-/**
- * The goals, costliest first.
- *
- * The unattributed remainder is a row rather than a footnote, and it is the row
- * that keeps the rest honest: these figures are a *partition* of the fleet's
- * spend, and a remainder nothing draws would let them read as complete while it
- * grew behind them.
- */
 function Goals({
   goals,
   unattributedCostUsd,
@@ -645,7 +510,6 @@ function Goals({
   );
 }
 
-/** The individual runs behind the totals — a ranking, and it says so. */
 function Runs({ runs, rankedFrom }: { runs: readonly SpendRun[]; rankedFrom: number }): JSX.Element {
   if (runs.length === 0) return <p className="empty">Nothing has been measured yet.</p>;
   return (
@@ -693,16 +557,6 @@ function Runs({ runs, rankedFrom }: { runs: readonly SpendRun[]; rankedFrom: num
   );
 }
 
-/**
- * What the numbers are, stated where they are read.
- *
- * The cache sentence is the one that has to be here. Dollars come from the
- * provider's own `total_cost_usd`, which is already net of cache pricing; the
- * token count folds cache reads and writes into input, so it is gross. Both are
- * right and they are right about different things — and an operator dividing one
- * by the other, as the tile above deliberately does, will get a rate that looks
- * far too cheap unless something says why.
- */
 function Method({ insights }: { insights: SpendInsights }): JSX.Element {
   const { totals } = insights;
   return (
