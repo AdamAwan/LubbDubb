@@ -509,11 +509,13 @@ Five conditions, and each is somebody's decision rather than the harness's:
 are keyed on, so a shared one would let a check that can never be run spend the attempts of the four
 beside it — `pr-ci-gate`'s split against `pr-ci`, argument for argument.
 
-**It is last of every rule**, below one-shot pickup, and that is load-bearing rather than tidy.
-Validation's standing promise is that it blocks nothing; a rule that could take the final slot from a
-blocked part or a red build would make the one feature that gates nothing the reason something else
-did not run. Ranked last, a handed-over check gets the headroom nothing else wanted and queues as
-`waiting` when there is none.
+**It is last of every rule that produces work**, below one-shot pickup — only `validation-failed`,
+which is a second opinion on work somebody has already done, and the two Feature desks
+(`feature-summary`, `feature-sequence`), which produce no work at all, sit below it. That is
+load-bearing rather than tidy. Validation's standing promise is that it blocks nothing; a rule that
+could take the final slot from a blocked part or a red build would make the one feature that gates
+nothing the reason something else did not run. Ranked there, a handed-over check gets the headroom
+nothing else wanted and queues as `waiting` when there is none.
 
 **It fails open and silent**, `issue-retro`'s rule and more cheaply: a crashed or capped agent leaves
 the check exactly as it was, `unrun` and still flagged, with no escalation. The flag is already the
