@@ -6,54 +6,23 @@ import { relatedWorkNote } from '../../issueRelations.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { RawAction, StageContext } from './context.js';
 
-/**
- * Put a planning agent in front of pickup. It reads the repo and writes a verdict
- * — one PR or several — which is what makes today's one-agent/one-PR path an
- * explicit outcome of the funnel rather than a bypass. Ranked ahead of
- * `issue-pickup` because a planner *unblocks* work, so it should win a scarce slot
- * before the work it unblocks. There is no escalation arm: a planner that spends
- * its attempt cap without producing a plan fails the issue open to `single` (see
- * `resolvePlanRoute`), so a failure never parks an issue.
- */
+// → docs/spec/05-dispatcher.md (rule `issue-plan`)
+
 export function issuePlan(s: StageContext): void {
   const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
     const route = s.routes.get(issue.number);
     if (route?.route !== 'planning') continue;
-    // `issue-appraisal` is deciding whether this goal can be worked from at all.
-    // Planning it in the same cycle is the exact waste the appraisal exists to
-    // prevent — and would put the decomposition of an unanswerable question in
-    // front of an operator. Queued as `superseded` rather than skipped: a
-    // planner that silently never appeared was the same invisibility `capped`
-    // was named to fix.
     const supersededBy = s.appraising.has(issue.number) ? ('issue-appraisal' as const) : null;
     const origin = planOrigin(issue.number);
-    if (s.activeOrigins.has(origin)) continue; // a planner is already on it
+    if (s.activeOrigins.has(origin)) continue;
     const branch = planBranch(issue.number);
-    // Ingestion only ever writes `single`/`active`, so a plan row sitting in
-    // `planning` is an operator's replan request: same rule, same origin, same
-    // ingestion path — but the planner is primed with what already exists rather
-    // than being asked to plan the issue cold. Without that it would re-derive a
-    // decomposition from scratch and give the parts new slugs, which is precisely
-    // what would strand the in-flight ones.
     const existing = s.plansByOrigin.get(issueOrigin(issue.number)) ?? null;
     const replan = existing !== null && existing.status === 'planning';
-    // There is no third arm here any more. Discussing a plan used to be a replan
-    // whose planner talked first, dispatched from this same status with only the
-    // prompt to tell the two apart; it is now a deep link into the operator's own
-    // Claude Code, which amends the plan through `plan_amend` and dispatches
-    // nothing. What is left is the distinction that was always load-bearing:
-    // whether there is an existing decomposition to plan *from*.
     const title = replan ? `Replan issue #${issue.number}` : `Plan issue #${issue.number}`;
     const reason = replan
       ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
       : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
-    // An accepted order holding this story holds its *planner* too: a decomposition
-    // written before the story it depends on has a branch is a decomposition of a
-    // schema that does not exist yet, which is the whole failure the order exists to
-    // prevent. Read off the one map the dispatcher derives, so this rule and
-    // `issue-pickup` cannot disagree about whether the story is ready.
-    // → `docs/spec/33-story-sequencing.md#readiness-and-the-hold`
     const waits = s.sequenceWaits.get(issue.number);
     s.candidates.push({
       origin,
@@ -66,20 +35,11 @@ export function issuePlan(s: StageContext): void {
         : waits
           ? `${reason} ${sequenceHoldReason(waits)}`
           : reason,
-      // Superseded outranks the throttle as an explanation: this planner is not
-      // going out this cycle whatever the cooldown says. The sequence hold
-      // outranks it for the same reason — the story is not ready, and blaming a
-      // cooldown for that would send the operator to the wrong knob. Otherwise
-      // throttled like any other origin — kept visible in the queue, not dispatched.
       held: supersededBy ? 'superseded' : waits ? 'sequenced' : route.planner === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         branch,
         title,
-        // Appended to whichever of the three prompts this planner got: the scope
-        // either side of the item — the feature's goal above it, the sibling
-        // stories beside it — is what a decomposition has to fit inside, and a
-        // planner that can't see it re-decomposes work someone already has.
         prompt:
           (replan
             ? s.templates.render('issue-replan', {
@@ -102,10 +62,6 @@ export function issuePlan(s: StageContext): void {
                 planFile: PLAN_FILE,
               })) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          // Appended for the same reason and with the same guarantee: an operator
-          // override that never learned a `{watch}` token would drop an
-          // interpolated one silently, on exactly the deployments that customised
-          // most. Empty where no environment declares telemetry.
           s.watchNote,
         originRef: origin,
         originTitle: issue.title,

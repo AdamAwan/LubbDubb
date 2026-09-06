@@ -5,18 +5,8 @@ import { planIsWedged, wedgedPlanPrompt } from '../../plans/planWedge.js';
 import { liveParts, planIssueNumber } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
 
-/**
- * A released plan that is going nowhere. The reconciler already knows — it blocks
- * the parts and records the reason — but an error is a feed entry, and a feed is
- * not a question. Without this, an approved decomposition whose parts all blocked
- * showed two red machines, no agent, and nothing in "Needs you"; the operator's own
- * approval was the last thing that happened to it.
- *
- * Only `active` plans. An unapproved one is already in front of a human, and
- * `planCaveats` puts the same fact in that ask, as something to tick — escalating as well would
- * be the same sentence twice, to the same person, about a decomposition they have
- * not authorized.
- */
+// → docs/spec/05-dispatcher.md (rule `plan-blocked`)
+
 export function planBlocked(s: StageContext): void {
   const { ctx } = s;
   for (const plan of ctx.plans ?? []) {
