@@ -1,12 +1,3 @@
-/**
- * End-to-end smoke test of the walking skeleton against the Definition of Done,
- * using the REAL node-pty backend and the mock-agent program. Proves the highest
- * -risk path works for real: inject a CI failure -> the harness decides -> a
- * Claude-style agent spawns in a git worktree over a PTY -> it hits a waiting
- * state that escalates -> we answer -> it continues -> it finishes.
- *
- * Run with: npm run smoke
- */
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,8 +10,6 @@ const scriptPath = join(process.cwd(), 'scripts/mock-agent.sh');
 function tempGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-smoke-repo-'));
   const git = (args: string[]) => execFileSync('git', args, { cwd: dir });
-  // Named explicitly: agent branches are cut from `config.defaultBranch` ("main"),
-  // while bare `git init` takes whatever the host's init.defaultBranch says.
   git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 't@t.com']);
   git(['config', 'user.name', 'Smoke']);
@@ -38,19 +27,10 @@ async function waitFor(label: string, pred: () => boolean, timeoutMs = 10_000): 
   }
 }
 
-/**
- * Exercise the MCP tool channel the way an agent actually reaches it: a real
- * `bridge.mjs` child process, a real Unix socket, real JSON-RPC frames. The unit
- * tests drive `mcp.session()`, which shares everything from `dispatch` inward —
- * this is the half they can't cover, and the half where a transport bug would
- * otherwise only show up against a live `claude`.
- */
 async function smokeToolCall(system: System): Promise<void> {
   const log = (m: string): void => console.log(`  ${m}`);
   if (!(await system.mcp.listen())) throw new Error('MCP bridge server would not listen');
 
-  // A planning agent, since `plan_submit` is confined to one by identity. No live
-  // process is needed: the credential names the agent row, and the row is enough.
   const task = system.store.createTask({
     kind: 'code',
     title: 'Plan issue #12',
@@ -109,7 +89,6 @@ async function smokeToolCall(system: System): Promise<void> {
   const parts = system.store.listPlanParts(plan.id).map((p) => p.slug);
   log(`✓ plan persisted through the tool: status=${plan.status} parts=${parts.join(',')}`);
 
-  // ...and a rejection comes back as a reason the agent could act on, not silence.
   send({
     jsonrpc: '2.0',
     id: 4,
@@ -121,10 +100,6 @@ async function smokeToolCall(system: System): Promise<void> {
   if (!rejected.isError) throw new Error('an empty parts list should have been rejected');
   log(`✓ validation error returned to the caller: "${rejected.content[0]?.text.trim()}"`);
 
-  // A read of the harness's own world, over the same real transport. PR #42 is the
-  // one step 1 injected and failed CI on, and this agent was dispatched for an
-  // issue rather than that PR — so this is also the general-read decision holding
-  // end to end, not just in the unit test.
   send({
     jsonrpc: '2.0',
     id: 5,
@@ -142,9 +117,6 @@ async function smokeToolCall(system: System): Promise<void> {
   }
   log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
 
-  // A finding filed over the same transport: attributed from the credential (the
-  // call names no agent), and it must queue nothing — an operator's promotion is
-  // the only path from a finding to an agent.
   const queuedBefore = system.store.listQueuedJobs().length;
   send({
     jsonrpc: '2.0',
@@ -167,9 +139,6 @@ async function smokeToolCall(system: System): Promise<void> {
   }
   log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
 
-  // A progress note over the same transport: it lands on the agent row as a
-  // current value (the second call replaces the first, it does not accumulate),
-  // which is what the fleet card reads.
   const notes = ['Reading the store schema', 'Running the full suite after the rename'];
   for (const [i, note] of notes.entries()) {
     const before = frames.length;
@@ -187,8 +156,6 @@ async function smokeToolCall(system: System): Promise<void> {
   bridge.kill();
   system.mcp.release(credential.token);
   await system.mcp.close();
-  // Retire the synthetic agent/task, or the next step's boot reconcile sees an
-  // orphan and its "expected 0/0" stops meaning anything.
   system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
   system.store.updateTask(task.id, { status: 'done' });
 }
