@@ -906,8 +906,11 @@ test("the group is drawn as weight within the kind's own hue", () => {
  * make every assertion below vacuous instead of failing.
  */
 function goalRef(): string {
-  const ref = view().needsYou.find((n) => n.goalRef !== null)?.goalRef;
-  assert.ok(ref, 'the demo fixtures must carry at least one ask that names a goal');
+  // The plan ask's goal (#395): a goal with a plan, no pull request and no
+  // validation run, which is the page these tests are written against. The demo
+  // also carries a merge ask that ranks above it (#390), whose page has both.
+  const ref = view().needsYou.find((n) => n.kind === 'plan' && n.goalRef !== null)?.goalRef;
+  assert.ok(ref, 'the demo fixtures must carry a plan ask that names a goal');
   return ref;
 }
 

@@ -23,6 +23,17 @@ import type {
   SnoozeTarget,
   CockpitDecision,
   Decision,
+  FeatureBlockRow,
+  FeatureBoardPayload,
+  FeatureBriefing,
+  FeatureChildRow,
+  FeatureChildStanding,
+  FeatureCounts,
+  FeatureLandingRow,
+  FeatureReach,
+  FeatureReportRow,
+  FeatureRollup,
+  FeatureSummary,
   GoalWatch,
   GoalWatchDeclaration,
   FilingTargetProbe,
@@ -2622,11 +2633,17 @@ const DEMO_GOAL_SEEDS: {
   localRuns: number;
   hoursAgo: number;
   byPhase: Partial<Record<SpendPhase, number>>;
+  /** The harness's outcome word on the tickets tab, agreeing with the goal's own page in `fixtures.ts`. */
+  outcome: 'delivered' | 'fell short' | null;
+  /** Still open in the tracker — the one goal here whose page says its plan is mid-landing. */
+  open?: true;
 }[] = [
   {
     issueNumber: 390,
     title: 'Validate job payloads in the catalog, not in each runner',
     agents: 7,
+    outcome: null,
+    open: true,
     // The goal that has been looked at locally, twice — the row that shows a total
     // holding money no agent spent.
     localRuns: 2,
@@ -2637,6 +2654,7 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 364,
     title: 'Document the two-watcher requirement for maintenance jobs',
     agents: 4,
+    outcome: 'delivered',
     localRuns: 0,
     hoursAgo: 1,
     byPhase: { deliberation: 1.6, build: 3.24, ci: 0.3, landing: 0.2, evidence: 0.8 },
@@ -2645,6 +2663,7 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 382,
     title: 'Gap clustering merges unrelated questions into one gap',
     agents: 3,
+    outcome: 'fell short',
     localRuns: 1,
     hoursAgo: 26,
     // The goal whose CI dwarfs its build — the shape the split exists to surface,
@@ -2658,6 +2677,7 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 331,
     title: null,
     agents: 2,
+    outcome: 'fell short',
     localRuns: 0,
     hoursAgo: 74,
     byPhase: { deliberation: 0.3, build: 0.62, evidence: 0.5 },
@@ -3949,7 +3969,8 @@ function buildDemoReliability(): ReliabilityInsights {
     window: demoWindow(now, DEMO_CI_DAYS.length),
     runs: {
       ...tally,
-      live: 3,
+      // Four agents are live in `fixtures.ts`; `demoReliability.test.ts` holds the two together.
+      live: 4,
       completionRate: tally.completed / tally.settled,
       costUsd: round(DEMO_OUTCOMES.reduce((a, o) => a + o.costUsd, 0)),
       lostCostUsd: round(DEMO_PHASE_HEALTH.reduce((a, p) => a + p.lostCostUsd, 0)),
@@ -4634,24 +4655,17 @@ export const demoApi = {
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
-  // The demo's tracker is flat — `config.featureBoard` is false in the fixture, so
-  // no tab reaches this and the empty board is never drawn. It exists to keep the
-  // two API shapes interchangeable, exactly as the empty work graph above does.
-  getFeatures: () =>
-    Promise.resolve({
-      features: [],
-      orphans: null,
-      unresolved: 0,
-      environments: [],
-      backfilling: false,
-      refUrls: {},
-    }),
-  // Unreachable for the same reason: no Feature in the demo carries an order, so
-  // there is no proposal to answer. Present so the two API shapes stay
-  // interchangeable, and it refuses rather than pretending — a demo that answered
-  // would be a demo that lied about a write.
+  // The feature board, authored off the tickets tab's own rows and parent map so
+  // the two altitudes agree (`buildDemoFeatureBoard`). Fetched on open and never
+  // polled, as the real route is; the demo's is built fresh on each fetch so its
+  // stamps read as recent.
+  getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
+  // No Feature in the demo carries an order — `issueSequencing` is off by default,
+  // and the board ships `sequence: null` throughout — so there is no proposal to
+  // answer. It refuses rather than pretending: a demo that answered would be a demo
+  // that lied about a write.
   answerFeatureSequence: (): Promise<never> =>
-    Promise.reject(new Error('the demo has no feature board, so there is no order to answer')),
+    Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
   // The ticket mirror, authored for `getSpend`'s reason: the demo's world is built
   // fresh in the browser each load, so there is no swept history to page through
   // and a fixture is the only way the tab shows what it is for. The filtering,
@@ -5043,48 +5057,81 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
  */
 const DEMO_STATE_MOVES = new Map<number, string>();
 
-function demoTickets(query: {
-  watch: string;
-  tracking: string;
-  state: string;
-  feature: string | null;
-  order: string;
-  cursor: string | null;
-}): TicketsPayload {
-  const now = Date.now();
-  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
-  // Three features and a hue apiece, so the legend, the grouping and the orphan
-  // bucket all have something to draw. The fourth of every group is deliberately
-  // left parentless — an orphan is a state the surface has to be able to show.
-  const features = [
-    { number: 900, title: 'Payments' },
-    { number: 901, title: 'Onboarding' },
-    { number: 902, title: 'Platform hygiene' },
-  ];
-  const featureOf = (n: number) => (n % 4 === 3 ? null : (features[n % 3] ?? null));
-  // The demo's stand-in for the store's least-used-first assignment: the position
-  // in the list, which for three features is the same answer.
-  const featureSlotOf = (feature: { number: number } | null) =>
-    feature === null ? null : features.findIndex((f) => f.number === feature.number);
-  const worked: TicketRow[] = DEMO_GOAL_SEEDS.map((seed, i) => ({
+/**
+ * The containers the demo's tickets hang off, and a hue apiece, so the legend, the
+ * grouping and the orphan bucket all have something to draw. Shared by the tickets
+ * tab and the feature board — the two are one backlog read at two altitudes, and a
+ * story filed under one Feature on the first and another on the second would be a
+ * demo disagreeing with itself.
+ *
+ * The first three are the arithmetic ones (`demoFeatureOf`); #300 is the Feature
+ * the world snapshot in `fixtures.ts` actually carries, and #903 groups the two
+ * goals nobody has started on, so the board has a Feature nothing has summarised.
+ */
+const DEMO_FEATURES = [
+  { number: 900, title: 'Payments' },
+  { number: 901, title: 'Onboarding' },
+  { number: 902, title: 'Platform hygiene' },
+  { number: 300, title: 'Source-grounded document patrols' },
+  { number: 903, title: 'Search and console polish' },
+];
+
+/**
+ * Parents the world snapshot states outright, read before the arithmetic below:
+ * #332 and #333 are #300's stories on their own goal pages, #341 is the orphan bug
+ * the placement band is drawn for, and #395 / #379 are the untouched pair.
+ *
+ * #331 is **not** here although #300's page lists it: it is the tickets tab's one
+ * worked orphan (the fourth of every group is parentless by design), and the board's
+ * one shortfall answering to no Feature — a reading the orphan card has to be able
+ * to show. The story aged out of the open list, so nothing else draws its parent.
+ */
+const DEMO_PARENTS = new Map<number, number | null>([
+  [332, 300],
+  [333, 300],
+  [341, null],
+  [395, 903],
+  [379, 903],
+]);
+
+/** The parent of a demo ticket: the stated one, or every fourth item parentless and the rest dealt round. */
+const demoFeatureOf = (n: number): { number: number; title: string } | null => {
+  const stated = DEMO_PARENTS.get(n);
+  if (stated !== undefined) return stated === null ? null : (DEMO_FEATURES.find((f) => f.number === stated) ?? null);
+  return n % 4 === 3 ? null : (DEMO_FEATURES[n % 3] ?? null);
+};
+
+// The demo's stand-in for the store's least-used-first assignment: the position in
+// the list, which for a fixed list is the same answer.
+const demoFeatureSlotOf = (feature: { number: number } | null): number | null =>
+  feature === null ? null : DEMO_FEATURES.findIndex((f) => f.number === feature.number);
+
+/**
+ * The rows the tickets tab and the feature board are both built from — worked goals
+ * off the spend fixture, and a tail nobody has triaged so `unwatched` is not an
+ * empty answer. One function so the two tabs cannot disagree about a title, a cost
+ * or a parent.
+ */
+function demoTicketRows(iso: (hoursAgo: number) => string): TicketRow[] {
+  const worked: TicketRow[] = DEMO_GOAL_SEEDS.map((seed) => ({
     number: seed.issueNumber,
     title: seed.title ?? `Goal #${seed.issueNumber}`,
-    // The fixture's goals are the closed ones — they are what the spend tab cohorts.
-    state: 'closed' as const,
+    // The fixture's goals are the closed ones — they are what the spend tab
+    // cohorts — bar #390, whose plan is still landing on the goal page.
+    state: seed.open === true ? ('open' as const) : ('closed' as const),
     watch: 'watched' as const,
     labels: ['lubbdubb-watch'],
     costUsd: Object.values(seed.byPhase).reduce((a, b) => a + b, 0),
-    outcome: i % 5 === 3 ? 'fell short' : 'delivered',
+    outcome: seed.outcome,
     addedAt: iso(seed.hoursAgo + 48),
     changedAt: iso(seed.hoursAgo),
     // Closed in the tracker, so the mirror has stopped enriching them.
-    tracking: 'frozen' as const,
-    workItemState: DEMO_STATE_MOVES.get(seed.issueNumber) ?? 'Closed',
+    tracking: seed.open === true ? ('live' as const) : ('frozen' as const),
+    workItemState: DEMO_STATE_MOVES.get(seed.issueNumber) ?? (seed.open === true ? 'Active' : 'Closed'),
     issueType: 'Task',
-    parent: featureOf(seed.issueNumber),
-    featureSlot: featureSlotOf(featureOf(seed.issueNumber)),
+    parent: demoFeatureOf(seed.issueNumber),
+    featureSlot: demoFeatureSlotOf(demoFeatureOf(seed.issueNumber)),
   }));
-  // A tail nobody has triaged, so `unwatched` is not an empty answer.
   const untouched: TicketRow[] = DEMO_UNTRIAGED.map((seed) => ({
     number: seed.number,
     title: seed.title,
@@ -5099,11 +5146,23 @@ function demoTickets(query: {
     workItemState:
       DEMO_STATE_MOVES.get(seed.number) ?? (seed.number % 3 === 0 ? 'Ready' : seed.number % 3 === 1 ? 'New' : 'Active'),
     issueType: seed.issueType,
-    parent: featureOf(seed.number),
-    featureSlot: featureSlotOf(featureOf(seed.number)),
+    parent: demoFeatureOf(seed.number),
+    featureSlot: demoFeatureSlotOf(demoFeatureOf(seed.number)),
   }));
+  return [...worked, ...untouched];
+}
 
-  const all = [...worked, ...untouched].sort((a, b) => b.number - a.number);
+function demoTickets(query: {
+  watch: string;
+  tracking: string;
+  state: string;
+  feature: string | null;
+  order: string;
+  cursor: string | null;
+}): TicketsPayload {
+  const now = Date.now();
+  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const all = demoTicketRows(iso).sort((a, b) => b.number - a.number);
   const matching = all.filter(
     (row) =>
       (query.tracking === 'any' || row.tracking === query.tracking) &&
@@ -5150,15 +5209,442 @@ function demoTickets(query: {
     ]
       .map(([state, seen]) => ({ ...seen, state, pickup: state === 'Ready' || state === 'Active' }))
       .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state)),
-    features: features
-      .map((f) => ({
-        ...f,
-        slot: featureSlotOf(f) ?? 0,
-        count: all.filter((row) => row.parent?.number === f.number).length,
-      }))
-      .filter((f) => f.count > 0),
+    features: DEMO_FEATURES.map((f) => ({
+      ...f,
+      slot: demoFeatureSlotOf(f) ?? 0,
+      count: all.filter((row) => row.parent?.number === f.number).length,
+    })).filter((f) => f.count > 0),
     orphanCount: all.filter((row) => row.parent === null).length,
     anchorAt: iso(24 * 30),
+    backfilling: false,
+    refUrls: {},
+  };
+}
+
+/**
+ * The feature board, built off the same rows and the same parent map as the
+ * tickets tab, so a story is under one Feature on both and its cost is one figure.
+ *
+ * Authored rather than folded, for `getSpend`'s reason: the demo's world is built
+ * fresh in the browser each load, so there is no verdict store and no landing
+ * table to roll up, and a fixture is the only way the tab shows what it is for.
+ * What it has to show is every reading the card draws, and each is carried by at
+ * least one Feature:
+ *
+ * - a summary whose `standingKey` equals the rollup's (Payments, Platform hygiene —
+ *   current), one whose key differs (Onboarding, #300 — moved since written), and
+ *   one with no summary at all (#903 — nothing has been on it);
+ * - all six standings, `unwatched` and `fellShort` included, with the counts
+ *   agreeing with the rows;
+ * - a briefing quoting the delivery on #364, the agent's question on #368 and
+ *   #376, and the assessor's shortfall on #382 — the same sentences the goal pages
+ *   and the queue rail carry, since a briefing composes nothing;
+ * - all four reach verdicts across the two configured environments;
+ * - landings inside and outside the seven-day window the card counts in;
+ * - an orphan bucket with a shortfall of its own, its landing and its spend.
+ *
+ * The holds and presence the card derives client-side — the merge waiting on #413,
+ * the stack under #390, #345's cooldown, the agents on #332, #368 and #388 — are in
+ * the world snapshot (`fixtures.ts`) under these same children, so the two halves
+ * of the card describe one fleet. `sequence` is null throughout: `issueSequencing`
+ * is off by default and `answerFeatureSequence` refuses.
+ */
+function buildDemoFeatureBoard(): FeatureBoardPayload {
+  const now = Date.now();
+  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const tickets = new Map(demoTicketRows(iso).map((row) => [row.number, row]));
+  const environments = ['staging', 'prod'];
+
+  // A child the tickets tab already lists — title, type, state and cost quoted from
+  // that row, so the two tabs agree to the cent.
+  const ticket = (
+    number: number,
+    standing: FeatureChildStanding,
+    over: Partial<FeatureChildRow> = {},
+  ): FeatureChildRow => {
+    const row = tickets.get(number);
+    if (!row) throw new Error(`demo feature board names ticket #${number}, which the tickets tab does not carry`);
+    return {
+      number,
+      title: row.title,
+      issueType: row.issueType,
+      standing,
+      outcome: row.outcome,
+      workItemState: row.workItemState,
+      costUsd: row.costUsd,
+      changedAt: row.changedAt,
+      ...over,
+    };
+  };
+  // A child the world snapshot carries and the tickets tab does not — its figures
+  // are the goal page's own (`fixtures.ts`).
+  const goal = (
+    number: number,
+    title: string,
+    standing: FeatureChildStanding,
+    over: Partial<Omit<FeatureChildRow, 'number' | 'title' | 'standing'>> & { changedAt: string },
+  ): FeatureChildRow => ({
+    number,
+    title,
+    issueType: null,
+    standing,
+    outcome: null,
+    workItemState: 'Active',
+    costUsd: null,
+    ...over,
+  });
+
+  // Every child on the board, in one list. Which Feature each hangs off is
+  // `demoFeatureOf`'s answer below — the tickets tab's — and never stated here, so
+  // a story cannot sit under one Feature on that tab and another on this one.
+  const children: FeatureChildRow[] = [
+    // The worked goals off the spend fixture.
+    ticket(390, 'queued'),
+    ticket(364, 'delivered'),
+    ticket(382, 'fellShort'),
+    // #331 is drawn with its title rather than the tickets tab's `Goal #331`: the
+    // spend panel's row can only draw its number because the goal aged out of the
+    // open list, where the mirror the board reads still holds the item.
+    ticket(331, 'fellShort', { title: 'Give each source-grounded job a read-only workspace' }),
+    // The tail nobody has triaged.
+    ...DEMO_UNTRIAGED.map((seed) => ticket(seed.number, 'unwatched')),
+    // The goals the world snapshot carries, with the runs and verdicts it states.
+    goal(376, 'Read GitHub review decisions as proposal approval', 'inFlight', {
+      issueType: 'Bug',
+      costUsd: 0.31,
+      changedAt: iso(4 / 60),
+    }),
+    goal(388, 'Cap the retrieval context at the token budget before ranking', 'inFlight', {
+      costUsd: 0.84,
+      changedAt: iso(8 / 60),
+    }),
+    goal(368, 'Retry transient 502s from the embeddings endpoint', 'inFlight', {
+      issueType: 'Bug',
+      costUsd: 0.27,
+      changedAt: iso(6 / 60),
+    }),
+    goal(332, 'Give HTTP providers a bounded file-tool loop', 'inFlight', {
+      issueType: 'User Story',
+      costUsd: 0.52,
+      changedAt: iso(23 / 60),
+    }),
+    goal(333, 'Verify a document against its sources before correcting it', 'queued', {
+      issueType: 'User Story',
+      changedAt: iso(20),
+    }),
+    goal(345, 'The watcher drops its claim when the API restarts mid-job', 'queued', {
+      issueType: 'Bug',
+      workItemState: 'Ready',
+      costUsd: 3.08,
+      changedAt: iso(80 / 60),
+    }),
+    goal(359, 'Embedding backfill times out on the 40k-section repository', 'queued', {
+      issueType: 'Bug',
+      workItemState: 'Ready',
+      costUsd: 7.36,
+      changedAt: iso(30),
+    }),
+    goal(341, 'Answers cite a heading the section splitter renamed', 'queued', { issueType: 'Bug', changedAt: iso(1) }),
+    goal(395, 'Snapshot downloads 401 in the review console', 'queued', { workItemState: 'Ready', changedAt: iso(12) }),
+    goal(379, 'Make retrieval smarter', 'queued', { workItemState: 'New', changedAt: iso(52) }),
+  ];
+
+  // What the briefing quotes, per goal: when its run started, the delivery verdict
+  // as its author wrote it, and the question or shortfall standing against it. The
+  // same sentences the goal pages and the queue rail carry in `fixtures.ts`.
+  const since = new Map<number, string>([
+    [376, iso(4 / 60)],
+    [388, iso(8 / 60)],
+    [368, iso(35 / 60)],
+    [332, iso(23 / 60)],
+  ]);
+  const delivered = new Map<number, Omit<FeatureReportRow, 'number' | 'title'>>([
+    [
+      364,
+      { summary: 'PR #410 landed the deadlock note and the console warning with it.', by: 'assessor', at: iso(1.5) },
+    ],
+  ]);
+  const blocking = new Map<number, Omit<FeatureBlockRow, 'number' | 'title'>>([
+    [
+      376,
+      {
+        kind: 'question',
+        summary: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
+        since: iso(2 / 60),
+      },
+    ],
+    [
+      368,
+      {
+        kind: 'question',
+        summary:
+          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, ' +
+          'or turn the SDK’s off and own the whole policy?',
+        since: iso(6 / 60),
+      },
+    ],
+    [
+      382,
+      {
+        kind: 'fellShort',
+        summary:
+          'The threshold was raised and the two example questions now cluster apart — but the goal asks for ' +
+          'clusters that are “about one thing”, and no threshold decides that.',
+        since: iso(4 / 60),
+      },
+    ],
+    [
+      331,
+      {
+        kind: 'fellShort',
+        summary:
+          'The workspace is read-only as asked, but it is a fresh clone per job — a 40k-section repository ' +
+          'takes four minutes to check out before the patrol reads a line.',
+        since: iso(74),
+      },
+    ],
+  ]);
+  // Every landing under a board child, as `goal_landings` would hold it. #345's
+  // two attempts both landed — at the wrong layer, the operator ruled — and the
+  // older of them is outside the window the card counts in.
+  const landings: FeatureLandingRow[] = [
+    { goal: 390, prNumber: 406, at: iso(0.5) },
+    { goal: 364, prNumber: 410, at: iso(52 / 60) },
+    { goal: 382, prNumber: 405, at: iso(3) },
+    { goal: 345, prNumber: 401, at: iso(3 * 24) },
+    { goal: 331, prNumber: 396, at: iso(74) },
+    { goal: 345, prNumber: 397, at: iso(9 * 24) },
+  ];
+
+  const newestFirst = (a: string, b: string) => b.localeCompare(a);
+  const briefing = (rows: readonly FeatureChildRow[]): FeatureBriefing => {
+    const working = rows
+      .filter((c) => c.standing === 'inFlight')
+      .map((c) => ({ number: c.number, title: c.title, since: since.get(c.number) ?? c.changedAt }))
+      .sort((a, b) => newestFirst(a.since, b.since));
+    const done = rows
+      .flatMap((c) => {
+        const verdict = delivered.get(c.number);
+        return verdict ? [{ number: c.number, title: c.title, ...verdict }] : [];
+      })
+      .sort((a, b) => newestFirst(a.at, b.at));
+    const blocked = rows
+      .flatMap((c) => {
+        const block = blocking.get(c.number);
+        return block ? [{ number: c.number, title: c.title, ...block }] : [];
+      })
+      // Questions first, then shortfalls; newest first inside each.
+      .sort((a, b) => (a.kind === b.kind ? newestFirst(a.since, b.since) : a.kind === 'question' ? -1 : 1));
+    return {
+      working: working.slice(0, 3),
+      workingTotal: working.length,
+      delivered: done.slice(0, 3),
+      deliveredTotal: done.length,
+      blocking: blocked.slice(0, 3),
+      blockingTotal: blocked.length,
+    };
+  };
+  const counts = (rows: readonly FeatureChildRow[]): FeatureCounts => {
+    const out: FeatureCounts = {
+      delivered: 0,
+      inFlight: 0,
+      queued: 0,
+      fellShort: 0,
+      settled: 0,
+      unwatched: 0,
+      total: 0,
+    };
+    for (const child of rows) {
+      out[child.standing] += 1;
+      out.total += 1;
+    }
+    return out;
+  };
+  // Null where no child was ever run on — `TicketRow.costUsd`'s reason: never
+  // worked and worked for free are different facts.
+  const cost = (rows: readonly FeatureChildRow[]): number | null => {
+    const spent = rows.map((c) => c.costUsd).filter((c): c is number => c !== null);
+    return spent.length === 0 ? null : Math.round(spent.reduce((a, b) => a + b, 0) * 100) / 100;
+  };
+  const landedUnder = (rows: readonly FeatureChildRow[]): FeatureLandingRow[] => {
+    const under = new Set(rows.map((c) => c.number));
+    return landings.filter((l) => under.has(l.goal)).sort((a, b) => newestFirst(a.at, b.at));
+  };
+  // What is happening, then what is stuck, then the rest — the route's own order.
+  const rank: Record<FeatureChildStanding, number> = {
+    inFlight: 0,
+    fellShort: 1,
+    queued: 2,
+    delivered: 3,
+    settled: 4,
+    unwatched: 5,
+  };
+  const ordered = (rows: readonly FeatureChildRow[]): FeatureChildRow[] =>
+    [...rows].sort((a, b) => rank[a.standing] - rank[b.standing] || b.number - a.number);
+  const reach = (status: Record<string, [FeatureReach['status'], number, number]>): FeatureReach[] =>
+    environments.map((environment) => {
+      const [verdict, goals, total] = status[environment] ?? ['absent', 0, 0];
+      return { environment, status: verdict, goals, total };
+    });
+  const summary = (
+    feature: number,
+    standingKey: string,
+    hoursAgo: number,
+    text: Pick<FeatureSummary, 'standing' | 'usable' | 'blocked' | 'remaining'>,
+  ): FeatureSummary => ({
+    originRef: `issue:${feature}`,
+    ...text,
+    standingKey,
+    agentId: `agent_fs${feature}`,
+    taskId: `task_fs${feature}`,
+    createdAt: iso(hoursAgo + 30),
+    updatedAt: iso(hoursAgo),
+  });
+
+  // Per Feature, what cannot be folded from its children: the reach verdict, the
+  // summary an agent wrote, and the digest of where the children stand now. A
+  // summary whose `standingKey` equals the rollup's is current; one that differs
+  // was written before the Feature moved; null is a Feature nobody has summarised.
+  const rollups: Record<
+    number,
+    Pick<FeatureRollup, 'reach' | 'summary' | 'standingKey'> &
+      Partial<Pick<FeatureRollup, 'workItemState' | 'issueType'>>
+  > = {
+    // Onboarding — one of each verdict, two runs, a question with an agent behind
+    // it. #376's probe could not answer, so staging is two of three and prod —
+    // where the pipeline is failing (`environmentHealth`) — could not be read at
+    // all. Summarised before #376 and #388 were picked up and before #382 was
+    // assessed, so the digest no longer matches.
+    901: {
+      reach: reach({ staging: ['partial', 2, 3], prod: ['unknown', 0, 3] }),
+      summary: summary(901, 'b7d02c4e19a3', 9, {
+        standing:
+          'Two of three worked stories are through: the two-watcher requirement is documented and the console ' +
+          'warns on one watcher, and the gap-cluster threshold has been raised so the two questions from the ticket ' +
+          'cluster apart. The review-decision mapping and the context budget are unstarted, and two items have ' +
+          'not been opted in.',
+        usable:
+          'On staging, architecture.md carries the deadlock section and the review console warns when a single ' +
+          'watcher is configured.',
+        blocked: null,
+        remaining:
+          'Map a GitHub review decision of APPROVED onto the proposal’s own approval state (#376), cut the ' +
+          'retrieval context to the budget (#388), and have the threshold change assessed against what the ticket ' +
+          'actually asks for.',
+      }),
+      standingKey: '5e88f1a3c07d',
+    },
+    // Platform hygiene — one run, parked on a question, and nothing landed yet.
+    // Nothing merged under it, so nothing has been anywhere: `rollUpReach`'s
+    // answer to an empty fold, and not a guess.
+    902: {
+      reach: reach({}),
+      summary: summary(902, 'c93af5d1e6b2', 0.4, {
+        standing:
+          'Nothing under this Feature has landed. One story is being worked: the embeddings client is getting a ' +
+          'bounded retry on a 502, so an incremental index run no longer aborts whole-sale on one bad response.',
+        usable: null,
+        blocked:
+          'The retry work is parked on a question — the embeddings SDK already retries once, and the agent wants a ' +
+          'call on whether to stack a second policy on top of it.',
+        remaining: 'The retry itself, and the link sweep over docs/ has not been opted in.',
+      }),
+      standingKey: 'c93af5d1e6b2',
+    },
+    // Payments — the stack, the merge, the cooldown, and no briefing at all:
+    // nothing worked, delivered or blocked in the briefing's sense, so the card
+    // draws none, and the holds derived from the snapshot say where it is. Both
+    // goals with anything merged are in staging; #390's first part has not been
+    // confirmed in prod, so prod is half.
+    900: {
+      reach: reach({ staging: ['reached', 2, 2], prod: ['partial', 1, 2] }),
+      summary: summary(900, 'a41c9e07f2d8', 0.3, {
+        standing:
+          'The catalog now owns every payload schema and the runners read it rather than re-parsing; the second of ' +
+          '#390’s three parts is approved and waiting on a merge, and the third is written and stacks on it. The ' +
+          'watcher’s claim bug has been fixed twice at the wrong layer and is sitting out its cooldown.',
+        usable:
+          'On staging, a job posted through the form is validated against the catalog’s schema — the first part ' +
+          'landed there this morning.',
+        blocked:
+          'Nothing stopped. #345 waits on the operator’s note being taken up: both attempts patched the watcher, ' +
+          'and the claim is the API’s to release.',
+        remaining:
+          'Merge #413, get #414 green, and take #345 up at the API. One item under this Feature has never been ' +
+          'read by the fleet.',
+      }),
+      standingKey: 'a41c9e07f2d8',
+    },
+    // #300 — the one Feature the world snapshot holds as an item of its own, so
+    // its state and type resolve. Summarised when both stories were queued; #332
+    // has since been picked up.
+    300: {
+      workItemState: 'Active',
+      issueType: 'Feature',
+      reach: reach({}),
+      summary: summary(300, 'd1e4b7a20891', 26, {
+        standing:
+          'The read-only workspace landed and fell short of its goal — it checks out a fresh clone per job, which ' +
+          'the assessor found too slow on the larger repositories. Neither of the two stories that build on it has ' +
+          'started.',
+        usable:
+          'A patrol run against a local checkout reads the source files rather than a pasted sample — on the ' +
+          'maintainer’s machine only; nothing is deployed.',
+        blocked: null,
+        remaining:
+          'HTTP providers still have no file tools (#332), and the patrol still corrects from a single read rather ' +
+          'than verifying first (#333).',
+      }),
+      standingKey: '0f6c3a9e75b4',
+    },
+    // #903 — two stories nobody has been on, and so nothing to say about them.
+    903: { reach: reach({}), summary: null, standingKey: 'e2a7c40b9f13' },
+  };
+
+  const under = (feature: number | null) => children.filter((c) => demoFeatureOf(c.number)?.number === (feature ?? -1));
+  // What wants a person first, then the most work — the route's own order.
+  const features = [901, 902, 900, 300, 903].map((number): FeatureRollup => {
+    const feature = DEMO_FEATURES.find((f) => f.number === number);
+    const extra = rollups[number];
+    if (!feature || !extra)
+      throw new Error(`demo feature board names Feature #${number}, which DEMO_FEATURES does not carry`);
+    const rows = under(number);
+    const landed = landedUnder(rows);
+    return {
+      number,
+      title: feature.title,
+      slot: demoFeatureSlotOf(feature) ?? 0,
+      // Null unless the mirror holds the container itself, which for the demo is
+      // only #300 — the arithmetic Features are parent links and nothing more.
+      workItemState: extra.workItemState ?? null,
+      issueType: extra.issueType ?? null,
+      counts: counts(rows),
+      briefing: briefing(rows),
+      children: ordered(rows),
+      costUsd: cost(rows),
+      reach: extra.reach,
+      summary: extra.summary,
+      sequence: null,
+      lastLandingAt: landed[0]?.at ?? null,
+      landings: landed,
+      standingKey: extra.standingKey,
+    };
+  });
+
+  const orphanRows = children.filter((c) => demoFeatureOf(c.number) === null);
+  const orphanLandings = landedUnder(orphanRows);
+  return {
+    features,
+    orphans: {
+      counts: counts(orphanRows),
+      briefing: briefing(orphanRows),
+      children: ordered(orphanRows),
+      costUsd: cost(orphanRows),
+      lastLandingAt: orphanLandings[0]?.at ?? null,
+      landings: orphanLandings,
+    },
+    unresolved: 0,
+    environments,
     backfilling: false,
     refUrls: {},
   };

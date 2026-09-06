@@ -1167,7 +1167,7 @@ function Counts({ counts }: { counts: FeatureCounts }): JSX.Element {
             <b>{counts[s]}</b> {STANDING_WORD[s]}
           </span>
         ))}
-      <span className="cn-fb-count cn-psub">{counts.total} in all</span>
+      <span className="cn-fb-count cn-fb-total">{counts.total} in all</span>
     </p>
   );
 }

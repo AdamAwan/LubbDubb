@@ -222,17 +222,22 @@ export function buildDemoState(): DemoSeed {
     config: {
       // Short heartbeat so the countdown bar visibly moves in the demo.
       heartbeatIntervalMs: 15_000,
-      maxConcurrentAgents: 3,
+      // Four agents are live below, so the cap sits one above them: exactly one
+      // goal is `eligible` this cycle and the rest of the ready ones are `blocked`.
+      maxConcurrentAgents: 5,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
-      // The demo's tracker is a fake with no hierarchy to roll up, so the board is
-      // absent here exactly as it is on a GitHub deployment.
-      featureBoard: false,
-      // The same fake, asked the other question — and the two now differ, which is
-      // the point of separating them. `orphanGoal.test.ts` flips this one on and
-      // leaves the tab off, which is exactly the deployment the band was never
-      // drawing for.
-      canPlaceWorkItem: false,
+      // The demo's tickets hang off Features — `demoTickets` and `buildDemoFeatureBoard`
+      // in demoBackend.ts share one parent map — so the board is on, and the Features
+      // tab is reachable in the Pages build. The remote is spelled `github` in the
+      // config reading, which a real GitHub deployment could not do ([15]); the demo
+      // is a fake tracker with a hierarchy, and the tab is what it is here to show.
+      featureBoard: true,
+      // The same fake, asked the other question. On together with the flag above,
+      // which is the ordinary shape on a tracker with a hierarchy; `orphanGoal.test.ts`
+      // drives the two apart itself. With this on, the orphan band draws on the goal
+      // pages of #341 and every other parentless goal, and the placement asks appear.
+      canPlaceWorkItem: true,
       // A plausible checkout, so the demo's Discuss link is a real `claude://code/new`
       // rather than one pointing at nothing. It opens whatever the visitor has —
       // which is the honest demonstration: the control hands off to their machine.
@@ -682,15 +687,15 @@ export function buildDemoState(): DemoSeed {
        * a goal here, in the order they are gated:
        *
        *   done       #352   retained  #357   has_pr    #388, #376
-       *   active     #332   ignored   #366   container #300
+       *   active     #332, #368       ignored   #366   container #300
        *   unwatched  #371   planning  #390, #395       delivered #364
        *   appraisal      #379   cooldown  #345   escalated #359
-       *   blocked    #333, #368, #382  eligible  #341
+       *   blocked    #333, #382  eligible  #341
        *
-       * `blocked` outnumbers `eligible` on purpose: the cap is 3 and two agents
+       * `blocked` outnumbers `eligible` on purpose: the cap is 5 and four agents
        * are live, so exactly one goal can start this cycle and the queue below
        * dispatches it. A fixture set where six goals are all "eligible" under a
-       * cap of three is a world the dispatcher could never have produced.
+       * cap of five is a world the dispatcher could never have produced.
        *
        * Thirteen of the fourteen are reachable by clicking: the backlog lists every
        * *open* item, in one of its four groups, and the overview reaches the retained
@@ -827,7 +832,11 @@ export function buildDemoState(): DemoSeed {
           labels: ['bug', 'priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
+          // An agent is on it and parked on a question (`agent-a4`, `esc-6`) — the
+          // one escalation in the demo raised against a goal rather than a pull
+          // request, which is the only kind the feature board counts under a Feature.
+          pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
+          spend: demoSpend(368, 0.27, 1),
         }),
         // The two goals the in-flight pull requests belong to. They are here so
         // that every ask the demo raises has a goal page to be read on: an
@@ -1165,6 +1174,38 @@ export function buildDemoState(): DemoSeed {
         agentId: 'agent-a2',
         createdAt: ago(4),
         updatedAt: ago(2),
+      },
+      // The run behind #332's `active` — a story under the demo's one real Feature
+      // (#300), so the board has a goal-origin run to draw as being worked.
+      {
+        id: 'task-a3',
+        kind: 'code',
+        title: 'Give HTTP providers a bounded file-tool loop (#332)',
+        branch: 'issue/332',
+        originRef: 'issue:332',
+        originTitle: 'Give HTTP providers a bounded file-tool loop',
+        originSummary:
+          'An HTTP provider has no tools of its own, so it needs list_dir / read_file / grep with a ceiling.',
+        dispatchReason: 'Open issue #332 has no linked PR and no agent is on it.',
+        status: 'running',
+        agentId: 'agent-a3',
+        createdAt: ago(23),
+        updatedAt: ago(5),
+      },
+      // The run behind #368's `active`, parked on a question (`esc-6`).
+      {
+        id: 'task-a4',
+        kind: 'code',
+        title: 'Retry transient 502s from the embeddings endpoint (#368)',
+        branch: 'issue/368',
+        originRef: 'issue:368',
+        originTitle: 'Retry transient 502s from the embeddings endpoint',
+        originSummary: 'An incremental index run aborts whole-sale on one 502 from the embeddings provider.',
+        dispatchReason: 'Open issue #368 has no linked PR and no agent is on it.',
+        status: 'running',
+        agentId: 'agent-a4',
+        createdAt: ago(35),
+        updatedAt: ago(6),
       },
       {
         id: 'task-a0',
@@ -2517,6 +2558,49 @@ export function buildDemoState(): DemoSeed {
         resumeAttempts: 0,
       },
       {
+        id: 'agent-a3',
+        taskId: 'task-a3',
+        status: 'running',
+        cwd: '/work/magpie-332',
+        pid: 5012,
+        waitingReason: null,
+        sessionId: null,
+        startedAt: ago(23),
+        endedAt: null,
+        costUsd: 0.52,
+        inputTokens: 236_000,
+        outputTokens: 11_800,
+        cacheReadTokens: 190_000,
+        cacheCreationTokens: 14_000,
+        numTurns: 4,
+        note: 'Offering list_dir / read_file / grep as tools; the call ceiling is per job, not per turn',
+        notedAt: ago(5),
+        resumedAt: null,
+        resumeAttempts: 0,
+      },
+      {
+        id: 'agent-a4',
+        taskId: 'task-a4',
+        status: 'waiting',
+        cwd: '/work/magpie-368',
+        pid: 5077,
+        waitingReason:
+          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, or turn the SDK’s off and own the whole policy?',
+        sessionId: null,
+        startedAt: ago(35),
+        endedAt: null,
+        costUsd: 0.27,
+        inputTokens: 141_000,
+        outputTokens: 5_900,
+        cacheReadTokens: 108_000,
+        cacheCreationTokens: 8_100,
+        numTurns: 2,
+        note: 'Found the SDK’s own retry — asking before stacking a second one on it',
+        notedAt: ago(6),
+        resumedAt: null,
+        resumeAttempts: 0,
+      },
+      {
         id: 'agent-a0',
         taskId: 'task-a0',
         status: 'done',
@@ -2618,6 +2702,21 @@ export function buildDemoState(): DemoSeed {
         decidedAt: null,
         escalationId: 'esc-3',
         createdAt: ago(12),
+      },
+      // The merge of #390's second rung, held for the operator: auto-merge is off
+      // in the demo (see `dec-1`), so a green, approved pull request is proposed
+      // rather than landed. This is what PR #413's `attention: you` is about.
+      {
+        id: 'prop-3',
+        kind: 'merge',
+        ref: 'pr:413:merge',
+        status: 'pending',
+        action: { type: 'merge_pr', reason: 'PR #413 is merge-ready', prNumber: 413, method: 'squash' },
+        note: null,
+        decidedBy: null,
+        decidedAt: null,
+        escalationId: 'esc-7',
+        createdAt: ago(15),
       },
     ],
     escalations: [
@@ -2739,6 +2838,47 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(2),
         answeredAt: null,
       },
+      // A question raised against a *goal* rather than a pull request — `esc-1`
+      // above names `pr:409`, and the feature board counts a question under a
+      // Feature only where the escalation names one of its stories. This is that
+      // arm: #368's agent parked, the fleet stopped on it, and a reply owed.
+      {
+        id: 'esc-6',
+        type: 'answer_question',
+        status: 'open',
+        prompt:
+          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, or turn the SDK’s off and own the whole policy?',
+        context: {
+          taskTitle: 'Retry transient 502s from the embeddings endpoint (#368)',
+          originRef: 'issue:368',
+          recentOutput: 'packages/index/src/embed.ts:41  client = new EmbeddingsClient({ maxRetries: 1 })',
+        },
+        agentId: 'agent-a4',
+        taskId: 'task-a4',
+        response: null,
+        createdAt: ago(6),
+        answeredAt: null,
+      },
+      // The ask behind `prop-3`: the harness, not an agent, holding a merge for a
+      // verdict. Agentless for the plan approval's reason — nothing is parked on
+      // it, so the queue groups it as the operator's own.
+      {
+        id: 'esc-7',
+        type: 'approve_change',
+        status: 'open',
+        prompt:
+          'PR #413 ("#390 [2/3] refactor(jobs): validate every payload through the catalog") is approved, green and ' +
+          'clean against main — merge it?',
+        context: {
+          originRef: 'pr:413',
+          prNumber: 413,
+        },
+        agentId: null,
+        taskId: null,
+        response: null,
+        createdAt: ago(15),
+        answeredAt: null,
+      },
       // The harness asking, not an agent: a shortfall whose cause is the goal
       // itself, which schedules nothing and so is a question rather than a
       // proposal. Here because it is the *long* case — the assessor's write-up is
@@ -2832,7 +2972,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(12),
       },
     ],
-    // The dispatcher's ranked pickup plan from the "last pulse": cap 3 with two
+    // The dispatcher's ranked pickup plan from the "last pulse": cap 5 with four
     // live agents leaves headroom 1, so the top candidate dispatches and the
     // rest sit below the cut.
     // A fleet with more work than slots — the state the harness is *for*, so the
@@ -2842,7 +2982,7 @@ export function buildDemoState(): DemoSeed {
     runway: {
       state: 'healthy',
       runwayMinutes: 187,
-      inflight: 3,
+      inflight: 4,
       queued: 11,
       reservoir: 4,
       reservoirContainers: 1,
@@ -2855,7 +2995,7 @@ export function buildDemoState(): DemoSeed {
       unmeasuredRuns: 0,
       idleSlots: 0,
       headline: 'About 3h 7m of work queued',
-      detail: '3 in flight, 11 waiting.',
+      detail: '4 in flight, 11 waiting.',
     },
     upcoming: {
       cycleId: 'cycle-103',
@@ -3080,7 +3220,7 @@ export function buildDemoState(): DemoSeed {
     },
     // The Yield gauge's reading. Not every run finishes in the demo either: a
     // fleet that has never lost one is a fleet whose gauge nobody would click.
-    runOutcomes: { settled: 24, live: 3, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
+    runOutcomes: { settled: 24, live: 4, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
   };
 
   const transcripts: Record<string, string> = {
@@ -3128,6 +3268,18 @@ export function buildDemoState(): DemoSeed {
       'CONFLICT (content): Merge conflict in packages/git/src/review-decision.ts',
       'Both sides changed reviewDecisionToApproval. Need a human call.',
       '@@LUBBDUBB_WAITING: which mapping wins?@@',
+    ].join('\n'),
+    'agent-a3': [
+      '$ claude implement-332',
+      'Reading packages/providers/src/http.ts — the provider gets a prompt and nothing else.',
+      'Adding list_dir / read_file / grep as tools on the HTTP provider, with a per-job call ceiling.',
+      'npm test -w packages/providers … 3 new, all green so far',
+    ].join('\n'),
+    'agent-a4': [
+      '$ claude implement-368',
+      'Reading packages/index/src/embed.ts — the batch call aborts the whole run on one 502.',
+      'The EmbeddingsClient is built with maxRetries: 1, so the SDK already retries once.',
+      '@@LUBBDUBB_WAITING: bound our retry on top of the SDK’s, or own the whole policy?@@',
     ].join('\n'),
     'agent-a0': [
       '$ claude implement-364',

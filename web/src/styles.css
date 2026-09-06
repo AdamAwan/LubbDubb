@@ -8684,6 +8684,9 @@ select:disabled {
   color: var(--cn-fg);
   font-weight: 500;
 }
+.cn-fb-total {
+  color: var(--cn-fg-faint);
+}
 .cn-fb-c-delivered b {
   color: var(--cn-green-ink);
 }
@@ -8705,6 +8708,17 @@ select:disabled {
 }
 .cn-fb-attn b {
   color: var(--cn-fg);
+}
+/* Refs inside the sentence stay in the sentence: the group's own right-packing and
+   rule are for a row's trailing column, and a line of prose has neither. */
+.cn-fb-attn .cn-refs,
+.cn-fb-hold-title .cn-refs {
+  display: inline-flex;
+  justify-content: flex-start;
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+  vertical-align: baseline;
 }
 
 /* -- reach ------------------------------------------------------------------- */
@@ -8948,9 +8962,13 @@ select:disabled {
 .cn-fb-story-row {
   display: flex;
   gap: 8px;
-  align-items: baseline;
-  flex-wrap: wrap;
+  align-items: center;
   color: var(--cn-fg-dim);
+  min-width: 0;
+}
+.cn-fb-story-row .cn-fb-goal {
+  flex: 1;
+  min-width: 0;
 }
 .cn-fb-story-row .cn-refs {
   border-left: 0;
