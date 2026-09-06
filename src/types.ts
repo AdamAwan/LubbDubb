@@ -1270,45 +1270,23 @@ export interface IssueRun {
   outcome: IssueRunOutcome | null;
   /** Null until the operator dismisses it — the one thing that ends a run. */
   dismissedAt: string | null;
-  /**
-   * What the operator said when they ended a run whose validation plan was not
-   * clear. Required only in that case, so null is the ordinary reading and not a
-   * gap: nobody was asked.
-   */
+  /** What the operator said when they ended a run whose validation plan was not clear. Null when nobody was asked. */
   dismissNote: string | null;
   updatedAt: string;
 }
 
 /**
- * Who decided an issue was delivered: the assessing agent, the operator directly,
- * or the **planner** that found the goal already met before anything was built.
- *
- * The third is the same statement made at the other end of the run. An assessor
- * judges delivered work; a planner judges a goal nothing has started on, and the
- * answer "this is already true of the repository" is one it reaches often enough
- * that the alternative — a plan whose one part exists so that an agent can
- * discover the same thing and conclude it — was work invented to fit the shape.
- * → `src/mcp/planNotNeeded.ts`
+ * Who decided an issue was delivered: the assessing agent, the operator, or the planner that
+ * found the goal already met before anything was built. → `src/mcp/planNotNeeded.ts`
  */
 export type DeliveryAuthor = 'assessor' | 'planner' | 'operator';
 
 /**
- * One issue's standing `delivered` verdict — the harness's own park.
- *
- * Distinct from {@link IssueConclusion}, and deliberately not a third member of
- * {@link IssueConclusionVerdict}, because the two have different lifetimes and
- * different readers. A conclusion is declared once by the agent that did the work
- * and **gates nothing** — rule `work-item-back-to-pickup` is its only consumer. A delivery verdict is
- * re-read by the pickup gate every pulse and stops standing when the world moves
- * (`src/delivery/delivery.ts`). Folding them would give the resolver an expiring
- * member its other two do not have, and would overwrite the working agent's note
- * with the assessor's.
- *
- * They are mutually exclusive: writing either clears the other, in the store, so
- * an issue never carries a conclusion and a delivery that contradict.
- *
- * `delivered` is weaker than the tracker's `closed` and reversible. It says the
- * harness believes it has done what it can, and its only effect is to stop pickup.
+ * One issue's standing `delivered` verdict — the harness's own park. Distinct from
+ * {@link IssueConclusion} (a different lifetime and reader): a conclusion is declared once and
+ * gates nothing, a delivery verdict is re-read by the pickup gate every pulse and stops standing
+ * when the world moves. Writing either clears the other. `delivered` is weaker than `closed` and
+ * reversible; its only effect is stopping pickup.
  */
 export interface IssueDelivery {
   /** The issue, as `issue:<n>` — the same origin the conclusion and every gate keys on. */
@@ -1327,14 +1305,9 @@ export interface IssueDelivery {
 }
 
 /**
- * What a goal appraisal may conclude about an issue's text (issue #158).
- *
- * `workable` is stored as much as `unclear` is, for the reason the planner
- * persists a `single` verdict: without a row for the affirmative the appraiser
- * re-runs on the same issue every cycle. Only `unclear` holds anything.
- *
- * There is deliberately no third "not appraised" member — that is the absence of a
- * row, which is what makes a crashed appraiser fail open (see `src/intake/appraisal.ts`).
+ * What a goal appraisal may conclude about an issue's text. `workable` is stored as much as
+ * `unclear`, else the appraiser re-runs every cycle. No third "not appraised" member — that is
+ * the absence of a row, which is what makes a crashed appraiser fail open.
  */
 export type GoalAppraisalVerdict = 'workable' | 'unclear';
 
@@ -1342,20 +1315,11 @@ export type GoalAppraisalVerdict = 'workable' | 'unclear';
 export type AppraisalAuthor = 'appraiser' | 'operator';
 
 /**
- * One issue's standing goal appraisal — the answer to "is this ticket workable", cast
- * *before* anything is dispatched against it.
- *
- * Sibling of {@link IssueDelivery} and split from it for the reason that one is
- * split from {@link IssueConclusion}: the two verdicts are about opposite ends of
- * the same issue. A delivery says the work is *finished*; an appraisal says the goal
- * could not be *started* from. They can be true at different times about one
- * issue, so they are two rows, and neither clears the other.
- *
- * The distinguishing field is {@link goalRef}: an appraisal judges a *text*, not a
- * state of the world, so the verdict is bound to the exact text it judged. Change
- * the title or the body and the verdict no longer describes the ticket in front of
- * you, which is what makes "re-appraise when it is edited" a lookup rather than an
- * event the harness has to have witnessed.
+ * One issue's standing goal appraisal — whether the ticket is workable, cast before anything is
+ * dispatched against it. Sibling of {@link IssueDelivery}: a delivery says the work is finished,
+ * an appraisal says the goal could not be started from — both can be true at different times, so
+ * neither clears the other. Bound to the exact text via {@link goalRef}, so an edited ticket
+ * re-appraises by lookup rather than an event the harness had to witness.
  */
 export interface IssueAppraisal {
   /** The issue, as `issue:<n>` — the same origin every gate keys on. */
@@ -1364,70 +1328,40 @@ export interface IssueAppraisal {
   /** Why the goal is, or is not, actionable. Required: a bare verdict is not reviewable. */
   summary: string;
   /**
-   * What the ticket has to say before an agent could start, one question per
-   * entry, addressed to whoever wrote it. Empty on every `workable` verdict and on
-   * an operator's. This is what turns a refusal into a next step: the ticket
-   * comment renders it as the checklist the author works through.
+   * What the ticket has to say before an agent could start, one question per entry, addressed to
+   * whoever wrote it. Empty on every `workable` verdict and on an operator's.
    */
   missing: string[];
   /**
-   * A fingerprint of the goal text this verdict was cast against (see
-   * `goalFingerprint`). The hold ends the instant the issue's current text
-   * fingerprints differently — no timer, and no world event to have missed.
+   * A fingerprint of the goal text this verdict was cast against (see `goalFingerprint`). The
+   * hold ends the instant the issue's current text fingerprints differently — no timer needed.
    */
   goalRef: string;
   by: AppraisalAuthor;
   /**
-   * The model profile the appraiser proposed for this goal's work (issue #342), or
-   * null when it named none — which is every `unclear` verdict, every deployment
-   * with no `agentModels`, and any appraiser that simply did not answer.
-   *
-   * Kept whatever the operator then decides, so the pair (this, the tag on the
-   * ticket) is what says a human intervened. Nothing reads it as the pin: the
-   * tag is the resolved answer, this is what was suggested.
+   * The model profile the appraiser proposed for this goal's work, or null when it named none.
+   * Kept regardless of what the operator later decides, so the pair (this, the ticket tag) shows
+   * whether a human intervened; nothing reads this as the pin.
    */
   proposedProfile: string | null;
   /**
-   * When the profile question was settled — by the operator answering, or at the
-   * moment the proposal was written if there was nothing to ask.
-   *
-   * Null is the whole of the gate: a proposal with no answer holds the funnel
-   * (see `appraisalHold`). Stamped at write time when the appraiser agreed with what
-   * was already standing, so agreement costs no click and raises no question.
+   * When the profile question was settled — by the operator answering, or at write time if
+   * nothing needed asking. Null holds the funnel (see `appraisalHold`).
    */
   profileAnsweredAt: string | null;
   /**
-   * The container work item the appraiser proposed this goal should hang off, or
-   * null when it named none — every `unclear` verdict, every flat tracker, and any
-   * appraiser that had nothing to suggest.
-   *
-   * A number rather than a resolved item: what the tracker holds is the id, and a
-   * title cached here would be free to drift from the one on the board. The
-   * cockpit resolves it through `refUrls` like every other ref.
-   *
-   * **Nothing here expires it.** Whether the question is still worth asking is
-   * derived from the live work item — an operator who sets the parent by hand in
-   * the tracker makes the row disappear on the next read, with no timer and no
-   * world event to have missed. See {@link parentSettledAt} for the one thing
-   * that is stored.
+   * The container work item the appraiser proposed this goal should hang off, or null when it
+   * named none. A number, not a resolved item — the cockpit resolves it through `refUrls`.
+   * Nothing here expires it; whether the question is still worth asking is derived from the live
+   * work item. See {@link parentSettledAt} for the one thing that is stored.
    */
   proposedParent: number | null;
   /**
-   * When the operator answered the parent question — whichever of the three
-   * answers they gave.
-   *
-   * The one piece of state a *derived* question needs. Two of the answers end it
-   * on their own: accepting the proposal and supplying a different value both
-   * change the work item, which the next world read sees. The third — "this goal
-   * wants no parent" — changes nothing out there, so without a stamp a goal that
-   * legitimately has none sits in the needs band for ever. Stamped on all three
-   * rather than only that one, because the derived read lags a pulse behind the
-   * write and a row that reappeared for one refresh would read as a click that
-   * did not take.
-   *
-   * Scoped to this row, so a re-appraisal against rewritten goal text asks again: the
-   * ticket having been rewritten is the one signal that the old answer may no
-   * longer be the right one.
+   * When the operator answered the parent question, whichever of the three answers they gave.
+   * The one piece of state a derived question needs — accepting or supplying a value both change
+   * the work item (visible on the next read), but "this goal wants no parent" changes nothing out
+   * there, so without a stamp it sits in the needs band forever. Scoped to this row, so rewritten
+   * goal text asks again.
    */
   parentSettledAt: string | null;
   /** The area path the appraiser proposed, from the candidates the harness offered it. */
@@ -1445,12 +1379,9 @@ export interface IssueAppraisal {
 }
 
 /**
- * One entry on an issue's shared scratchpad — what an agent working the goal left
- * for whoever works it next, and for the retrospective at the end.
- *
- * Append-only: there is no update and no delete anywhere above this type. The pad
- * is a trail, and a retrospective reads *when* something was learned as much as
- * what.
+ * One entry on an issue's shared scratchpad — what an agent working the goal left for whoever
+ * works it next, and for the retrospective at the end. Append-only: no update or delete anywhere
+ * above this type.
  */
 export interface ScratchEntry {
   id: string;
@@ -1464,20 +1395,14 @@ export interface ScratchEntry {
   /** An optional scannable tag the author chose. */
   topic: string | null;
   note: string;
-  /**
-   * What makes the entry a **fork** rather than a note: the witness log of
-   * [31](../docs/spec/31-review-packs.md#the-witness-log). Null on an ordinary
-   * note, which is every entry from before the field existed.
-   */
+  /** What makes the entry a fork rather than a note — the witness log. Null on an ordinary note. */
   decision: PadDecision | null;
   createdAt: string;
 }
 
 /**
- * A moment where the change could reasonably have gone another way, recorded by
- * the agent that took it. `rejected` is the field that justifies the record: the
- * road not taken leaves no trace in the tree, and a diff can never answer *why not
- * the other way*. Every line is one line; the lists may be empty.
+ * A moment where the change could reasonably have gone another way, recorded by the agent that
+ * took it. `rejected` justifies the record — a diff can never answer why not the other way.
  */
 export interface PadDecision {
   /** What the change does here. */
@@ -1491,13 +1416,9 @@ export interface PadDecision {
 }
 
 /**
- * What a pad amounts to without reading it: how much was written, and when the
- * last entry landed.
- *
- * The reading rather than the trail, for the retrospective's reason exactly — the
- * snapshot is polled continuously, and a goal's pad is unbounded prose, so what
- * rides on every poll is only what a control needs to know there is something to
- * open. The entries themselves are fetched when a reader opens them.
+ * What a pad amounts to without reading it: how much was written, and when the last entry
+ * landed. The snapshot is polled continuously, so this carries only what a control needs to know
+ * there's something to open; entries are fetched separately.
  */
 export interface ScratchPadSummary {
   padRef: string;
@@ -1507,11 +1428,8 @@ export interface ScratchPadSummary {
 }
 
 /**
- * One goal's retrospective: what shipped, and how the run went.
- *
- * Nothing gates on it — a goal is delivered whether or not anybody wrote it up —
- * which is what makes a missing one silence rather than a hold, and what makes the
- * rule that produces it safe to fail open.
+ * One goal's retrospective: what shipped, and how the run went. Nothing gates on it — a missing
+ * one is silence, not a hold, which is what makes the rule that produces it safe to fail open.
  */
 export interface Retrospective {
   /** The issue it is about, `issue:<n>` — the same key every other verdict uses. */
@@ -1529,28 +1447,19 @@ export interface Retrospective {
 }
 
 /**
- * A **review pack**: one pull request's change restated as a handful of ideas,
- * each followed through every file it touched, with every sentence a claim the
- * checker marked true, false or undecidable.
- * → `docs/spec/31-review-packs.md#the-pack`
+ * A review pack: one pull request's change restated as a handful of ideas, each followed
+ * through every file it touched, with every sentence a claim the checker marked true, false or
+ * undecidable. → `docs/spec/31-review-packs.md#the-pack`
  *
- * **A document, not a row.** It is written whole by the author, annotated whole by
- * the checker, and read whole by every renderer; nothing queries inside it. So it
- * carries its own `schema`, the pull request and head it was written against, and
- * the code its anchors point at — a pack is complete without a repository behind
- * it, which is what lets the HTML companion render one with no harness.
- *
- * The checker's fields — `order`, each idea's `attention` and `cue`, each claim's
- * `verdict` and `evidence` — are null (or empty, for the list) on a pack the
- * checker has not yet read, and a renderer draws the gap rather than guessing.
+ * A document, not a row: written whole by the author, annotated whole by the checker, read whole
+ * by every renderer — nothing queries inside it. Self-contained (carries its own code) so the
+ * HTML companion can render one with no harness behind it. The checker's fields (`order`, each
+ * idea's `attention`/`cue`, each claim's `verdict`/`evidence`) are null/empty until it has run.
  */
 export interface ReviewPack {
   /**
-   * The document's shape version, compared by every reader against the one it
-   * knows: a renderer handed a version it does not know refuses loudly rather than
-   * drawing what it recognises, because a page silently missing its false-claim
-   * banner is the failure this subsystem exists to catch. A number rather than a
-   * literal type, so that comparison can be written.
+   * The document's shape version, compared by every reader against the one it knows: an unknown
+   * version refuses loudly rather than silently rendering a page missing its false-claim banner.
    */
   schema: number;
   prNumber: number;
@@ -1566,9 +1475,8 @@ export interface ReviewPack {
   order: string[];
   ideas: ReviewIdea[];
   /**
-   * Whether a witness log existed when the pack was written. False on a pull
-   * request nobody witnessed, where every claim comes out `inferred` and the
-   * header says so rather than leaving the reader to notice.
+   * Whether a witness log existed when the pack was written. False on a pull request nobody
+   * witnessed, where every claim comes out `inferred` and the header says so.
    */
   witnessed: boolean;
   /** The colophon's "what is fake" sentence — what a demo owes, and what a real pack states as "nothing". */
@@ -1582,10 +1490,9 @@ export interface ReviewPack {
  */
 export interface ReviewIdea {
   /**
-   * Minted by the author on every run, so nothing durable is keyed to it — a
-   * reviewer's marks ride on the hunks an idea owns ({@link ReviewMark}). The one
-   * reserved id is `plumbing`: the idea that owns hunks carrying nothing to
-   * review, declared like any other so the checker can verify they are empty.
+   * Minted by the author on every run, so nothing durable is keyed to it — a reviewer's marks
+   * ride on the hunks an idea owns ({@link ReviewMark}). `plumbing` is the one reserved id, for
+   * hunks carrying nothing to review.
    */
   id: string;
   /** One sentence, falsifiable, stating what this idea does — for the checker. */
@@ -1599,18 +1506,9 @@ export interface ReviewIdea {
   /** The checkable statements this idea rests on. */
   claims: ReviewClaim[];
   /**
-   * The test scenarios this idea is covered by, one short line each — never
-   * explained, only listed: a reader wants assurance the cases were thought of,
-   * and a paragraph about a test is a paragraph nobody reads.
-   *
-   * Why it lives on the idea rather than in an idea of its own: a "Tests" section
-   * separates a change from its evidence, so the reader who has just decided
-   * whether the code is right has to go somewhere else to find out whether it is
-   * exercised. `assemblePack` refuses an idea whose hunks are all test files for
-   * that reason. → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
-   *
-   * Optional because a pack written before this field existed reads it back as
-   * `undefined`; every renderer treats that as the empty list.
+   * The test scenarios this idea is covered by, one short line each, never explained. Lives on
+   * the idea rather than in an idea of its own, so a reader is not sent elsewhere to check
+   * coverage. → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
    */
   coverage?: string[];
   /** How hard to look. The checker's, never the author's; null until it has run. */
@@ -1667,9 +1565,8 @@ export interface ReviewRange {
 export type ReviewAnchorMark = 'key' | 'false' | 'disputed';
 
 /**
- * A note states its provenance the way a claim does, because a reader weighs the
- * two differently: written by the witness at the time — citing the pad entry and
- * stamped with when — or added by the author afterwards.
+ * A note states its provenance the way a claim does: written by the witness at the time (citing
+ * the pad entry) or added by the author afterwards.
  */
 export type ReviewNote = { by: 'witness'; text: string; entryId: string; at: string } | { by: 'author'; text: string };
 
@@ -1685,20 +1582,16 @@ export interface ReviewClaim {
   /** What the checker did to decide — the search, the test, the file it read. Null until it has run. */
   evidence: string | null;
   /**
-   * The checker's finding, on a `false` claim and on nothing else: the page's most
-   * important prose. Null until the checker has run, and null on every claim that
-   * held or could not be decided. → `docs/spec/31-review-packs.md#what-a-false-claim-does`
+   * The checker's finding, on a `false` claim and nothing else — the page's most important
+   * prose. Null until the checker has run. → `docs/spec/31-review-packs.md#what-a-false-claim-does`
    */
   finding: ReviewFinding | null;
 }
 
 /**
- * Where a claim came from, structurally rather than decoratively. A `witnessed`
- * claim cites the pad entry (`scr_…`) and the entry is rendered verbatim beside
- * it — the pack stores the id, never a copy. `disputed` cites the entry the code
- * disagrees with; the claim states what the code does. `inferred` is the author's
- * own reading, where the witness said nothing.
- * → `docs/spec/31-review-packs.md#provenance`
+ * Where a claim came from, structurally rather than decoratively. `witnessed` cites the pad
+ * entry (stores the id, never a copy); `disputed` cites the entry the code disagrees with;
+ * `inferred` is the author's own reading. → `docs/spec/31-review-packs.md#provenance`
  */
 export type ReviewProvenance =
   | { kind: 'witnessed'; entryId: string }
@@ -1709,40 +1602,27 @@ export type ReviewProvenance =
 export type ReviewVerdict = 'true' | 'false' | 'cant_tell';
 
 /**
- * What a false claim does to the document: the finding lives **on the claim**,
- * because the claim is what is false, and the anchor it is about carries the
- * `false` mark so the walk shows where. The page draws it twice — at the top of
- * the idea, unfolded, and as the boxed section after the ideas — from this one
- * field, and the gate above the ideas counts claims whose `verdict` is `false`.
+ * What a false claim does to the document: the finding lives on the claim, and the anchor it is
+ * about carries the `false` mark so the walk shows where. Drawn twice from this one field.
  */
 export interface ReviewFinding {
   /** One plain line saying what is wrong. */
   headline: string;
-  /**
-   * The consequence worked out, how serious it is and whose call it is — the
-   * closing paragraph. Markdown; a table where numbers make it concrete.
-   */
+  /** The consequence worked out, how serious it is and whose call it is. Markdown. */
   body: string;
   /**
-   * The step of the idea's walk the claim is about, 1-based as the page numbers
-   * them — the anchor that carries `mark: 'false'`. Null where no step fits: the
-   * contradiction is somewhere the walk never stopped, and {@link counter} shows it.
+   * The step of the idea's walk the claim is about, 1-based — the anchor that carries
+   * `mark: 'false'`. Null where the contradiction is somewhere the walk never stopped, and
+   * {@link counter} shows it.
    */
   step: number | null;
-  /**
-   * The code that contradicts the claim, where it is not already on the walk: a
-   * range of the tree at the head, read by the harness like a region anchor's, with
-   * the checker's one-line caption. The "two pieces of code that disagree" are the
-   * marked step and this.
-   */
+  /** The code that contradicts the claim, where not already on the walk — a range of the tree at the head. */
   counter: { range: ReviewRange; code: string[]; caption: string } | null;
 }
 
 /**
- * A pack as the store holds it: the document, and when it was written. The pull
- * request and head sha are inside the document; the row copies them out as
- * columns because staleness is decided against the pull request's head on every
- * load, and that read must not open the document to do it.
+ * A pack as the store holds it: the document, and when it was written. Pull request and head sha
+ * are copied out as columns so staleness can be checked without opening the document.
  */
 export interface ReviewPackRecord {
   pack: ReviewPack;
@@ -1750,19 +1630,13 @@ export interface ReviewPackRecord {
 }
 
 /**
- * Whether one pull request's pack has been shared into the pool, and what became
- * of it. → `docs/spec/31-review-packs.md#sharing-a-pack`
+ * Whether one pull request's pack has been shared into the pool, and what became of it.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
  *
- * **Sharing is a second, deliberate act**, so this row exists only once somebody
- * has asked for one: no row is the ordinary state, and it is the honest one — a
- * pack unshared costs nobody anything, and a pack shared by default costs the
- * fleet its source, in volume.
- *
- * The request is recorded and the publish happens on the pool's own clock, because
- * the publish is never inside a route handler
- * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
- * So the row carries both moments, and a reader can tell "asked for" from "in the
- * pool" without guessing.
+ * Sharing is a second, deliberate act — this row exists only once somebody has asked for one; no
+ * row is the ordinary state. Request and publish happen on different clocks (the publish is
+ * never inside a route handler), so the row carries both moments to distinguish "asked for" from
+ * "in the pool". → `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`
  */
 export interface ReviewPackShare {
   prNumber: number;
@@ -1772,33 +1646,23 @@ export interface ReviewPackShare {
   /** When the transport took it, or null while it has not been published yet. */
   publishedAt: string | null;
   /**
-   * When somebody unshared it, or null. Set only on a share that **is** in the
-   * pool: the copy is still in the namespace until the pool's own arm takes it
-   * out, and the row is what tells the arm to. A withdrawal of a share the pool
-   * never carried has nothing to remove and deletes the row outright, so this is
-   * never set beside a null {@link publishedAt}.
+   * When somebody unshared it, or null. Set only on a share that is in the pool — the copy stays
+   * in the namespace until the pool's own arm removes it, and this tells the arm to. Never set
+   * beside a null {@link publishedAt} (an un-published share is just deleted).
    * → `docs/spec/31-review-packs.md#unsharing-a-pack`
    */
   withdrawnAt: string | null;
   /**
-   * Why the secret backstop refused it, naming the line. Null on a share nothing
-   * refused. A refusal is **loud and never a rewrite**: the pack stays local and
-   * the page says which line stopped it.
-   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+   * Why the secret backstop refused it, naming the line. Null on a share nothing refused. Loud,
+   * never a rewrite — the pack stays local. → `docs/spec/28-cross-fleet-pool.md#data-classification`
    */
   refusal: string | null;
 }
 
 /**
- * What a reviewer did to a pack — an attention override, an idea marked read —
- * held beside the document and never written into it, so a pack rewritten
- * against a new head does not throw their marks away.
- *
- * **Keyed to a hunk, never an idea.** An idea's id is minted on every run, so a
- * mark on one would point at nothing in the next pack. A mark on an idea is
- * recorded against every hunk that idea owns, and the next pack draws it on
- * whichever idea owns the same hunks. A hunk the next head rewrote loses its
- * mark, honestly: the thing that was read is gone.
+ * What a reviewer did to a pack — an attention override, an idea marked read — held beside the
+ * document, never written into it, so a rewritten pack doesn't lose their marks. Keyed to a hunk,
+ * never an idea, since an idea's id is minted fresh on every run.
  * → `docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack`
  */
 export interface ReviewMark {
