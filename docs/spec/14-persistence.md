@@ -464,6 +464,23 @@ then drops any untracked longer than `ttlMs`; `ttlMs <= 0` disables pruning). Ca
 the harness with the origins still queued or staffed, so an override for work the harness has stopped
 tracking is pruned rather than lingering forever (issue #128).
 
+### Feature pauses
+
+`setGoalPause(originRef, paused)` (a `DELETE` when false, an `INSERT … ON CONFLICT DO NOTHING` when
+true, so pausing an already-paused Feature is one statement rather than a reset clock) and
+`listGoalPauses()` (oldest first), over `goal_pauses` — one row per Feature an operator has parked.
+
+A row is the whole of the statement: an origin and the stamp it was made at. **There is no expiry
+column**, and that is a decision rather than an omission — a pause a clock could lift would hand a
+Feature back to the fleet with nobody having asked, and the operator who paused it would find out from
+the agent that started. What ends a pause is a person, which is why the surfaces that draw one count it
+out loud ([06](06-issue-pickup.md#a-pause-withholds-work-so-it-is-said-out-loud)).
+
+It is a table and not a tracker label for the reason [06](06-issue-pickup.md#pausing-a-feature-which-is-not-un-watching-one)
+gives: the watch tag cascades onto every descendant, so expressing a pause as its absence would strip
+the stories' own tags and lose the operator's tagging on the way back. Nothing here writes to the
+provider.
+
 ### Agents
 
 `createAgent`, `updateAgent` (status / pid / waitingReason / endedAt), `getAgent`, `listAgents`,

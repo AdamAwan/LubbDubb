@@ -8,6 +8,7 @@ import { POOL_RETIRED_TABLES, PoolStore, type PoolDigestMirrorRow } from './pool
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
+import { PauseStore } from './pauses.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { RemedyStore } from './remedies.js';
@@ -133,6 +134,7 @@ import type {
   ReviewPack,
   ReviewPackRecord,
   ReviewPackShare,
+  GoalPause,
   GoalPriority,
   PlanStatus,
   PriorityOverride,
@@ -188,6 +190,7 @@ export class Store {
   private readonly jobs: JobStore;
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
+  private readonly pauses: PauseStore;
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly remedies: RemedyStore;
   private readonly mcpCalls: McpCallStore;
@@ -292,6 +295,7 @@ export class Store {
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
+    this.pauses = new PauseStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.pool = new PoolStore(ctx);
     this.remedies = new RemedyStore(ctx);
@@ -461,6 +465,13 @@ export class Store {
   }
   listGoalPriorities(): GoalPriority[] {
     return this.priority.listGoalPriorities();
+  }
+
+  setGoalPause(originRef: string, paused: boolean): void {
+    this.pauses.setGoalPause(originRef, paused);
+  }
+  listGoalPauses(): GoalPause[] {
+    return this.pauses.listGoalPauses();
   }
 
   recordRemedy(input: RemedyInput): Remedy {

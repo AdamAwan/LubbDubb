@@ -3,6 +3,7 @@ import type {
   Decision,
   Escalation,
   FeatureSequence,
+  GoalPause,
   GoalPriority,
   IssueConclusion,
   IssueAppraisal,
@@ -57,6 +58,7 @@ export interface DispatchContext {
   localValidations?: LocalValidation[];
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
+  goalPauses?: GoalPause[];
   profileOverrides?: ProfileOverride[];
   conclusions?: IssueConclusion[];
   deliveries?: IssueDelivery[];

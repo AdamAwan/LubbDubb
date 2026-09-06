@@ -52,6 +52,7 @@ import {
   openPrForIssue,
   type IssuePickupContext,
 } from '../dispatcher/issuePickup.js';
+import { pausedIssueNumbers } from '../goalPause.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { rollUpIssueSpend } from '../issueSpend.js';
 import { tallyRunOutcomes } from '../reliabilityInsights.js';
@@ -224,8 +225,12 @@ export function buildStateSections(
   }
   const appraisals = store.listAppraisals();
   const appraisalsByOrigin = new Map(appraisals.map((a) => [a.originRef, a]));
+  const goalPauses = store.listGoalPauses();
   const pickupCtx: IssuePickupContext = {
-    policy: system.issuePickup,
+    policy: {
+      ...system.issuePickup,
+      pausedIssues: pausedIssueNumbers(goalPauses, world.issues, system.issuePickup.containerTypes),
+    },
     cooldown: DEFAULT_COOLDOWN,
     now: world.takenAt,
     tasks,

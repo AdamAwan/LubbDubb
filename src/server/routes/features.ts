@@ -6,13 +6,15 @@ import { buildSpendGoals } from '../../spendInsights.js';
 import { featureRecords } from '../../summaries/featureRecord.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
-import { checked } from '../validation.js';
+import { checked, requiredBoolean } from '../validation.js';
 import { NumberParams, SequenceAnswerBody } from '../../sequence/answer.js';
+import { z } from 'zod';
+import { goalPauseOrigin } from '../../goalPause.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system }: RouteContext): void {
+export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, connector, config } = system;
 
   const FEATURES_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
@@ -81,6 +83,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         environments: config.environments.map((e) => e.name),
         containerTypes: config.issueContainerTypes,
         watchLabel: watchLabelFor(config.labelPrefix),
+        pauses: new Map(store.listGoalPauses().map((p) => [p.originRef, p])),
       });
 
       const refUrls: Record<string, string> = {};
@@ -116,6 +119,20 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           .send({ error: `feature #${params.number} has no order to answer — it may have been re-proposed` });
       }
       return answered;
+    }),
+  );
+
+  const PauseBody = z.object({ paused: requiredBoolean('paused must be a boolean') });
+  app.post(
+    '/api/features/:number/pause',
+    FEATURES_RATE_LIMIT,
+    checked({ params: NumberParams, body: PauseBody }, ({ params, body, reply }) => {
+      if (!featureBoardOn(config, connector)) {
+        return reply.code(404).send({ error: 'no feature board on this deployment' });
+      }
+      store.setGoalPause(goalPauseOrigin(params.number), body.paused);
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, paused: body.paused };
     }),
   );
 }

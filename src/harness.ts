@@ -305,6 +305,7 @@ export class Harness extends EventEmitter {
       const rejectionSignals = signals ? store.listWorldEventsSince(signals.since, signals.refs) : [];
       const priorityOverrides = store.listPriorityOverrides();
       const goalPriorities = store.listGoalPriorities();
+      const goalPauses = store.listGoalPauses();
       const profileOverrides = store.listProfileOverrides();
       const liveAgents = store.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
@@ -362,6 +363,7 @@ export class Harness extends EventEmitter {
         rejectionSignals,
         priorityOverrides,
         goalPriorities,
+        goalPauses,
         profileOverrides,
         priorRemedies: [
           ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),

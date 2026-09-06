@@ -1211,6 +1211,10 @@ the items the tracker says hang off nothing, and is `null` where there are none;
 the items whose parent link could not be read at all, which is **neither** of the other two — the same
 three-valued distinction `TicketRow.parent` keeps by being optional rather than nullable.
 
+Each feature also carries `paused` — the operator's own `goal_pauses` row, or `null`
+([06](06-issue-pickup.md#pausing-a-feature-which-is-not-un-watching-one)). It is the one field on the
+payload that is not a reading of the tracker, and the server sorts a paused feature to the end.
+
 Every reading on it is quoted rather than re-derived: the outcome word from `src/tickets/outcomes.ts`,
 cost from `buildSpendGoals`, the watch bucket from `src/watchLabels.ts`, which items are containers
 from `isContainerType`, and the environment fold from `rollUpReach` — the **same function** a goal's
@@ -1218,6 +1222,15 @@ own landings are folded with, so `unknown` cannot collapse into `absent` one tie
 verdict about a Feature**: no risk word, no forecast, no age judgement. It is a lens, and no rule under
 `src/dispatcher/` reads it. → [17](17-cockpit.md#the-feature-board),
 [24](24-environments.md#the-three-verdicts)
+
+### `POST /api/features/:number/pause`
+
+`{paused}`. Parks a Feature, or lifts the park: one `goal_pauses` row, gated behind `featureBoardOn`
+with the same 404 as the board itself. It writes **nothing to the tracker** — no label, no state, no
+link — which is the whole of what makes it a different instrument from `POST /api/issues/:n/watch`
+([06](06-issue-pickup.md#pausing-a-feature-which-is-not-un-watching-one)). It broadcasts
+`world:changed` and does **not** run a cycle: a pause only ever takes work away, so there is nothing
+for a cycle to pick up that the next pulse will not see.
 
 ### `GET /api/retrospectives/:ref`
 

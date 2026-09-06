@@ -7,6 +7,7 @@ import type {
   FeatureSummary,
   GoalEnvironmentReach,
   GoalLanding,
+  GoalPause,
   IssueDelivery,
   IssueShortfall,
 } from '../types.js';
@@ -50,6 +51,7 @@ interface BuildInput {
   environments: readonly string[];
   containerTypes: readonly string[] | undefined;
   watchLabel: string;
+  pauses?: ReadonlyMap<string, GoalPause>;
 }
 
 export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 'backfilling' | 'refUrls'> {
@@ -108,6 +110,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       lastLandingAt: latestLanding(group.rows, landedAt),
       landings: landingsUnder(group.rows, landingsByGoal),
       standingKey: input.standingKeys.get(number) ?? '',
+      paused: input.pauses?.get(`issue:${number}`) ?? null,
     });
   }
 
@@ -340,7 +343,8 @@ function orderChildren(rows: readonly FeatureChildRow[]): FeatureChildRow[] {
 
 function byWantsYouThenSize(a: FeatureRollup, b: FeatureRollup): number {
   const wants = (f: FeatureRollup) => f.counts.fellShort + f.counts.unwatched;
-  return wants(b) - wants(a) || b.counts.total - a.counts.total || a.number - b.number;
+  const resting = (f: FeatureRollup) => (f.paused === null ? 0 : 1);
+  return resting(a) - resting(b) || wants(b) - wants(a) || b.counts.total - a.counts.total || a.number - b.number;
 }
 
 export function featureBoardOn(config: { featureBoard: boolean }, connector: { canPlaceWorkItem(): boolean }): boolean {

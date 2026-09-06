@@ -86,21 +86,76 @@ This is a **write to the tracker**, and the one place the harness's reading of t
 into a change to it — the tags, never the links. Nothing here re-parents, links or edits a work item's
 own structure.
 
+## Pausing a Feature, which is not un-watching one
+
+An operator with ten Features on the go wants a way to say **"mine, but not now"**, and un-watching is
+the wrong instrument for it. A pause is a separate statement, and the difference is not cosmetic:
+
+|                 | Watch tag                                                                 | Pause                                                       |
+| --------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Where it lives  | a label on the tracker, visible to everyone                               | a row in the harness's own database (`goal_pauses`)         |
+| What it answers | is this the fleet's work at all                                           | it is the fleet's work, just not right now                  |
+| On a container  | cascades the tag onto every descendant                                    | cascades the **hold**, and writes no tag anywhere           |
+| Undoing it      | re-tags every descendant, flattening whatever per-story tagging was there | changes nothing but the row: every tag is exactly as it was |
+| Expiry          | —                                                                         | none. A pause ends when a person ends it                    |
+
+The last two rows are the whole argument. Un-watching a Feature strips the tag off its stories, so
+re-watching hands back a subtree tagged uniformly rather than the way the operator had it; and the
+board draws an un-watched story as `unwatched` — the standing that means _nobody has looked at this_ —
+which is the wrong sentence about work somebody deliberately parked. A pause leaves the tags alone and
+says the true thing.
+
+`goalPauseOrigin(n)` is the ref (`issue:<n>`) and `pausedIssueNumbers(pauses, issues, containerTypes)`
+(`src/goalPause.ts`) expands the rows into the numbers actually held — the Feature and, through
+`watchCascadeTargets`, every descendant beneath it. A paused ref the world snapshot no longer holds
+still pauses itself: the hold works over an aged-out world, exactly as the watch toggle does.
+
+The gate is `policy.pausedIssues` on `IssuePickupPolicy`, read by `isIssuePickupEligible` and by
+`issuePickupStatus`, which answers with its **own** status word, `paused` — never folded into
+`unwatched`, because those are the two readings this whole feature exists to keep apart.
+
+### The pause set is folded in per cycle
+
+`RuleDispatcher.stageContext` builds `pausedIssues` from `ctx.goalPauses` on **every** cycle rather
+than reading it off the boot-time policy, and `stateSnapshot` does the same for the cockpit's lens. The
+policy is assembled once in `src/system.ts` and lives for the process; a pause snapshotted into it
+would leave the fleet dispatching under a Feature an operator paused ten minutes ago, and nothing about
+that is red — it is the same shape as the worktree pool's cap, which is read by reference for the same
+reason ([09](09-execution.md#exhaustion)).
+
+### A pause withholds work, so it is said out loud
+
+Withholding is the quietest failure this harness has ([33](33-story-sequencing.md#fail-open)), so a
+pause is countable everywhere it acts: the goal's pickup status names it, and the board's header
+carries `· N paused` beside the feature count. Deliberately **no expiry** — a clock that un-paused on
+its own would put a Feature back on the fleet with nobody having asked — which is exactly why the count
+has to be visible: the only thing that ends a pause is a person seeing it.
+
+The toggle is `POST /api/features/:number/pause`
+([16](16-http-api.md#post-apifeaturesnumberpause)), on the feature board and nowhere else — a pause is
+a statement about a Feature, and offering it per story would be a second, quieter way to say the thing
+the watch tag already says.
+
+**A pause holds issue pickup, and nothing else.** Pull requests already open under a paused Feature go
+on being worked, because what is acted on there is the PR's own watch tag ([07](07-pull-requests.md)),
+and abandoning an open PR mid-flight is not what "pause" says. The hold is on new work starting.
+
 ## `IssuePickupPolicy`
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                | Effect                                                                                          |
-| ----------------- | -------------------------- | ----------------------------------------------------------------------------------------------- |
-| `watchLabel`      | derived from `labelPrefix` | Opt-in gate. Empty = gate off.                                                                  |
-| `requireOwnLabel` | `userId` being set         | Read `labelsAddedByViewer` instead of `labels` for the watch check.                             |
-| `priorityLabels`  | `issuePriorityLabels`      | Label → weight.                                                                                 |
-| `defaultPriority` | `issueDefaultPriority`     | Weight when no label matches.                                                                   |
-| `pickupStates`    | `issuePickupStates`        | Allowed provider-native workflow states.                                                        |
-| `containerTypes`  | `issueContainerTypes`      | Item types that are never worked. Unset falls back to the default pair; `[]` is off.            |
-| `parentedTypes`   | `issueParentedTypes`       | Item types expected to hang off a container. Unset falls back to the default list; `[]` is off. |
-| `inReviewState`   | `issueInReviewState`       | The state rule `work-item-in-review` parks an item in.                                          |
-| `inProgressState` | `issueInProgressState`     | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`.            |
+| Field             | From config                         | Effect                                                                                                       |
+| ----------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `watchLabel`      | derived from `labelPrefix`          | Opt-in gate. Empty = gate off.                                                                               |
+| `requireOwnLabel` | `userId` being set                  | Read `labelsAddedByViewer` instead of `labels` for the watch check.                                          |
+| `priorityLabels`  | `issuePriorityLabels`               | Label → weight.                                                                                              |
+| `defaultPriority` | `issueDefaultPriority`              | Weight when no label matches.                                                                                |
+| `pickupStates`    | `issuePickupStates`                 | Allowed provider-native workflow states.                                                                     |
+| `containerTypes`  | `issueContainerTypes`               | Item types that are never worked. Unset falls back to the default pair; `[]` is off.                         |
+| `parentedTypes`   | `issueParentedTypes`                | Item types expected to hang off a container. Unset falls back to the default list; `[]` is off.              |
+| `inReviewState`   | `issueInReviewState`                | The state rule `work-item-in-review` parks an item in.                                                       |
+| `inProgressState` | `issueInProgressState`              | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`.                         |
+| `pausedIssues`    | not config — the `goal_pauses` rows | The numbers held by an operator's pause, expanded through the hierarchy. Folded in per cycle, never at boot. |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.

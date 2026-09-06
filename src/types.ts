@@ -311,6 +311,11 @@ export interface GoalPriority {
   since: string;
 }
 
+export interface GoalPause {
+  originRef: string;
+  since: string;
+}
+
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed' | 'crashed';
 
 export type ReadyingStep = 'picked-up' | 'ci-evidence' | 'slot-handover' | 'authorizing';
