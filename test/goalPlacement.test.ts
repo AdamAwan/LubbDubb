@@ -37,6 +37,7 @@ function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Reconcile the statement totals.',
+    missing: [],
     goalRef: 'abc123',
     by: 'appraiser',
     proposedProfile: null,
@@ -257,7 +258,7 @@ test('the appraisal tool takes a parent freely and an area path only from the of
   );
 
   const unclear = validateGoalAppraisal(
-    { status: 'unclear', summary: 'no idea', parent: 345, area_path: 'Contoso\\Web' },
+    { status: 'unclear', summary: 'no idea', missing: ['Which statement?'], parent: 345, area_path: 'Contoso\\Web' },
     [],
     TREE.paths,
   );

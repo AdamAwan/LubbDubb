@@ -311,8 +311,8 @@ nobody has to remember the goal, and `owned` still holds it, because being fixed
 The `appraisal` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
 exactly where rule `issue-appraisal` sits: an unwatched or state-parked issue is never appraised, so reporting an
 appraisal for one would promise something that cannot happen, while an appraisal that refused the goal is
-the reason no planner and no pickup agent is coming. It covers both the standing hold (the
-appraiser's own words, quoted) and the pending case — `awaiting a goal appraisal`, `a goal appraisal is
+the reason no planner and no pickup agent is coming. It covers the standing hold (the
+appraiser's own words, quoted), the pending case — `awaiting a goal appraisal`, `a goal appraisal is
 running`, `goal appraisal on cooldown` — because an issue silently waiting a cycle for a verdict looks
 exactly like an idle fleet.
 
@@ -589,11 +589,37 @@ assessment — never the origins where the harness is merely deliberating (`:pla
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
-| Verdict    | Effect                                                                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text. |
-| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands.                                          |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                    |
+| Verdict    | Effect                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text.        |
+| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands, and posts the author's checklist on the ticket. |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                           |
+
+### What the appraiser judges against
+
+A story an agent can start on says three things, always — **the problem** (who has it, why it
+matters), **what success looks like** (observable, so someone could tell done from not done), and
+**its words defined** where they could mean two things — and, where the change implies it, three more:
+a **design or mockup** for a UI change or an exact description of layout, states and behaviour; an
+**example of the shape** for data going in or out; **links to the specs or docs** it relates to.
+Implementation hints and an out-of-scope list are welcome and never required. The rubric is stated
+once, `STORY_RUBRIC` in `src/mcp/goalAppraisal.ts`, and the prompt, the tool description and the
+skill all render it from there.
+
+**It is judged on substance, never on headings.** The target repository is any project on any
+tracker, so no template can be assumed, and a deterministic pre-check — required sections, keyword
+matches — was rejected for exactly that reason: it would pass a ticket that has the heading and fail
+one that answers the question in a paragraph. The appraiser has to run anyway, and it is the only
+thing that can tell whether "the export" names something the repository has. The conditional items
+are conditional on the appraiser's reading of what the ticket implies, not on a flag.
+
+An `unclear` verdict carries **`missing`** beside its summary: one entry per gap, each phrased as
+the question the author has to answer, required and refused when empty (`validateGoalAppraisal`).
+The summary says why the appraiser could not start; the list says what the author does about it.
+A refusal with no list is a refusal with no next step, which is the report that got this built:
+people found the harness hard to redirect once it was running, when the design is that they never
+need to — a good ticket, a plan review, a PR review — and the missing piece was the harness telling
+them what a good ticket is, on the ticket, before anything ran.
 
 ### Block or inform, and why blocking is safe
 
@@ -604,8 +630,11 @@ way to stop the harness working:
 - **Silence holds nothing.** Only an explicit `unclear` gates. An appraiser that crashes or spends its
   attempt cap writes no row and the issue falls through to ordinary pickup, with **no escalation** —
   the planner's fail-open and the assessor's, for their reason. This is also
-  `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
-- **The hold expires on its own** (below).
+  `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence. Holding on
+  a spent cap was considered and rejected: a cap is spent by an appraiser that could not _run_ —
+  a crash, a kill, a bad launch — which is an operations failure and says nothing about the ticket,
+  and every test downstream of the funnel reaches pickup by spending exactly this cap.
+- **The hold expires on its own** when the ticket is rewritten (below).
 - **The operator can clear or override it** (`POST /api/issues/:number/appraisal`), from either cockpit:
   a refused goal is raised **on the queue rail** as an `intake` row, which quotes the appraiser's sentence
   whole and puts the override under it, and is marked with a lamp in the tickets list
@@ -617,9 +646,9 @@ way to stop the harness working:
 
 ### What ends a hold
 
-`appraisalHold(appraisal, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
+`appraisalHold(appraisal, issue)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
 eligibility filter and `issuePickupStatus` — so the chip can never promise what the next cycle
-refuses. Two arms, plus a clearer that is deliberately not an arm:
+refuses. One arm, plus two operator acts that are deliberately not arms:
 
 1. **The goal text changed.** The row stores `goal_ref`, a NUL-joined fingerprint of the title and
    body the verdict was cast against (`goalFingerprint`), taken from the _task_ rather than re-read
@@ -629,13 +658,17 @@ refuses. Two arms, plus a clearer that is deliberately not an arm:
    `worldDiff` emits nothing at all for an edit, and adding one would make the verdict depend on the
    harness having witnessed the moment — so a ticket rewritten while it was down would stay parked
    forever.
-2. **Any world transition on `issue:<n>` strictly after the verdict.** Issue #109 phase 4's
-   rejection-expiry pattern again, and here it is what covers a human who answers the question in a
-   **comment** rather than by editing the body. "The verdict" is the one standing now — `updated_at`,
-   not the preserved `decided_at` — for [the delivery park's reason](#what-ends-it), and the two are
-   one rule with two copies: fixing either alone leaves the other reading a different definition of
-   "after the verdict".
-3. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm.
+2. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm — or
+   overrides it to `workable`, a write of the same row.
+
+There used to be a second arm — any world transition on `issue:<n>` after the verdict, described as
+covering a human who answers in a **comment**. It did not: nothing ingests comments, so what it
+released on was a reopen or a link, neither of which answers "what does done look like", and the
+release put the same unanswerable text straight into the funnel with no re-appraisal. A gate the
+ticket can pass unchanged is not a gate. The answer has to land **in the ticket**, where the next
+agent reads it, and the comment on the ticket says so in as many words — replies are not read. No
+world events are read for the appraisal at all now: `appraisalSignalQuery` and the `appraisalSignals`
+context field are gone.
 
 ### The second arm: an unanswered profile proposal (issue #342)
 
@@ -649,10 +682,8 @@ same two call sites, and the same safety argument as above pointed at a second q
 - **Agreement holds nothing and costs no click.** Whether the proposal diverges is decided once, where
   it is written and the tag and config are both in hand, and stored as `profile_answered_at` — so this
   arm is a two-field read with no config threaded into it.
-- **It does not expire on world signal.** A comment is how a human answers "I could not act on this
-  goal"; it is not how they authorise spending more than the rule allows, and reading it as one would
-  release the gate with nobody having decided anything. Arm 1 (the text changed) and arm 3 (the row is
-  cleared) still end it, and so does the operator answering — one click on either side, through
+- **It expires on nothing but an answer.** Arm 1 (the text changed) and the row being cleared end
+  it, and so does the operator answering — one click on either side, through
   `POST /api/issues/:number/profile`, which writes the tag and settles the question in one act.
 
 The hold's string names the proposal — `the goal appraisal proposes running this on "deep"`. A refused goal
@@ -824,6 +855,17 @@ rather than overwriting the record of the old one), and a hold that has ended is
 thread rather than left standing. It is the appraisal's only outbound act: nothing is closed, rejected,
 labelled or edited.
 
+**The comment is the next step, not only the verdict** (`renderAppraisalComment`). Under the
+appraiser's summary it renders `missing` as a checklist — `- [ ]` per entry, in the tracker's own
+markdown — then says exactly what ends the hold and what does not: _edit this item so the
+description answers the points above; that alone is enough, no button to press; replies here are not
+read by the agents._ And it offers help with the edit: _open the project in Claude Code and run
+`/lubbdubb clarify <n>`_ — the skill's seventh job ([20](20-validation.md#the-skill)), which reads
+the verdict and the list through `goal_read`, works through them with the author against the
+repository, and drafts the rewrite. Nothing is deep-linked from a tracker comment because a
+`claude://` URL is not a link there; the command is spelled out instead. A row from before `missing`
+existed renders no checklist and still says the rest.
+
 Because it is the harness explaining, on somebody else's ticket, why it will not act, the operator
 must be able to read it without opening the tracker: `/api/state` ships it as `issue.appraisal.commentRef`
 — a canonical comment ref beside the verdict, resolved through `buildRefUrls` like every other link
@@ -871,7 +913,7 @@ keeps its own body and gets no note. That is the ordinary cost of an override an
 The appraisal applies only to issues that already pass the watch gate — it never filters an untagged
 tickets tab. So it does second-guess an explicit operator signal, and is argued for on that basis: the
 tag says _work this_, and the appraisal's answer is not _no_ but _with what?_. A question, asked once,
-that the operator ends by editing the ticket, replying to it, or clearing the verdict.
+that the operator ends by rewriting the ticket or clearing the verdict.
 
 ### Cost
 

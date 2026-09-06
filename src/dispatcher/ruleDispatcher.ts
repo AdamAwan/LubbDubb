@@ -337,8 +337,7 @@ export class RuleDispatcher implements Dispatcher {
     // crashed or capped appraiser fails the issue open.
     const appraisals = new Map((ctx.appraisals ?? []).map((a) => [a.originRef, a]));
     const appraisalParked = (issue: Issue): boolean =>
-      appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.appraisalSignals }) !==
-      null;
+      appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue) !== null;
 
     // Goals an agent concluded `blocked` on, still behind an obstacle that reaches agents — a
     // third park, whose exit is the obstacle rather than the issue. → `docs/spec/27-obstacles.md#blocked-is-an-answer`

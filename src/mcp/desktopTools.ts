@@ -645,6 +645,7 @@ const goalRead: DesktopToolFactory = (deps) => ({
     const checks = liveChecks(deps.store.listValidationChecks(originRef));
     const retro = deps.store.getRetrospective(originRef);
     const pad = deps.store.listScratchEntries(originRef);
+    const appraisal = deps.store.getAppraisal(originRef);
     return toolJson({
       issue: {
         number: ref.issue,
@@ -661,6 +662,18 @@ const goalRead: DesktopToolFactory = (deps) => ({
       // Said rather than implied: everything below the issue is a pulse-old
       // snapshot rather than a question put to the provider.
       observedAt: world?.takenAt ?? null,
+      // The gate in front of the work, verbatim: on `unclear` this is what
+      // `clarify` is here to work through, and `missing` is the author's list.
+      appraisal:
+        appraisal === null
+          ? null
+          : {
+              verdict: appraisal.verdict,
+              summary: appraisal.summary,
+              missing: appraisal.missing,
+              by: appraisal.by,
+              decidedAt: appraisal.decidedAt,
+            },
       record: retroDossier(record),
       validation: checks.map((c) => ({
         letter: c.letter,

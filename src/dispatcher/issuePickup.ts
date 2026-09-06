@@ -221,7 +221,6 @@ export interface IssuePickupContext {
   deliverySignals?: WorldEvent[];
   /** Standing goal-appraisal verdicts and the transitions that may have ended one. Absent = nothing appraised, which holds nothing. */
   appraisals?: IssueAppraisal[];
-  appraisalSignals?: WorldEvent[];
   /**
    * Goals parked behind an obstacle and the board that lifts them. Absent = nothing
    * parked. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
@@ -380,7 +379,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const origin = `issue:${issue.number}`;
   const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
-  const held = appraisalHold(stored, issue, { signals: ctx.appraisalSignals });
+  const held = appraisalHold(stored, issue);
   if (held) return held;
   if (isAppraised(stored, issue)) return null;
   if (hasWorkStarted(issue.number, ctx.tasks)) return null;

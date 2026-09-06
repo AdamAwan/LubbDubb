@@ -47,14 +47,16 @@ import type { ErrorRecorder } from '../errorLog.js';
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, or change the order the stories under a feature are worked in. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — or to change what waits on what: "/lubbdubb order 500".
+description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
 ---
 
 # LubbDubb at your keyboard
 
-Six jobs, told apart by the argument. \`fleet\` — or anything about the harness
+Seven jobs, told apart by the argument. \`fleet\` — or anything about the harness
 rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
 \`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
+\`clarify 284\` — or "why won't it pick up 284" — is
+[rewriting a ticket the goal check refused](#clarify-a-ticket),
 \`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`order 500\` —
 or anything about which of a feature’s stories goes first — is
 [the order the stories go in](#discuss-the-order-the-stories-go-in), \`run 284\` is
@@ -256,6 +258,53 @@ alone — and the operator cannot tell that apart from the real one.
 - **Do not defend the fleet.** If the record shows three agents went round in
   circles on a part, that is the answer. An account that smooths it over is worth
   nothing to somebody deciding what to change about how this goal is being worked.
+
+## Clarify a ticket
+
+LubbDubb reads every watched ticket before it dispatches anything for it, and
+holds the ones an agent could not start on. The hold is a comment on the ticket
+listing what is missing, and it ends **only when the ticket's own text changes** —
+not on a reply, not on a timer. The person here wrote that ticket, or is the one
+who has to fix it, and the comment sent them to you.
+
+What a story has to say, always: **the problem** (who has it, why it matters),
+**what success looks like** (observable — someone could tell done from not
+done), and **its words defined** where they could mean two things. And where the
+change implies it: a **design or mockup** for anything with a UI, or an exact
+description of layout, states and behaviour; an **example of the data** for
+anything with data going in or out — a real-looking sample, not a type name; and
+**links to the specs or docs** it relates to. Implementation hints and an
+out-of-scope list help and are never required.
+
+1. **Read what was found.** \`goal_read\` with the goal number. \`appraisal\` is
+   the verdict: \`summary\` is why the check could not start, \`missing\` is the
+   list of questions it left, and the scratchpad has the appraiser's note on
+   where in the repository it went looking. Read the ticket's own text there too.
+2. **Work through the list with them, one question at a time.** You have the
+   repository open — use it. Where a question can be answered by reading the
+   code, propose the answer and let them confirm rather than making them find
+   it; where it is a product decision, ask and wait. Do not skip an item because
+   it seems obvious to you: it was not obvious to the agent that refused it, and
+   the next agent gets only the ticket.
+3. **Draft the rewrite.** The whole ticket — title and body — with every answer
+   folded into the description where it belongs, in the author's own words and
+   the tracker's own formatting. Not a comment, not an addendum: the hold ends on
+   the description changing, and the next agent reads the description.
+4. **Get it onto the ticket.** If a CLI for the tracker is on this machine and
+   signed in (\`gh issue edit\`, \`az boards work-item update\`), offer to write it
+   and do so only when they say yes. Otherwise hand them the text to paste, and
+   say that saving it is the whole of what restarts the goal. Either way, tell
+   them what happens next: LubbDubb re-reads the ticket on its next pass, checks
+   it again, and the comment updates itself.
+
+**Do not do the work.** You were asked to make the ticket workable, not to work
+it. Nothing here opens a branch or writes code against the goal.
+
+**\`goal_gate\` with \`appraisal: "workable"\` is the override, not the fix.** It
+tells the harness to start on the ticket as it stands. Offer it only when the
+person has read the list and says the ticket is good enough — a wrong "workable"
+costs an agent guessing at what they meant. Never reach for it because the list
+was long.
 
 ## Discuss a plan
 

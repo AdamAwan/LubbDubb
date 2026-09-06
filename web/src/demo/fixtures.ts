@@ -974,6 +974,10 @@ export function buildDemoState(): DemoSeed {
               'Nothing here names which question came back wrong, or what the right sections would have been. ' +
               'Retrieval is keyword search, vector search and an RRF fold over both — which of the three is ' +
               'bringing back the wrong thing, and for which question?',
+            missing: [
+              'Which question came back wrong — the field name or the step where it happened?',
+              'What should the right sections have been? A sample of one good record.',
+            ],
             by: 'appraiser',
             // An `unclear` verdict names no profile: a goal nobody could start
             // from has no work to size.

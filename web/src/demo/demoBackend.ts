@@ -776,6 +776,7 @@ class DemoServer {
           ? null
           : {
               verdict,
+              missing: [],
               by: 'operator',
               commentRef: null,
               // An operator's own verdict proposes no profile: the pin is its own

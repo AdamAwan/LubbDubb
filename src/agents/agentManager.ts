@@ -1066,7 +1066,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
-    placement?: { parent: number | null; areaPath: string | null },
+    placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
   ):
     | { ok: true; issueOrigin: string; verdict: GoalAppraisalVerdictName; profileHeld: boolean }
     | { ok: false; error: string } {
@@ -1082,6 +1082,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         originRef: origin.issueOrigin,
         verdict,
         summary,
+        missing: placement?.missing ?? [],
         goalRef: goalFingerprint(task.originTitle, task.originSummary),
         by: 'appraiser',
         proposedProfile,

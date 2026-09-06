@@ -1305,50 +1305,78 @@ export interface Agent {
   outputTokens: number | null;
   /**
    * The cached share of {@link Agent.inputTokens} — a *part* of it, never a
-   * sibling total; `inputTokens` stays the gross figure. Both null on a run
-   * with no usage reported; zero on one with usage but no caching. Stored
-   * because a cache read bills at a fraction of a fresh token and a write at
-   * a premium, so a fleet at 90% hit rate and one at 0% report identical
-   * `inputTokens` but wildly different bills — the split is what tells them apart.
+   * sibling total. `inputTokens` stays the gross figure (fresh + written + read),
+   * so nothing that already sums it changes meaning; fresh input is the
+   * subtraction. Both are null on a run that reported no usage at all, and zero
+   * on one that reported usage with no caching.
+   *
+   * They are stored because the cache is the one thing an operator can act on
+   * that the gross figure cannot show: a read bills at a fraction of a fresh
+   * token and a write at a premium, so a fleet at a 90% hit rate and one at 0%
+   * report identical `inputTokens` and wildly different bills. Without the split
+   * there is no reading that says which fleet this is.
    */
   cacheReadTokens: number | null;
   cacheCreationTokens: number | null;
   numTurns: number | null;
-  /** The agent's own one-line answer to "what are you doing right now", from `note_progress` — a *current value*, replaced each call. Null for an agent that never called it (supported, not degraded). */
+  /**
+   * The agent's own one-line answer to "what are you doing right now", from the
+   * `note_progress` tool — a *current value*, replaced on each call, and null for
+   * an agent that never called it (which is a supported state, not a degraded
+   * one: the output tail is what the fleet card falls back to).
+   */
   note: string | null;
   /**
-   * When {@link Agent.note} was written. Display context only. **Nothing
-   * derives liveness or health from it**: the longest gaps between notes are
-   * long test runs and refactors — exactly when an agent is healthiest — so a
-   * staleness verdict would punish honest use.
+   * When {@link Agent.note} was written. Display context only — it dates the note
+   * so a reader knows how current it is. **Nothing derives liveness or health from
+   * it**, by decision: the longest gaps between notes are the long test runs and
+   * big refactors, i.e. exactly the stretches where an agent is healthiest, so a
+   * staleness verdict would punish honest use and turn this into a heartbeat.
+   * Liveness is the process, the status transitions and the `waiting` park.
    */
   notedAt: string | null;
   /**
-   * When this agent was last seen *doing work after it parked on a human*, or
-   * null if that has not happened since its current park. Exists because the
-   * park is only a request: `escalate` returns immediately, and a model that
-   * carries on regardless leaves the row `waiting` with an alert nobody needs
-   * to answer. What counts as work is narrow — a **tool call**, observed on
-   * the legible transcript; prose does not count. Display context only —
-   * nothing un-parks off it and the dispatcher never reads it.
+   * When this agent was last seen *doing work after it parked on a human*, or null
+   * if that has not happened since its current park. It exists because the park is
+   * only ever a request: the `escalate` tool returns immediately, telling the agent
+   * to wait, and a model that carries on regardless leaves the row saying `waiting`
+   * with an open alert nobody needs to answer.
+   *
+   * What counts as work is runtime-specific and narrow — a **tool call**, observed
+   * on the legible transcript (see `AgentSession`'s `activity` event). Prose does
+   * not count: an agent that escalates and then writes one more sentence before
+   * ending its turn is still waiting, and reading that as "resumed" would clear
+   * alerts that genuinely need answering.
+   *
+   * Read as display context, never as a status. Nothing un-parks off it and nothing
+   * in the dispatcher reads it — it marks an alert stale so a human can dismiss it
+   * with confidence, which is the whole job.
    */
   resumedAt: string | null;
   /**
-   * How many times the harness has re-attached to this agent after its
-   * process died mid-run, bounded by `agentResumeAttempts`. Zero for an agent
-   * that has never crashed. A budget, not an observation — kept off
-   * {@link Agent.resumedAt}, which clears on every answered escalation.
-   * Persisted rather than counted in memory, since `spawn`/`resume` reuse one
-   * row across restarts.
+   * How many times the harness has re-attached to this agent after its process
+   * died mid-run (issue #318), bounded by `agentResumeAttempts`. Zero for an
+   * agent that has never crashed, and for every row written before the column
+   * existed.
+   *
+   * A budget rather than an observation, which is what keeps it off
+   * {@link Agent.resumedAt}: that one is about a *park* and is cleared the moment
+   * an escalation is answered, so a crash budget riding on it would refill every
+   * time somebody replied to a question. Never cleared, and persisted rather than
+   * counted in memory, because `spawn`/`resume` reuse one row across restarts —
+   * an in-memory counter would reset on every boot and a crash-looping agent
+   * would relaunch forever.
    */
   resumeAttempts: number;
 }
 
 /**
  * An artifact an agent surfaced to the cockpit mid-run via the flag sentinel
- * — a design doc, a report, a link. Generic on purpose: `kind`/`label` are
- * cosmetic and `ref` is either a worktree-relative path or an absolute
- * http(s) URL. Deduped per agent by `ref`.
+ * (`@@LUBBDUBB_FLAG:…@@`) — a design doc, a report, a link. Generic on purpose:
+ * `kind`/`label` are cosmetic and `ref` is either a worktree-relative path (served
+ * through the confined artifact route) or an absolute http(s) URL. Deduped per
+ * agent by `ref`, so an agent re-flagging the same doc as it evolves just refreshes
+ * the timestamp rather than piling up duplicates.
  */
 export interface AgentFlag {
   id: string;
@@ -1363,10 +1391,11 @@ export interface AgentFlag {
 export type AgentFlagInput = Pick<AgentFlag, 'kind' | 'label' | 'ref'>;
 
 /**
- * A file an agent wrote, captured by the file-events `PostToolUse` hook (not
- * the flag sentinel, so it needs no cooperation from the prompt). Every write
- * is tracked as "files changed"; `promoted` ones are additionally surfaced as
- * an {@link AgentFlag} chip. Deduped per agent by `path`.
+ * A file an agent wrote, captured by the file-events `PostToolUse` hook (not the
+ * flag sentinel — so it needs no cooperation from the agent's prompt). Every
+ * write is tracked as the "files changed" list; `promoted` ones are additionally
+ * surfaced as an {@link AgentFlag} chip (a report/doc, per `classifyArtifact`).
+ * Deduped per agent by `path`.
  */
 export interface AgentFile {
   id: string;
@@ -1386,8 +1415,11 @@ export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 /**
  * One path a goal has been edited in, and the work that last wrote it — the
  * `agent_files` rows of a whole issue subtree, folded to one row per path.
- * Deliberately narrower than {@link AgentFile} (no agent id, tool or
- * promotion flag): the one reader is the prior-work briefing. → `Store.listGoalFiles`.
+ *
+ * Deliberately narrower than {@link AgentFile}: no agent id, no tool and no
+ * promotion flag, because the one reader is the prior-work briefing and a field
+ * it does not render is a field a later reader would have to guess the meaning
+ * of. → `Store.listGoalFiles`.
  */
 export interface GoalFile {
   /** As the writing agent reported it — worktree-relative where the write landed inside its cwd. */
@@ -1400,14 +1432,22 @@ export interface GoalFile {
 
 /**
  * Another goal that has been in the same files as this one, and what its
- * retrospective said about the run. Keyed on the **goal**, not the writing
- * agent: `detectFileOverlaps` answers "who is editing this path right now"
- * and this answers "who has been here before". → `Store.listGoalNeighbours`.
+ * retrospective said about the run.
+ *
+ * The neighbour is keyed on the **goal**, not the agent that did the writing:
+ * `detectFileOverlaps` answers "who is editing this path right now" and this
+ * answers "who has been here before", so the unit is the thing that has a
+ * write-up. → `Store.listGoalNeighbours`.
  */
 export interface GoalNeighbour {
   /** The neighbour goal, always the `issue:<n>` root — a retrospective's own key. */
   goalRef: string;
-  /** The neighbour's retrospective summary, quoted whole — no tool an agent has reaches another goal's write-up, so this is the only place it is put in front of them. */
+  /**
+   * The neighbour's retrospective summary, quoted whole. Carried rather than
+   * pointed at because no tool an agent has reaches another goal's write-up:
+   * `scratch_read` is scoped to the caller's own pad, and this is the only place
+   * the sentence is ever put in front of them.
+   */
   retroSummary: string;
   /** The paths both goals have been in, the neighbour's most recent write first. */
   sharedPaths: string[];
@@ -1415,10 +1455,20 @@ export interface GoalNeighbour {
   lastWriteAt: string;
 }
 
-/** Which kind of return to a pull request a {@link Remedy} accounts for: CI going red, or a review asking for changes. Resolved from the dispatch origin, never an argument — see `remedyOrigin` in `src/remedies/remedies.ts`. */
+/**
+ * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
+ * going red, or a review asking for changes.
+ *
+ * Resolved from the dispatch origin and never from an argument — see
+ * `remedyOrigin` in `src/remedies/remedies.ts`, which is also where the copy for
+ * every value below lives.
+ */
 export type RemedyKind = 'ci' | 'review';
 
-/** What was actually wrong. Which values a given {@link RemedyKind} may name is `CAUSES_BY_KIND`'s to say, not this union's: a review round is never a flake. */
+/**
+ * What was actually wrong. Which values a given {@link RemedyKind} may name is
+ * `CAUSES_BY_KIND`'s to say, not this union's: a review round is never a flake.
+ */
 export type RemedyCause =
   | 'flake'
   | 'environment'
@@ -1435,15 +1485,27 @@ export type RemedyCause =
   | 'defect'
   | 'other';
 
-/** What would have caught it before the push — the axis that answers *how do we get fewer of these*. `undocumented` is the only value the harness can act on, and the only one a proposed {@link Lesson} may ride on. */
+/**
+ * What would have caught it before the push — the second axis, and the one that
+ * answers *how do we get fewer of these*. `undocumented` is the only value the
+ * harness can act on, and the only one a proposed {@link Lesson} may ride on.
+ */
 export type RemedyGuard = 'local_check' | 'documented' | 'undocumented' | 'unpreventable';
 
 /**
- * One account of why the fleet had to come back to a pull request, written by
- * the agent that settled it. A **record, not a verdict**: nothing gates on
- * it, no rule reads it. Its own table rather than columns on `tasks`: a task
- * is what was dispatched, this is what was found — one run can settle
- * several reds and one red can take several runs, so the two do not share a key.
+ * One account of why the fleet had to come back to a pull request, written by the
+ * agent that settled it.
+ *
+ * A **record, not a verdict**: nothing gates on it, no rule reads it, and a pull
+ * request goes green whether or not one was ever filed. It has exactly two
+ * readers — the Causes reading on the Yield panel, and the note appended to a
+ * later dispatch on the same check (`src/remedies/priorRemedies.ts`).
+ *
+ * Why it is a table of its own rather than columns on `tasks`: a task is what was
+ * dispatched, and this is what was found. One run can settle several reds and one
+ * red can take several runs, so the two do not share a key — and a nullable
+ * cause/guard pair on every task row would make "no remedy filed" and "not that
+ * kind of task" the same reading.
  */
 export interface Remedy {
   id: string;
@@ -1456,7 +1518,12 @@ export interface Remedy {
   guard: RemedyGuard;
   /** One line: what was wrong, and what fixed it. Required — a bare pair of enums is not a reading. */
   summary: string;
-  /** The checks that were red when this agent was dispatched, from {@link Task.ciChecks} rather than the submission. Empty for a review remedy, or a CI dispatch on a provider with no per-check detail. */
+  /**
+   * The checks that were red when this agent was dispatched, from
+   * {@link Task.ciChecks} rather than from the submission — the same rule the
+   * kind follows. Empty for a review remedy, and for a CI dispatch on a provider
+   * that reported no per-check detail.
+   */
   checks: string[];
   /** The reporting agent and its task, from the credential. */
   agentId: string;
@@ -1469,64 +1536,98 @@ export interface Remedy {
 export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
- * Where a piece of work only a person can do has got to. Two terminals, both
- * settlements — nothing lapses, expires or is deleted. `declined` is not a
- * failure or a tidy-up: it is the operator saying *no, and here is why*,
- * which the plan, the next agent and a later replan all need. Clearing a
- * settled row off the bench is {@link HumanTask.dismissedAt}, not a value
- * here — what is owed and whether it has been read about are two questions.
+ * Where a piece of work only a person can do has got to. Two terminals, and both
+ * are settlements — there is no way for one to lapse, expire or be deleted.
+ *
+ * `declined` is not a failure state and not a tidy-up: it is the operator saying
+ * *no, and here is why*, which is a fact the plan, the next agent and a later
+ * replan all need. A task nobody will ever do that says nothing about why is the
+ * shape this repo refuses everywhere else.
+ *
+ * Clearing a settled row off the bench is {@link HumanTask.dismissedAt}, not a
+ * value here: what a person is owed and whether they have finished reading about
+ * it are two questions, and one column cannot answer both.
  */
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
 /**
- * Who a human task is *for the harness*, a different question from who asked
- * for it. `ask` is every task a person typed or an agent requested — only a
- * person can say it is done. `close_out`, `burn` and `validate` are ones the
- * harness files *and settles itself*, watching a ticket, an agent's spend, or
- * validation checks respectively each pulse. `watch` is a post-deploy watch
- * whose checks came back outside what was declared, filed **one row per
- * window, never per reading**, and settled itself when a later reading comes
- * back clean. A discriminator rather than a title match — the close-out
- * sweep must find its own row again without parsing prose it composed.
+ * Who a human task is *for the harness*, which is a different question from who
+ * asked for it.
+ *
+ * `ask` is every task a person typed or an agent requested: the harness knows
+ * nothing about it beyond the words, and only a person can say it is done.
+ * `close_out` is one the harness files itself and can therefore also settle
+ * itself — the ticket it names is a thing it watches every pulse. `burn` is the
+ * same shape one step further in: the run it names is one the harness is
+ * *watching spend*, so it both files and settles it, and the row is about an
+ * agent rather than a tracker item (see `src/spendBurn.ts`). `validate` is the
+ * third of that family: the goal it names is delivered with checks a person still
+ * has to run, and the check rows it is waiting on are ones the harness reads
+ * every pulse — so it settles itself as they are recorded (see
+ * `src/validation/ready.ts`). `watch` is the fourth: a post-deploy watch whose
+ * declared checks came back outside what was declared, filed **one row per window
+ * and never one per reading** — 96 readings per check per environment is the rail
+ * burying its own asks. The harness settles it itself when a later reading in the
+ * same window comes back clean, so it is the family's shape exactly (see
+ * `src/environments/watchFinding.ts`).
+ *
+ * A discriminator rather than a title match. The close-out sweep has to find its
+ * own row again on the next pulse, and the alternative is recognising it by the
+ * sentence it wrote — parsing prose the harness composed, which is the failure
+ * mode `signalPolarity` and the reason plates already refuse.
  */
 export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch';
 
 /**
- * A unit of work only a person can do: flipping a setting in a console
- * nobody gave the fleet an account for, plugging something in, looking at a
- * rendered screen and saying whether it is right.
+ * A unit of work only a person can do: flipping a setting in a console nobody
+ * gave the fleet an account for, plugging something in, looking at a rendered
+ * screen and saying whether it is right.
  *
- * **It is not an {@link Escalation}.** An escalation is a *question*: one
- * running agent is blocked on it, holding a slot and a worktree, and it dies
- * with the agent. A human task is *work*: no agent is blocked, it outlives
- * every agent and restart, and other work can depend on it. An agent
- * needing an answer to carry on escalates; one needing a person to *do
- * something* — which may take until Tuesday — requests one of these and
- * gets on with what it can.
+ * **It is not an {@link Escalation}, and the difference is not a nuance.** An
+ * escalation is a *question*: exactly one running agent is blocked on it, holding
+ * a slot and a worktree; it is settled by typing an answer into that session, and
+ * it dies with the agent. A human task is *work*: no agent is blocked on it, it
+ * outlives every agent and every restart, and other work can be made to depend on
+ * it. An agent that needs an answer to carry on escalates. An agent that needs a
+ * person to *do something* — which may take until Tuesday — requests one of these
+ * and gets on with, or concludes, what it can.
  *
  * Attribution is structural on the agent arm, as for a {@link Finding}:
- * `agentId`/`taskId`/`originRef` come from the credential the call arrived
- * on, never an argument. A null `agentId` means no individual agent asked —
- * an operator filed it, or a plan declared it as a step, told apart by
- * {@link HumanTask.partId}.
+ * `agentId`/`taskId`/`originRef` come from the credential the call arrived on,
+ * never from an argument. A null `agentId` means no individual agent asked —
+ * either an operator filed it from the cockpit, or a plan declared it as a step,
+ * and {@link HumanTask.partId} is what tells those two apart. There is no
+ * `requestedBy` column, so nothing can disagree with the ids beside it.
  */
 export interface HumanTask {
   id: string;
-  /** The ask, on one line. Validation refuses a newline — this is the headline of a panel row, and the only cheap moment to fix a blob is the requesting agent's own turn. */
+  /**
+   * The ask, on one line. Validation refuses a newline for
+   * {@link Finding.summary}'s reason: this string is the headline of a panel row,
+   * and the only cheap moment to fix a blob is the requesting agent's own turn.
+   */
   title: string;
   /** What to do and how to know it is done. Markdown, rendered as such. Null when the title says it all. */
   detail: string | null;
   /** The work this belongs to — `issue:<n>`, `issue:<n>:part:<slug>`, `pr:<n>` — or null for a standalone ask. */
   originRef: string | null;
   /**
-   * The plan part this task *is*, when a planner declared a step for a
-   * person (`expectedKind: 'human'`). Null for every other human task. The
-   * only field through which a human task ever holds work off the fleet: the
-   * part is the scheduling node `dependsOn` and the reconciler already
-   * understand. A standalone human task blocks nothing.
+   * The plan part this task *is*, when a planner declared a step for a person
+   * (`expectedKind: 'human'`). Null for every other human task.
+   *
+   * This is the only field through which a human task ever holds work off the
+   * fleet, and it is deliberately the only one: the part is the scheduling node
+   * that `dependsOn` and the reconciler's readiness pass already understand, so
+   * blocking needs no second mechanism beside them. A standalone human task
+   * blocks nothing — it is a visible obligation, not a gate.
    */
   partId: string | null;
-  /** What kind of obligation this is — see {@link HumanTaskKind}. `ask` for everything a person or agent filed; `close_out`/`validate` are the harness's own, which it files and settles. */
+  /**
+   * What kind of obligation this is — see {@link HumanTaskKind}. `ask` for
+   * everything a person or an agent filed; `close_out` for the harness's own
+   * "the goal is delivered, close its ticket", and `validate` for its "the goal is
+   * delivered, run its checks" — both of which it files and settles.
+   */
   kind: HumanTaskKind;
   /** The agent that asked for it, from its credential. Null when an operator filed it themselves. */
   agentId: string | null;
@@ -1538,12 +1639,16 @@ export interface HumanTask {
   updatedAt: string;
   resolvedAt: string | null;
   /**
-   * When the operator cleared a **settled** row off the bench, or null while
-   * still on it. Deliberately not a fourth {@link HumanTaskStatus}: a status
-   * is the verdict on the work, and "I have read the record of it" is not a
-   * third answer. Only a settled row can carry one, so a dismissal can never
-   * lose an obligation, and the close-out sweep can find its own settled row
-   * again by looking for it.
+   * When the operator cleared a **settled** row off the bench, or null while it is
+   * still on it.
+   *
+   * Deliberately not a fourth {@link HumanTaskStatus}: a status is the verdict on
+   * the work, and "I have read the record of it" is not a third answer to that
+   * question — the reconciler asking whether a part was declined must not have to
+   * learn a value that says nothing about the part. Only a settled row can carry
+   * one, so a dismissal can never lose an obligation; the row itself is kept for
+   * the reason a dismissed finding is, and because the close-out sweep finds its
+   * own settled row again by looking for it.
    */
   dismissedAt: string | null;
 }
@@ -1552,23 +1657,33 @@ export interface HumanTask {
 export type HumanTaskInput = Pick<HumanTask, 'title' | 'detail'>;
 
 /**
- * What someone said about whether an issue is finished. `undeclared` is a
- * value, not the absence of one: a work item parked in a review state is
- * genuinely ambiguous, so folding "nobody said" into "not finished" is the
+ * What someone said about whether an issue is finished.
+ *
+ * `undeclared` is a value, not the absence of one, and that distinction is the
+ * whole feature: a work item parked in a review state is genuinely ambiguous —
+ * it sits there when work remains *and* when everything is delivered and it is
+ * waiting on test — so folding "nobody said" into "not finished" is exactly the
  * assumption that had the harness re-pick merged work. Only
  * {@link IssueConclusionVerdict} is ever stored; `undeclared` is what the
  * resolver returns for a row that doesn't exist.
  */
 export type IssueConclusionVerdict = 'done' | 'more_work';
 
-/** Who cast a verdict: the agent that did the work, the assessor that later judged the issue as a whole, or the operator overriding either. */
+/**
+ * Who cast a verdict: the agent that did the work, the assessor that later judged
+ * the issue as a whole, or the operator overriding either.
+ */
 export type ConclusionAuthor = 'agent' | 'assessor' | 'operator';
 
 /**
  * One issue's standing conclusion — the `conclude_work` tool's row, or the
- * operator's override. Keyed on the `issue:<n>` origin rather than hung off
- * an agent, since a conclusion belongs to the **issue** and outlives every
- * agent that touched it. One row per issue, overwritten per declaration.
+ * operator's override of it.
+ *
+ * Keyed on the `issue:<n>` origin rather than hung off an agent (the way a
+ * `note_progress` note is) because a conclusion belongs to the **issue** and has
+ * to outlive every agent that ever touched it — including across a replan, which
+ * rewrites the plan row. One row per issue, overwritten per declaration, so the
+ * standing verdict is a lookup rather than a fold over history.
  */
 export interface IssueConclusion {
   /** The issue, as `issue:<n>` — the same origin every dispatch rule and gate keys on. */
@@ -1585,14 +1700,22 @@ export interface IssueConclusion {
 }
 
 /**
- * Something the operator has told the fleet to do on a goal, in their own
- * words — "change the button to primary", "the loading icon is broken, fix
- * it". A row rather than a note on the verdict: the old `more_work` toggle
- * was a bare verdict carrying not one word of what was wanted, and a
- * conclusion is one overwritten row, so a second instruction would silently
- * replace the first. Instructions instead accumulate — every one written
- * since the last conclusion stands, is appended to every dispatch on the
- * goal in order, and is settled together by `conclude_work`. An operator can
+ * Something the operator has told the fleet to do on a goal, in their own words —
+ * "change the button to primary", "the loading icon is broken, fix it".
+ *
+ * ## Why it is a row rather than a note on the verdict
+ *
+ * The operator's `more_work` toggle used to be a bare verdict: it bounced the
+ * item back to pickup and carried not one word of *what* was wanted, so the next
+ * agent re-read the same ticket that had already produced the thing the operator
+ * was unhappy with. The words are the whole feature, and a verdict has nowhere to
+ * put them — a conclusion is one overwritten row, so a second instruction would
+ * silently replace the first while both were still outstanding.
+ *
+ * So instructions accumulate. Every one written since the last agent concluded
+ * stands, they are appended to every dispatch on the goal in the order they were
+ * written, and they are settled together by `conclude_work` — the agent's own
+ * statement that it has dealt with what was in front of it. An operator can
  * withdraw one they did not mean.
  */
 export interface IssueInstruction {
@@ -1602,36 +1725,67 @@ export interface IssueInstruction {
   /** The operator's words, verbatim. Never rendered by the harness into anything else. */
   text: string;
   createdAt: string;
-  /** When it stopped standing: an agent concluded the goal, or the operator withdrew it. Null while it stands, the only state anything reads. */
+  /**
+   * When it stopped standing: an agent concluded the goal, or the operator
+   * withdrew it. Null while it stands, which is the only state anything reads.
+   */
   settledAt: string | null;
 }
 
 /**
- * How a run ended, stamped at the moment it is dismissed: the harness had
- * judged the work, or the operator abandoned it. Derived from the row rather
- * than passed in — a run with a completion instant was judged, one without
- * was abandoned.
+ * A finished goal the operator has kept on the Goal Floor, until they dismiss it
+ * (issue #203).
+ *
+ * The floor is built from the live world, so a completed goal drops off it the
+ * moment the tracker stops returning the issue (a human closes the ticket) or its
+ * watch tag comes off — and with it the one way in to the run's report. The row is
+ * written while the goal is still live, so its `title` survives the world
+ * forgetting the issue, and the floor draws a retained completion from it either
+ * way until `dismissedAt` is set. Dismissal is one-way and persists across a
+ * restart, so the same finished goals do not reappear.
+ */
+/**
+ * How a run ended, stamped at the moment it is dismissed (issue #234): the
+ * harness had judged the work, or the operator abandoned it. Derived from the
+ * row rather than passed in — a run with a completion instant was judged, one
+ * without was abandoned — so the two cannot be claimed independently of the
+ * evidence.
  */
 export type IssueRunOutcome = 'judged' | 'abandoned';
 
 /**
- * One run of the harness at a goal, from the first pulse that saw work under
- * it to the operator's dismissal. A run's life is **not** the tracker's
- * answer: the tracker returns open issues, so a ticket closed by hand used
- * to take the whole goal out of the world mid-workflow, and the assessor and
- * retrospective that come *after* a merge never ran. The row is minted at
- * pickup and lives until dismissed — which also gives an **abandoned** goal
- * something to dismiss. The five snapshot fields are the issue as it last
- * stood while live, kept because a retained run is dispatched from: the
- * assess/retro rules interpolate the body and read the labels through the watch gate.
+ * One run of the harness at a goal, from the first pulse that saw work under it
+ * to the operator's dismissal (issue #234).
+ *
+ * A run's life is **not** the tracker's answer. The tracker returns open issues,
+ * so a ticket closed by hand — often by the very PR that delivered it — used to
+ * take the whole goal out of `ctx.world.issues` mid-workflow, and the assessor
+ * and the retrospective that come *after* a merge never ran. The row is minted at
+ * pickup and lives until dismissed, which is also what gives an **abandoned**
+ * goal something to dismiss: it never completes, so a record minted on completion
+ * alone was never written for one.
+ *
+ * The five snapshot fields are the issue as it last stood while live. They are
+ * here because a retained run is dispatched from: `issue-assess` and `issue-retro`
+ * interpolate the body into their prompts, and every rule reads the labels through
+ * the watch gate — a stub with neither would put an assessor on a goal it cannot
+ * read, and hide a retained run from the gate that decides whether the operator
+ * still wants it worked.
  */
 /**
- * One tracker item as the mirror keeps it. Deliberately thinner than
- * {@link Issue}: the row behind a *history*, carrying what a list is read
- * and ordered by. No body — a rule that needs one reads the live issue.
- * `changedAt` is the provider's own last-modified instant: the high-water
- * mark the next sweep asks from, and why the one-month floor is a floor
- * rather than a cut. → `docs/spec/14-persistence.md`
+ * One tracker item as the mirror keeps it (issue #329).
+ *
+ * Deliberately thinner than {@link Issue}: this is the row behind a *history*, so
+ * it carries what a list is read and ordered by and nothing a dispatch would want.
+ * No body, because the mirror holds every item the tracker has ever returned and a
+ * description per row is the bulk of a tracker; a rule that needs one reads the
+ * live issue, which is the only shape it is allowed to act on anyway.
+ *
+ * `changedAt` is the provider's own last-modified instant, and it is load-bearing
+ * twice over: it is the high-water mark the next sweep asks from, and it is why
+ * the one-month floor is a floor rather than a cut — an item older than the anchor
+ * that someone has touched since arrives on a changed-since read and is then kept
+ * like any other. → `docs/spec/14-persistence.md`
  */
 export interface TrackerItem {
   number: number;
@@ -1640,10 +1794,14 @@ export interface TrackerItem {
   state: IssueState;
   /**
    * The provider's own workflow word — `Closed`, `Removed`, `Ready` — or null
-   * where it has none (GitHub, the fake). Read on the *history* sweep and
-   * not only the live overlay: the overlay is built from the open set by
-   * construction, so an item that left it would otherwise keep whatever
-   * state it was last seen live with. → `docs/spec/14-persistence.md#the-ticket-mirror`
+   * where it has none (GitHub, the fake).
+   *
+   * Read on the *history* sweep and not only on the live overlay, which is the
+   * whole difference between a closed item that says `Closed` and one no state
+   * filter can reach: the overlay is built from the open set by construction, so
+   * an item that has left it would otherwise keep whatever state it was last seen
+   * live with — or, for everything closed before the harness ever saw it open,
+   * none at all. → `docs/spec/14-persistence.md#the-ticket-mirror`
    */
   workItemState: string | null;
   /** The provider's web URL, when it gave one. */
@@ -1676,29 +1834,45 @@ export interface IssueRun {
   outcome: IssueRunOutcome | null;
   /** Null until the operator dismisses it — the one thing that ends a run. */
   dismissedAt: string | null;
-  /** What the operator said when they ended a run whose validation plan was not clear. Required only then, so null is the ordinary reading: nobody was asked. */
+  /**
+   * What the operator said when they ended a run whose validation plan was not
+   * clear. Required only in that case, so null is the ordinary reading and not a
+   * gap: nobody was asked.
+   */
   dismissNote: string | null;
   updatedAt: string;
 }
 
 /**
- * Who decided an issue was delivered: the assessing agent, the operator
- * directly, or the **planner** that found the goal already met before
- * anything was built — "this is already true of the repository" is a
- * verdict a planner reaches often enough that inventing a part just to let
- * an agent discover and conclude the same thing would be pointless work.
+ * Who decided an issue was delivered: the assessing agent, the operator directly,
+ * or the **planner** that found the goal already met before anything was built.
+ *
+ * The third is the same statement made at the other end of the run. An assessor
+ * judges delivered work; a planner judges a goal nothing has started on, and the
+ * answer "this is already true of the repository" is one it reaches often enough
+ * that the alternative — a plan whose one part exists so that an agent can
+ * discover the same thing and conclude it — was work invented to fit the shape.
  * → `src/mcp/planNotNeeded.ts`
  */
 export type DeliveryAuthor = 'assessor' | 'planner' | 'operator';
 
 /**
  * One issue's standing `delivered` verdict — the harness's own park.
- * Distinct from {@link IssueConclusion}, not a third member of
- * {@link IssueConclusionVerdict}: a conclusion is declared once and **gates
- * nothing**, while a delivery verdict is re-read by the pickup gate every
- * pulse and stops standing when the world moves. Mutually exclusive with a
- * conclusion — writing either clears the other. `delivered` is weaker than
- * the tracker's `closed` and reversible; its only effect is to stop pickup.
+ *
+ * Distinct from {@link IssueConclusion}, and deliberately not a third member of
+ * {@link IssueConclusionVerdict}, because the two have different lifetimes and
+ * different readers. A conclusion is declared once by the agent that did the work
+ * and **gates nothing** — rule `work-item-back-to-pickup` is its only consumer. A delivery verdict is
+ * re-read by the pickup gate every pulse and stops standing when the world moves
+ * (`src/delivery/delivery.ts`). Folding them would give the resolver an expiring
+ * member its other two do not have, and would overwrite the working agent's note
+ * with the assessor's.
+ *
+ * They are mutually exclusive: writing either clears the other, in the store, so
+ * an issue never carries a conclusion and a delivery that contradict.
+ *
+ * `delivered` is weaker than the tracker's `closed` and reversible. It says the
+ * harness believes it has done what it can, and its only effect is to stop pickup.
  */
 export interface IssueDelivery {
   /** The issue, as `issue:<n>` — the same origin the conclusion and every gate keys on. */
@@ -1717,11 +1891,14 @@ export interface IssueDelivery {
 }
 
 /**
- * What a goal appraisal may conclude about an issue's text. `workable` is
- * stored as much as `unclear`: without a row for the affirmative the
- * appraiser re-runs on the same issue every cycle. Only `unclear` holds
- * anything. No third "not appraised" member — that is the absence of a row,
- * which is what makes a crashed appraiser fail open (`src/intake/appraisal.ts`).
+ * What a goal appraisal may conclude about an issue's text (issue #158).
+ *
+ * `workable` is stored as much as `unclear` is, for the reason the planner
+ * persists a `single` verdict: without a row for the affirmative the appraiser
+ * re-runs on the same issue every cycle. Only `unclear` holds anything.
+ *
+ * There is deliberately no third "not appraised" member — that is the absence of a
+ * row, which is what makes a crashed appraiser fail open (see `src/intake/appraisal.ts`).
  */
 export type GoalAppraisalVerdict = 'workable' | 'unclear';
 
@@ -1729,54 +1906,92 @@ export type GoalAppraisalVerdict = 'workable' | 'unclear';
 export type AppraisalAuthor = 'appraiser' | 'operator';
 
 /**
- * One issue's standing goal appraisal — the answer to "is this ticket
- * workable", cast *before* anything is dispatched. Sibling of
- * {@link IssueDelivery}, split the same way that is split from
- * {@link IssueConclusion}: a delivery says the work is *finished*, an
- * appraisal says the goal could not be *started* from — both can be true at
- * different times, so two rows, neither clearing the other. The
- * distinguishing field is {@link goalRef}: an appraisal judges a *text*, so
- * changing the title or body means the verdict no longer describes the
- * ticket, making re-appraisal a lookup rather than an event to witness.
+ * One issue's standing goal appraisal — the answer to "is this ticket workable", cast
+ * *before* anything is dispatched against it.
+ *
+ * Sibling of {@link IssueDelivery} and split from it for the reason that one is
+ * split from {@link IssueConclusion}: the two verdicts are about opposite ends of
+ * the same issue. A delivery says the work is *finished*; an appraisal says the goal
+ * could not be *started* from. They can be true at different times about one
+ * issue, so they are two rows, and neither clears the other.
+ *
+ * The distinguishing field is {@link goalRef}: an appraisal judges a *text*, not a
+ * state of the world, so the verdict is bound to the exact text it judged. Change
+ * the title or the body and the verdict no longer describes the ticket in front of
+ * you, which is what makes "re-appraise when it is edited" a lookup rather than an
+ * event the harness has to have witnessed.
  */
 export interface IssueAppraisal {
   /** The issue, as `issue:<n>` — the same origin every gate keys on. */
   originRef: string;
   verdict: GoalAppraisalVerdict;
-  /** What is missing, or why the goal is actionable. Required: a bare verdict is not reviewable. */
+  /** Why the goal is, or is not, actionable. Required: a bare verdict is not reviewable. */
   summary: string;
-  /** A fingerprint of the goal text this verdict was cast against (see `goalFingerprint`). The hold ends the instant the issue's current text fingerprints differently — no timer, no missed event. */
+  /**
+   * What the ticket has to say before an agent could start, one question per
+   * entry, addressed to whoever wrote it. Empty on every `workable` verdict and on
+   * an operator's. This is what turns a refusal into a next step: the ticket
+   * comment renders it as the checklist the author works through.
+   */
+  missing: string[];
+  /**
+   * A fingerprint of the goal text this verdict was cast against (see
+   * `goalFingerprint`). The hold ends the instant the issue's current text
+   * fingerprints differently — no timer, and no world event to have missed.
+   */
   goalRef: string;
   by: AppraisalAuthor;
   /**
-   * The model profile the appraiser proposed for this goal's work, or null
-   * when it named none. Kept whatever the operator then decides, so the pair
-   * (this, the tag on the ticket) says a human intervened — nothing reads
-   * this as the pin.
+   * The model profile the appraiser proposed for this goal's work (issue #342), or
+   * null when it named none — which is every `unclear` verdict, every deployment
+   * with no `agentModels`, and any appraiser that simply did not answer.
+   *
+   * Kept whatever the operator then decides, so the pair (this, the tag on the
+   * ticket) is what says a human intervened. Nothing reads it as the pin: the
+   * tag is the resolved answer, this is what was suggested.
    */
   proposedProfile: string | null;
   /**
-   * When the profile question was settled — by the operator answering, or
-   * at write time if there was nothing to ask. Null is the whole of the
-   * gate: an unanswered proposal holds the funnel (see `appraisalHold`).
+   * When the profile question was settled — by the operator answering, or at the
+   * moment the proposal was written if there was nothing to ask.
+   *
+   * Null is the whole of the gate: a proposal with no answer holds the funnel
+   * (see `appraisalHold`). Stamped at write time when the appraiser agreed with what
+   * was already standing, so agreement costs no click and raises no question.
    */
   profileAnsweredAt: string | null;
   /**
-   * The container work item the appraiser proposed this goal should hang off,
-   * or null when it named none. A number rather than a resolved item, since
-   * a cached title could drift; the cockpit resolves it through `refUrls`.
-   * **Nothing here expires it** — whether the question is still worth asking
-   * is derived from the live work item. See {@link parentSettledAt} for the
-   * one thing that is stored.
+   * The container work item the appraiser proposed this goal should hang off, or
+   * null when it named none — every `unclear` verdict, every flat tracker, and any
+   * appraiser that had nothing to suggest.
+   *
+   * A number rather than a resolved item: what the tracker holds is the id, and a
+   * title cached here would be free to drift from the one on the board. The
+   * cockpit resolves it through `refUrls` like every other ref.
+   *
+   * **Nothing here expires it.** Whether the question is still worth asking is
+   * derived from the live work item — an operator who sets the parent by hand in
+   * the tracker makes the row disappear on the next read, with no timer and no
+   * world event to have missed. See {@link parentSettledAt} for the one thing
+   * that is stored.
    */
   proposedParent: number | null;
   /**
    * When the operator answered the parent question — whichever of the three
-   * answers. The one piece of state a *derived* question needs: two answers
-   * change the work item, which the next world read sees; the third
-   * ("wants no parent") changes nothing out there, so without a stamp a goal
-   * that legitimately has none sits in the needs band forever. Scoped to
-   * this row, so a re-appraisal against rewritten goal text asks again.
+   * answers they gave.
+   *
+   * The one piece of state a *derived* question needs. Two of the answers end it
+   * on their own: accepting the proposal and supplying a different value both
+   * change the work item, which the next world read sees. The third — "this goal
+   * wants no parent" — changes nothing out there, so without a stamp a goal that
+   * legitimately has none sits in the needs band for ever. Stamped on all three
+   * rather than only that one, because the derived read lags a pulse behind the
+   * write and a row that reappeared for one refresh would read as a click that
+   * did not take.
+   *
+   * Scoped to this row, so a re-appraisal against rewritten goal text asks again: the
+   * ticket having been rewritten is the one signal that the old answer may no
+   * longer be the right one.
    */
   parentSettledAt: string | null;
   /** The area path the appraiser proposed, from the candidates the harness offered it. */
@@ -2015,7 +2230,11 @@ export interface ReviewRange {
  */
 export type ReviewAnchorMark = 'key' | 'false' | 'disputed';
 
-/** A note states its provenance the way a claim does, since a reader weighs them differently: written by the witness at the time, or added by the author afterwards. */
+/**
+ * A note states its provenance the way a claim does, because a reader weighs the
+ * two differently: written by the witness at the time — citing the pad entry and
+ * stamped with when — or added by the author afterwards.
+ */
 export type ReviewNote = { by: 'witness'; text: string; entryId: string; at: string } | { by: 'author'; text: string };
 
 /**
@@ -2029,15 +2248,20 @@ export interface ReviewClaim {
   verdict: ReviewVerdict | null;
   /** What the checker did to decide — the search, the test, the file it read. Null until it has run. */
   evidence: string | null;
-  /** The checker's finding, on a `false` claim and on nothing else. Null until the checker has run, and on every claim that held or could not be decided. → `docs/spec/31-review-packs.md#what-a-false-claim-does` */
+  /**
+   * The checker's finding, on a `false` claim and on nothing else: the page's most
+   * important prose. Null until the checker has run, and null on every claim that
+   * held or could not be decided. → `docs/spec/31-review-packs.md#what-a-false-claim-does`
+   */
   finding: ReviewFinding | null;
 }
 
 /**
- * Where a claim came from, structurally rather than decoratively. A
- * `witnessed` claim cites the pad entry (`scr_…`), rendered verbatim beside
- * it. `disputed` cites the entry the code disagrees with. `inferred` is the
- * author's own reading, where the witness said nothing.
+ * Where a claim came from, structurally rather than decoratively. A `witnessed`
+ * claim cites the pad entry (`scr_…`) and the entry is rendered verbatim beside
+ * it — the pack stores the id, never a copy. `disputed` cites the entry the code
+ * disagrees with; the claim states what the code does. `inferred` is the author's
+ * own reading, where the witness said nothing.
  * → `docs/spec/31-review-packs.md#provenance`
  */
 export type ReviewProvenance =
@@ -2049,37 +2273,60 @@ export type ReviewProvenance =
 export type ReviewVerdict = 'true' | 'false' | 'cant_tell';
 
 /**
- * What a false claim does to the document: the finding lives **on the
- * claim**, and the anchor it is about carries the `false` mark. Drawn twice
- * from this one field — unfolded at the top of the idea, and boxed after the
- * ideas — and the gate above the ideas counts claims whose `verdict` is `false`.
+ * What a false claim does to the document: the finding lives **on the claim**,
+ * because the claim is what is false, and the anchor it is about carries the
+ * `false` mark so the walk shows where. The page draws it twice — at the top of
+ * the idea, unfolded, and as the boxed section after the ideas — from this one
+ * field, and the gate above the ideas counts claims whose `verdict` is `false`.
  */
 export interface ReviewFinding {
   /** One plain line saying what is wrong. */
   headline: string;
-  /** The consequence worked out, how serious it is and whose call it is — the closing paragraph. Markdown; a table where numbers make it concrete. */
+  /**
+   * The consequence worked out, how serious it is and whose call it is — the
+   * closing paragraph. Markdown; a table where numbers make it concrete.
+   */
   body: string;
-  /** The step of the idea's walk the claim is about, 1-based, carrying `mark: 'false'`. Null where no step fits — the contradiction is somewhere the walk never stopped, and {@link counter} shows it. */
+  /**
+   * The step of the idea's walk the claim is about, 1-based as the page numbers
+   * them — the anchor that carries `mark: 'false'`. Null where no step fits: the
+   * contradiction is somewhere the walk never stopped, and {@link counter} shows it.
+   */
   step: number | null;
-  /** The code that contradicts the claim, where not already on the walk: a range of the tree at the head, with the checker's one-line caption. */
+  /**
+   * The code that contradicts the claim, where it is not already on the walk: a
+   * range of the tree at the head, read by the harness like a region anchor's, with
+   * the checker's one-line caption. The "two pieces of code that disagree" are the
+   * marked step and this.
+   */
   counter: { range: ReviewRange; code: string[]; caption: string } | null;
 }
 
-/** A pack as the store holds it: the document, and when it was written. The PR and head sha are inside the document; the row copies them out as columns since staleness is decided against the PR's head on every load. */
+/**
+ * A pack as the store holds it: the document, and when it was written. The pull
+ * request and head sha are inside the document; the row copies them out as
+ * columns because staleness is decided against the pull request's head on every
+ * load, and that read must not open the document to do it.
+ */
 export interface ReviewPackRecord {
   pack: ReviewPack;
   writtenAt: string;
 }
 
 /**
- * Whether one pull request's pack has been shared into the pool, and what
- * became of it. → `docs/spec/31-review-packs.md#sharing-a-pack`
+ * Whether one pull request's pack has been shared into the pool, and what became
+ * of it. → `docs/spec/31-review-packs.md#sharing-a-pack`
  *
- * **Sharing is a second, deliberate act**, so this row exists only once
- * somebody has asked for one — no row is the ordinary state. The request is
- * recorded and the publish happens on the pool's own clock (never inside a
- * route handler), so the row carries both moments and a reader can tell
- * "asked for" from "in the pool" without guessing.
+ * **Sharing is a second, deliberate act**, so this row exists only once somebody
+ * has asked for one: no row is the ordinary state, and it is the honest one — a
+ * pack unshared costs nobody anything, and a pack shared by default costs the
+ * fleet its source, in volume.
+ *
+ * The request is recorded and the publish happens on the pool's own clock, because
+ * the publish is never inside a route handler
+ * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
+ * So the row carries both moments, and a reader can tell "asked for" from "in the
+ * pool" without guessing.
  */
 export interface ReviewPackShare {
   prNumber: number;
@@ -2089,23 +2336,33 @@ export interface ReviewPackShare {
   /** When the transport took it, or null while it has not been published yet. */
   publishedAt: string | null;
   /**
-   * When somebody unshared it, or null. Set only on a share that **is** in
-   * the pool — a withdrawal of a share the pool never carried deletes the
-   * row outright, so this is never set beside a null {@link publishedAt}.
+   * When somebody unshared it, or null. Set only on a share that **is** in the
+   * pool: the copy is still in the namespace until the pool's own arm takes it
+   * out, and the row is what tells the arm to. A withdrawal of a share the pool
+   * never carried has nothing to remove and deletes the row outright, so this is
+   * never set beside a null {@link publishedAt}.
    * → `docs/spec/31-review-packs.md#unsharing-a-pack`
    */
   withdrawnAt: string | null;
-  /** Why the secret backstop refused it, naming the line. Null on a share nothing refused. A refusal is **loud and never a rewrite**. → `docs/spec/28-cross-fleet-pool.md#data-classification` */
+  /**
+   * Why the secret backstop refused it, naming the line. Null on a share nothing
+   * refused. A refusal is **loud and never a rewrite**: the pack stays local and
+   * the page says which line stopped it.
+   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+   */
   refusal: string | null;
 }
 
 /**
- * What a reviewer did to a pack — an attention override, an idea marked read
- * — held beside the document and never written into it, so a pack rewritten
- * against a new head does not throw their marks away. **Keyed to a hunk,
- * never an idea**: an idea's id is minted on every run, so a mark on one
- * would point at nothing in the next pack. A hunk the next head rewrote
- * loses its mark, honestly.
+ * What a reviewer did to a pack — an attention override, an idea marked read —
+ * held beside the document and never written into it, so a pack rewritten
+ * against a new head does not throw their marks away.
+ *
+ * **Keyed to a hunk, never an idea.** An idea's id is minted on every run, so a
+ * mark on one would point at nothing in the next pack. A mark on an idea is
+ * recorded against every hunk that idea owns, and the next pack draws it on
+ * whichever idea owns the same hunks. A hunk the next head rewrote loses its
+ * mark, honestly: the thing that was read is gone.
  * → `docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack`
  */
 export interface ReviewMark {
@@ -2119,10 +2376,14 @@ export interface ReviewMark {
   /** Whether the reviewer marked the owning idea read. */
   read: boolean;
   /**
-   * Whether the reviewer took the finding on this idea's false claim. The
-   * only column about the **checker's** output rather than the author's —
-   * a pull request that merged with a false claim nobody marked seen is the
-   * one number that measures whether prominence works.
+   * Whether the reviewer took the finding on this idea's false claim.
+   *
+   * The third column, and the only one about the **checker's** output rather than
+   * the author's. It is what makes prominence measurable: the four surface
+   * requirements under *What a false claim does* are checkable as an order things
+   * are drawn in, and none of them says whether a false claim was read. This does
+   * — a pull request that merged with a false claim nobody marked seen is the one
+   * number that measures them.
    * → `docs/spec/31-review-packs.md#whether-prominence-works`
    */
   seen: boolean;
@@ -2130,12 +2391,15 @@ export interface ReviewMark {
 }
 
 /**
- * What a developer would tell a product owner about one Feature — rule
- * `feature-summary` dispatches an agent to write, the one thing on the
- * feature board that is prose rather than a fold. Four fields rather than
- * one document, since they are the four questions the card is opened with.
- * Only {@link standing} is required — an empty section says so where an
- * invented one would be the forecast the board refuses to make.
+ * What a developer would tell a product owner about one Feature — the account rule
+ * `feature-summary` dispatches an agent to write, and the one thing on the feature
+ * board that is prose rather than a fold.
+ *
+ * Four fields rather than one document, because they are the four questions the
+ * card is opened with and a reader must not have to find each of them inside a
+ * paragraph. Only {@link standing} is required: a Feature with nothing usable yet,
+ * nothing blocked, or nothing left are each ordinary states, and an empty section
+ * says so where an invented one would be the forecast the board refuses to make.
  * → `docs/spec/17-cockpit.md#the-feature-summary`
  */
 export interface FeatureSummary {
@@ -2149,7 +2413,12 @@ export interface FeatureSummary {
   blocked: string | null;
   /** What is left to do. Null for a Feature with nothing outstanding. */
   remaining: string | null;
-  /** The digest of where every child stood when this was written (`featureStandingKey`). Makes the summary re-writable exactly once per movement: the rule dispatches when this differs from current standing. */
+  /**
+   * The digest of where every child stood when this was written
+   * (`featureStandingKey`). What makes the summary re-writable exactly once per
+   * movement: the rule dispatches when this differs from the current standing and
+   * does nothing, for ever, while it matches.
+   */
   standingKey: string;
   /** The writing agent and its task, from the credential. */
   agentId: string;
@@ -2160,11 +2429,13 @@ export interface FeatureSummary {
 }
 
 /**
- * One "this story waits on that one", with **where the edge came from
- * recorded on it**. The provenance is not presentational: `link` is a
- * statement a person made on their own board, `inferred` an agent's guess —
- * drawing them the same way would invite an operator to accept the second
- * thinking it was the first. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
+ * One "this story waits on that one", with **where the edge came from recorded on
+ * it**. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
+ *
+ * The provenance is not presentational. `link` is a statement a person made on
+ * their own board; `inferred` is an agent's guess from the items' own text. A
+ * surface that drew the two the same way would invite an operator to accept the
+ * second thinking it was the first.
  */
 export interface FeatureSequenceEdge {
   /** The story that waits. */
@@ -2172,11 +2443,14 @@ export interface FeatureSequenceEdge {
   /** The story it waits on. */
   dependsOn: number;
   /**
-   * Where the edge came from. `link` — the tracker's own Predecessor, drawn
-   * by a person. `inferred` — the sequencer read it out of the items' text.
-   * `operator` — amended by hand through the desktop channel. Three rather
-   * than two, since marking an operator's edge `inferred` would claim an
-   * agent guessed at a judgement a person made. → `docs/spec/33-story-sequencing.md#amending-it`
+   * Where the edge came from. `link` — the tracker's own Predecessor, drawn by a
+   * person on their own board. `inferred` — the sequencer read it out of the items'
+   * text. `operator` — somebody amended the order by hand, through the desktop
+   * channel.
+   *
+   * Three rather than two because an operator's edge is neither of the others, and
+   * marking one `inferred` would claim an agent guessed at a judgement a person
+   * made. → `docs/spec/33-story-sequencing.md#amending-it`
    */
   source: 'link' | 'inferred' | 'operator';
   /** One line on why this edge. Null on a `link`, where the reason is that somebody drew it. */
@@ -2184,11 +2458,13 @@ export interface FeatureSequenceEdge {
 }
 
 /**
- * The order the stories under one Feature are worked in. Only `accepted`
- * holds anything — a `proposed` order and a `declined` one both leave the
- * fleet behaving exactly as with no row at all, so every failure of this
- * mechanism is a failure to *order*, never a failure to work.
- * → `docs/spec/33-story-sequencing.md#the-record`
+ * The order the stories under one Feature are worked in.
+ *
+ * Only `accepted` holds anything. A `proposed` order is an agent's suggestion
+ * nobody has answered and a `declined` one is an operator saying "run them all" —
+ * both leave the fleet behaving exactly as it does with no row at all, which is
+ * what makes every failure of this mechanism a failure to *order* rather than a
+ * failure to work. → `docs/spec/33-story-sequencing.md#the-record`
  */
 export interface FeatureSequence {
   /** The Feature, as `issue:<n>` — `FeatureSummary`'s key, and every verdict's. */
@@ -2196,17 +2472,28 @@ export interface FeatureSequence {
   status: 'proposed' | 'accepted' | 'declined';
   /** Why this order, in the sequencer's own voice. Empty on one built only from links. */
   reason: string;
-  /** The edge it would most like argued with, and what would change its mind — an order with no stated doubt is one nobody can disagree with usefully. Null where every edge was drawn by a person. */
+  /**
+   * The edge it would most like argued with, and what would change its mind.
+   * `openQuestions`' job on the plan document: an order with no stated doubt is one
+   * nobody can disagree with usefully. Null where every edge was drawn by a person.
+   */
   unsure: string | null;
-  /** The digest of *which* stories were under the Feature when this was written (`featureSequenceKey`) — membership, never movement. A story merging does not invalidate an order; adding one does. */
+  /**
+   * The digest of *which* stories were under the Feature when this was written
+   * (`featureSequenceKey`) — membership, never movement. A story merging does not
+   * invalidate an order; a story being added does.
+   */
   standingKey: string;
   /** The order itself. Rewritten as a set, never merged. */
   edges: FeatureSequenceEdge[];
   /**
-   * The stories this order was written over, ascending — every watched child
-   * the Feature had, settled ones included. **Null on a row written before
-   * the column existed**, meaning *we cannot say which stories are new* — the
-   * fail-open reading, asking the operator again. → `docs/spec/33-story-sequencing.md#a-story-is-added`
+   * The stories this order was written over, ascending — every watched child the
+   * Feature had, settled ones included.
+   *
+   * **Null on a row written before the column existed**, and null means *we cannot
+   * say which stories are new*. That is the fail-open reading: a re-sequence that
+   * cannot prove it only extended the order asks the operator again, which is what
+   * every row did before this. → `docs/spec/33-story-sequencing.md#a-story-is-added`
    */
   members: number[] | null;
   /** Who accepted or declined it, and when. Null while it is still a proposal. */
@@ -2220,16 +2507,31 @@ export interface FeatureSequence {
 }
 
 /**
- * Which of the three failures an assessor's "not delivered" actually is.
- * They wear one face — worked, and the goal is not reached — but want three
- * different things done, so the cause is **declared** by the assessor rather
- * than derived. `plan` — the decomposition was wrong, whole plan goes back
- * to a planner. `part` — the split was right, one named part fell short: a
- * follow-up part is appended. `goal` — the issue itself is wrong, ambiguous
- * or obsolete: nothing is dispatched. **No cause is a fourth answer, and
- * never one of these three**: an issue with no plan has no decomposition to
- * be wrong about, so folding a plain "not finished" into `goal` would
- * infer a route from silence.
+ * Which of the three failures an assessor's "not delivered" actually is (issue
+ * #159).
+ *
+ * They wear one face — the issue was worked and the goal is not reached — and
+ * they want three different things done, so the cause is **declared** by the
+ * assessor rather than derived by the harness. Deriving "the plan was wrong" from
+ * the fact that something is missing would route every shortfall to a replan, and
+ * re-decompose plans whose shape was never the problem: the issue's own point 2.
+ *
+ * - `plan` — the decomposition was wrong: a part is missing, or the split is. The
+ *   whole plan goes back to a planner.
+ * - `part` — the split was right and one named part did not deliver its scope. A
+ *   follow-up part is appended; the plan is not re-derived.
+ * - `goal` — the issue itself is wrong, ambiguous or obsolete. Nothing is
+ *   dispatched: that is #158's question, and this arm exists to stop pretending
+ *   the planner can answer it.
+ *
+ * **No cause is a fourth answer, and it is never one of these three.** An issue
+ * with no plan has no decomposition to be wrong about, so the honest reading of a
+ * negative assessment there is usually just "the work is not finished" — which
+ * names nothing to route and wants nothing done beyond what `more_work` already
+ * did: the issue comes back round. That is the absence of a value, not a member,
+ * for `undeclared`'s reason — folding it into `goal` would file an escalation
+ * claiming the ticket is wrong every time an unplanned issue fell short, which is
+ * inferring a route from silence.
  */
 export type ShortfallCause = 'plan' | 'part' | 'goal';
 
@@ -2238,15 +2540,31 @@ export type ShortfallAuthor = 'assessor' | 'operator';
 
 /**
  * One issue's standing "worked, and the goal is not reached" verdict — the
- * negative mirror of {@link IssueDelivery}. A **separate table** rather than
- * a polarity column, because every reader of `issue_deliveries` is a *gate*
- * and a shortfall must gate **nothing** — putting both in one table would
- * leave every reader having to remember which polarity it holds from a row
- * that looks identical until you read a column. Also **not** an
- * {@link IssueConclusion}: that row is the working agent's own declaration,
- * so an assessor writing `more_work` into it would overwrite the agent's
- * note with no precedence the resolver could judge. Mutually exclusive with
- * a delivery — writing either clears the other.
+ * negative mirror of {@link IssueDelivery}.
+ *
+ * A **separate table** rather than a polarity column on the delivery row, and the
+ * reason is the polarity itself. Every reader of `issue_deliveries` is a *gate*:
+ * `deliveryHold` is asked by rule `issue-pickup`'s filter and by `issuePickupStatus`, each
+ * pulse, and it holds pickup off. A shortfall must gate **nothing** — releasing
+ * work is the entire point — so putting the two in one table would leave every
+ * present and future reader having to remember which polarity it is holding, from
+ * a row that looks identical until you read a column. That is the drift class this
+ * repo has already paid for twice (`proposalHold` vs `planProposalHold`, detection
+ * vs stripping in the PTY scanner), and both times the fix was to keep the two
+ * predicates apart rather than give one a flag.
+ *
+ * It is also **not** an {@link IssueConclusion}. That row is the working agent's
+ * own declaration about its own run, keyed `origin_ref PRIMARY KEY` — so an
+ * assessor writing `more_work` into it overwrote the agent's note, its author and
+ * its timestamp, with no precedence between two parties the resolver could not
+ * tell apart. The assessor writes here instead, and `resolveIssueConclusion` reads
+ * both, ranking this one higher because the assessor is later and better informed
+ * than the agent that declared its own work.
+ *
+ * Mutually exclusive with a delivery — writing either clears the other, in the
+ * store — for the reason a delivery and a conclusion are: they are two answers to
+ * one question, so one must win, and a caller that remembered one and forgot the
+ * other would leave the pickup gate holding an issue this row is trying to release.
  */
 export interface IssueShortfall {
   /** The issue, as `issue:<n>` — the same origin every gate and verdict keys on. */
@@ -2274,21 +2592,35 @@ export interface IssueShortfall {
 
 /**
  * Where a plan sits in its life — and **only** that. How the issue is being
- * delivered (one pull request, or several) is read off the live parts by
- * `planShape`, not a status. `planning` — a verdict still being worked out.
- * `awaiting_approval` — the planner has spoken and a human must authorize it;
- * nothing is scheduled — this status *is* the gate, releasing to `active` on
- * either arm. `active` — being delivered, whole (no parts) or as a
- * decomposition with parts outstanding. `complete` — every part settled (a
- * single-PR plan never reaches it; the issue's own delivery finishes that
- * arm). `abandoned` — the operator gave up on the decomposition.
+ * delivered (one pull request, or several) is not a status: it is read off the
+ * live parts, by `planShape`. The two were one field until a `single` status
+ * meant a plan could not also be *running*, and every consumer that switched on
+ * status had to know the shape — including the ones that forgot, which is how a
+ * single-PR issue silently stopped being reconciled and never posted its status
+ * comment.
+ *
+ * - `planning` — a verdict is still being worked out (a replan in flight).
+ * - `awaiting_approval` — the planner has spoken, so a human has been asked to
+ *   authorize the verdict (issue #109 phase 3) —
+ *   a decomposition, or the decision to work the issue as one PR. Nothing is
+ *   scheduled from it: this status *is* the gate, which is why release is a
+ *   one-way move rather than a verdict re-read every pulse. It releases to
+ *   `active` on either arm.
+ * - `active`   — being delivered. With live parts that is a decomposition with at
+ *   least one part outstanding; with none, it is the single-PR arm, worked whole
+ *   by rule `issue-pickup`.
+ * - `complete` — every part settled. A single-PR plan does not reach it: what
+ *   finishes that arm is the issue's own delivery, which the plan does not own.
+ * - `abandoned`— the operator gave up on the decomposition.
  */
 export type PlanStatus = 'planning' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
 
 /**
  * One issue's delivery plan — the planning agent's verdict, persisted so the
  * planner never re-runs on the same issue. Written for *both* outcomes: a
- * single-PR plan is a first-class row with no parts.
+ * single-PR plan is a first-class row with no parts, which is what turns today's
+ * one-agent / one-PR path into an explicit outcome of the funnel rather than a
+ * bypass.
  */
 export interface Plan {
   id: string;
@@ -2296,9 +2628,18 @@ export interface Plan {
   originRef: string;
   title: string;
   status: PlanStatus;
-  /** What is actually wrong — the root cause found in the code, not a restatement of the issue. Null when it said nothing, and legitimately null on work that is not a defect. */
+  /**
+   * What is actually wrong — the root cause the planner found in the code, not a
+   * restatement of the issue. Null when it said nothing, and legitimately null on
+   * work that is not a defect: there is no root cause of a feature.
+   */
   diagnosis: string | null;
-  /** What is going to be done about it, in a few sentences — the summary an operator approves on, kept separate from {@link reason} which answers a different question. */
+  /**
+   * What is going to be done about it, in a few sentences. The summary an operator
+   * approves on, kept separate from {@link reason} because that one answers a
+   * different question — a shape justification is not a description of the work,
+   * and one field asked to be both is reliably neither.
+   */
   approach: string | null;
   /** The planner's own justification for its verdict — why *this shape*. Null when it gave none. */
   reason: string | null;
@@ -2306,13 +2647,30 @@ export interface Plan {
   risks: string | null;
   /** What the planner deliberately left out. */
   outOfScope: string | null;
-  /** What the planner considered and rejected, and why. Its own field rather than a paragraph of {@link document}, since it is the most useful thing an approver can have. */
+  /**
+   * What the planner considered and rejected, and why. Null when it said nothing.
+   *
+   * Its own field rather than a paragraph of {@link document} because of *when* it
+   * is read: it is the most useful thing an approver can have and it was reachable
+   * only by opening the write-up and scrolling, which is not what anyone does with
+   * a decision in front of them.
+   */
   alternatives: string | null;
   /** What the planner is least sure about — the agenda a discussion opens on. */
   openQuestions: string | null;
-  /** How anyone will know the *whole* thing worked. Distinct from a part's `acceptance`, which answers per-branch and never for the issue — the question `issue-assess` is later handed cold. */
+  /**
+   * How anyone will know the *whole* thing worked. Distinct from a part's
+   * `acceptance`, which answers the same question one branch at a time and never
+   * for the issue — which is the question `issue-assess` is later handed cold.
+   */
   verification: string | null;
-  /** Where in the code the diagnosis comes from. Empty when the planner cited nothing. A root cause with no citation is unfalsifiable, and the harness asks for attributable testimony everywhere else it takes any (`raise`). */
+  /**
+   * Where in the code the diagnosis comes from. Empty when the planner cited
+   * nothing, which is every plan written before the field existed.
+   *
+   * A root cause with no citation is unfalsifiable, and the harness asks for
+   * testimony to be attributable everywhere else it takes any (`raise`).
+   */
   evidence: PlanEvidence[];
   /** The full narrative, markdown — the read-in-depth version of this plan. */
   document: string | null;
@@ -2323,28 +2681,42 @@ export interface Plan {
 }
 
 /**
- * One thing about a plan an operator has to have *read* before they may
- * release it (`src/plans/planCaveats.ts`). A plan approval used to be a
- * click on a card whose warnings were prose in the body — skippable — so a
- * caveat is that same sentence made into a thing the operator ticks, and
- * accept refuses while any is unticked. `id` is what the acknowledgement
- * names, stable for the life of one proposal because it is stored on the
- * action the proposal carries.
+ * One thing about a plan an operator has to have *read* before they may release
+ * it (`src/plans/planCaveats.ts`).
+ *
+ * A plan approval used to be a click on a card whose warnings were prose in the
+ * body: the planner's own uncertainty, a part that is already blocked, a pull
+ * request open on the issue that belongs to no part of the plan. Prose is
+ * skippable, and the one verdict that starts every agent, branch and pull request
+ * the plan declares was the easiest thing on the page to give without reading it.
+ * A caveat is that same sentence made into a thing the operator ticks, and the
+ * accept refuses while any of them is unticked.
+ *
+ * `id` is what the acknowledgement names, and it is stable for the life of one
+ * proposal because it is stored on the action the proposal carries — the gate
+ * compares what was ticked against what that row declares, never against a
+ * re-derivation from a world that has moved since the card was drawn.
  */
 export interface PlanCaveat {
   /** Stable within one proposal; what an acknowledgement names. */
   id: string;
-  /** The short line the operator is ticking — a title, not a paragraph. What it is about goes in {@link detail}. */
+  /**
+   * The short line the operator is ticking — a title, not a paragraph. What it is
+   * *about* goes in {@link detail}, so a checklist of several reads as a list
+   * rather than as the wall of prose it replaced.
+   */
   label: string;
   /** What the label is about: the planner's own words, or the stored reason. */
   detail: string | null;
 }
 
 /**
- * The plan-level prose of one verdict, gathered so a revision can hold it
- * whole. Every field is on {@link Plan} too, and that is not duplication:
- * the plan row is what the harness acts on *now*, a revision is what was
- * said *then* — the row is overwritten by every amendment.
+ * The plan-level prose of one verdict, gathered so a revision can hold it whole.
+ *
+ * Every field is on {@link Plan} as well, and that is not duplication: the plan row
+ * is what the harness acts on *now*, while a revision is what was said *then* —
+ * and the row is overwritten by every amendment, which is exactly the reason the
+ * snapshot has to exist separately.
  */
 export interface PlanNarrative {
   reason: string | null;
@@ -2360,10 +2732,13 @@ export interface PlanNarrative {
 }
 
 /**
- * One verdict, exactly as the planner submitted it. Written at ingestion, so
- * the record is of what was *proposed*, not what the store made of it — a
- * part the amendment dropped but `partsToRetire` kept appears as dropped
- * here and live on the plan, and both readings are true.
+ * One verdict, exactly as the planner submitted it.
+ *
+ * Written at ingestion — the one place a document becomes rows — so the record is
+ * of what was *proposed*, not of what the store made of it. That distinction is
+ * the whole value on a replan: a part the amendment dropped but `partsToRetire`
+ * kept (because work had started) appears as dropped here and as live on the plan,
+ * and both readings are true.
  */
 export interface PlanRevision {
   id: string;
@@ -2376,20 +2751,35 @@ export interface PlanRevision {
   at: string;
 }
 
-/** Who wants the plan changed. Only the settlement differs — an operator's own amendment is still proposed rather than applied: a plan under way changes only on a deliberate decision. */
+/**
+ * Who wants the plan changed. Only the settlement differs — an operator's own
+ * amendment is still proposed rather than applied, because the point of the gate
+ * is that a plan under way changes only on a decision somebody took deliberately,
+ * and the person arguing with a plan at their keyboard is not always the person
+ * who approved it.
+ */
 export type PlanAmendmentAuthor = 'agent' | 'operator';
 
-/** Where a proposed amendment stands. `superseded` is the terminal for one the world overtook — replanned or abandoned under it — and is not a verdict anybody gave. */
+/**
+ * Where a proposed amendment stands. `superseded` is the terminal for one the
+ * world overtook — the plan was replanned, or abandoned, under it — and is not a
+ * verdict anybody gave.
+ */
 export type PlanAmendmentStatus = 'pending' | 'applied' | 'declined' | 'superseded';
 
 /**
- * A correction to a plan that is **already running**, waiting on an
- * operator. Exists because a live plan must not rewrite itself under the
- * agents working it: an agent or operator who disagrees records one of
- * these, the plan keeps scheduling until it is approved, and applying it is
- * ordinary ingestion merged on slug, so work in flight keeps its branch and
- * progress. Re-validated at apply time by the same `validatePlanDocument`
- * both transports use.
+ * A correction to a plan that is **already running**, waiting on an operator.
+ *
+ * The row exists because the alternative is the one thing a live plan must not do:
+ * rewrite itself under the agents working it. An agent that finds the plan wrong
+ * halfway through a part, or an operator who reads it again and disagrees, records
+ * one of these; the plan keeps scheduling exactly as it was until the amendment is
+ * approved, and applying it is the ordinary ingestion — merged on slug, so work in
+ * flight keeps its branch, its pull request and its progress.
+ *
+ * The document is kept as submitted and re-validated at apply time, by the same
+ * `validatePlanDocument` the two transports use: what an operator approved and
+ * what is ingested are then the same document.
  */
 export interface PlanAmendment {
   id: string;
@@ -2410,7 +2800,13 @@ export interface PlanAmendment {
   decidedAt: string | null;
 }
 
-/** One place in the code a plan's diagnosis rests on — the planner's citation. `line` is optional since a claim is often about a file rather than a line. `note` says what the reader is meant to see there — without it a citation is a path, not evidence. */
+/**
+ * One place in the code a plan's diagnosis rests on — the planner's citation.
+ *
+ * `line` is optional because a claim is often about a file rather than a line, and
+ * a planner made to invent one would invent one. `note` says what the reader is
+ * meant to see there; without it a citation is a path, which is not evidence.
+ */
 export interface PlanEvidence {
   path: string;
   line: number | null;
@@ -2418,45 +2814,89 @@ export interface PlanEvidence {
 }
 
 /**
- * Where one validation check stands. `unrun` is the state everything starts
- * in, counted as a finding rather than an absence, the same refusal
- * `undeclared` makes about an undeclared conclusion. `waived` and `deferred`
- * are two operator acts with opposite effects on the flag, kept apart since
- * collapsing them would make one dishonest.
+ * Where one validation check stands.
+ *
+ * `unrun` is the state everything starts in and the one the flag is loudest
+ * about: with every check a person's by default, the realistic failure is the set
+ * nobody got to, so silence is counted as a finding rather than as an absence —
+ * the same refusal `undeclared` makes about a conclusion nobody declared.
+ *
+ * `waived` and `deferred` are two operator acts with opposite effects on the
+ * flag, and they are kept apart because collapsing them would make one of them
+ * dishonest: "the test environment is rebuilt on Thursday" is not "I am not going
+ * to check this".
  */
 export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred';
 
 /**
- * Who is expected to run a check — **the operator's decision, and only
- * theirs**. `human` is the default. The planner's
- * {@link ValidationCheck.fleetCandidate} is a nomination and does not set
- * this — whether an agent can run a check is a deployment property a planner
- * cannot know. `fleet` is a hand-over: not permanent, an agent that cannot do
- * the work hands it back, and a rewording returns it too.
+ * Who is expected to run a check — **the operator's decision, and only theirs**.
+ *
+ * `human` is the default and stays the default. The planner's {@link
+ * ValidationCheck.fleetCandidate} is a nomination and does not set this: whether
+ * an agent can run a check is a property of the deployment (what logins it has,
+ * whether anything can drive a browser), which a planner reading the repository
+ * cannot know. A wrong guess is a check dispatched against a login the fleet does
+ * not have, so the nomination is information and the deciding stays with the
+ * person who has the information.
+ *
+ * `fleet` is a hand-over: the operator has read the check and said the harness's
+ * own agents may run it. It is not permanent — an agent that finds it cannot do
+ * the work hands it back (see {@link ValidationCheck.handbackNote}), and a
+ * rewording returns it, because the hand-over was a decision about wording that
+ * no longer exists.
  */
 export type ValidationCheckActor = 'human' | 'fleet';
 
 /**
- * Who took a reading — three genuinely different claims about how much a
- * tick is worth. `operator` — a person ran it (the default, draws no
- * marker). `agent` — a fleet agent ran it unattended. `desktop` — the
- * operator's own Claude Code session ran it at their keyboard — not the
- * fleet (nobody dispatched it) and not a person (didn't carry out the steps).
+ * Who took a reading, and the three are genuinely different claims about how
+ * much a tick is worth.
+ *
+ * - `operator` — a person ran the procedure and ticked it. The default a
+ *   validation checklist already means, which is why it is the one that draws no
+ *   marker anywhere.
+ * - `agent` — a fleet agent the operator handed the check to ran it unattended.
+ * - `desktop` — the operator's own Claude Code session ran it, at their keyboard,
+ *   on their machine. Not the fleet, because nobody dispatched it and it reached
+ *   an environment the fleet cannot; and not a person, because a person did not
+ *   carry out the steps.
+ *
+ * The distinction is the point rather than bookkeeping: a reader deciding whether
+ * to re-run a check before closing a goal is deciding on exactly this.
  */
 export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop';
 
 /**
- * One executable step in a goal's validation plan: what to do, what a pass
- * looks like, and what anyone concluded from running it. Validation is
- * **per goal**, not per part — a check usually spans several parts, and
- * {@link ValidationCheck.covers} only says which it exercises.
+ * One executable step in a goal's validation plan: what to do, what a pass looks
+ * like, and what anyone concluded from running it.
+ *
+ * Validation is **per goal**, not per part. A check usually spans several parts —
+ * the question it answers is whether the goal works — and {@link
+ * ValidationCheck.covers} only lets it say which parts it exercises.
  */
 export interface ValidationCheck {
-  /** The **goal** this check belongs to, as `issue:<n>` — the same `originRef` a plan carries. Keyed on the goal, not the plan: a check outlives any one plan of the work. */
+  /**
+   * The **goal** this check belongs to, as `issue:<n>` — the same `originRef` a
+   * plan carries.
+   *
+   * Keyed on the goal rather than on the plan because that is what validation is
+   * about. A plan is 1:1 with a goal today, which is what let `plan_id` stand in
+   * for this, but it is the wrong key wearing the right key's clothes: a check
+   * outlives any one plan of the work, and nothing about it is a property of the
+   * decomposition.
+   */
   originRef: string;
-  /** The author's own kebab-case slug, and **the merge key**: an amended plan merges onto this row rather than replacing it. */
+  /**
+   * The author's own kebab-case slug, and **the merge key**: an amended plan
+   * merges onto this row rather than replacing it, so it has to survive a replan
+   * exactly as a part's slug does.
+   */
   id: string;
-  /** `A`, `B`, `C`… — the handle a person types. Assigned at ingestion, stored, never reused or reassigned, so a check named in a note yesterday is the same check today. */
+  /**
+   * `A`, `B`, `C`… — the handle a person types. Assigned at ingestion, stored,
+   * and never reused or reassigned, so a check named in a note yesterday is the
+   * same check today. Derived from position instead, it would silently move under
+   * the next amendment.
+   */
   letter: string;
   /** Declaration order within the document, for rendering. Not the letter. */
   seq: number;
@@ -2668,7 +3108,11 @@ export interface ValidationResource {
   name: string;
   kind: ValidationResourceKind | null;
   note: string | null;
-  /** False is the planner saying it needs something it cannot produce, and ingestion files a `human_tasks` row asking for it — a missing resource is an ask, not a check that mysteriously never runs. */
+  /**
+   * False is the planner saying it needs something it cannot produce, and
+   * ingestion files a `human_tasks` row asking for it — so a missing resource is
+   * an ask rather than a check that mysteriously never runs.
+   */
   provided: boolean;
   /** The ask that was filed for an unprovided resource. Null when none was. */
   humanTaskId: string | null;
@@ -2692,33 +3136,42 @@ export interface ValidationVerdict {
 }
 
 /**
- * How big a part is to *review*, as the planner judged it — not how long it
- * takes. Three values rather than a number, for the reason story points are
- * not hours: the useful signal is "not like the others", and any finer scale
+ * How big a part is to *review*, as the planner judged it — not how long it takes.
+ * Three values rather than a number, for the reason story points are not hours:
+ * the useful signal is "this one is not like the others", and any finer scale
  * invites a precision the planner does not have.
  */
 export type PartSize = 's' | 'm' | 'l';
 
 /**
- * Where one part of a multi-PR plan sits: `pending`, `ready`, `dispatched`,
- * `in_review`, `merged`, `concluded` (finished without a pull request — a
- * report or determination), `blocked`, or `retired` (an amended plan no
- * longer declares it). Retiring is a *status transition, not a
- * disappearance* — the row stays so the graph remains readable after a
- * replan. `merged` and `concluded` are both terminals; `concluded` is not a
- * kind of retirement (retired means dropped before anything started). Ask
- * `partSettled` rather than comparing to `merged`.
+ * Where one part of a multi-PR plan sits: `pending` (dependencies outstanding),
+ * `ready` (dispatchable), `dispatched` (an agent is on it), `in_review` (its PR
+ * is open), `merged`, `concluded` (it finished without a pull request — a report
+ * or a determination), `blocked`, or `retired` — a part an amended plan no longer
+ * declares. Retiring is a *status transition, not a disappearance*: the row stays
+ * so the graph remains readable after a replan, and nothing schedules it again.
+ *
+ * `merged` and `concluded` are both terminals, and `concluded` is not a kind of
+ * retirement: retired means "dropped before anything was started", which
+ * `partHasWork` enforces, whereas a concluded part did its work and found there
+ * was nothing to build. Ask `partSettled` rather than comparing to `merged`, so
+ * the sites that mean "finished" cannot drift apart.
  */
 type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired';
 
 /**
- * What a part produces. `code` ends in a merged pull request; `report` and
- * `determination` end in a record already durable the moment the agent
- * writes it, declarable through `conclude_part`. `human` is the fourth and
- * the only one no agent ever produces — work a person does by hand, backed
- * by a {@link HumanTask} row and settled by marking that task done. Its own
- * kind rather than a flag, so consumers asking "what did this part produce"
- * read it for free.
+ * What a part produces. `code` ends in a merged pull request, which the world
+ * observes; `report` and `determination` end in a record already durable in the
+ * store the moment the agent writes it — which is why the plan reconciler's fold
+ * differs by kind, and why only those two are declarable through `conclude_part`.
+ *
+ * `human` is the fourth and the only one no agent ever produces: the part is work
+ * a person does by hand, backed by a {@link HumanTask} row, and it is settled by
+ * an operator marking that task done. It is a kind rather than a flag beside the
+ * kinds because every consumer that already asks "what did this part produce"
+ * — the plan comment, the modal, the floor, the retro dossier — then reads it for
+ * free, and because collapsing it into `determination` would lose the one fact
+ * worth keeping: that the thing which finished this part was a human.
  */
 export type PartOutcomeKind = 'code' | 'report' | 'determination' | 'human';
 
@@ -2733,24 +3186,53 @@ export interface PlanPart {
   title: string;
   /** Files/areas this part owns, so concurrent parts don't collide. */
   scope: string;
-  /** The same claim as {@link scope}, as paths rather than prose. Empty when the planner declared none. Two fields since only one can be *checked*: `scope` is what the agent is told, this is what a merged part's writes are compared against (`partScopeDrift`). */
+  /**
+   * The same claim as {@link scope}, as paths rather than prose. Empty when the
+   * planner declared none.
+   *
+   * Two fields rather than one because they are read by different things and only
+   * one of them can be *checked*: `scope` is what the part's agent is told, at
+   * whatever grain the work has, while these are what a merged part's writes are
+   * compared against (`partScopeDrift`). Narrowing `scope` to an array would have
+   * cost the prose; deriving the array by parsing the prose would have invented
+   * paths nobody declared.
+   */
   touches: string[];
   /** Why this is its own PR rather than folded into a sibling. */
   rationale: string | null;
   /** What makes this part done. */
   acceptance: string | null;
-  /** Which of the criteria in {@link acceptance} a reviewer has confirmed, keyed on the criterion text rather than an index — so a re-declared criterion loses its tick, since an amendment reworded what "done" means. */
+  /**
+   * Which of the criteria in {@link acceptance} a reviewer has confirmed, held as
+   * the criterion text itself rather than an index.
+   *
+   * Keyed on the text so a re-declared criterion loses its tick, which is the
+   * behaviour worth having: an amendment that rewords what "done" means has
+   * withdrawn the thing that was confirmed. An index would silently carry the tick
+   * across to a criterion nobody looked at.
+   */
   acceptanceMet: string[];
   /** How big this part is to review, as the planner judged it. Null when unstated. */
   size: PartSize | null;
   /** What the planner expected this part to produce. Null means unstated, which reads as `code`. */
   expectedKind: PartOutcomeKind | null;
   /**
-   * The model profile this part's own work should run on, or null to inherit
-   * the goal's pin — the common case. Named by the planner, since it just
-   * cut the decomposition and can price the part it narrowed. Overridable
-   * from the cockpit, since a plan is a proposal. A plain string: a profile
-   * this deployment no longer configures reads back as what the plan said.
+   * The model profile this part's own work should run on (issue #342), or null to
+   * inherit the goal's pin — which is the common case and the one the planner
+   * should leave alone.
+   *
+   * Named by the planner, because it is the stage that knows: it has just cut the
+   * decomposition, and the part it made narrow enough to state acceptance
+   * criteria for is the part it can price. Overridable from the cockpit, since a
+   * plan is a proposal and this is one of its claims.
+   *
+   * A plain string for {@link PlanPart.slug}'s neighbours' reason — a profile
+   * this deployment no longer configures reads back as what the plan said, and
+   * `resolveAgentProfile` falls through to the rule rather than resolving to
+   * nothing.
+   *
+   * Optional on the same terms as {@link Task.model}: every stored row has it,
+   * and a caller building a part in a test has one fewer field to state.
    */
   profile?: string | null;
   /** What it actually produced, written when it concludes. Null until then; a merged part derives `code`. */
@@ -2764,14 +3246,26 @@ export interface PlanPart {
   branch: string | null;
   prNumber: number | null;
   status: PlanPartStatus;
-  /** Why this part is `blocked`, written by the reconciler with the status and cleared with it. Null on every other status. */
+  /**
+   * Why this part is `blocked`, written by the reconciler with the status and
+   * cleared with it. Null on every other status — a blocked part is the one that
+   * has a reason nothing else in the world can be read for, since it has no
+   * branch, no PR and no agent to explain it.
+   */
   blockedReason: string | null;
   /**
-   * **Which** of the two blockers put it there, for readers that must tell
-   * them apart — {@link planIsWedged} above all, which escalates one and
-   * must not escalate the other. Carried on the row rather than re-derived
-   * from {@link blockedReason}'s prose. Null on every unblocked part, and on
-   * a blocked one from before the column existed — read as *unattributed*.
+   * **Which** of the two blockers put it there, for the readers that must tell
+   * them apart — {@link planIsWedged} above all, which escalates one and must not
+   * escalate the other.
+   *
+   * Carried on the row rather than re-derived from {@link blockedReason}'s prose:
+   * the reconciler is the only writer and already knows which it wrote, and a
+   * reader sniffing the sentence would be one rewording away from silently
+   * escalating a refusal back at the operator who made it.
+   *
+   * Null on every unblocked part, and null on a blocked one from a database before
+   * the column existed — read as *unattributed*, which counts toward the wedge the
+   * way it did before there was anything to attribute.
    */
   blockedBy: PlanPartBlocker | null;
   taskId: string | null;
@@ -2780,11 +3274,15 @@ export interface PlanPart {
 }
 
 /**
- * The two things that block a plan part. A **collision** is git's — a taken
- * branch ref, blocking every part together or none. A **decline** is the
- * operator's — a refused human step, blocking that part alone. One
- * predicate answering for both was bug #505: it escalated a refusal back at
- * the person who made it, and missed the collision once one sibling settled.
+ * The two things that block a plan part, named so a reader can tell them apart.
+ *
+ * A **collision** is git's: `refs/heads/issue/12` is taken, so no part's branch
+ * can be cut, and it blocks every part together or none. A **decline** is the
+ * operator's: they refused one human step, and it blocks that part alone.
+ *
+ * One predicate answering for both is the bug in #505 — the collision's "every
+ * live part is blocked" reading escalates a refusal back at the person who made
+ * it, and misses the collision the moment one sibling has settled.
  */
 export type PlanPartBlocker = 'collision' | 'declined';
 
@@ -2817,10 +3315,13 @@ export interface AgentUsage {
 
 /**
  * One timestamped cost delta — the row `recordAgentUsage` appends beside the
- * cumulative figure it folds onto the agent. What makes cost answerable as a
- * question about *time*: an agent row says what a run came to and never when
- * the money went. `sumUsageCostSince` totals over a window; this is the same
- * rows, unaggregated.
+ * cumulative figure it folds onto the agent.
+ *
+ * The deltas are what make cost answerable as a question about *time*: an agent
+ * row says what a run came to and never when the money went, so a rolling window
+ * or a trend can only be read off these. `sumUsageCostSince` is the total over a
+ * window; this is the same rows, unaggregated, for a reader that needs the shape
+ * rather than the sum.
  */
 export interface UsageEvent {
   agentId: string;
@@ -2829,12 +3330,16 @@ export interface UsageEvent {
 }
 
 /**
- * What one goal has cost so far: every agent the harness put on the issue,
- * summed. The unit is the **issue**, since that is what the operator budgets
- * in and the tracker names — everything downstream (planner, appraisal, each
- * part, its pull requests) rolls up rather than counting as its own work. A
- * running figure, never final: it climbs while an agent works and stops
- * when the last one ends.
+ * What one goal has cost so far: every agent the harness put on the issue, summed.
+ *
+ * The unit is the **issue**, because that is the unit the operator budgets in and
+ * the one thing the tracker names. Everything downstream of it — the planner, the
+ * appraisal, each part, and the pull requests those parts opened — is spend on that
+ * goal, so it rolls up rather than being counted as work of its own.
+ *
+ * A running figure, never a final one: `costUsd` is summed from the cumulative
+ * report on each `agents` row, so it climbs while an agent is still working and
+ * stops when the last one ends.
  */
 export interface IssueSpend {
   /** `issue:<n>` — the same key every other per-issue record is stored under. */
@@ -2845,15 +3350,24 @@ export interface IssueSpend {
   outputTokens: number;
   /** How many agent runs the totals are over. Zero on a goal whose only measured spend is a local run. */
   agents: number;
-  /** How many local runs are in the totals — an operator bringing this goal's branch up locally, billed to the same account. Counted separately since the cockpit prints "Agents" and a local run is not one. */
+  /**
+   * How many local runs are in the totals — an operator bringing this goal's branch
+   * up on their own machine, which is billed to the same account.
+   *
+   * Counted separately rather than added to {@link IssueSpend.agents} because the
+   * cockpit prints that figure as "Agents" and a local run is not one. The money is
+   * in `costUsd` either way: it was spent on this goal.
+   */
   localRuns: number;
 }
 
 /**
- * A park held on an agent that stopped without saying why, and when it
- * settles itself as done. The pair rather than the id alone, since this park
- * is drawn as a countdown and a countdown with no end to count to is a chip
- * that says "soon".
+ * A park held on an agent that stopped without saying why, and when it settles
+ * itself as done (`agentStallParkMs` from the park, or from the last Extend).
+ *
+ * The pair rather than the id alone — which is all a limit park needs on the wire —
+ * because this park is drawn as a countdown, and a countdown with no end to count
+ * to is a chip that says "soon".
  */
 export interface StallPark {
   agentId: string;
@@ -2869,11 +3383,15 @@ export interface RateLimitWindow {
 }
 
 /**
- * Account-level Claude usage windows, read off `rate_limit_event`. Pro/Max
- * only — API-key auth carries no windows, and each can be independently
- * absent. Turn-bound: a reading arrives only when an agent takes a turn, so
- * an idle fleet's ages while the real window keeps moving underneath it —
- * stale-and-optimistic is the failure mode to render honestly, not to hide.
+ * Account-level Claude usage windows, read off the `rate_limit_event` every
+ * stream agent receives. Pro/Max only — API-key auth carries no windows at all,
+ * and each window can be independently absent.
+ *
+ * Turn-bound, which is what {@link AccountRateLimits.capturedAt} is for: a
+ * reading arrives only when an agent takes a turn, so an idle fleet's ages while
+ * the real window keeps moving underneath it (an operator's own Claude Code on
+ * the same account spends from it too). Stale-and-optimistic is the failure mode
+ * to render honestly, not to hide.
  */
 export interface AccountRateLimits {
   fiveHour: RateLimitWindow | null;
@@ -2884,7 +3402,12 @@ export interface AccountRateLimits {
 
 export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_ambiguity' | 'review_reply';
 
-/** A structured question an agent raised through the `escalate` MCP tool — the typed form of what the WAITING sentinel can only carry as one line of free text. `question` is all that is required. */
+/**
+ * A structured question an agent raised through the `escalate` MCP tool — the
+ * typed form of what the WAITING sentinel can only carry as one line of free
+ * text. `question` is the sentinel's equivalent and is all that is required; the
+ * rest is what the sentinel could never express.
+ */
 export interface AgentAsk {
   /** One line: what the agent needs decided. Becomes the escalation prompt. */
   question: string;
@@ -2894,7 +3417,12 @@ export interface AgentAsk {
   options?: string[];
   /** Background the human needs in order to decide. */
   detail?: string;
-  /** When the agent needs several things settled: one entry per question, each with its own options and answer box. `question` stays the headline; this is the questionnaire the cockpit opens in a modal. */
+  /**
+   * When the agent needs several things settled: one entry per question, each
+   * with its own options and its own answer box. `question` stays the headline —
+   * what the inbox row shows — and this is the questionnaire behind it, which the
+   * cockpit opens in a modal rather than unpacking into the panel.
+   */
   questions?: AgentAskQuestion[];
 }
 
@@ -2910,7 +3438,13 @@ export interface AgentAskQuestion {
 
 type EscalationStatus = 'open' | 'answered' | 'dismissed';
 
-/** The extra context an escalation carries so a human can answer it in-place. Every key is optional — each escalation type populates the subset that makes sense — and the index signature keeps it extensible. */
+/**
+ * The extra context an escalation carries so a human can answer it in-place,
+ * without leaving the card. Every key is optional — each escalation type
+ * populates the subset that makes sense — and the index signature keeps it
+ * extensible for new kinds. The cockpit's `EscalationCard` renders whatever is
+ * present (recent output, the originating signal, a draft reply, …).
+ */
 export interface EscalationContext {
   /** Title of the task this escalation concerns. */
   taskTitle?: string;
@@ -2918,7 +3452,11 @@ export interface EscalationContext {
   originRef?: string | null;
   /** Tail of the agent's transcript leading up to the question (sentinels stripped). */
   recentOutput?: string;
-  /** The questionnaire an agent raised through `escalate` — its presence makes the card open a modal instead of one box, and lets `/answer` take positional answers. */
+  /**
+   * The questionnaire an agent raised through `escalate` — see
+   * {@link AgentAsk.questions}. Its presence is what makes the card open a modal
+   * instead of offering one box, and what lets `/answer` take positional answers.
+   */
   questions?: AgentAskQuestion[];
   // -- reply_on_pr / merge_pr escalations --------------------------------
   prNumber?: number;
@@ -2927,17 +3465,24 @@ export interface EscalationContext {
   method?: string;
   autoMergeFailed?: boolean;
   // -- propose_plan escalations -------------------------------------------
-  /** The plan whose decomposition this item asks you to authorize. */
+  /** The plan whose decomposition this item asks you to authorize (issue #109 phase 3). */
   planId?: string;
   // -- issue-shortfall escalations ----------------------------------------
-  /** The goal a shortfall item is about. Carried on both the escalation and proposal, so the card's overrule can name the issue rather than stripping the number back out of `originRef`. */
-  issueNumber?: number;
-  // -- grant_permission escalations ------------------
   /**
-   * Set when this escalation is a live permission request: a tool call fell
-   * through the allow-list and is blocked until the operator allows or
-   * denies. Its presence marks the card un-answerable by the ordinary
-   * free-text route; it is settled through `POST /api/escalations/:id/permission` instead.
+   * The goal a shortfall item is about. Carried on both of the rule's arms —
+   * the escalation and the proposal — so the card's overrule can name the issue
+   * it writes a verdict for rather than stripping the number back out of
+   * `originRef`, which is `refLabel`'s job and nothing else's.
+   */
+  issueNumber?: number;
+  // -- grant_permission escalations (issue #130 phase B) ------------------
+  /**
+   * Set when this escalation is a live permission request: an agent's tool call
+   * fell through the allow-list, and it is blocked inside a `--permission-prompt-tool`
+   * call until the operator allows or denies. Its presence is what marks the card
+   * un-answerable by the ordinary free-text route (answering would type into a
+   * session that is blocked in a tool call, not parked at a prompt); it is settled
+   * through `POST /api/escalations/:id/permission` instead.
    */
   permission?: PermissionRequest;
   [key: string]: unknown;
@@ -2952,17 +3497,29 @@ interface PermissionRequest {
 }
 
 /**
- * When one escalation stood, and the only two handles there are on what it
- * stood *about* — the projection the runway lens measures a hold from. A
- * projection rather than the row: `listEscalations` is all-time and carries
- * every settled item's transcript tail, and the runway is re-read on every
- * refresh. Deliberately raw — no resolved `originRef: string`, since deciding
- * which handle reaches which goal is the lens's judgement.
- * → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
+ * When one escalation stood, and the only two handles there are on what it stood
+ * *about* — the projection the runway lens measures a hold from.
+ *
+ * A projection rather than the row because `listEscalations` is all-time and
+ * carries every settled item's `recentOutput` transcript tail with it, and the
+ * runway is re-read on every cockpit refresh. This is four columns and no JSON
+ * body.
+ *
+ * Deliberately raw. There is no `originRef: string` here resolved to a goal,
+ * because {@link EscalationContext} populates a different subset per escalation
+ * type — a merge approval carries `prNumber` and no ref at all — and deciding
+ * which of the two reaches which goal is the lens's judgement to make, not a
+ * caller's. → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
  */
 export interface EscalationSpan {
   createdAt: string;
-  /** When a person answered, or null. Null covers two things the lens must tell apart: still open, or dismissed without an answer — which is what {@link open} is for. */
+  /**
+   * When a person answered, or null. Null covers two different things and the
+   * lens has to tell them apart: an item still open (the hold is running now)
+   * and one dismissed without an answer (`dismissEscalation` stamps no time, so
+   * when that hold ended is not recorded anywhere) — which is what {@link open}
+   * is for.
+   */
   answeredAt: string | null;
   /** `context.originRef`, verbatim: `issue:12`, `pr:42:ci`, or absent. */
   originRef: string | null;
@@ -2988,12 +3545,17 @@ export interface Escalation {
 }
 
 /**
- * What a human is being asked to authorize. Two are acts the auto-send gate
- * refuses on its own: a drafted PR reply and a merge. `plan` publishes
- * nothing — accepting it *releases a rule*, unscheduling a decomposition
- * until a human says yes. `shortfall` also publishes nothing: accepting it
- * sends the plan back to a planner or appends a follow-up part, a proposal
- * rather than automatic since both arms spend a fleet.
+ * What a human is being asked to authorize. Two of them are acts the auto-send
+ * gate refuses to perform on its own (issue #109 phase 1): a drafted PR reply and
+ * a merge. The third, `plan`, is the odd one and deliberately so — it publishes
+ * nothing. Accepting it *releases a rule*: a decomposition of an issue into
+ * stacked PRs stays unscheduled until a human says yes (phase 3).
+ *
+ * `shortfall` is the fourth and publishes nothing either (issue #159): accepting
+ * it acts on an assessor's "this was worked and the goal is not reached" — sending
+ * the plan back to a planner, or appending a follow-up part. It is a proposal
+ * rather than an automatic action because both arms spend a fleet, and a plan the
+ * harness rewrote on its own would churn `plan_parts` under whatever is running.
  */
 export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment';
 
@@ -3001,30 +3563,46 @@ export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'pla
 type ProposalStatus = 'pending' | 'accepted' | 'rejected';
 
 /**
- * An act the harness proposed and a human accepted or rejected — the object
- * missing between "approve" and "the approved thing happens". An
- * {@link Escalation} can record that a human *typed something*; only this
- * can record they said **yes**. Hangs off an escalation rather than
- * replacing it: the escalation stays the inbox item and routing mechanism.
+ * An act the harness proposed and a human accepted or rejected — the object that
+ * was missing between "approve" and "the approved thing happens" (issue #109).
+ *
+ * An {@link Escalation} can record that a human *typed something*; only this can
+ * record that they said **yes**, which is the difference between an approval the
+ * harness can branch on and one that goes nowhere. It hangs off an escalation
+ * rather than replacing it: the escalation stays the inbox item and the routing
+ * mechanism, and a plain question still has no proposal at all.
  */
 export interface Proposal {
   id: string;
   kind: ProposalKind;
-  /** The act's subject in the harness's own ref vocabulary (`pr:42:merge`). What the gate keys on — a column, not something re-derived from the payload. */
+  /**
+   * The act's subject in the harness's own ref vocabulary (`pr:42:merge`,
+   * `pr:42:comment:c_7`). This is what the gate keys on, which is why it's a
+   * column and not something re-derived from the payload at read time.
+   */
   ref: string;
   status: ProposalStatus;
-  /** The validated action the executor was about to run, kept verbatim: accepting runs *that act*, not a re-derivation of it minutes later. */
+  /**
+   * The validated action the executor was about to run, kept verbatim: accepting
+   * runs *that act*, not a re-derivation of it from the world as it is minutes later.
+   */
   action: Action;
   /** Free text alongside the verdict — never instead of it. */
   note: string | null;
   /**
    * Who decided. `human` is a click in the cockpit; `stack_landing` is the
-   * operator having authorized a whole chain in advance, over the pull
-   * request numbers, before any rung was proposed. `auto_send` is the
-   * operator authorizing a *class* of act in their config — scoped to
-   * replies and can only ever *accept*, since a machine "no" would mean the
-   * question is never put to anyone. Also predates that key: a removed
-   * confidence gate wrote the same value, and both read as "auto-send authorized".
+   * operator having authorized a whole chain in advance, over the pull request
+   * numbers it was clicked across, before any rung of it was proposed.
+   *
+   * `auto_send` is the operator having authorized a *class* of act in advance,
+   * in their config, rather than one chain of pull requests with a click:
+   * `sendPrRepliesWithoutApproval` sends a drafted review reply without asking.
+   * It is scoped to replies and it can only ever *accept* — a machine "no" would
+   * mean the question is never put to anyone.
+   *
+   * It also predates that key: the removed confidence gate wrote the same value,
+   * so a database from before it went carries rows with no config key behind
+   * them. Both read as "auto-send authorized", which is what they were.
    */
   decidedBy: 'human' | 'auto_send' | 'stack_landing' | null;
   decidedAt: string | null;
@@ -3035,23 +3613,33 @@ export interface Proposal {
 
 /**
  * Where a standing intent ends up. Only `standing` authorizes anything; the
- * other three are terminal — "it finished", "you called it off" and
- * "something went wrong" are different answers to *why is this chain not
- * landing*, and only the last needs surfacing.
+ * other three are terminal, and they are three rather than one because "it
+ * finished", "you called it off" and "something went wrong" are different
+ * answers to *why is this chain not landing*, and only the last needs surfacing.
  */
 export type StackLandingStatus = 'standing' | 'landed' | 'stopped' | 'revoked';
 
 /**
- * An operator's standing authorization to land a whole stack of pull
- * requests — one click that keeps saying yes to each rung's merge as the
- * harness proposes it, cycle after cycle. **It is not a merge, and
- * schedules none.** Rule `pr-merge-ready` already proposes one merge per
- * stack at a time (the bottom rung); this record only decides who accepts
- * those proposals. **Its scope is {@link rungs}, not {@link ref}**:
- * `Stack.ref` is stable only until the intent's first success, so an intent
- * keyed on it would land one rung and then be silently orphaned. Keying on
- * the PR numbers captured at the click also means a rung stacked on top
- * afterward is not authorized, with no rule needed to say so.
+ * An operator's standing authorization to land a whole stack of pull requests —
+ * one click that keeps saying yes to each rung's merge as the harness proposes
+ * it, cycle after cycle.
+ *
+ * **It is not a merge, and it schedules none.** Rule `pr-merge-ready` already
+ * proposes exactly one merge per stack — the bottom rung, the only one whose base
+ * is the integration branch — and the rung above it becomes proposable only once
+ * that lands and the provider retargets it, which is observed on a later pulse.
+ * So a chain landing bottom-up over several cycles is what the harness does
+ * anyway; this record only decides who accepts those proposals. A merge still
+ * happens exactly one way, through `ActionExecutor.runAuthorized`.
+ *
+ * **Its scope is {@link rungs}, not {@link ref}.** `Stack.ref` is
+ * `stack:<bottom rung's PR number>` and the bottom rung is precisely the one that
+ * merges first, so the ref is stable only until the intent's first success. An
+ * intent keyed on it would land one rung and then be orphaned — silently, which
+ * is the whole failure this feature exists to avoid. Keying on the PR numbers
+ * captured at the click also makes the authorization exactly what the operator
+ * read: a rung stacked *on top* afterwards is not in the list, so it is not
+ * authorized, with no rule needed to say so.
  */
 export interface StackLanding {
   id: string;
@@ -3091,7 +3679,11 @@ export interface Action {
   reason: string;
   /** The dispatcher rule that produced this action (a `DISPATCH_RULES` id), when one did. */
   rule?: string | null;
-  /** What became of that proposal, when an admission transformed it (an `admission`-kind `DISPATCH_RULES` id). Null for a proposal admitted unchanged. */
+  /**
+   * What became of that proposal, when an admission transformed it (an
+   * `admission`-kind `DISPATCH_RULES` id). Null for a proposal admitted
+   * unchanged — see `decisions.admission`.
+   */
   admission?: string | null;
   /** Payload shape depends on `type`; validated by zod at the boundary. */
   [key: string]: unknown;
@@ -3106,19 +3698,23 @@ export interface Decision {
   outcome: DecisionOutcome;
   detail: string;
   /**
-   * The dispatcher rule that **proposed** the action, lifted off it at
-   * record time so the audit log can answer "which rule fired" first-class.
-   * Null for decisions with no rule identity, and for the branch note (see `admission`).
+   * The dispatcher rule that **proposed** the action, lifted off it at record
+   * time so the audit log can answer "which rule fired" first-class. Null for
+   * decisions with no rule identity (lifecycle bookkeeping, human-authorized acts) —
+   * and for the one action with no single proposer, the branch note (see
+   * `admission`).
    */
   rule: string | null;
   /**
-   * What **became** of that proposal, when an admission transformed it:
-   * `cooldown-escalate` (attempt cap turned a dispatch into an escalation)
-   * or `branch-notify` (a fresh signal delivered to the agent already on the
-   * branch). Null for the ordinary case. Not a fallback for `rule` — a row
-   * from before this column existed carries the outcome in `rule` and
-   * `admission: null`, unrecoverably, so renderers say which shape they see
-   * rather than guessing.
+   * What **became** of that proposal, when an admission transformed it rather
+   * than letting it through: `cooldown-escalate` (the attempt cap turned a
+   * dispatch into an escalation) or `branch-notify` (a fresh signal was
+   * delivered to the agent already on the branch). Null for the ordinary case.
+   *
+   * The two columns are not fallbacks for each other. A row written before this
+   * column existed carries the *outcome* in `rule` and `admission: null`, and
+   * which rule was throttled on one is unrecoverable — the renderers say which
+   * shape they are looking at rather than guessing.
    */
   admission: string | null;
   createdAt: string;
@@ -3134,10 +3730,18 @@ export type UpgradeState = 'idle' | 'draining' | 'ready' | 'applying';
 /** What the operator asked the upgrade to do, and what a cancel must undo. */
 export interface UpgradeIntent {
   state: UpgradeState;
-  /** The upstream commit the operator accepted. Carried so the next boot can say which build it came up on, including when the supervisor landed elsewhere because upstream moved mid-handoff. */
+  /**
+   * The upstream commit the operator accepted. Carried so the next boot can say
+   * which build it came up on, including when the supervisor landed somewhere
+   * else because upstream moved again mid-handoff.
+   */
   targetSha: string | null;
   requestedAt: string | null;
-  /** Whether the *drain* is what paused dispatch. Load-bearing on cancel: a fleet already paused by the operator must stay paused, not get silently un-paused. */
+  /**
+   * Whether the *drain* is what paused dispatch. Load-bearing on cancel: a fleet
+   * the operator had already paused themselves must stay paused, and a blanket
+   * un-pause on cancel would silently start dispatching for them.
+   */
   pausedByDrain: boolean;
 }
 
@@ -3307,13 +3911,23 @@ export interface PetAction {
 
 /** What beats there are, and where they went. All three are derived at read time. */
 export interface PetWallet {
-  /** `floor(cost since the last clearance × PET_RULES.beatsPerDollar)`. Only ever grows, until a clearance moves the floor. → {@link PetReset} */
+  /**
+   * `floor(cost since the last clearance × PET_RULES.beatsPerDollar)`. Only ever
+   * grows — until a clearance moves the floor, which is the one thing that takes
+   * it back to zero. → {@link PetReset}
+   */
   earned: number;
   spent: number;
   balance: number;
 }
 
-/** One clearance of the vivarium: when it ran, and how much it released. Named rather than counted — a build asks "has *this* clearance run here", not "has any". `at` is the epoch the wallet counts fleet spend from afterwards. */
+/**
+ * One clearance of the vivarium: when it ran, and how much it released.
+ *
+ * Named rather than counted, because what a build asks is "has *this* clearance
+ * run here", and a build that asked "has any" would leave the next one unable to
+ * happen. `at` is the epoch the wallet counts fleet spend from afterwards.
+ */
 export interface PetReset {
   id: string;
   at: string;
@@ -3326,12 +3940,17 @@ export interface PetReset {
 // ---------------------------------------------------------------------------
 
 /**
- * A goal's work arriving on the integration branch: the commit one of its
- * pull requests landed as, recorded against the goal it belonged to. **The
- * SHA is a provider fact and cannot be recovered later**: `merge_pr` squashes
- * and a squash-merged branch has no ancestry link to its base, so the commit
- * the merge *created* is only reported by the provider ({@link PullRequest.mergeCommitSha}).
- * Keyed on the pull request, since a branch name is reusable and a goal can land more than once.
+ * A goal's work arriving on the integration branch: the commit one of its pull
+ * requests landed as, recorded against the goal it belonged to.
+ *
+ * **The SHA is a provider fact and cannot be recovered later.** `merge_pr` squashes,
+ * and a squash-merged branch has no ancestry link to its base — so the branch tip
+ * answers "is this in production" with a permanent no. What a downstream check has
+ * to be handed is the commit the merge *created*, which only the provider reports
+ * ({@link PullRequest.mergeCommitSha}).
+ *
+ * Keyed on the pull request, for {@link BranchReapStore}'s reason: a branch name is
+ * reusable, and a goal can land more than once.
  */
 export interface GoalLanding {
   /** The pull request that landed. */
@@ -3344,10 +3963,14 @@ export interface GoalLanding {
 }
 
 /**
- * Whether a commit has got to an environment. Three values, not two: a probe
- * that cannot answer must not be readable as "not deployed" — that is the
- * same word the true answer uses. `unknown` and `absent` are both asked
- * again; only `reached` is ever final. → `docs/spec/24-environments.md#the-three-verdicts`
+ * Whether a commit has got to an environment.
+ *
+ * Three values and not two. A probe that cannot answer — the command is missing, it
+ * timed out, the cluster credentials expired — must not be readable as "not
+ * deployed": that is the same word the true answer uses, and the operator has no
+ * way to tell which one they are looking at. `unknown` is asked again; `absent` is
+ * asked again too, and only `reached` is ever final.
+ * → `docs/spec/24-environments.md#the-three-verdicts`
  */
 export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
 
@@ -3364,15 +3987,30 @@ export interface EnvironmentReading {
 
 /**
  * Whether an environment is **well**, as its own health check answered.
- * Beside {@link EnvironmentReachStatus}, deliberately not folded into it:
- * reach is about one commit, health about the environment, and the two can
- * differ at the same moment. → `docs/spec/24-environments.md#is-the-environment-well`
- * Three values, for {@link EnvironmentReachStatus}'s reason: a check that
- * could not answer must be readable as neither `healthy` nor `unhealthy`.
+ *
+ * Beside {@link EnvironmentReachStatus} and deliberately not folded into it: reach
+ * is a question about one commit and health is a question about the environment,
+ * and the two have different right answers at the same moment — a testUk holding
+ * every commit a goal owns while its search index is down is `reached` and it is
+ * `unhealthy`. Folded, the loudest half of the pair would be the one nobody could
+ * see. → `docs/spec/24-environments.md#is-the-environment-well`
+ *
+ * Three values, for {@link EnvironmentReachStatus}'s reason. A check that could
+ * not answer — the command is missing, it timed out, the credentials expired —
+ * must be readable as neither `healthy` nor `unhealthy`: the first is an
+ * environment nobody is watching reporting that it is fine, and the second is a
+ * page in the night about a credential.
  */
 export type EnvironmentHealthState = 'healthy' | 'unhealthy' | 'unknown';
 
-/** How bad an `unhealthy` environment is, worst first. A closed set, since the tier decides how loudly the reading is drawn. A report naming another word is refused and says so on the glass. */
+/**
+ * How bad an `unhealthy` environment is, worst first.
+ *
+ * A closed set because the tier is what decides how loudly the reading is drawn,
+ * and a tier the cockpit cannot rank would be drawn at some tone nobody asked for.
+ * A report naming another word is refused and says so on the glass, where the
+ * person who wrote the script will read it.
+ */
 export type EnvironmentHealthTier = 'red' | 'orange';
 
 /** The current standing of one environment's health check — one row, replaced each reading. */
@@ -3388,38 +4026,75 @@ export interface EnvironmentHealthReading {
   detail: string | null;
   /** When the check last answered — as precise as `environmentHealthIntervalMs`. */
   observedAt: string;
-  /** When it last became what it is now. "Red" and "red since Tuesday" are different sentences. Moved by a change of state or tier, **not** by a change of reasons. */
+  /**
+   * When it last became what it is now.
+   *
+   * Held because "red" and "red since Tuesday" are different sentences, and the
+   * second is the one an operator acts on. Moved by a change of state or tier and
+   * **not** by a change of reasons: a check whose reason list shifts under the same
+   * tier is the same episode still running, and a clock restarting under it every
+   * five minutes would report a fresh outage forever.
+   */
   changedAt: string;
 }
 
 /**
  * A whole goal's standing in one environment, folded from its landings.
- * `partial` is the reading this exists for: a goal is several pull requests
- * landing separately, and a release cut between two puts half a feature in
- * production — folding that to a boolean "shipped" is wrong the expensive way.
+ *
+ * `partial` is the reading this exists for: a goal is several pull requests, they
+ * land separately, and a release cut between two of them puts half a feature in
+ * production. Folded to a boolean that reads as "shipped", which is the wrong
+ * answer in the expensive direction.
  */
 export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
 
 export interface GoalEnvironmentReach {
   environment: string;
   status: GoalReachStatus;
-  /** How many of the goal's landings this environment has, out of everything the goal owes — its landings, attributed merges, **and its plan parts that have yet to merge**. → `docs/spec/24-environments.md#the-lens` */
+  /**
+   * How many of the goal's landings this environment has, out of everything the
+   * goal owes: its landings, its merges nothing could attribute, **and its plan
+   * parts that have yet to merge**. The last of those is why the fraction does not
+   * close the day part one of four lands — work with no commit yet is work no
+   * environment is holding. → `docs/spec/24-environments.md#the-lens`
+   */
   landed: number;
   total: number;
-  /** When the environment was first seen holding the goal's *last* landing. Null unless `status` is `reached`, as precise as the probe interval. */
+  /**
+   * When the environment was first seen holding the goal's *last* landing — the
+   * moment the whole goal was there. Null unless `status` is `reached`, and only
+   * ever as precise as the probe interval.
+   */
   at: string | null;
-  /** Which delivered-goal obligations arriving here opens, from the operator's own list. Shipped on the row so the cockpit can say *why* a goal's bench rows wait on this environment. */
+  /**
+   * Which delivered-goal obligations arriving here opens, from the operator's own
+   * list. Shipped on the row rather than looked up beside it so the cockpit can
+   * say *why* a goal's bench rows are waiting on this environment without holding
+   * a second copy of the configuration.
+   */
   opens: EnvironmentGate[];
 }
 
-/** The obligations an arrival at an environment opens. Both name a {@link HumanTaskKind} the harness already files — what a gate changes is *when*. → `docs/spec/24-environments.md#what-an-arrival-means` */
+/**
+ * The obligations an arrival at an environment opens. Both name a
+ * {@link HumanTaskKind} the harness already files on a delivered goal — what a
+ * gate changes is *when*: at the delivery, or once the work is somewhere a person
+ * can act on it. → `docs/spec/24-environments.md#what-an-arrival-means`
+ */
 export type EnvironmentGate = 'validate' | 'close_out';
 
 /**
  * A whole goal's work confirmed in one environment, the first time it was.
- * Stored rather than folded on demand: {@link goalReach} can say a goal *is*
- * somewhere on every pulse, but not that it just **got** there. `OR IGNORE`
- * on the write, for {@link GoalLanding}'s reason: a goal that arrives again is the same arrival.
+ *
+ * Stored rather than folded on demand, and that is the only reason the table
+ * exists: {@link goalReach} can say a goal *is* somewhere on every pulse, but not
+ * that it has just **got** there — and an arrival is a moment. Something has to
+ * be written down for the comment to go out once rather than every five minutes,
+ * and for the signal to read as an event rather than as a status.
+ *
+ * `OR IGNORE` on the write, for {@link GoalLanding}'s reason: the goal arriving is
+ * a settled fact, and a goal that grows another pull request and arrives again is
+ * the same arrival, not a second one.
  */
 export interface GoalArrival {
   /** The goal, `issue:<n>`. */
@@ -3428,42 +4103,65 @@ export interface GoalArrival {
   environment: string;
   /** The reading that confirmed the goal's last landing — as precise as the probe interval. */
   arrivedAt: string;
-  /** When the arrival went through the announce pass, or null while it has not. Stamped whether or not there was anything to say. → `docs/spec/24-environments.md#announcing-an-arrival` */
+  /**
+   * When the arrival went through the announce pass, or null while it has not.
+   *
+   * Stamped whether or not there was anything to say, which is what keeps an
+   * environment that grows `arrival.comment` later from commenting on its whole
+   * history on the boot after. → `docs/spec/24-environments.md#announcing-an-arrival`
+   */
   announcedAt: string | null;
   /**
    * When the watch pass considered this arrival, or null while it has not.
-   * Stamped whether or not a window was opened, so the first pulse after
-   * the watch ships walks the history *once* and silently.
+   *
+   * {@link announcedAt}'s stamp, for {@link announcedAt}'s reason and one more.
+   * Stamped whether or not a window was opened, so the first pulse after the watch
+   * ships — or after an operator adds a `watch` to an environment that has been
+   * probing for a month — walks the history *once* and silently, rather than
+   * opening a window on every goal that ever arrived.
    * → `docs/spec/29-post-deploy-watch.md#only-for-an-arrival-the-harness-watched`
    */
   watchedAt: string | null;
 }
 
 /**
- * What a goal's post-deploy watch is meant to be told, per check. A `signal`
- * asks how many of a thing there are and is not trusted without a
+ * What a goal's post-deploy watch is meant to be told, per check.
+ *
+ * A `signal` asks how many of a thing there are and is not trusted without a
  * `presence` query; a `measure` asks what one number is and is not trusted
- * without a threshold or baseline — they fail in opposite directions.
- * → `docs/spec/29-post-deploy-watch.md#the-declaration`
+ * without a threshold or a baseline. They fail in opposite directions and carry
+ * opposite guards. → `docs/spec/29-post-deploy-watch.md#the-declaration`
  */
 export type GoalWatchKind = 'signal' | 'measure';
 
 /**
- * What the dry run learned about one declared check. `fires` — the query
- * and defect are both proven real (the baseline reading). `zero` — the
- * query resolves and matches nothing; either the query or the ticket is
- * wrong. `unknown` — the observation did not answer. **Never folded into
- * either of the others**: an expired credential and a quiet release fail
- * identically, and only the latter is about the work.
+ * What the dry run learned about one declared check, and the three readings are
+ * genuinely different facts about it.
+ *
+ * - `fires` — the query is proven live and the reported defect is proven real.
+ *   This reading is the baseline.
+ * - `zero` — the query resolves and matches nothing. Either the query is wrong or
+ *   the ticket is, and the author is the only party that can tell which.
+ * - `unknown` — the observation did not answer: it failed, timed out, printed
+ *   nothing, or came back without the id echo. **Never folded into either of the
+ *   others**, in `GoalReachStatus`' rule one layer up: an expired credential and a
+ *   quiet release fail identically, and only one of them is about the work.
  */
 export type WatchReadingVerdict = 'fires' | 'zero' | 'unknown';
 
 /**
- * One check as its **author** writes it — a plan document's `watch` block,
- * or the goal page's form. A separate shape from {@link GoalWatchInput}: the
- * two kinds are told apart here by a `kind` the author states, there by a
- * row of columns null for whichever kind it is not. `WatchCheckSchema` is
- * annotated with this so a field learned by one and not the other does not compile.
+ * One check as its **author** writes it — a plan document's `watch` block, and the
+ * goal page's form, which is the same declaration with one check in it.
+ *
+ * A separate shape from {@link GoalWatchInput}, and the difference is which way
+ * round the two kinds are told apart: here by a `kind` the author states and an
+ * `expect` a measure carries, there by a row of columns most of which are null for
+ * whichever kind it is not. The store's shape is the one table's; this is the one
+ * a person types, and refusing it is where a signal without a presence query and a
+ * measure with nothing that could fail it are refused.
+ *
+ * `WatchCheckSchema` (`src/validation/watchDocument.ts`) is annotated with this,
+ * so a field learned by one and not the other does not compile.
  * → `docs/spec/29-post-deploy-watch.md#the-declaration`
  */
 export type GoalWatchDeclaration =
@@ -3507,9 +4205,11 @@ export interface GoalWatchInput {
   /** A measure's floor — the number must stay above it. */
   expectOver: number | null;
   /**
-   * Whether the measure declared `noWorseThan: "baseline"`. **A measure that
-   * declared it and has no baseline is `unknown`, never clean**: the
-   * baseline is taken at declaration, days before the arrival.
+   * Whether the measure declared `noWorseThan: "baseline"`.
+   *
+   * **A measure that declared it and has no baseline is `unknown`, never clean.**
+   * The baseline is taken at declaration, days before the arrival, and a
+   * comparison with nothing to compare against is not a passing one.
    * → `docs/spec/29-post-deploy-watch.md#the-baseline-and-why-a-measure-is-not-trusted-without-one`
    */
   expectBaseline: boolean;
@@ -3535,50 +4235,65 @@ export interface GoalWatch extends GoalWatchInput {
   /** What an operator is told, in words — the refusal for a `zero` or an `unknown`. */
   dryRunDetail: string | null;
   /**
-   * A measure's **before**: what its query answered at declaration time.
-   * Null means *never taken*, a fact and not a zero — a measure declaring
-   * `noWorseThan: "baseline"` reads `unknown` while null. Cleared by a
-   * re-declaration, since a baseline is a reading of *that* query.
+   * A measure's **before**: what its query answered at declaration time, on the
+   * same query and from the same source, before anything changed.
+   *
+   * Null means *never taken*, which is a fact and not a zero — a measure declaring
+   * `noWorseThan: "baseline"` reads `unknown` while it is null, because it has
+   * nothing to compare against. Cleared by a re-declaration for the dry run's
+   * reason: a baseline is a reading of *that* query.
    */
   baselineValue: number | null;
   /** When the baseline was taken, or null while none has been. */
   baselineAt: string | null;
   /**
-   * Whether this declaration is live — whether the operator accepted it.
-   * False on a row an agent proposed through `watch_declare` and nobody has
-   * ruled on yet. **A false row is never put to an environment**: the query
-   * runs with the operator's own credential, and that approval is the whole
-   * of the authorisation story.
+   * Whether this declaration is live — that is, whether the operator has accepted
+   * it.
+   *
+   * False on a row an agent proposed through `watch_declare` and nobody has ruled
+   * on yet. **A false row is never put to an environment**: the query runs inside
+   * the operator's own command with the operator's own credential, and that
+   * approval is the whole of the authorisation story.
    */
   live: boolean;
   /** An agent's pending amendment to this check, or null where none is outstanding. */
   proposal: GoalWatchProposal | null;
   /**
-   * Who last wrote this declaration — the plan, or the operator. **`operator`
-   * is what a replan does not touch**: re-ingesting a document removes a
-   * check it stopped declaring and overwrites one it still does, which is
-   * right for the plan's own checks and wrong for the operator's, so an
-   * operator's row is neither swept nor overwritten.
+   * Who last wrote this declaration — the plan, or the operator on the goal page.
+   *
+   * **`operator` is what a replan does not touch**, and that is the whole of why
+   * the field exists. A document speaks for the whole watch, so re-ingesting one
+   * removes a check it stopped declaring and overwrites the text of one it still
+   * does; both are right for a check the plan wrote, and both are somebody's edit
+   * silently reverted for a check the operator did. So an operator's row is
+   * neither swept nor overwritten, and the plan's version of that id is dropped
+   * on the floor.
    * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
    */
   authored: GoalWatchAuthor;
 }
 
 /**
- * Which writer a check's current text came from. Two rather than three —
- * `watch_declare` is neither: its output is a {@link GoalWatchProposal}
- * against a row that already has an author, and accepting it applies text
- * without changing whose the row is.
+ * Which writer a check's current text came from.
+ *
+ * Two rather than three, and `watch_declare` is neither: its output is a
+ * {@link GoalWatchProposal} against a row that already has an author, and
+ * accepting one applies text to that row without changing whose the row is. An
+ * agent's amendment to a check the plan wrote is still the plan's, and a replan
+ * is still entitled to replace it — which is the behaviour that was there before
+ * this field, kept.
  */
 type GoalWatchAuthor = 'plan' | 'operator';
 
 /**
- * An agent's declaration, waiting on the operator. `watch_declare` writes
- * one of these rather than the check itself, since the plan sheet is
- * read-only: approving the plan authorises a query against the operator's
- * telemetry with their own credential, and a query arriving after approval
- * has not been approved. Accepting applies it and re-runs the dry run;
- * declining leaves the live check exactly as it was.
+ * An agent's declaration, waiting on the operator.
+ *
+ * `watch_declare` writes one of these rather than the check itself, for the
+ * reason the plan sheet is read-only: approving the plan is what authorises a
+ * query to be run against the operator's telemetry with the operator's own
+ * credential, and a query that arrived after the approval has not been approved.
+ * Accepting applies it and re-runs the dry run; declining leaves the live check
+ * exactly as it was.
  * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
  */
 export interface GoalWatchProposal {
@@ -3591,11 +4306,13 @@ export interface GoalWatchProposal {
 }
 
 /**
- * What one open watch is: a goal's whole work confirmed in one environment,
- * and the period the harness spends asking that environment what happened
- * next. One row per `(goalRef, environment)`, opened on an arrival and never
- * on a merge — a window opened at merge would spend itself asking about code
- * that is not running yet. → `docs/spec/29-post-deploy-watch.md#opening`
+ * What one open watch is: a goal's whole work confirmed in one environment, and
+ * the period the harness spends asking that environment what happened next.
+ *
+ * One row per `(goalRef, environment)`, opened on an arrival and never on a
+ * merge — between the two sit a release train and an approval gate, and a window
+ * opened at merge would spend itself asking about code that is not running yet.
+ * → `docs/spec/29-post-deploy-watch.md#opening`
  */
 export interface WatchWindow {
   /** The goal, `issue:<n>`. */
@@ -3607,29 +4324,43 @@ export interface WatchWindow {
   /** When it is due to settle — `openedAt` plus the environment's `forMs`. */
   settlesAt: string;
   /**
-   * When it settled, or **null while it is still watching**. A null that
-   * means something — a column added later needs a backfill gated on
-   * `ensureColumns`' report, or every settled window reopens on the next boot.
+   * When it settled, or **null while it is still watching**.
+   *
+   * A null that means something, which is the whole of why a column added to this
+   * table later needs a backfill gated on `ensureColumns`' report: without one,
+   * every settled window reopens on the boot an operator takes the build.
    * → `docs/spec/14-persistence.md#when-a-null-means-something`
    */
   settledAt: string | null;
   /**
    * When an operator last **extended** it, or null where nobody has.
-   * Extending re-opens *this* window rather than opening a second one — the
-   * goal's readings are one series. Null means **never extended**, the
-   * honest reading of every row from before the column existed, so it needs
-   * no backfill (unlike `settledAt`). → `docs/spec/29-post-deploy-watch.md#closing`
+   *
+   * A window that ran out before the weekly job ran is the case this answers, and
+   * extending re-opens *this* window rather than opening a second one — the goal's
+   * readings are one series, and a second row keyed on the same
+   * `(goal, environment)` is not a thing the table can hold anyway.
+   *
+   * Null here means **never extended**, which is the honest reading of every row
+   * written before the column existed and is why it is the one column on this
+   * table that needs no backfill. `settledAt` is the null that means something,
+   * and this one is deliberately not.
+   * → `docs/spec/29-post-deploy-watch.md#closing`
    */
   extendedAt: string | null;
 }
 
 /**
- * What one check's reading said, per environment, folded to three verdicts.
- * `clean` — within what was declared, with presence answering. `regressed`
- * — outside what was declared. `unknown` — the observation failed, or
- * presence is silent. **`unknown` never folds to `clean`**: an expired
- * credential and a genuinely quiet release fail identically, and only the
- * latter is about the work. → `docs/spec/29-post-deploy-watch.md#the-verdict`
+ * What one check's reading said, per environment, folded to the three verdicts.
+ *
+ * - `clean` — within what was declared, **with presence answering**.
+ * - `regressed` — outside what was declared.
+ * - `unknown` — the observation failed, or presence is silent.
+ *
+ * **`unknown` never folds to `clean`.** An expired credential, a missing binary,
+ * a job that never ran and a genuinely quiet release all fail identically, and
+ * only the last is about the work — read as clean they are indistinguishable on
+ * the glass. `GoalReachStatus`' rule one layer up, and the same rule because it is
+ * the same mistake. → `docs/spec/29-post-deploy-watch.md#the-verdict`
  */
 export type WatchCheckVerdict = 'clean' | 'regressed' | 'unknown';
 
@@ -3643,17 +4374,28 @@ export interface WatchReading {
   verdict: WatchCheckVerdict;
   /** How many rows the check's own query matched, or null when the observation did not answer. */
   rows: number | null;
-  /** A measure's **now**: the one number its query answered with, or null for a signal or an observation that did not answer. Stored beside the verdict since the card draws the number as well as the ruling. */
+  /**
+   * A measure's **now**: the one number its query answered with, or null for a
+   * signal and for any observation that did not answer.
+   *
+   * Stored beside the verdict rather than derived from it, because the card draws
+   * the number as well as the ruling — a p95 of 310ms means nothing alone and
+   * everything beside the 8,400ms it replaced.
+   */
   value: number | null;
   /** Why, in words — set for every verdict but `clean`, because the cockpit says it in words. */
   detail: string | null;
 }
 
 /**
- * The operator's answer to a goal that is never going to reach the
- * environment its obligations are gated on — a docs change, a config
- * change, work nothing here can see the deployment of. A row rather than a
- * per-goal config key, cleared by deletion. Lifts every gate on that goal at once.
+ * The operator's answer to a goal that is never going to reach the environment
+ * its obligations are gated on — a docs change, a config change, work whose
+ * deployment nothing here can see.
+ *
+ * A row rather than a per-goal config key, and cleared by deletion, for
+ * `IssueDelivery`'s reason: "not released" then keeps exactly one representation.
+ * It lifts every gate on that goal at once — the case it exists for is work that
+ * does not ship at all, not work that ships to three environments out of four.
  */
 export interface EnvironmentGateRelease {
   /** The goal, `issue:<n>`. */
@@ -3664,23 +4406,38 @@ export interface EnvironmentGateRelease {
 }
 
 /**
- * How a local run is going. Five states, since the harness only knows four
- * things: that it asked, that the session finished asking, that it asked
- * for takedown, and that something ended. `running` is **presumed, not
- * probed** — the session finished its turn without failing and its process
- * is still alive; nothing here opens a socket to check. `stopping` is a
- * **live** state: taking a dev environment down is a session's own turn, so
- * for a minute or so there is a run neither up nor over, still holding the
- * environment. → `docs/spec/23-local-runs.md`
+ * How a local run is going. Five states and no more, because the harness only
+ * knows four things: that it asked, that the session finished asking, that it has
+ * asked for it to be taken down, and that something ended.
+ *
+ * `running` is **presumed, not probed** — it means the session that was told to
+ * bring the environment up finished its turn without failing, and its process is
+ * still alive holding whatever it started. Nothing here opens a socket to check,
+ * which is why the panel draws the URL as a link to try rather than as a reading.
+ * A readiness probe is the honest way to close that gap and is a separate change.
+ *
+ * `stopping` is a **live** state, and that is the whole reason it exists rather than
+ * the stop being instantaneous: taking a dev environment down is a session's turn
+ * (`docker compose down` and whatever else the project needs), so for a minute or so
+ * there is a run that is neither up nor over — and one that still holds the
+ * environment, so nothing else may begin beside it.
+ * → `docs/spec/23-local-runs.md`
  */
 export type LocalRunStatus = 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 
 /**
- * The one local run: which goal's code is in the machine's dev environment
- * right now, or was last. **One row at a time is the whole feature** — the
- * operator's own constraint (one dev environment on the machine). A second
- * run started while one is live stops the first. The row **outlives the
- * run**, so a start that failed leaves its reason somewhere to read.
+ * The one local run: which goal's code is in the machine's dev environment right
+ * now, or was last.
+ *
+ * **One row at a time is the whole feature**, and it is the operator's own
+ * constraint rather than a limit invented here — there is one dev environment on
+ * the machine, exactly as there is one working copy behind the validation claim.
+ * A second run started while one is live stops the first; the store write is what
+ * makes that true rather than a check the caller is trusted to make.
+ *
+ * The row **outlives the run**, so a start that failed leaves its reason somewhere
+ * to read. That is the difference between a panel that says `failed` and a panel
+ * that says nothing, which is the case an operator actually hits.
  */
 export interface LocalRun {
   id: string;
@@ -3690,9 +4447,21 @@ export interface LocalRun {
   ref: string;
   /** The checkout it is running in. `localRunRoot`, and never a pool slot. */
   dir: string;
-  /** The commit the checkout stands at, or null on a row from before this was recorded. What a freshness reading is measured from: `ref` names a branch, and a branch moves. */
+  /**
+   * The commit the checkout stands at, or null on a row from before this was
+   * recorded.
+   *
+   * What a freshness reading is measured from: `ref` names a branch, and a branch
+   * moves. Written by a start and rewritten by a refresh — `ensurePreview` is the
+   * only thing that moves the checkout, and it reports where it put it.
+   */
   commit: string | null;
-  /** The session process holding the environment up, or null once it is gone. Recorded because stopping the run means reaping *this* pid's whole subtree — the dev server is its descendant. */
+  /**
+   * The session process holding the environment up, or null once it is gone.
+   *
+   * Recorded because stopping the run means reaping *this* pid's whole subtree: the
+   * dev server is its descendant, not the process itself.
+   */
   pid: number | null;
   status: LocalRunStatus;
   /** `localRun.url` as it stood when the run started, so a later config edit does not rewrite history. */
@@ -3702,29 +4471,48 @@ export interface LocalRun {
   startedAt: string;
   endedAt: string | null;
   /**
-   * When the harness holding this run went down, or null if nothing
-   * stamped it. Stamped by the fast stop on its way out, cleared again on
-   * resume. The age a resume is judged on — `startedAt` cannot answer that
-   * question. **Null is not recent, it is "nobody wrote a line"**: a kill,
-   * power cut or closed console takes the process with no shutdown, so the
-   * fallback is {@link lastSeenAt}; with both null a resume refuses rather than guessing.
+   * When the harness holding this run went down, or null if nothing stamped it.
+   *
+   * Stamped by the fast stop on its way out, and cleared again when a resume brings
+   * the run back. It is the age a resume is judged on: an environment nobody has been
+   * near for hours is not one to spend a session bringing back, and `startedAt`
+   * cannot answer that question — a run started on Monday and still in use at five
+   * o'clock is not a stale one.
+   *
+   * **Null is not recent, it is "nobody wrote a line".** A kill, a power cut or a
+   * closed console window takes the process with no shutdown at all, so the fallback
+   * is {@link lastSeenAt}; with both null the age is genuinely unknown and a resume
+   * refuses rather than guessing.
    */
   interruptedAt: string | null;
   /**
-   * The last pulse on which the harness was holding this run, or null on a
-   * row no process ever stamped. **What dates a force close** — a kill,
-   * power cut, or closed console window, none of which run a line on the
-   * way out, so {@link interruptedAt} stays null and this is the only
-   * record. Stamped only by the process **actually holding the run**.
+   * The last pulse on which the harness was holding this run, or null on a row no
+   * process ever stamped.
+   *
+   * **What dates a force close** — `taskkill /F`, Task Manager's End task, a power
+   * cut, a console window closed on Windows. None of those run a line on the way out,
+   * so {@link interruptedAt} stays null and this is the only record of when the
+   * environment was last true. Accurate to one heartbeat, which is all a two-hour
+   * window needs.
+   *
+   * Stamped only by the process **actually holding the run**, never by a boot that
+   * walked past a live row it declined to bring back.
    */
   lastSeenAt: string | null;
   /**
-   * What the sessions behind this run have cost. **Accumulated, not
-   * folded**: unlike an `agents` row's one session, a local run has up to
-   * two (bring-up and teardown), so a cumulative write would overwrite the
-   * bring-up's total downwards — `Store.addLocalRunUsage` adds deltas
-   * instead. → [23](../docs/spec/23-local-runs.md#what-it-costs)
-   * **Null is unmeasured, never free**: a PTY deployment reports nothing ever.
+   * What the sessions behind this run have cost, and what they spent to do it.
+   *
+   * **Accumulated, not folded.** Every other usage figure the harness holds is a
+   * session's own cumulative report written straight onto a row, because an
+   * `agents` row has exactly one session behind it. A local run has up to two — the
+   * one that brought the environment up, and the one spawned to take it down when
+   * that one is gone — so a cumulative write would replace the bring-up's total
+   * with the teardown's, downwards. `Store.addLocalRunUsage` adds deltas for that
+   * reason. → [23](../docs/spec/23-local-runs.md#what-it-costs)
+   *
+   * **Null is unmeasured, never free**, the convention `Agent.costUsd` sets: a run
+   * from before this was recorded reports nothing, and a PTY deployment reports
+   * nothing ever, since only the stream runtime has a usage channel at all.
    */
   costUsd: number | null;
   inputTokens: number | null;
@@ -3736,23 +4524,34 @@ export interface LocalRun {
 }
 
 /**
- * One session's usage since its own last report — what {@link LocalRun}
- * accumulates. Same fields as {@link AgentUsage}, deliberately a different
- * type: that one is *cumulative*, this is a *difference*, and the hazard is
- * handing one to something expecting the other.
+ * One session's usage since its own last report — what {@link LocalRun} accumulates.
+ *
+ * The same fields as {@link AgentUsage} and deliberately a different type: that one
+ * is a *cumulative* report and this is a *difference*, and the whole hazard here is
+ * handing one to something expecting the other. A null field adds nothing and leaves
+ * the column as it was, so a runtime that reports cost but no cache split does not
+ * write a zero share.
  */
 export type LocalRunUsageDelta = AgentUsage;
 
-/** Which turn the session holding a local run is in the middle of. `start`/`stop` double the row's `starting`/`stopping`; `refresh`/`message` happen on top of a `running` row. */
+/**
+ * Which turn the session holding a local run is in the middle of. `start` and `stop`
+ * double the row's `starting`/`stopping`; `refresh` and `message` happen on top of a
+ * `running` row, which is why the row's status cannot carry them.
+ */
 export type LocalRunTurn = 'start' | 'stop' | 'refresh' | 'message';
 
 /**
- * What the local-run watch found on the machine's ports — a reading taken
- * on a timer while a run is live. Both halves are three-valued: `declared`
- * is null when no URL is configured; `answering` is a TCP connect and
- * nothing more; `listening` is the session's process tree, null when the
- * lister could not say (never an empty list). Containers belong to the
- * daemon and never appear here. → `docs/spec/23-local-runs.md#watching-the-environment`
+ * What the local-run watch found on the machine's ports — a reading, taken on a
+ * timer while a run is live, and the first thing here that *is* one.
+ *
+ * Both halves are three-valued. `declared` is null when no URL is configured or the
+ * configured one has no port to speak of; `answering` is a TCP connect and nothing
+ * more, so it says the port is held and not that the application behind it works.
+ * `listening` is what the session's own process tree holds open, and null when the
+ * lister could not say — never an empty list, which would read as "nothing".
+ * Containers belong to the daemon and never appear here.
+ * → `docs/spec/23-local-runs.md#watching-the-environment`
  */
 export interface LocalRunPorts {
   checkedAt: string;
@@ -3762,10 +4561,13 @@ export interface LocalRunPorts {
 
 /**
  * How far the checked-out commit has fallen behind, in the clone's opinion.
- * `behindTip` counts commits the run's own ref has that the checkout does
- * not. `base` is the branch this ref was cut from, or null on the
- * integration branch. Every count is null where the clone cannot say, and
- * null is never folded into zero. → `docs/spec/23-local-runs.md#watching-the-environment`
+ *
+ * `behindTip` counts the commits the run's own ref has that the checkout does not —
+ * the branch moved since the start, so the preview is showing old code. `base` is
+ * the branch this ref was cut from and how many of its commits the ref lacks, or
+ * null on the integration branch, which has no base. Every count is null where the
+ * clone cannot say — an unfetched ref, a commit it has never seen — and null is
+ * never folded into zero. → `docs/spec/23-local-runs.md#watching-the-environment`
  */
 export interface LocalRunFreshness {
   checkedAt: string;
@@ -3780,13 +4582,19 @@ export interface LocalRunReadings {
 }
 
 /**
- * How a local validation ended, or that it has not. `blocked` is the third
- * answer: an agent that could not reach or confirm the environment learned
- * nothing about the goal, so `passed`/`failed` alone would be a lie or
- * silence — a `blocked` row dispatches no fix, since it carries no finding.
- * `abandoned` is the harness's own answer, not the agent's: the environment
- * went away, the agent ended without reporting, or the operator called it
- * off — never a reading, and the note says which. → `docs/spec/32-local-validation.md`
+ * How a local validation ended, or that it has not.
+ *
+ * `blocked` is the third answer and the reason there are three, exactly as
+ * `validation_report`'s hand-back is: an agent that could not reach or confirm the
+ * environment has learned nothing about the goal, and with only `passed` and
+ * `failed` available its options are a lie and silence. A `blocked` row dispatches
+ * no fix, because it carries no finding about the code to fix.
+ *
+ * `abandoned` is the harness's own answer rather than the agent's: the environment
+ * the reading was pinned to went away — stopped, swapped to another goal, or moved
+ * to a different commit — or the agent ended without reporting, or the operator
+ * called it off. It is never a reading, and the note says which of those happened.
+ * → `docs/spec/32-local-validation.md`
  */
 export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
 
@@ -3990,18 +4798,32 @@ export type SurfaceReachInput = Omit<SurfaceReach, 'at'>;
 // ---------------------------------------------------------------------------
 
 /**
- * Which document this is. The first two are the fleet's own standing
- * documents, published on a clock and tracked in `pool_publications`; a
- * **pack** is neither — one pull request's review pack, published because a
- * person asked for it, pruned once closed long enough, so it has no dirty
- * flag, content hash or cadence. → `docs/spec/31-review-packs.md#sharing-a-pack`
+ * Which document this is.
+ *
+ * The first two are the fleet's own standing documents, published on a clock and
+ * tracked in `pool_publications`; a **pack** is neither. It is one pull request's
+ * review pack, published because a person asked for that one to be shared and
+ * pruned when its pull request has been closed long enough, so it has no dirty
+ * flag, no content hash and no cadence.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
  */
 type PoolDocumentKind = PoolClockKind | 'pack';
 
-/** The document a **clock** publishes. Named apart from {@link PoolDocumentKind} so the publication bookkeeping cannot be handed a pack, which has none of it. */
+/**
+ * The document a **clock** publishes. Named apart from {@link PoolDocumentKind}
+ * so the publication bookkeeping — dirty, hash, checked — cannot be handed a pack,
+ * which has none of those things and is published by a person.
+ */
 export type PoolClockKind = 'digest';
 
-/** What every pool document carries, whichever kind it is. `fleetId` is in the body **as well as the address** — a mismatch discards the document, since a fleet publishing under another's name breaks one writer per namespace. */
+/**
+ * What every pool document carries, whichever kind it is.
+ *
+ * `fleetId` is in the body **as well as in the address**, and a mismatch discards
+ * the document: the address is the transport's, a text substrate may have none
+ * that survives a round trip, and a fleet publishing under another fleet's name is
+ * the single thing that can break one writer per namespace.
+ */
 interface PoolEnvelope {
   /** The schema version. Named `pool` so the field reads as what it versions. */
   pool: number;
@@ -4012,7 +4834,13 @@ interface PoolEnvelope {
   harnessVersion: string;
 }
 
-/** One day's figure for one key, in one section. **Counts and dollars, never percentages** — a share summed across fleets is meaningless. `costUsd` is null where a window measured nothing, never `$0.00`. */
+/**
+ * One day's figure for one key, in one section.
+ *
+ * **Counts and dollars, never percentages** — a share summed across fleets is
+ * meaningless, so the aggregator takes shares from summed counts. `costUsd` is
+ * null where a window measured nothing at all, and never `$0.00` for it.
+ */
 export interface PoolDigestRow {
   /** A UTC day, `YYYY-MM-DD`. Never local midnight — see the spec's sharp edge. */
   day: string;
@@ -4021,14 +4849,22 @@ export interface PoolDigestRow {
   /** Runs, accounts, or dispatches — whichever the section counts. */
   count: number;
   costUsd: number | null;
-  /** True for the origin's current day. **A partial day counts in a total and never in an average**, or every average would be dragged down by a day not yet over. */
+  /**
+   * True for the origin's current day. **A partial day counts in a total and never
+   * in an average** — otherwise every average on the page is dragged down by a day
+   * that is not over, silently, on the newest and most-read number.
+   */
   partial: boolean;
 }
 
 /**
- * A fleet's digest document: ninety UTC days of what it spent and what
- * coming back to a pull request cost it. No separate total: `PHASE_ORDER`
- * includes `other`, so the phases partition spend and the total is their sum.
+ * A fleet's digest document: ninety UTC days of what it spent and what coming back
+ * to a pull request cost it.
+ *
+ * There is no separate total: `PHASE_ORDER` includes `other`, so the phases
+ * partition the fleet's spend and the total is their sum. A total shipped beside
+ * them would be a second statement of one number, free to disagree with the one
+ * that adds up.
  */
 export interface PoolDigestDocument extends PoolEnvelope {
   kind: 'digest';
@@ -4036,36 +4872,55 @@ export interface PoolDigestDocument extends PoolEnvelope {
   byPhase: PoolDigestRow[];
   /** Keyed by `<RemedyKind>/<RemedyCause>/<RemedyGuard>` — closed vocabularies, comparable by construction. */
   byCause: PoolDigestRow[];
-  /** Keyed by the check's own name. A **separate section**: check names cross within a project and never between, so summing across projects would render as one chart saying no single check causes much pain. */
+  /**
+   * Keyed by the check's own name. A **separate section**, because check names
+   * cross within a project and never between: three fleets on one problem produce
+   * three keys, and summed across projects that renders perfectly as a chart
+   * saying no single check causes much pain.
+   */
   byCheck: PoolDigestRow[];
   /** Return dispatches that filed no account. Not optional: without it every share is a share of a minority. */
   unaccounted: PoolDigestRow[];
   /** Runs that reported no usage at all. Without it a PTY fleet is drawn as a cheap fleet. */
   unmeasured: PoolDigestRow[];
   /**
-   * What a person did, keyed by `<UsageSubject>.<UsageVerb>` — the registry's
-   * two closed-vocabulary axes, so two fleets on two providers produce
-   * comparable rows by construction. **The cockpit's place key is
-   * deliberately not here**: it is the console's own layout, which a
-   * redesign moves. `costUsd` is null on every row.
+   * What a person did, keyed by `<UsageSubject>.<UsageVerb>` — the registry's two
+   * axes and nothing else (`src/usage/events.ts`).
+   *
+   * Both halves of the key are closed vocabularies the harness owns, so two fleets
+   * on two providers produce comparable rows by construction. **The cockpit's place
+   * key is deliberately not here**: it is the console's own layout, which a redesign
+   * moves, and a cross-fleet series keyed on it would break at a release rather than
+   * at a change of behaviour.
+   *
+   * `costUsd` is null on every row: what a person did has no dollar figure anywhere
+   * in the harness, and deriving one here would be a new measurement invented for
+   * the pool.
    * → `docs/spec/34-usage-metrics.md#the-digest-section`
    */
   byUsage: PoolDigestRow[];
   /**
-   * Faults this fleet recorded, keyed by `ErrorLogEntry['source']`. **It
-   * carries no cost and it is never mirrored** — nothing at the far end
-   * reads it, so it exists to be read in this fleet's own `digest.md` alone.
+   * Faults this fleet recorded, keyed by `ErrorLogEntry['source']` — a closed
+   * vocabulary of five, and the same word the Faults panel draws.
+   *
+   * **It carries no cost and it is never mirrored**, which is what makes it a
+   * different animal from the four sections above it: nothing at the far end reads
+   * it, so it exists to be read in this fleet's own `digest.md` and nowhere else.
    * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
    */
   byFault: PoolDigestRow[];
 }
 
 /**
- * One shared review pack: the local document, whole and unedited, in an
- * envelope. **It rides the transport and nothing else** — not a claim, no
- * corroboration or vouch, never injected into a prompt or read by a rule.
- * Carried as written rather than restated: a second grammar for one fact is
- * free to disagree with the first, silently. → `docs/spec/31-review-packs.md#sharing-a-pack`
+ * One shared review pack: the local document, whole and unedited, in an envelope.
+ *
+ * **It rides the transport and nothing else.** It is not a claim and takes none of
+ * the claims arm: no corroboration, no vouch, no contradiction, no lifetime, and
+ * nothing about it is ever injected into a prompt or read by a rule. The pack is
+ * carried as it was written rather than restated, for the reason every other
+ * rendering of one is downstream of the document: a second grammar for one fact is
+ * free to disagree with the first, silently.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
  */
 export interface PoolPackDocument extends PoolEnvelope {
   kind: 'pack';
@@ -4084,7 +4939,14 @@ export type PoolClockDocument = PoolDigestDocument;
 /** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */
 export type PoolDocument = PoolClockDocument | PoolPackDocument;
 
-/** One fleet as the mirror last saw it, including the two readings that are not "it has published nothing". `ahead` is a fleet whose document this build's schema version skips. *Could not reach the pool* is never folded into *nobody has published anything*. */
+/**
+ * One fleet as the mirror last saw it — including the two readings that are not
+ * "it has published nothing".
+ *
+ * `ahead` is a fleet whose document this build's schema version skips, and it is
+ * drawn as such. *Could not reach the pool* is never folded into *nobody has
+ * published anything*.
+ */
 export interface PoolFleetReading {
   fleetId: string;
   project: string | null;
@@ -4107,17 +4969,22 @@ export interface PoolPublication {
 // The obstacle board → `docs/spec/27-obstacles.md`
 
 /**
- * What identifies an obstacle: a fact about the world, not a sentence about
- * it. The three the harness can check something against — `check`, `test`,
- * `path` — bind. The two it cannot only ever suggest: a signature normalises
- * somebody else's output, outside this repository's control.
+ * What identifies an obstacle: a fact about the world, not a sentence about it.
+ *
+ * The three the harness can check something against — `check`, `test`, `path` —
+ * bind. The two it cannot only ever suggest: a signature is a normalisation of
+ * somebody else's output, and the thing being normalised is outside this
+ * repository's control.
  */
 export type ObstacleKeyKind = 'check' | 'test' | 'path' | 'signature' | 'cmd';
 
 /** Where an obstacle is, and therefore who it reaches. → `src/obstacles/lifecycle.ts` */
 export type ObstacleState = 'sighted' | 'standing' | 'owned' | 'resolved' | 'dormant' | 'muted';
 
-/** Whether a fix ends it. The one boolean an agent can always answer, and the whole of what the intake asks about where a report goes. */
+/**
+ * Whether a fix ends it. The discriminator is the one boolean an agent can always
+ * answer, and it is the whole of what the intake asks about where a report goes.
+ */
 export type ObstacleKind = 'obstacle' | 'note';
 
 /** One way into an obstacle. An obstacle may hold several. */
@@ -4154,7 +5021,13 @@ export interface ObstacleSighting {
   createdAt: string;
 }
 
-/** A row on the board with everything that reads it needs, assembled once. The voice count is the store's own (`obstacleVoices`), never a second fold of the sightings — the number that carries a row to `standing` and the one a repair dispatch is judged against are the same number. */
+/**
+ * A row on the board with everything that reads it needs, assembled once.
+ *
+ * The voice count is the store's own (`obstacleVoices`), never a second fold of
+ * the sightings: the number that carries a row to `standing` and the number a
+ * repair dispatch is judged against are the same number.
+ */
 export interface ObstacleStanding {
   obstacle: Obstacle;
   /** Every way into it, suggestions included — the reader decides which bind. */
@@ -4163,18 +5036,26 @@ export interface ObstacleStanding {
   voices: number;
   /** The goals that have said it, deduplicated. A priority flag expands over these. */
   goalRefs: string[];
-  /** The voices in their **own words**, oldest first — the sentences behind the one-line claim, carried since this store exists because agents cannot match on somebody else's words. */
+  /**
+   * The voices in their **own words**, oldest first — the sentences behind the
+   * one-line claim. Carried on the row because everything that puts an obstacle in
+   * front of somebody wants them: a claim in somebody else's words is exactly what
+   * this store exists because agents cannot match on.
+   */
   words: string[];
 }
 
 /**
- * One goal parked behind an obstacle — the `blocked` verdict's row. Its own
- * table rather than a fifth member of the verdict matrix
- * (`src/store/verdicts.ts`): the four verdicts there answer *is this goal's
- * work finished*, each clearing the ones it contradicts. This answers *can
- * it be worked at all right now*, and its exit is the **obstacle**, not the
- * issue — folding it in would have a block clear a delivery, handing
- * delivered work back to the fleet.
+ * One goal parked behind an obstacle — the `blocked` verdict's row.
+ *
+ * Its own table rather than a fifth member of the verdict matrix
+ * (`src/store/verdicts.ts`), and the distinction is what keeps it safe: the four
+ * verdicts there all answer *is this goal's work finished*, and each clears the
+ * ones it contradicts. This answers a different question — *can it be worked at
+ * all right now* — and its exit is the **obstacle**, not the issue. Folding it in
+ * would have a block clear a delivery, which is delivered work handed back to the
+ * fleet (`docs/spec/20-validation.md#when-a-check-fails`, the same failure from
+ * the other side).
  */
 export interface ObstacleBlock {
   /** The goal, as `issue:<n>` — the origin every pickup gate keys on. */
@@ -4205,29 +5086,42 @@ export interface Obstacle {
   /** The newest sighting, which is what decay reads. */
   lastSeenAt: string;
   /**
-   * What ended it, or null while nothing has. Null on every row from before
-   * the endings existed — the honest reading rather than a hole to backfill.
-   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   * What ended it, or null while nothing has — the terminal states' own record of
+   * which of the four endings took the row.
+   *
+   * Null on every row a build before the endings wrote, and that is the honest
+   * reading rather than a hole a backfill has to fill: nothing could write
+   * `resolved` or `dormant` then, so no row that predates this column has ended at
+   * all. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endedBy: ObstacleEnding | null;
 }
 
 /**
- * Which of the four endings took a row. Not interchangeable: `condition` —
- * the world saying it cleared; `landing` — the owner's work shipping;
- * `expiry` — a clock running out on something no reading settled; `decay` —
- * nothing said for `obstacleDormantMs`. `retired` is the operator's own, a
- * member here rather than a second column, since the board must never say a
- * clock or the world ended a row a person did. **Retiring is not
- * rejecting** — the row keeps its claim and reopens at `standing` on a
- * matching report, unlike `muted`. → `docs/spec/27-obstacles.md#in-the-cockpit`
+ * Which of the four endings took a row.
+ *
+ * Recorded because the four are not interchangeable to anybody reading the board
+ * afterwards: a `condition` is the world saying it cleared, a `landing` is the
+ * owner's work shipping, an `expiry` is a clock running out on something no
+ * reading ever settled, and `decay` is nothing having said it for
+ * `obstacleDormantMs`. Read by nothing that decides.
+ *
+ * `retired` is the operator's own, and it is a member here rather than a second
+ * column for exactly the reason the other five are recorded: the board must never
+ * say a clock or the world ended a row a person did. **Retiring is not
+ * rejecting** — the row keeps its claim, its keys and its sightings, and a
+ * matching report reopens it at `standing` like any other terminal row, which is
+ * the whole difference from `muted`. → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
 
 /**
- * A condition the harness can evaluate, written by the harness and **never
- * by an agent** — settling one means reading a world object pulse after
- * pulse, and only the party already reading it can promise that.
+ * A condition the harness can evaluate, written by the harness and **never by an
+ * agent**.
+ *
+ * Settling one means reading a world object pulse after pulse, and the only party
+ * that can promise to do that is the one already reading it — an agent naming a
+ * condition would be naming something nothing watches.
  * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleCondition {
@@ -4239,16 +5133,23 @@ export interface ObstacleCondition {
   checkName: string;
   /** The branch the harness saw it failing on, as the world named it. */
   branch: string;
-  /** The first of the **two consecutive real world readings** a resolution needs, or null while unmet. A reading that finds it unmet clears it. */
+  /**
+   * The first of the **two consecutive real world readings** a resolution needs, or
+   * null while the condition is not currently met. A reading that finds it unmet
+   * clears it, so "consecutive" is a fact about the column rather than a promise.
+   */
   metAt: string | null;
   createdAt: string;
 }
 
 /**
- * A note being written into the repository: the documentation job opened
- * for it, and what became of that job. One row per note, ever. A note whose
- * write-up was abandoned is not queued again — it stays `standing` and
- * decays like anything else. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+ * A note being written into the repository: the documentation job opened for it,
+ * and what became of that job.
+ *
+ * One row per note, ever — the primary key is the obstacle. A note whose write-up
+ * was abandoned is not queued again: it stays `standing` and decays like anything
+ * else, where a retry on every pulse would be this subsystem spending the fleet on
+ * itself. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleWriteUp {
   obstacleId: string;
@@ -4265,14 +5166,22 @@ export interface ObstacleWriteUp {
 export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';
 
 /**
- * What the model desk made of one row, as the store holds it. **It is a
- * reading and never a ruling** — nothing here moves a state, takes an owner
- * or resolves anything; the desk is the harness's secretary, deliberately
- * not its judge. → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+ * What the model desk made of one row, as the store holds it.
+ *
+ * **It is a reading and never a ruling.** Nothing here moves a state, takes an
+ * owner or resolves anything: the desk is the harness's secretary and deliberately
+ * not its judge. What it holds is what a model may decide — what the row is *for*,
+ * and the ticket prose that would be written from the sightings otherwise.
+ * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
  */
 export interface ObstacleDeskReading {
   obstacleId: string;
-  /** The row's own `lastSeenAt` as it stood when read — what makes the inbox a comparison rather than a clock. */
+  /**
+   * The row's own `lastSeenAt` as it stood when this was read, which is what makes
+   * the inbox a comparison rather than a clock: a further voice landing words on a
+   * row puts it back in the inbox, and a row nobody has said anything new about is
+   * one already read.
+   */
   readAt: string;
   takenAt: string;
   /** What the desk says the row is for, or null where it did not say. */
@@ -4282,5 +5191,13 @@ export interface ObstacleDeskReading {
   body: string | null;
 }
 
-/** What an obstacle is *for*: a ticket somebody fixes, or a change to the documentation. A model may decide it — a wrong ticket is still a ticket, visible. Same pair of doors the `kind` column already names. */
+/**
+ * What an obstacle is *for*: a ticket somebody fixes, or a change to the
+ * documentation.
+ *
+ * A model may decide it, because a wrong ticket is a ticket and a ticket is
+ * visible. It is the same pair of doors the `kind` column already names — an
+ * obstacle is fixed and a note is written down — so the desk writes the kind
+ * rather than a second field nothing else reads.
+ */
 export type ObstaclePurpose = 'ticket' | 'docs';

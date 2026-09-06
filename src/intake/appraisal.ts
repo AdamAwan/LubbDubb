@@ -1,29 +1,115 @@
 import { createHash } from 'node:crypto';
-import type { Issue, IssueAppraisal, TaskSummary, WorldEvent } from '../types.js';
+import type { Issue, IssueAppraisal, TaskSummary } from '../types.js';
 import { hasPriorWork } from '../delivery/assessment.js';
 
 /**
- * The goal appraisal: the gate in front of an issue asking about its **content**
- * rather than policy — is there anything to act on? Silence holds nothing: only
- * an explicit `unclear` gates, so a crashed, killed or capped appraiser leaves
- * the issue to ordinary pickup. → `docs/spec/06-issue-pickup.md#the-goal-appraisal-unclear`
+ * The goal appraisal (issue #158): the one gate in front of an issue that asks about
+ * its **content** rather than about policy.
+ *
+ * Everything else standing in front of a fresh ticket — the watch tag, the
+ * workflow state, the cooldown, the attempt cap, headroom, `resolvePlanRoute` —
+ * asks whether the harness is *allowed* to act. None of them asks whether there is
+ * anything to act on. So a vague, self-contradictory or already-obsolete ticket
+ * goes straight into the funnel, and the first signal that anything was wrong is
+ * an agent spending its attempt cap and ending in a cooldown escalation that reads
+ * as the agent's failure. That is `src/ci/ciPolicy.ts`'s failure — work dispatched
+ * at a wall it was never going to get through — one stage earlier in the pipeline.
+ *
+ * The assessor (rule `issue-assess`) is the closest existing thing and asks the same *kind* of
+ * question at the opposite end of the run: it judges whether an issue was
+ * **delivered**, after the work. This judges whether it was **workable**, before.
+ * The two are mutually exclusive by construction — `hasPriorWork` is the
+ * discriminator for both, one taking each arm — so no issue is ever a candidate
+ * for both in one cycle.
+ *
+ * ## Block or inform (issue #158's first decision)
+ *
+ * It blocks, because informing is what the cockpit already does for every other
+ * verdict and it would leave the dispatch it exists to prevent happening anyway.
+ * What makes blocking safe is that a *missing* verdict holds nothing:
+ *
+ * - An appraiser that crashes, is killed, or spends its attempt cap writes no row,
+ *   and the issue falls through to ordinary pickup with no escalation. That is the
+ *   planner's fail-open (`resolvePlanRoute`) and the assessor's, arrived at the
+ *   same way: narrowing rule `issue-pickup` without it turns any appraiser failure into a
+ *   permanently parked issue.
+ * - Only an explicit `unclear` holds. This is `undeclared`-vs-`more_work` from
+ *   `src/issueConclusion.ts` again: the harness acts only on what was actually
+ *   said, never on silence, because the failure mode of the other direction is
+ *   contingent on model diligence and invisible when it bites.
+ * - And the hold itself expires — see {@link appraisalHold}.
+ *
+ * ## A third agent in front of the work (the second decision)
+ *
+ * The cost is worth naming rather than discovering: with planning, assessment and
+ * this all unconditional, a single issue can spend three agents before one line of
+ * its work is written. What makes it bearable is that only an explicit `unclear`
+ * holds anything, and that hold ends on the ticket's own text changing — which
+ * is the one thing that can actually answer it.
+ *
+ * A pure predicate was considered and is not sufficient: it can check length and
+ * structure and nothing else, while every failure this exists to catch — *"this
+ * names a module that no longer exists"*, *"this contradicts #98"* — is a judgement
+ * about the repository. That is what an agent is for.
+ *
+ * ## The watch gate (the fifth decision)
+ *
+ * The appraisal applies **only** to issues that already pass the watch gate: it never
+ * filters an untagged backlog, and it never touches an issue the operator has not
+ * asked for. So it does second-guess an explicit operator signal, and it is argued
+ * for on that basis: the tag says *work this*, and the appraisal's answer is not *no*
+ * but *with what?* — a question, asked once, that the operator ends by editing the
+ * ticket, saying something on it, or clearing the verdict outright. What it must
+ * never become is a durable refusal, which is what {@link appraisalHold} is about.
  */
 
-/** The origin an appraising agent is dispatched on — its own, so its cooldown and attempt cap stay independent of pickup on `issue:<n>`. */
+/**
+ * The origin an appraising agent is dispatched on — its own, for `assessOrigin`'s
+ * reason: the cooldown and attempt cap that throttle appraisals must be independent of
+ * the pickup attempts on `issue:<n>`, or an issue that burned its pickup budget
+ * could never be appraised and a looping appraiser would eat the budget that gets the
+ * work done.
+ */
 export function appraisalOrigin(issueNumber: number): string {
   return `issue:${issueNumber}:appraisal`;
 }
 
-/** The branch an appraising agent works on — its own namespace, since git refs are files and `issue/12` and `issue/12/appraisal` cannot coexist. Cut from the default branch. */
+/**
+ * The branch an appraising agent works on. Its own namespace beside `plan/issue/<n>`
+ * and `assess/issue/<n>` and for the same hard reason: git stores refs as files, so
+ * `refs/heads/issue/12` and `refs/heads/issue/12/appraisal` cannot coexist, and
+ * `issue/<n>` is exactly what the pickup agent this rule stands in front of wants.
+ *
+ * Cut from the **default branch**: the question is whether this goal makes sense
+ * against the repository as it stands, so the checkout has to be the repository as
+ * it stands.
+ */
 export function appraisalBranch(issueNumber: number): string {
   return `appraisal/issue/${issueNumber}`;
 }
 
 /**
- * The fingerprint of the goal text a verdict was cast against — a lookup against
- * current state, not an event, so a ticket rewritten while the harness was down
- * is still re-appraised. Title and body joined by NUL; 16 hex chars, a change
- * detector, not a security boundary.
+ * The fingerprint of the goal text a verdict was cast against.
+ *
+ * This is the whole of issue #158's fourth decision — *"a ticket edited after a
+ * failed appraisal must be re-appraised, or one bad verdict parks it for good"*. #122's
+ * answer to the same problem is expiry on world signal, and it cannot be the answer
+ * here: `worldDiff` emits `issue_opened`, `issue_closed` and `issue_linked` and
+ * **nothing at all for an edit**, which is precisely the transition that answers
+ * the appraiser's question. Adding an `issue_edited` event would make the verdict
+ * depend on the harness having witnessed the moment of the edit — the fragility
+ * `deliveryHold` refused for the same reason, and worse here, because a ticket
+ * rewritten while the harness was down would stay parked forever.
+ *
+ * Fingerprinting the text instead makes the check a **lookup against current
+ * state**: it survives a restart, a lost baseline and a missed pulse, and it is
+ * exact rather than approximate — an appraisal is a verdict about a text, so the thing
+ * that ends it is that text being different.
+ *
+ * Title and body both, joined by NUL — a byte neither field can contain — so moving
+ * words from one to the other still fingerprints differently rather than colliding
+ * with the concatenation. Truncated to 16 hex chars: this is a change detector between two
+ * readings of one ticket, not a security boundary.
  */
 export function goalFingerprint(title: string | null, body: string | null): string {
   return createHash('sha256')
@@ -32,36 +118,72 @@ export function goalFingerprint(title: string | null, body: string | null): stri
     .slice(0, 16);
 }
 
-/** What a hold is judged against: the ticket in front of us, and the world since the verdict. */
-interface AppraisalHoldContext {
-  /** World transitions covering at least {@link appraisalSignalQuery}'s window. Absent = nothing observed, every verdict still stands. */
-  signals?: WorldEvent[];
-}
-
-/** The world item an appraisal verdict is about. One function, since it both matches events and asks for them — those two answering differently is a known bug class. */
-function appraisalWorldRef(originRef: string): string | null {
-  return /^issue:\d+$/.test(originRef) ? originRef : null;
-}
-
 /**
- * Why this issue is held out of the funnel by a standing appraisal, or null when
- * free. Operator-facing — the cockpit chip and dispatcher skip reason both render
- * it. An `unclear` verdict ends on the goal text changing, any transition since
- * the verdict, or the row being deleted — never on a timer. An unanswered profile
- * proposal ends only on the operator answering, a rewrite, or a clear.
- * → `docs/spec/06-issue-pickup.md#the-goal-appraisal-unclear`
+ * Why this issue is held out of the funnel by a standing appraisal, or null when it is
+ * free. The string is operator-facing — the cockpit chip and the dispatcher's skip
+ * reason both render it.
+ *
+ * ## What ends a hold
+ *
+ * Two things, and **no timer**, which is #122's asymmetry preserved: an accepted
+ * act waits on the world to *reflect* something done, which is a duration; a
+ * refused goal waits on it to *become* something else, which is an event. A verdict
+ * that expired on a clock would re-ask a question whose answer has not changed —
+ * "not this second" under a longer name — and, since the appraiser costs an agent,
+ * it would re-ask it forever at a fixed price.
+ *
+ * 1. **The goal text changed** ({@link goalFingerprint}). The direct answer: the
+ *    verdict describes a ticket that no longer exists. This is the arm that makes
+ *    the loop closable — the author reads the checklist the appraisal left on the
+ *    ticket, rewrites it, and it is re-appraised on the next pulse with no clearing
+ *    step and nothing to remember. It is also the **only** arm that ends the hold
+ *    on the ticket's side, and deliberately: there used to be a second — any world
+ *    transition on the issue since the verdict — described as covering a human who
+ *    answers in a comment. It did not: `worldDiff` emits nothing for a comment,
+ *    so what it actually released on was a reopen or a link, neither of which
+ *    answers "what does done look like", and the release put the same unanswerable
+ *    text straight into the funnel with no re-appraisal. A gate that lets the
+ *    ticket through unchanged is not a gate; the answer has to land *in the
+ *    ticket*, where the next agent reads it.
+ * 2. **The operator deleting the row**, which is why it is not an arm:
+ *    `Store.clearAppraisal` removes it, so "not appraised" keeps exactly one
+ *    representation — the same reason clearing a conclusion is a delete. And the
+ *    operator overriding it to `workable`, which is a write of the same row.
+ *
+ * Expiry lifts the hold; it does not retract the verdict. On a re-appraisal the row is
+ * overwritten, so what the operator reads is always the latest thing said.
+ *
+ * ## The second arm: an unanswered profile proposal (issue #342)
+ *
+ * The appraiser also proposes which model profile this goal's work should run on,
+ * and a proposal that differs from what is already standing holds the funnel
+ * until a human answers it. Blocking rather than informing, for the same reason
+ * the `unclear` arm blocks: informing is what the cockpit already does for every
+ * verdict, and the dispatch the gate exists to price correctly would happen
+ * anyway. What makes it safe is what makes the first arm safe — **an absent
+ * proposal holds nothing**, so an appraiser that crashes, is killed, spends its
+ * attempt cap, or simply names no profile leaves the issue to the funnel it
+ * would have entered anyway, on its rule's own entry.
+ *
+ * Agreement holds nothing either, and costs no click: the divergence is decided
+ * once, where the proposal is written and the tag and config are both in hand,
+ * and a proposal that matched what was standing is stored already answered. So
+ * the question this arm asks is a two-field read, with no config threaded into
+ * it and no caller able to forget a lookup and gate the whole fleet by accident.
+ *
+ * Three things end it: the operator answering, the ticket being rewritten (a new
+ * fingerprint, so a re-appraisal proposes against the current text), and the row
+ * being cleared.
  */
-export function appraisalHold(
-  appraisal: IssueAppraisal | null,
-  issue: Issue,
-  ctx: AppraisalHoldContext = {},
-): string | null {
+export function appraisalHold(appraisal: IssueAppraisal | null, issue: Issue): string | null {
   if (!appraisal) return null;
-  // The ticket was rewritten: whatever the appraiser read, it is not this. Both arms.
+  // The ticket was rewritten: whatever the appraiser read, it is not this. Applies
+  // to both arms — a proposal is a judgement about a text too.
   if (appraisal.goalRef !== goalFingerprint(issue.title, issue.body)) return null;
 
-  if (appraisal.verdict === 'unclear' && !expiringSignal(appraisal, ctx.signals ?? [])) return unclearHold(appraisal);
-  // After the refusal, so an issue both refused and unpriced reads as refused.
+  if (appraisal.verdict === 'unclear') return unclearHold(appraisal);
+  // Asked after the refusal, so an issue that is both refused and unpriced reads
+  // as refused: there is no point pricing work that is not going to start.
   if (appraisal.proposedProfile !== null && appraisal.profileAnsweredAt === null)
     return `the goal appraisal proposes running this on "${appraisal.proposedProfile}"`;
   return null;
@@ -69,51 +191,47 @@ export function appraisalHold(
 
 function unclearHold(appraisal: IssueAppraisal): string {
   const by = appraisal.by === 'operator' ? 'you' : 'the goal appraisal';
-  // Deliberately no quote and no timestamp: a caller that wants either reads
-  // `IssueAppraisal` in full. This is a chip built to be scanned.
+  // The verdict's own words and the time it was reached are **not** in here, and
+  // deliberately: this is one reason among several on a row that already carries
+  // `IssueAppraisal` in full, so a caller that wants the quote reads it there. Folding
+  // them in made the single longest string the cockpit renders — a paragraph and a
+  // raw ISO timestamp in a chip built to be scanned — which is the opposite of what
+  // a reason is for. Nothing is lost: the panel puts the summary and a relative
+  // time in the chip's title, and the ticket comment has the whole of it.
   return `${by} could not act on this goal`;
 }
 
-/** The transition that ended a verdict's standing, or null while it still stands. Measured against {@link verdictCast}, never `decided_at`, which dates the first verdict. */
-function expiringSignal(appraisal: IssueAppraisal, signals: WorldEvent[]): WorldEvent | null {
-  const item = appraisalWorldRef(appraisal.originRef);
-  if (!item) return null;
-  const cast = verdictCast(appraisal);
-  return signals.find((e) => e.ref === item && e.createdAt > cast) ?? null;
-}
-
-/** When the verdict standing *now* was cast. `decided_at` survives an overwrite (dates the first judgement); `updated_at` moves with the re-cast. */
-function verdictCast(appraisal: IssueAppraisal): string {
-  return appraisal.updatedAt ?? appraisal.decidedAt;
-}
-
 /**
- * Which world events {@link appraisalHold} needs, as a query. Bounded by time and
- * item rather than row count — a count-bounded read would judge an old verdict
- * against events it cannot see and hold it forever. Narrowed to `unclear` rows;
- * null when none is standing.
+ * Has work on this issue actually started — i.e. is the goal still the only thing
+ * there is to judge?
+ *
+ * Exactly `hasPriorWork`, and that is the point rather than an accident. This began
+ * as `hasPriorWork` with the appraisal's **own** tasks filtered out, because
+ * `issue:<n>:appraisal` was inside the `issue:<n>:*` subtree that predicate matched: an
+ * appraiser that crashed without writing a verdict would count as prior work and no
+ * second attempt could ever be made, silently retiring the cooldown, the attempt cap
+ * and the assessor's arm of the same discriminator. The exclusion was right and its
+ * scope was wrong — an appraisal is the harness *asking* rather than the work being
+ * done, and so is a plan, which nothing excluded until `issue:<n>:plan` parked every
+ * `single`-routed issue in the assessor. `issueOriginRole` now makes the distinction
+ * for both, so this is a name for the question rather than a second answer to it.
+ *
+ * The assessor's and the retrospective's origins are still counted: both only ever
+ * fire downstream of work, so either is evidence that some was done.
  */
-export function appraisalSignalQuery(appraisals: IssueAppraisal[]): { since: string; refs: string[] } | null {
-  const refs = new Set<string>();
-  let since: string | null = null;
-  for (const a of appraisals) {
-    if (a.verdict !== 'unclear') continue;
-    const item = appraisalWorldRef(a.originRef);
-    if (!item) continue;
-    refs.add(item);
-    // The instant the predicate compares against, so a re-cast shrinks the window.
-    const cast = verdictCast(a);
-    if (since === null || cast < since) since = cast;
-  }
-  return since !== null && refs.size > 0 ? { since, refs: [...refs] } : null;
-}
-
-/** Has work on this issue actually started? Exactly `hasPriorWork` — a name for the question, not a second answer to it. */
 export function hasWorkStarted(issueNumber: number, tasks: TaskSummary[]): boolean {
   return hasPriorWork(issueNumber, tasks);
 }
 
-/** Whether this issue already carries a verdict about its current text. Asked instead of "is there a row" so an edited ticket is re-appraised on its own. */
+/**
+ * Whether this issue already carries a verdict about the text it currently has —
+ * i.e. whether there is anything left to appraise.
+ *
+ * Asked instead of "is there a row", so an edited ticket is re-appraised on its own:
+ * the same fingerprint comparison that ends a hold is what re-opens the question,
+ * which is what keeps the rule and the gate from disagreeing about whether an issue
+ * has been judged.
+ */
 export function isAppraised(appraisal: IssueAppraisal | null, issue: Issue): boolean {
   return appraisal !== null && appraisal.goalRef === goalFingerprint(issue.title, issue.body);
 }

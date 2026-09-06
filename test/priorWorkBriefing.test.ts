@@ -171,6 +171,7 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 'the goal names a concrete table',
+      missing: [],
       goalRef: 'fingerprint',
       by: 'appraiser',
       proposedProfile: null,

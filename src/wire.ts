@@ -227,6 +227,8 @@ export interface Issue extends WorldIssue {
   appraisal: {
     verdict: GoalAppraisalVerdict;
     summary: string;
+    /** The author's checklist on an `unclear` verdict — see `IssueAppraisal.missing`. Empty otherwise. */
+    missing: string[];
     by: AppraisalAuthor;
     decidedAt: string;
     /**
