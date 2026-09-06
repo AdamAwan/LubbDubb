@@ -181,21 +181,9 @@ export class Hub {
       this.broadcast({ type: 'dirty', sections: ['inbox'] });
     });
 
-    // The local run, coarse and **rate-limited**, which is the one thing here that
-    // is not like the rest of this constructor.
-    //
-    // Coarse for the usual reason: everything the panel draws — the status turn from
-    // `starting` to `running`, the phase, a failure's last words — is shipped inside
-    // /api/state, so the refetch is the whole delivery. Without it none of that
-    // moved until the next heartbeat, which on a slow bring-up is the difference
-    // between a start that is working and one that has hung.
-    //
-    // Rate-limited because this event also fires per line of output, and every
-    // `dirty` costs every connected cockpit a full snapshot. A bring-up printing an
-    // install log would otherwise pay for one of those per line, to move a caption.
-    //
-    // The watch's readings ride the same coalescer: they ship on the same section,
-    // and a port coming up in the same 400ms as a phase line is one refetch.
+    // The local run, coarse and **rate-limited** — the one thing here that is not
+    // like the rest of this constructor.
+    // → `docs/spec/16-http-api.md#server-events`, `docs/spec/23-local-runs.md`
     const refetchLocalRun = (): void => {
       if (this.localRunPending !== null) return;
       this.localRunPending = setTimeout(() => {

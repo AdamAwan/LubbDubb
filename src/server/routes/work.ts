@@ -168,20 +168,4 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { nodes, refUrls } satisfies WorkSubtreePayload;
     }),
   );
-
-  // The prompt book the rule dispatcher renders from — what the harness says to
-  // its agents, and which of those wordings the operator has replaced.
-  //
-  // Its own route, fetched on open rather than shipped on `/api/state`, for the
-  // work graph's reason inverted: the graph is too big to poll, this is too
-  // *static* to. `loadPromptTemplates` reads the override directory once at boot,
-  // so the book cannot change while the process is up and re-sending it every
-  // couple of seconds would be paying for a constant.
-  //
-  // Read-only on purpose. Editing stays a file drop into `promptTemplatesDir`:
-  // a write route would have to answer "when does this take effect", and the
-  // honest answer — at the next restart — is worse than not offering it. `dir`
-  // is what makes the panel actionable without one.
-  // The document itself, fetched when a reader opens it rather than shipped on
-  // every poll. Null rather than 404 for a goal nobody wrote up: "no retrospective"
 }

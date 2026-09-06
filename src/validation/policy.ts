@@ -65,7 +65,7 @@ export interface ValidationPolicy {
 
 export const DEFAULT_VALIDATION: ValidationPolicy = {
   desktopClaimMinutes: 60,
-  // Under the OS tmpdir for the fleet socket's reason: POSIX caps a socket path
+  // TECHDEBT: under the OS tmpdir for the fleet socket's reason: POSIX caps a socket path
   // at about 104 characters, which a repo-relative path clears easily.
   desktopSocketPath:
     process.platform === 'win32' ? '\\\\.\\pipe\\lubbdubb-desktop' : join(tmpdir(), 'lubbdubb', 'mcp-desktop.sock'),

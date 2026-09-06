@@ -310,7 +310,7 @@ export class McpDesktopServer {
     if (this.token === null) return false;
     const a = Buffer.from(candidate);
     const b = Buffer.from(this.token);
-    // `timingSafeEqual` throws on a length mismatch, which is itself a leak-free
+    // TECHDEBT: `timingSafeEqual` throws on a length mismatch, which is itself a leak-free
     // answer: the token is a fixed-length uuid, so a different length is wrong.
     return a.length === b.length && timingSafeEqual(a, b);
   }

@@ -282,30 +282,8 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
 
   const emitted = new Map(out.map((o) => [o.ref, o]));
 
-  // **Arm C — a job is adopted by the origin it stands in for.** `Job.originRef`
-  // names the work being redone — `issue:41:retro` for a requeue, `pr:31251` for a
-  // promoted finding — so it is the job's own statement that something already
-  // accounts for it.
-  //
-  // Arm B can only adopt a job that *produced a pull request an issue links to*,
-  // and a requeued appraisal, plan, retro or review-comment job opens none — so every
-  // one of them was emitted parentless forever, and stage 3 offered to file a
-  // second tracker item for work an existing one already names. Not a stale row
-  // that ages out: the condition is permanent, which is why the unrecorded list
-  // filled with `Requeued: Plan issue #35699` and read as noise.
-  //
-  // Resolved by walking the origin down to the longest prefix the graph actually
-  // holds a node for, so `issue:41:retro` lands on `issue:41` while
-  // `issue:41:part:api` — itself a node — lands on itself. A prefix walk rather
-  // than a suffix table because an origin vocabulary this does not recognise must
-  // fail to the *visible* mistake, which here is the row staying in the unrecorded
-  // list; a table would silently adopt the next origin added under whichever
-  // parent its author last thought about. It also cannot invent an edge, since
-  // every candidate is a ref something emitted.
-  //
-  // Last, so this only ever fills a null: arm B's adoption and a stray operator
-  // job's honest null both stand. A job with no origin stands in for nothing and
-  // stays unrecorded, which is the case stage 3 was written for.
+  // **Arm C — a job is adopted by the origin it stands in for**, last so it only
+  // ever fills a null. → `docs/spec/16-http-api.md`
   const nodeRefs = new Set([...emitted.keys(), ...input.existing.map((n) => n.ref)]);
   for (const job of input.jobs) {
     if (job.originRef === null) continue;

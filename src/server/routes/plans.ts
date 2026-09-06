@@ -50,18 +50,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Send a plan back for replanning. The mechanism already exists —
-  // `resolvePlanRoute` routes a plan row in `planning` status to rule `issue-plan` — so this
-  // is only the operator's way in: flip the status, and the next cycle dispatches a
-  // planner primed with the current plan and part states (`issue-replan`).
-  //
-  // **Nothing is torn down.** Every part row is left exactly as it is: agents keep
-  // running, branches stay, open PRs stay open. What an amended plan does to them is
-  // decided at ingestion, where the planner's new declaration is actually known — a
-  // part it no longer declares is retired only if nothing was started for it, and one
-  // with a branch or a PR is kept whatever the amendment says (see `partsToRetire`).
-  // Until that lands, the existing plan keeps scheduling: a replan that fails or is
-  // never picked up leaves the issue exactly where it was, not parked.
+  // Send a plan back for replanning. Nothing is torn down.
+  // → `docs/spec/16-http-api.md#post-apiplansidreplan`, `docs/spec/08-planning.md`
   app.post(
     '/api/plans/:id/replan',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -69,29 +59,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const plan = store.getPlan(id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
       const next = store.setPlanStatus(id, 'planning');
-      // A replan supersedes an approval that was still being asked for. Withdrawing
-      // it is not optional: a pending proposal holds rule `plan-approval` off this plan, so the
-      // amended verdict would never be put to anyone — and the stale card, if
-      // accepted, would release a decomposition its reader never saw. The status
-      // write above is what makes this safe to route through the ordinary reject:
-      // the plan is no longer `awaiting_approval`, so `refusePlan` finds nothing to
-      // settle and the withdrawal is only the inbox item closing.
+      // A replan supersedes an approval that was still being asked for; the status
+      // write above is what makes this safe to route through the ordinary reject.
+      // → `docs/spec/08-planning.md`
       const ref = planProposalRef(plan.originRef);
       const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
       if (pending) proposals.reject(pending.id, 'superseded by a replan');
-      // A pending *amendment* goes the same way, and for the sharper version of the
-      // same reason: a replan replaces the document the amendment was written
-      // against, so accepting it afterwards would either write a plan nobody asked
-      // for over the replan or — since applying refuses outside `active` — do
-      // nothing at all while telling the operator it had.
-      //
-      // **The rows are settled before the cards are withdrawn**, and the order is
-      // the whole of what makes this a withdrawal rather than a verdict: rejecting
-      // a `plan_amendment` proposal runs `declinePlanAmendment`, so a card closed
-      // over a still-pending row writes `declined` — the terminal that means *an
-      // operator said no*, against a question nobody was asked. Settled first, the
-      // rejection finds the row already `superseded` and changes nothing about it,
-      // and the card closing is only the inbox item going away.
+      // A pending *amendment* goes the same way. **The rows are settled before the
+      // cards are withdrawn**, and that order is what makes this a withdrawal
+      // rather than a verdict. → `docs/spec/08-planning.md`
       const pendingAmendments = store.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
       supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       for (const amendment of pendingAmendments) {

@@ -203,21 +203,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // The two ways out of a plan verdict that are not a verdict on the plan (issue
-  // #109's gate, widened). Approve and Reject both agree the work is worth doing —
-  // a rejection sends the goal straight back to a planner — so an operator who has
-  // read a plan and concluded the *ticket* is the problem had only the wrong "no"
-  // to say it with, and the harness answered by re-planning a goal nobody wanted
-  // until the attempt cap ran out.
-  //
-  // `close` requires the comment, and that is the whole of why the two verdicts do
-  // not share `NoteBody`: closing somebody's ticket is a write on a tracker that
-  // outlives this harness, and one with no words on it is the "closed for reasons
-  // nobody can read" the feature exists to stop. The operator writes it or asks for
-  // the draft below and edits that; nothing posts a comment the harness composed
-  // and nobody read. `hold` takes an optional note for the ordinary reason every
-  // other "no" here does — it is recorded, and it changes nothing about what the
-  // hold does.
+  // The two ways out of a plan verdict that are not a verdict on the plan.
+  // `close` requires the comment, which is why the two verdicts do not share
+  // `NoteBody`. → `docs/spec/16-http-api.md#post-apiproposalsidback-out`
   const BackOutBody = z
     .object({
       verdict: z.enum(['close', 'hold'], { errorMap: () => ({ message: "verdict must be 'close' or 'hold'" }) }),
@@ -241,22 +229,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Decide what happens to work the previous run left orphaned. **Until every
-  // one of these is answered the harness runs no cycles at all**, so this route is
-  // the only thing that can un-stick a booted-after-a-crash harness — which is why
-  // it settles the verdict inline (like a proposal accept) rather than emitting an
-  // action for a pulse that cannot run to pick up.
-  //
-  // A refusal is a 409 with the reason, and leaves the item pending: a restore the
-  // runtime declines is not a decision, and the operator still has requeue and
-  // remove. The cycle is kicked only once the *last* decision lands, since one
-  // kicked while others are outstanding would just return the hold.
-  //
-  // `:id` is the **task** id, not the agent id: a restart can orphan a task before
-  // its agent was ever spawned, and the task is the only identity every candidate has.
-  // The verdict list lives in `crashRecovery.ts` and is checked through its own
-  // predicate, so this schema does not restate the three names — a second copy
-  // here is how the route and the desk come to disagree about what is on offer.
+  // Decide what happens to work the previous run left orphaned. The verdict list
+  // lives in `crashRecovery.ts` and is checked through its own predicate, so this
+  // schema does not restate the three names — a second copy here is how the route
+  // and the desk come to disagree about what is on offer.
+  // → `docs/spec/16-http-api.md#post-apirecoverytaskid`
   const RecoveryBody = z.object({
     verdict: z.custom<RecoveryVerdict>(isRecoveryVerdict, {
       message: "verdict must be 'restore', 'requeue' or 'remove'",

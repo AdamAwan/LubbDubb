@@ -109,7 +109,7 @@ export function register(root: FastifyInstance, ctx: RouteContext): void {
   // the refusal wording — find routes by matching the instance name against a
   // literal path, and a route they cannot see is a route neither of them holds.
   root.register(async (app) => {
-    // Kept as bytes and parsed here rather than by Fastify's built-in parser,
+    // TECHDEBT: kept as bytes and parsed here rather than by Fastify's built-in parser,
     // because `JSON.stringify(JSON.parse(x))` is not `x` — key order, floats and any
     // non-ASCII text all move — so a signature checked against a re-serialised body
     // fails on exactly the deliveries carrying an emoji in a comment.

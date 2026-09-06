@@ -41,7 +41,7 @@ export class NodePtyBackend implements PtyBackend {
     const require = createRequire(import.meta.url);
     const pty = require('node-pty') as typeof import('node-pty');
     const env = { ...process.env, ...opts.env } as Record<string, string>;
-    // Resolve up front: node-pty reports a missing binary only by exiting 1 with
+    // TECHDEBT: Resolve up front: node-pty reports a missing binary only by exiting 1 with
     // `execvp(3) failed` in the terminal, so a bad command would otherwise look
     // like an agent that spawned and instantly "failed" for no visible reason.
     const command = resolveExecutable(file, env);
@@ -57,7 +57,7 @@ export class NodePtyBackend implements PtyBackend {
       onData: (cb) => proc.onData(cb),
       onExit: (cb) => proc.onExit((e) => cb({ exitCode: e.exitCode, signal: e.signal })),
       write: (data) => proc.write(data),
-      // node-pty's Windows backend terminates via a job object and *throws* on any
+      // TECHDEBT: node-pty's Windows backend terminates via a job object and *throws* on any
       // signal argument ("Signals not supported on windows"); drop the signal there.
       // POSIX honours it, so keep passing SIGTERM etc. off Windows.
       kill: (signal) => proc.kill(process.platform === 'win32' ? undefined : signal),

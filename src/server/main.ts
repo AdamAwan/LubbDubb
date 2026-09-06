@@ -144,17 +144,9 @@ async function main(): Promise<void> {
     stopProjectConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
-    // **The fast path, deliberately.** A stop is a session's turn now — the project's
-    // own `stop` command, because a dev environment is not a process tree and no
-    // signal reaches a container. Waiting for a turn here would hang the two paths
-    // that must not hang: a Ctrl-C, and the upgrade handoff, which is a restart. So
-    // the session and its children are reaped without one.
-    //
-    // What happens to the *row* depends on whether the deployment can bring it back:
-    // with a `localRun.resumeInstruction` it is left live for `resumeInterrupted` to
-    // pick up on the next boot, and without one it is settled with a note saying the
-    // instruction did not run — which is what makes a container that outlived the
-    // harness something the panel states rather than a mystery.
+    // **The fast path, deliberately**, and what happens to the row depends on
+    // whether the deployment can bring the run back.
+    // → `docs/spec/21-self-update.md`, `docs/spec/23-local-runs.md`
     // The watch's timer goes before the run it watches: a tick that lands mid-close
     // would ask git and the OS about an environment this process no longer holds.
     system.localRunWatch.stop();
@@ -167,29 +159,14 @@ async function main(): Promise<void> {
   };
   process.on('SIGINT', shutdown(0));
   process.on('SIGTERM', shutdown(0));
-  // The two an operator actually reaches for, and neither took this path before.
-  // Closing the console window on Windows raises `SIGHUP` — unhandled, Node exits
-  // without running a line, so the agents were not reaped and the local run was not
-  // dated. Ctrl-Break is `SIGBREAK`, the same. Both are the clean shutdown, because
-  // both are somebody meaning "stop".
-  //
-  // What is still not reachable is a `taskkill /F` or an End task, which deliver no
-  // signal at all — the local run's pulse stamp is what covers those
-  // ([23](../../docs/spec/23-local-runs.md#coming-back-after-a-restart)).
+  // Both are the clean shutdown, because both are somebody meaning "stop".
+  // → `docs/spec/21-self-update.md`, `docs/spec/23-local-runs.md`
   process.on('SIGHUP', shutdown(0));
   process.on('SIGBREAK', shutdown(0));
-  // How the cockpit's Apply gets this process to exit *distinguishably*: the
-  // supervisor relaunches on this code alone, and treats every other ending as the
-  // server's own. Wired here rather than in `buildSystem` because shutdown is this
-  // file's — a harness embedded in a test has no port, no supervisor and nothing to
-  // hand off to, and its `apply` correctly stops at recording the intent.
-  //
-  // **Deferred, and that is not a cosmetic delay.** The desk calls this from inside
-  // the route handler, before the reply has been written; going down synchronously
-  // would close the server out from under the response, and the cockpit that asked
-  // for the upgrade would see a dropped socket rather than the confirmation and the
-  // broadcast. A tick is not enough — the reply has to reach the wire — so this
-  // waits, and the shutdown itself is what the operator is told is happening.
+  // How the cockpit's Apply gets this process to exit *distinguishably*. Wired
+  // here rather than in `buildSystem` because shutdown is this file's, and
+  // **deferred** past the HTTP reply, which is not a cosmetic delay.
+  // → `docs/spec/21-self-update.md#applying-it`
   system.updates.onHandoff = () => {
     setTimeout(() => void shutdown(UPGRADE_EXIT_CODE)(), HANDOFF_GRACE_MS);
   };
@@ -200,14 +177,8 @@ async function main(): Promise<void> {
   // window, a worktree that has gone — still holds the pulse and still needs a
   // verdict, so both halves are announced.
   //
-  // First, though, what the fleet comes back *as*. `RuntimeControl` is not
-  // persisted, so every other boot seeds `paused` from `config.startPaused` — the
-  // right answer for a cold boot and the wrong one for a restart that is really one
-  // process handing the fleet to the next. Left to the default, an operator's own
-  // pause is dropped on the way through an upgrade and the fleet comes back
-  // dispatching; on a deployment that starts paused by policy, a fleet that was
-  // running a second ago comes back parked. Both are silent, and under
-  // `selfUpdate.autoUpdate` nobody is at the screen.
+  // First, though, what the fleet comes back *as*.
+  // → `docs/spec/21-self-update.md#the-pause-the-upgrade-must-not-lose`
   const pausedBack = system.updates.restorePause();
   if (pausedBack !== null && pausedBack)
     console.log('[lubbdubb] dispatch is still paused after the upgrade — it was paused before it');

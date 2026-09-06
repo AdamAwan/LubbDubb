@@ -535,7 +535,7 @@ export class ValidationStore {
   private writeCheck(check: ValidationCheck): void {
     this.ctx.db
       .prepare(
-        // `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
+        // TECHDEBT: `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,

@@ -60,7 +60,7 @@ export function verifyGitHubSignature(secret: string, body: Buffer, header: stri
 export function verifyBasicCredential(expected: string, header: string | undefined): boolean {
   if (!header) return false;
   const space = header.indexOf(' ');
-  // Parsed by hand rather than with a regex, for `auth.ts`'s reason: this header is
+  // TECHDEBT: parsed by hand rather than with a regex, for `auth.ts`'s reason: this header is
   // unauthenticated attacker input, and a quantifier pair over a run of spaces
   // backtracks polynomially.
   if (space <= 0 || header.slice(0, space).toLowerCase() !== 'basic') return false;

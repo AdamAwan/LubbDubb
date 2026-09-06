@@ -111,7 +111,7 @@ export class WorktreeManager implements Worktrees {
   async ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
     const commit = await this.startPoint('the local run', ref);
     const dir = resolve(this.previewRoot);
-    // Whether the directory is there, never whether `git worktree list` names it: git
+    // TECHDEBT: whether the directory is there, never whether `git worktree list` names it: git
     // reports the canonical path, and a short-name TEMP root on Windows resolves
     // differently for the same directory than `worktree add` would report it as existing.
     if (!existsSync(dir)) {

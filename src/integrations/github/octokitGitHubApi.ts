@@ -390,7 +390,7 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async getJobLog(jobId: number): Promise<string> {
-    // Octokit follows the 302 and hands back the body. The generated types call the
+    // TECHDEBT: Octokit follows the 302 and hands back the body. The generated types call the
     // response `never` (it is declared as a redirect), so the string is asserted here.
     const res = await this.octokit.actions.downloadJobLogsForWorkflowRun({ ...this.base, job_id: jobId });
     return typeof res.data === 'string' ? res.data : String(res.data ?? '');
@@ -438,7 +438,8 @@ export class OctokitGitHubApi implements GitHubApi {
         const issue = ev.source.issue;
         if (issue && issue.pull_request) sourcePrNumber = issue.number;
       }
-      // The "who tagged this" signal. Cast past octokit's broad timeline union.
+      // The "who tagged this" signal.
+      // TECHDEBT: cast past octokit's broad timeline union.
       let label: string | null = null;
       let actorLogin: string | null = null;
       if (ev.event === 'labeled' || ev.event === 'unlabeled') {

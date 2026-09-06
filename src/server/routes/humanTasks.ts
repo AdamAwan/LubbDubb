@@ -88,27 +88,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   // Close the tracker item from here — the close-out row's third verb, and the one
   // that does the work rather than recording that somebody else did it.
-  //
-  // The row already settles itself when the tracker stops listing the item open
-  // (`closeOutPass`), so this is not a second way to answer the obligation: it is
-  // the *act* the obligation asks for, taken through the same outbound seam the
-  // plan back-out closes an issue with. What it saves is the round trip — the
-  // operator was being asked to leave the cockpit, do one click in a tracker, and
-  // come back to a row that would settle a pulse later.
-  //
-  // **It settles the row itself rather than waiting for the sweep.** The sweep is
-  // still the authority for a close that happened anywhere else, and it is
-  // idempotent against a row already settled; leaving this one to it would leave an
-  // obligation standing in front of the operator who has just discharged it, for as
-  // long as a pulse takes. The resolution deliberately does **not** carry
-  // `DESK_SETTLED`: a person pressed this, so it is an operator's answer and the
-  // reopen arm must not treat it as the harness's own.
-  //
-  // The capability is checked, for `/api/issues/:number/state`'s reason —
-  // `closeIssue` throws where no integration implements it, and an operator would
-  // read that as this write failing rather than as the deployment not having the
-  // operation at all. The cockpit reads the same flag off `config.canCloseIssue`
-  // and does not draw the button, so this is the backstop rather than the notice.
+  // → `docs/spec/13-jobs-and-tickets.md`, `docs/spec/16-http-api.md`
   const CloseTicketBody = z.object({ note: optionalText('note') });
   app.post(
     '/api/human-tasks/:id/close-ticket',
