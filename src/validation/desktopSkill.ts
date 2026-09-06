@@ -2,49 +2,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 
-/**
- * The `/lubbdubb` skill, installed into the operator's Claude Code when the
- * desktop channel starts.
- *
- * **The skill is the interface, not a convenience.** Without it the operator
- * types the same six sentences at their Claude every time they want a check run —
- * which is the friction the whole channel exists to remove, and the reason the
- * bench-and-priority design was rejected: *"realistically I'm going to look at
- * the goal, see it needs something validating, then want my Claude to do it."*
- * With it, that is `/lubbdubb 284:C`.
- *
- * Kept as a string here rather than as a file asset for the prompt templates'
- * reason: the build emits `.ts` and nothing copies a stray `.md` into `dist`, so
- * an asset would work in development and be missing in a deployment — the exact
- * shape of silent failure this repo's conventions exist to avoid. There is no
- * second copy under `docs/` either: one of the two would be the stale one.
- *
- * It is deliberately short. Everything about *how* to run a check comes back from
- * `validation_read` and `validation_claim`, which read the live plan; a skill that
- * restated any of it would be a second copy of the procedure, drifting.
- *
- * It carries the plan discussion for the same reason it carries the checks: the
- * cockpit deep-links `/lubbdubb discuss <n>` into this session, and the whole
- * point of Discuss being a link rather than a text box is that the operator lands
- * somewhere that already knows what to do. What the plan *says* still comes back
- * from `plan_read`.
- *
- * `ask <n>` is the fourth job and the only one that settles nothing. It exists
- * because the question an operator has about a goal — what was done, how, which
- * pull request, is it on hallway yet — is answerable from rows the harness already
- * holds, and was previously answerable only by reading the cockpit and the
- * repository and joining them by hand. `goal_read` is the whole of it; this file
- * says what to do with the answer, and its longest section is about the one way a
- * session with the repository open gets this wrong: reconstructing a plausible
- * history from the code, which the operator cannot tell from the real one.
- *
- * `run <n>` is the third of those links, and the division is sharper still: the
- * **harness** starts the application, in a checkout it keeps for the purpose, so
- * this file says only how to ask and what the answer means. *How* this deployment
- * starts is `localRun.instruction`, which the session the harness spawns is handed
- * directly — a session reading it here would be a second copy of an operator's
- * config, and one that could not be stopped from the cockpit.
- */
+// → docs/spec/20-validation.md
+
 export const DESKTOP_SKILL = `---
 name: lubbdubb
 description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
@@ -486,26 +445,6 @@ which check if more than one is outstanding.
   goal, not for the session taking the reading.
 `;
 
-/**
- * The skill as it is written to disk: the body above, plus — when the harness can
- * see its own checkout — a note saying where that checkout is.
- *
- * **Appended, never interpolated.** The body is one fixed document, and a path
- * spliced into it would be a second thing to keep in step every time either moves;
- * the same argument the prompt templates are built on. A deployment running from a
- * tarball resolves no root and gets the body unchanged, which is the honest answer
- * — a section naming a directory that is not there is worse than no section.
- *
- * It exists because of what the cockpit's *Question?* control actually
- * collects. The deep link opens the session on `repoRoot`, the repository the
- * fleet **works on**, and most questions are about that work. But a fair share are
- * not — "why has nothing picked this up", "is this a bug in LubbDubb" — and the
- * two repositories are different directories on this machine except while LubbDubb
- * is dogfooding itself. Without this note the session answers a question about the
- * harness from the harness's *output*, which is the shape of confident wrong answer
- * the `ask` section already warns about.
- * → `docs/spec/26-setup.md`
- */
 function desktopSkillDocument(harnessRoot: string | null): string {
   if (harnessRoot === null) return DESKTOP_SKILL;
   return `${DESKTOP_SKILL}
@@ -531,17 +470,6 @@ subsystem, and \`docs/README.md\` is its index.
 `;
 }
 
-/**
- * Install (or refresh) the skill. Best-effort by contract, like everything else
- * on this channel: a failure is recorded and the harness carries on, because the
- * tools still work when the operator asks for them in their own words.
- *
- * Always overwrites. The alternative — trying to tell an operator's edits from a
- * stale copy — has no honest implementation, and a skill that silently stopped
- * being refreshed would describe a channel that had since changed. There is no
- * setting that turns the writing off; the file says so in its own body, and
- * `validation.desktopSkillPath` is the only way to put it somewhere else.
- */
 export function installDesktopSkill(path: string, errors?: ErrorRecorder, harnessRoot: string | null = null): boolean {
   try {
     mkdirSync(dirname(path), { recursive: true });

@@ -1,36 +1,11 @@
 import type { IssueConclusionVerdict } from '../types.js';
 
-/**
- * The `conclude_work` tool's pure layer: what a conclusion is allowed to be.
- *
- * The note is **required and not trimmed away**, which is the opposite of
- * `note_progress` and deliberate. A progress note is a cheap, frequent status
- * line, so trimming an over-long one beats refusing it. A conclusion is a verdict
- * that stops the harness scheduling anything further for a ticket, or sends it
- * back round the loop — an operator reading it needs to know *what was delivered*
- * or *what remains*, and a bare "done" is not reviewable. So an empty note is
- * refused, and an over-long one is kept whole (it is written once per issue, not
- * once a minute, and the cockpit can wrap it).
- */
+// → docs/spec/11-mcp-tools.md
 
-/** The two verdicts an agent may cast. `undeclared` is the absence of a call, never an argument. */
 const CONCLUSION_VERDICTS = ['done', 'more_work'] as const satisfies readonly IssueConclusionVerdict[];
 
-/**
- * The third answer, which is **not** a verdict about the goal.
- *
- * `done` and `more_work` both say something about the work; this says the work
- * could not be attempted, and names what stopped it. It is not a member of
- * {@link IssueConclusionVerdict} and writes no conclusion row, because the two
- * have different lifetimes and different readers: a conclusion is the agent's
- * standing statement about its own run, and a block is a park whose exit is the
- * **obstacle** rather than the issue — a desk lifts it when the board does, with
- * nobody having declared anything about whether the goal is finished.
- * → `docs/spec/27-obstacles.md#blocked-is-an-answer`
- */
 export const BLOCKED_STATUS = 'blocked';
 
-/** Every status `conclude_work` accepts, which is the two verdicts plus the block. */
 export const CONCLUSION_STATUSES = [...CONCLUSION_VERDICTS, BLOCKED_STATUS] as const;
 
 export const CONCLUSION_VERDICT_HELP: Record<IssueConclusionVerdict | typeof BLOCKED_STATUS, string> = {
@@ -42,7 +17,6 @@ export const CONCLUSION_VERDICT_HELP: Record<IssueConclusionVerdict | typeof BLO
     'hit the same wall',
 };
 
-/** A note long enough that it is prose rather than a line, but not a pasted transcript. */
 const MAX_CONCLUSION_NOTE = 2000;
 
 export function validateConclusion(
@@ -60,9 +34,6 @@ export function validateConclusion(
         CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
     };
   }
-  // Required, and refused rather than defaulted: a block with nothing named is a
-  // park with no exit — nothing to watch, and nothing for the desk that lifts it
-  // to read. The id is in the answer `raise` gave the agent a moment ago.
   const obstacleId = typeof args.obstacle === 'string' ? args.obstacle.trim() : '';
   if (verdict === BLOCKED_STATUS && obstacleId === '') {
     return {
@@ -90,20 +61,6 @@ export function validateConclusion(
   return { ok: true, verdict: verdict as IssueConclusionVerdict, note, obstacleId: null };
 }
 
-/**
- * The preamble prepended to a re-dispatched issue's prompt, carrying what the
- * last agent said was left.
- *
- * **Appended to the rendered prompt, never filled into it.** Prompt templates are
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so an override that omitted a new `{outstanding}` token would
- * silently drop the previous agent's words — on exactly the deployments that
- * customised most. Appending has no fallback to get wrong.
- *
- * Attributed and quoted, for the same reason a rejected proposal's note is: an
- * agent will act on this, and must not read another agent's report as the
- * harness's own instruction.
- */
 export function outstandingWorkNote(note: string, at: string): string {
   return (
     `---\n\nA previous agent worked this issue and reported on ${at} that it is **not finished**. ` +

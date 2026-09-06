@@ -9,32 +9,9 @@ import {
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * Account for one return to a pull request: why it was red, or why a reviewer
- * asked for changes, and what settled it.
- *
- * **The kind decides the schema, and the kind comes from the origin.** A CI agent
- * is offered the CI causes and a review agent the review ones, because a taxonomy
- * with fourteen entries in front of a choice that has eight is a taxonomy where
- * everything lands on `other`. Building the schema from the caller's own origin —
- * rather than taking a `kind` argument and validating it — is what makes that
- * narrowing structural rather than a hope about how the description reads.
- *
- * **Every option carries its blurb into the schema**, in the words the panel uses.
- * The `pr-ci-fix` and `pr-review-comment` templates are operator-overridable, so a
- * deployment on an override written before this existed dispatches an agent that
- * hears about this tool from nowhere else. A tool description always arrives —
- * `retro_submit`'s reason for putting its discriminator here exactly.
- *
- * An agent whose origin is neither is refused by name and pointed at the tool it
- * actually wants; nothing about the refusal is a fault, and nothing is held on a
- * remedy that never arrives.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
-  // The origin is read once, here, so a caller that may not file one is offered a
-  // schema that says so rather than a menu it will be refused for using. `ci` is
-  // the fallback shape for the refused caller: the handler rejects it before the
-  // schema is ever consulted, and an empty enum is not a thing every client draws.
   const scope = remedyOrigin(task.originRef);
   const kind = scope.ok ? scope.kind : 'ci';
   const causes = CAUSES_BY_KIND[kind];

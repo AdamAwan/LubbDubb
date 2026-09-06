@@ -2,12 +2,8 @@ import type { FeatureSummary, IssueState, TrackerItem } from '../types.js';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
-/**
- * Everything past the original `CREATE`: the mirror carries the harness's reading
- * (`tracking`) and the fields a work surface groups and filters by. `feature_colors`
- * is a fresh table but still declares an empty entry — new once does not keep a
- * table exempt from `ColumnMigrations`.
- */
+// → docs/spec/14-persistence.md
+
 export const TICKET_COLUMNS: ColumnMigrations = {
   tracker_items: {
     tracking: "TEXT NOT NULL DEFAULT 'live'",
@@ -18,55 +14,30 @@ export const TICKET_COLUMNS: ColumnMigrations = {
     parent_known: 'INTEGER NOT NULL DEFAULT 0',
     last_read_at: 'TEXT',
   },
-  // Mark that the one-time re-read of the history has happened; null on an existing database tells the sweep to ask from the anchor once. See TrackerSweepMark.restatedAt.
   tracker_sweep: { restated_at: 'TEXT' },
   feature_colors: {},
   feature_summaries: {},
 };
 
-/** How many hues the feature ladder has — fixed rather than one per feature, since a random colour can vanish against the panel. Repeats past twelve. */
 const FEATURE_SLOTS = 12;
 
-/**
- * What the world knows about an item that the tracker's history read does not: its
- * provider-native state, type, and feature. Passed in to the sweep rather than
- * fetched by it, since the snapshot has already paid for all three.
- */
 export interface LiveTicketFacts {
   number: number;
   labels: string[];
   workItemState: string | null;
   issueType: string | null;
-  /** The feature this hangs off; `null` is an orphan, `undefined` is a link that could not be read — collapsing the two would claim certainty we lack. */
   parent?: { number: number; title: string } | null;
 }
 
-/** Where the sweep has got to, and how far back it was ever allowed to look. */
 export interface TrackerSweepMark {
-  /** One month before the first sweep, stamped once and never moved — a rolling window would silently drop the far end of history every night. */
   anchorAt: string;
-  /** The newest `changedAt` the mirror has actually taken in, or null before the first sweep lands. The next changed-since read asks from here. */
   sweptTo: string | null;
-  /** When the mirror last re-read its whole history to fill in native states, or null if it never has. Stamped by the first sweep that lands, so a fresh database is restated by construction and an upgraded one pays for the re-read once. */
   restatedAt: string | null;
 }
 
-/**
- * The ticket mirror: every item the tracker's assignment filter has returned since
- * the harness first swept. A record, and the only kind of table that never deletes —
- * an item the tracker stops returning keeps its last-seen row; nothing in
- * `src/dispatcher/` reads it. The list read hands back the whole table with no
- * `WHERE`/`LIMIT`, since filtering, ordering and paging are a pure function over
- * these rows elsewhere (`src/tickets/ticketList.ts`).
- */
 export class TicketStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * The sweep's mark, minting the frozen anchor on first call. `backfillMs` is only
-   * ever read on that first call (`INSERT OR IGNORE`), so a later change to the
-   * window does not move an existing deployment's floor.
-   */
   ensureTrackerSweep(backfillMs: number): TrackerSweepMark {
     const ts = this.ctx.now();
     const anchor = new Date(new Date(ts).getTime() - backfillMs).toISOString();
@@ -76,7 +47,6 @@ export class TicketStore {
     return this.readTrackerSweep() ?? { anchorAt: anchor, sweptTo: null, restatedAt: null };
   }
 
-  /** The mark as it stands, or null on a database that has never swept. */
   readTrackerSweep(): TrackerSweepMark | null {
     const row = this.ctx.db.prepare(`SELECT anchor_at, swept_to, restated_at FROM tracker_sweep WHERE id = 1`).get() as
       | { anchor_at: string; swept_to: string | null; restated_at: string | null }
@@ -84,12 +54,6 @@ export class TicketStore {
     return row ? { anchorAt: row.anchor_at, sweptTo: row.swept_to, restatedAt: row.restated_at } : null;
   }
 
-  /**
-   * Write what a sweep saw, and move the high-water mark — one transaction, so a
-   * failure part-way leaves the mark behind the rows, never ahead (ahead loses data
-   * forever). The mark is the newest `changedAt` written, or `askedFrom` when nothing
-   * came back — never the clock.
-   */
   recordSweep(askedFrom: string, items: readonly TrackerItem[], live: readonly LiveTicketFacts[] = []): void {
     const ts = this.ctx.now();
     const upsert = this.ctx.db.prepare(
@@ -106,7 +70,6 @@ export class TicketStore {
          changed_at=excluded.changed_at,
          updated_at=excluded.updated_at`,
     );
-    // parent_known is written from the fact itself, not from whether parent_number is null: an orphan and an unreadable link are both a null id.
     const enrich = this.ctx.db.prepare(
       `UPDATE tracker_items SET
          tracking='live',
@@ -121,7 +84,6 @@ export class TicketStore {
        WHERE number=@number`,
     );
     const mark = this.ctx.db.prepare(
-      // MAX, not assignment: a batch is not ordered, and one stale row would walk the mark backwards.
       `UPDATE tracker_sweep SET swept_to = MAX(COALESCE(swept_to, ''), ?), restated_at = COALESCE(restated_at, ?), updated_at = ? WHERE id = 1`,
     );
     this.ctx.db.transaction(() => {
@@ -154,7 +116,6 @@ export class TicketStore {
         });
       }
 
-      // Freezing is by absence from the live set, skipped entirely when that set is empty — a provider down on boot hands back nothing, and freezing off that would retire the whole board silently.
       if (live.length > 0) {
         const stmt = this.ctx.db.prepare(
           `UPDATE tracker_items SET tracking='frozen', updated_at=?
@@ -167,7 +128,6 @@ export class TicketStore {
     })();
   }
 
-  /** The colour slot each of these features draws in, assigning one to any never seen. Least-used-first, ties on the lowest slot, deterministic. Assigned once, never moved. */
   ensureFeatureColors(numbers: readonly number[]): Map<number, number> {
     const rows = this.ctx.db.prepare(`SELECT number, slot FROM feature_colors`).all() as {
       number: number;
@@ -181,7 +141,6 @@ export class TicketStore {
     const insert = this.ctx.db.prepare(
       `INSERT OR IGNORE INTO feature_colors (number, slot, assigned_at) VALUES (?, ?, ?)`,
     );
-    // Ascending, so two deployments that met the same features in the same order colour them the same way.
     for (const number of [...new Set(numbers)].sort((a, b) => a - b)) {
       if (assigned.has(number)) continue;
       let pick = 0;
@@ -200,13 +159,6 @@ export class TicketStore {
     return assigned;
   }
 
-  /**
-   * The goals closed and last touched since `since` — the spend trend's cohort. The
-   * mirror is the closure source, not `world_events` (which never fires
-   * `issue_closed`, since providers snapshot the open set only). `changed_at` is
-   * last-modified, not a close date, so an item edited afterwards drifts to a later
-   * week — a knowing trade, since the tracker gives no close date to mirror.
-   */
   listTicketsClosedSince(since: string): TicketClosure[] {
     const rows = this.ctx.db
       .prepare(
@@ -216,13 +168,11 @@ export class TicketStore {
     return rows.map((r) => ({ number: r.number, closedAt: r.changed_at }));
   }
 
-  /** Every mirrored item, newest tracker id first — already arrival order, since a tracker id is auto-incremental. No date parsing or timezone. */
   listTrackerItems(): MirroredTicket[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM tracker_items ORDER BY number DESC`).all() as TrackerItemRow[];
     return rows.map(rowToTicket);
   }
 
-  /** The mirror's rows for these numbers only, read for the retained runs' `stale` marking. A number the mirror does not hold is simply absent. */
   readTrackerItems(numbers: readonly number[]): MirroredTicket[] {
     if (numbers.length === 0) return [];
     const rows = this.ctx.db
@@ -231,12 +181,6 @@ export class TicketStore {
     return rows.map(rowToTicket);
   }
 
-  /**
-   * Fold a label change the provider has just confirmed onto the mirrored rows —
-   * `WorldStore.patchWorldLabels`'s half of the same click. Nothing else writes this
-   * column between sweeps, so without it the toggle reads as broken. A number the
-   * mirror does not hold is skipped; an empty label is a no-op.
-   */
   patchTicketLabels(patch: TicketLabelPatch): void {
     if (patch.label === '' || patch.numbers.length === 0) return;
     const read = this.ctx.db.prepare(`SELECT labels FROM tracker_items WHERE number = ?`);
@@ -254,23 +198,12 @@ export class TicketStore {
     })();
   }
 
-  /**
-   * Fold a work-item state the provider has just confirmed onto the mirrored row —
-   * `WorldStore.patchWorldState`'s half of the same drop. Without it the card returns
-   * to the column it was dragged out of. A number the mirror does not hold is
-   * skipped by the `WHERE`.
-   */
   patchTicketState(patch: { number: number; state: string }): void {
     this.ctx.db
       .prepare(`UPDATE tracker_items SET work_item_state = ?, updated_at = ? WHERE number = ?`)
       .run(patch.state, this.ctx.now(), patch.number);
   }
 
-  /**
-   * Write (or revise) a Feature's summary. Upsert on the container, so a re-write
-   * revises one row rather than stacking accounts of the same Feature. `created_at`
-   * survives an overwrite.
-   */
   recordFeatureSummary(input: {
     originRef: string;
     standing: string;
@@ -305,37 +238,28 @@ export class TicketStore {
     return row ? rowToFeatureSummary(row) : null;
   }
 
-  /** Every summary on file. The board quotes them; the rule reads only their keys. */
   listFeatureSummaries(): FeatureSummary[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM feature_summaries`).all() as FeatureSummaryRow[];
     return rows.map(rowToFeatureSummary);
   }
 }
 
-/** A label change to fold onto the mirror: which items carry it now, on or off. One label per call, issues only — the mirror never holds pull requests. */
 export interface TicketLabelPatch {
   numbers: readonly number[];
   label: string;
   present: boolean;
 }
 
-/** A goal the mirror holds as closed, and the instant it was last changed. */
 export interface TicketClosure {
   number: number;
-  /** `tracker_items.changed_at` — last-modified, read as a close date. See {@link TicketStore.listTicketsClosedSince}. */
   closedAt: string;
 }
 
-/** One mirrored item: the tracker's own fields, plus what the harness makes of it. */
 export interface MirroredTicket extends TrackerItem {
-  /** The sweep that first wrote this row; frozen. On the backfill, every row shares it. */
   firstSeenAt: string;
-  /** `frozen` is an item that has left the tracker's open set; it keeps its last-seen fields and is no longer enriched, hence "live" and "kept" as two counts. */
   tracking: 'live' | 'frozen';
   issueType: string | null;
-  /** The feature it hangs off. `undefined` means the link was never resolved (no hierarchy, or a failed read); `null` means the tracker says there is no parent. */
   parent?: { number: number; title: string } | null;
-  /** The last sweep that saw this item in the live set. Null on a row only ever seen frozen. */
   lastReadAt: string | null;
 }
 
@@ -368,7 +292,6 @@ function rowToTicket(r: TrackerItemRow): MirroredTicket {
     createdAt: r.added_at,
     changedAt: r.changed_at,
     firstSeenAt: r.first_seen_at,
-    // A row written before this column existed reads null; `live` is correct since it was in the open set when last swept.
     tracking: r.tracking === 'frozen' ? 'frozen' : 'live',
     workItemState: r.work_item_state,
     issueType: r.issue_type,

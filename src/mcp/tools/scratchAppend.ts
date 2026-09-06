@@ -2,6 +2,8 @@ import { normalisePadDecision, normalisePadNote } from '../../scratch/pad.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const scratchAppend: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Leave a note on the shared scratchpad for the issue — or the pull request — you are working. Every ' +
@@ -56,8 +58,6 @@ export const scratchAppend: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = normalisePadNote(args.note, args.topic);
     if (!parsed.ok) return toolError(`Note rejected: ${parsed.error}`);
-    // Refused by field name rather than stored as a note: a fork the log lost in
-    // silence is the one thing the witness log exists not to do.
     const fork = normalisePadDecision(args.decision);
     if (!fork.ok) return toolError(`Decision rejected: ${fork.error}`);
     const result = deps.agents.appendScratch(agent.id, parsed.note, parsed.topic, fork.decision);

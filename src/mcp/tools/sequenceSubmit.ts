@@ -2,6 +2,8 @@ import { featureSequenceSubmitOrigin, validateSequenceSubmission } from '../../s
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const sequenceSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Record the order the stories under this Feature should be worked in — which of them cannot start until ' +
@@ -52,15 +54,8 @@ export const sequenceSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     required: ['order', 'reason'],
   },
   handler: (args) => {
-    // The Feature is on the origin, never in an argument — `validation_report`'s
-    // identity rule. Accepting one here and comparing it back would add a way to be
-    // wrong about something that was never in doubt.
     const target = featureSequenceSubmitOrigin(task.originRef);
     if (!target.ok) return toolError(target.error);
-    // The stories the order may rank, read off the same snapshot `world_read`
-    // serves this agent — so what it was shown and what it is held to are one
-    // reading. An order naming a story that is not under the Feature would store an
-    // edge nothing could ever satisfy, which is a story that never starts.
     const children = (deps.store.getWorldBaseline()?.issues ?? [])
       .filter((issue) => issue.parent?.number === target.featureNumber && issue.state === 'open')
       .map((issue) => issue.number);

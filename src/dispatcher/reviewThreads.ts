@@ -1,21 +1,15 @@
 import type { PrComment } from '../types.js';
 
-/** The dispatch origin for a PR's review feedback — **one per PR**, not per thread: a review is written as a unit, origin and branch stay 1:1, and the whole review costs one attempt cap. */
+// → docs/spec/05-dispatcher.md
+
 export function prCommentsOrigin(prNumber: number): string {
   return `pr:${prNumber}:comments`;
 }
 
-/** The ref of a single review thread — not a dispatch origin, but what notify de-dup keys on. Deliberately the same string {@link replyProposalRef} names a drafted reply with. */
 export function prCommentOrigin(prNumber: number, commentId: string): string {
   return `pr:${prNumber}:comment:${commentId}`;
 }
 
-/**
- * The notify de-dup key for one thread — {@link prCommentOrigin} while it is just its root, and the
- * root **plus its newest message** once somebody has replied. The key must move when the
- * conversation does, or a follow-up is a signal delivered to nobody. Not folded into
- * `prCommentOrigin`: that string is a *ref* and must stay the same across the thread's life.
- */
 export function prCommentSignalRef(prNumber: number, thread: PrComment): string {
   const origin = prCommentOrigin(prNumber, thread.id);
   const replies = thread.replies ?? [];
@@ -23,7 +17,6 @@ export function prCommentSignalRef(prNumber: number, thread: PrComment): string 
   return newest === undefined ? origin : `${origin}@${newest.id}`;
 }
 
-/** The unresolved threads, rendered for the end of the `pr-review-comment` prompt. **Appended, never interpolated**, so an operator override without the token doesn't drop it. The thread id is named so the agent can reply to the right thread. */
 export function reviewThreadsNote(threads: PrComment[]): string {
   if (threads.length === 0) return '';
   const heading =
@@ -34,7 +27,6 @@ export function reviewThreadsNote(threads: PrComment[]): string {
   return `${heading}\n\n${bodies.join('\n\n')}${lastWordNote(threads)}`;
 }
 
-/** One thread as the agent must read it: root then every reply, oldest first, each named by author. A reply the harness itself sent is marked as such, or an agent re-reads it as a fresh instruction. */
 function threadTranscript(thread: PrComment): string {
   const head = `${thread.author} (thread ${thread.id}):\n${quote(thread.body)}`;
   const replies = thread.replies ?? [];
@@ -45,7 +37,6 @@ function threadTranscript(thread: PrComment): string {
   return `${head}\n${rendered.join('\n')}`;
 }
 
-/** The line that says what the transcript above is *for*, appended only when there is a conversation to read. */
 function lastWordNote(threads: PrComment[]): string {
   if (!threads.some((t) => (t.replies?.length ?? 0) > 0)) return '';
   return (
@@ -58,11 +49,6 @@ function lastWordNote(threads: PrComment[]): string {
   );
 }
 
-/**
- * The closing check appended after {@link reviewThreadsNote}: read the threads again before
- * finishing. The prompt's list is a reading taken at dispatch, and branch-notify delivers no
- * signal for an *edit* to a thread already in it. **Appended, never interpolated.**
- */
 export function reviewRecheckNote(prNumber: number): string {
   return (
     '\n\nBefore you finish, read that list again — it was taken when you were dispatched, and a review moves ' +
@@ -79,11 +65,9 @@ export function reviewRecheckNote(prNumber: number): string {
   );
 }
 
-/** The line a *running* agent on the branch is sent when a thread it has not been told about appears. One per thread, collapsed into a single note by the caller. */
 export function reviewThreadNote(prNumber: number, thread: PrComment): string {
   const replies = thread.replies ?? [];
   const head = `Review comment from ${thread.author} on PR #${prNumber} (thread ${thread.id}): "${thread.body}"`;
-  // Often the *only* delivery a follow-up gets; naming the root alone drops the reply's content.
   if (replies.length === 0) return head;
   const rendered = replies
     .map((r) => `${r.author}${r.ours ? ' (the fleet, earlier)' : ''}: "${r.body}"`)
@@ -91,7 +75,6 @@ export function reviewThreadNote(prNumber: number, thread: PrComment): string {
   return `${head} — then ${rendered}. The last of those is the live ask.`;
 }
 
-/** Indent a comment body so its own line breaks can't be read as the next thread. */
 function quote(body: string): string {
   return body
     .split('\n')
@@ -99,11 +82,6 @@ function quote(body: string): string {
     .join('\n');
 }
 
-/**
- * Which pull request's review this caller may reply to, refusing every other origin by name. The
- * PR comes out of the origin rather than an argument, so an agent cannot answer a review it was not
- * dispatched for. Two origins: `pr:<n>:comments` and `pr:<n>:review`, still fenced against `pr:<n>:ci`.
- */
 export function replyOrigin(
   originRef: string | null,
 ): { ok: true; prNumber: number; originRef: string } | { ok: false; error: string } {
@@ -120,7 +98,6 @@ export function replyOrigin(
   };
 }
 
-/** The appendix that names {@link replyToReview} and tells the agent **not** to post to the thread itself, which would post as whoever is logged in, unsigned and unrecorded. **Appended, never interpolated**, unconditionally. */
 export function replyToolNote(): string {
   return (
     '\n\nWhen you have a reply for a thread — a defence, an answer, or a note about what you changed — ' +

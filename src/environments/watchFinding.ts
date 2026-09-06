@@ -2,26 +2,15 @@ import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchReading, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 
-/**
- * What a finding does, as arithmetic: the bench row a regressed watch files, and the
- * sentence the close-out carries. One row per window, never one per reading; `unknown` is
- * not a finding; nothing here is a `WorldEvent`.
- * → `docs/spec/29-post-deploy-watch.md#what-a-finding-does`
- */
+// → docs/spec/24-environments.md
 
-/** What a pass decided, as data — so the decisions are testable without a store. */
 type WatchFindingStep =
   | { kind: 'file'; originRef: string; title: string; detail: string }
   | { kind: 'settle'; taskId: string; status: 'done'; resolution: string }
   | { kind: 'reopen'; taskId: string; detail: string };
 
-/** One window's reading, reduced to the one word a surface with room for one draws. */
 type WatchWindowVerdict = WatchCheckVerdict | 'unread';
 
-/**
- * What a whole window says, folded in the same direction as the goal page's strip.
- * One-directional: nothing that is not a clean reading is ever folded into an all-clear.
- */
 function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): WatchWindowVerdict {
   if (readings.length === 0) return 'unread';
   if (readings.includes('regressed')) return 'regressed';
@@ -30,14 +19,9 @@ function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): Wa
   return 'clean';
 }
 
-/**
- * One window with its checks' newest readings resolved — what both halves of this file work
- * from.
- */
 interface WatchWindowReading {
   window: WatchWindow;
   verdict: WatchWindowVerdict;
-  /** The regressed checks, in document order, each with what it said in words. */
   regressed: { title: string; said: string }[];
 }
 
@@ -50,9 +34,7 @@ interface WatchWindowReading {
  */
 export function watchWindowReadings(input: {
   windows: readonly WatchWindow[];
-  /** Every live check, `Store.listGoalWatches()`. */
   checks: readonly GoalWatch[];
-  /** Every reading, oldest first — `Store.listWatchReadings()`. */
   readings: readonly WatchReading[];
 }): WatchWindowReading[] {
   const newest = new Map<string, WatchReading>();
@@ -62,8 +44,6 @@ export function watchWindowReadings(input: {
     const read = checks.map((c) => newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null);
     return {
       window,
-      // A window whose goal declares no live check reads *unread*, not clean:
-      // one with nothing left to ask has answered nothing.
       verdict: watchWindowVerdict(read.map((r) => r?.verdict ?? null)),
       regressed: checks.flatMap((check, i) => {
         const reading = read[i];
@@ -74,14 +54,8 @@ export function watchWindowReadings(input: {
   });
 }
 
-/**
- * The bench rows a regressed watch owes, and the standing ones a later reading has
- * answered. A retraction here must wear {@link DESK_SETTLED} — without the marker the
- * dedup refreshes an operator's settled row in place and the finding comes back invisible.
- */
 export function watchFindings(input: {
   readings: readonly WatchWindowReading[];
-  /** The `watch` tasks already on these goals, settled ones included. */
   existing: readonly HumanTask[];
 }): WatchFindingStep[] {
   const byKey = new Map(input.existing.map((t) => [`${t.originRef ?? ''} ${t.title}`, t]));
@@ -90,8 +64,6 @@ export function watchFindings(input: {
     const title = findingTitle(window.environment);
     const existing = byKey.get(`${window.goalRef} ${title}`);
     if (verdict !== 'regressed') {
-      // Not a finding — a window nobody could read has said nothing about the
-      // work. A standing row whose reading has since come back clean is retracted.
       if (existing?.status === 'open' && verdict === 'clean')
         steps.push({
           kind: 'settle',
@@ -102,9 +74,6 @@ export function watchFindings(input: {
       continue;
     }
     const detail = findingDetail(window, regressed);
-    // An operator's own verdict stands forever; one the harness retracted is owed
-    // again. Reopened rather than re-filed: the dedup ignores status and would
-    // refresh a settled row's detail and leave it settled.
     if (existing && existing.status !== 'open') {
       if (deskSettled(existing)) steps.push({ kind: 'reopen', taskId: existing.id, detail });
       continue;
@@ -114,19 +83,10 @@ export function watchFindings(input: {
   return steps;
 }
 
-/**
- * Stable per window and naming the environment: the dedup key is `(agent_id, origin_ref,
- * title, kind)`, so stability is how one window keeps one row across many readings, and one
- * title for three environments would fold three asks into one.
- */
 function findingTitle(environment: string): string {
   return `The post-deploy watch on ${environment} is reporting a regression`;
 }
 
-/**
- * What the row says: which checks read outside what they declared, in the reading's own
- * words, and the two ways out. Numbers are quoted, never summarised — no model reads them.
- */
 function findingDetail(window: WatchWindow, regressed: { title: string; said: string }[]): string {
   const still = window.settledAt === null ? 'The window is still open' : 'The window has settled';
   return [
@@ -158,11 +118,9 @@ export function watchCloseOutLine(goalRef: string, readings: readonly WatchWindo
   );
 }
 
-/** One window's verdict in the operator's own words, never in a clean one's vocabulary. */
 const WATCH_SAID: Record<WatchWindowVerdict, string> = {
   clean: 'read every declared check clean',
   regressed: 'is answering outside what was declared',
-  // Never *clean so far*: a check nobody could read is not a check that passed.
   unknown: 'could not be read',
   unread: 'has not been read yet',
 };

@@ -1,5 +1,4 @@
-// The `issue:<n>` origin vocabulary, classified in one place.
-// → docs/spec/05-dispatcher.md (classification), docs/spec/18-observability.md (spend phases)
+// → docs/spec/05-dispatcher.md
 
 type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
 
@@ -25,7 +24,6 @@ export function issueOriginRole(issueNumber: number, originRef: string | null): 
   return 'unrecognised';
 }
 
-// → docs/spec/27-obstacles.md#ownership
 export function obstacleOriginId(originRef: string | null): string | null {
   const match = /^obstacle:([A-Za-z0-9_-]+)$/.exec(originRef ?? '');
   return match ? match[1]! : null;

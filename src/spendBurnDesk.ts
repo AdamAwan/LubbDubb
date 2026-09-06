@@ -2,21 +2,13 @@ import type { Store } from './store/store.js';
 import type { Agent, TaskSummary } from './types.js';
 import { burnPass, type BurnPolicy } from './spendBurn.js';
 
-/** The pulse's own reads, handed in — see {@link SpendBurnDesk.run}. */
+// → docs/spec/18-observability.md
+
 interface BurnWorld {
   agents: readonly Agent[];
   tasks: readonly TaskSummary[];
 }
 
-/**
- * Where a run that is spending far past its kind of work is surfaced, once a
- * pulse.
- *
- * The desk half of {@link burnPass}, and thin for {@link DeliveryCloseOutDesk}'s
- * reason: every decision is in the pure function and this is the store round trip
- * around it. It writes `human_tasks` rows and nothing else — it dispatches
- * nobody, kills nobody, and the dispatcher does not read what it writes.
- */
 export class SpendBurnDesk {
   constructor(
     private readonly store: Store,

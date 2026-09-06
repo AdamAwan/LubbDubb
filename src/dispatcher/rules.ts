@@ -1,103 +1,22 @@
-/**
- * The dispatcher's rule book, as data — and, for the entries that are rules, as
- * the **order they are evaluated in**.
- *
- * Each branch of the dispatcher tags the actions it emits with one of these ids,
- * the id is persisted on the decision row, and the registry ships to the cockpit
- * (in `/api/state`) so a Decision log row can expand into "which rule fired, and
- * why it exists".
- *
- * There is deliberately **no rule number**. There used to be, hand-written on
- * each entry ('1', '2b', '3c', …), and it rotted exactly as a second copy of an
- * ordering always does: by the time it was removed, `issue-appraisal` was numbered
- * after `issue-plan` and evaluated before it, two entries both claimed '3b', and
- * three claimed positions that were not positions at all ('1–2b', '1–4'). Order
- * now lives in one place — the declaration order of {@link DISPATCH_PIPELINE} —
- * and nothing renders a position. An entry is named, and the name is the id.
- *
- * ## Two vocabularies, one registry
- *
- * `kind` splits them, and the split is the point:
- *
- * - **`rule`** — proposes work from the world. These are the pipeline, in order.
- * - **`admission`** — decides what becomes of something a rule proposed. Not
- *   ordered per-feature and not a stage: every proposal passes the same chain
- *   (see `admission.ts`). Two of them emit actions of their own, and those land
- *   in `decisions.admission` — a **column of its own**, so a throttled pickup
- *   records `issue-pickup` as its proposer *and* `cooldown-escalate` as its
- *   outcome rather than losing the first to the second. {@link AdmissionId} is
- *   what keeps the two columns' vocabularies apart at compile time.
- * - **`terminal`** — a property of the finished cycle rather than of any rule.
- *
- * The registry keeps all three because `decisions.rule` is **persisted**: a row
- * written months ago naming `cooldown-escalate` — before the split gave the
- * outcome its own column — must still resolve to something the Decision log can
- * render. So the registry is the display vocabulary (a superset) and the pipeline
- * is the ordered subset that actually runs.
- */
+// → docs/spec/05-dispatcher.md
 
-/**
- * Whether an entry runs as a pipeline stage, transforms what a stage proposed, or
- * describes the cycle itself. See the module doc.
- */
 type RuleKind = 'rule' | 'admission' | 'terminal';
 
-/**
- * The operator switches a rule's `enabled` predicate may ask about, flattened to
- * booleans so this module stays dependency-free — it is imported by the server,
- * the cockpit's snapshot builder and the action parser, and a policy type dragged
- * in here would drag the plan/appraisal/retro modules along with it.
- *
- * `workItemStates` is the one that isn't a feature flag: the work-item rules are
- * on when the operator has configured **both** a review state and pickup states,
- * which is a property of `IssuePickupPolicy` rather than a switch of its own.
- * `workItemInProgress` is the same shape over the other two keys — an in-progress
- * state and pickup states — and is separate because the two states are separate
- * knobs: setting one must not switch on the rule that reads the other.
- */
 export interface RuleConditions {
   workItemStates: boolean;
   workItemInProgress: boolean;
-  /**
-   * The fleet review, `config.review.enabled` — the one condition here that is a
-   * plain operator switch rather than a property of the provider. It is switched
-   * in this way rather than with an `if` inside the concern pass for the reason
-   * the work-item rules are: the registry is where a rule is in or out of the
-   * pipeline, and a rule held back inside its own body is one the Decision log
-   * still advertises as live.
-   */
   review: boolean;
-  /**
-   * `issueSequencing` at `full` — the only level that runs an agent. At `links` the
-   * gate is on and the sequencer is not: the edges are ones a person drew, so there
-   * is nothing to propose and nothing to accept.
-   */
   sequencer: boolean;
 }
 
 export interface DispatchRule {
   name: string;
-  /** Why the rule exists — the standing rationale, independent of any one firing. */
   description: string;
   kind: RuleKind;
-  /**
-   * When this rule is live. Omitted => unconditional. Only meaningful for
-   * `kind: 'rule'`; this is the single place an optional rule is switched in and
-   * out of the pipeline, replacing the `if (this.<feature>.enabled)` blocks that
-   * used to wrap four of the rule bodies.
-   */
   enabled?: (c: RuleConditions) => boolean;
 }
 
-/**
- * Every rule, in evaluation order, followed by the entries that are not stages.
- *
- * **Adding a rule is adding an entry here, in the position it should run.** The
- * dispatcher walks this array; there is nothing else to keep in step, and nothing
- * downstream renders an index, so inserting one mid-list renumbers nothing.
- */
 const RULES = [
-  // ---- Operator work: jumps every world-driven rule. ------------------------
   {
     id: 'manual-job',
     kind: 'rule',
@@ -113,7 +32,6 @@ const RULES = [
       "The operator pressed Validate locally on a goal, so the harness brought that goal's code up in the machine's one dev environment and this puts one agent on it: write a test plan for the change, wait for the environment, drive the running application through the plan, and report passed, failed or blocked. It is dispatched while the environment is still coming up, because a bring-up is minutes inside one turn and writing the plan is exactly what that wait is worth spending on. The checkout is read-only and pinned to the commit the environment stands at, and the launch carries a browser as a second MCP server — the fleet has none otherwise, and a headless agent cannot open a page without one. It ranks directly behind operator-launched jobs, for their reason: somebody is at a screen waiting, with an environment already running on their machine. A row is one press of a button rather than a standing signal, so there is no cooldown budget and no escalation — it is re-proposed each pulse until it dispatches, the operator calls it off, or the environment goes away, and the last two settle the row.",
   },
 
-  // ---- The fleet's own way, before the work it is in the way of. -----------
   {
     id: 'obstacle-repair',
     kind: 'rule',
@@ -122,8 +40,6 @@ const RULES = [
       'An obstacle two or more agents reported — and which is blocking the fleet *now*, meaning a base branch is red or three independent voices have hit it — gets one code agent to fix it. It is the second of the two ways an obstacle gets an owner (the other is a ticket, filed by the ownership desk and ranked like any other goal), and it is a capability rather than a convenience: a store that can queue work can put agents on the fleet. So it is one rule, here where it can be seen, taking the headroom cut like every other candidate — and bounded on top of that to **one repair in flight at a time**, because the cut bounds how many agents run and not how many of them this rule may be. It sits above every world-driven rule because what it dispatches for is, by construction, in front of the work those rules are about to propose: an agent sent to a red base is an agent sent to the reason the next four dispatches would have failed. Nothing an agent calls reaches it — no agent stakes a claim on an obstacle, because a lock an agent takes is a lock an agent forgets. A repair that spends its attempt cap escalates rather than looping: an obstacle three agents could not clear is what an operator wants to be told about.',
   },
 
-  // ---- PR concerns. Four of these collect concerns for one branch; the ------
-  // order they appear in here *is* the urgency order the fold reads.
   {
     id: 'pr-review-triage',
     kind: 'rule',
@@ -190,7 +106,6 @@ const RULES = [
       'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
   },
 
-  // ---- Tracker state. Opt-in: pickup states, plus the state each rule moves to.
   {
     id: 'work-item-in-progress',
     kind: 'rule',
@@ -216,7 +131,6 @@ const RULES = [
     enabled: (c) => c.workItemStates,
   },
 
-  // ---- The funnel in front of an issue, in the order it narrows. ------------
   {
     id: 'issue-appraisal',
     kind: 'rule',
@@ -253,7 +167,6 @@ const RULES = [
       'An issue the harness has parked as delivered, with nothing in flight under it and no retrospective yet, gets one desk agent to write the run up: what shipped, and what came out of the process of shipping it. It is handed the shared scratchpad the working agents left and the record the harness kept — which rules fired, what was escalated and how it was answered, replans, shortfalls, what it cost — and it writes one document per goal, read in the cockpit on the station that used to say nothing. It schedules nothing, gates nothing and posts nothing to the tracker, so a retrospective that never gets written costs only the report: an agent that crashes or spends its attempt cap leaves the goal exactly as delivered, with no escalation, because there is nothing a human can do about a write-up that did not happen that they cannot do by reading the issue.',
   },
 
-  // ---- Plans: approve, notice a wedge, then schedule. -----------------------
   {
     id: 'plan-approval',
     kind: 'rule',
@@ -290,7 +203,6 @@ const RULES = [
       "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. Parts rank after planners and ahead of one-shot pickups, bottom of a stack first, and `maxConcurrentPartsPerIssue` caps how many parts of one plan may have agents at once: a human stacks safely because they hold the decomposition in their head, and N concurrent agents do not. A part held by that cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
   },
 
-  // ---- The unplanned path, last: everything above narrows it. ---------------
   {
     id: 'issue-pickup',
     kind: 'rule',
@@ -299,7 +211,6 @@ const RULES = [
       'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. It fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
   },
 
-  // ---- Last, deliberately: neither may take a slot from work. ---------------
   {
     id: 'validate-check',
     kind: 'rule',
@@ -316,7 +227,6 @@ const RULES = [
       'A validation check that somebody ran against the delivered goal and recorded as **failed** gets one code agent, in a read-only checkout of the default branch, to reproduce it and say what is behind it. It is the one negative verdict in the harness that used to schedule nothing: an assessment that says the goal was not reached reaches `issue-shortfall`, a red build reaches `pr-ci-failing`, and a person who watched the delivered thing not work wrote a note that waited for them to come back to it. It is deliberately **not** wired through a shortfall, which would clear the goal’s delivery row and so un-park the goal, settle its close-out obligation and decline the very bench row the reading was taken for — a shortfall says the work is not finished, and a failed check says the finished work does not do what somebody checked it for. The agent fixes nothing and files nothing on its own authority: it diagnoses, and the doors it already has carry the three honest endings — `escalate` for a real defect somebody has to decide about, `validation_amend` for a check describing something that no longer exists, `raise` for what the next agent should not have to rediscover. It cannot record a reading at all, structurally: `validation_report` resolves its check from the dispatch origin and this rule’s origin is not one it parses, so an agent that decides the check actually passes is refused by the tool rather than by a sentence in a prompt. Each reading gets its own attempt budget — a check that failed, was fixed and failed again is looked at again — and a spent cap escalates nothing, because the flag and the note are already in front of the operator.',
   },
 
-  // ---- Below even validation: the one rule that produces no work. -----------
   {
     id: 'feature-summary',
     kind: 'rule',
@@ -334,11 +244,6 @@ const RULES = [
     enabled: (c) => c.sequencer,
   },
 
-  // ---- Not stages. Position here is display order only. ---------------------
-  // These two transform what a rule proposed rather than proposing anything, so
-  // they take no place in the pipeline — but they emit actions of their own, and
-  // `decisions.rule` has been persisting their ids for as long as they have
-  // existed, so they stay in the registry for the Decision log to resolve.
   {
     id: 'branch-notify',
     kind: 'admission',
@@ -362,53 +267,21 @@ const RULES = [
   },
 ] as const satisfies readonly ({ id: string } & DispatchRule)[];
 
-/** Every id that can appear in `decisions.rule`, rules and non-rules alike. */
 export type DispatchRuleId = (typeof RULES)[number]['id'];
 
-/**
- * The ids that can appear in `decisions.admission` — what *became* of a proposal,
- * as against the `rule` column's what *proposed* it.
- *
- * Derived from the registry rather than written out, so a rule id structurally
- * cannot land in the admission column: that conflation is the whole defect the
- * split exists to end, and a hand-written union would let it back in the moment
- * somebody added an id. `idle` is excluded with the rules — it is a property of
- * the finished cycle, not a verdict on anything proposed.
- */
 export type AdmissionId = Extract<(typeof RULES)[number], { kind: 'admission' }>['id'];
 
-/**
- * The ids that are pipeline stages, in evaluation order. The dispatcher walks
- * this; `StageRuleId` is what makes "every rule has an implementation" a
- * compile-time question rather than a test.
- */
 export type StageRuleId = Extract<(typeof RULES)[number], { kind: 'rule' }>['id'];
 
-/** The rules, in evaluation order. */
 export const DISPATCH_PIPELINE: readonly { id: StageRuleId; enabled?: (c: RuleConditions) => boolean }[] = RULES.filter(
   (r): r is Extract<(typeof RULES)[number], { kind: 'rule' }> => r.kind === 'rule',
 );
 
-/** The whole vocabulary, keyed by id — what `/api/state` ships to the cockpit. */
 export const DISPATCH_RULES = Object.fromEntries(RULES.map(({ id, ...rule }) => [id, rule])) as Record<
   DispatchRuleId,
   DispatchRule
 >;
 
-/**
- * Cross-PR rank of a concern class: review comment beats CI beats base-update.
- *
- * Read off the pipeline rather than restated anywhere. It used to be three
- * hardcoded numbers that happened to agree with the order the concerns are pushed
- * in and with the registry's own numbering — three copies of one fact, which is
- * the arrangement the rule numbers rotted under. It lives here, beside the
- * pipeline it reads, because it has two callers: rule `pr-ci-failing`, which
- * ranks the concerns it dispatches for, and `prAttention`'s lens, which has to
- * name the same one (#562 — the lens encoded the pre-reorder order in statement
- * order and led with CI while the agent went out for the review). A rule with no
- * pipeline position sorts last rather than throwing: this only orders concerns,
- * and a wrong order is a worse failure than a late one.
- */
 export function concernUrgency(rule: DispatchRuleId): number {
   const at = DISPATCH_PIPELINE.findIndex((r) => r.id === rule);
   return at === -1 ? Number.MAX_SAFE_INTEGER : at;

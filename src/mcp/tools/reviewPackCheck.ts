@@ -1,17 +1,8 @@
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The checker's one write: its verdicts on the pack it was dispatched to check.
- * → `docs/spec/31-review-packs.md#the-check`
- *
- * **The call is the check.** The desk merges what is said here onto the stored
- * document through `applyCheck`, which can reach only the checker's fields —
- * verdicts, evidence, findings, labels, cues, the order, the `false` mark on a
- * step — so the rule that the checker may not edit the pack is the shape of this
- * tool rather than a sentence in its prompt. Keyed to what the prompt handed out:
- * the idea ids and the claim numbers, never a document back.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const reviewPackCheck: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Record your verdicts on the review pack you were dispatched to check. This is the check — the harness ' +

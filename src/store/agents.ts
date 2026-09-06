@@ -13,6 +13,8 @@ import type {
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
+// → docs/spec/14-persistence.md
+
 export const AGENT_COLUMNS: ColumnMigrations = {
   agents: {
     session_id: 'TEXT',
@@ -29,11 +31,6 @@ export const AGENT_COLUMNS: ColumnMigrations = {
   },
 };
 
-/**
- * The `agents` row and the three tables that hang off it: `usage_events` (the cost delta
- * behind each rolling window), `agent_flags` (artifacts an agent surfaced) and `agent_files`
- * (every path the file-events hook saw it write). Together because they are written together.
- */
 export class AgentStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -85,19 +82,10 @@ export class AgentStore {
       .run({ id, status: next.status, pid: next.pid, waitingReason: next.waitingReason, endedAt: next.endedAt });
   }
 
-  /**
-   * Stamp (or clear) the moment an agent was seen working *after* it parked. Deliberately not
-   * part of {@link updateAgent}'s status patch: it records an observation, not a status.
-   */
   setAgentResumed(id: string, at: string | null): void {
     this.ctx.db.prepare(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
   }
 
-  /**
-   * Count one automatic re-attach after a mid-run crash, returning the new total. Incremented
-   * over a `COALESCE`, so a row from before the column counts from zero rather than staying
-   * null. **Never cleared** — the budget is the agent's whole life, not its current launch.
-   */
   countAgentResumeAttempt(id: string): number {
     const row = this.ctx.db
       .prepare(`UPDATE agents SET resume_attempts=COALESCE(resume_attempts,0)+1 WHERE id=? RETURNING resume_attempts`)
@@ -116,10 +104,6 @@ export class AgentStore {
     return rows.map(rowToAgent);
   }
 
-  /**
-   * Fold a session's *cumulative* usage report onto the agent row and append the delta since
-   * the previous report to `usage_events`, so rolling account windows are a plain SUM later.
-   */
   recordAgentUsage(id: string, usage: AgentUsage): void {
     const existing = this.getAgent(id);
     if (!existing) throw new Error(`Agent ${id} not found`);
@@ -138,8 +122,6 @@ export class AgentStore {
                 num_turns=@numTurns WHERE id=@id`,
       )
       .run({ id, ...next });
-    // Clamp: a restarted CLI resets the cumulative total, which must never reach the window
-    // sum as a negative delta.
     const delta = Math.max(0, (usage.costUsd ?? 0) - (existing.costUsd ?? 0));
     if (delta > 0) {
       this.ctx.db
@@ -148,13 +130,6 @@ export class AgentStore {
     }
   }
 
-  /**
-   * Record an agent's own one-line account of what it is doing (`note_progress`).
-   *
-   * **Latest value, not a stream**: two columns on the agent row, overwritten each call, so a
-   * fleet view can ask "where is this one up to now" cheaply. The per-call audit trail is the
-   * transcript. The note deliberately survives the agent as the run's one-line summary.
-   */
   recordAgentNote(id: string, note: string): string {
     const at = this.ctx.now();
     const changed = this.ctx.db.prepare(`UPDATE agents SET note=?, noted_at=? WHERE id=?`).run(note, at, id).changes;
@@ -162,7 +137,6 @@ export class AgentStore {
     return at;
   }
 
-  /** Total agent cost recorded since `sinceIso` — the rolling-window aggregate. */
   sumUsageCostSince(sinceIso: string): number {
     const row = this.ctx.db
       .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
@@ -170,10 +144,6 @@ export class AgentStore {
     return row.total;
   }
 
-  /**
-   * The same rows {@link sumUsageCostSince} totals, oldest first and unaggregated — for the
-   * reader that needs *when* rather than *how much*. Bucketing is the caller's.
-   */
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
     const rows = this.ctx.db
       .prepare(`SELECT agent_id, cost_usd, at FROM usage_events WHERE at >= ? ORDER BY at`)
@@ -181,10 +151,6 @@ export class AgentStore {
     return rows.map((r) => ({ agentId: r.agent_id, costUsd: r.cost_usd, at: r.at }));
   }
 
-  /**
-   * The agents dispatched on the named tasks, newest first. Takes task ids rather than a
-   * goal, so the whole table is never read; an empty list reads nothing at all.
-   */
   listAgentsForTasks(taskIds: readonly string[]): Agent[] {
     if (taskIds.length === 0) return [];
     const rows = this.ctx.db
@@ -204,14 +170,6 @@ export class AgentStore {
     return this.listAgentsByStatus('starting', 'running', 'waiting').length;
   }
 
-  // -- Flags (surfaced artifacts) ------------------------------------------
-
-  /**
-   * Record (or refresh) an artifact an agent flagged. Deduped by (agent, ref):
-   * an agent re-flagging the same doc as it evolves updates the kind/label and
-   * bumps the timestamp on the existing row rather than inserting a duplicate.
-   * Returns the persisted flag (its stable id preserved across refreshes).
-   */
   recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {
     const existing = this.ctx.db
       .prepare(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`)
@@ -246,7 +204,6 @@ export class AgentStore {
     return rows.map(rowToFlag);
   }
 
-  /** Every flag across all agents, newest first — the snapshot feed. */
   listAllFlags(): AgentFlag[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM agent_flags ORDER BY created_at DESC, rowid DESC`)
@@ -254,13 +211,6 @@ export class AgentStore {
     return rows.map(rowToFlag);
   }
 
-  // -- Files (captured by the file-events hook) ----------------------------
-
-  /**
-   * Record (or refresh) a file an agent wrote. Deduped by (agent, path): the same
-   * path written again updates the tool/promotion and bumps the timestamp rather
-   * than piling up rows. Returns the persisted file (stable id across refreshes).
-   */
   recordFile(agentId: string, input: AgentFileInput): AgentFile {
     const existing = this.ctx.db
       .prepare(`SELECT id FROM agent_files WHERE agent_id=? AND path=?`)
@@ -290,14 +240,6 @@ export class AgentStore {
     return rows.map(rowToFile);
   }
 
-  /**
-   * Every path the agents on one goal have written, one row per path and newest first.
-   *
-   * Scoped by the goal's subtree as an `issue:<n>` prefix rather than a second taxonomy, so
-   * it cannot drift from the pad's membership (the ref carries no `LIKE` wildcards). **Code
-   * tasks only**: a desk agent works in a scratch directory, so its files are not in the
-   * repository at all. One row per path, dated by the last write, ties broken on `rowid`.
-   */
   listGoalFiles(goalRef: string): GoalFile[] {
     const rows = this.ctx.db
       .prepare(
@@ -316,18 +258,6 @@ export class AgentStore {
     return rows.map((r) => ({ path: r.path, originRef: r.origin_ref, createdAt: r.created_at }));
   }
 
-  /**
-   * Which **other** goals have already been in `paths`, and what each one's retrospective
-   * said — {@link listGoalFiles}'s join with a goal on the far side of it.
-   *
-   * "Closed" is spelled *has a retrospective*: an issue's open/closed state is a world fact
-   * this briefing refuses, and the retrospective is both the gate and the payload, so they
-   * are one join. There is no separate liveness test — the retrospective gate is the one
-   * reading of "finished". Code tasks only, and the subtree is a prefix built from
-   * `retrospectives.origin_ref` (always the `issue:<n>` root), so `issue:1` never reaches
-   * `issue:12`. **No ranking**: recency of last write, ties on the ref; a shared-path count
-   * would be a relevance score, and the reader states it rather than sorting on it.
-   */
   listGoalNeighbours(goalRef: string, paths: string[]): GoalNeighbour[] {
     if (paths.length === 0) return [];
     const holes = paths.map(() => '?').join(',');
@@ -345,13 +275,10 @@ export class AgentStore {
           ORDER BY created_at DESC, r.origin_ref ASC, f.path ASC`,
       )
       .all(goalRef, ...paths) as { goal_ref: string; summary: string; path: string; created_at: string }[];
-    // Folded here rather than with `group_concat`: a path may contain any separator.
     const byGoal = new Map<string, GoalNeighbour>();
     for (const row of rows) {
       const seen = byGoal.get(row.goal_ref);
       if (seen) seen.sharedPaths.push(row.path);
-      // Rows arrive newest-first, so the first for a goal dates it and insertion order is
-      // the order the caller renders.
       else
         byGoal.set(row.goal_ref, {
           goalRef: row.goal_ref,
@@ -363,12 +290,6 @@ export class AgentStore {
     return [...byGoal.values()];
   }
 
-  /**
-   * Every recorded file written by the named agents, newest first — the overlap detector's
-   * feed. Takes agent ids because `agent_files` grows for the life of a deployment and
-   * nothing deletes from it; the caller names the window (`OVERLAP_AGENT_WINDOW` in
-   * `src/fileOverlap.ts`), and an empty list reads nothing at all.
-   */
   listFilesForAgents(agentIds: readonly string[]): AgentFile[] {
     if (agentIds.length === 0) return [];
     const rows = this.ctx.db
@@ -433,15 +354,12 @@ function rowToAgent(r: AgentRow): Agent {
     costUsd: r.cost_usd,
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
-    // Null on rows from before the columns existed: those runs measured nothing about their
-    // cache share. Not defaulted to 0, which would report a 0% hit rate for unmeasured history.
     cacheReadTokens: r.cache_read_tokens,
     cacheCreationTokens: r.cache_creation_tokens,
     numTurns: r.num_turns,
     note: r.note,
     notedAt: r.noted_at,
     resumedAt: r.resumed_at,
-    // Null on every row written before the column existed — read as "never resumed".
     resumeAttempts: r.resume_attempts ?? 0,
   };
 }

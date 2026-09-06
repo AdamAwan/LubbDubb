@@ -1,48 +1,13 @@
 import type { PoolDigestDocument, PoolDigestRow, PoolClockKind, PoolFleetReading, PoolPublication } from '../types.js';
 import type { StoreContext } from './context.js';
 
-/**
- * The cross-fleet pool's local side: the mirror of everybody else's documents, and
- * the record of what this fleet has published.
- *
- * **The mirror is derived and wholly replaceable.** It is rewritten on every poll,
- * so dropping it and re-polling gives an identical one — which is what keeps the
- * pool from becoming authoritative locally. Every fleet's own SQLite stays the
- * truth about that fleet, and everything published is re-derivable from it. That
- * is not a cost this design pays: the mirror is the table the human-facing page
- * reads anyway.
- *
- * **Nothing here is read into a prompt, and no tool answers from it.** An agent
- * asking `knowledge_ask` is answered from `knowledge_facts` exactly as it was
- * before the pool existed. Wiring the mirror to that tool would put another team's
- * unvouched prose in front of an agent, and it is deliberately not built.
- *
- * The two tables it owns are `pool_digest_rows` and `pool_fleets`
- * (the mirror) plus `pool_publications` (this fleet's own side). All four are new
- * tables, so none needs a `ColumnMigrations` entry — and being new **once** is
- * what stops them staying exempt: the first column added to any of them later
- * belongs in one. → `docs/spec/14-persistence.md#migrations`
- *
- * → `docs/spec/28-cross-fleet-pool.md`
- */
-/**
- * What the claims arm left in the database when it went.
- *
- * `pool_claims` mirrored other fleets' vouched claims, rewritten whole on every
- * poll. The arm is gone — nothing creates the table, nothing reads it — so on a
- * database made since it is simply absent, and on one from before it holds a poll's
- * worth of another team's prose that nothing will ever look at again. Dropped
- * because the rows were derived and are worthless, never because the table is
- * merely unused. → `docs/spec/28-cross-fleet-pool.md#the-mirrors-own-tables`
- */
+// → docs/spec/14-persistence.md
+
 export const POOL_RETIRED_TABLES: readonly string[] = ['pool_claims'];
 
 export class PoolStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  // -- The mirror ------------------------------------------------------------
-
-  /** Replace one fleet's digest rows, whole — {@link replaceFleetClaims}' reason exactly. */
   replaceFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
     const write = this.ctx.db.transaction(() => {
       this.ctx.db.prepare(`DELETE FROM pool_digest_rows WHERE fleet_id=?`).run(fleetId);
@@ -59,7 +24,6 @@ export class PoolStore {
     write();
   }
 
-  /** Note what this poll made of one fleet — including that it is ahead of this build. */
   recordFleetReading(reading: Omit<PoolFleetReading, 'seenAt'>): void {
     this.ctx.db
       .prepare(
@@ -74,7 +38,6 @@ export class PoolStore {
       .run({ ...reading, ahead: reading.ahead ? 1 : 0, seenAt: this.ctx.now() });
   }
 
-  /** Every fleet the mirror has heard from, its own first if it is in there. */
   listPoolFleets(): PoolFleetReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM pool_fleets ORDER BY fleet_id ASC`).all() as FleetRow[];
     return rows.map((r) => ({
@@ -86,15 +49,6 @@ export class PoolStore {
     }));
   }
 
-  /**
-   * Every digest row in the mirror for one project, or for every project.
-   *
-   * The project is an **argument** rather than a filter the caller may forget,
-   * because `byCheck` is only comparable inside one project: three fleets on one
-   * problem produce `test (windows)`, `ci/test-windows` and `Build & Test
-   * (win-latest)`, and summed across projects that is three rows of one instead of
-   * one row of three, rendering perfectly.
-   */
   listDigestRows(project: string | null): PoolDigestMirrorRow[] {
     const rows = (
       project === null
@@ -113,9 +67,6 @@ export class PoolStore {
     }));
   }
 
-  // -- This fleet's own side -------------------------------------------------
-
-  /** What this fleet last published of one kind, or the untouched row for a kind it never has. */
   getPublication(kind: PoolClockKind): PoolPublication {
     const row = this.ctx.db.prepare(`SELECT * FROM pool_publications WHERE kind=?`).get(kind) as
       | PublicationRow
@@ -130,14 +81,6 @@ export class PoolStore {
     };
   }
 
-  /**
-   * Mark a document as needing a publish.
-   *
-   * **A flag and not a queue**: because the put is a whole replace, five rulings in
-   * a minute collapse to one publish and a failed push simply stays dirty. There is
-   * no pending-change list to lose, reorder or replay — and a flag lost to a crash
-   * self-heals on the slow clock, which re-derives and compares the hash.
-   */
   markPoolDirty(kind: PoolClockKind): void {
     this.ctx.db
       .prepare(
@@ -148,7 +91,6 @@ export class PoolStore {
       .run(kind);
   }
 
-  /** Record a successful publish: the hash it went out with, and when. Clears the hint. */
   recordPoolPublish(kind: PoolClockKind, contentHash: string): void {
     const at = this.ctx.now();
     this.ctx.db
@@ -164,13 +106,6 @@ export class PoolStore {
       .run(kind, contentHash, at, at);
   }
 
-  /**
-   * Record that the backstop re-derived this document and found it unchanged.
-   *
-   * The stamp is what makes an hourly cadence cheap: an idle fleet computes a hash
-   * and writes nothing. Without it every idle fleet would commit an identical file
-   * twenty-four times a day and the pool's history would be almost entirely noise.
-   */
   recordPoolChecked(kind: PoolClockKind): void {
     this.ctx.db
       .prepare(
@@ -182,10 +117,8 @@ export class PoolStore {
   }
 }
 
-/** The sections a digest carries, in the order the mirror stores them. */
 type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage';
 
-/** One mirrored digest row, flattened across every fleet — what the aggregator sums. */
 export interface PoolDigestMirrorRow {
   fleetId: string;
   project: string;
@@ -224,20 +157,6 @@ interface PublicationRow {
   checked_at: string | null;
 }
 
-/**
- * The document's mirrored lists as `(section, rows)` pairs.
- *
- * One place rather than five `insert.run` blocks, so a section the mirror should
- * store is added here once rather than in five places one of which is forgotten.
- *
- * **`byFault` is deliberately absent, and this is the one omission worth stating.**
- * Every section above sums across fleets into the shared insights page; a fault is
- * this harness's own failure on this operator's machine, comparable to nothing on
- * anybody else's and answering no question a company page asks. It is published so
- * a person can read it in this fleet's own `digest.md` and it goes no further —
- * mirroring it would put it in front of every other fleet as a number to sum.
- * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
- */
 function digestSections(document: PoolDigestDocument): [PoolDigestSection, readonly PoolDigestRow[]][] {
   return [
     ['phase', document.byPhase],

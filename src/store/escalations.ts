@@ -2,15 +2,8 @@ import { nanoid } from 'nanoid';
 import type { Escalation, EscalationContext, EscalationSpan, Proposal } from '../types.js';
 import type { StoreContext } from './context.js';
 
-/**
- * The `escalations` and `proposals` tables: everything the harness puts to a human.
- *
- * One module because a proposal hangs off an escalation (`escalation_id`) — the
- * escalation is the inbox item and the routing mechanism, the proposal is the
- * typed verdict that lets the harness branch on the answer — and the 409 rule that
- * keeps them consistent (an escalation cannot be answered as free text while a
- * pending proposal hangs off it) is a statement about the join.
- */
+// → docs/spec/14-persistence.md
+
 export class EscalationStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -46,11 +39,6 @@ export class EscalationStore {
     return { ...existing, status: 'answered', response, answeredAt };
   }
 
-  /**
-   * Flip an escalation to `dismissed`, persisting the caller-built context (which
-   * carries the dismissal reason + timestamp). The store stays a dumb data layer:
-   * the decision of *what* to dismiss and *why* lives in the EscalationInbox.
-   */
   dismissEscalation(id: string, context: Record<string, unknown>): Escalation {
     const existing = this.getEscalation(id);
     if (!existing) throw new Error(`Escalation ${id} not found`);
@@ -65,15 +53,6 @@ export class EscalationStore {
     return row ? rowToEscalation(row) : null;
   }
 
-  /**
-   * The question each of these escalations asked, by id.
-   *
-   * For the pets panel, which has an `origin_ref` and nothing to call it. A
-   * by-id read over the refs the vivarium holds, never a walk: `listEscalations`
-   * is unbounded and the pet that needs naming is usually the oldest one.
-   * An id with no row is simply absent from the map — a pruned source is not an
-   * error here. → `docs/spec/22-pets.md#the-sources`
-   */
   escalationLabels(ids: string[]): Map<string, string> {
     if (ids.length === 0) return new Map();
     const holes = ids.map(() => '?').join(',');
@@ -84,15 +63,6 @@ export class EscalationStore {
     return new Map(rows.map((r) => [r.id, r.prompt]));
   }
 
-  /**
-   * Every escalation, newest first.
-   *
-   * Tied on `rowid` like `listProposals` and the decision and
-   * world-event reads: several escalations raised in one millisecond are ordinary
-   * — one pulse answering a plan and a shortfall — and without the tiebreak which
-   * of them a capped reader keeps is arbitrary run to run, against the dossier's
-   * stated aim that the same database renders the same page twice.
-   */
   listEscalations(): Escalation[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM escalations ORDER BY created_at DESC, rowid DESC`)
@@ -100,17 +70,6 @@ export class EscalationStore {
     return rows.map(rowToEscalation);
   }
 
-  /**
-   * The escalations still waiting on a person, newest first.
-   *
-   * A `WHERE` rather than a filter over {@link listEscalations}, because this is
-   * what `/api/state` ships and that read is all-time: a deployment with 373
-   * escalations sent every settled one — with its `recentOutput` transcript tail
-   * — on every cockpit refresh, to be filtered back to the handful that are open
-   * by every surface that reads them. The settled ones are still readable one at
-   * a time through {@link getEscalation}, and whole through
-   * {@link listEscalations}, which the retro dossier and the pet scan need.
-   */
   listOpenEscalations(): Escalation[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM escalations WHERE status='open' ORDER BY created_at DESC`)
@@ -118,14 +77,6 @@ export class EscalationStore {
     return rows.map(rowToEscalation);
   }
 
-  /**
-   * When each escalation stood, and what it stood about — {@link EscalationSpan}.
-   *
-   * A projection rather than {@link listEscalations} for that read's own stated
-   * reason: it is all-time and ships every settled item's transcript tail, and
-   * this one is taken on every cockpit refresh. `json_extract` keeps the two
-   * context keys the runway can attribute a hold by without hydrating the body.
-   */
   listEscalationSpans(): EscalationSpan[] {
     const rows = this.ctx.db
       .prepare(
@@ -143,8 +94,6 @@ export class EscalationStore {
       open: r.status === 'open',
     }));
   }
-
-  // -- Proposals (human decisions) -----------------------------------------
 
   createProposal(input: Omit<Proposal, 'id' | 'status' | 'note' | 'decidedBy' | 'decidedAt' | 'createdAt'>): Proposal {
     const proposal: Proposal = {
@@ -168,12 +117,6 @@ export class EscalationStore {
     return proposal;
   }
 
-  /**
-   * Settle a pending proposal, once. The `status='pending'` predicate makes this a
-   * compare-and-set rather than a read-then-write: a second accept changes no rows
-   * and gets `null` back, so "accepting twice posts once" is a property of the
-   * write, not of whoever remembered to check first.
-   */
   decideProposal(
     id: string,
     status: Extract<Proposal['status'], 'accepted' | 'rejected'>,
@@ -194,11 +137,6 @@ export class EscalationStore {
     return row ? rowToProposal(row) : null;
   }
 
-  /**
-   * Every proposal, newest first — deliberately unbounded. The dispatcher's gate
-   * reads the *standing* verdict for a ref, so a rejection that aged out of a
-   * window would quietly re-propose an act the operator already refused.
-   */
   listProposals(): Proposal[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM proposals ORDER BY created_at DESC, rowid DESC`)

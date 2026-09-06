@@ -1,17 +1,5 @@
-/**
- * The plan document, as JSON Schema — the one copy, shared by both channels.
- *
- * `plan_submit` (the fleet's, `tools/planSubmit.ts`) and `plan_amend` (the
- * operator's, `desktopTools.ts`) accept the *same document*: they differ in who
- * may write one and what settles afterwards, never in what a plan is. A second
- * copy of this literal is the drift the repo's conventions exist to prevent —
- * a field described one way to a planner and another way to a desktop session,
- * with `validatePlanDocument` behind both and nothing red.
- *
- * Kept out of `tools/` because it belongs to neither channel; `desktopTools.ts`
- * deliberately never reaches `tools.ts`, and this is what lets the two share a
- * schema without sharing a tool set.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {

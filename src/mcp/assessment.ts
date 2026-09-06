@@ -1,26 +1,8 @@
-/**
- * The `assess_issue` tool's pure layer: what an assessment is allowed to be, and
- * whose origin may cast one.
- *
- * Modelled on `conclusion.ts` because the two are siblings, and split from it
- * because they are not the same statement. `conclude_work` is the agent that did
- * the work saying whether it finished; this is a later agent, dispatched by rule
- * 3e with a checkout of the delivered state and the work graph in front of it,
- * saying whether the *issue* is finished. The verdict is required and kept whole
- * for `validateConclusion`'s reason: a verdict that parks a ticket has to be
- * reviewable, and it is written once per issue rather than once a minute.
- *
- * It is kept in **two** fields, not one, for the claim intake's reason: an
- * assessor handed a single string writes its sections into it as inline capitals,
- * and what reaches the operator is a paragraph with no seams. `summary` is the
- * headline and `detail` is the account, and the newline refusal below is what
- * makes that a rule rather than a request.
- */
-
 import { SHORTFALL_CAUSES, SHORTFALL_CAUSE_HELP } from '../delivery/shortfall.js';
 import type { ShortfallCause } from '../types.js';
 
-/** What an assessor may conclude. */
+// → docs/spec/11-mcp-tools.md
+
 export const ASSESSMENT_VERDICTS = ['delivered', 'more_work'] as const;
 
 export type AssessmentVerdict = (typeof ASSESSMENT_VERDICTS)[number];
@@ -35,28 +17,13 @@ export const ASSESSMENT_VERDICT_HELP: Record<AssessmentVerdict, string> = {
     'wrong goal to a human',
 };
 
-/**
- * One line, and short enough to be one: this is the sentence an operator reads on
- * a card before deciding anything, so it is capped where a headline stops being a
- * headline. Matches a raised claim's own one-line shape, deliberately — an operator who
- * has learned the shape on one surface should not have to learn a second.
- */
 const MAX_ASSESSMENT_SUMMARY = 160;
 
-/** Long enough to be prose, short of a pasted transcript. The old summary cap, moved. */
 const MAX_ASSESSMENT_DETAIL = 2000;
 
-/**
- * A validated assessment. `cause`/`part` are only ever set for `more_work` — a
- * delivered issue has nothing that fell short — and `cause` may still be null
- * there, because whether it is *required* depends on the plan, which is a store
- * question this pure layer deliberately cannot ask. That check lives in
- * `AgentManager.recordAssessment`, one call away, where the plan is in hand.
- */
 interface ValidAssessment {
   verdict: AssessmentVerdict;
   summary: string;
-  /** The evidence, as markdown. Null when the assessor had nothing to add. */
   detail: string | null;
   cause: ShortfallCause | null;
   part: string | null;
@@ -83,9 +50,6 @@ export function validateAssessment(
         'goes in `detail`. An operator decides what happens to the ticket from these two alone.',
     };
   }
-  // The load-bearing refusal. An assessor writing sections into one string is
-  // where the operator's wall of text comes from, and it reaches them hours
-  // later; here it is a tool error the same agent fixes inside its own turn.
   if (/[\r\n]/.test(summary)) {
     return {
       ok: false,
@@ -111,10 +75,6 @@ export function validateAssessment(
   }
   const detail = detailText || null;
 
-  // A `delivered` verdict has nothing that fell short, so the two shortfall
-  // fields are *refused* rather than ignored — an assessor that filled them in
-  // has contradicted itself, and silently dropping them would leave it believing
-  // it had routed something.
   if (verdict === 'delivered') {
     if (args.cause !== undefined || args.part !== undefined) {
       return {
@@ -163,22 +123,6 @@ export function validateAssessment(
   };
 }
 
-/**
- * Resolve a task's origin into the issue it may assess — or say why it may not.
- *
- * **Only an assessor's own origin qualifies**, which is `conclusionOrigin`'s
- * discipline pointed the other way: there, a part agent is refused because the
- * plan speaks for the issue; here, every agent that is *doing* work is refused
- * because judging your own delivery is not an assessment. The agent that wrote
- * the code has `conclude_work`, which records what it believes it did; rule `issue-assess`
- * exists precisely to have someone else look.
- *
- * Refusing beats silently narrowing, for the reason `conclusionOrigin` gives: an
- * agent handed `{ok: true}` would believe it had parked the issue — and each
- * refusal names the tool that *is* the caller's, so a refused agent's next call
- * is not refused too: a pickup has `conclude_work`, a planner `plan_submit`, a
- * part agent `conclude_part`.
- */
 export function assessmentOrigin(
   originRef: string | null,
 ): { ok: true; originRef: string; issueOrigin: string } | { ok: false; error: string } {
@@ -186,9 +130,6 @@ export function assessmentOrigin(
   const match = /^issue:(\d+):assess$/.exec(ref);
   if (match) return { ok: true, originRef: ref, issueOrigin: `issue:${match[1]}` };
 
-  // Three arms, not one: each names the tool that *is* this caller's, which a
-  // single "use conclude_work" refuses a planner and a part agent by name one
-  // call later. `conclusionOrigin` splits the same three the same way.
   const planner = /^issue:(\d+):plan$/.exec(ref);
   if (planner) {
     return {

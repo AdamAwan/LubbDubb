@@ -9,6 +9,8 @@ import {
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Record what you saw when you ran the validation check you were dispatched for — the one check a person ' +
@@ -41,10 +43,6 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);
     const origin = issueOrigin(target.issueNumber);
-    // "The world moved under a dispatch that is still running": an amendment
-    // withdrew the check between the agent being sent and it reporting. Said
-    // plainly rather than as a refusal, because it is neither the agent's fault
-    // nor something it can fix.
     const check = deps.store.getValidationCheck(origin, target.checkId);
     if (!check) {
       return toolError(
@@ -66,8 +64,6 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
       return ok({
         reported: 'handback',
         check: `${check.letter}. ${check.id}`,
-        // Stated rather than left to be inferred from the absence of a state: an
-        // agent told only "ok" would reasonably believe it had settled the check.
         state: next?.state ?? check.state,
         means:
           'no result was recorded and the check is back with the operator, with your reason on it. Its state is ' +
@@ -78,9 +74,6 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const next = deps.store.recordValidationResult(origin, check.id, {
       state: result,
       note,
-      // Attributed to the fleet, not to a person, and drawn everywhere the
-      // reading is: "an agent says this passed" and "I ran it and it passed" are
-      // different facts, and the second must never be assumed from the first.
       by: 'agent',
     });
     if (!next) {

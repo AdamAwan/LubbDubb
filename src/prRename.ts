@@ -4,25 +4,12 @@ import { prTitleFields, renderPrTitle } from './prTitle.js';
 import type { PrTitleInput } from './sink/actionSink.js';
 import type { Issue, PullRequest } from './types.js';
 
-/**
- * Which pull requests the harness may rename onto the convention.
- *
- * Whose a pull request is, is {@link isOurPr}'s question — the same one the merged-branch
- * reap asks, answered in one place.
- *
- * Renaming is mechanical bookkeeping, like `setWorkItemState` and
- * `upsertIssueComment`, so it is deliberately not auto-send gated. What keeps it
- * from being noise is that it writes only when the rendered title differs from the
- * live one — a PR already on convention is left alone, every pulse, for free.
- */
+// → docs/spec/07-pull-requests.md
 
 export interface PrRenameContext {
-  /** `github.filters.prAuthor` / `azureDevOps.filters.prAuthor` is configured. */
   prAuthorConfigured: boolean;
-  /** The `pr-title` template, already resolved through any operator override. */
   template: string;
   issues: Issue[];
-  /** Stack position per PR number, when the PR is a rung. Absent reads as a lone PR. */
   positions?: ReadonlyMap<number, { position: number; total: number }>;
 }
 
@@ -33,8 +20,6 @@ export function renamablePrs(prs: PullRequest[], ctx: PrRenameContext): PrTitleI
     if (!isOurPr(pr, ctx.prAuthorConfigured)) continue;
 
     const issue = issueForPr(pr, ctx.issues);
-    // The convention is keyed on an issue number, so a PR that resolves to no issue
-    // has no name to be given. Left exactly as it is rather than half-renamed.
     if (!issue) continue;
 
     const at = ctx.positions?.get(pr.number);
@@ -45,9 +30,6 @@ export function renamablePrs(prs: PullRequest[], ctx: PrRenameContext): PrTitleI
         title: issue.title,
         position: at?.position ?? 1,
         total: at?.total ?? 1,
-        // The type and scope are the agent's to declare and are not stored, so a
-        // rename cannot invent them: an existing title keeps whatever it had only
-        // in as much as the summary carries it.
         summary: summaryOf(pr.title),
       }),
     );
@@ -56,13 +38,6 @@ export function renamablePrs(prs: PullRequest[], ctx: PrRenameContext): PrTitleI
   return out;
 }
 
-/**
- * The human-readable part of an existing title, with any convention prefix this
- * function itself would have written stripped off.
- *
- * Without the strip a rename is not idempotent: re-rendering `#182 sync cursor`
- * would give `#182 #182 sync cursor`, and it would keep growing every pulse.
- */
 function summaryOf(title: string): string {
   return title
     .replace(/^#\d+\s*/, '')

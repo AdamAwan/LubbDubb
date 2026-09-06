@@ -1,57 +1,20 @@
-/**
- * The usage vocabulary: everything the harness measures about what a **person**
- * did, declared once and named from both sides of the wire.
- *
- * Two axes rather than a flat list — a subject and a verb, with the verbs shared
- * across subjects, so "how much of this is rejecting" is one `group by`. **A
- * subject is a thing, never a screen**: keying on the screen resets every number a
- * redesign touches.
- *
- * The event is a string-literal union, not a const object, because `web/src/` may
- * name only `src/wire.ts` and that module must contribute no runtime.
- * → `docs/spec/34-usage-metrics.md#the-event-registry`
- */
+// → docs/spec/34-usage-metrics.md
 
-/**
- * What a person did, shared across subjects on purpose — `plan.reject` and
- * `validation.reject` being the *same* verb is what keeps the rejection question
- * one `group by` rather than a join nobody writes.
- */
 export type UsageVerb =
-  /** The surface was reached. */
   | 'view'
-  /** A disclosure inside it was opened. */
   | 'expand'
-  /** The view was re-cut — a filter, an ordering, a switch of layout. */
   | 'filter'
-  /** A new one was made. */
   | 'create'
-  /** Its content was changed by a person. */
   | 'edit'
-  /** Approved, passed, authorised — the affirmative settle. */
   | 'accept'
-  /** Refused, failed, declined — the negative settle. */
   | 'reject'
-  /** Put off, still owed. */
   | 'defer'
-  /** Declared not needed, no longer owed. */
   | 'waive'
-  /** Dropped: not owed, and not done. */
   | 'abandon'
-  /** A running thing was halted by a person. */
   | 'stop'
-  /** A previous settle was taken back. */
   | 'undo'
-  /** Something left the harness towards a person or a tracker. */
   | 'send';
 
-/**
- * Which verbs each subject offers — `CAUSES_BY_KIND`' shape and its purpose.
- *
- * **An empty cell is a statement**: the product offers no such control on that
- * subject. A `ui` cell with no control behind it is a permanent silent zero, so a
- * cell is added on the day the control is.
- */
 export const VERBS_BY_SUBJECT = {
   plan: ['view', 'expand', 'edit', 'accept', 'reject', 'abandon'],
   goal: ['view', 'expand', 'edit', 'accept', 'abandon'],
@@ -77,42 +40,19 @@ export const VERBS_BY_SUBJECT = {
 
 export type UsageSubject = keyof typeof VERBS_BY_SUBJECT;
 
-/** Reading order for a panel and for the digest — declaration order, said once. */
 export const USAGE_SUBJECTS = Object.keys(VERBS_BY_SUBJECT) as UsageSubject[];
 
-/**
- * `subject.verb`, narrowed by the matrix. The whole vocabulary and nothing
- * outside it.
- */
 export type UsageEvent = {
   [S in UsageSubject]: `${S}.${(typeof VERBS_BY_SUBJECT)[S][number]}`;
 }[UsageSubject];
 
-/**
- * Where an event is seen.
- *
- * - **`ui`** — nothing durable records it, so the call site is the only witness.
- * - **`record`** — a table already holds it with a stamp, so the ledger sweeps the
- *   record and **the call site does not log it at all**.
- *
- * An event logged **both** ways would be counted twice, which is why
- * {@link UiUsageEvent} cannot express it.
- */
 export type UsageEventSource = 'ui' | 'record';
 
-/**
- * The split, per event. `record` is claimed **only where a table has actually been
- * checked** to hold the act with a stamp that survives the next write; several acts
- * that feel durable are not, and claiming one is a ledger row permanently zero with
- * nothing saying why.
- */
 const EVENT_SOURCE = {
   'plan.view': 'ui',
   'plan.expand': 'ui',
   'plan.edit': 'record',
   'plan.accept': 'record',
-  // The replan route flips the plan's status and settles what hung off it; no row
-  // records that a person sent it back, so the call site is the only witness.
   'plan.reject': 'ui',
   'plan.abandon': 'record',
   'goal.view': 'ui',
@@ -168,33 +108,22 @@ const EVENT_SOURCE = {
   'pool.view': 'ui',
   'pool.filter': 'ui',
   'config.view': 'ui',
-  // `lubbdubb.config.json` is rewritten in place; nothing records that it was.
   'config.edit': 'ui',
   'upgrade.view': 'ui',
   'upgrade.accept': 'record',
-  // Declining puts the intent back to idle, which is the state it was in before.
   'upgrade.reject': 'ui',
   'pet.view': 'ui',
   'pet.edit': 'record',
 } as const satisfies Record<UsageEvent, UsageEventSource>;
 
-/**
- * The `ui`-sourced subset, and the whole of what a call site may log. Passing a
- * `record` event is a compile error, so the double count is unreachable.
- */
 export type UiUsageEvent = {
   [E in UsageEvent]: (typeof EVENT_SOURCE)[E] extends 'ui' ? E : never;
 }[UsageEvent];
 
-/** Whether a table already holds this act, or the call site is the only witness. */
 export function usageEventSource(event: UsageEvent): UsageEventSource {
   return EVENT_SOURCE[event];
 }
 
-/**
- * What each event means, in the operator's words. A `Record` over the union, so an
- * event with no label does not compile.
- */
 export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = {
   'plan.view': { label: 'Opened a plan', blurb: 'The plan page was reached' },
   'plan.expand': { label: 'Read into a plan', blurb: 'A part, a caveat or the write-up was opened' },
@@ -263,16 +192,6 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'pet.edit': { label: 'Named a pet', blurb: 'A creature was renamed' },
 };
 
-/**
- * Where the cockpit was when something happened — a closed vocabulary, and the
- * second half of {@link UiUsageEvent}'s privacy boundary. It is a **place**, never
- * a URL, a title or a ref, so no identifier can be recorded here at all.
- *
- * The keys are `web/src/cockpit/place.ts`'s layout folded to one name per surface.
- * **It stays local to the fleet** — a redesign moves it, so a cross-fleet series
- * keyed on it would break at a release.
- * → `docs/spec/34-usage-metrics.md#surface-reach`
- */
 export const PLACE_KEYS = [
   'overview',
   'tickets',
@@ -304,18 +223,8 @@ export const PLACE_KEYS = [
 
 export type PlaceKey = (typeof PLACE_KEYS)[number];
 
-/**
- * How a place was arrived at — `linked` is a control inside the cockpit that
- * carried somebody there, `direct` is an address. The distinction is what tells
- * `never-linked` from `linked-never-visited`.
- */
 export type UsageArrival = 'linked' | 'direct';
 
-/**
- * What each subject is called, in the operator's words. A `Record` over the union,
- * so a subject added to {@link VERBS_BY_SUBJECT} without a label does not compile.
- * Names the **subject**, never the screen it is worked on.
- */
 export const SUBJECT_LABEL: Record<UsageSubject, string> = {
   plan: 'Plans',
   goal: 'Goals',
@@ -339,7 +248,6 @@ export const SUBJECT_LABEL: Record<UsageSubject, string> = {
   pet: 'The vivarium',
 };
 
-/** What each verb is called — the same discipline one axis over. */
 export const VERB_LABEL: Record<UsageVerb, string> = {
   view: 'Reached',
   expand: 'Opened something inside',

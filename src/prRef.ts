@@ -1,4 +1,5 @@
 // → docs/spec/07-pull-requests.md#naming-a-pull-request
+
 export type PrRefStyle = '#' | '!';
 
 export function prRefStyle(sourceControl: string): PrRefStyle {

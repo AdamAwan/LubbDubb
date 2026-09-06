@@ -1,7 +1,7 @@
 import type { Agent, IssueSpend, LocalRun, TaskSummary, WorkNode } from './types.js';
 import { issueOrigin } from './plans/planning.js';
 
-// → docs/spec/18-observability.md (what a ticket cost)
+// → docs/spec/18-observability.md
 
 interface SpendInput {
   agents: readonly Agent[];

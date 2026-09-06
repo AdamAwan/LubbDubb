@@ -7,17 +7,8 @@ import { toolError } from '../protocol.js';
 import type { PrRefStyle } from '../../prRef.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * How the agent is told to name *another pull request* in the body it writes.
- *
- * The one reference the harness writes itself is the issue's, and `#12` is right
- * for that on both providers. Everything else in the body is the agent's own
- * prose — and a stacked part naturally names the rung beneath it — so this is the
- * only place the distinction can be stated at the moment it is used. On Azure
- * DevOps `#12` is *work item* 12 and `!12` is pull request 12, and getting it
- * wrong is silent: the description renders and the link resolves, to something
- * else entirely. → `src/prRef.ts`
- */
+// → docs/spec/11-mcp-tools.md
+
 function prRefGuidance(style: PrRefStyle): string {
   return style === '!'
     ? 'If you name another pull request in it — the one your work stacks on, say — write it as `!12`, ' +
@@ -52,9 +43,6 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         type: 'string',
         description: 'Optional module the change lands in, e.g. "store". Omit it if the change is broad.',
       },
-      // Unlike the title, which `pr-title` renders, the body ships as written —
-      // the harness appends the reference and rewrites nothing. So this
-      // description is the only place a form is expressible, and it states one.
       body: {
         type: 'string',
         description:
@@ -78,9 +66,6 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
 
-    // Any origin in the issue subtree, not just a planner's: the part arm below is
-    // the one that needs the plan, and a part origin is exactly what `planOriginIssue`
-    // does not resolve.
     const issueNumber = originIssueNumber(task.originRef);
     const plan = issueNumber === null ? null : deps.store.getPlanByOrigin(issueOrigin(issueNumber));
     const target = resolveOpenPr(task.originRef, {
@@ -104,10 +89,6 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       }),
     );
 
-    // The reference is appended, never interpolated into the agent's body — and
-    // deliberately never a closing keyword. Whether a PR closes its issue is the
-    // agent's judgement (the prompts say so); a harness-written "closes" would
-    // shut a ticket whose remaining parts are still open.
     const reference =
       target.total > 1
         ? `Part ${target.position}/${target.total} of #${target.issueNumber}.`
@@ -122,25 +103,12 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         title,
         body,
       });
-      // Tagged as the harness's own the moment it exists. Pull requests are opt-in,
-      // so without this the fleet would stop acting on the very pull request it just
-      // opened until the seeding desk caught it a pulse later. Through the one shared
-      // write path, and after the create: a failure here is recorded and leaves the
-      // pull request for that desk, never failing the tool call that succeeded.
       const prNumber = result.ref ? Number(result.ref) : null;
       if (prNumber !== null && Number.isFinite(prNumber)) {
         await seedPrWatch(
           { prNumber, branch: target.branch },
           { sink: wiring.sink, store: deps.store, watchLabel: wiring.watchLabel, errors: deps.errors },
         );
-        // Linked to its work item in the same breath, for the same reason and through
-        // the same shape: on Azure the reference appended to the body above is prose
-        // and satisfies nothing, so a pull request opened without this is blocked by
-        // the linked-work-items policy from the moment it exists — and the agent that
-        // would be dispatched to clear it would be rediscovering `target.issueNumber`,
-        // which is right here. Recorded through the one shared write path, and after
-        // the create: a failure is recorded and leaves the pull request for the desk,
-        // never failing the tool call that succeeded.
         await linkPrWorkItem(
           { prNumber, workItemNumber: target.issueNumber },
           { sink: wiring.sink, store: deps.store, errors: deps.errors },

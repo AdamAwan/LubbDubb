@@ -1,6 +1,8 @@
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const localValidationPlan: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Record the test plan for the change you were sent to validate. Write it first, before the environment is ' +

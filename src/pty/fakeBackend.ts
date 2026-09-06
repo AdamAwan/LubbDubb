@@ -1,6 +1,7 @@
 import type { PtyBackend, PtyProcess, SpawnOptions } from './backend.js';
 
-/** A controllable fake process for tests: emit data, drive exit, observe writes. */
+// → docs/spec/10-agent-runtimes.md
+
 export class FakePtyProcess implements PtyProcess {
   readonly pid: number;
   writes: string[] = [];
@@ -23,10 +24,9 @@ export class FakePtyProcess implements PtyProcess {
   }
   kill(): void {
     this.killed = true;
-    this.emitExit(143); // 128 + SIGTERM
+    this.emitExit(143);
   }
 
-  // -- test drivers --
   emit(data: string): void {
     for (const cb of this.dataCbs) cb(data);
   }
@@ -45,7 +45,6 @@ export class FakePtyBackend implements PtyBackend {
     return proc;
   }
 
-  /** The most recently spawned process, for test assertions. */
   last(): FakePtyProcess {
     const entry = this.spawned[this.spawned.length - 1];
     if (!entry) throw new Error('nothing spawned yet');

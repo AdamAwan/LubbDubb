@@ -3,27 +3,15 @@ import type { HumanTask, HumanTaskInput, HumanTaskKind, HumanTaskStatus } from '
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
-/**
- * Additive columns for `human_tasks`. Every pre-existing row is an `ask`, hence
- * the default; null `dismissed_at` already means "not cleared off the bench".
- */
+// → docs/spec/14-persistence.md
+
 export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
   human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'`, dismissed_at: `TEXT` },
 };
 
-/**
- * The `human_tasks` table: work only a person can do. The dispatcher never reads this table; a
- * human task holds work off the fleet only by *being* a plan part (`part_id`).
- */
 export class HumanTaskStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * File a human task. `agentId`/`taskId`/`originRef` are the caller's own, or all null when an
-   * operator filed it from the cockpit. A repeat (same agent, origin, title, kind) refreshes the
-   * existing row; status and `dismissed_at` are never reset, so a repeat can't resurrect a declined
-   * or dismissed task.
-   */
   recordHumanTask(
     input: HumanTaskInput & {
       agentId: string | null;
@@ -35,8 +23,6 @@ export class HumanTaskStore {
   ): { task: HumanTask; created: boolean } {
     const ts = this.ctx.now();
     const kind: HumanTaskKind = input.kind ?? 'ask';
-    // `IS` so a null matches a null; `kind` is in the key so a matching sentence typed by an
-    // operator refreshes their own row, not the harness's.
     const existing = this.ctx.db
       .prepare(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=? AND kind=?`)
       .get(input.agentId, input.originRef, input.title, kind) as HumanTaskRow | undefined;
@@ -76,11 +62,6 @@ export class HumanTaskStore {
     return row ? rowToHumanTask(row) : null;
   }
 
-  /**
-   * The title of each of these asks, by id — the pets panel's label for a `human-task` origin. By
-   * id rather than off {@link listHumanTasks}, whose cap would leave the oldest pets unnamed. A
-   * missing id is absent from the map, never an error. → `docs/spec/22-pets.md#the-sources`
-   */
   humanTaskLabels(ids: string[]): Map<string, string> {
     if (ids.length === 0) return new Map();
     const holes = ids.map(() => '?').join(',');
@@ -91,7 +72,6 @@ export class HumanTaskStore {
     return new Map(rows.map((r) => [r.id, r.title]));
   }
 
-  /** Every human task, newest first — the snapshot feed, open ones and a settled tail alike. */
   listHumanTasks(limit = 100): HumanTask[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM human_tasks ORDER BY created_at DESC, rowid DESC LIMIT ?`)
@@ -99,12 +79,6 @@ export class HumanTaskStore {
     return rows.map(rowToHumanTask);
   }
 
-  /**
-   * Every obligation the bench has ever held, oldest first — the runway lens's view of what a
-   * person owes the fleet and what they used to. Deliberately unbounded: it feeds a count and a
-   * median, which a cap would understate. Settled rows are included.
-   * → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
-   */
   listAllHumanTasks(): HumanTask[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM human_tasks ORDER BY created_at ASC, rowid ASC`)
@@ -112,10 +86,6 @@ export class HumanTaskStore {
     return rows.map(rowToHumanTask);
   }
 
-  /**
-   * The human tasks backing plan parts — what the reconciler reads to decide whether a part a
-   * person owns is still waiting or refused. Every status, not only open: `declined` must be visible.
-   */
   listHumanTasksForParts(partIds: string[]): HumanTask[] {
     if (partIds.length === 0) return [];
     const holes = partIds.map(() => '?').join(',');
@@ -125,21 +95,11 @@ export class HumanTaskStore {
     return rows.map(rowToHumanTask);
   }
 
-  /**
-   * Every task of one kind — what the close-out sweep reads to find rows it filed on earlier
-   * pulses. Every status and unbounded in age: a settled row stops the sweep filing the same
-   * obligation twice; an open one whose delivery cleared since is what it has to retract.
-   */
   listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
     return rows.map(rowToHumanTask);
   }
 
-  /**
-   * Settle a human task: the person did it, or refused it. Compare-and-set on `status='open'` so a
-   * second click cannot overwrite the first verdict. Returns null when there was no open task,
-   * which the route turns into a 409.
-   */
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     const ts = this.ctx.now();
     const result = this.ctx.db
@@ -151,14 +111,6 @@ export class HumanTaskStore {
     return this.getHumanTask(id);
   }
 
-  /**
-   * Put a settled row back on the bench, under its own title, with fresh detail — an obligation
-   * owed **again**. The one caller is `RunwayDesk`, reopening a row it settled itself;
-   * {@link recordHumanTask} must not learn to do this, since its dedup ignores status on purpose.
-   * Only a settled row (compare-and-set); `dismissed_at` and `created_at` are both reset, the
-   * latter so the row doesn't fall off {@link listHumanTasks}' newest-first cap. Returns null when
-   * there was nothing to reopen.
-   */
   reopenHumanTask(id: string, detail: string): HumanTask | null {
     const ts = this.ctx.now();
     const result = this.ctx.db
@@ -171,11 +123,6 @@ export class HumanTaskStore {
     return this.getHumanTask(id);
   }
 
-  /**
-   * Clear a settled task off the bench. Compare-and-set on settled+undismissed, so an open
-   * obligation can never be hidden and a second click can't restamp the time; returns null
-   * otherwise (409). Updated, never deleted — a delete would have the close-out sweep re-file it.
-   */
   dismissHumanTask(id: string): HumanTask | null {
     const ts = this.ctx.now();
     const result = this.ctx.db

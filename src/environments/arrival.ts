@@ -3,18 +3,8 @@ import { optionalText, requiredBoolean } from '../server/validation.js';
 import type { EnvironmentGate, EnvironmentGateRelease, GoalArrival, GoalEnvironmentReach } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 
-/**
- * The operator's "this goal is not waiting on an environment", as a request body
- * — here rather than in the route that reads it, because what it encodes is the
- * rule and not the routing.
- *
- * The `.refine` is the rule: a release **must say why**, where every other
- * operator verdict's summary is optional. The others record a judgement about the
- * work; this one records a decision to stop waiting for evidence, on a goal that
- * will then read as closed-out with nothing at all on the glass to say the
- * environment never confirmed it. The note is the whole of what keeps that
- * legible six weeks later.
- */
+// → docs/spec/24-environments.md
+
 export const GateReleaseBody = z
   .object({
     released: requiredBoolean('released must be a boolean'),
@@ -24,32 +14,14 @@ export const GateReleaseBody = z
     message: 'a release needs a note — it is the only account of why this goal stopped waiting',
   });
 
-/** One goal's whole work, newly confirmed in one environment. */
 interface ArrivalToRecord {
   goalRef: string;
   environment: string;
   arrivedAt: string;
 }
 
-/**
- * Which goals have just arrived somewhere — every `(goal, environment)` the fold
- * calls `reached` and the store has no row for.
- *
- * **An arrival is a moment and reach is a status**, which is the whole reason
- * anything is written down. {@link goalReach} can say a goal *is* in testUk on
- * every pulse from now until the heat death; only a row can say it has just got
- * there, and only a row keeps the ticket to one comment rather than one every
- * five minutes.
- *
- * `at` is required rather than assumed: it is the reading that confirmed the
- * goal's *last* landing, so it is when the whole goal arrived rather than when the
- * first part of it did, and it is what {@link announceableArrivals} reads to tell
- * an arrival it watched happen from one it merely discovered.
- */
 export function newArrivals(input: {
-  /** One entry per goal, exactly as the cockpit's own fold produces them. */
   reach: { goalRef: string; environments: GoalEnvironmentReach[] }[];
-  /** Every arrival already recorded — `Store.listGoalArrivals()`. */
   recorded: readonly GoalArrival[];
 }): ArrivalToRecord[] {
   const held = new Set(input.recorded.map((a) => `${a.goalRef} ${a.environment}`));
@@ -63,69 +35,12 @@ export function newArrivals(input: {
   return out;
 }
 
-/**
- * How stale a confirming reading may be and still be announced, as a multiple of
- * the probe interval.
- *
- * The harness comments on an arrival it **watched happen**, never on one it
- * discovered. Without that line the first pulse after this ships — or after an
- * operator adds `arrival.comment` to an environment that has been probing for a
- * month — posts a comment on every ticket already in it, which is the same
- * backfill-on-boot failure a nullable column has and reads on the ticket as the
- * feature having lost its mind.
- *
- * Two intervals rather than one: a landing confirmed on the pulse before this one
- * is an arrival this harness saw, and a probe pass that ran long must not turn
- * that into silence. → `docs/spec/24-environments.md#announcing-an-arrival`
- */
 const ANNOUNCE_WINDOW_INTERVALS = 2;
 
-/**
- * The arrivals this pulse owes an announcement, and what each owes.
- *
- * Every unannounced arrival is returned, including the ones with nothing to say —
- * the caller stamps them all. That is deliberate: an environment that grows
- * `arrival.comment` later then announces its *next* arrival rather than its whole
- * history, and the stamp is the only thing that can say so.
- *
- * The confirming reading being fresh — {@link ANNOUNCE_WINDOW_INTERVALS} — is what
- * says the harness watched *something* happen, and on its own it is not enough to
- * say what. Readings and arrivals are both keyed on the environment's **name**, so
- * a name the harness has never used before starts with no readings at all: every
- * landing in the deployment's history is due, every probe writes its reading *now*,
- * and every arrival is therefore fresh. A rename is that, and so is adding a second
- * environment to a deployment that has been running for months — a year-old
- * deployment would comment on every ticket it ever shipped, 200 a pulse until it
- * had worked through them, and the comments cannot be unsent.
- *
- * So a fresh reading is announced when **either** of two things says the deploy is
- * what was watched rather than the harness's own first look:
- *
- * - the **name** was already asking before the window opened, so this reading is
- *   one of a series rather than the first of them; or
- * - the **work** landed inside the window, so there is no history for a new name to
- *   have mistaken this for.
- *
- * Either alone would be wrong in one direction. The name test alone silences a
- * brand-new deployment's first genuine arrival, which is the feature's whole first
- * impression. The landing test alone silences a slow deploy — a release train, an
- * environment somebody promotes to on Thursdays — where the merge is days older
- * than the arrival and the harness watched every pulse of the wait.
- *
- * A newly introduced name therefore catches the deployment's *history* up silently
- * and still speaks for work that lands after it — which is what switching
- * `arrival.comment` on already does, and for the same reason.
- * → `docs/spec/24-environments.md#announcing-an-arrival`
- */
 export function announceableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: EnvironmentConfig[];
-  /**
-   * Every reading held, `Store.listEnvironmentReach()` — read only for the oldest
-   * `observedAt` per environment name, which is when that name started asking.
-   */
   readings: readonly { environment: string; observedAt: string }[];
-  /** Every landing, `Store.listGoalLandings()` — read only for each goal's newest. */
   landings: readonly { goalRef: string; recordedAt: string }[];
   probeIntervalMs: number;
   now: number;
@@ -150,14 +65,9 @@ export function announceableArrivals(input: {
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
     const environment = byName.get(arrival.environment);
-    // An environment the operator has since removed still gets its arrival
-    // stamped: the row is history, and leaving it unstamped would announce it
-    // if the name ever came back.
     const wanted = environment?.arrival?.comment === true;
     const seen = Date.parse(arrival.arrivedAt);
     const fresh = Number.isFinite(seen) && seen >= floor;
-    // A name with no reading at all reads as having started asking now, which is
-    // the safe direction: it leaves the landing to say whether this was watched.
     const established = (startedAsking.get(arrival.environment) ?? input.now) < floor;
     const justLanded = (landedAt.get(arrival.goalRef) ?? -Infinity) >= floor;
     out.push({ arrival, comment: wanted && fresh && (established || justLanded) });
@@ -165,16 +75,8 @@ export function announceableArrivals(input: {
   return out;
 }
 
-/** Identifies the comment as the harness's, for anyone reading the thread cold. */
 const MARKER = '<!-- lubbdubb:arrival -->\n_LubbDubb environments_';
 
-/**
- * What an arrival says on the ticket. Pure, and one comment per arrival rather
- * than one living comment edited in place — unlike the appraisal's, which is a
- * standing state. This is a thing that happened at a time, and a timeline of four
- * short comments is what a reader wants from "where did this get to"; an edited
- * comment would silently rewrite the record of the last environment each time.
- */
 export function arrivalComment(input: { environment: string; landings: number; at: string }): string {
   const merges = input.landings === 1 ? 'its merge is' : `all ${input.landings} of its merges are`;
   return (
@@ -183,18 +85,6 @@ export function arrivalComment(input: { environment: string; landings: number; a
   );
 }
 
-/**
- * The goals whose `gate` obligation is open, or **null when nothing gates it**.
- *
- * Null is the whole compatibility story: with no environment declaring a gate,
- * the desks behave exactly as they did — the obligation is filed on the delivery
- * and nothing waits for a deployment. A caller that folded null into an empty set
- * would withhold every bench row on every deployment that never configured an
- * environment, and would look identical to the feature working.
- *
- * A gate declared on more than one environment is satisfied by whichever the goal
- * reaches first: two acceptance environments are two entries, not a ranking.
- */
 export function openedGoals(
   gate: EnvironmentGate,
   environments: EnvironmentConfig[],
@@ -208,17 +98,6 @@ export function openedGoals(
   return open;
 }
 
-/**
- * Why a delivered goal's bench rows are waiting, in the operator's own terms, or
- * null when nothing is holding them.
- *
- * The sentence exists because the hold is otherwise the quietest thing the
- * harness does: no row is filed, so an operator sees a delivered goal with an
- * empty bench and nothing at all to say the harness is waiting rather than
- * finished. It names the environments that would open it, since the useful next
- * question is always "what is it waiting for" and the answer is configuration
- * they may not remember writing.
- */
 export function environmentGateHold(input: {
   goalRef: string;
   environments: EnvironmentConfig[];
@@ -238,7 +117,6 @@ export function environmentGateHold(input: {
   return `${sentence(waiting)} ${waiting.length === 1 ? 'is' : 'are'} waiting for this work to reach ${where}.`;
 }
 
-/** What each gate holds, named as the thing an operator would otherwise go looking for. */
 const GATE_SAID: Record<EnvironmentGate, string> = {
   validate: 'the validation checks',
   close_out: 'the close-out',

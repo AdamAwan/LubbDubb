@@ -1,47 +1,23 @@
 import type { ReviewAttention, ReviewFinding, ReviewPack, ReviewRange, ReviewVerdict } from '../types.js';
 
-/**
- * What the harness knows about the commission the checker is answering: the
- * document as the author left it, and the tree it may quote a contradiction
- * from. The checker is handed the ideas by id and the claims by number, and
- * names them back; it never sends a document.
- */
+// → docs/spec/31-review-packs.md
+
 interface CheckCommission {
   pack: ReviewPack;
-  /** The lines of one file at the head sha, plain, or null where the range names nothing there. */
   readRegion(range: ReviewRange): string[] | null;
 }
 
-/** How long a cue may be, the author's `gist` cap for the same reason it has one. */
 const CUE_LIMIT = 70;
 
 const ATTENTIONS: readonly ReviewAttention[] = ['read', 'decide', 'skim', 'split'];
 const VERDICTS: readonly ReviewVerdict[] = ['true', 'false', 'cant_tell'];
 
-/**
- * Merge the checker's verdicts onto the stored document, or refuse them by field
- * name. The inverse of `assemblePack`, and **the whole of the rule that the
- * checker may not edit the pack**: the document that comes out is the one that
- * went in with exactly these fields written — per idea `attention` and `cue`, per
- * claim `verdict`, `evidence` and, on a false one, `finding`; the `false` mark on
- * the step a finding names; the reading `order` — and nothing else can be
- * reached from the arguments. No claim is reworded, no anchor reassigned, no
- * `key` or `disputed` set, because there is no argument that would.
- *
- * Complete or refused: every idea gets a label, every claim a verdict, and the
- * order names every idea once. A checker that skipped a claim has not checked
- * the pack, and a document half-annotated would read as one where the checker
- * found nothing to say about the rest.
- * → `docs/spec/31-review-packs.md#the-check`
- */
 export function applyCheck(
   commission: CheckCommission,
   args: Record<string, unknown>,
 ): { ok: true; pack: ReviewPack } | { ok: false; error: string } {
   const refuse = (error: string): { ok: false; error: string } => ({ ok: false, error: `Check rejected: ${error}` });
   const pack = structuredClone(commission.pack);
-  // A second merge — a resumed checker calling twice — starts from the author's
-  // marks, not the last merge's: `false` is only ever written here.
   for (const idea of pack.ideas) for (const anchor of idea.anchors) if (anchor.mark === 'false') anchor.mark = null;
 
   if (!Array.isArray(args.ideas)) return refuse('ideas must be a list — one entry per idea you were handed.');
@@ -58,8 +34,6 @@ export function applyCheck(
     if (attention === undefined) return refuse(`${at}.attention must be one of read, decide, skim, split.`);
     const cue = line(raw.cue);
     if (cue === null) return refuse(`${at}.cue is required — one short line saying why the label is what it is.`);
-    // The author's caps, applied to the one field the checker writes for the
-    // person. → `docs/spec/31-review-packs.md#say-it-in-fewer-words`
     if (cue.length > CUE_LIMIT) {
       return refuse(
         `${at}.cue is ${cue.length} characters and the limit is ${CUE_LIMIT}. Say it in fewer words: the ` +

@@ -1,18 +1,10 @@
-/**
- * Live, in-memory dispatch controls — the concurrency cap and a pause flag —
- * that the {@link Harness} and {@link ActionExecutor} read **by reference** each
- * cycle. Seeded from `config.maxConcurrentAgents`/`config.startPaused` at boot and
- * mutated at runtime via the control endpoint; deliberately **not persisted**, so
- * a restart reverts to the configured defaults.
- */
+// → docs/spec/09-execution.md#exhaustion
+
 export interface ControlState {
-  /** Hard cap on concurrently-running agents. */
   cap: number;
-  /** While true, no new agents are dispatched; live agents keep running. */
   paused: boolean;
 }
 
-/** A partial change to apply — omit a field to leave it untouched. */
 interface ControlPatch {
   cap?: number;
   paused?: boolean;
@@ -37,11 +29,6 @@ export class RuntimeControl {
     return { ...this.state };
   }
 
-  /**
-   * Validate and apply a patch, returning the resulting state. Validation lives
-   * here so the endpoint and tests share one source of truth. Throws (leaving
-   * state untouched) if `cap` is not a non-negative integer.
-   */
   apply(patch: ControlPatch): ControlState {
     if (patch.cap !== undefined) {
       if (!Number.isInteger(patch.cap) || patch.cap < 0) {

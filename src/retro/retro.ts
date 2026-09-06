@@ -1,61 +1,13 @@
-/**
- * The retrospective's pure layer — the policy, the origin, and what a submission is
- * allowed to be.
- *
- * ## The gap this closes
- *
- * The Goal Floor draws a station called Manifest, *Report what was done*,
- * immediately before Launch — and it reports nothing. Its content was
- * `issue.conclusion?.note` falling back to an em dash, its `link` was null, and
- * nothing downstream read it: the edge to the Signal post is drawing order, and a
- * missing note held nothing back. The floor named a step the harness never took.
- * What it should name is the run's own post-mortem.
- *
- * ## Why it is not a plan part
- *
- * `expectedKind: 'report'` already exists, so a plan could have carried this, and
- * that was refused. A part is *work the plan schedules*: retired by a replan,
- * counted by `liveParts`, rolled up into the plan's status, and available only to a
- * decomposed issue. A retrospective is about the whole goal — including the ones
- * nobody decomposed — and it must survive a replan rewriting `plan_parts`. It is
- * also not something a planner should be able to forget, since the sloppiest plan
- * is the run most worth reading about.
- *
- * ## Why nothing gates on it
- *
- * A goal is delivered whether or not anybody wrote it up. So a missing retrospective
- * is silence rather than a hold — the `undeclared`-vs-`more_work` asymmetry again —
- * and that is what makes rule `issue-retro`'s fail-open cheap: an agent that crashes, is killed
- * or spends its attempt cap costs the report and nothing else. No escalation is
- * raised, because there is nothing a human can do about a write-up that did not
- * happen that they cannot do by reading the issue.
- */
+// → docs/spec/05-dispatcher.md
 
-/** A document long enough to be a real write-up, short enough not to be a pasted transcript. */
 export const MAX_RETRO_DOCUMENT = 20_000;
 
-/** The summary is the station's one line and the fleet's scannable reading of the run. */
 const MAX_RETRO_SUMMARY = 400;
 
-/**
- * The origin a retrospective agent is dispatched on — its own, for `assessOrigin`'s
- * reason: the cooldown and attempt cap that throttle retrospectives must be
- * independent of the pickup attempts on `issue:<n>`, or a looping retro agent would
- * eat the budget that gets the work done.
- */
 export function retroOrigin(issueNumber: number): string {
   return `issue:${issueNumber}:retro`;
 }
 
-/**
- * Which issue this caller may write up, refusing every other origin **by name and
- * with the tool it actually wants**.
- *
- * Structural identity, as for every other write in the channel — and here it also
- * decides whether the account is worth anything: an agent that did the work is
- * refused rather than scoped down, because a retrospective written by the agent
- * whose run it judges is not a retrospective.
- */
 export function retroSubmitOrigin(
   originRef: string | null,
 ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
@@ -70,15 +22,6 @@ export function retroSubmitOrigin(
   };
 }
 
-/**
- * What a submission is allowed to be.
- *
- * The summary is **required and refused when missing** (`validateConclusion`'s
- * rule): it is the whole of what an operator sees before deciding whether to open
- * the document, and a retrospective nobody opens has not been written. The document
- * is **trimmed rather than refused** (`MAX_PLAN_DOCUMENT_CHARS`' rule): an over-long
- * write-up must not sink the whole submission after the work of assembling it.
- */
 export function validateRetrospective(
   args: Record<string, unknown>,
 ): { ok: true; summary: string; document: string; trimmed: boolean } | { ok: false; error: string } {

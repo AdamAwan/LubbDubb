@@ -2,6 +2,8 @@ import { normaliseNote } from '../progress.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const noteProgress: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Say in one line what you are working on right now, so an operator watching the fleet can ' +
@@ -27,21 +29,13 @@ export const noteProgress: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = normaliseNote(args.note);
     if (!parsed.ok) return toolError(parsed.error);
-    // Structural attribution, exactly as for `report_finding` and for the same
-    // reason: this is a write that speaks in an agent's name to an operator.
-    // There is no argument naming an agent, so there is nothing to forge with.
     const result = deps.agents.recordProgress(agent.id, parsed.note);
     if (!result.ok) return toolError(result.error);
     return ok({
       noted: true,
       note: parsed.note,
       notedAt: result.notedAt,
-      ...(parsed.trimmed
-        ? // Stored anyway rather than refused — a trimmed status line still
-          // answers the question a rejected one would have left blank — but the
-          // caller hears that it was cut so the next one fits.
-          { trimmed: `Kept, trimmed to one line. Shorter notes read better on the card.` }
-        : {}),
+      ...(parsed.trimmed ? { trimmed: `Kept, trimmed to one line. Shorter notes read better on the card.` } : {}),
     });
   },
 });

@@ -21,32 +21,8 @@ import {
   type FalseClaim,
 } from './derive.js';
 
-/**
- * The HTML companion: one self-contained file that draws the same page the
- * cockpit does, for the reviewer who has no LubbDubb — which is most reviewers on
- * most teams.
- *
- * **A pure function of the document, written beside it, never read back.** The
- * rule `docs/spec/28-cross-fleet-pool.md#the-human-readable-companion` states about
- * the pool's markdown, for the reason it gives: a second grammar for one fact is
- * free to disagree with the first, and it disagrees silently. Nothing here reads
- * the store, the tree or the clock — same record in, same bytes out.
- *
- * **It needs nothing checked out**, because the document carries its code, and it
- * needs no harness behind it: every fold is a `<details>` and the stylesheet is
- * inline, so there is no script and no request. It is read-only and **takes no
- * input** — a shared pack carries no marks, and a control that wrote one would
- * have nowhere to write to.
- *
- * The order is `docs/spec/31-review-packs.md#the-page`'s, the same order the
- * cockpit draws, because the layering *is* the product: what the change is, then
- * the code, then the reasoning folded under it.
- *
- * A pack stating a schema this build does not know is **refused whole**, exactly
- * as the cockpit refuses one: a page silently missing its false-claim banner
- * because the renderer was a version behind is the failure the subsystem exists to
- * catch, reproduced by the thing that reports it.
- */
+// → docs/spec/31-review-packs.md
+
 export function renderReviewPackCompanion(record: ReviewPackRecord): string {
   const { pack } = record;
   if (pack.schema !== REVIEW_PACK_SCHEMA) return page(`Review pack · #${pack.prNumber}`, refusal(pack.schema));
@@ -63,9 +39,6 @@ export function renderReviewPackCompanion(record: ReviewPackRecord): string {
     `<h1>${esc(pack.headline)}</h1>`,
     `<div class="rp-plain">${markdown(pack.summary)}</div>`,
     `<div class="rp-facts">${facts_(facts, pack.estimatedMinutes)}</div>`,
-    // Said on the page rather than only in the spec: a reader who found this file
-    // in a wiki has no way to tell what it is downstream of, and the one thing they
-    // must not do is treat it as the live view of a moving pull request.
     `<p class="rp-provenance">A rendering of the pack written against <code>${esc(pack.headSha)}</code> on ` +
       `${esc(record.writtenAt)}. It is a copy: it does not follow the pull request, it takes no input, and ` +
       `nothing here was re-checked when it was shared.</p>`,
@@ -87,20 +60,6 @@ export function renderReviewPackCompanion(record: ReviewPackRecord): string {
   );
 }
 
-/**
- * The contents rail: every idea, and every stop under it.
- *
- * **The companion's answer to what the cockpit answers with a collapsed row.**
- * There is no address bar here to hold which idea is open, so every idea is open
- * ([Reading it](../../docs/spec/31-review-packs.md#reading-it)) — which means the
- * one screen the cockpit's rows give a reader has to come from somewhere else.
- * The rail is that screen, and it stays on it: a reader eighty lines into a walk
- * can see which idea they are in and jump.
- *
- * It draws the weight of each stop rather than only its name — a `key` stop marked,
- * a `minor` one dimmed — so the map says where the time goes before the reader has
- * scrolled to find out.
- */
 function contents(numbered: ReturnType<typeof numberIdeas>): string {
   const rows = numbered.ideas
     .map(({ idea, number }) => {
@@ -130,7 +89,6 @@ function contents(numbered: ReturnType<typeof numberIdeas>): string {
   );
 }
 
-/** Where one fleet's companion for a pull request's pack lives, beside the document. */
 export function reviewPackCompanionPath(fleetId: string, prNumber: number): string {
   return `fleets/${fleetId}/packs/pr-${prNumber}.html`;
 }
@@ -170,10 +128,6 @@ function facts_(facts: ReturnType<typeof packFacts>, minutes: number): string {
   ].join('');
 }
 
-/**
- * The gate: first thing after the masthead and above the ideas, so a reader cannot
- * reach the ideas without passing it. → `docs/spec/31-review-packs.md#what-a-false-claim-does`
- */
 function gate(wrong: FalseClaim[]): string {
   const first = wrong[0]!;
   const rest = wrong.length - 1;
@@ -187,12 +141,6 @@ function gate(wrong: FalseClaim[]): string {
   );
 }
 
-/**
- * One idea: the collapsed row a reader who opens nothing still sees, and the walk
- * and claims under it. Open by default here, unlike the cockpit's: there is no
- * address bar to hold which one is open, and a file a reviewer scrolls is better
- * open than clicked through.
- */
 function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string {
   const flags = ideaFlags(idea);
   const steps = idea.anchors.length;
@@ -229,14 +177,6 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
   );
 }
 
-/**
- * The scenarios the idea's tests cover, listed and never explained.
- *
- * Sits under the walk and above the claims because it answers the question the
- * walk raises — is this exercised? — for the reader who has just read the code,
- * rather than sending them to a tests section at the far end of the page.
- * → `docs/spec/31-review-packs.md#tests-are-never-an-idea`
- */
 function coveredBy(coverage: readonly string[]): string {
   if (coverage.length === 0) return '';
   return (
@@ -289,9 +229,6 @@ function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
       ? ''
       : `<details class="rp-why"${anchor.mark === 'false' || anchor.mark === 'disputed' ? ' open' : ''}>` +
         `<summary><span class="rp-stamp">${note.by === 'witness' ? `witness · ${esc(note.at)}` : 'added afterwards'}</span><span> why</span></summary>` +
-        // Plain text with its newlines, for the notepad's reason: a note is
-        // testimony, and rendering it would let a stray backtick change what the
-        // testimony looks like.
         `<div class="rp-why-body">${esc(note.text)}</div></details>`) +
     `</li>`
   );
@@ -311,17 +248,6 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
-/**
- * A code block: the caption, then the lines with their diff marker in a column of
- * its own rather than as the first character of the code.
- * → `docs/spec/31-review-packs.md#the-code-block`
- *
- * The marker span is `aria-hidden` and unselectable, so a reader who copies the
- * block gets the code and not a diff — the tint and the gutter say which lines
- * moved, and neither is part of the text. Where there is no gutter there is no
- * tint either: every line is the same kind, the step's tag has already said which,
- * and a screen of solid green reads worse than the code does.
- */
 function codeBlock(
   code: readonly string[],
   caption: string | null,
@@ -343,10 +269,6 @@ function codeBlock(
       .join('');
     return `<span class="rp-l${cls}">${mark}<span class="rp-t">${runs}</span>\n</span>`;
   });
-  // A block longer than this is scrolled past rather than read, and on this page
-  // one of them buries the two ideas under it. The tail is folded rather than
-  // dropped: everything the document carries is still in the file, still copyable,
-  // and the fold is a `<details>` because the companion runs no script.
   const clip = rendered.length > HEAD_LINES + TAIL_MARGIN ? HEAD_LINES : rendered.length;
   const head = rendered.slice(0, clip).join('');
   const rest = rendered.slice(clip);
@@ -366,17 +288,9 @@ function codeBlock(
   );
 }
 
-/** How much of a code block is shown before the rest is folded, and the slack that stops a fold saving nothing. */
 const HEAD_LINES = 20;
 const TAIL_MARGIN = 6;
 
-/**
- * One claim, with its verdict, its evidence and where it came from. A `witnessed`
- * or `disputed` claim cites its pad entry by id and **the entry is not here**: the
- * pads are the fleet's own record and a shared pack carries the document alone, so
- * the citation is drawn as one rather than as a blank the reader might read as
- * nothing having been said.
- */
 function claimLine(claim: ReviewClaim, findingAt: number | null): string {
   const cited = claim.provenance.kind === 'inferred' ? null : claim.provenance.entryId;
   return (
@@ -397,7 +311,6 @@ function claimLine(claim: ReviewClaim, findingAt: number | null): string {
   );
 }
 
-/** The page's most important prose: the two pieces of code that disagree, then the consequence. */
 function finding(item: FalseClaim, index: number): string {
   const found = item.claim.finding;
   const stepNumber = found?.step ?? null;
@@ -434,7 +347,6 @@ function finding(item: FalseClaim, index: number): string {
   );
 }
 
-/** `attention` made actionable: the ideas in reading order, each with the reason. */
 function spendTheTime(numbered: ReturnType<typeof numberIdeas>, minutes: number): string {
   if (numbered.by === 'document') {
     return (
@@ -472,7 +384,6 @@ function colophon(record: ReviewPackRecord): string {
   );
 }
 
-/** The whole file: one document, one stylesheet, no script and no request. */
 function page(title: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -493,12 +404,6 @@ ${body}
 `;
 }
 
-/**
- * Every colour is a custom property on `:root`, the cockpit's rule
- * (`docs/spec/17-cockpit.md#tokens`) applied to a file that has no cockpit behind
- * it: a hex at a use site is a colour nothing can reach, and this page has a dark
- * scheme to answer as well as a light one.
- */
 const STYLE = `:root {
   color-scheme: light dark;
   --rp-bg: #fbfbfa; --rp-fg: #23211d; --rp-dim: #6c675f; --rp-line: #dcd8d0;
@@ -646,7 +551,6 @@ a { color: var(--rp-accent); }
 table { border-collapse: collapse; }
 th, td { border: 1px solid var(--rp-line); padding: .25rem .5rem; text-align: left; }`;
 
-/** Escaped for HTML text and for a double-quoted attribute alike, so one function serves both. */
 function esc(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -656,16 +560,6 @@ function esc(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * The two markdown fields the document carries — the author's `summary` and the
- * checker's `body` — as HTML.
- *
- * **Deliberately small**: paragraphs, bullets, pipe tables, and inline bold,
- * italic, code and links. The escaping happens first and the markup is added
- * after, so nothing an agent wrote can reach the page as markup. Anything richer
- * renders as its own plain text rather than as a surprise — a companion is a page
- * a reviewer reads, not a document format.
- */
 function markdown(text: string): string {
   const blocks = text.split(/\n{2,}/);
   return blocks
@@ -712,7 +606,6 @@ function table(lines: string[]): string {
   );
 }
 
-/** Inline markdown over already-escaped text: code first, so nothing inside a span is re-read. */
 function inline(text: string): string {
   return esc(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')

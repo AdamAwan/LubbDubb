@@ -2,30 +2,8 @@ import { submitBrief } from '../jobs/brief.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
-/**
- * The two verbs that reach the fleet itself: putting work in, and driving an
- * agent that is already running.
- *
- * These are the ones that make the channel a way to *run* the harness rather
- * than a way to watch it, and they are the ones an operator most often wants at
- * a keyboard they do not have — a brief typed from a phone, an agent that has
- * been sat at a prompt for an hour.
- *
- * **`job_create` is still not a dispatch.** A code brief on a deployment with a
- * tracker is **filed as a watched ticket** and enters the planning funnel like
- * any other issue; the harness decides whether and when to work it. That is not
- * a fence drawn for this channel — it is what `POST /api/jobs` has done since
- * issue #198, and it is shared code (`src/jobs/brief.ts`) rather than a second
- * account of it. A desk brief, and a code brief where nothing is configured to
- * file, do queue directly.
- *
- * **`agent_control` is the one place this channel touches a live process.** Each
- * verb is `AgentManager`'s own, reached exactly as the cockpit's button reaches
- * it, and every one of them refuses an agent that is not live rather than
- * reporting a success against a dead row.
- */
+// → docs/spec/11-mcp-tools.md
 
-/** What `agent_control` will do, and the sentence each one is worth saying back. */
 const AGENT_ACTIONS = {
   respond: 'typed into the session; the agent carries on from it',
   interrupt: 'sent Ctrl-C; the agent stops what it is doing and stays at its prompt',
@@ -93,8 +71,6 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
     if (outcome.kind === 'ticket')
       return toolJson({
         filed: outcome.ticketRef,
-        // Said rather than implied: a session told only "created" would reasonably
-        // report back that the work has started, and it has not.
         means:
           'a ticket was filed carrying the watch tag, so the harness will appraise it, plan it and work its ' +
           'parts in its own order. Nothing has been dispatched by this call. Read fleet_status to see where it ' +
@@ -136,9 +112,6 @@ export const agentControl: DesktopToolFactory = (deps) => ({
     const action = args.action as AgentAction;
     if (typeof action !== 'string' || !(action in AGENT_ACTIONS))
       return toolError(`action must be one of: ${Object.keys(AGENT_ACTIONS).join(', ')}.`);
-    // Named before anything is attempted: an id that is not an agent at all and an
-    // agent that has already ended are different answers, and "not live" alone
-    // would read as the second on a typo.
     const agent = deps.store.getAgent(id);
     if (!agent) return toolError(`No agent "${id}". Call fleet_status for the ones that are running.`);
 
@@ -146,8 +119,6 @@ export const agentControl: DesktopToolFactory = (deps) => ({
     if (action === 'respond') {
       const text = typeof args.text === 'string' ? args.text : '';
       if (!text.trim()) return toolError('text required for "respond" — it is typed into the agent verbatim.');
-      // Through `AgentManager.respond`, which is also what clears the park. Writing
-      // to the session directly would leave the agent answered and still parked.
       if (!fleet.respond(id, text)) return toolError(notLive(agent.status, 'typed into'));
       return toolJson({ agentId: id, action, means: AGENT_ACTIONS.respond });
     }
@@ -174,7 +145,6 @@ export const agentControl: DesktopToolFactory = (deps) => ({
   },
 });
 
-/** Why a verb could not reach the agent, in terms of the row rather than of the map lookup that failed. */
 function notLive(status: string, verb: string): string {
   return (
     `This agent is "${status}" and holds no live session, so it cannot be ${verb}. An agent that has ended is ` +

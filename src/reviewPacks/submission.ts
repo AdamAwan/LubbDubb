@@ -13,41 +13,16 @@ import type {
 } from '../types.js';
 import { coverageRefusal, ownsTestHunk, PLUMBING_IDEA_ID, testsOnlyIdea, type DiffHunk } from './hunks.js';
 
-/**
- * What the harness knows about the commission the author is submitting against:
- * the hunks it was handed, the pad entries it may cite, and the tree it may quote.
- * Everything a submitted pack is checked against comes from here, never from the
- * submission — a pack that named its own hunks or its own head would be one the
- * harness could not vouch for.
- */
+// → docs/spec/31-review-packs.md
+
 export interface Commission {
   prNumber: number;
   headSha: string;
   hunks: readonly DiffHunk[];
-  /** Both pads the author was handed, together: the goal's and the pull request's own. */
   entries: readonly ScratchEntry[];
-  /**
-   * The lines of one file at the head sha, plain, or null where the range names
-   * nothing there — a path outside the checkout, a file the head does not have,
-   * an end past the file's last line.
-   */
   readRegion(range: ReviewRange): string[] | null;
 }
 
-/**
- * How long each piece of the author's prose may be, in characters.
- * → `docs/spec/31-review-packs.md#say-it-in-fewer-words`
- *
- * A cap is the only thing that actually shortens the writing. The prompt can ask
- * for plain words and be obeyed for a paragraph, and the author is reading a
- * codebase whose own prose runs long — it writes back what it just read. A number
- * it cannot argue with is what makes it choose.
- *
- * They are not arbitrary: a `gist` is one line beside a code block, a `title` is a
- * row in a list, and both stop being scannable at about the widths below. `claim`
- * is the loosest because it is for the checker and has to stay falsifiable, which
- * sometimes needs a clause the reader would not want.
- */
 const LIMITS = {
   headline: 100,
   summaryBullet: 100,
@@ -58,23 +33,6 @@ const LIMITS = {
   coverage: 60,
 } as const;
 
-/**
- * Assemble the pack the author submitted into the document the store takes, or
- * refuse it by field name.
- *
- * Pure: the tool hands it the commission and the arguments and writes what comes
- * back. Everything the checker owns is set here, not taken — `order` empty, every
- * `attention`, `cue`, `verdict`, `evidence` and `finding` null — because a pack the author
- * wrote is a pack the checker has not read, whatever the submission says.
- * `witnessed`, the pull request and the head are the commission's, for the same
- * reason.
- *
- * A hunk anchor names a hunk by the id the prompt listed, and its range and code
- * are the diff's own; a region anchor names a range, and its code is read off the
- * tree. The author transcribes nothing: a range it typed is one a mark never
- * matches, and a line it retyped is a line the page shows wrongly, both silently.
- * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
- */
 export function assemblePack(
   commission: Commission,
   args: Record<string, unknown>,
@@ -90,8 +48,6 @@ export function assemblePack(
       'summary is required — a short bulleted list, one line each, with the words that matter most in bold. ' +
         'Not a paragraph: the opening is the part every reader reads, and a block of prose is the part they skim.',
     );
-  // Per bullet, not over the whole block: the cap is about how much a reader takes
-  // in at one glance, and five short lines are easier than two long ones.
   const long = summary.split('\n').find((l) => l.trim().length > LIMITS.summaryBullet);
   if (long !== undefined) return refuse(overLimit('a summary bullet', LIMITS.summaryBullet, long.trim()));
   const estimatedMinutes = args.estimatedMinutes;
@@ -161,8 +117,6 @@ export function assemblePack(
       }
       coverage.push(scenario);
     }
-    // Owned twice *within* one idea is the same fault as across two, and the
-    // coverage check below reads ownership per idea.
     const dup = hunkIds.find((h, k) => hunkIds.indexOf(h) !== k);
     if (dup !== undefined) return refuse(`${at} anchors hunk ${dup} twice.`);
     if (id !== PLUMBING_IDEA_ID && testsOnlyIdea(commission.hunks, hunkIds)) {
@@ -223,8 +177,6 @@ function readAnchor(
   }
   let mark: ReviewAnchorMark | null = null;
   if (raw.mark !== undefined && raw.mark !== null) {
-    // `false` is the checker's mark: it names the stop a false claim is about, and
-    // nothing has been checked yet.
     const found = AUTHOR_MARKS.find((m) => m === raw.mark);
     if (found === undefined) return { ok: false, error: `${at}.mark must be "key" or "disputed", or be left out.` };
     mark = found;
@@ -256,8 +208,6 @@ function readAnchor(
     if (!isLine(start) || !isLine(end) || end < start) {
       return { ok: false, error: `${at}: start and end must be 1-based line numbers with end >= start.` };
     }
-    // A region may cover a hunk another idea owns — the second escape valve, so
-    // shared code can be walked past from two ideas while one of them owns it.
     const range: ReviewRange = { path, start, end };
     const code = commission.readRegion(range);
     if (code === null) {
@@ -327,11 +277,6 @@ function isLine(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
 }
 
-/**
- * The refusal for a field that is over its cap: what it is, what it may be, and
- * what it was. The count is quoted because "too long" without one is a guess the
- * author has to make twice.
- */
 function overLimit(at: string, max: number, value: string): string {
   return (
     `${at} is ${value.length} characters and the limit is ${max}. Say it in fewer words rather than abbreviating: ` +
@@ -339,14 +284,12 @@ function overLimit(at: string, max: number, value: string): string {
   );
 }
 
-/** A required one-liner: trimmed, collapsed onto one line, null when empty or not a string. */
 function line(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const collapsed = value.replace(/\s+/g, ' ').trim();
   return collapsed === '' ? null : collapsed;
 }
 
-/** Required prose that keeps its newlines. */
 function text(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();

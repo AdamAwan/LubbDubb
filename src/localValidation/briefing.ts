@@ -1,40 +1,19 @@
 import type { LocalRun, LocalValidation, Plan, PlanPart, ValidationCheck } from '../types.js';
 
-/**
- * What a validating agent is handed beyond the rendered prompt, and what a fix
- * agent is handed beyond its own.
- *
- * **Appended, never interpolated**, the prompt book's rule
- * ([05](../../docs/spec/05-dispatcher.md#prompt-templates)): `loadPromptTemplates`
- * rejects only *unknown* placeholders, so an operator override written before a
- * token existed drops it in silence — and everything here is the half the agent
- * cannot act without. An agent that lost the URL would validate nothing; one that
- * lost the findings would fix nothing.
- *
- * Pure over the snapshot, so a rule can build it. What is deliberately **not** here
- * is anything that would be a reading: the ports the watch took and the session's
- * output tail are live, and a copy of them frozen into a prompt at dispatch would be
- * minutes stale by the time the agent got to them. `local_run_read` answers those,
- * at the moment the answer is wanted.
- */
+// → docs/spec/32-local-validation.md
 
 interface ValidationBrief {
   issue: { number: number; title: string; body: string | null };
   plan: Plan | null;
   parts: PlanPart[];
-  /** The goal's own validation checks — **input**, never something to report against. */
   checks: ValidationCheck[];
   run: LocalRun;
-  /** The branch this ref was cut from, where the harness could say. */
   base: string | null;
-  /** `localValidation.instruction`, verbatim. */
   instruction: string;
   outputDir: string;
-  /** The `mcpServers` key the browser is under, or null when none is configured. */
   browserKey: string | null;
 }
 
-/** Trim and drop what the planner left empty, so a blank field is absent rather than a heading over nothing. */
 function said(value: string | null | undefined): string | null {
   const text = (value ?? '').trim();
   return text === '' ? null : text;
@@ -57,10 +36,6 @@ function planSection(plan: Plan | null, parts: PlanPart[]): string {
         .map((part) => `${String(part.seq)}. **${part.title}** — ${said(part.acceptance) ?? 'no acceptance stated'}`)
         .join('\n')}\n`,
     );
-  // The planner's own answer to "how would anyone know this worked" — the narrative
-  // field the validation checks are the executable form of. It is the closest thing
-  // in the record to a test plan, so it is the one part of the plan worth quoting
-  // rather than summarising.
   if (verification !== null)
     lines.push(`The planner said the whole thing is verified like this:\n\n> ${quote(verification)}\n`);
   return lines.join('\n');
@@ -70,16 +45,6 @@ function quote(text: string): string {
   return text.replace(/\n/g, '\n> ');
 }
 
-/**
- * The goal's declared validation checks, handed over as **input and nothing else**.
- *
- * They are the best statement anyone has written of what this goal is supposed to
- * do, and a test plan that ignored them would re-derive it worse. But a check is a
- * reading against the *delivered* goal, taken by whoever ran it
- * ([20](../../docs/spec/20-validation.md)) — and this agent is running against work
- * still in flight. So the heading says what they are for, and the tools say the rest:
- * there is no reachable code path from this dispatch to `validation_report`.
- */
 function checksSection(checks: ValidationCheck[]): string {
   if (checks.length === 0) return '';
   const rows = checks
@@ -137,7 +102,6 @@ function browserSection(browserKey: string | null, outputDir: string): string {
   );
 }
 
-/** The rules the harness imposes, which no operator instruction may be relied on to carry. */
 function rulesSection(): string {
   return (
     `## How this run goes\n\n` +
@@ -169,7 +133,6 @@ function rulesSection(): string {
   );
 }
 
-/** The three tools this dispatch has, named where they are used — the point-of-use rule. */
 function toolsSection(): string {
   return (
     `## Your tools\n\n` +
@@ -182,7 +145,6 @@ function toolsSection(): string {
   );
 }
 
-/** Everything a validating agent is handed, in reading order. */
 export function localValidationBriefing(brief: ValidationBrief): string {
   return [
     '\n\n---\n',
@@ -204,14 +166,6 @@ const SEVERITY_WORD: Record<string, string> = {
   nit: 'Nit',
 };
 
-/**
- * What the fix agent is handed: the plan that was run, and what running it found.
- *
- * The findings are quoted rather than summarised for `failureBriefing`'s reason —
- * somebody drove the application and wrote down what they saw, and that account is
- * the only thing in the record that cannot be re-derived from the code. The plan
- * comes with them because a finding is only as clear as the step that produced it.
- */
 export function localValidationFixBriefing(row: LocalValidation, run: LocalRun | null): string {
   const lines = [
     `\n\n---\n`,

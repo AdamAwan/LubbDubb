@@ -3,35 +3,20 @@ import type { JobSchedule } from '../types.js';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
-/**
- * `job_schedules` was a fresh `CREATE TABLE`, and this is declared empty anyway:
- * a table being new **once** does not keep it exempt, and the entry is where the
- * next column added to it has to be named. → `docs/spec/14-persistence.md`
- */
+// → docs/spec/14-persistence.md
+
 export const JOB_SCHEDULE_COLUMNS: ColumnMigrations = {
   job_schedules: {},
 };
 
-/**
- * The `job_schedules` table: recurring briefs, and how far through each
- * recurrence the harness has got.
- *
- * The store holds **when**, never **whether** — no query here asks the clock.
- * `next_run_at` is written by whoever computed it (the route on a create or an
- * edit, the desk on a firing) and read back as a plain string, so the one place
- * that knows what a cron expression means is `src/schedules/cron.ts` and this
- * table cannot form a second opinion about it.
- */
 export class JobScheduleStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /** Record a new recurrence. Enabled on creation — an operator who wrote one means it to run. */
   createJobSchedule(input: {
     title: string;
     prompt: string;
     kind: JobSchedule['kind'];
     cron: string;
-    /** When the first firing is due, computed by the caller from the same expression. */
     nextRunAt: string | null;
   }): JobSchedule {
     const ts = this.ctx.now();
@@ -62,26 +47,11 @@ export class JobScheduleStore {
     return row ? rowToSchedule(row) : null;
   }
 
-  /**
-   * Every schedule, oldest first — the order the cockpit draws them in and the
-   * order the desk considers them. All of them, enabled or not: a disabled
-   * schedule is a standing intent the operator can see and switch back on, and
-   * the pass skips it by reading `enabled` rather than by never being handed it.
-   */
   listJobSchedules(): JobSchedule[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM job_schedules ORDER BY created_at ASC`).all() as ScheduleRow[];
     return rows.map(rowToSchedule);
   }
 
-  /**
-   * Change what a schedule says or where it is next due. Every field is optional
-   * and an absent one is left alone — including `nextRunAt`, which the desk sets
-   * on its own when it rolls a held schedule forward.
-   *
-   * It deliberately cannot write `lastFiredAt` / `lastJobId`:
-   * {@link recordJobScheduleRun} is the one writer of those, so a firing is
-   * recorded as one thing rather than as an edit that happens to mention it.
-   */
   updateJobSchedule(
     id: string,
     patch: Partial<Pick<JobSchedule, 'title' | 'prompt' | 'kind' | 'cron' | 'enabled' | 'nextRunAt'>>,
@@ -98,12 +68,6 @@ export class JobScheduleStore {
     return next;
   }
 
-  /**
-   * Record that a schedule fired: when, what it created, and where the recurrence
-   * goes next. One write for all three because they are one event — a row that
-   * said it fired but not what it produced is exactly the row the next pulse's
-   * in-flight check cannot use.
-   */
   recordJobScheduleRun(id: string, run: { firedAt: string; jobId: string; nextRunAt: string | null }): void {
     this.ctx.db
       .prepare(
@@ -113,13 +77,6 @@ export class JobScheduleStore {
       .run({ ...run, id });
   }
 
-  /**
-   * Forget a recurrence. Deleted rather than tombstoned, unlike a dismissed
-   * finding or a settled human task: those carry somebody's judgement about a
-   * piece of work, and this carries an intention that has ended. Its history is
-   * not lost with it either — every job it ever queued is still in `jobs`, with
-   * the decisions and agents that came of them.
-   */
   deleteJobSchedule(id: string): boolean {
     return this.ctx.db.prepare(`DELETE FROM job_schedules WHERE id=?`).run(id).changes > 0;
   }

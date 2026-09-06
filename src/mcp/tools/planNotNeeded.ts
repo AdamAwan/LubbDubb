@@ -3,6 +3,8 @@ import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const planNotNeeded: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Say that the issue you were dispatched to plan needs no plan, because what it asks for is ' +
@@ -38,18 +40,11 @@ export const planNotNeeded: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = validatePlanNotNeeded(args);
     if (!parsed.ok) return toolError(`Verdict rejected: ${parsed.error}`);
-    // Structural identity, and here it decides whether there is anything to
-    // report at all: every other kind of agent is refused by name and pointed at
-    // the verdict that is its own. The plan-aware refusals happen there too —
-    // this layer cannot read a plan or a standing shortfall.
     const result = deps.agents.recordGoalMet(agent.id, parsed.summary, parsed.detail);
     if (!result.ok) return toolError(result.error);
     return ok({
       recorded: true,
       issue: result.issueOrigin,
-      // Said out loud rather than left to be inferred: a planner that believed it
-      // had closed the ticket would stop looking at it, and one that believed it
-      // had merely declined to plan would go on to write a plan anyway.
       note:
         'Recorded as a delivery verdict on the issue. Nothing further is scheduled for it while that ' +
         'stands — no plan, and no implementation agent. It ends if the issue changes in the tracker or ' +

@@ -2,15 +2,8 @@ import { validateRetrospective } from '../../retro/retro.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The retrospective: one document, for two readers.
- *
- * **The one door is in the description, not only in the prompt.** The
- * `issue-retro` template is operator-overridable, so a deployment running an
- * override written before the claim store went would otherwise dispatch an agent
- * still looking for a `lessons` field. What outlives the goal goes through
- * `raise`, and the description says so — a tool description always arrives.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const retroSubmit: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Submit the retrospective for the issue you were dispatched to write up. Two audiences, one ' +

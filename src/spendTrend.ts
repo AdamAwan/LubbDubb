@@ -5,63 +5,33 @@ import { PHASE_ORDER, phaseLabel, zeroPhases, type SpendGoal, type SpendPhase } 
 import { ciStatusOf } from './world/worldDiff.js';
 import { runInstant, trendSpan, windowView, type InsightsWindowView, type ResolvedWindow } from './insightsWindow.js';
 
-/**
- * The spend trend: eight periods on one axis, every reading a rate over a unit of
- * delivered work. The unit is a **goal that closed**, never a run. Derived, never
- * stored, and the closure source is the ticket mirror, never `world_events` —
- * `issue_closed` never fires on a real provider, which snapshots the open set
- * only. → `docs/spec/18-observability.md#the-spend-trend`
- */
+// → docs/spec/18-observability.md
 
-/** Two periods *that closed a goal* either side, below which a comparison is a coin toss — see {@link compare}. */
 const MIN_HALF_PERIODS = 2;
 
-/** The endings that are the harness failing, as opposed to a run being stopped. */
 const LOST: readonly AgentStatus[] = ['failed', 'crashed'];
-/** Every ending. The live statuses are not outcomes and settle no week. */
 const SETTLED: readonly AgentStatus[] = ['done', 'failed', 'crashed', 'killed', 'interrupted'];
 
-/** One period on the shared axis. Every chart in the tab is drawn from these. */
 export interface SpendTrendBucket {
   startsAt: string;
-  /** True for the week `now` falls inside: every cohort figure on it is an under-count. */
   partial: boolean;
 
-  // -- Cohort: the goals that closed in this week ---------------------------
-
-  /** Goals that closed in this week *and* have measured spend. */
   goalsClosed: number;
-  /** Goals that closed with no measured spend. In no figure below; counted so the medians can be read. */
   goalsUnmeasured: number;
-  /** The middle goal's cost. Null when no measured goal closed this week. */
   medianCostUsd: number | null;
   medianInputTokens: number | null;
-  /** Every closed goal's cost, ascending — the spread the panel draws around the median. */
   costs: number[];
-  /** Mean dollars per goal per phase. Sums to the cohort's mean goal cost. */
   byPhase: Record<SpendPhase, number>;
-  /**
-   * Goals that closed in this week and are open again now. Read from the world's
-   * current state, not from an event: `diffWorlds` emits no `closed → open`.
-   */
   reopened: number;
 
-  // -- Period: what was observed inside the week itself ---------------------
-
-  /** Runs that ended inside this week. */
   settled: number;
   completed: number;
-  /** `completed / settled`, or null when nothing ended this week. */
   completionRate: number | null;
-  /** What the runs that failed or crashed this week cost. */
   lostCostUsd: number;
-  /** Transitions into failing observed on any pull request this week. */
   reds: number;
-  /** `reds / goalsClosed` — pipeline noise against delivered work. Null when nothing closed. */
   redsPerGoal: number | null;
 }
 
-/** Half the window, folded — what the tiles and the phase table compare. Folded here, never in the cockpit. */
 export interface SpendTrendPeriod {
   startsAt: string;
   endsAt: string;
@@ -69,31 +39,23 @@ export interface SpendTrendPeriod {
   goalsClosed: number;
   medianCostUsd: number | null;
   medianInputTokens: number | null;
-  /** Mean dollars per goal per phase. Zero for a phase the cohort never touched. */
   byPhase: Record<SpendPhase, number>;
   completionRate: number | null;
-  /** What failed and crashed runs cost, per goal closed. Null when none closed. */
   lostCostPerGoalUsd: number | null;
   redsPerGoal: number | null;
-  /** Reopened goals as a share of the cohort. Null when none closed. */
   reopenedRate: number | null;
 }
 
-/** A phase's dollars in each half, so the panel's load-bearing table is a fold, not a join. */
 export interface SpendTrendPhaseShift {
   phase: SpendPhase;
   label: string;
-  /** Mean dollars per goal, earlier half then recent half. */
   earlierUsd: number;
   recentUsd: number;
-  /** Share of the mean goal's cost, 0–1. The column that misleads without the two above. */
   earlierShare: number;
   recentShare: number;
-  /** `(recent - earlier) / earlier`, or null when the phase cost nothing earlier. */
   changeRatio: number | null;
 }
 
-/** The two halves and the shift between them, or nothing when the window is too thin. */
 export interface SpendTrendComparison {
   earlier: SpendTrendPeriod;
   recent: SpendTrendPeriod;
@@ -102,49 +64,30 @@ export interface SpendTrendComparison {
 
 export interface SpendTrend {
   generatedAt: string;
-  /** The window each period is one of — eight of these make the axis. Stated, never assumed by the panel. */
   window: InsightsWindowView;
-  /** How many periods the axis carries. */
   periods: number;
   bucketMs: number;
   startsAt: string;
   buckets: SpendTrendBucket[];
-  /**
-   * The complete weeks split down the middle. Null when either side holds fewer
-   * than {@link MIN_HALF_PERIODS} complete weeks *that closed a goal* — withholding
-   * it is the only way the panel can be made not to draw it.
-   */
   comparison: SpendTrendComparison | null;
 }
 
 interface SpendTrendInput {
-  /** Every goal with measured spend — `buildSpendInsights`' own rows, taken whole; never re-rolled here. */
   goals: readonly SpendGoal[];
-  /**
-   * The goals the ticket mirror holds as closed inside the window
-   * (`Store.listTicketsClosedSince`). `closedAt` is the tracker's last-modified,
-   * not a close date.
-   */
   closures: readonly TicketClosure[];
-  /** The world's issues as they stand — for the reopen check, and nothing else. */
   issues: readonly Issue[];
-  /** Every agent the harness has run; the period half selects by `endedAt` itself. */
   agents: readonly Agent[];
-  /** `pr_ci` rows inside the window. Order is not read — only the count of reds is. */
   ciEvents: readonly WorldEvent[];
-  /** The window one period is the length of. Eight of them make the axis. */
   window: ResolvedWindow;
   now: number;
 }
 
-/** The middle sample, or the upper of the two middles. Null on an empty set. */
 function median(samples: readonly number[]): number | null {
   if (samples.length === 0) return null;
   const sorted = [...samples].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)] ?? null;
 }
 
-/** An empty week — every field present, so a week nothing happened in is a row and not a gap. */
 function emptyWeek(startsAt: string, partial: boolean): SpendTrendBucket {
   return {
     startsAt,
@@ -169,8 +112,6 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
   const { goals, closures, issues, agents, ciEvents, window, now } = input;
   const span = trendSpan(
     window,
-    // The oldest thing the axis could be about. Closures and runs both, because
-    // either alone leaves the unbounded axis starting after data it will draw.
     [...closures.map((c) => Date.parse(c.closedAt)), ...agents.map(runInstant)].reduce<number | null>(
       (oldest, at) => (Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest),
       null,
@@ -180,18 +121,14 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
   const buckets = Array.from({ length: span.buckets }, (_, i) =>
     emptyWeek(new Date(start + i * span.bucketMs).toISOString(), i === span.buckets - 1),
   );
-  /** Which bucket an instant falls in, or null when it predates the axis. */
   const bucketAt = (at: number): number | null => {
     if (Number.isNaN(at) || at < start) return null;
     return Math.min(span.buckets - 1, Math.floor((at - start) / span.bucketMs));
   };
 
   const spendOfGoal = new Map(goals.map((g) => [g.issueNumber, g]));
-  // Open *now*, so a goal that closed inside the window and is nonetheless here came back.
   const openNow = new Set(issues.filter((i) => i.state === 'open').map((i) => i.number));
 
-  // The last closure per goal: one that closed, reopened and closed again belongs
-  // to the week it last landed in.
   const closedAt = new Map<number, number>();
   for (const closure of closures) {
     const at = Date.parse(closure.closedAt);
@@ -200,9 +137,6 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     if (seen === undefined || at > seen) closedAt.set(closure.number, at);
   }
 
-  // -- Cohort: goals, by the week they closed --------------------------------
-  // The cohort itself is kept, not just its summary: the period fold below needs
-  // the goals.
   const cohorts = new Map<number, SpendGoal[]>();
   for (const [issueNumber, at] of closedAt) {
     const index = bucketAt(at);
@@ -226,14 +160,12 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     week.costs = cohort.map((g) => g.costUsd).sort((a, b) => a - b);
     week.medianCostUsd = median(week.costs);
     week.medianInputTokens = median(cohort.map((g) => g.inputTokens));
-    // Per goal, not the cohort's total: a busy week would otherwise draw as an expensive one.
     for (const phase of PHASE_ORDER) {
       const total = cohort.reduce((n, g) => n + g.byPhase[phase], 0);
       week.byPhase[phase] = roundUsd(total / cohort.length);
     }
   }
 
-  // -- Period: runs that settled, and reds observed ---------------------------
   for (const agent of agents) {
     if (agent.endedAt === null || !SETTLED.includes(agent.status)) continue;
     const index = bucketAt(Date.parse(agent.endedAt));
@@ -267,12 +199,6 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
   };
 }
 
-/**
- * The complete weeks, split in half. The partial week is dropped, never folded
- * into the recent half. The count that gates the comparison is of weeks that
- * *closed something*, not of buckets on the axis — `trendSpan` returns a fixed
- * eight whatever the data, so counting buckets withholds nothing.
- */
 function compare(
   buckets: readonly SpendTrendBucket[],
   cohorts: ReadonlyMap<number, SpendGoal[]>,
@@ -290,7 +216,6 @@ function compare(
   return { earlier, recent, phases: shifts(earlier, recent) };
 }
 
-/** How many of a half's weeks closed a goal — the weeks a median is taken over. */
 function populated(
   span: readonly { week: SpendTrendBucket; index: number }[],
   cohorts: ReadonlyMap<number, SpendGoal[]>,
@@ -298,10 +223,6 @@ function populated(
   return span.filter(({ index }) => (cohorts.get(index)?.length ?? 0) > 0).length;
 }
 
-/**
- * Several weeks as one period. Medians are re-taken over the pooled goals, never
- * averaged from each week's own median, and the phase means are pooled likewise.
- */
 function fold(
   span: readonly { week: SpendTrendBucket; index: number }[],
   cohorts: ReadonlyMap<number, SpendGoal[]>,
@@ -337,7 +258,6 @@ function fold(
   };
 }
 
-/** Every phase either half spent anything on, in funnel order. */
 function shifts(earlier: SpendTrendPeriod, recent: SpendTrendPeriod): SpendTrendPhaseShift[] {
   const earlierTotal = PHASE_ORDER.reduce((n, p) => n + earlier.byPhase[p], 0);
   const recentTotal = PHASE_ORDER.reduce((n, p) => n + recent.byPhase[p], 0);

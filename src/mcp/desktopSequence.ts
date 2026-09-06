@@ -6,23 +6,7 @@ import { toolJson, toolError } from './protocol.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import type { Issue } from '../types.js';
 
-/**
- * The desktop channel's half of story sequencing: read an order, and rewrite one.
- * → `docs/spec/33-story-sequencing.md#amending-it`
- *
- * **There is no drag-to-reorder in the cockpit, and this is why.** Reordering is a
- * judgement with a reason behind it, and the reason is the half worth keeping: a
- * drag records that the order changed and loses why, which is exactly what the next
- * person to read the Feature needs. Talking to Claude Code is the door a plan is
- * already amended through, and it removes a surface rather than adding one — no
- * reorder route, no per-wave editing state on `Place`, nothing in the cockpit that
- * writes an order.
- *
- * These are on `DESKTOP_TOOL_NAMES` and **never** in `buildTools`. The fleet's own
- * channel gets `sequence_submit`, which can only ever write a proposal; an
- * amendment lands `accepted`, because the person making it is the person who would
- * have accepted it, and nothing the fleet says about its own output may hold work.
- */
+// → docs/spec/11-mcp-tools.md
 
 const sequenceRead: DesktopToolFactory = (deps) => ({
   description:
@@ -110,10 +94,6 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
     );
     if (!parsed.ok) return toolError(`Order rejected: ${parsed.error}`);
 
-    // Two writes, and the split is the record's own: `recordFeatureSequence`
-    // always clears the answer, because an order over a different set of edges is
-    // a new question — so the acceptance is stated separately, by the person
-    // making it. Marked `operator` rather than `inferred`: no agent guessed these.
     const standing = standingFor(deps, found.number);
     const stored = deps.store.recordFeatureSequence({
       originRef: found.originRef,
@@ -139,16 +119,12 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
   },
 });
 
-/** The Feature an issue names, whether it is the container or one of its stories. */
 function featureFor(
   deps: DesktopToolDeps,
   issue: number,
 ): { ok: true; number: number; originRef: string; stories: Issue[] } | { ok: false; error: string } {
   const issues = deps.store.getWorldBaseline()?.issues ?? [];
   const self = issues.find((i) => i.number === issue);
-  // A story resolves to its parent, because an order is a statement about a
-  // Feature — and the number an operator has in front of them on a goal page is
-  // the story's, not the container's.
   const number = self?.parent?.number ?? issue;
   const stories = issues.filter((i) => i.parent?.number === number);
   if (stories.length === 0) {
@@ -163,15 +139,6 @@ function featureFor(
   return { ok: true, number, originRef: `issue:${number}`, stories };
 }
 
-/**
- * The membership this amendment is written against, so the sequencer does not
- * immediately propose over it.
- *
- * Empty where the Feature is one `sequenceableFeatures` would not ask about — a
- * single story, or more than the cap — and that is the safe direction: an empty
- * key matches no live standing, so the worst case is one proposal, never a Feature
- * parked on an order nothing will revisit.
- */
 function standingFor(deps: DesktopToolDeps, feature: number): { key: string; members: number[] } {
   const config = deps.briefConfig();
   const policy = {
@@ -186,10 +153,6 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
     (issue) => issueWatchGateReason(issue, policy) === null,
     config.issueSequenceMaxChildren,
   ).find((f) => f.feature.number === feature);
-  // The stories the Feature actually has, even where it is one the sequencer
-  // would not be asked about: an operator may order a two-story Feature by hand,
-  // and recording no membership for it would make the next re-sequence ask again
-  // for no reason.
   return {
     key: found?.key ?? '',
     members:
@@ -201,7 +164,6 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
   };
 }
 
-/** What the registry in `desktopTools.ts` mounts. */
 export const DESKTOP_SEQUENCE_TOOLS = {
   sequence_read: sequenceRead,
   sequence_amend: sequenceAmend,

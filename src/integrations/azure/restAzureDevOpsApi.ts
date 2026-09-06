@@ -20,44 +20,27 @@ import type {
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
 import { AzureEtagCache } from './conditionalRequests.js';
 
+// → docs/spec/15-integrations.md
+
 const execFileAsync = promisify(execFile);
 
-/** The Azure DevOps resource GUID the `az` CLI mints access tokens against. */
 const AZURE_DEVOPS_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798';
 
 const API_VERSION = '7.1';
 
-/** connectionData is a preview-only resource: 7.1 is rejected without the -preview suffix. */
 const CONNECTION_DATA_API_VERSION = '7.1-preview.1';
 
-/** The policy evaluations resource is preview-only under 7.1. */
 const POLICY_API_VERSION = '7.1-preview.1';
 
-/** Azure deletes a ref by updating it to this — there is no delete verb for one. */
 const ZERO_OBJECT_ID = '0000000000000000000000000000000000000000';
 
-/** Work-item comments are preview-only under 7.1 (7.1 flat is rejected). */
 const WORK_ITEM_COMMENTS_API_VERSION = '7.1-preview.4';
 
-/**
- * How the harness authenticates to Azure DevOps. Two implementations ship, chosen
- * by {@link resolveAzureAuth}: a Personal Access Token (Basic auth) or, when no PAT
- * is set, an access token from the logged-in `az` CLI (Bearer). Injectable so the
- * REST client stays testable and the `az` spawn is isolated.
- */
 export interface AzureAuth {
-  /** The `Authorization` header value to send with each request. */
   header(): Promise<string>;
-  /**
-   * Drop any cached credential so the next {@link header} re-mints one. Called by the
-   * request retry when Azure serves a sign-in page — an `az`-CLI token can need a beat
-   * to propagate after a refresh, so a fresh token often clears a transient rejection.
-   * A no-op for stateless auth (a PAT is fixed), hence optional.
-   */
   forceRefresh?(): void;
 }
 
-/** Basic auth with a Personal Access Token — the empty username is the ADO convention. */
 class PatAuth implements AzureAuth {
   constructor(private readonly pat: string) {}
   async header(): Promise<string> {
@@ -65,15 +48,8 @@ class PatAuth implements AzureAuth {
   }
 }
 
-/**
- * Bearer auth from the logged-in `az` CLI (`az account get-access-token`). The
- * token is cached and refreshed on a fixed window rather than parsing Azure's
- * ambiguous local-time `expiresOn` — ADO tokens live well past this, so a
- * conservative refresh is safe and avoids a fragile date parse.
- */
 class AzCliAuth implements AzureAuth {
   private cached: { token: string; fetchedAtMs: number } | null = null;
-  /** Refresh well inside the token's real lifetime (typically 60–90 min). */
   private static readonly TTL_MS = 45 * 60 * 1000;
 
   constructor(private readonly fetchToken: () => Promise<string> = azCliAccessToken) {}
@@ -86,7 +62,6 @@ class AzCliAuth implements AzureAuth {
     return `Bearer ${this.cached.token}`;
   }
 
-  /** Discard the cached token so the next {@link header} re-fetches from the `az` CLI. */
   forceRefresh(): void {
     this.cached = null;
   }
@@ -119,20 +94,10 @@ export async function azCliAccessToken(): Promise<string> {
   }
 }
 
-/**
- * Pick the auth strategy: a Personal Access Token (`AZURE_DEVOPS_PAT`) if set,
- * otherwise the logged-in `az` CLI. The PAT is read from the environment only —
- * never from config — so a secret never lands in a committed file (mirroring
- * `GITHUB_TOKEN`).
- */
 export function resolveAzureAuth(): AzureAuth {
   const pat = process.env.AZURE_DEVOPS_PAT;
   return pat ? new PatAuth(pat) : new AzCliAuth();
 }
-
-// ---------------------------------------------------------------------------
-// Minimal shapes of the Azure DevOps JSON we read. Only the fields we consume.
-// ---------------------------------------------------------------------------
 
 interface RawPull {
   pullRequestId: number;
@@ -151,9 +116,7 @@ interface RawClosedPull {
   title: string;
   sourceRefName: string;
   targetRefName: string;
-  /** active | completed | abandoned. */
   status?: string;
-  /** ISO instant the PR was completed or abandoned. Absent while still active. */
   closedDate?: string;
   createdBy?: { uniqueName?: string };
   lastMergeCommit?: { commitId?: string };
@@ -162,9 +125,7 @@ interface RawClosedPull {
 interface RawThread {
   id: number;
   status?: string | null;
-  /** Where the thread hangs in the diff. Absent on a thread attached to no file. */
   threadContext?: { filePath?: string; rightFileStart?: { line?: number }; leftFileStart?: { line?: number } } | null;
-  /** Azure wraps every property value in a `{$type, $value}` envelope. */
   properties?: Record<string, { $value?: unknown }> | null;
   comments?: Array<{
     id: number;
@@ -181,10 +142,6 @@ interface RawWorkItem {
   relations?: Array<{ rel?: string; url?: string }>;
 }
 
-/**
- * How deep {@link RestAzureDevOpsApi.listAreaPaths} asks for. Azure's parameter
- * has no "everything", and an area tree past this depth is one nobody navigates.
- */
 const AREA_DEPTH = 6;
 
 interface RawClassificationNode {
@@ -193,12 +150,6 @@ interface RawClassificationNode {
   children?: RawClassificationNode[];
 }
 
-/**
- * A classification node's address in the form `System.AreaPath` accepts. Azure
- * returns `\Contoso\Area\Web` and the field takes `Contoso\Web` — the `\Area` infix
- * names the tree, not a node, and writing it back is rejected. Dropped here so the
- * strings offered are the strings writable.
- */
 function areaNodePath(node: RawClassificationNode): string | null {
   const raw = typeof node.path === 'string' && node.path !== '' ? node.path : null;
   if (raw === null) return null;
@@ -207,13 +158,6 @@ function areaNodePath(node: RawClassificationNode): string | null {
   return [parts[0], ...parts.slice(1).filter((p) => p !== 'Area')].join('\\');
 }
 
-/**
- * Flatten Azure's thread `properties` bag to plain strings — every value arrives
- * wrapped as `{"$type", "$value"}`, and non-string `$value`s are stringified so a
- * match is one comparison. **Undefined rather than `{}` on a thread with no
- * properties**, so "carries none" reaches {@link PrReviewThread.properties} as the
- * absence it is.
- */
 function flattenThreadProperties(raw: Record<string, { $value?: unknown }> | null | undefined) {
   if (raw === null || raw === undefined) return undefined;
   const out: Record<string, string> = {};
@@ -227,11 +171,9 @@ function flattenThreadProperties(raw: Record<string, { $value?: unknown }> | nul
 
 interface RawWorkItemUpdate {
   revisedBy?: { uniqueName?: string };
-  /** Per-revision field diffs; only System.Tags is read (its old/new are strings). */
   fields?: Record<string, { oldValue?: string; newValue?: string }>;
 }
 
-/** The timeline fields we read; Azure's record carries far more. */
 interface RawTimelineRecord {
   type?: string;
   name?: string;
@@ -241,33 +183,17 @@ interface RawTimelineRecord {
 }
 
 interface RawPolicyEvaluation {
-  /** The evaluation's own id — what a requeue is addressed to. */
   evaluationId?: string;
   status?: string | null;
-  /**
-   * Build-validation evaluations carry the definition they ran here — and
-   * whether that run is expired, i.e. superseded by later commits on the branch.
-   */
   context?: { buildDefinitionName?: string; isExpired?: boolean; buildId?: number } | null;
   configuration?: {
     isBlocking?: boolean;
     isEnabled?: boolean;
     type?: { id?: string; displayName?: string };
-    /**
-     * Policy-type-specific settings. A build-validation policy names itself with
-     * `displayName`; a status policy is identified by its `statusGenre`/
-     * `statusName` pair, and separately carries `defaultDisplayName`, the label
-     * Azure renders for it on the pull request page.
-     */
     settings?: { displayName?: string; statusName?: string; statusGenre?: string; defaultDisplayName?: string };
   };
 }
 
-/**
- * The operator-facing name of a policy, however its type happens to carry one.
- * `settings.displayName` is null for most build-validation policies, leaving the
- * definition name in `context` as the only thing a `ci.checks` glob can match.
- */
 export function policyDisplayName(e: RawPolicyEvaluation): string {
   const s = e.configuration?.settings;
   if (s?.displayName) return s.displayName;
@@ -276,68 +202,32 @@ export function policyDisplayName(e: RawPolicyEvaluation): string {
   return e.configuration?.type?.displayName ?? '';
 }
 
-/**
- * The *other* names this policy answers to, so a `ci.checks` glob written against
- * any of them claims the check. A status policy is keyed by `statusGenre/statusName`
- * but labelled from `settings.defaultDisplayName`, and an operator copies what they
- * can see. An *alias*, not a replacement — {@link policyDisplayName} still decides
- * the check's name.
- */
 export function policyDisplayAliases(e: RawPolicyEvaluation): string[] {
   const primary = policyDisplayName(e);
   const alias = e.configuration?.settings?.defaultDisplayName;
   return alias && alias !== primary ? [alias] : [];
 }
 
-/** Extra attempts after the first for a *transient* failure (sign-in HTML, 429, 5xx, network). */
 const MAX_RETRIES = 2;
-/** Base backoff between retries, multiplied by the attempt number. */
 const RETRY_BACKOFF_MS = 300;
 
-/** Real delay; injectable in the client so tests don't actually wait. */
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Does this look like Azure's sign-in HTML page rather than the JSON we asked for?
- * Azure answers a rejected credential with a 2xx serving the sign-in page, which
- * passes `res.ok` and then crashes `JSON.parse` on the leading `<`. Detecting it
- * lets the client retry and, failing that, name the cause. Pure, so it is testable.
- */
 export function isSignInHtml(contentType: string | null, body: string): boolean {
   if (contentType && /text\/html/i.test(contentType)) return true;
   return /^\s*<(?:!doctype|html)\b/i.test(body);
 }
 
-/**
- * Is this rejected PATCH Azure saying the relation is already on the work item?
- * Adding a link a work item already carries is a 400, and the one 400 the linking
- * path must not surface. Matched on the exception type key (the prose is localised)
- * and on the message too. Pure, like {@link isSignInHtml}.
- */
 export function isRelationAlreadyExists(message: string): boolean {
   return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
 }
 
-/**
- * The real {@link AzureDevOpsApi}: one bound `organization`/`project`/`repository`,
- * all HTTP behind `fetch`, mapping Azure's responses down to the minimal `Az*`
- * shapes the integrations consume. All Azure DevOps HTTP (and auth) lives here —
- * nothing else in the repo touches the network — so the integrations stay
- * network-free and unit-testable.
- */
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
-  /**
-   * Validators for the GET responses Azure volunteered one for. Opportunistic
-   * and server-driven: see `conditionalRequests.ts` for what it does and does
-   * not cover on this provider.
-   */
   private readonly etags = new AzureEtagCache();
-  /** The bound project's GUID, resolved once — the policy artifactId needs the id, not the name. */
   private projectId: string | null = null;
-  /** The bound repository's GUID, resolved once — a work-item artifact link needs the id, not the name. */
   private repositoryId: string | null = null;
 
   constructor(
@@ -346,12 +236,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     private readonly repository: string,
     private readonly auth: AzureAuth,
     private readonly fetchImpl: typeof fetch = fetch,
-    /**
-     * Diagnostic sink for a request that failed every attempt — wired to the error log
-     * in prod, silent by default. A retry that recovers writes nothing here.
-     */
     private readonly log: (message: string) => void = () => {},
-    /** Injectable backoff so tests don't wait real milliseconds. */
     private readonly sleep: (ms: number) => Promise<void> = defaultSleep,
   ) {}
 
@@ -375,20 +260,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
     const method = init.method ?? 'GET';
-    // Only a GET is ever validated. A write has no business in a read cache, and
-    // the validator is only offered when the server volunteered one for this
-    // exact URL last time — see `conditionalRequests.ts` for why this layer
-    // makes no claim about which Azure endpoints answer 304.
     const cached = method === 'GET' ? this.etags.get(url) : undefined;
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) {
-        // The previous attempt hit a *transient* failure. Force a fresh token in case a
-        // stale/lagging one caused it (the `az`-CLI token can need a beat to propagate
-        // after a refresh), then back off. Nothing is recorded here: a blip the next
-        // attempt clears is not a fault, and recording it made a self-healing retry
-        // read in the Errors panel exactly like a rejected credential.
         this.auth.forceRefresh?.();
         await this.sleep(RETRY_BACKOFF_MS * attempt);
       }
@@ -406,7 +282,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
           },
         });
       } catch (err) {
-        // Network-level failure (DNS, reset, timeout) — transient, worth another try.
         lastError = new Error(`Azure DevOps ${method} ${url}: network error: ${(err as Error).message}`);
         continue;
       }
@@ -414,10 +289,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       const body = await res.text().catch(() => '');
       const contentType = res.headers.get('content-type');
 
-      // The server has just said the reading we hold is still current. That is a
-      // *fresh* answer that cost no transfer, not a degraded one — nothing here
-      // may set anything resembling `stale`. Checked before `res.ok`, which is
-      // false for a 304 and would otherwise turn it into a hard 4xx failure.
       if (res.status === 304 && cached) return JSON.parse(cached.body) as T;
 
       if (!res.ok) {
@@ -425,18 +296,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
           `Azure DevOps ${method} ${url} -> ${res.status} ${res.statusText} ` +
             `(${contentType ?? 'no content-type'}): ${body.slice(0, 300)}`,
         );
-        // Throttling (429) and server errors (5xx) can clear on a retry; a 4xx is a
-        // definitive auth/permission/not-found answer — fail fast with the legible message.
         if (res.status === 429 || res.status >= 500) continue;
         throw lastError;
       }
 
-      // A no-content success (e.g. a 204 from a label DELETE) has nothing to parse.
       if (body.trim() === '') return undefined as T;
 
-      // A 2xx can still be Azure's sign-in HTML page when the credential was transiently
-      // rejected — the notorious `Unexpected token '<'`. Retry it (a fresh token usually
-      // clears it) rather than letting JSON.parse crash on the leading `<`.
       if (isSignInHtml(contentType, body)) {
         lastError = new Error(
           `Azure DevOps ${method} ${url} -> ${res.status} returned an HTML sign-in page instead of JSON — ` +
@@ -448,14 +313,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
       try {
         const parsed = JSON.parse(body) as T;
-        // Store only what the server itself offered a validator for, so the next
-        // read of this URL can be asked conditionally. An endpoint that sends no
-        // ETag is never stored and never asked — this layer is a no-op for it.
         const etag = res.headers.get('etag');
         if (method === 'GET' && res.status === 200 && etag) this.etags.set(url, etag, body);
         return parsed;
       } catch {
-        // 2xx, not HTML, but unparseable — genuinely malformed; a retry won't help.
         throw new Error(
           `Azure DevOps ${method} ${url} -> ${res.status} returned invalid JSON ` +
             `(${contentType ?? 'no content-type'}): ${body.slice(0, 200)}`,
@@ -463,9 +324,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       }
     }
 
-    // Every attempt was spent on a transient failure, so the blip was not one: record
-    // it, naming the attempts, and throw. A caller that degrades to its last good
-    // reading swallows the throw, which is why the recording happens here.
     const exhausted = lastError ?? new Error(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES} retries`);
     this.log(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES + 1} attempts — ${exhausted.message}`);
     throw exhausted;
@@ -479,7 +337,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async viewerUniqueName(): Promise<string> {
-    // Stable for the auth lifetime, so fetch it once.
     if (this.viewer === null) {
       const data = await this.request<{
         authenticatedUser?: { properties?: { Account?: { $value?: string } }; providerDisplayName?: string };
@@ -509,21 +366,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         uniqueName: r.uniqueName ?? '',
         vote: r.vote ?? 0,
         isRequired: r.isRequired ?? false,
-        // Absent means an individual: Azure sets the flag only on the entries that
-        // are groups, so defaulting it the other way would read every reviewer as
-        // a team and drop the assignment on all of them.
         isContainer: r.isContainer ?? false,
       })),
     }));
   }
 
   async listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]> {
-    // `queryTimeRangeType=closed` + `minTime` is the server-side window; `status=all`
-    // is what makes one request cover both completions and abandonments (asking for
-    // each separately would double the cost of the feature). The client-side filter
-    // below is not redundant: the range is inclusive at the boundary, and an org on
-    // an older API version that ignores the time parameters must still not be able
-    // to flood the world with a year of closed PRs.
     const data = await this.request<{ value: RawClosedPull[] }>(
       this.withApiVersion(`${this.repoUrl}/pullrequests`, {
         'searchCriteria.status': 'all',
@@ -559,9 +407,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((t) => ({
       id: t.id,
       status: t.status ?? null,
-      // Azure leads with the right-hand side, which is the line as the change
-      // leaves it — the one a reader opening the file would look at. A thread on
-      // a deleted line has only the left, and one on no file has neither.
       filePath: t.threadContext?.filePath ?? null,
       line: t.threadContext?.rightFileStart?.line ?? t.threadContext?.leftFileStart?.line ?? null,
       properties: flattenThreadProperties(t.properties),
@@ -575,11 +420,8 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     }));
   }
 
-  /** Resolve (and cache) the bound project's GUID — the policy artifactId needs the id, not the name. */
   private async resolveProjectId(): Promise<string> {
     if (this.projectId === null) {
-      // The projects endpoint accepts either a name or an id, so passing the
-      // configured project name works whether it was already a GUID or not.
       const data = await this.request<{ id?: string }>(
         this.withApiVersion(`${this.orgUrl}/_apis/projects/${encodeURIComponent(this.project)}`),
       );
@@ -588,11 +430,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return this.projectId;
   }
 
-  /**
-   * Resolve (and cache) the bound repository's GUID. The repositories endpoint takes
-   * a name or an id, exactly as the projects one does, so this works whichever the
-   * operator configured — and a pull-request artifact link needs the id.
-   */
   private async resolveRepositoryId(): Promise<string> {
     if (this.repositoryId === null) {
       const data = await this.request<{ id?: string }>(this.withApiVersion(this.repoUrl));
@@ -603,7 +440,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   async listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]> {
     const projectId = await this.resolveProjectId();
-    // A PR is addressed as a "CodeReview" artifact; the id must carry the project GUID.
     const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`;
     const data = await this.request<{ value: RawPolicyEvaluation[] }>(
       this.withApiVersion(`${this.projectUrl}/_apis/policy/evaluations`, { artifactId }, POLICY_API_VERSION),
@@ -623,12 +459,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     }));
   }
 
-  /**
-   * Requeue one policy evaluation — a body-less PATCH. The response is the
-   * evaluation *after* the requeue and is read rather than discarded: a 200 is not a
-   * restart, and a policy Azure declined answers unchanged, where `isExpired` still
-   * true is the only signal before the next snapshot.
-   */
   async requeuePolicyEvaluation(evaluationId: string): Promise<AzPolicyRequeue> {
     const data = await this.request<RawPolicyEvaluation>(
       this.withApiVersion(
@@ -638,10 +468,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       ),
       { method: 'PATCH' },
     );
-    // A deployment that answers 204 leaves `request` with nothing to parse, which
-    // is a requeue that said nothing about itself — taken at its word rather than
-    // read as expired, since the alternative is falling back to an agent on every
-    // successful write.
     return { status: data?.status ?? null, isExpired: data?.context?.isExpired };
   }
 
@@ -659,10 +485,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async getBuildLog(buildId: number, logId: number): Promise<string[]> {
-    // Asked as JSON — the same `Accept` every other read here sends — because the
-    // endpoint answers a `{count, value: [...lines]}` envelope for it and raw
-    // text otherwise, and `request` parses JSON. The `value` guard covers a
-    // deployment that answers text anyway: no lines beats a thrown dispatch.
     const data = await this.request<{ value?: string[] }>(
       this.withApiVersion(`${this.projectUrl}/_apis/build/builds/${buildId}/logs/${logId}`),
     );
@@ -677,24 +499,13 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
-    // Two-step: WIQL returns the matching ids, then a batch read hydrates fields
-    // and relations. WIQL can't return fields directly, so the batch is required.
     return this.runWorkItemQuery(buildOpenWorkItemQuery(tag, assignedTo));
   }
 
   async listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
-    // Time precision, because the clause carries a time: see runWorkItemQuery.
     return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo), true);
   }
 
-  /**
-   * The shared two-step behind both work-item listings: ids from WIQL, fields from
-   * the batch read.
-   *
-   * A WIQL query runs at **date** precision and faults on a comparison supplying a
-   * time, so a query whose clauses carry one must ask for `timePrecision` — in the
-   * **query string**, not the body, which the server drops silently.
-   */
   private async runWorkItemQuery(wiql: string, timePrecision = false): Promise<AzWorkItem[]> {
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
       this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`, timePrecision ? { timePrecision: 'true' } : {}),
@@ -704,12 +515,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return this.getWorkItems(ids);
   }
 
-  /**
-   * The batch read, shared by the open-item list and relation hydration. Azure
-   * caps a batch at 200 ids, and `errorPolicy: 'omit'` is what keeps one dead id
-   * — a deleted parent, an item in a project this identity cannot read — from
-   * faulting the whole request and, through it, the snapshot.
-   */
   async getWorkItems(ids: number[]): Promise<AzWorkItem[]> {
     if (ids.length === 0) return [];
     const items: AzWorkItem[] = [];
@@ -718,7 +523,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         this.withApiVersion(`${this.orgUrl}/_apis/wit/workitemsbatch`),
         { method: 'POST', body: JSON.stringify({ ids: chunk, $expand: 'Relations', errorPolicy: 'omit' }) },
       );
-      // An omitted id comes back as a null-ish entry rather than being absent.
       for (const w of batch.value) if (w && typeof w.id === 'number') items.push(this.mapWorkItem(w));
     }
     return items;
@@ -759,10 +563,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         .map((r) => r.url as string),
       parentId: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Reverse')[0] ?? null,
       childIds: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Forward'),
-      // Reverse, not Forward: Azure names the link from the *other* end, so
-      // `Dependency-Forward` is this item's Successors — what waits on it — and
-      // `-Reverse` its Predecessors, what it waits on. The pair reads the same way
-      // round as Hierarchy, where `-Reverse` is the parent.
       dependsOnIds: hierarchyIds(w.relations, 'System.LinkTypes.Dependency-Reverse'),
       url: `${this.projectUrl}/_workitems/edit/${w.id}`,
     };
@@ -774,10 +574,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     parentCommentId: number,
     content: string,
   ): Promise<AzCommentRef> {
-    // The created comment's own id comes back in the response body, and it is the
-    // id the next thread read will carry — the one thing that lets attribution
-    // recognise this reply as the fleet's rather than guess from its author.
-    // Left unset when Azure answers without one; the caller must not invent it.
     const created = await this.request<{ id?: number }>(
       this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}/comments`),
       { method: 'POST', body: JSON.stringify({ content, parentCommentId, commentType: 'text' }) },
@@ -788,11 +584,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     };
   }
 
-  /**
-   * Resolve (or otherwise re-status) a thread. A PATCH on the thread itself
-   * rather than on a comment: Azure's resolution verdict lives on the thread, and
-   * it is what `buildUnresolvedComments` reads back.
-   */
   async setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void> {
     await this.request(this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}`), {
       method: 'PATCH',
@@ -801,10 +592,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
-    // A *new* thread, so nothing here is a reply into an existing one and no
-    // attribution row is ever keyed on it. Both ids are still reported when Azure
-    // gives them, so the two create paths answer in one shape — and the thread's
-    // own id is what a later resolution of it is recognised by.
     const created = await this.request<{ id?: number; comments?: { id?: number }[] }>(
       this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`),
       { method: 'POST', body: JSON.stringify({ comments: [{ content, commentType: 'text' }], status: 'active' }) },
@@ -837,12 +624,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return { status: data.status ?? 'unknown' };
   }
 
-  /**
-   * Abandon a pull request. The same PATCH `completePullRequest` makes, with the
-   * one field that matters and none of the merge machinery — no
-   * `lastMergeSourceCommit`, because nothing is being merged and Azure does not
-   * ask for one to abandon.
-   */
   async abandonPullRequest(pullRequestId: number): Promise<void> {
     await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
       method: 'PATCH',
@@ -851,9 +632,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async setWorkItemState(id: number, state: string): Promise<void> {
-    // Work item updates are a JSON Patch document, not a plain JSON body — the
-    // dedicated content type is required or Azure rejects the request. `add` on an
-    // existing field replaces it, so this doubles as an idempotent set.
     await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json-patch+json' },
@@ -881,16 +659,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return { id: data.id ?? commentId };
   }
 
-  /**
-   * The write behind Azure's **Check for linked work items** policy. The link is a
-   * relation on the *work item*, not a field on the pull request, so it is a second
-   * call and a work-item method rather than a git one.
-   *
-   * The artifact id is `{projectId}/{repositoryId}/{pullRequestId}` **URL-encoded
-   * into the vstfs path** — `%2F` inside one path segment, stored exactly as sent,
-   * which is why `linkedPrFromRelations` reads either form. A duplicate is absorbed
-   * rather than thrown.
-   */
   async linkWorkItemToPull(id: number, pullRequestId: number): Promise<void> {
     const [projectId, repositoryId] = await Promise.all([this.resolveProjectId(), this.resolveRepositoryId()]);
     const artifactUrl = `vstfs:///Git/PullRequestId/${projectId}%2F${repositoryId}%2F${pullRequestId}`;
@@ -902,9 +670,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
           {
             op: 'add',
             path: '/relations/-',
-            // `name` is what the work item's Development section labels the link.
-            // Azure defaults it to the artifact type, so omitting it is not neutral:
-            // the link renders unnamed and reads as somebody's hand-made mistake.
             value: { rel: 'ArtifactLink', url: artifactUrl, attributes: { name: 'Pull Request' } },
           },
         ]),
@@ -921,16 +686,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     tags: string[];
     assignedTo: string | null;
   }): Promise<{ id: number }> {
-    // The type is a path segment — `$Bug`, `$User Story` — and the URL-encoded
-    // space is why the type travels as a name rather than an id: what a project
-    // calls its types is process-template data, and the name is the only handle an
-    // operator can put in config.
     const url = `${this.projectUrl}/_apis/wit/workitems/$${encodeURIComponent(input.type)}`;
     const patch: { op: string; path: string; value: string }[] = [
       { op: 'add', path: '/fields/System.Title', value: input.title },
       { op: 'add', path: '/fields/System.Description', value: input.description },
     ];
-    // Semicolon-delimited, the one shape `setWorkItemTag` also writes.
     if (input.tags.length > 0) patch.push({ op: 'add', path: '/fields/System.Tags', value: input.tags.join('; ') });
     if (input.assignedTo) patch.push({ op: 'add', path: '/fields/System.AssignedTo', value: input.assignedTo });
     const data = await this.request<{ id: number }>(this.withApiVersion(url), {
@@ -962,13 +722,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     }
   }
 
-  /**
-   * The project's area tree, flattened depth-first. `$depth=<n>` rather than a walk,
-   * bounded because the parameter has no "all".
-   *
-   * Only the full `path` is a value `System.AreaPath` accepts, so that is what is
-   * carried, with the `\Area` infix dropped so the strings offered are writable.
-   */
   async listAreaPaths(): Promise<AreaPathTree> {
     const data = await this.request<RawClassificationNode>(
       this.withApiVersion(`${this.projectUrl}/_apis/wit/classificationnodes/areas`, { $depth: String(AREA_DEPTH) }),
@@ -1016,8 +769,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {
-    // System.Tags is a single semicolon-delimited string, so a tag add/remove is a
-    // read-modify-write: fetch current tags, adjust the set, PATCH the whole field.
     const wi = await this.request<{ fields?: Record<string, unknown> }>(
       this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}?fields=System.Tags`),
     );
@@ -1067,18 +818,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
-  /**
-   * Delete a branch. Azure has no delete verb for a ref — you *update* it to the zero
-   * object id, optimistically against the id it currently points at, so this is two
-   * calls. The first is also the already-gone check, which the reap treats as success.
-   */
   async deleteBranch(branch: string): Promise<boolean> {
     const plain = branch.replace(/^refs\/heads\//, '');
     const refs = await this.request<{ value: { name: string; objectId: string }[] }>(
       this.withApiVersion(`${this.repoUrl}/refs`, { filter: `heads/${plain}` }),
     );
-    // The filter is a prefix match, so `heads/issue/12` also returns `issue/120`.
-    // Only an exact name is this branch.
     const ref = refs.value.find((r) => r.name === headsRef(plain));
     if (!ref) return false;
     await this.request(this.withApiVersion(`${this.repoUrl}/refs`), {
@@ -1091,10 +835,8 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {
     const labelsUrl = `${this.repoUrl}/pullRequests/${pullRequestId}/labels`;
     if (present) {
-      // POST is idempotent-ish: re-adding an existing label just returns it.
       await this.request(this.withApiVersion(labelsUrl), { method: 'POST', body: JSON.stringify({ name: label }) });
     } else {
-      // DELETE by label name; a 404 (label not present) is a no-op for our purposes.
       try {
         await this.request(this.withApiVersion(`${labelsUrl}/${encodeURIComponent(label)}`), { method: 'DELETE' });
       } catch (err) {
@@ -1104,62 +846,29 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 }
 
-/**
- * A plain branch name as the full ref Azure's PR API expects. The read side strips
- * this prefix (`sourceControl.ts`), so every branch inside the harness is plain and
- * the conversion belongs at this one boundary.
- */
 function headsRef(branch: string): string {
   return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
 }
 
-/**
- * WIQL selecting open work items in the bound project, optionally narrowed to a tag
- * and/or an assignee (uniqueName/UPN). Both narrowings are independent AND clauses, so
- * any combination — neither, either, both — composes.
- */
 export function buildOpenWorkItemQuery(tag?: string, assignedTo?: string): string {
   return workItemQuery(["[System.State] NOT IN ('Closed', 'Done', 'Removed', 'Resolved')"], tag, assignedTo);
 }
 
-/**
- * WIQL selecting work items in **any** state that changed at or after `since`, under
- * the same tag/assignee narrowing — the ticket mirror's query. The state clause is
- * dropped rather than inverted, since this is a history. Exported for its own test:
- * a mis-built WIQL fails as an empty result rather than as an error.
- */
 export function buildWorkItemHistoryQuery(since: string, tag?: string, assignedTo?: string): string {
   return workItemQuery([`[System.ChangedDate] >= '${wiqlDate(since)}'`], tag, assignedTo);
 }
 
-/** The clauses both work-item queries share, so the two narrowings are written once. */
 function workItemQuery(extra: string[], tag?: string, assignedTo?: string): string {
   const clauses = ['[System.TeamProject] = @project', ...extra];
-  // Tags are matched with CONTAINS; a single-quote in a tag would break the query,
-  // so escape it the SQL way (double the quote).
   if (tag) clauses.push(`[System.Tags] CONTAINS '${tag.replace(/'/g, "''")}'`);
-  // AssignedTo matches the identity's uniqueName/UPN exactly; same single-quote escape.
   if (assignedTo) clauses.push(`[System.AssignedTo] = '${assignedTo.replace(/'/g, "''")}'`);
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(' AND ')} ORDER BY [System.Id] ASC`;
 }
 
-/**
- * An ISO instant as WIQL will accept it: `YYYY-MM-DD HH:MM:SSZ`. WIQL faults the
- * whole query on the `T` separator or sub-second precision, and on any time at all
- * unless the request sets `timePrecision` ({@link RestAzureDevOpsApi}) — one fix in
- * two places. Quotes are stripped rather than escaped: this is never
- * operator-supplied.
- */
 function wiqlDate(iso: string): string {
   return iso.replace(/'/g, '').replace('T', ' ').replace(/\.\d+/, '').replace(/Z?$/, 'Z');
 }
 
-/**
- * The work-item ids on one side of the hierarchy, read out of a work item's
- * relations — the trailing segment of the relation's REST `url`. Exported for its
- * own test: a silently-unparsed url presents as a tracker with no hierarchy rather
- * than as an error.
- */
 export function hierarchyIds(relations: RawWorkItem['relations'], rel: string): number[] {
   const ids: number[] = [];
   for (const r of relations ?? []) {

@@ -6,44 +6,9 @@ import { toolError } from '../protocol.js';
 import type { ObstacleKind } from '../../types.js';
 import type { ToolFactory } from './context.js';
 
-/**
- * The one door: anything in an agent's way that is not its goal, and anything true
- * of this repository that the repository does not say.
- *
- * **What this replaces is a question the agent was never in a position to answer.**
- * Filing an observation used to mean choosing between `report_finding` (and then
- * which of its four kinds), `knowledge_propose`, `knowledge_notice`,
- * `knowledge_contradict` and a retrospective's `lessons` field — six doors sorted
- * by *what an operator would do about it*, which is knowledge the operator has and
- * the agent does not. The intake collapsed those to one; the obstacle board
- * (`docs/spec/27-obstacles.md`) keeps the one door and reshapes what is asked
- * through it.
- *
- * The routing, and the whole of it — no kind, no lifetime word, no destination.
- * One boolean the agent can always answer, *would a fix make this go away?*:
- *
- * - true → an **obstacle**, something broken now that a fix ends
- * - false, or unsaid → a **note**, something true of the repository that the
- *   repository does not say, which ends by being written down
- *
- * Both land on the same board through the same `recordObstacleSighting`, and both
- * calls are the lookup.
- *
- * **Reporting is the lookup.** There is no search tool: an agent does not search on
- * a hunch, and searching would require it to guess the words somebody else used —
- * the failure a search tool had. It calls something the moment it is in pain, so
- * the pain call returns the answer, in one round trip, with no model call and
- * nothing to wait for. The report is filed either way and never held pending a
- * reply.
- *
- * **The gate is the same on both arms.** A row reaches nobody until a second
- * independent voice has said it. Making it easier to file costs nothing, because
- * filing has never been what puts a sentence in front of the fleet.
- */
+// → docs/spec/11-mcp-tools.md
+
 export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
-  // The goal, never the origin and never the agent: `pr:412:ci` and
-  // `pr:412:comments` are two origins of one observation, and the count of
-  // independent voices is the whole of what carries a row to `standing`.
   const goalRef = corroborationGoal(task.originRef);
   return {
     description:
@@ -118,11 +83,6 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       const raised = validateRaisedObstacle(args, goalRef);
       if (!raised.ok) return toolError(`Not raised: ${raised.error}`);
       const report = raised.report;
-      // The one classification asked of the agent, and the whole of the routing:
-      // *would a fix make this go away?* Anything else — including saying nothing
-      // — is a note, which is something true of the repository that ends by being
-      // written down rather than by being fixed. It is a column on the row and
-      // never a second door: an agent choosing a shelf is an agent choosing wrongly.
       const kind: ObstacleKind =
         (args as Record<string, unknown> | undefined)?.fix_makes_it_go_away === true ? 'obstacle' : 'note';
       const world = buildObstacleWorld({
@@ -135,10 +95,6 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
         extractKeys({ what: report.what, evidence: report.whyNotMine, world, declared: report.keys }),
         world,
       );
-      // **An agent may not report its own breakage.** The harness holds the diff
-      // already, so this is the only enforcement of *fix what you broke* that is
-      // not a sentence in a prompt — and a sentence in a prompt is not an
-      // enforcement. It refuses, names the file, and records nothing.
       const mine = ownBreakage(
         keys,
         deps.store.listFiles(agent.id).map((file) => file.path),

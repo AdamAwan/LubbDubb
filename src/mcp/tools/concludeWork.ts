@@ -3,6 +3,8 @@ import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Say whether the ISSUE you were dispatched for is now finished — not whether your own turn is ' +
@@ -42,10 +44,6 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = validateConclusion(args);
     if (!parsed.ok) return toolError(`Conclusion rejected: ${parsed.error}`);
-    // Its own path because it is its own record: a block writes no conclusion row
-    // at all. The two verdicts below say something about the *work*; this says the
-    // work could not be attempted, and the thing that lifts it is the board rather
-    // than anybody's opinion about whether the goal is finished.
     if (parsed.verdict === BLOCKED_STATUS) {
       const blocked = deps.agents.recordBlocked(agent.id, parsed.obstacleId, parsed.note);
       if (!blocked.ok) return toolError(blocked.error);
@@ -60,19 +58,12 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
           DONE_REMINDER,
       });
     }
-    // Structural identity, and here it carries more than attribution: the
-    // origin decides whether there is anything to conclude at all. A part
-    // agent is refused rather than scoped down — see `conclusionOrigin`.
     const result = deps.agents.recordConclusion(agent.id, parsed.verdict, parsed.note);
     if (!result.ok) return toolError(result.error);
     return ok({
       concluded: true,
       issue: result.conclusion.originRef,
       status: result.conclusion.verdict,
-      // Said in the response as well as the description: an agent that
-      // believes "done" closed the ticket would stop looking at it, and an
-      // agent that believes "more_work" scheduled something would wait. The
-      // finish reminder rides along for {@link DONE_REMINDER}'s reason.
       note:
         (parsed.verdict === 'done'
           ? 'Recorded. The harness will schedule nothing further for this issue. It does not close the ' +

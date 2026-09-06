@@ -14,33 +14,17 @@ import type { Store } from '../../store/store.js';
 import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** The ways out of a plan verdict an operator does not want to simply accept or reject, plus its history. */
+// → docs/spec/16-http-api.md
+
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness, proposals, config } = system;
 
-  // Every verdict this plan has had, and the last amendment read as a change.
-  //
-  // A route of its own rather than a field on `/api/state`, for the reason the work
-  // graph and the retro have theirs: it is read when a sheet is opened rather than
-  // every pulse, and the write-ups it carries are the largest prose the store holds
-  // — a plan replanned three times would put three of them into every poll.
-  //
-  // The diff is computed here rather than in the browser because it is a *reading
-  // of the plan*, and the cockpit re-deriving one would be a second answer to a
-  // question the server already answers. It is null on a plan with a single
-  // verdict, which is not an amendment and would draw every part as "added".
   app.get(
     '/api/plans/:id/history',
     checked({ params: IdParams }, async ({ params, reply }) => {
       const { id } = params;
       if (!store.getPlan(id)) return reply.code(404).send({ error: 'plan not found' });
       const revisions = store.listPlanRevisions(id);
-      // The change waiting on the operator, read the same way the approval card
-      // reads it: `proposedPlanDiff` against the latest revision, and
-      // `amendmentWarnings` over the plan's live rows. Both are the server's, for
-      // the diff's reason above — a second reading in the browser is a second
-      // answer to a question this route already answers, and the one drawn beside
-      // the card would be the other one.
       const pending = store.listPlanAmendments(id).find((a) => a.status === 'pending') ?? null;
       return {
         revisions,
@@ -50,8 +34,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Send a plan back for replanning. Nothing is torn down.
-  // → `docs/spec/16-http-api.md#post-apiplansidreplan`, `docs/spec/08-planning.md`
   app.post(
     '/api/plans/:id/replan',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -59,15 +41,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const plan = store.getPlan(id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
       const next = store.setPlanStatus(id, 'planning');
-      // A replan supersedes an approval that was still being asked for; the status
-      // write above is what makes this safe to route through the ordinary reject.
-      // → `docs/spec/08-planning.md`
       const ref = planProposalRef(plan.originRef);
       const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
       if (pending) proposals.reject(pending.id, 'superseded by a replan');
-      // A pending *amendment* goes the same way. **The rows are settled before the
-      // cards are withdrawn**, and that order is what makes this a withdrawal
-      // rather than a verdict. → `docs/spec/08-planning.md`
       const pendingAmendments = store.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
       supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       for (const amendment of pendingAmendments) {
@@ -83,17 +59,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Tick (or un-tick) one of a part's acceptance criteria.
-  //
-  // The reviewer's own reading, never the harness's: nothing here derives whether a
-  // criterion holds, for the reason `conclude_part` refuses to derive an outcome —
-  // inferring a positive terminal from incidental evidence is the mistake the
-  // harness refuses everywhere. What this adds is only that the criteria are *in
-  // front of* the merged pull request instead of in a plan nobody reopens.
-  //
-  // Keyed on the criterion's text rather than its index, so a re-worded criterion
-  // loses its tick. That is the behaviour worth having: an amendment that changes
-  // what "done" means has withdrawn the thing that was confirmed.
   app.post(
     '/api/plans/:id/acceptance',
     checked({ params: IdParams, body: AcceptanceBody }, async ({ params, body, reply }) => {
@@ -101,9 +66,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
       const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
-      // Refused rather than stored: a tick against text no criterion carries can
-      // never be shown again, so accepting it would report a confirmation the sheet
-      // would then not draw.
       const criteria = acceptanceCriteria(part);
       if (!criteria.some((c) => c.text === body.criterion))
         return reply.code(409).send({ error: 'that criterion is not one this part declares' });
@@ -112,23 +74,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         : part.acceptanceMet.filter((c) => c !== body.criterion);
       const updated = store.setPartAcceptanceMet(part.id, next);
       hub.broadcast({ type: 'world:changed' });
-      // No cycle: a reviewer's note about finished work schedules nothing, and
-      // running one would be a pulse per checkbox.
       return { ok: true, part: updated };
     }),
   );
 
-  // Override which model profile one part's work runs on (issue #342).
-  //
-  // The planner's claim, edited: it sized the part it had just cut, and an
-  // operator reading the decomposition may know better. Clearing it (an absent or
-  // empty `profile`) is its own answer rather than a synonym for the goal's
-  // profile — a cleared part inherits, so re-pinning the goal later moves it too.
-  //
-  // Refused by name against the configured profiles, the same way the goal pin is
-  // and for the same reason: this is the surface that cannot produce a bad value,
-  // as distinct from a plan document, which is agent-authored and falls back
-  // instead.
   const PartProfileBody = z.object({
     slug: requiredText('slug is required — the part being pinned'),
     profile: optionalText('profile'),
@@ -151,27 +100,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         });
       const updated = store.setPartProfile(part.id, wanted);
       hub.broadcast({ type: 'world:changed' });
-      // A cycle, unlike the acceptance tick above: this changes what the next
-      // dispatch of a pending part costs, so an operator who re-prices one about
-      // to go out wants that to land before it does.
       await harness.runCycle('manual');
       return { ok: true, part: updated };
     }),
   );
 
-  // Restart a part an amendment has overtaken: close its pull request, drop its
-  // branch, and put the row back to `ready` so rule `plan-part` schedules it again
-  // against the declaration the plan carries **now**.
-  //
-  // **Operator-triggered, and nothing else may reach it.** Applying an amendment
-  // deliberately stops no running work — a part keeps its branch, its PR and its
-  // status, and the diff the operator read is the diff of the *declaration*.
-  // Closing a reviewable pull request on the strength of a rewritten scope field is
-  // outward-facing and effectively irreversible, so it stays a person's act.
-  //
-  // Every refusal is a returned 400 naming the reason, never a throw: the four
-  // conditions are ordinary states a part can be in, and `setErrorHandler` means
-  // *unanticipated*. → `docs/spec/08-planning.md#restarting-a-part`
   const RestartPartBody = z.object({ slug: requiredText('slug is required — the part being restarted') });
   app.post(
     '/api/plans/:id/restart-part',
@@ -183,9 +116,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const issueNumber = planIssueNumber(plan.originRef);
       if (issueNumber === null)
         return reply.code(400).send({ error: `${plan.originRef} names no issue, so its parts have no branch to drop` });
-      // The capability is asked of the connector, exactly as the close-out row's
-      // asks it: the cockpit reads the same flag off `config.canClosePr` and draws
-      // no control where it is false, so this is the backstop rather than the notice.
       const refusal = partRestartRefusal(part, store.listTasks(), system.connector.canClosePr());
       if (refusal !== null) return reply.code(400).send({ error: refusal });
 
@@ -196,26 +126,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       );
       if (!done.ok) return reply.code(400).send({ error: done.error });
       hub.broadcast({ type: 'world:changed' });
-      // A cycle, for the reason the part-profile pin runs one and rather more so:
-      // the pull request just left the provider's open list, and the part is
-      // dispatchable again — an operator who restarts a part wants the new run to
-      // start, not to wait out a heartbeat for it.
       await harness.runCycle('manual');
       return { ok: true, part: done.part, detail: done.detail };
     }),
   );
 }
 
-/**
- * A pending amendment as the plan sheet reads it, or null.
- *
- * The stored document is parsed here rather than shipped: the sheet draws the
- * diff, not the document, and a row written by an older build that no longer
- * validates has no diff to draw — so it degrades to its note and its warnings
- * rather than failing the whole history. `applyPlanAmendment` makes the same
- * reading and settles such a row where it is applied; this one only has to avoid
- * being the reason a plan sheet will not open.
- */
 function pendingView(
   amendment: PlanAmendment | null,
   store: Store,
@@ -239,15 +155,6 @@ function pendingView(
   };
 }
 
-/**
- * The stored document as the two readings above need it, or null.
- *
- * Null on anything that cannot be read — malformed JSON from a hand-edited row, a
- * document the schema has since moved past — and **recorded** rather than
- * swallowed, since a row nothing can draw is a row nothing can apply either and
- * the operator's card is about to say the same. The reading is degraded, not
- * fatal: the sheet still draws the note, which is the case being made.
- */
 function readDeclaration(
   amendment: PlanAmendment,
   errors: ErrorRecorder,

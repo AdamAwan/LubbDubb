@@ -1,4 +1,4 @@
-// → docs/spec/06-issue-pickup.md (the watch label), docs/spec/07-pull-requests.md#watching-a-pull-request
+// → docs/spec/06-issue-pickup.md
 
 export function watchLabelFor(prefix: string): string {
   return prefix ? `${prefix}-watch` : '';

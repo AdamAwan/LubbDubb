@@ -1,41 +1,16 @@
 import type { ReviewAnchor, ReviewClaim, ReviewIdea, ReviewPack, ReviewRange } from '../types.js';
 
-/**
- * The derivations a rendering of a pack needs, on the harness's side.
- *
- * **Two statements of one set of rules, held together by a test.** The cockpit's
- * copy is `web/src/view/reviewPack.ts` and this is the companion's, and neither
- * can import the other: `web/src/` may name no server module but `src/wire.ts`,
- * which carries no runtime, so there is no one place both can reach. That is the
- * same arrangement `KNOWN_REVIEW_PACK_SCHEMA` already has, for the same reason and
- * with the same defence — `test/reviewPackCompanion.test.ts` runs both over one
- * pack and asserts they agree, so a rule changed on one side and not the other
- * fails there rather than shipping two pages that disagree about which idea is
- * number one.
- *
- * Nothing here reads a rendering, holds state, or touches the store: a pack is
- * data and every rendering is downstream of it.
- * → `docs/spec/31-review-packs.md#a-pack-is-data-and-rendering-is-downstream`
- */
+// → docs/spec/31-review-packs.md
 
-/** The hunks an idea owns — the `hunk` anchors; a `region` is a reference, not ownership. */
 function ownedHunks(idea: ReviewIdea): ReviewRange[] {
   return idea.anchors.filter((a) => a.kind === 'hunk').map((a) => a.range);
 }
 
-/** One idea with the number the page gives it. */
 interface NumberedIdea {
   idea: ReviewIdea;
-  /** 1-based, as the rows and the finding's `step` reference them. */
   number: number;
 }
 
-/**
- * The ideas in the order the page draws them, numbered — by the checker's `order`
- * where it has run, and by document order until then, with the page saying which.
- * An idea the order does not name is drawn after the ordered ones rather than
- * lost.
- */
 export function numberIdeas(pack: ReviewPack): { by: 'order' | 'document'; ideas: NumberedIdea[] } {
   if (pack.order.length === 0) {
     return { by: 'document', ideas: pack.ideas.map((idea, i) => ({ idea, number: i + 1 })) };
@@ -50,20 +25,13 @@ export function numberIdeas(pack: ReviewPack): { by: 'order' | 'document'; ideas
   return { by: 'order', ideas: ordered.map((idea, i) => ({ idea, number: i + 1 })) };
 }
 
-/** A false claim, with the idea it sits on and where that idea is numbered. */
 export interface FalseClaim {
   idea: ReviewIdea;
   number: number;
-  /** 1-based, as the claims list numbers them. */
   claimNumber: number;
   claim: ReviewClaim;
 }
 
-/**
- * Every claim the checker marked false, in page order. What the gate counts and
- * the finding boxes draw, off one derivation so the two cannot disagree.
- * → `docs/spec/31-review-packs.md#what-a-false-claim-does`
- */
 export function falseClaims(pack: ReviewPack): FalseClaim[] {
   const out: FalseClaim[] = [];
   for (const { idea, number } of numberIdeas(pack).ideas) {
@@ -74,7 +42,6 @@ export function falseClaims(pack: ReviewPack): FalseClaim[] {
   return out;
 }
 
-/** What an idea's collapsed row must say even to a reader who opens nothing. */
 export function ideaFlags(idea: ReviewIdea): { falseClaims: number; disputed: number } {
   return {
     falseClaims: idea.claims.filter((c) => c.verdict === 'false').length,
@@ -82,7 +49,6 @@ export function ideaFlags(idea: ReviewIdea): { falseClaims: number; disputed: nu
   };
 }
 
-/** The masthead's facts line, every figure read off the document rather than stated in it. */
 interface PackFacts {
   ideas: number;
   files: number;
@@ -110,41 +76,16 @@ export function packFacts(pack: ReviewPack): PackFacts {
   return { ideas: pack.ideas.length, files: files.size, changes, claims };
 }
 
-/**
- * One line of an embedded code block, with the diff marker taken **out of the
- * text**. → `docs/spec/31-review-packs.md#the-code-block`
- *
- * A hunk's lines arrive as git printed them, so every line carries a leading
- * `+`, `-` or space. Printed inline that marker is the first character of the
- * code: it shifts the indentation by a column, it lands in anything the reader
- * copies, and on a new file — where every line is an addition — a whole screen
- * of `+` says one thing the tag above the block already said. The marker is a
- * column of its own here, and `text` is the code as it actually reads.
- */
 interface CodeLine {
-  /** `+`, `-` or `' '` for a diff line; null for a region's plain lines. */
   marker: '+' | '-' | ' ' | null;
   text: string;
 }
 
-/**
- * A code block split for rendering: the lines, and whether the marker column is
- * worth drawing at all.
- *
- * **The gutter is dropped when every line carries the same marker** — a new
- * file, a deleted one, a pure insertion. There is nothing to tell apart, the tag
- * on the step already says `changed +102`, and the column is a screen-tall
- * repetition of one character. It is drawn the moment a block mixes markers,
- * because that is when it carries the information.
- */
 export function codeBlockLines(code: readonly string[], diff: boolean): { gutter: boolean; lines: CodeLine[] } {
   if (!diff) return { gutter: false, lines: code.map((text) => ({ marker: null, text })) };
   const lines: CodeLine[] = code.map((line) => {
     const head = line.slice(0, 1);
     if (head === '+' || head === '-' || head === ' ') return { marker: head, text: line.slice(1) };
-    // A line git printed without a prefix — the "\ No newline" trailer, or a
-    // pack from a build that embedded them plain. Kept whole rather than losing
-    // its first character to a column it never had.
     return { marker: null, text: line };
   });
   const first = lines[0]?.marker ?? null;
@@ -152,66 +93,31 @@ export function codeBlockLines(code: readonly string[], diff: boolean): { gutter
   return { gutter, lines };
 }
 
-/**
- * How much of a look one stop wants, decided from the code rather than declared.
- * → `docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop`
- *
- * The idea carries the checker's `attention`; this is the tier below it, because
- * a walk mixes an import block and a fifty-line function and draws them as equals.
- * Three values, and only the middle one is the ordinary case:
- *
- * - `key` is the author's own mark and nothing here second-guesses it.
- * - `minor` is a stop that costs a reader nothing: a hunk whose changed lines are
- *   all imports, or two changed lines or fewer. It is drawn quiet and its code is
- *   folded.
- * - `normal` is everything else, drawn as it always was.
- *
- * **Derived and never authored.** A `weight` field on the anchor would be more
- * accurate — the author knows which forty lines are hairy and which are
- * boilerplate, and no rule reading the text will — but it is a document change
- * that every pack already written would lack, and this reaches the noisy majority
- * for nothing. A region anchor is never `minor`: it is in the pack because
- * somebody decided the change could not be judged without it.
- */
 export function anchorWeight(anchor: ReviewAnchor): 'key' | 'normal' | 'minor' {
   if (anchor.mark === 'key') return 'key';
   if (anchor.kind !== 'hunk') return 'normal';
   const changed = anchor.code.filter((l) => l.startsWith('+') || l.startsWith('-'));
   if (changed.length === 0) return 'minor';
   if (changed.every((l) => IMPORT_LINE.test(l))) return 'minor';
-  // Few lines is not the same as little to read: one changed line can be a
-  // thousand characters of prompt or doc, and drawing that quiet is the mistake
-  // this makes in the direction that costs a reader something. So both.
   const written = changed.reduce((n, l) => n + l.trim().length, 0);
   return changed.length <= MINOR_LINES && written <= MINOR_CHARS ? 'minor' : 'normal';
 }
 
-/** A changed line that is part of an import or export statement, including its wrapped members. */
 const IMPORT_LINE =
   /^[+-]\s*(?:import\b|export\s+(?:\*|\{|type\b)|\}?\s*from\s|[A-Za-z_$][\w$]*\s*,?\s*$|\{\s*$|\}\s*$)/;
 
-/** Changed lines at or under which a hunk may carry nothing to stop for. */
 const MINOR_LINES = 2;
 
-/** And the characters within them, because one line can hold a whole prompt. */
 const MINOR_CHARS = 160;
 
-/**
- * The languages a code block is highlighted in, decided from the anchor's path.
- * Null is "draw it plain", and is the honest answer for everything else: a
- * tokenizer guessing at a language it does not know **mis**-colours, and a
- * confident wrong colour is worse to read than no colour at all.
- */
 type CodeLanguage = 'ts' | 'json';
 
-/** The language of a file, by extension, or null to draw it plain. */
 export function codeLanguage(path: string): CodeLanguage | null {
   if (/\.[cm]?[jt]sx?$/.test(path)) return 'ts';
   if (/\.json[c5]?$/.test(path)) return 'json';
   return null;
 }
 
-/** One run of a line, with what it is. `plain` is everything the scanner does not name. */
 interface CodeToken {
   kind: 'plain' | 'comment' | 'string' | 'number' | 'keyword';
   text: string;
@@ -277,27 +183,6 @@ const TS_KEYWORDS = new Set([
 ]);
 const JSON_KEYWORDS = new Set(['true', 'false', 'null']);
 
-/**
- * Split a block of code into coloured runs, line by line.
- * → `docs/spec/31-review-packs.md#the-code-block`
- *
- * **Rendered here, never in the browser.** The companion is one self-contained
- * file with no script and no request, so a highlighter that runs on the page is
- * not available to it, and a pack that highlighted in the cockpit and not in the
- * companion would be two pages disagreeing about what the code says.
- *
- * The whole block is scanned at once and cut at newlines afterwards, so a block
- * comment or a template literal that spans lines is one run rather than a
- * mis-coloured line each. What it deliberately does not do: no regular
- * expressions (telling one from a division needs a parser, and the wrong guess
- * silently swallows the rest of the line), no interpolation inside a template
- * literal, and no identifier classification beyond the keyword list — the parts
- * of a highlighter that are wrong often enough to cost more than they give.
- *
- * A quoted string never runs past its own line: the code arrives as a hunk, which
- * can begin and end anywhere, and a stray quote on a cut boundary would otherwise
- * colour every line under it.
- */
 export function highlightCode(code: readonly string[], language: CodeLanguage | null): CodeToken[][] {
   if (language === null) return code.map((text) => [{ kind: 'plain', text }]);
   const source = code.join('\n');
@@ -341,7 +226,6 @@ export function highlightCode(code: readonly string[], language: CodeLanguage | 
           j += 1;
           break;
         }
-        // A quoted string cannot span a line, and a hunk can be cut anywhere.
         if (c === '\n' && quote !== '`') break;
         j += 1;
       }
@@ -371,7 +255,6 @@ export function highlightCode(code: readonly string[], language: CodeLanguage | 
   }
   keep('plain', '');
 
-  // Back into lines, splitting the runs that crossed one.
   const lines: CodeToken[][] = [[]];
   for (const run of runs) {
     const parts = run.text.split('\n');
@@ -380,13 +263,10 @@ export function highlightCode(code: readonly string[], language: CodeLanguage | 
       if (part !== '') lines[lines.length - 1]!.push({ kind: run.kind, text: part });
     });
   }
-  // `code.join` produced exactly one line per input line; anything else is a bug
-  // here rather than something to paper over at the call site.
   while (lines.length < code.length) lines.push([]);
   return lines.slice(0, Math.max(code.length, 0));
 }
 
-/** A sha the way a page prints one: seven characters, or the whole thing when it is shorter. */
 export function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }

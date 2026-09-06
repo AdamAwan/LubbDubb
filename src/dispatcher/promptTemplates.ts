@@ -1,24 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 
-/**
- * Operator-customisable dispatch prompts.
- *
- * Every agent- (and escalation-) facing prompt the harness composes itself has a
- * stable id and a built-in default here — the {@link RuleDispatcher}'s, plus the
- * route-driven `finding-ticket` and `docs-change`, which are here rather than
- * inline in the route precisely because *how a ticket should be written*, and
- * *how a documentation change should be worded and where it belongs*, are the
- * operator's opinion, not the harness's. An operator can override any of
- * them by dropping a `<id>.md` file into the prompt-templates directory
- * (`promptTemplatesDir`, default `.lubbdubb/prompts`); unset ids keep their
- * default. Overrides are read once at boot — templates don't change per-cycle.
- *
- * A template is a plain string with `{placeholder}` tokens filled at dispatch
- * time. Each id declares the exact placeholders it supports; an override that
- * references an unknown placeholder (or lives in a file whose name matches no
- * id) fails fast at load, so a typo can't silently ship a broken prompt.
- */
+// → docs/spec/05-dispatcher.md
+
 type PromptId =
   | 'issue-plan'
   | 'issue-replan'
@@ -65,27 +49,9 @@ type PromptId =
   | 'pr-title';
 
 interface TemplateDef {
-  /** The placeholder names this template may reference (validated on override). */
   readonly placeholders: readonly string[];
-  /** Built-in default, used unless an operator override replaces it. */
   readonly template: string;
-  /**
-   * Human-facing note on what the prompt is for and when it fires, plus its
-   * placeholders. Seeds the strippable doc header of the sample override files
-   * so operators start from a self-documenting template.
-   */
   readonly doc: string;
-  /**
-   * Set on an id the harness no longer renders — because the work it prompted for
-   * moved (issue #394 filed two of the four ticket arms directly, so their prompts
-   * have no agent left to send them to), or because the id was renamed under it.
-   *
-   * The id stays in the book rather than being deleted, because `loadPromptTemplates`
-   * **throws** on a file naming no known id: removing one would turn an operator's
-   * customised deployment into a harness that will not boot. It is surfaced on
-   * {@link PromptTemplates.describe} instead, so the Prompts panel says the override
-   * is no longer sent rather than leaving it looking live.
-   */
   readonly retired?: true;
 }
 
@@ -962,77 +928,44 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
 
 const KNOWN_IDS = Object.keys(REGISTRY) as PromptId[];
 
-/** Every `{token}` referenced in a template body. */
 function placeholdersIn(template: string): string[] {
   return [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
 }
 
-/**
- * Fill `{name}` tokens from `vars`. Pure. A token with no matching var is left
- * untouched (a default template only ever references vars the caller supplies;
- * an override is placeholder-validated at load, so this can't silently drop
- * data). Values stringify — numbers included.
- */
 export function renderTemplate(template: string, vars: Record<string, string | number | undefined>): string {
   return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
     name in vars && vars[name] !== undefined ? String(vars[name]) : whole,
   );
 }
 
-/**
- * Strip a single leading HTML-comment block (the operator's "what/when" doc)
- * plus surrounding whitespace, so a documented override file never leaks its
- * documentation into the agent's prompt. Only a *leading* comment is removed —
- * a comment inside the prompt body is left alone.
- */
 export function stripTemplateDoc(raw: string): string {
   return raw.replace(/^\s*<!--[\s\S]*?-->\s*/, '').trim();
 }
 
-/** The `<!-- doc -->` + body a sample/scaffold override file should contain. */
 export function sampleTemplateFile(id: PromptId): string {
   return `<!--\n  ${REGISTRY[id].doc}\n-->\n\n${REGISTRY[id].template}\n`;
 }
 
-/** One template as the cockpit shows it: what it is, and what it says. */
 export interface PromptTemplateDescription {
   readonly id: PromptId;
-  /** What the prompt is for and when it fires — the registry's own note. */
   readonly doc: string;
-  /** The `{token}`s this id may reference, i.e. what an override may use. */
   readonly placeholders: readonly string[];
-  /** The **effective** text: the override where there is one, else the default. */
   readonly template: string;
-  /** Whether an operator override replaced the built-in. */
   readonly overridden: boolean;
-  /** True for an id the harness no longer renders — see {@link TemplateDef.retired}. */
   readonly retired: boolean;
 }
 
-/**
- * The resolved template book handed to the dispatcher: defaults overlaid with
- * any operator overrides. Construct via {@link loadPromptTemplates} (reads the
- * override dir) or {@link defaultPromptTemplates} (defaults only, for tests).
- */
 export class PromptTemplates {
   private readonly templates: Record<PromptId, string>;
   private readonly overridden: Set<PromptId>;
   constructor(overrides: Partial<Record<PromptId, string>> = {}) {
     this.templates = {} as Record<PromptId, string>;
     for (const id of KNOWN_IDS) this.templates[id] = overrides[id] ?? REGISTRY[id].template;
-    // Held rather than re-derived: the book is the one thing that knows an
-    // override happened, and a consumer comparing the text back against
-    // REGISTRY would be a second opinion able to disagree with it.
     this.overridden = new Set(KNOWN_IDS.filter((id) => overrides[id] !== undefined));
   }
-  /** Render prompt `id` with `vars`. */
   render(id: PromptId, vars: Record<string, string | number | undefined>): string {
     return renderTemplate(this.templates[id], vars);
   }
-  /**
-   * The whole book, for `GET /api/prompts`. The effective text, so the cockpit
-   * shows what the dispatcher actually sends rather than what ships in the box.
-   */
   describe(): PromptTemplateDescription[] {
     return KNOWN_IDS.map((id) => ({
       id,
@@ -1045,17 +978,10 @@ export class PromptTemplates {
   }
 }
 
-/** Defaults only — the built-in prompts, no overrides. */
 export function defaultPromptTemplates(): PromptTemplates {
   return new PromptTemplates();
 }
 
-/**
- * Read `<id>.md` overrides from `dir` and fold them onto the defaults. Absent
- * dir => defaults. Fails fast on a file that names no known id, references an
- * unknown placeholder, or is empty once its doc header is stripped — an
- * operator typo surfaces at boot, not as a silently broken prompt.
- */
 export function loadPromptTemplates(dir: string | undefined): PromptTemplates {
   if (!dir || !existsSync(dir)) return defaultPromptTemplates();
   const overrides: Partial<Record<PromptId, string>> = {};

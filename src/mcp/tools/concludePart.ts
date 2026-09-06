@@ -3,6 +3,8 @@ import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const concludePart: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Close YOUR PART of a decomposed issue when it finished without a pull request. Most parts end in ' +
@@ -39,17 +41,12 @@ export const concludePart: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = validatePartConclusion(args);
     if (!parsed.ok) return toolError(`Part conclusion rejected: ${parsed.error}`);
-    // Structural identity, carrying more than attribution again: the origin
-    // decides *which* part this is, so an agent cannot conclude a sibling's.
     const result = deps.agents.recordPartOutcome(agent.id, parsed.kind, parsed.summary, parsed.ref);
     if (!result.ok) return toolError(result.error);
     return ok({
       concluded: true,
       part: result.part.slug,
       outcome: result.part.outcomeKind,
-      // Said in the response as well as the description, for `conclude_work`'s
-      // reason: an agent that believed this settled the issue would stop. The
-      // finish reminder rides along for {@link DONE_REMINDER}'s reason.
       note:
         'Recorded. This part is finished and nothing further is dispatched for it. The rest of the ' +
         'plan is unaffected, and whether the issue itself is done is decided by the plan as a whole. ' +

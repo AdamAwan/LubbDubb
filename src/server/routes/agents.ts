@@ -4,11 +4,8 @@ import { checked, IdParams } from '../validation.js';
 import type { AgentFilesPayload, AgentTranscript } from '../../wire.js';
 import type { RouteContext } from './context.js';
 
-/**
- * How much of a transcript the caller already holds. Absent means "all of it",
- * which is what the first read of a drawer asks for; the polls after it name what
- * they have so a quiet run costs an empty string rather than the whole record.
- */
+// → docs/spec/16-http-api.md
+
 const TranscriptQuery = z.object({
   from: z.coerce
     .number({ invalid_type_error: 'from must be a number of characters' })
@@ -17,7 +14,6 @@ const TranscriptQuery = z.object({
     .default(0),
 });
 
-/** The fleet: one agent's transcript, and the five things an operator can say to one. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, agents } = system;
 
@@ -28,30 +24,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const agent = store.getAgent(id);
       if (!agent) return reply.code(404).send({ error: 'agent not found' });
       const full = store.getTranscript(id);
-      // Clamped rather than refused: a transcript only grows, so an offset past
-      // the end is a client that read at the same moment a flush landed, not a
-      // bad request — and it wants to be told the end, not given a 400.
       const from = Math.min(query.from, full.length);
       const payload: AgentTranscript = { agentId: id, from, total: full.length, transcript: full.slice(from) };
       return payload;
     }),
   );
 
-  /**
-   * The files one agent wrote, for the drawer's "files changed" list.
-   *
-   * Fetched when a drawer opens rather than shipped on `/api/state`, for the
-   * transcript's reason above: the rows are bulk text about **one** agent. They
-   * used to ride the snapshot as a whole-fleet `files` list — every file every
-   * agent ever wrote, on a table nothing deletes from — which was 87% of the
-   * payload, built, serialised, transferred and parsed on every refresh so that
-   * one open drawer could take one agent's slice of it and the rest could be
-   * thrown away. → `docs/spec/16-http-api.md#bulk-text`
-   *
-   * 404 on an unknown agent rather than an empty list, exactly as the transcript
-   * does: an agent that wrote nothing and an agent that does not exist are
-   * different answers, and only the first is a row the drawer can be open over.
-   */
   app.get(
     '/api/agents/:id/files',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -80,9 +58,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // "This is finished" — the verdict only the agent could reach before, via the
-  // done sentinel. Stops the process and records the clean terminal (task `done`,
-  // worktree reclaimed on the reap), unlike kill, which records an abandonment.
   app.post(
     '/api/agents/:id/complete',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -91,13 +66,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // "No, wait" — buy `agentStallExtendMs` more before a stall park settles itself
-  // done (see `AgentManager.completeExpiredStalls`). The countdown is the operator's
-  // window to disagree with the harness's reading, and this is the disagreement:
-  // pressing it says only "I am looking at this", which is why it takes no note and
-  // records nothing. It refuses an agent that has no countdown running rather than
-  // reporting success over one — an operator told they had bought time on a run that
-  // is already over is worse off than one told they cannot.
   app.post(
     '/api/agents/:id/extend-stall',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -108,22 +76,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // "The limit has cleared, carry on" — the one way out of a usage-limit park
-  // (issue #318). It is not `respond`: there is no question and nothing to type,
-  // and the session is usually gone, since `claude` exits with the exhausted
-  // account. Resuming re-opens *that* conversation in *that* worktree.
-  //
-  // The refusal is the manager's own sentence rather than a flat "not live",
-  // because the two ways to reach it are worth telling apart: an agent parked on a
-  // question is not resumable this way, and one whose park a restart has already
-  // handed to the recovery desk is answered there instead.
   app.post(
     '/api/agents/:id/resume',
     checked({ params: IdParams }, async ({ params, reply }) => {
       const result = agents.resumeParked(params.id);
       if (!result.ok) return reply.code(409).send({ error: result.error });
-      // The row, the fleet's live count and the park chip all move together, and all
-      // three ride the snapshot rather than a frame of their own.
       hub.broadcast({ type: 'dirty' });
       return { ok: true };
     }),

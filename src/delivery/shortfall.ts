@@ -1,24 +1,12 @@
-/**
- * The pure half of a negative assessment: what an assessor may say fell short, and what
- * each answer does. The assessor names the cause and {@link shortfallArm} routes it —
- * nothing else infers which failure this was. Arms A and B spend a fleet and are put to
- * a human as proposals; arm C schedules nothing and is an ordinary deduped escalation.
- */
-
 import { z } from 'zod';
 import { optionalText } from '../server/validation.js';
 import type { PlanPart, PlanPartInput, ShortfallCause } from '../types.js';
 import { partHasWork } from '../plans/parts.js';
 
-/** What an assessor may say fell short, in the order the tool advertises them. */
+// → docs/spec/24-environments.md
+
 export const SHORTFALL_CAUSES = ['plan', 'part', 'goal'] as const;
 
-/**
- * The operator's arm of the verdict, as a request body. `cause` is three-valued:
- * absent records a shortfall naming no cause, explicit null clears one, a named cause
- * records it — hence `.optional()` over the union rather than null standing in for
- * "not given". The `.refine` enforces that a `part` cause must name its part.
- */
 export const ShortfallBody = z
   .object({
     cause: z
@@ -33,7 +21,6 @@ export const ShortfallBody = z
     message: 'cause "part" needs the part slug in `part`',
   });
 
-/** What each cause means to the agent choosing it, and what the harness will do about it. */
 export const SHORTFALL_CAUSE_HELP: Record<ShortfallCause, string> = {
   plan:
     'the decomposition was wrong — a part is missing, or the split itself was. The whole plan goes back ' +
@@ -50,23 +37,10 @@ export const SHORTFALL_CAUSE_HELP: Record<ShortfallCause, string> = {
     'reaches a person',
 };
 
-/**
- * The subject of a shortfall: one issue's fallen-short verdict, as an act. One function
- * for both the proposal ref (arms A and B) and arm C's escalation dedup key. Maps back
- * to `issue:<n>` unchanged so rejection expiry works — a refused replan that never
- * expired would veto every future one. It is nobody's dispatch origin.
- */
 export function shortfallRef(issueNumber: number): string {
   return `issue:${issueNumber}:shortfall`;
 }
 
-/**
- * What a shortfall's cause routes to, decided in one place so the rule, executor and
- * cockpit chip agree. `replan` (arm A) flips the plan to `planning`; `followup` (arm B)
- * appends one part; `escalate` (arm C) asks a human and schedules nothing; `none` means
- * no cause was named, so no route is manufactured (the verdict still reads `more_work`).
- * A shortfall on an issue with no plan always degrades to `escalate`.
- */
 export function shortfallArm(
   cause: ShortfallCause | null,
   hasPlan: boolean,
@@ -77,12 +51,10 @@ export function shortfallArm(
   return cause === 'plan' ? 'replan' : 'followup';
 }
 
-/** The assessor's verdict as one block of quoted markdown, for the `detail` slot on the card that puts it to a human. Never spliced into a sentence the dispatcher wrote. */
 export function quotedAssessment(summary: string, detail: string | null): string {
   return detail ? `**${summary}**\n\n${detail}` : summary;
 }
 
-/** Arm C's question, as one line: what the assessment said, and that nothing is coming. Everything else rides in `detail` ({@link quotedAssessment}), so this must stay one sentence. */
 export function shortfallEscalationPrompt(issueNumber: number, title: string, cause: ShortfallCause | null): string {
   const wrongGoal = cause === 'goal';
   return (
@@ -96,24 +68,14 @@ export function shortfallEscalationPrompt(issueNumber: number, title: string, ca
   );
 }
 
-/** Where arm B's part is going to land, and whether that is an append or a refresh. */
 interface FollowupSlot {
   slug: string;
-  /** An unstarted follow-up already declared for this scope is re-declared in place. */
   refreshing: boolean;
 }
 
-/**
- * The slug a follow-up part takes, resolved against the plan's existing parts. Derived
- * from the part that fell short, so a second shortfall against an unstarted follow-up
- * collides and refreshes the declaration. A follow-up with work must never be reused —
- * `upsertPlanParts` preserves progress on conflict, so the write would be silently
- * absorbed. A taken slot takes the next free number instead.
- */
 export function followupSlot(part: PlanPart, parts: readonly PlanPart[]): FollowupSlot {
   const base = part.slug.endsWith('-followup') ? part.slug : `${part.slug}-followup`;
   const bySlug = new Map(parts.map((p) => [p.slug, p]));
-  // A retired row counts as taken too, or re-declaring one would lift a retirement an operator's replan had already dropped.
   const free = (slug: string): boolean => !bySlug.has(slug);
   const unstarted = (slug: string): boolean => {
     const existing = bySlug.get(slug);
@@ -134,22 +96,13 @@ export function followupSlot(part: PlanPart, parts: readonly PlanPart[]): Follow
   }
 }
 
-/**
- * Arm B's new part, as the planner would have declared it. Appended, never a
- * resurrection of the part that fell short — a merged part's branch is spent, so
- * returning it to `ready` would put an agent on a closed PR's branch. `dependsOn` is
- * empty on purpose, since the part it follows up has already finished.
- */
 export function followupPartInput(part: PlanPart, summary: string, seq: number, slug: string): PlanPartInput {
   return {
     slug,
-    // Inherits the part's price rather than the goal's, which would downgrade a part somebody decided needed more.
     profile: part.profile,
     seq,
     title: `Finish "${part.title}"`,
-    // The assessor's own words are the scope.
     scope: summary,
-    // No inherited paths: carrying the finished part's touches over would claim a scope nobody declared.
     touches: [],
     rationale: `An assessment of the delivered work found that "${part.slug}" did not deliver its scope.`,
     acceptance: null,
@@ -159,11 +112,6 @@ export function followupPartInput(part: PlanPart, summary: string, seq: number, 
   };
 }
 
-/**
- * What the assessor is told happens next, per cause. Careful about tense: nothing has
- * happened yet — the verdict is a row, the rule proposes the arm on a later pulse and a
- * human decides it.
- */
 export function shortfallRecordedNote(cause: ShortfallCause | null): string {
   const tail =
     ' Nothing is dispatched by this call: the harness puts it to a human on a later cycle, and only their ' +

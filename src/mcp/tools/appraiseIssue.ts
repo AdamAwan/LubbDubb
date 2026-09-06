@@ -8,17 +8,11 @@ import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
+// → docs/spec/11-mcp-tools.md
+
 export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
-  // The deployment's own profiles, cheapest first. Empty when no `agentModels` is
-  // configured, and then the argument is neither offered nor required — there is
-  // nothing to choose between, and a tool that asked anyway would be asking the
-  // agent to invent a vocabulary.
   const profiles = deps.profiles ?? [];
   const names = profiles.map((p) => p.name);
-  // The project's area tree as the harness last read it, capped. Empty for a
-  // tracker with no such concept (GitHub, the fake) and for a deployment whose
-  // first read has not landed yet — and then the argument is neither offered nor
-  // accepted, exactly as an absent `agentModels` retires the profile.
   const tree = deps.areaPaths?.() ?? null;
   const areas = tree === null ? { paths: [], omitted: 0 } : truncateAreaPaths(tree);
   return {
@@ -127,9 +121,6 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
     handler: (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
-      // Structural identity, and here it decides whether there is anything to
-      // appraisal at all: an agent already doing the work is refused rather than
-      // scoped down, because it would be parking an issue it is mid-way through.
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,

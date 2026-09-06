@@ -3,34 +3,14 @@ import type { Issue, IssueRelative } from '../types.js';
 import { isContainerIssue } from '../issueRelations.js';
 import { linkEdges, type SequenceEdge } from './readiness.js';
 
-/**
- * The pure half of story sequencing: which Features have an order to be written about,
- * what standing that order was written against, and whether a submitted set of edges is
- * an order at all. Reads no store, lens or world beyond the issue list it is handed.
- * → `docs/spec/33-story-sequencing.md`
- */
+// → docs/spec/33-story-sequencing.md
 
-/** A Feature and the stories under it, as the sequencer is asked to order them. */
 interface FeatureGroup {
-  /** The container itself, as its children carry it — title and description included. */
   feature: IssueRelative;
-  /** Its watched, **open** children — the ones an order is actually about. */
   children: Issue[];
-  /**
-   * Every watched child, settled ones included, ascending. The key digests this rather
-   * than {@link children} — membership, not movement, so a merge does not re-propose.
-   */
   members: number[];
 }
 
-/**
- * Group the world's stories under the Feature each hangs off, built from the children's
- * own `parent` — the container is usually not in the (tag- and assignee-narrowed) issue
- * list, and the parent summary is the only reliable source of its title and body. A
- * container that *is* in the list is skipped: an Epic's Features are not sequenced
- * against each other.
- * ([33](../../docs/spec/33-story-sequencing.md#what-is-deliberately-not-built))
- */
 function featureGroups(
   issues: readonly Issue[],
   containerTypes: readonly string[] | undefined,
@@ -54,24 +34,11 @@ function featureGroups(
   return [...groups.values()].sort((a, b) => a.feature.number - b.feature.number);
 }
 
-/**
- * What a Feature's order was written against — **membership, not movement**: which
- * stories are under the Feature and what the provider says about them, settled ones
- * included. A merge does not invalidate an order; an addition does. Sorted before
- * hashing so the key is order-independent.
- * → `docs/spec/33-story-sequencing.md#the-record`
- */
 export function featureSequenceKey(members: readonly number[], edges: readonly SequenceEdge[]): string {
   const lines = [...members.map((n) => `c ${n}`), ...edges.map((e) => `e ${e.issue} ${e.dependsOn}`)].sort();
   return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32);
 }
 
-/**
- * The cycle in these edges, as the stories on it, or null when there is none. Refused at
- * ingestion with nothing stored, never linearised on read — a silently untangled cycle
- * would hold work in an order nobody chose. Returns the cycle so the submitting agent
- * can act on it.
- */
 export function findCycle(edges: readonly SequenceEdge[]): number[] | null {
   const out = new Map<number, number[]>();
   for (const edge of edges) {
@@ -106,26 +73,12 @@ export function findCycle(edges: readonly SequenceEdge[]): number[] | null {
   return null;
 }
 
-/**
- * Above this many stories a Feature is not sequenced: the prompt would not fit and
- * the order would not be read. Forty is generous — a Feature nobody could hold in
- * their head is one an order would not make legible either.
- */
 export const DEFAULT_SEQUENCE_MAX_CHILDREN = 40;
 
-/** A Feature the sequencer could be asked about, with the standing its order answers. */
 export interface SequenceableFeature extends FeatureGroup {
-  /** `featureSequenceKey` over this group — membership, never movement. */
   key: string;
 }
 
-/**
- * The Features worth asking the sequencer about, with the key each order would be written
- * against. Both cuts — fewer than two stories, more than `maxChildren` — are refusals to
- * spend, and both fail open: the Feature keeps the ordering it has, which is none. The
- * key folds in the provider's own edges as well as membership, so a hand-drawn link
- * re-asks.
- */
 export function sequenceableFeatures(
   issues: readonly Issue[],
   containerTypes: readonly string[] | undefined,
@@ -140,17 +93,10 @@ export function sequenceableFeatures(
   return out;
 }
 
-/** The origin rule `feature-sequence` dispatches its desk agent on. */
 export function featureSequenceOrigin(featureNumber: number): string {
   return `issue:${featureNumber}:sequence`;
 }
 
-/**
- * The reverse, for the submit side: which Feature this caller may write an order for,
- * decided by what it was dispatched to do rather than by what it says — the Feature is on
- * the origin, never an argument.
- * ([11](../../docs/spec/11-mcp-tools.md#identity))
- */
 export function featureSequenceSubmitOrigin(
   originRef: string | null,
 ): { ok: true; featureOrigin: string; featureNumber: number } | { ok: false; error: string } {
@@ -169,24 +115,15 @@ export function featureSequenceSubmitOrigin(
   };
 }
 
-/** The longest reason the record will hold. Past it the card stops being readable. */
 const MAX_REASON = 2_000;
-/** Per edge — one line on why, not an argument. */
 const MAX_EDGE_REASON = 400;
 
-/** An order as the sequencer states it: one entry per story that waits on something. */
 interface SequenceSubmission {
   reason: string;
   unsure: string | null;
   edges: { issue: number; dependsOn: number; source: 'inferred'; reason: string | null }[];
 }
 
-/**
- * Validate a submitted order against the Feature's own children. Three refusals, each of
- * something that would otherwise be stored and then hold work forever: an unknown story,
- * a self-edge, and a cycle (named back, so the submitter can fix it). Nothing is stored
- * on any of them.
- */
 export function validateSequenceSubmission(
   args: Record<string, unknown>,
   children: readonly number[],
@@ -271,15 +208,6 @@ function text(raw: unknown): string | null {
   return value ? value : null;
 }
 
-/**
- * What a re-proposed order does to the acceptance that stood: carry it, or ask again.
- * → `docs/spec/33-story-sequencing.md#a-story-is-added`
- *
- * The acceptance carries only when the new order is the old one *extended*: every
- * accepted edge between stories the Feature still has survives, and every new edge
- * touches a new story. Every uncertainty — an unaccepted previous order, `members` null
- * — falls through to a fresh `proposed`.
- */
 export function resequenceVerdict(
   previous: {
     status: 'proposed' | 'accepted' | 'declined';
@@ -295,8 +223,6 @@ export function resequenceVerdict(
   const now = new Set(members);
   const key = (e: { issue: number; dependsOn: number }): string => `${e.issue}>${e.dependsOn}`;
   const kept = new Set(proposed.map(key));
-  // Restricted to stories the Feature still has: an edge whose endpoint was re-parented
-  // away is gone whatever the new order says.
   for (const edge of previous.edges) {
     if (!now.has(edge.issue) || !now.has(edge.dependsOn)) continue;
     if (!kept.has(key(edge))) return { carry: false };
