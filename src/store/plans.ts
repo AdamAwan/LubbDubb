@@ -62,11 +62,8 @@ export const PLAN_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The `plans` and `plan_parts` tables: the multi-PR issue funnel.
- *
- * One module rather than two because {@link PlanStore.rollUpPlanStatus} reads the
- * parts and writes the plan — a fold across a module boundary would buy nothing
- * and would put half of it out of reach.
+ * The `plans` and `plan_parts` tables: the multi-PR issue funnel. One module
+ * because {@link PlanStore.rollUpPlanStatus} reads the parts and writes the plan.
  */
 export class PlanStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -141,13 +138,9 @@ export class PlanStore {
   }
 
   /**
-   * Record the plan a document carried, as its own revision.
-   *
-   * Append-only, and numbered off what is already there rather than off the plan —
-   * a plan re-planned three times has three revisions whatever its status has done
-   * in between. Called from {@link ingestPlanDocument} alone, which is the one
-   * place a document becomes rows, so a revision cannot exist for a plan that was
-   * never persisted or be missing for one that was.
+   * Record the plan a document carried, as its own revision. Append-only, numbered
+   * off what is already there rather than off the plan. Called from
+   * {@link ingestPlanDocument} alone, the one place a document becomes rows.
    */
   recordPlanRevision(planId: string, input: { narrative: PlanNarrative; parts: PlanPartInput[] }): PlanRevision {
     const at = this.ctx.now();
@@ -169,9 +162,8 @@ export class PlanStore {
       )
       .run({
         ...revision,
-        // Vestigial: the column is `NOT NULL` on every existing database and every
-        // plan is a `parts` plan now, so it is written and never read back. Dropping
-        // it would be a table reshape for a value no reader consults.
+        // Vestigial: `NOT NULL` on every existing database and every plan is a
+        // `parts` plan now, so it is written and never read back.
         verdict: 'parts',
         narrative: JSON.stringify(revision.narrative),
         parts: JSON.stringify(revision.parts),
@@ -188,11 +180,9 @@ export class PlanStore {
   }
 
   /**
-   * Record a change somebody wants made to a plan that is already running.
-   *
-   * Pending, always: this table is the *holding* of an amendment, and nothing here
-   * touches the plan. What applies it is an accepted proposal, through the ordinary
-   * ingestion — see `src/plans/planAmendment.ts`.
+   * Record a change somebody wants made to a plan that is already running. Pending,
+   * always: nothing here touches the plan — an accepted proposal applies it through
+   * the ordinary ingestion. → `src/plans/planAmendment.ts`
    */
   recordPlanAmendment(input: {
     planId: string;
@@ -248,10 +238,9 @@ export class PlanStore {
   }
 
   /**
-   * Settle one amendment — compare-and-set against `pending` for
-   * `Store.decideProposal`'s reason: a verdict that arrives after the amendment was
-   * superseded must not apply a document nobody was shown. Null when it had already
-   * been settled, which every caller reads as "not mine to act on".
+   * Settle one amendment — compare-and-set against `pending`, so a verdict arriving
+   * after the amendment was superseded cannot apply a document nobody was shown.
+   * Null when it had already been settled.
    */
   settlePlanAmendment(
     id: string,
@@ -319,30 +308,26 @@ export class PlanStore {
         touches: input.touches,
         rationale: input.rationale,
         acceptance: input.acceptance,
-        // A reviewer's confirmations, not the planner's declaration — so they
-        // survive an amendment the way branch and PR do. What withdraws one is the
-        // criterion itself changing, which the text key handles without a rule here.
+        // A reviewer's confirmations, not the declaration, so they survive an
+        // amendment; the text key withdraws one when the criterion changes.
         acceptanceMet: prev?.acceptanceMet ?? [],
         size: input.size,
         expectedKind: input.expectedKind,
         profile: input.profile,
-        // Progress, not declaration — an amendment re-declaring a part must not
-        // wipe an outcome it already reached. Same split as branch/prNumber below.
+        // Progress, not declaration: an amendment re-declaring a part must not wipe
+        // an outcome it already reached.
         outcomeKind: prev?.outcomeKind ?? null,
         outcomeRef: prev?.outcomeRef ?? null,
         outcomeSummary: prev?.outcomeSummary ?? null,
         dependsOn: input.dependsOn,
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
-        // `retired` is the one status that is a *declaration verdict* rather than
-        // progress: it says this document stopped declaring the slug. A document
-        // that declares it again is delivering it again, so the retirement lifts —
-        // otherwise a replan, which must reuse slugs, merges onto retired rows and
-        // releases a plan with no live parts. Every other status is progress.
+        // `retired` is a *declaration verdict* rather than progress, so re-declaring
+        // the slug lifts it — otherwise a replan, which must reuse slugs, merges onto
+        // retired rows and releases a plan with no live parts.
         status: prev?.status === 'retired' ? 'pending' : (prev?.status ?? 'pending'),
-        // Progress like the outcome columns: it explains a status this call is not
-        // allowed to change, so an amendment re-declaring a part leaves it alone —
-        // except across the un-retirement above, where the status it explains is gone.
+        // Progress like the outcome columns, except across the un-retirement above,
+        // where the status it explains is gone.
         blockedReason: prev?.status === 'retired' ? null : (prev?.blockedReason ?? null),
         blockedBy: prev?.status === 'retired' ? null : (prev?.blockedBy ?? null),
         taskId: prev?.taskId ?? null,
@@ -352,15 +337,10 @@ export class PlanStore {
       return part;
     });
     const stmt = this.ctx.db.prepare(
-      // The outcome columns are deliberately absent from DO UPDATE SET: they are
-      // progress, and an amendment re-declaring a part must leave what it produced
-      // alone. `expected_kind` is part of the declaration, so it does update, and so
-      // do `touches` and `size`. `acceptance_met` is not a declaration at all — it
-      // is a reviewer's confirmations — so it sits with the outcome columns.
-      // `status` and `blocked_reason` *do* update, which is safe only because the
-      // computed row already carries `prev`'s values for every case but the
-      // un-retirement above: this write is the declaration lifting a retirement,
-      // never the scheduler's progress being overwritten.
+      // The outcome columns and `acceptance_met` are deliberately absent from DO
+      // UPDATE SET: they are progress, not declaration. `status` and `blocked_reason`
+      // *do* update, which is safe only because the computed row already carries
+      // `prev`'s values everywhere but the un-retirement above.
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
          acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
@@ -403,10 +383,9 @@ export class PlanStore {
   }
 
   /**
-   * Move a part's *progress* — status, branch, PR, task — leaving its declaration
-   * (seq/title/scope/dependsOn) to {@link upsertPlanParts}. The two halves of a part
-   * row have different authors: the planner declares, the scheduler and the
-   * reconciler record what happened. Returns null when the part is gone.
+   * Move a part's *progress* — status, branch, PR, task — leaving its declaration to
+   * {@link upsertPlanParts}. The two halves have different authors. Returns null
+   * when the part is gone.
    */
   updatePlanPart(
     id: string,
@@ -444,12 +423,9 @@ export class PlanStore {
   }
 
   /**
-   * Record which of a part's acceptance criteria a reviewer has confirmed.
-   *
-   * The whole set is written rather than one criterion toggled, for
-   * `decideProposal`'s reason: the caller has the list it is looking at, and a
-   * per-criterion toggle would have to agree with a text key it did not compute.
-   * Returns null when the part is gone.
+   * Record which of a part's acceptance criteria a reviewer has confirmed. The whole
+   * set is written rather than one criterion toggled: a per-criterion toggle would
+   * have to agree with a text key it did not compute. Null when the part is gone.
    */
   setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
@@ -462,18 +438,10 @@ export class PlanStore {
   }
 
   /**
-   * Override which model profile one part's work runs on (issue #342) — the
-   * operator's arm of a claim the planner made.
-   *
-   * Null clears it, and clearing is not the same as naming the goal's profile: a
-   * cleared part *inherits*, so a later re-pin of the goal moves it too, while a
-   * named one stays where it was put. That is the distinction a two-state
-   * "overridden or not" flag would lose.
-   *
-   * Deliberately not guarded on status. A part already dispatched keeps the
-   * profile its task row stored — resolution happened once, at dispatch — so
-   * writing this only ever changes what a *future* dispatch of it costs, which is
-   * exactly what an operator re-pricing a retry is asking for.
+   * Override which model profile one part's work runs on. Null clears it, which is
+   * not the same as naming the goal's profile: a cleared part *inherits* and moves
+   * with a later re-pin. Deliberately not guarded on status — a dispatched part
+   * keeps the profile its task row stored, so this only prices a future dispatch.
    */
   setPartProfile(id: string, profile: string | null): PlanPart | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
@@ -484,23 +452,18 @@ export class PlanStore {
   }
 
   /**
-   * A part's agent actually spawned. Called from the executor *after* the spawn, for
-   * the same reason `markJobDispatched` is: a dispatch the cap/pause gate holds
-   * must leave the part `ready` for a later cycle, not claim it started.
+   * A part's agent actually spawned. Called from the executor *after* the spawn: a
+   * dispatch the cap/pause gate holds must leave the part `ready` for a later cycle.
    */
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.updatePlanPart(id, { status: 'dispatched', taskId, branch });
   }
 
   /**
-   * A part finished without a pull request — it produced a report, or determined
-   * that nothing needed building.
-   *
-   * Its own method rather than an {@link updatePlanPart} patch, because the guard
-   * *is* the point: the write is conditional on the part still being worked, so a
-   * second call changes nothing and a merged or retired part cannot be re-labelled.
-   * Idempotence in the write, not in a read-then-check somebody has to remember —
-   * the same discipline as `decideProposal` and `link_ticket`.
+   * A part finished without a pull request. Its own method rather than an
+   * {@link updatePlanPart} patch because the guard *is* the point: the write is
+   * conditional on the part still being worked, so a second call changes nothing and
+   * a merged or retired part cannot be re-labelled.
    */
   concludePlanPart(
     id: string,
@@ -518,16 +481,11 @@ export class PlanStore {
   }
 
   /**
-   * A part a person owns finished, because the operator marked its human task
-   * done. `concluded`, with `outcome_kind='human'` — the record of *what* closed
-   * it, which is the whole reason `human` is a kind rather than a flag.
-   *
-   * Its own method rather than a {@link PlanStore.concludePlanPart} call, because
-   * the guards are opposites and both are load-bearing. That one insists the part
-   * was `dispatched` or `in_review`, which is exactly right for a part an agent
-   * worked and exactly wrong here: a human part is never dispatched at all, so it
-   * settles from `pending`, `ready` or `blocked`. Widening the other guard would
-   * have let an agent conclude a part nobody had started.
+   * A part a person owns finished, because the operator marked its human task done —
+   * `concluded` with `outcome_kind='human'`. Its own method because the guards are
+   * opposites: {@link PlanStore.concludePlanPart} insists on `dispatched`/`in_review`,
+   * while a human part is never dispatched and settles from `pending`, `ready` or
+   * `blocked`. Widening that guard would let an agent conclude an unstarted part.
    */
   concludeHumanPart(id: string, summary: string): PlanPart | null {
     const result = this.ctx.db
@@ -543,14 +501,9 @@ export class PlanStore {
 
   /**
    * Move a plan to a new status, optionally rewriting the reason that goes with it.
-   *
-   * `reason` is optional and **preserved on absence**, like every other narrative
-   * field on a plan: the planner's own words are what a replan amends, so a
-   * transition that had no opinion about them must not clear them. The one caller
-   * that passes it is a shortfall's replan arm (issue #159), which appends what an
-   * assessment found — the summary reaches the replanning agent through
-   * `currentPlanSummary`, which already renders this field, rather than through a
-   * new prompt placeholder an operator override could silently drop.
+   * `reason` is **preserved on absence**, like every narrative field on a plan: a
+   * transition with no opinion about the planner's words must not clear them. The
+   * one caller that passes it is a shortfall's replan arm.
    */
   setPlanStatus(id: string, status: PlanStatus, reason?: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
@@ -573,14 +526,10 @@ export class PlanStore {
   }
 
   /**
-   * Fold a plan's part statuses back onto the plan: every part merged => `complete`,
-   * anything outstanding after that => back to `active` (a replan can add work to a
-   * finished plan). Returns the plan **only when the roll-up moved it**, so a caller
-   * can treat the return as the "the plan just completed" edge rather than re-deriving
-   * it. A partless plan — the single-PR arm, or one still `planning` — is never
-   * touched: what finishes that arm is the issue's own delivery, not a roll-up. A
-   * retired part is not outstanding work — an amended plan that dropped its last
-   * unstarted part is complete, not stuck.
+   * Fold a plan's part statuses back onto the plan: every part settled => `complete`,
+   * anything outstanding => back to `active`. Returns the plan **only when the
+   * roll-up moved it**, so the return is the "just completed" edge. A partless plan
+   * is never touched, and a retired part is not outstanding work.
    */
   rollUpPlanStatus(planId: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
@@ -589,8 +538,7 @@ export class PlanStore {
     if (plan.status !== 'active' && plan.status !== 'complete') return null;
     const parts = liveParts(this.listPlanParts(planId));
     if (parts.length === 0) return null;
-    // Every terminal, not just merges: a part that concluded with a report or a
-    // determination is finished, and counting only merges is what held a whole
+    // Every terminal, not just merges: counting only merges holds a whole
     // decomposition open on the one part that found nothing to build.
     const next: PlanStatus = parts.every(partSettled) ? 'complete' : 'active';
     if (next === plan.status) return null;
@@ -599,62 +547,32 @@ export class PlanStore {
 }
 
 /**
- * Absorb the retired `single` plan status into `active`.
+ * Absorb the retired `single` plan status into `active`. `single` was a *shape*
+ * wearing a lifecycle status, and consumers that switched on status silently
+ * excluded those plans; the shape is now read off the live parts (`planShape`).
  *
- * `single` was a *shape* wearing a lifecycle status, and the two are not
- * exclusive: a plan being delivered as one pull request is still being delivered.
- * Every consumer that switched on status therefore had to know about the shape,
- * and the one that forgot — `PlanReconciler`, which lists only `active`,
- * `complete` and `awaiting_approval` — quietly excluded single-PR plans from
- * reconciliation, so their status comment was never written. The shape is now read
- * off the live parts (`planShape`), which every one of those rows already carries:
- * a `single` plan has none.
- *
- * A data migration rather than an `ensureColumns` entry — no column changes, the
- * values in one do. Unconditional and idempotent: a database with no such rows
- * updates none, and a second boot finds none left.
+ * A data migration rather than an `ensureColumns` entry — no column changes.
+ * Unconditional and idempotent. → `docs/spec/14-persistence.md#migrations`
  */
 export function absorbSinglePlanStatus(db: Database.Database): void {
   db.prepare(`UPDATE plans SET status='active' WHERE status='single'`).run();
 }
 
 /**
- * Give every partless plan the one part it always was.
+ * Give every partless plan the one part it always was. A partless plan was the old
+ * encoding of "single"; with every plan now scheduled through rule `plan-part`,
+ * such a row would be scheduled by nothing and its goal would stop dead with no
+ * error anywhere — which is why this is a migration and not a tidy-up.
  *
- * A plan delivering one pull request used to carry **no parts at all** — that was
- * the encoding of "single", and rule `issue-pickup` worked the issue whole on the
- * flat `issue/<n>` branch instead. Every plan has parts now, so those rows would
- * otherwise be scheduled by nothing: rule `issue-pickup` no longer looks at them
- * (the route is `parts`), rule `plan-part` finds no part to dispatch, and the
- * issue stops dead with no error anywhere. That silence is the whole reason this
- * exists — the migration is not a tidy-up, it is what stops a live goal parking
- * itself on the deploy that ships this.
+ * The backfilled part is ordinary but for its branch: the flat `issue/<n>` on a
+ * plan already being delivered (so an open PR, a pushed commit and a running agent
+ * carry onto it, and the ref-collision guard stays quiet), null before anything was
+ * scheduled. `merged` on a `complete` plan so the roll-up still agrees, `ready`
+ * otherwise. `abandoned` plans are skipped — nothing schedules them.
  *
- * The backfilled part is an ordinary one in every respect but its branch:
- *
- * - **`branch` is the flat `issue/<n>`** for a plan that was already being
- *   delivered, because that is where the work is. Every reader resolves a part's
- *   branch as `part.branch ?? partBranch(n, slug)`, so pointing the column at the
- *   existing branch is enough to carry an open PR, a pushed commit and a running
- *   agent onto the part — the reconciler's `foldPr` picks the PR up on the next
- *   pulse and writes `in_review` or `merged` without being told. It also keeps the
- *   ref-collision guard quiet, which reads a part on the flat branch as being what
- *   is on it rather than as colliding with it.
- * - **`branch` is null before anything was scheduled** (`awaiting_approval`,
- *   `planning`), where no branch exists yet and the part should be cut in the
- *   normal namespace like any other.
- * - **`merged`** on a `complete` plan, so the roll-up that already decided the
- *   plan was finished still agrees; **`ready`** otherwise, so the part is picked
- *   up on the next pulse. A `ready` part on a branch an unplanned pickup is still
- *   working is held by the executor's existing branch lock rather than doubled.
- *
- * `abandoned` plans are skipped: nothing schedules them, so there is no silence to
- * fix, and inventing a part for work somebody stopped would put a row in the graph
- * claiming the opposite.
- *
- * A data migration rather than an `ensureColumns` entry — no column changes, the
- * rows in one do. Idempotent: a plan with any part row, retired ones included, is
- * left alone, so a second boot backfills nothing.
+ * A data migration rather than an `ensureColumns` entry, and idempotent: a plan with
+ * any part row, retired ones included, is left alone.
+ * → `docs/spec/14-persistence.md#migrations`
  */
 export function backfillWholePlanParts(db: Database.Database, now: string): void {
   const orphans = db
@@ -691,11 +609,7 @@ export function backfillWholePlanParts(db: Database.Database, now: string): void
   }
 }
 
-/**
- * The slug a backfilled part gets. Fixed rather than derived so a plan the
- * migration touched is recognisable, and short enough to read in a branch name if
- * one is ever cut for it.
- */
+/** The slug a backfilled part gets — fixed rather than derived, so a plan the migration touched is recognisable. */
 const WHOLE_PART_SLUG = 'whole';
 
 interface PlanRow {
@@ -813,8 +727,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     outcomeKind: partOutcomeKindOf(r.outcome_kind),
     outcomeRef: r.outcome_ref ?? null,
     outcomeSummary: r.outcome_summary ?? null,
-    // Written as JSON by upsertPlanParts; a corrupt value degrades to "no deps"
-    // rather than throwing the whole snapshot away.
+    // Written as JSON by upsertPlanParts; corrupt degrades to "no deps".
     dependsOn: parseDependsOn(r.depends_on),
     branch: r.branch,
     prNumber: r.pr_number,
@@ -828,17 +741,12 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
 }
 
 /**
- * Narrowed rather than cast: these two columns are absent on older databases and
- * are the only part of the row a *human* can edit by hand, so an unrecognised
- * value degrades to "unstated" instead of putting a status nothing switches on
- * into the type.
+ * Narrowed rather than cast: absent on older databases and hand-editable, so an
+ * unrecognised value degrades to "unstated".
  *
- * **A new {@link PartOutcomeKind} must be added here too**, and that is a sharp
- * edge rather than a chore: this narrowing is not a type guard the compiler
- * checks against the union, so a kind missing from it is written to SQLite, read
- * back as `null`, and silently reads as `code` everywhere downstream — a step for
- * a person would be handed to an agent. It cost one test to find and would have
- * cost a fleet to find in production.
+ * **A new {@link PartOutcomeKind} must be added here too.** The compiler does not
+ * check this list against the union, so a missing kind is written, read back as
+ * `null`, and silently reads as `code` everywhere downstream.
  */
 function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
   return raw === 'code' || raw === 'report' || raw === 'determination' || raw === 'human' ? raw : null;
@@ -850,11 +758,9 @@ function partSizeOf(raw: string | null | undefined): PartSize | null {
 }
 
 /**
- * Narrowed for {@link partOutcomeKindOf}'s reason, and the null it degrades to is
- * the reading a database from before the column has: *blocked, attribution
- * unstated*. {@link planIsWedged} counts one toward the wedge exactly as it did
- * when there was nothing to count — an unattributed block is the pre-column
- * behaviour, which is the direction that keeps a real collision escalating.
+ * Narrowed for {@link partOutcomeKindOf}'s reason; the null it degrades to reads as
+ * *blocked, attribution unstated*, which {@link planIsWedged} still counts toward
+ * the wedge — the direction that keeps a real collision escalating.
  */
 function partBlockerOf(raw: string | null | undefined): PlanPartBlocker | null {
   return raw === 'collision' || raw === 'declined' ? raw : null;
@@ -865,10 +771,8 @@ function parseDependsOn(raw: string): string[] {
 }
 
 /**
- * A JSON string array column, degrading to empty rather than throwing. Absent
- * (an older database) and corrupt reach the same answer deliberately: neither is
- * worth taking a whole snapshot down for, and "declared nothing" is the truthful
- * reading of both.
+ * A JSON string array column, degrading to empty rather than throwing. Absent (an
+ * older database) and corrupt reach the same answer deliberately.
  */
 function parseStringArray(raw: string | null | undefined): string[] {
   if (raw === null || raw === undefined) return [];
@@ -904,10 +808,9 @@ function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
 }
 
 /**
- * A stored amendment. `author` and `status` are narrowed by reading rather than
- * trusted: these rows outlive the build that wrote them, and a value this build
- * does not know reads as the safest of each — somebody else's proposal, still
- * waiting — rather than widening the union.
+ * A stored amendment. `author` and `status` are narrowed rather than trusted: these
+ * rows outlive the build that wrote them, and an unknown value reads as the safest
+ * of each — somebody else's proposal, still waiting.
  */
 function rowToAmendment(r: PlanAmendmentRow): PlanAmendment {
   return {
@@ -941,9 +844,8 @@ function rowToRevision(r: PlanRevisionRow): PlanRevision {
 }
 
 /**
- * A revision's stored prose. Every field degrades independently: these rows are
- * written by one function and read by a view, so a shape that surprises the reader
- * should cost that field rather than the history.
+ * A revision's stored prose. Every field degrades independently, so a surprising
+ * shape costs that field rather than the history.
  */
 function parseNarrative(raw: string): PlanNarrative {
   const empty: PlanNarrative = {

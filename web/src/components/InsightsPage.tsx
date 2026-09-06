@@ -29,35 +29,14 @@ import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
 
 /**
- * Insights — one destination, one window, five readings of it.
+ * Insights — one destination, one window, several readings of it.
  *
- * It replaces three surfaces that were the same subject cut three ways: Spend
- * answered *how much*, Output answered *how fast*, Yield answered *how much of
- * it survived*. Each had independently grown toward the other two — the output
- * graph drew a cost row, the yield panel drew four dollar figures, the spend
- * trend drew a completion rate off a second server builder — which is the shape
- * of a wrong seam rather than three panels that got busy.
- *
- * Three things about it are load-bearing.
- *
- * **It is a destination, not a modal.** The two it replaced covered the queue
- * rail, and the rail is where the ask that sends an operator here comes from: a
- * `burn` row saying an agent is running at four times its median. Answering it
- * behind a sheet that hides it was the arrangement. It also means the window and
- * the open tab are [`Place`](../cockpit/place.ts) fields, so a link to "causes,
- * last 24 hours" is a link somebody can send — which no modal state in this
- * cockpit has ever been.
- *
- * **The time bar sits above the tabs, so it is page state.** Switching tabs
- * keeps the window; every reading under it obeys the same one. That is the whole
- * argument for merging them, and it is why the control is drawn here rather than
- * in whichever tab happened to want it first.
- *
- * **It fetches, so it lives here rather than under `console/`.** The console may
- * not reach `api.js` — asserted structurally in `test/console.test.ts` — and the
- * sanctioned route is the one the tickets tab and the work tree already take: a
- * component that fetches, rendered from the situation area, with the place it
- * reads passed in as props.
+ * Three things are load-bearing. **A destination, not a modal**: the window and the open tab
+ * are [`Place`](../cockpit/place.ts) fields, so "causes, last 24 hours" is a link somebody
+ * can send. **The time bar sits above the tabs**, so it is page state — switching tabs keeps
+ * the window and every reading under it obeys the same one. **It fetches, so it lives here
+ * rather than under `console/`**, which may not reach `api.js` (asserted in
+ * `test/console.test.ts`).
  *
  * → docs/spec/17-cockpit.md#insights
  */
@@ -81,17 +60,13 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
 ];
 
 /**
- * The windows the bar offers, with the caption each carries.
- *
- * A cockpit-side list rather than the server's, because `web/src/` may name
- * nothing but the wire contract — and it is typed as `InsightsWindow`, so
- * dropping a member server-side turns a stale entry here into a type error
- * rather than a button the page offers and the route refuses.
+ * The windows the bar offers. A cockpit-side list because `web/src/` may name nothing but the
+ * wire contract, typed as `InsightsWindow` so a member dropped server-side is a type error
+ * rather than a button the route refuses.
  */
 const WINDOWS: readonly { key: InsightsWindow; label: string }[] = [
-  // First, and first for a reason: it is the only window here an operator arrives
-  // at with a question already formed — the usage chip said the five hours are
-  // nearly spent, and this is the one span that can say on what.
+  // First: the only window an operator arrives at with a question already formed — the usage
+  // chip said the five hours are nearly spent, and this is the span that says on what.
   { key: 'session', label: '5h session' },
   { key: '6h', label: '6h' },
   { key: '24h', label: '24h' },
@@ -116,11 +91,8 @@ export function InsightsPage({
   poolProject: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  // The page itself, for the print sheet: PDF is the surface *printed*, not a
-  // document built to resemble it, so the export needs the nodes the browser
-  // already laid out. The whole page rather than the tab body, so the file
-  // carries the window it was taken over — a printed table with no window on it
-  // is the same silent under-report the CSV's first row exists to prevent.
+  // The page itself, for the print sheet: PDF is the surface *printed*, so the export needs
+  // the laid-out nodes. The whole page, not the tab body, so the file carries its window.
   const page = useRef<HTMLDivElement>(null);
   const [spend, setSpend] = useState<Fetched<SpendInsights>>(PENDING);
   const [reliability, setReliability] = useState<Fetched<ReliabilityInsights>>(PENDING);
@@ -128,42 +100,30 @@ export function InsightsPage({
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
   const [mcp, setMcp] = useState<Fetched<McpInsights>>(PENDING);
   const [allowance, setAllowance] = useState<Fetched<AllowancePayload>>(PENDING);
-  // The trend is fetched on its tab's first visit *for a given window* rather
-  // than with the rest, for the reason the settings modal mounts its tabs
-  // lazily: it reaches eight windows of world events on top of the same agent
-  // walk, and an operator who came here to read the phase table should not pay
-  // for it. The window is in the key because a window change invalidates it —
-  // holding "already fetched" as a boolean is how the trend ends up drawn over
-  // one stretch while everything above it describes another.
+  // Fetched on its tab's first visit *for a given window*: it reaches eight windows of world
+  // events on top of the same agent walk. The window is in the key because a window change
+  // invalidates it — a boolean draws the trend over one stretch and the rest over another.
   const trendFetchedFor = useRef<InsightsWindow | null>(null);
-  // The MCP tab is fetched on first visit for the trend's reason and keyed the
-  // same way: its naming evidence is a scan of every dispatch prompt in the
-  // window, which is the one read in the harness that touches `tasks.prompt` in
-  // bulk. Same ref-per-window shape, because a window change invalidates it.
+  // The MCP tab, on the trend's terms and keyed the same way: its naming evidence scans
+  // every dispatch prompt in the window, the one bulk read of `tasks.prompt`.
   const mcpFetchedFor = useRef<InsightsWindow | null>(null);
-  // The Allowance tab's own, on the same terms and keyed the same way: it walks
-  // the readings history on top of the same agent walk, and a window change
-  // invalidates it for the reason every other keyed fetch here is keyed.
+  // The Allowance tab's own, on the same terms: it walks the readings history on top of the
+  // same agent walk.
   const allowanceFetchedFor = useRef<InsightsWindow | null>(null);
-  // The pool tab's own, and the one that does **not** hang off the window: the
-  // digest's bucket is a UTC day and its retention is ninety of them, so the page's
-  // five spans are not the question anybody asks of it. It is keyed on the project
-  // instead, which is the one narrowing that changes what the payload contains.
-  // The Review tab's own, on the trend's terms and keyed the same way: it folds
-  // every pack the store holds against every mark, which nothing on the top bar
-  // needs and nobody who came here to read the phase table should pay for.
+  // The pool tab's own, and the one that does **not** hang off the window: the digest's
+  // bucket is a UTC day, so it is keyed on the project instead.
+  // The Review tab's own, on the trend's terms: it folds every pack the store holds against
+  // every mark, which nothing on the top bar needs.
   const [calibration, setCalibration] = useState<Fetched<ReviewCalibration>>(PENDING);
   const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
-  // The Usage tab's own, on the trend's terms and keyed the same way: it sweeps
-  // every settled-record table the harness keeps about a person plus the whole
-  // reach table, which nothing on the top bar needs.
+  // The Usage tab's own, on the trend's terms: it sweeps every settled-record table the
+  // harness keeps about a person, plus the whole reach table.
   const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
   const usageFetchedFor = useRef<InsightsWindow | null>(null);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
-  // Both refetch on a window change, and both are re-read from scratch rather
-  // than merged: a payload for the old window left standing beside one for the
-  // new is the disagreement the single window exists to remove.
+  // Re-read from scratch on a window change, never merged: a payload for the old window
+  // beside one for the new is the disagreement the single window exists to remove.
   useEffect(() => {
     let live = true;
     setSpend(PENDING);
@@ -395,20 +355,11 @@ export function InsightsPage({
 }
 
 /**
- * What one window button says.
- *
- * The server's own label wherever it has answered for that button, because for
- * `session` the two deliberately differ: where the account's window could not be
- * anchored to, the reading is still given and the control must stop calling it
- * the session ({@link SessionNote} says why in full). A note under a button that
- * still reads `5h session` is a caveat a reader has already skimmed past — the
- * lettering is the half they take the span's name from, which is the same reason
- * every caption on this page is drawn from the payload rather than from the key
- * it was asked with.
- *
- * The static label everywhere else, and that is not a fallback: only the chosen
- * window has a payload, so the other five have nothing to draw from — and for all
- * of them the two strings agree anyway.
+ * What one window button says: the server's own label wherever it has answered for that
+ * button, because for `session` the two deliberately differ — where the account's window
+ * could not be anchored to, the control must stop calling it the session
+ * ({@link SessionNote}). The static label elsewhere, where only the chosen window has a
+ * payload and the two strings agree anyway.
  */
 export function windowButtonLabel(
   window: { key: InsightsWindow; label: string },
@@ -419,26 +370,16 @@ export function windowButtonLabel(
 }
 
 /**
- * What the session window was anchored to — the sentence the split under it
- * cannot say for itself.
+ * What the session window was anchored to — the sentence the split under it cannot say for
+ * itself. Two things must be said.
  *
- * Two things have to be said here and neither is optional.
+ * **Which five hours these are**: the account's window opened when the last one reset, not
+ * five hours ago, so the three anchor cases are three different sentences — and where the
+ * harness could not anchor, the control's own label changes too (`resolveSession`).
  *
- * **Which five hours these are.** The account's window is not the last five
- * hours: it opened when the last one reset, which can be four hours and fifty
- * minutes ago. A breakdown that silently answered for the wrong span would be
- * plausible, unmarked, and the whole reason an operator came here. So the three
- * cases the anchor can be in are three different sentences — and where the
- * harness could not anchor, the control's own label changes with them
- * (`resolveSession`), because a caption is not enough on its own.
- *
- * **That the split is money and the limit is not.** The account meters something
- * Anthropic does not publish and this harness cannot see; cost is the only dated
- * per-run measure it holds. The two move together and are not the same quantity,
- * and an operator reading `$4.10` against `86%` will divide them unless told not
- * to. The percentage is drawn beside the split for exactly that reason — the
- * comparison is going to be made, so it is better made against the reading the
- * fold actually anchored on than against a chip read at some other moment.
+ * **That the split is money and the limit is not**: the account meters something this
+ * harness cannot see, and cost is the only dated per-run measure it holds. The percentage is
+ * drawn beside the split because the comparison will be made either way.
  */
 function SessionNote({
   session,
@@ -498,13 +439,9 @@ function stamp(iso: string | null, now: number): string {
 }
 
 /**
- * Which tab is drawn, and what each of the three fetch states looks like.
- *
- * **A failed fetch is its own answer and never an empty one.** `$0.00` and 100%
- * are both real readings here — a fresh harness, a fleet that has not failed —
- * so neither may double as the failure mode. That was the rule on both panels
- * this page replaces and it survives the merge unchanged; what changes is that
- * one refusal now covers two tabs, since they come off one payload.
+ * Which tab is drawn, and what each fetch state looks like. **A failed fetch is its own
+ * answer and never an empty one**: `$0.00` and 100% are both real readings here, so neither
+ * may double as the failure mode.
  */
 function Body({
   view,
@@ -599,14 +536,9 @@ function Body({
 }
 
 /**
- * The page as a file, and it follows the tab.
- *
- * One control rather than one per tab, and it exports **what is on screen** —
- * so a file is now "the last 24 hours of causes" rather than "all time, always",
- * which is what the window makes newly possible. Nothing exports what it could
- * not fetch: the control is absent until there is a payload, which is each
- * tab's own "a failed fetch must not read as a clean fleet" rule applied to the
- * one artefact that outlives the page.
+ * The page as a file, following the tab. One control rather than one per tab, exporting
+ * **what is on screen**. Nothing exports what it could not fetch: the control is absent
+ * until there is a payload, so no file reads as a clean fleet.
  */
 function Exports({
   view,

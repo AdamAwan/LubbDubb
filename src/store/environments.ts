@@ -13,48 +13,23 @@ import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
 /**
- * Four tables, one question: `goal_landings` — the commit each of a goal's pull
- * requests landed as — and `environment_reach`, what a probe said about each of
- * those commits in each environment.
- *
- * Together rather than apart because neither is readable alone: a landing with no
- * readings says nothing about where the work is, and a reading is keyed on a SHA
- * that only the landing attributes to a goal.
- *
- * **Both are stored because nothing else can answer them.** A squash merge leaves
- * no ancestry link, so the SHA is a provider fact with a `closedPrWindowMs`-long
- * shelf life and has to be caught while it is on offer; and a probe is a process
- * spawn, so re-asking it every pulse for every landing would put the cost of the
- * feature on the heartbeat.
- *
- * `goal_arrivals` and `environment_gate_releases` sit beside them because they are
- * the same subject read as *events* rather than as status: when a goal's work
- * first arrived somewhere, and the operator's answer for a goal that is never
- * going to.
- *
- * The tables were new once, which is exactly what stops keeping them exempt:
- * `goal_arrivals.watched_at` is the column the post-deploy watch added to an
- * existing table, and it is declared in {@link ENVIRONMENT_COLUMNS} below.
- * → `docs/spec/24-environments.md`
+ * Four tables, one question: `goal_landings` — the commit each of a goal's pull requests landed
+ * as — and `environment_reach`, what a probe said about each of those commits in each
+ * environment; neither is readable without the other. Both are stored because nothing else can
+ * answer them: a squash-merge SHA is a provider fact with a `closedPrWindowMs` shelf life, and a
+ * probe is a process spawn. `goal_arrivals` and `environment_gate_releases` are the same subject
+ * read as events rather than status. → `docs/spec/24-environments.md`
  */
 
 /**
- * `goal_arrivals.watched_at` — when the watch pass considered an arrival, whether
- * or not it opened a window for it.
- *
- * The one column this module has added since its tables were created, and it needs
- * this entry for the reason every such column does: `CREATE TABLE IF NOT EXISTS`
- * never alters an existing table, so without it the column is invisible on every
- * database from before the watch shipped — and the freshness guard would read
- * `undefined` for every arrival on exactly the deployments that have a history to
- * storm.
- *
- * **It needs no backfill, and that is a property of the guard rather than an
- * oversight.** Null here means *not considered yet*, and an arrival considered for
- * the first time only opens a window if its confirming reading is within two probe
- * intervals of now — so a database full of nulls is walked once, stamped, and
- * opens nothing for work that shipped in March.
- * → `docs/spec/14-persistence.md#migrations`
+ * `goal_arrivals.watched_at` — when the watch pass considered an arrival, whether or not it
+ * opened a window for it. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so
+ * without this entry the column is invisible on every database from before the watch shipped,
+ * and the freshness guard reads `undefined` for every arrival on exactly the deployments with a
+ * history to storm. It needs no backfill: null means "not considered yet", and an arrival
+ * considered for the first time only opens a window if its confirming reading is within two
+ * probe intervals of now — a database full of nulls is walked once, stamped, and opens nothing
+ * for work that shipped in March. → `docs/spec/14-persistence.md#migrations`
  */
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
   goal_arrivals: { watched_at: 'TEXT' },
@@ -63,39 +38,22 @@ export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
 /**
  * Undo the landings and arrivals a part-ref goal was filed under (#472).
  *
- * `goalOfPr` stopped its walk on any ref starting with `issue:`, and since parts
- * arrived a part is one — `issue:35916:part:orc-bucket-config` — so every planned
- * goal's merges were attributed to whichever part opened the pull request. The
- * walk is fixed; these are the rows it already wrote, and neither table can be
- * left as it is: nothing ever asks about a part ref, so the goal reads as having
- * been nowhere and its gate never opens.
+ * `goalOfPr` stopped its walk on any ref starting with `issue:`, and a part is one —
+ * `issue:35916:part:orc-bucket-config` — so every planned goal's merges were attributed to
+ * whichever part opened the pull request. The walk is fixed; these are the rows it already
+ * wrote, and neither table can be left as-is or the goal reads as never having landed.
  *
- * **The two rows are repaired in opposite directions, because they claim
- * different things.**
+ * The two rows are repaired in opposite directions, because they claim different things. A
+ * landing is a fact about one pull request — the commit it merged as — so truncating the
+ * `:part:…` suffix restores the label without touching the fact (`pr_number` is the primary key,
+ * so the rewrite cannot collide). An arrival is a claim about the goal's whole work, so a
+ * part-ref row would promote "one part is in testUk" into "this goal has arrived" — an assertion
+ * nobody made, on a row `openedGoals` reads to release a hold — so they are discarded, and the
+ * desk re-derives real ones from the repaired landings. Re-deriving cannot re-comment on old
+ * tickets: a goal confirmed last week comes back stamped and silent.
  *
- * A landing is a fact about *one pull request* — the commit it merged as — and
- * the goal ref is only the label it is filed under, so truncating the `:part:…`
- * suffix restores the label without touching the fact. `pr_number` is the primary
- * key, so the rewrite cannot collide: two parts of one goal becoming two rows
- * under `issue:35916` is exactly what that goal's two landings are.
- *
- * An arrival is a claim about the goal's *whole* work, and a part-ref row makes it
- * about one part. Rewriting the ref would promote "one part of this is in testUk"
- * into "this goal has arrived" — an assertion nobody made, on a row that
- * `openedGoals` reads to release a `validate` or `close_out` hold. So they
- * are discarded, and the desk re-derives the real ones from the repaired landings:
- * an arrival is only recorded once *every* landing of the goal is confirmed.
- *
- * Re-deriving cannot re-comment on old tickets. `announceableArrivals` announces
- * only an arrival whose confirming reading is within two probe intervals of now,
- * and the readings behind these rows are already recorded — a goal confirmed last
- * week comes back stamped and silent, exactly as it would on a fresh database
- * that had been probing all along.
- *
- * Unconditional and idempotent, in `absorbSinglePlanStatus`' sense rather than
- * `openPetsFromBeforeEggs`': no column changed, so there is nothing to gate on,
- * and the fixed walk can never write a part ref again — a second boot finds
- * nothing to do, forever.
+ * Unconditional and idempotent: no column changed, so there's nothing to gate on, and the fixed
+ * walk can never write a part ref again — a second boot finds nothing to do, forever.
  */
 export function repairPartRefGoals(db: Database.Database): void {
   db.transaction(() => {
@@ -108,16 +66,11 @@ export function repairPartRefGoals(db: Database.Database): void {
 }
 
 /**
- * Discard goal arrivals written before the reach denominator counted outstanding
- * plan parts (#515).
- *
- * Those rows claim the goal's whole work arrived while a live code part still
- * owed a merge. They cannot be corrected: the desk must re-derive the arrival
- * once every owed part is confirmed, just as `repairPartRefGoals` discards an
- * arrival filed under a part ref. The composition root supplies the goal refs
- * from its cross-domain plan query; this module only writes its own table.
- * Unconditional and idempotent because the fixed fold can never write another
- * partial goal arrival.
+ * Discard goal arrivals written before the reach denominator counted outstanding plan parts
+ * (#515). Those rows claim the goal's whole work arrived while a live code part still owed a
+ * merge; they cannot be corrected, so the desk re-derives the arrival once every owed part is
+ * confirmed, as `repairPartRefGoals` does for a part-ref arrival. The composition root supplies
+ * the goal refs; this module only writes its own table. Unconditional and idempotent.
  */
 export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonly string[]): void {
   if (goalRefs.length === 0) return;
@@ -130,14 +83,7 @@ export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonl
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  /**
-   * Attribute a merge commit to the goal it was work for.
-   *
-   * `OR IGNORE`, not `OR REPLACE`: the pull request has already merged, so its
-   * landing is a settled fact and a second sighting of it in the closed window is
-   * the same fact arriving again. Replacing would move `recordedAt` forward every
-   * pulse for six hours, which is the one column anything downstream orders by.
-   */
+  /** Attribute a merge commit to the goal it was work for. `OR IGNORE`, never `OR REPLACE`: a landing is settled, and replacing would move `recordedAt` forward every pulse. */
   recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
     this.ctx.db
       .prepare(
@@ -155,21 +101,13 @@ export class EnvironmentStore {
     return rows.map((r) => ({ prNumber: r.pr_number, goalRef: r.goal_ref, sha: r.sha, recordedAt: r.recorded_at }));
   }
 
-  /**
-   * The pull requests already attributed. Unbounded in age on purpose and cheap
-   * for it, exactly as `BranchReapStore.reapedPrs` is: without it the sweep would
-   * re-attribute every merged pull request on every pulse it stayed in the closed
-   * window.
-   */
+  /** The pull requests already attributed. Unbounded in age on purpose, or the sweep re-attributes every merged PR every pulse inside the closed window. */
   landedPrs(): ReadonlySet<number> {
     const rows = this.ctx.db.prepare(`SELECT pr_number FROM goal_landings`).all() as { pr_number: number }[];
     return new Set(rows.map((r) => r.pr_number));
   }
 
-  /**
-   * Record what a probe said. `OR REPLACE` here, unlike a landing: a verdict is an
-   * observation of something that moves, and the newest one is the answer.
-   */
+  /** Record what a probe said. `OR REPLACE` here, unlike a landing: a verdict is an observation of something that moves, and the newest one is the answer. */
   recordEnvironmentReach(input: {
     sha: string;
     environment: string;
@@ -184,14 +122,7 @@ export class EnvironmentStore {
       .run({ ...input, observedAt: this.ctx.now() });
   }
 
-  /**
-   * Record that a goal's whole work was first seen in an environment.
-   *
-   * `OR IGNORE`, not `OR REPLACE`: a goal that grows another pull request, lands
-   * it and is confirmed again has not arrived twice. Replacing would move
-   * `arrived_at` forward and — worse — clear the announcement stamp, so the
-   * ticket would collect a comment per later merge.
-   */
+  /** Record that a goal's whole work was first seen in an environment. `OR IGNORE`: replacing would move `arrived_at` forward and clear the announcement stamp, collecting a comment per later merge. */
   recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
     this.ctx.db
       .prepare(
@@ -215,38 +146,21 @@ export class EnvironmentStore {
     }));
   }
 
-  /**
-   * Stamp an arrival as considered by the watch pass.
-   *
-   * {@link markArrivalAnnounced}'s twin, and called on the same terms: whether or
-   * not a window was opened. That is the whole of how a deployment that adds a
-   * `watch` to an environment it has been probing for a month watches its *next*
-   * arrival rather than opening a window on every goal already in the table.
-   */
+  /** Stamp an arrival as considered by the watch pass, whether or not a window opened — how a newly added `watch` starts at the next arrival rather than every one already in the table. */
   markArrivalWatched(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
-  /**
-   * Stamp an arrival as announced.
-   *
-   * Called whether or not anything went out, which is the whole of how an
-   * environment that grows `arrival.comment` next month comments on its next
-   * arrival rather than on every one already in the table.
-   */
+  /** Stamp an arrival as announced, whether or not anything went out — a newly added `arrival.comment` starts at the next arrival, not every one already in the table. */
   markArrivalAnnounced(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE goal_arrivals SET announced_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
-  /**
-   * The operator's "this one is not waiting on an environment", replacing any
-   * standing release on the same goal — a second click is them looking again, and
-   * the newer note is the live account of why.
-   */
+  /** The operator's "this one is not waiting on an environment", replacing any standing release on the same goal — a second click is them looking again. */
   releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
     const release: EnvironmentGateRelease = { goalRef, note, releasedAt: this.ctx.now() };
     this.ctx.db
@@ -272,17 +186,10 @@ export class EnvironmentStore {
   }
 
   /**
-   * Record what an environment's own health check said.
-   *
-   * `OR REPLACE` in effect, like a reach reading and unlike a landing: health is a
-   * status and the newest answer is the answer. What survives the replace is
-   * `changed_at`, and only while the reading says the same thing — the `CASE`
-   * below is that whole rule, kept in the statement rather than in a read-then-write
-   * so two pulses landing together cannot lose an episode's start between them.
-   *
-   * A change of **reasons** under the same state and tier is not a change: a check
-   * whose list shifts while an outage runs is the same outage, and a clock
-   * restarting under it every five minutes would report a fresh one forever.
+   * Record what an environment's own health check said. Replace-in-effect; `changed_at`
+   * survives while state and tier are unchanged. The `CASE` keeps that rule in the statement
+   * rather than a read-then-write, so two pulses landing together can't lose an episode's start.
+   * A change of reasons alone is not a change — the same outage would restart its clock.
    */
   recordEnvironmentHealth(input: {
     environment: string;
@@ -313,14 +220,7 @@ export class EnvironmentStore {
       });
   }
 
-  /**
-   * What each environment's health check last said. One row per environment, so it
-   * is bounded by the operator's own list.
-   *
-   * A row is kept for an environment whose `health` command has since been removed
-   * — nothing deletes it — which is why the cockpit's builder ships only the
-   * environments that declare one today rather than everything this returns.
-   */
+  /** What each environment's health check last said, one row per environment. A row survives one whose `health` command was removed; the cockpit's builder ships only environments declaring one today. */
   listEnvironmentHealth(): EnvironmentHealthReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM environment_health`).all() as HealthRow[];
     return rows.map((r) => ({
@@ -380,12 +280,8 @@ interface HealthRow {
 }
 
 /**
- * The stored reason list, read defensively.
- *
- * The column is written by {@link EnvironmentStore.recordEnvironmentHealth} and by
- * nothing else, so a row that will not parse is not a case anything produces — but
- * a throw here would take the whole cockpit snapshot down over one environment's
- * reading, which is a worse answer than drawing a reading with no reasons on it.
+ * The stored reason list, read defensively: a throw here would take the whole
+ * cockpit snapshot down over one environment's unparseable reading.
  */
 function readReasons(text: string): string[] {
   try {

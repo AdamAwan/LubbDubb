@@ -10,27 +10,17 @@ import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * The shape version every pack this build writes carries, and the one every
- * reader on this build knows. A document stating another number was written by
- * a different build — a fleet ahead of or behind this one — and a reader that
- * does not know it refuses rather than drawing what it recognises
- * (`docs/spec/31-review-packs.md#the-document-carries-its-schema-version`).
- * Bumped when the shape changes in a way a renderer must know about, never for
- * an added optional field.
+ * The shape version every pack this build writes carries. A document stating another number
+ * came from a different build and a reader refuses it rather than drawing what it
+ * recognises. Bumped only when a renderer must know about the change, never for an added
+ * optional field. → `docs/spec/31-review-packs.md#the-document-carries-its-schema-version`
  */
 export const REVIEW_PACK_SCHEMA = 1;
 
 /**
- * A table being new **once** does not keep it exempt, which is what these two
- * entries are: `review_marks.seen` and `review_pack_shares.withdrawn_at` were
- * added after their tables shipped, and `CREATE TABLE IF NOT EXISTS` never alters
- * an existing table — so without them every database from before this build reads
- * both columns back as `undefined`.
- *
- * Neither owes a backfill. `seen` is 0 on every existing row and 0 is what those
- * rows mean: nobody had a finding to take, because there was no control to take it
- * with. `withdrawn_at` null means *not withdrawn*, which is true of every share
- * that predates the withdrawal.
+ * `review_marks.seen` and `review_pack_shares.withdrawn_at` were added after their tables
+ * shipped, so without these entries every older database reads both back as `undefined`.
+ * Neither owes a backfill: 0 and null are what the existing rows already mean.
  * → `docs/spec/14-persistence.md#migrations`
  */
 export const REVIEW_PACK_COLUMNS: ColumnMigrations = {
@@ -40,18 +30,11 @@ export const REVIEW_PACK_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The `review_packs` and `review_marks` tables: a change restated for a person,
- * and what that person did to it. → `docs/spec/31-review-packs.md#where-it-lives`
- *
- * The pack is **one document**, stored as written and read as written. It is
- * written whole by the author and read whole by every renderer, and nothing
- * queries inside it — three normalised tables would buy nothing and cost a join on
- * every read. The store neither renders it nor interprets it.
- *
- * The marks are a separate table because they **outlive the document** they were
- * made against: a pack is immutable output for one head sha, and the moment it is
- * also a record of what somebody did to it, regenerating against a new head throws
- * their marks away.
+ * The `review_packs` and `review_marks` tables: a change restated for a person, and what
+ * that person did to it. The pack is one document, stored and read whole; nothing queries
+ * inside it. The marks are a separate table because they **outlive the document** — a pack
+ * is immutable output for one head sha, so folding marks in would lose them on regeneration.
+ * → `docs/spec/31-review-packs.md#where-it-lives`
  */
 /** One pull request's current pack, without its document. → {@link ReviewPackStore.listReviewPackHeads} */
 export interface ReviewPackHead {
@@ -64,18 +47,10 @@ export class ReviewPackStore {
   constructor(private readonly ctx: StoreContext) {}
 
   /**
-   * Write a pack. Upserted on `(pr_number, head_sha)`: asking again on the same
-   * head replaces the pack rather than duplicating it, and a pack for a newer
-   * head is a new row beside the old one — the older row is kept, and the newest
-   * written is what {@link getCurrentReviewPack} answers.
-   *
-   * The pull request and head are read off the document, never taken as
-   * arguments: the row's columns are a copy of what the document says, and two
-   * sources for one fact is how they come to disagree.
-   *
-   * A document stating a schema this build does not write is refused rather than
-   * stored: a pack the store accepted and every reader then refuses is a run's
-   * work lost with nothing red at the moment it could have been caught.
+   * Write a pack. Upserted on `(pr_number, head_sha)`; a pack for a newer head is a new row
+   * beside the old one, and the newest written is what {@link getCurrentReviewPack} answers.
+   * The pull request and head are read off the document, never taken as arguments. A
+   * document stating a schema this build does not write is refused rather than stored.
    */
   recordReviewPack(pack: ReviewPack): ReviewPackRecord {
     if (pack.schema !== REVIEW_PACK_SCHEMA) {
@@ -104,10 +79,8 @@ export class ReviewPackStore {
   }
 
   /**
-   * Every pack ever written for the pull request, newest first. Ties on
-   * `written_at` break on `rowid` — a nanoid is not in play here, but two packs
-   * written inside one millisecond by a test would otherwise come back in an
-   * order nothing chose.
+   * Every pack ever written for the pull request, newest first. Ties on `written_at` break
+   * on `rowid`, so two packs written inside one millisecond have a defined order.
    */
   listReviewPacks(prNumber: number): ReviewPackRecord[] {
     const rows = this.ctx.db
@@ -117,15 +90,9 @@ export class ReviewPackStore {
   }
 
   /**
-   * Every pull request's current pack as **three columns**, newest first — the
-   * pull request, the head it was written against, and when.
-   *
-   * Beside {@link listCurrentReviewPacks} rather than instead of it, and the
-   * difference is the `document` column: that one parses every pack it returns,
-   * which is the right price for a surface that draws them and the wrong one for
-   * the state snapshot, which folds this on **every pulse** to answer one question
-   * per row — is there a pack, and is it about this head. Nothing here reads the
-   * document, so nothing here has to.
+   * Every pull request's current pack as three columns, newest first. Beside
+   * {@link listCurrentReviewPacks} rather than instead of it: that one parses every
+   * document, which the state snapshot folding this on every pulse must not pay for.
    * → `docs/spec/31-review-packs.md#on-the-row`
    */
   listReviewPackHeads(): ReviewPackHead[] {
@@ -136,9 +103,8 @@ export class ReviewPackStore {
       )
       .all() as HeadRow[];
     const heads = new Map<number, ReviewPackHead>();
-    // First row per pull request wins: the ordering above puts the newest there,
-    // the same tie-break `listReviewPacks` takes so the two cannot name different
-    // packs as current.
+    // First row per pull request wins, on the same tie-break `listReviewPacks` takes so the
+    // two cannot name different packs as current.
     for (const row of rows) {
       if (heads.has(row.pr_number)) continue;
       heads.set(row.pr_number, { prNumber: row.pr_number, headSha: row.head_sha, writtenAt: row.written_at });
@@ -147,10 +113,8 @@ export class ReviewPackStore {
   }
 
   /**
-   * Each pull request's **current** pack — the newest written, one per pull
-   * request. What a mark is laid over, because that is the pack the page draws it
-   * on: a mark is keyed to a hunk and the idea that owns that hunk now is the idea
-   * the reviewer's label is about now.
+   * Each pull request's current pack — the newest written, one per pull request, and what a
+   * mark is laid over: a mark is keyed to a hunk, so it lands on whichever idea owns it now.
    */
   listCurrentReviewPacks(): ReviewPackRecord[] {
     const numbers = this.ctx.db.prepare(`SELECT DISTINCT pr_number FROM review_packs`).all() as { pr_number: number }[];
@@ -194,13 +158,10 @@ export class ReviewPackStore {
   }
 
   /**
-   * Somebody unshared it. The row is **kept and stamped** rather than deleted,
-   * because the copy in the namespace is still there and only the pool's own arm
-   * may take it out — a route that did the network write would make the click wait
-   * on a push to another continent
-   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
-   * The arm unpublishes and deletes the row; a withdrawal of a share that never
-   * landed has nothing in the namespace and is deleted here.
+   * Somebody unshared it. The row is **kept and stamped** rather than deleted, because the
+   * copy in the namespace is still there and only the pool's own arm may take it out; that
+   * arm unpublishes and then deletes the row. A share that never landed is deleted here.
+   * → `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`
    */
   withdrawReviewPackShare(prNumber: number): ReviewPackShare | null {
     const share = this.getReviewPackShare(prNumber);
@@ -280,12 +241,8 @@ export class ReviewPackStore {
   }
 
   /**
-   * The reader took the finding on this idea's false claim — the third column, and
-   * the only one that is about the checker's output rather than the author's.
-   *
-   * It is what makes the four prominence requirements measurable: without it the
-   * page can be checked for drawing the gate first and nothing can say whether a
-   * pull request merged with a false claim nobody read.
+   * The reader took the finding on this idea's false claim — the one column about the
+   * checker's output rather than the author's, and what makes prominence measurable.
    * → `docs/spec/31-review-packs.md#whether-prominence-works`
    */
   markReviewFindingSeen(input: {
@@ -298,9 +255,8 @@ export class ReviewPackStore {
   }
 
   /**
-   * Every mark on every pull request — what the calibration reading folds. One
-   * read rather than one per pull request: the table is one row per hunk somebody
-   * touched, and the reading is over all of them.
+   * Every mark on every pull request — what the calibration reading folds, in one read
+   * rather than one per pull request.
    */
   listAllReviewMarks(): ReviewMark[] {
     const rows = this.ctx.db
@@ -318,10 +274,8 @@ export class ReviewPackStore {
   }
 
   /**
-   * One row per hunk, upserted on the hunk. The two things a reviewer can do are
-   * two columns on one row rather than two rows, so that reading an idea does not
-   * disturb an override on it and vice versa: each write names only the column it
-   * is about, and the other keeps what it had.
+   * One row per hunk, upserted on the hunk. Each write names only the column it is about, so
+   * reading an idea does not disturb an override on it or a finding taken on it.
    */
   private upsertMarks(
     prNumber: number,
@@ -330,9 +284,7 @@ export class ReviewPackStore {
     patch: { read: number } | { attention: ReviewAttention | null } | { seen: number },
   ): ReviewMark[] {
     const markedAt = this.ctx.now();
-    // Which column this write is about. The other two keep what they had, which is
-    // the whole reason the three live on one row: a reader taking a finding must
-    // not clear their own override, and a rewrite must not lose either.
+    // Which column this write is about; the other two keep what they had.
     const column = 'read' in patch ? 'read' : 'seen' in patch ? 'seen' : 'attention';
     const write = this.ctx.db.prepare(
       `INSERT INTO review_marks (pr_number, path, start_line, end_line, head_sha, attention, read, seen, marked_at)
@@ -414,8 +366,8 @@ function rowToMark(r: MarkRow): ReviewMark {
     prNumber: r.pr_number,
     hunk: { path: r.path, start: r.start_line, end: r.end_line },
     headSha: r.head_sha,
-    // Narrowed on read rather than trusted: the column is text, and a label a
-    // later build knew must not arrive as one this one will switch on.
+    // Narrowed on read: the column is text, and a later build's label must not arrive as one
+    // this build will switch on.
     attention: REVIEW_ATTENTIONS.find((a) => a === r.attention) ?? null,
     read: r.read === 1,
     seen: r.seen === 1,

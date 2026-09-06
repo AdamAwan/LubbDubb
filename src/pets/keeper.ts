@@ -10,25 +10,10 @@ import { PET_RULES, type PetRules } from './rules.js';
 import { collectActions } from './scan.js';
 
 /**
- * The whole of what an operator may say about pets.
- *
- * **One switch, and nothing that is a number.** Every rate this feature runs on
- * used to be a key here, and each of them was a way of writing a pet into
- * existence without doing anything — a drop chance of 1, a pity of 1, a rarity
- * table zeroed everywhere but `mythic`. They now live as constants in
- * `src/pets/rules.ts`, which is what lets a collection mean the same thing on
- * every deployment. → `docs/spec/22-pets.md#authenticity`
- *
- * `enabled` is safe to keep because off is the one direction that cannot mint
- * anything: it hides the vivarium and stops the scan, and deletes nothing.
- *
- * `visible` is the same safety in the other direction: it hides the vivarium and
- * changes nothing else. The scan still runs, the rolls still land and the
- * collection still grows behind it — so an operator who does not want animals on
- * their cockpit is not also deciding, months in advance, that the work they did
- * meanwhile was worth nothing. Turning it back on shows what accrued. Neither
- * switch is a number, which is what keeps a collection meaning the same thing on
- * every deployment. → `docs/spec/22-pets.md#configuration`
+ * The whole of what an operator may say about pets: two switches, no numbers — every rate lives
+ * as a constant in `src/pets/rules.ts`. `enabled` off stops the scan and deletes nothing;
+ * `visible` off hides the vivarium and changes nothing else — it keeps growing behind it.
+ * → `docs/spec/22-pets.md#authenticity`, `docs/spec/22-pets.md#configuration`
  */
 export interface PetPolicy {
   enabled: boolean;
@@ -39,83 +24,45 @@ export interface PetPolicy {
 type PetResult = { ok: true; pet: Pet } | { ok: false; error: string };
 
 /**
- * The vivarium: what has hatched, what it has been fed, and the one scan that
- * decides both.
- *
- * A **lens**. It reads what the operator has already done and writes only its own
- * five tables; nothing it holds is read by a rule, a gate, a rank or a report,
- * and `test/pets.test.ts` asserts structurally that `src/dispatcher/` never
- * imports any of it. The day that assertion fails, the fix is the import.
+ * The vivarium: what has hatched, what it has been fed, and the one scan that decides both. A
+ * lens — writes only its own five tables, and nothing it holds is read by a rule, gate, rank or
+ * report. `test/pets.test.ts` asserts structurally that `src/dispatcher/` never imports any of it.
  */
 export class PetKeeper {
   constructor(
     private readonly store: Store,
     private readonly policy: PetPolicy,
-    /**
-     * The rates, which are constants everywhere but here.
-     *
-     * A parameter only so the suite can roll against a certain drop chance instead
-     * of manufacturing a hundred escalations per assertion. **Nothing threads it
-     * from configuration** — `src/system.ts` passes two arguments, and
-     * `test/pets.test.ts` asserts that no config key reaches it.
-     */
+    /** The rates, constants everywhere but here — a parameter only so tests can roll a certain drop chance. Nothing threads it from configuration. */
     private readonly rules: PetRules = PET_RULES,
-    /**
-     * Which build is doing the hatching and the judging.
-     *
-     * A parameter for the same reason `rules` is: the suite has to be able to say
-     * "this pet was rolled by this build" without a git checkout underneath it.
-     * The default reads the running install once and remembers it.
-     */
+    /** Which build is doing the hatching and judging. A parameter for `rules`' reason; the default reads the running install once and remembers it. */
     private readonly stamp: () => PetBuildStamp = buildStamp,
   ) {}
 
   /**
-   * Roll every operator action not yet rolled, oldest first, and hatch what comes
-   * of it. Returns what hatched, for the caller that wants to say so.
-   *
-   * Safe to call as often as anything likes: an action already recorded is skipped
-   * by key, and the roll is a hash, so the second call over the same world writes
-   * nothing. That is what lets the routes call it for latency while `cycle:end`
-   * remains the thing that guarantees delivery — **forgetting the call on a new
-   * route costs a delay, never a pet.**
-   *
-   * An action stamped **before the vivarium started** is recorded and rolls
-   * nothing. That is the whole of what stops a build shipping pets to a long-lived
-   * database from treating a year of escalations, jobs and findings as this
-   * afternoon's work — and it is recorded rather than passed over, because an
-   * unrecorded action stays fresh forever and would pay the whole backlog out at
-   * once the day anything moved the boundary.
+   * Roll every operator action not yet rolled, oldest first, and hatch what comes of it.
+   * Idempotent — an action already recorded is skipped by key — so forgetting the call on a new
+   * route costs a delay, never a pet. An action stamped before the vivarium started is recorded
+   * and rolls nothing; leaving it unrecorded would pay the whole backlog out the day the
+   * boundary moved.
    */
   scan(): Pet[] {
     if (!this.policy.enabled) return [];
-    // Stamped here rather than in the `Store`'s constructor, so a deployment
-    // sitting with `pets.enabled` false for months does not silently burn its
-    // start date on boots that could hatch nothing anyway. It does mean the value
-    // depends on ordering in `src/server/main.ts` — `resetOnce` runs before the
-    // first cycle scan — and a route that scanned earlier would stamp it seconds
-    // early, which costs nothing but is why this is worth saying.
+    // Stamped here, not in the `Store` constructor, so a deployment with pets off doesn't burn
+    // its start date on boots that hatch nothing. Depends on `resetOnce` running first in `src/server/main.ts`.
     const since = this.store.beginVivarium();
     const seen = this.store.petActionKeys();
     const fresh = collectActions(this.store)
       .filter((action) => !seen.has(`${action.kind}:${action.ref}`))
       .sort((a, b) => a.at.localeCompare(b.at));
     const hatched: Pet[] = [];
-    // One counter per kind. A single counter is spent by whatever the deployment
-    // does most — jobs and findings, by an order of magnitude — so the kinds a
-    // pity floor is actually for never reach theirs.
+    // One counter per kind, so a pity floor for a rare kind isn't spent by a common one.
     const sinceHatch = this.store.petActionsSinceHatch(since);
-    // Carried across the pass rather than re-read per action, and asked of the
-    // rolls rather than of `seen`: the key set holds the backlog too, so a
-    // deployment taking this build has thousands of keys and has still never
-    // rolled anything. Re-reading it per action instead would call *every* action
-    // in a first scan the deployment's first — seven guaranteed pets out of one
-    // afternoon, which is the thing having a single guarantee exists to stop.
+    // Carried across the pass rather than re-read per action, or every action in a first scan
+    // would read as "the first ever" — a handful of guaranteed pets in one afternoon.
     let anyRolled = this.store.petRolledSince(since);
     for (const action of fresh) {
       if (action.at < since) {
-        // Inert, not pending: written with no pet so a re-scan stays free, and
-        // touching neither the pity counter nor the guarantee.
+        // Inert, not pending: written with no pet, touching neither pity nor the guarantee.
         this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: null });
         continue;
       }
@@ -145,29 +92,12 @@ export class PetKeeper {
   }
 
   /**
-   * Release the whole collection, once, and start the beats again from zero.
-   *
-   * **Runs at most once per deployment**, and the row it writes is what says so:
-   * `VIVARIUM_RESET` names *this* clearance, so a restart, a restored backup and
-   * an upgrade all find it already done. A build that asked "has any clearance
-   * run" instead could never ship a second one.
-   *
-   * What goes is the collection and the ledger under it — pets, purchases and
-   * blend credits. What stays is `pet_actions`, and it has to: it is the scan's
-   * watermark, so an action that has already been rolled is skipped rather than
-   * rolled again, and the released collection cannot hatch straight back out of
-   * the history it came from. What is re-stamped, in the same transaction, is the
-   * vivarium's start: those surviving rows all fall before it, so they are inert
-   * rather than merely spent — no pity floor inherited from them, and the
-   * deployment's one first-action guarantee handed back. The vivarium starts again
-   * from what the operator does *next*, which is the whole of what "from here on"
-   * means.
-   *
-   * Skipped entirely while `pets.enabled` is off, because off is the one setting
-   * that has never deleted anything and this is not the change that makes it. A
-   * deployment that turns the vivarium on later gets the clearance then.
-   *
+   * Release the whole collection, once, and start the beats again from zero. Runs at most once
+   * per deployment, keyed on the `VIVARIUM_RESET` id. Pets, purchases and blend credits go;
+   * `pet_actions` stays as the scan's watermark, and the vivarium's start is re-stamped in the
+   * same transaction. Skipped while `pets.enabled` is off — off has never deleted anything.
    * Returns what it released, or null when there was nothing to do.
+   * → `docs/spec/22-pets.md#clearing-the-vivarium`
    */
   resetOnce(): PetReset | null {
     if (!this.policy.enabled) return null;
@@ -176,20 +106,14 @@ export class PetKeeper {
   }
 
   /**
-   * What the cockpit draws, or null when the feature is off — **or merely
-   * hidden**, which the cockpit is not told apart from off and must not be: a
-   * second flavour of null is a second thing every surface reading it has to
-   * handle, for a distinction it would draw nothing different for.
-   *
-   * Hidden is the only gate in this class that is not `enabled`. Everything that
-   * hatches, feeds or clears stays on `enabled` alone, so a vivarium nobody is
-   * looking at goes on filling up. → `docs/spec/22-pets.md#configuration`
+   * What the cockpit draws, or null when the feature is off — or merely hidden, which the
+   * cockpit is deliberately not told apart from off. Hidden is the only gate here that isn't
+   * `enabled`; everything that hatches, feeds or clears stays on `enabled` alone.
+   * → `docs/spec/22-pets.md#configuration`
    */
   state(): PetState | null {
     if (!this.policy.enabled || !this.policy.visible) return null;
-    // One ledger for the whole grid rather than two queries per card: the snapshot
-    // is what the socket redraws, and a per-pet read here is a per-pet read on
-    // every pulse.
+    // One ledger for the whole grid, not a per-pet read every pulse.
     const ledger = this.ledger();
     const pets = this.store.listPets();
     const labels = this.originLabels(pets);
@@ -197,28 +121,15 @@ export class PetKeeper {
       pets: pets.map((pet) => this.view(pet, ledger, labels)),
       wallet: this.wallet(),
       slots: VIVARIUM_SLOTS,
-      // Read rather than stamped: `state()` is called on every heartbeat, and a
-      // read that wrote the boundary would start the vivarium on whichever pulse
-      // first drew the cockpit rather than on the first scan that could hatch
-      // something. `scan()` owns the stamp; this only reports it.
+      // Read, never stamped: `scan()` owns the stamp.
       startedAt: this.store.vivariumStart(),
     };
   }
 
   /**
-   * Crack an egg open — the one act that reveals rather than decides.
-   *
-   * Nothing is rolled here. The species and the tier were settled by
-   * `hash32(kind:ref)` the instant the scan reached the action, and the shell only
-   * withholds them; a roll at this point would move the subsystem's one decision
-   * from the action to the click, and with it every guarantee the hash buys — a
-   * re-scan would stop being free, and two operators on one database would open
-   * different animals out of one egg.
-   *
-   * **A second open is a success, not a refusal.** A double click, a retried
-   * request and a reload of a shared link all arrive here after the stamp is set,
-   * and none of them is the operator getting something wrong — the store's own
-   * `opened_at IS NULL` guard means they change nothing either way.
+   * Crack an egg open — the one act that reveals rather than decides. Nothing is rolled here:
+   * species and tier were settled by `hash32(kind:ref)` when the scan reached the action.
+   * A second open is a success, not a refusal.
    */
   open(id: string): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
@@ -238,13 +149,11 @@ export class PetKeeper {
     const existing = this.store.getPet(id);
     if (existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet keeps its record but stops growing' };
-    // The flaw is checked before the shell, here and in `blend`: a pet that does
-    // not verify is refused for *that*, whether or not it has been opened, because
-    // "open it first" on a forgery is an invitation to carry on.
+    // The flaw is checked before the shell, here and in `blend`: "open it first" on
+    // a forgery is an invitation to carry on.
     const flawed = existing === null ? null : this.refuseFlawed(existing, 'fed');
     if (flawed !== null) return flawed;
-    // Growth is a decision about a creature, and an egg is not one yet: what the
-    // beats would be buying is hidden from the operator spending them.
+    // An egg hides what the beats would be buying from the operator spending them.
     if (existing !== null && existing.openedAt === null)
       return { ok: false, error: 'that one is still an egg — open it before you feed it' };
     const pet = this.store.feedPet(id, beats);
@@ -260,8 +169,7 @@ export class PetKeeper {
 
   place(id: string, placed: boolean): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
-    // Counted before the write rather than trimmed after it: silently evicting
-    // whoever was there is the cockpit deciding something the operator did not.
+    // Counted before the write: silently evicting whoever was there is the cockpit deciding.
     if (placed && this.store.placedCount() >= VIVARIUM_SLOTS) {
       const already = this.store.getPet(id);
       if (already !== null && !already.placed)
@@ -270,31 +178,14 @@ export class PetKeeper {
     const existing = this.store.getPet(id);
     if (placed && existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet cannot stand in the vivarium' };
-    // Only on the way *in*: a pet that stops verifying while it stands there can
-    // always be taken out again, and refusing that would strand it in the rail.
+    // Only on the way *in*: refusing on the way out would strand the pet in the rail.
     const flawed = placed && existing !== null ? this.refuseFlawed(existing, 'put out') : null;
     if (flawed !== null) return flawed;
     const pet = this.store.placePet(id, placed);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
 
-  /**
-   * Dissolve a duplicate into beats.
-   *
-   * **Marks, never deletes.** The row keeps its species, its seed and its origin
-   * line — the night you answered the thing that produced it — because that line
-   * is the one part of this subsystem that gets better the longer a deployment
-   * runs, and a `DELETE` takes it with the animal. The panel draws a dissolved pet
-   * greyed with its date; it simply stops being feedable, placeable and alive.
-   *
-   * Only a **duplicate** may go: blending is a use for a species you already have
-   * standing, so the last live one of its kind is refused. That is what keeps this
-   * from being a way to lose something.
-   *
-   * And only a pet that **verifies**. This is the single route from a creature back
-   * into beats, so an unchecked one would let a row written straight into the file
-   * be laundered into food for the honest animals beside it.
-   */
+  /** Dissolve a duplicate into beats. Marks, never deletes — the row keeps its species, seed and origin, and only stops being feedable, placeable and alive. Only a duplicate that verifies may go. */
   blend(id: string): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
     const pet = this.store.getPet(id);
@@ -302,16 +193,12 @@ export class PetKeeper {
     if (pet.dissolvedAt !== null) return { ok: false, error: 'that one has already been blended' };
     const flawed = this.refuseFlawed(pet, 'blended');
     if (flawed !== null) return flawed;
-    // The last guard against losing something unseen: an unopened shell is not a
-    // duplicate yet, whatever the species column says, because nobody has been
-    // shown what is in it.
+    // An unopened shell is not a duplicate yet: nobody has been shown what is in it.
     if (pet.openedAt === null)
       return { ok: false, error: 'that one is still an egg — open it before you decide it is a duplicate' };
     if (this.store.livePetsOfSpecies(pet.species) < 2) {
-      // The species is named only once the pet is old enough to have said so
-      // itself. A hatchling has not — one grid serves every animal of a tier — so
-      // a refusal that named it would hand over, in an error message, the answer
-      // the whole juvenile stage exists to make you wait for.
+      // The species is named only once the pet is old enough to have said so itself:
+      // naming a hatchling's would give away what the juvenile stage withholds.
       const { display } = SPECIES[pet.species];
       const which = petStage(pet.species, pet.fed) === 'hatchling' ? 'one of these' : display;
       return { ok: false, error: `this is your only ${which} — blending is for duplicates` };
@@ -320,27 +207,14 @@ export class PetKeeper {
     return blended ? { ok: true, pet: blended } : { ok: false, error: 'no such pet' };
   }
 
-  /**
-   * The refusal a pet that does not verify earns, or null when it does.
-   *
-   * Feeding, placing and blending all go through it, and blending is the one that
-   * matters — the other two only spend beats on something that is not real, which
-   * costs the operator and nobody else.
-   */
+  /** The refusal a pet that does not verify earns, or null when it does. Feeding, placing and blending all use it. */
   private refuseFlawed(pet: Pet, act: string): { ok: false; error: string } | null {
     const flaw = attestPet(pet, this.ledger());
     if (flaw === null) return null;
     return { ok: false, error: `that one does not check out — ${flaw.note} — so it cannot be ${act}` };
   }
 
-  /**
-   * Everything an attestation is made against, built once.
-   *
-   * Four reads and two replays over a few hundred rows — the whole vivarium's
-   * worth, rather than a query and a walk per card. Both replays are a handful of
-   * hashes an action, which is cheap enough to redo on every snapshot rather than
-   * cache into a column nothing can keep in step.
-   */
+  /** Everything an attestation is made against, built once per snapshot rather than per card — recomputed rather than cached into a column nothing keeps in step. */
   private ledger(): PetLedger {
     return {
       actions: this.store.petActionIndex(),
@@ -351,20 +225,12 @@ export class PetKeeper {
     };
   }
 
-  /**
-   * Beats earned, spent and left — derived on every read, never accumulated into
-   * a column. `usage_events` only ever grows, so the earned figure only ever grows
-   * with it, and a restore or a recount moves the balance to the truth rather than
-   * to the truth plus whatever a column had remembered.
-   */
+  /** Beats earned, spent and left — derived on every read, never accumulated into a column. */
   private wallet(): PetWallet {
-    // Fleet spend plus what duplicates have been blended back. The blend credit is
-    // *stored* rather than derived from the dissolved rows, because a yield this
-    // build ships is not necessarily the yield the credit was granted under.
-    // Spend since the last clearance, not since the beginning. `usage_events` is
-    // never pruned, so a cleared vivarium counted from the beginning would open
-    // holding every beat the deployment had ever earned — a full grown collection
-    // one afternoon's clicking away, which is exactly what clearing it was for.
+    // The blend credit is stored, not derived from the dissolved rows: this build's yield isn't
+    // necessarily the one the credit was granted under. Spend is counted since the last
+    // clearance — `usage_events` is never pruned, so counting from the start would reopen a
+    // cleared vivarium holding every beat ever earned.
     const earned =
       Math.floor(this.store.sumUsageCostSince(this.store.petEpoch() ?? EPOCH) * this.rules.beatsPerDollar) +
       this.store.petBlendCredits();
@@ -372,20 +238,7 @@ export class PetKeeper {
     return { earned, spent, balance: Math.max(0, earned - spent) };
   }
 
-  /**
-   * A line of words for every origin the vivarium holds, keyed `kind:ref`.
-   *
-   * **Six by-id reads, not a walk.** `collectActions`' seven-table sweep was
-   * ruled out for the snapshot once already (→ `docs/spec/22-pets.md#what-is-not-checked`)
-   * and this must not smuggle it back in: each kind asks its own table for the
-   * handful of refs the pets actually carry, so the cost follows the collection
-   * rather than the deployment's history. `upgrade` asks nothing — its label is
-   * the sha it already stores.
-   *
-   * A ref with no row is simply left out, and `view` renders that as null. A
-   * pruned or restored source is not an accusation here any more than it is in
-   * the attestation.
-   */
+  /** A line of words for every origin the vivarium holds, keyed `kind:ref`. By-id reads, never a walk — cost follows the collection, not the deployment's history. → `docs/spec/22-pets.md#what-is-not-checked` */
   private originLabels(pets: Pet[]): Map<string, string> {
     const byKind = new Map<PetActionKind, Set<string>>();
     for (const pet of pets) {
@@ -408,9 +261,7 @@ export class PetKeeper {
         if (clamped !== null) out.set(`${kind}:${ref}`, clamped);
       }
     }
-    // An upgrade's ref *is* its label, shortened the way every other sha in the
-    // cockpit is. Nothing is read for it: the row it came from is a single
-    // mutable record that has long since moved on to the next upgrade.
+    // An upgrade's ref is its label, shortened — the row it came from has moved on.
     for (const ref of ids('upgrade')) out.set(`upgrade:${ref}`, ref.slice(0, 7));
     return out;
   }
@@ -430,16 +281,7 @@ export class PetKeeper {
   }
 }
 
-/**
- * One line, and a card's worth of it.
- *
- * Every label here is free text somebody typed — an escalation's prompt is a
- * paragraph, and a finding's summary can carry a newline — so the clamp happens
- * on the wire rather than in the panel: a grid that reflowed around one long
- * origin would be a layout bug nothing in `check` can see, and the panel is not
- * the only thing that may ever draw this. A label that is nothing but whitespace
- * is no label at all.
- */
+/** One line, and a card's worth of it. Every label is free text somebody typed, so the clamp happens on the wire rather than in the panel. Whitespace is no label. */
 function clampLabel(raw: string): string | null {
   const line = raw.replace(/\s+/g, ' ').trim();
   if (line === '') return null;
@@ -449,23 +291,13 @@ function clampLabel(raw: string): string | null {
 /** Long enough for a job title or a finding's claim, short enough for a card. */
 const LABEL_MAX = 90;
 
-/**
- * Before any timestamp this harness can hold, so `at >= EPOCH` is every usage
- * event ever recorded — and, on a vivarium that has never been scanned, every
- * action ever rolled. An empty string would compare the same way and read as an
- * accident.
- */
+/** Before any timestamp this harness can hold, so `at >= EPOCH` matches everything. An empty string would compare the same way and read as an accident. */
 const EPOCH = '0000-01-01T00:00:00.000Z';
 
 /**
- * The name of the clearance this build carries, and the only thing that decides
- * whether a deployment has had it.
- *
- * **Never edited in place.** Changing this string is not a rename: it is a second
- * clearance, and it releases every collection on every deployment that takes the
- * build — silently, since a wipe that ran as designed has nothing to report and
- * `npm run check` has no opinion about a constant. A new clearance is a new id,
- * added deliberately, and the old one stays where it is so the deployments that
- * have had it are not given it twice.
+ * The name of the clearance this build carries, and the only thing that decides whether a
+ * deployment has had it. Never edited in place: changing the string is a second clearance that
+ * silently releases every collection on every deployment taking the build. A new clearance is a new id.
+ * → `docs/spec/22-pets.md#clearing-the-vivarium`
  */
 const VIVARIUM_RESET = 'mark-two';

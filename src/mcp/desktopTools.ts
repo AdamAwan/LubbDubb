@@ -137,10 +137,8 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
           `what it does have.`,
       );
     }
-    // A settled check is somebody's answer. Re-running one is a legitimate thing
-    // to want and an illegitimate thing to do by accident, so it goes through the
-    // cockpit's reset — the same refusal the hand-over route makes, for the same
-    // reason: an agent must not overwrite a reading nobody asked it to re-take.
+    // A settled check is somebody's answer: re-running one goes through the
+    // cockpit's reset, so nothing overwrites a reading it was not asked to re-take.
     if (wanted.state !== 'unrun') {
       return toolError(
         `Check ${wanted.letter} on issue #${ref.ref.issue} already reads "${wanted.state}"${
@@ -175,8 +173,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
       tookOverFrom: claim.tookOverFrom,
       resourceRoot: plan.root,
       procedure: checkBriefing(claim.check),
-      // Said rather than assumed, because this is the one place a desktop session
-      // could quietly do the wrong thing: it has the repository open and every
+      // Said rather than assumed: this session has the repository open and every
       // means to make a check pass instead of running it.
       next:
         'Carry the procedure out for real — open the thing, click the thing, look at what happens. Then call ' +
@@ -214,10 +211,8 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     required: ['result', 'note'],
   },
   handler: (args) => {
-    // The check is not an argument here either — it is whatever this session
-    // claimed. The fleet's version takes it from the origin it was dispatched on;
-    // both are the same rule, that which check a report is about is decided
-    // before the report rather than by it.
+    // The check is not an argument — it is whatever this session claimed. Same
+    // rule as the fleet's version: the check is decided before the report.
     const held = session.held;
     if (!held) {
       return toolError(
@@ -250,8 +245,8 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
       return toolJson({
         reported: 'handback',
         check: `${check.letter}. ${check.id}`,
-        // Stated rather than inferred from a bare "ok": a session told only that
-        // the call succeeded would reasonably believe it had settled the check.
+        // Stated rather than inferred from a bare "ok", which would read as the
+        // check having been settled.
         state: next?.state ?? check.state,
         means:
           'no result was recorded, the claim is released and your reason is on the row. The state is unchanged, ' +
@@ -262,10 +257,8 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     const next = deps.store.recordValidationResult(held.originRef, check.id, {
       state: result,
       note,
-      // Neither `operator` nor `agent`: nobody dispatched this, and nobody
-      // carried out the steps by hand. The cockpit draws the difference because
-      // a reader deciding whether to re-run a check before closing a goal is
-      // deciding on exactly this.
+      // Neither `operator` nor `agent`: nobody dispatched this and nobody ran the
+      // steps by hand. The cockpit draws the difference.
       by: 'desktop',
     });
     session.held = null;
@@ -330,9 +323,8 @@ const planRead: DesktopToolFactory = (deps) => ({
       issue: ref.issue,
       title: plan.title,
       status: plan.status,
-      // The count rather than the revisions themselves: a plan replanned three
-      // times carries three write-ups, and a session that has to read all of them
-      // before it can say anything is the friction this whole surface removes.
+      // The count rather than the revisions themselves — a plan replanned three
+      // times carries three write-ups.
       revisions: deps.store.listPlanRevisions(plan.id).length,
       reason: plan.reason,
       diagnosis: plan.diagnosis,
@@ -340,13 +332,13 @@ const planRead: DesktopToolFactory = (deps) => ({
       risks: plan.risks,
       outOfScope: plan.outOfScope,
       alternatives: plan.alternatives,
-      // The planner's own nomination of what to argue about. Named as such in the
-      // reply because it is the agenda the operator opened this conversation on.
+      // The planner's own nomination of what to argue about — the agenda the
+      // operator opened this conversation on.
       openQuestions: plan.openQuestions,
       verification: plan.verification,
       document: plan.document,
-      // The same rendering a replanning agent is given, rather than a second one:
-      // it carries each part's slug, which is the merge key an amendment turns on.
+      // The same rendering a replanning agent gets: it carries each part's slug,
+      // the merge key an amendment turns on.
       parts: currentPlanSummary(plan, parts, deps.prRefStyle ?? '#'),
       acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
       validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
@@ -356,14 +348,9 @@ const planRead: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The document as the two paths both submit it — one object, built once.
- *
- * The awaiting-approval path validates it here and ingests it; the active path
- * hands it to {@link proposePlanAmendment}, which validates it before it writes.
- * Written out twice they would drift by a field — a `watch` block accepted on one
- * route and dropped on the other, with the schema advertising it on both and
- * nothing red — which is the same trap `PLAN_DOCUMENT_SCHEMA` exists to close on
- * the description side.
+ * The document as the two paths both submit it — one object, built once. Written
+ * out twice the two drift by a field, with the schema advertising it on both and
+ * nothing red.
  */
 function submittedPlanDocument(args: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -387,20 +374,11 @@ function submittedPlanDocument(args: Record<string, unknown>): Record<string, un
 }
 
 /**
- * Amend a plan — and **which of the two amendments this is depends on the plan's
- * status**, because the same conversation reaches both.
- *
- * `awaiting_approval` is a rewrite in place: nothing is scheduled off the plan
- * yet, the operator is about to answer for it, and the change belongs in the plan
- * they read. `active` is a proposal: parts are scheduling off a decision that has
- * already been taken, so the amended document waits in `plan_amendments` while the
- * plan carries on, and only the operator applies it
+ * Amend a plan — **which of the two amendments this is depends on the plan's
+ * status**. `awaiting_approval` is a rewrite in place: nothing is scheduled off it
+ * yet. `active` is a proposal: the amended document waits in `plan_amendments`
+ * while the plan carries on, and only the operator applies it
  * (`src/plans/planAmendment.ts` states why).
- *
- * The old refusal on anything but `awaiting_approval` sent the session to the
- * cockpit to replan, which was the wrong answer to the commonest case: a plan
- * whose split turned out wrong is not a plan whose *shape* needs re-deriving, and
- * a replan stops the whole goal to find that out.
  */
 const planAmend: DesktopToolFactory = (deps) => ({
   description:
@@ -435,12 +413,9 @@ const planAmend: DesktopToolFactory = (deps) => ({
 
     if (plan.status === 'active') return amendRunningPlan(deps, plan, args);
 
-    // The gate the `/discuss` route used to make, kept where the write is. Every
-    // other status is one where writing `awaiting_approval` back is wrong for a
-    // reason of its own — a planner already holds a `planning` plan, and a
-    // `complete` or `abandoned` one schedules nothing an amendment could keep
-    // running — so the refusal names the status rather than pretending there is a
-    // route.
+    // Every other status is one where writing `awaiting_approval` back is wrong —
+    // a planner already holds a `planning` plan; a `complete` or `abandoned` one
+    // schedules nothing — so the refusal names the status.
     if (plan.status !== 'awaiting_approval') {
       return toolError(
         `The plan for issue #${ref.issue} is "${plan.status}", so it is not yours to amend: it is neither ` +
@@ -450,23 +425,17 @@ const planAmend: DesktopToolFactory = (deps) => ({
     }
 
     // Validated before anything is written, so a rejection leaves the plan graph
-    // exactly as it was and the retry is against an unchanged plan.
+    // unchanged.
     const parsed = validatePlanDocument(submittedPlanDocument(args));
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
-    // The card the operator would otherwise walk back to is now about a plan that
-    // no longer exists, and `plan-approval` is held off this plan for as long as a
-    // pending one sits there — so an amendment that left it up would send them to
-    // approve the *pre-discussion* decomposition, and release parts its reader
-    // never saw.
+    // The pending approval card is about a plan that no longer exists; left up it
+    // would have the operator approve the pre-discussion decomposition.
     //
-    // **The status write comes first, exactly as it does in the replan route.**
-    // `refusePlan` settles a plan that is still `awaiting_approval`: it would
-    // retire every unstarted part and send the plan back to a planner, which is
-    // the opposite of what withdrawing a superseded card means. Out of that
-    // status it is a no-op, and the rejection is only the inbox item closing.
-    // Ingestion writes `awaiting_approval` back a few lines below, and store
-    // writes are synchronous, so no pulse can observe the gap.
+    // **The status write comes first**, as in the replan route: `refusePlan` on a
+    // still-`awaiting_approval` plan would retire every unstarted part and send it
+    // back to a planner. Out of that status it is a no-op. Ingestion writes the
+    // status back below, and store writes are synchronous, so no pulse sees the gap.
     const pending = deps.store
       .listProposals()
       .find((p) => p.kind === 'plan' && p.ref === planProposalRef(originRef) && p.status === 'pending');
@@ -480,8 +449,8 @@ const planAmend: DesktopToolFactory = (deps) => ({
       originRef,
       title: plan.title,
     });
-    // The card goes back up on a pulse, and an operator told to go and approve
-    // something wants it there when they look rather than at the next heartbeat.
+    // The card goes back up on a pulse — run one now so it is there when the
+    // operator looks.
     await deps.runCycle();
 
     return toolJson({
@@ -489,9 +458,7 @@ const planAmend: DesktopToolFactory = (deps) => ({
       issue: ref.issue,
       status: result.status,
       retired: result.retired,
-      // Stated rather than left to be read off the status, for `validation_report`'s
-      // reason: a session told only that the call succeeded would reasonably
-      // believe it had finished the job.
+      // Stated rather than read off the status, for `validation_report`'s reason.
       means:
         'the amended plan is recorded and the superseded approval card has been withdrawn. Nothing is ' +
         'scheduled and nothing more is yours to do here.',
@@ -505,12 +472,9 @@ const planAmend: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The running-plan half: a proposal, and **nothing else happens**.
- *
- * No cycle is run here, unlike the rewrite above. That one has to put a fresh
- * approval card up in place of the one it withdrew; this one adds a card the
- * `plan-amendment` rule raises on the next ordinary pulse, and nothing waits on
- * it — the plan is still scheduling, which is the point.
+ * The running-plan half: a proposal, and **nothing else happens**. No cycle is run,
+ * unlike the rewrite above: the `plan-amendment` rule raises the card on the next
+ * ordinary pulse and nothing waits on it — the plan is still scheduling.
  */
 function amendRunningPlan(deps: DesktopToolDeps, plan: Plan, args: Record<string, unknown>): ToolCallResult {
   const note = typeof args.note === 'string' ? args.note : '';
@@ -527,8 +491,7 @@ function amendRunningPlan(deps: DesktopToolDeps, plan: Plan, args: Record<string
     proposed: true,
     issue: planIssueNumber(plan.originRef),
     amendmentId: proposed.proposed.amendment.id,
-    // Handed back so the session can tell the operator the change it actually
-    // described rather than the one it meant to.
+    // Handed back so the session reports the change it actually described.
     changes: proposed.proposed.diff?.parts.filter((p) => p.kind !== 'unchanged').map((p) => `${p.kind} ${p.slug}`),
     ...(proposed.proposed.warnings.length > 0 ? { warnings: proposed.proposed.warnings } : {}),
     means:
@@ -544,13 +507,9 @@ function amendRunningPlan(deps: DesktopToolDeps, plan: Plan, args: Record<string
 }
 
 /**
- * What to do with what `plan_read` just returned — and it turns on `status`,
- * because `plan_amend` settles two different ways and a session that does not know
- * which one it is doing will describe the wrong one to the operator.
- *
- * Said here rather than left to the tool's own reply: by the time that is read the
- * write has happened, and "the plan is amended" told about a plan that is actually
- * still running unchanged is the one sentence this surface must not produce.
+ * What to do with what `plan_read` just returned. Turns on `status`, because
+ * `plan_amend` settles two different ways — said here rather than in the tool's own
+ * reply, which is read only after the write has happened.
  */
 const PLAN_READ_NEXT =
   'Argue with it. Check the diagnosis against the code, and say plainly where you think the split is wrong ' +
@@ -568,26 +527,14 @@ const READ_NEXT =
   'still fine and takes it off them for as long as you hold it.';
 
 /**
- * How this project starts on this machine.
+ * How this project starts on this machine — the `local-run` prompt, rendered.
+ * Deliberately not a field on `validation_read`, which refuses a goal with no
+ * checks, and a goal with no checks is exactly the one somebody runs locally.
  *
- * The instruction is the `local-run` prompt, rendered — so a deployment that has
- * written its own command down answers with it, and one that has not answers with
- * "work it out from the repository". Either way the session is told something
- * rather than left to guess in silence, which is the whole complaint this tool
- * exists for: a check that says "open the page and click the thing" is unrunnable
- * until somebody knows how to get the page up.
- *
- * **Not a field on `validation_read`.** That tool refuses a goal with no checks,
- * deliberately and with a reason worth keeping — and a goal with no checks is
- * exactly the goal somebody hits *run it locally* on. Two callers, one rendering,
- * no second copy of the text.
- *
- * The caution is *beside* the instruction rather than inside it, because the
- * template is operator-overridable and an override that never learned about the
- * worktree pool would drop the one sentence here that prevents a silent and
- * permanent failure: a process left holding a leased slot open stops that slot
- * ever being cleaned or handed on, and on Windows every later dispatch onto its
- * branch then fails `EBUSY` forever.
+ * The caution is appended *beside* the instruction, never inside the template: an
+ * override that never learned it would drop the sentence preventing a process left
+ * holding a leased worktree slot, which fails every later dispatch onto that branch
+ * with `EBUSY` forever. → `docs/spec/09-execution.md#the-lease`
  */
 const localRun: DesktopToolFactory = (deps) => ({
   description:
@@ -631,8 +578,8 @@ const localRun: DesktopToolFactory = (deps) => ({
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
     const started = await runner.start(issueOrigin(ref.issue));
-    // A refusal is the reason handed back rather than a throw: both are read by a
-    // person, and "nothing is configured to start" is an answer.
+    // A refusal is the reason handed back rather than a throw — "nothing is
+    // configured to start" is an answer.
     if (!started.ok) return toolError(started.error);
     return toolJson(describeLocalRun(runner, watch));
   },
@@ -645,48 +592,24 @@ const localRun: DesktopToolFactory = (deps) => ({
  */
 /**
  * How far a question may reach back before the answer stops being about this run.
- *
- * The scratchpad and the retrospective are the two lists here with no cap of their
- * own — a pad is a conversation and a write-up is a document — and both are read
- * whole everywhere else because their readers were dispatched on the goal they
- * belong to. This reader was not: it is a session the operator opened to ask one
- * question, and a goal worked over three weeks by nine agents can carry a pad
- * longer than the answer. The tail is what is kept, for `retroDossier`'s reason:
- * the end of a run is what somebody is usually asking about.
+ * The pad and the write-up are read whole elsewhere, by readers dispatched on the
+ * goal; this reader was not. The **tail** is what is kept, for `retroDossier`'s
+ * reason: the end of a run is what somebody is usually asking about.
  */
 const MAX_PAD_ENTRIES = 40;
 
 /**
- * The answer to "what happened here" — the whole record of one goal, for a
- * session that has to answer a question about it rather than act on it.
+ * The answer to "what happened here" — the whole record of one goal, for a session
+ * answering a question about it rather than acting on it. A read and only a read.
  *
- * **It is a read and only a read.** Every other tool on this channel is a step in
- * a job: claim this, report that, amend the plan, bring the application up. This
- * one settles nothing and schedules nothing, which is what lets it be the widest
- * read on the channel — an operator asking "why did this take four goes" or "is
- * it on hallway yet" is asking about rows the harness already holds, and the
- * failure worth preventing is not a write but an answer assembled from the
- * repository instead of the record.
+ * The history comes back as the dossier the retrospective agent gets, through the
+ * same {@link goalRecord} read and {@link retroDossier} rendering, so the two
+ * cannot be given different histories. What rides beside it is only what the
+ * dossier does not carry — repeating a row here would be two renderings free to
+ * disagree.
  *
- * **The history comes back as the dossier the retrospective agent gets**, through
- * the same {@link goalRecord} read and the same {@link retroDossier} rendering
- * rather than a second account beside it. That is the point of the shared
- * assembly: a retrospective and an operator asking about the same run cannot be
- * given two different histories, and a prose account of a run is what a session
- * answering a question in prose actually needs.
- *
- * **What rides beside it is what the dossier does not carry**, and only that —
- * the issue's own text, the validation checks, where the work has reached, the
- * write-up if one exists, and the pad. The dossier already holds the plan, the
- * parts, the pull requests, the decisions, the escalations, the claims and the
- * verdicts; repeating any of them here would be two renderings of one row in one
- * reply, free to disagree by the next change to either.
- *
- * **An environment verdict is passed through three-valued.** `unknown` is not
- * folded into `absent` anywhere below: an expired credential, a probe that could
- * not run and work that genuinely has not shipped are different answers, and a
- * session told `absent` will say in the operator's own words that the work is not
- * deployed for a reason that has nothing to do with deployment.
+ * **An environment verdict is passed through three-valued**: `unknown` is never
+ * folded into `absent` below.
  * → `docs/spec/24-environments.md#the-three-verdicts`
  */
 const goalRead: DesktopToolFactory = (deps) => ({
@@ -709,9 +632,8 @@ const goalRead: DesktopToolFactory = (deps) => ({
     const record = goalRecord(deps.store, originRef);
     const world = deps.store.getWorldBaseline();
     const issue = world?.issues.find((i) => i.number === ref.issue) ?? null;
-    // Nothing recorded *and* nothing in the world is the one case worth refusing:
-    // a number nobody has ever tracked is a typo far more often than it is a goal,
-    // and an empty account of it reads as a goal nothing has happened on yet.
+    // Nothing recorded *and* nothing in the world: a number nobody has tracked is
+    // a typo far more often than a goal, and an empty account reads as neither.
     if (issue === null && record.plan === null && record.decisions.length === 0) {
       return toolError(
         `The harness holds nothing about issue #${ref.issue} — no plan, no decisions, and the last world ` +
@@ -728,9 +650,8 @@ const goalRead: DesktopToolFactory = (deps) => ({
         number: ref.issue,
         ref: originRef,
         title: issue?.title ?? record.issueTitle,
-        // The ticket's own words. A question about a goal is very often a question
-        // about whether what was built is what was asked for, and the answer needs
-        // both halves — the record below is only ever the second one.
+        // The ticket's own words — the record below is only ever the other half of
+        // "is what was built what was asked for".
         body: issue?.body ?? null,
         state: issue?.state ?? null,
         workItemState: issue?.workItemState ?? null,
@@ -738,8 +659,7 @@ const goalRead: DesktopToolFactory = (deps) => ({
         url: issue?.url ?? null,
       },
       // Said rather than implied: everything below the issue is a pulse-old
-      // reading, and a session answering "has it shipped" needs to know it is
-      // reading a snapshot rather than asking the provider.
+      // snapshot rather than a question put to the provider.
       observedAt: world?.takenAt ?? null,
       record: retroDossier(record),
       validation: checks.map((c) => ({
@@ -763,11 +683,9 @@ const goalRead: DesktopToolFactory = (deps) => ({
 
 /**
  * Where this goal's work has got to, in each environment the operator declared.
- *
- * The cockpit's own fold ({@link allGoalReach}), not a reading of the arrivals
- * table: the denominator is the goal's *work* rather than its merges, and a count
- * taken here would call a four-part plan arrived on the day its first part landed
- * — which is the mistake that fold exists to have already made once.
+ * The cockpit's own fold ({@link allGoalReach}), never a reading of the arrivals
+ * table: the denominator is the goal's *work*, so a count taken here would call a
+ * four-part plan arrived on the day its first part landed.
  * → `docs/spec/24-environments.md#the-lens`
  */
 function goalEnvironments(deps: DesktopToolDeps, originRef: string): Record<string, unknown>[] {
@@ -792,13 +710,9 @@ function goalEnvironments(deps: DesktopToolDeps, originRef: string): Record<stri
 }
 
 /**
- * What the reply says to do with itself.
- *
- * Two sentences and both are about honesty rather than procedure, because this is
- * the one tool on the channel whose output is read straight back to a person: the
- * record is what the harness saw, and the gap between that and what happened is
- * the thing a session is most likely to paper over when it is asked a question it
- * can nearly answer.
+ * What the reply says to do with itself — two sentences about honesty rather than
+ * procedure, because this is the one tool whose output is read straight back to a
+ * person and the gap between the record and what happened is easy to paper over.
  */
 const GOAL_READ_NEXT =
   'Answer from this. Where the record does not say — a decision nobody wrote down, a pull request the ' +

@@ -96,9 +96,8 @@ class AzCliAuth implements AzureAuth {
  * Spawn the `az` CLI for an Azure DevOps access token. Throws a clear error if `az` isn't logged in.
  *
  * Exported so Setup's credential probe asks the *same* question the auth path asks
- * (`src/setup/probes.ts`). A second spawn written to look equivalent is how the
- * panel came to report a PAT as the only way in while the fleet ran happily on the
- * CLI. @public called by `RealSetupProbes.azSignedIn`.
+ * (`src/setup/probes.ts`) — a second spawn written to look equivalent drifts.
+ * @public called by `RealSetupProbes.azSignedIn`.
  */
 export async function azCliAccessToken(): Promise<string> {
   try {
@@ -195,13 +194,10 @@ interface RawClassificationNode {
 }
 
 /**
- * A classification node's address in the form `System.AreaPath` accepts.
- *
- * Azure returns `\Contoso\Area\Web` and the field takes `Contoso\Web`: the
- * `\Area` infix names the *tree*, not a node, and writing it back is rejected.
- * Dropping it here is what keeps "the strings offered" and "the strings writable"
- * one set — two readings of one path is the drift worth avoiding, since an
- * unwritable candidate looks exactly like a writable one until the patch fails.
+ * A classification node's address in the form `System.AreaPath` accepts. Azure
+ * returns `\Contoso\Area\Web` and the field takes `Contoso\Web` — the `\Area` infix
+ * names the tree, not a node, and writing it back is rejected. Dropped here so the
+ * strings offered are the strings writable.
  */
 function areaNodePath(node: RawClassificationNode): string | null {
   const raw = typeof node.path === 'string' && node.path !== '' ? node.path : null;
@@ -212,16 +208,11 @@ function areaNodePath(node: RawClassificationNode): string | null {
 }
 
 /**
- * Flatten Azure's thread `properties` bag to plain strings.
- *
- * Every value arrives wrapped as `{"$type": "System.String", "$value": "1"}`, and
- * the envelope is Azure's serialiser rather than anything a caller means — a
- * reader matching against a declared key wants the value it was stamped with.
- * Non-string `$value`s (Azure will serialise a number or a bool) are stringified
- * so a match is one comparison, not two.
- *
- * **Undefined rather than `{}` on a thread with no properties**, so "carries
- * none" reaches {@link PrReviewThread.properties} as the absence it is.
+ * Flatten Azure's thread `properties` bag to plain strings — every value arrives
+ * wrapped as `{"$type", "$value"}`, and non-string `$value`s are stringified so a
+ * match is one comparison. **Undefined rather than `{}` on a thread with no
+ * properties**, so "carries none" reaches {@link PrReviewThread.properties} as the
+ * absence it is.
  */
 function flattenThreadProperties(raw: Record<string, { $value?: unknown }> | null | undefined) {
   if (raw === null || raw === undefined) return undefined;
@@ -274,12 +265,8 @@ interface RawPolicyEvaluation {
 
 /**
  * The operator-facing name of a policy, however its type happens to carry one.
- *
- * The `context` and type-name arms are why a nameless policy is no longer skipped
- * downstream: `settings.displayName` is null for every build-validation policy
- * whose operator never typed one — which on a real repo is most of them, the
- * required builds included — leaving the definition name in `context` as the only
- * thing a `ci.checks` glob could ever match.
+ * `settings.displayName` is null for most build-validation policies, leaving the
+ * definition name in `context` as the only thing a `ci.checks` glob can match.
  */
 export function policyDisplayName(e: RawPolicyEvaluation): string {
   const s = e.configuration?.settings;
@@ -291,18 +278,10 @@ export function policyDisplayName(e: RawPolicyEvaluation): string {
 
 /**
  * The *other* names this policy answers to, so a `ci.checks` glob written against
- * any of them claims the check.
- *
- * A status policy has two names and they are not the same string: the harness
- * keys it by `statusGenre/statusName` (`pr-agent-review/reviewed`), while the
- * label on the pull request page comes from `settings.defaultDisplayName`
- * (`PR-Agent-Reviewed`). An operator writing a rule copies what they can see, so
- * before this the obvious glob matched nothing, silently — the same failure mode
- * as the nameless build policies above.
- *
- * An *alias*, not a replacement: {@link policyDisplayName} still decides the
- * check's name, so nothing an existing rule matched stops matching and no
- * cockpit row is renamed under an operator who was reading it.
+ * any of them claims the check. A status policy is keyed by `statusGenre/statusName`
+ * but labelled from `settings.defaultDisplayName`, and an operator copies what they
+ * can see. An *alias*, not a replacement — {@link policyDisplayName} still decides
+ * the check's name.
  */
 export function policyDisplayAliases(e: RawPolicyEvaluation): string[] {
   const primary = policyDisplayName(e);
@@ -322,13 +301,9 @@ function defaultSleep(ms: number): Promise<void> {
 
 /**
  * Does this look like Azure's sign-in HTML page rather than the JSON we asked for?
- *
- * Azure DevOps answers a *rejected* credential not with a JSON 401 but — maddeningly —
- * with a 2xx (often `203 Non-Authoritative`) serving the interactive sign-in page. It
- * passes a naive `res.ok` check, so `JSON.parse` then crashes on the leading `<` with an
- * opaque `Unexpected token '<'`. Detecting it lets the client retry (usually a transient
- * token blip) and, failing that, throw an error that actually names the cause. Pure so it
- * stays unit-testable.
+ * Azure answers a rejected credential with a 2xx serving the sign-in page, which
+ * passes `res.ok` and then crashes `JSON.parse` on the leading `<`. Detecting it
+ * lets the client retry and, failing that, name the cause. Pure, so it is testable.
  */
 export function isSignInHtml(contentType: string | null, body: string): boolean {
   if (contentType && /text\/html/i.test(contentType)) return true;
@@ -337,12 +312,9 @@ export function isSignInHtml(contentType: string | null, body: string): boolean 
 
 /**
  * Is this rejected PATCH Azure saying the relation is already on the work item?
- *
- * Adding a link a work item already carries is a 400, not a 409, and it is the one
- * 400 the linking path must not surface: the caller asked for a link and the link
- * is there. Matched on the exception type key rather than the prose, which is
- * localised — the message is checked too, for a deployment that answers only the
- * sentence. Pure so it stays unit-testable, like {@link isSignInHtml}.
+ * Adding a link a work item already carries is a 400, and the one 400 the linking
+ * path must not surface. Matched on the exception type key (the prose is localised)
+ * and on the message too. Pure, like {@link isSignInHtml}.
  */
 export function isRelationAlreadyExists(message: string): boolean {
   return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
@@ -652,14 +624,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   /**
-   * Requeue one policy evaluation (issue #395). A body-less PATCH: the endpoint's
-   * whole meaning is "run this again", and there is nothing to say about it.
-   *
-   * The response is the evaluation as it stands *after* the requeue, and it is
-   * read rather than discarded because a 200 is not the same as a restart — a
-   * policy Azure declines to requeue (a definition the token cannot queue, a
-   * policy that has since been disabled) answers with the record unchanged, and
-   * `isExpired` still true is the only signal before the next snapshot.
+   * Requeue one policy evaluation — a body-less PATCH. The response is the
+   * evaluation *after* the requeue and is read rather than discarded: a 200 is not a
+   * restart, and a policy Azure declined answers unchanged, where `isExpired` still
+   * true is the only signal before the next snapshot.
    */
   async requeuePolicyEvaluation(evaluationId: string): Promise<AzPolicyRequeue> {
     const data = await this.request<RawPolicyEvaluation>(
@@ -720,16 +688,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   /**
-   * The shared two-step behind both work-item listings: ids from WIQL, fields from the batch read.
+   * The shared two-step behind both work-item listings: ids from WIQL, fields from
+   * the batch read.
    *
-   * A WIQL query runs at **date** precision unless the request asks otherwise, and a
-   * date-precision query faults outright on a comparison that supplies a time — a 400
-   * with `VssPropertyValidationException`, every pulse. So a query whose clauses carry
-   * a time must ask for `timePrecision`; only the changed-since read does.
-   *
-   * It goes in the **query string**, not the body: the `Wiql` request body is defined as
-   * `{query}` alone, so the server drops an unknown body field without complaining and
-   * the fault is the one it was meant to fix, unchanged.
+   * A WIQL query runs at **date** precision and faults on a comparison supplying a
+   * time, so a query whose clauses carry one must ask for `timePrecision` — in the
+   * **query string**, not the body, which the server drops silently.
    */
   private async runWorkItemQuery(wiql: string, timePrecision = false): Promise<AzWorkItem[]> {
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
@@ -918,25 +882,14 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   /**
-   * The write behind Azure's **Check for linked work items** policy.
-   *
-   * The link is a relation on the *work item*, not a field on the pull request:
-   * Azure derives a pull request's `workItemRefs` from these, and the create-PR
-   * payload's `workItemRefs` is read-only, so there is no way to open a pull request
-   * already linked. Hence a second call, and hence this being a work-item API method
-   * rather than a git one.
+   * The write behind Azure's **Check for linked work items** policy. The link is a
+   * relation on the *work item*, not a field on the pull request, so it is a second
+   * call and a work-item method rather than a git one.
    *
    * The artifact id is `{projectId}/{repositoryId}/{pullRequestId}` **URL-encoded
-   * into the vstfs path** — the separators are `%2F` inside a single path segment,
-   * not real slashes. Azure stores it exactly as sent, which is why
-   * `linkedPrFromRelations` reads either form: a link a human made through the web
-   * UI comes back the same way, and one written any other way is not a link Azure's
-   * policy recognises.
-   *
-   * A duplicate is absorbed rather than thrown. The desk's row and the world's
-   * `linkedPrNumber` already make a repeat rare, but the two race across a pulse
-   * boundary, and "the link you asked for is there" is not a failure worth an entry
-   * in the operator's Errors panel.
+   * into the vstfs path** — `%2F` inside one path segment, stored exactly as sent,
+   * which is why `linkedPrFromRelations` reads either form. A duplicate is absorbed
+   * rather than thrown.
    */
   async linkWorkItemToPull(id: number, pullRequestId: number): Promise<void> {
     const [projectId, repositoryId] = await Promise.all([this.resolveProjectId(), this.resolveRepositoryId()]);
@@ -1010,19 +963,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   /**
-   * The project's area tree, flattened depth-first.
+   * The project's area tree, flattened depth-first. `$depth=<n>` rather than a walk,
+   * bounded because the parameter has no "all".
    *
-   * `$depth=<n>` rather than a walk: Azure returns the whole subtree in one call,
-   * and paging it a level at a time would cost a request per node for a list the
-   * harness reads at most once an hour. The depth is bounded rather than
-   * unlimited because the parameter has no "all" — a tree deeper than this is one
-   * whose leaves nobody navigates to anyway.
-   *
-   * `name` is a node's own label and `path` its full address; only the address is
-   * a value `System.AreaPath` accepts, so that is what is carried. Azure writes
-   * the root as `\<Project>\Area`, which is not the form the field takes — the
-   * `\Area` infix is dropped here so the strings offered are the strings that can
-   * be written back.
+   * Only the full `path` is a value `System.AreaPath` accepts, so that is what is
+   * carried, with the `\Area` infix dropped so the strings offered are writable.
    */
   async listAreaPaths(): Promise<AreaPathTree> {
     const data = await this.request<RawClassificationNode>(
@@ -1123,11 +1068,9 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   /**
-   * Delete a branch. Azure has no delete verb for a ref: you *update* it to the zero
-   * object id, and the update is optimistic — it needs the id the ref currently
-   * points at. So this is two calls, and the first one is also the already-gone
-   * check: a filter that matches no ref means the branch is not there, which the
-   * reap treats as success rather than as a failure to delete.
+   * Delete a branch. Azure has no delete verb for a ref — you *update* it to the zero
+   * object id, optimistically against the id it currently points at, so this is two
+   * calls. The first is also the already-gone check, which the reap treats as success.
    */
   async deleteBranch(branch: string): Promise<boolean> {
     const plain = branch.replace(/^refs\/heads\//, '');
@@ -1162,12 +1105,9 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 }
 
 /**
- * A plain branch name as the full ref Azure's PR API expects.
- *
- * The read side strips this prefix (`sourceControl.ts`), so every branch inside the
- * harness is plain and the conversion belongs at the one boundary that needs it —
- * a second stripper elsewhere is how the two ends come to disagree about whether a
- * branch is `main` or `refs/heads/main`.
+ * A plain branch name as the full ref Azure's PR API expects. The read side strips
+ * this prefix (`sourceControl.ts`), so every branch inside the harness is plain and
+ * the conversion belongs at this one boundary.
  */
 function headsRef(branch: string): string {
   return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
@@ -1183,14 +1123,10 @@ export function buildOpenWorkItemQuery(tag?: string, assignedTo?: string): strin
 }
 
 /**
- * WIQL selecting work items in **any** state that changed at or after `since`,
- * under the same tag/assignee narrowing — the ticket mirror's query (issue #329).
- *
- * The state clause is dropped rather than inverted: this is a history, and a
- * mirror that could only see finished work would be missing every row the cockpit
- * shows as open. Exported for its own test beside {@link buildOpenWorkItemQuery},
- * because a mis-built WIQL fails as an empty result rather than as an error — a
- * tab with no rows, on a tracker that is full of them.
+ * WIQL selecting work items in **any** state that changed at or after `since`, under
+ * the same tag/assignee narrowing — the ticket mirror's query. The state clause is
+ * dropped rather than inverted, since this is a history. Exported for its own test:
+ * a mis-built WIQL fails as an empty result rather than as an error.
  */
 export function buildWorkItemHistoryQuery(since: string, tag?: string, assignedTo?: string): string {
   return workItemQuery([`[System.ChangedDate] >= '${wiqlDate(since)}'`], tag, assignedTo);
@@ -1208,14 +1144,11 @@ function workItemQuery(extra: string[], tag?: string, assignedTo?: string): stri
 }
 
 /**
- * An ISO instant as WIQL will accept it: `YYYY-MM-DD HH:MM:SSZ`.
- *
- * WIQL rejects the `T` separator and sub-second precision, and rejects them by
- * faulting the whole query — as it also does to any time at all unless the request
- * sets `timePrecision` ({@link RestAzureDevOpsApi}), so the format and the flag are
- * one fix in two places. Quotes are stripped rather than escaped because
- * this value is never operator-supplied: it is the store's own high-water mark, and
- * anything unparseable is a bug here, not input.
+ * An ISO instant as WIQL will accept it: `YYYY-MM-DD HH:MM:SSZ`. WIQL faults the
+ * whole query on the `T` separator or sub-second precision, and on any time at all
+ * unless the request sets `timePrecision` ({@link RestAzureDevOpsApi}) — one fix in
+ * two places. Quotes are stripped rather than escaped: this is never
+ * operator-supplied.
  */
 function wiqlDate(iso: string): string {
   return iso.replace(/'/g, '').replace('T', ' ').replace(/\.\d+/, '').replace(/Z?$/, 'Z');
@@ -1223,12 +1156,9 @@ function wiqlDate(iso: string): string {
 
 /**
  * The work-item ids on one side of the hierarchy, read out of a work item's
- * relations. A hierarchy relation's `url` is the related item's REST address —
- * `…/_apis/wit/workItems/42` — so the trailing segment is the id.
- *
- * Pure, and exported for its own test: this is the one place the harness converts
- * an Azure URL into a work-item number, and a silently-unparsed url would present
- * as a tracker with no hierarchy at all rather than as an error.
+ * relations — the trailing segment of the relation's REST `url`. Exported for its
+ * own test: a silently-unparsed url presents as a tracker with no hierarchy rather
+ * than as an error.
  */
 export function hierarchyIds(relations: RawWorkItem['relations'], rel: string): number[] {
   const ids: number[] = [];

@@ -20,21 +20,11 @@ import {
 const SUPERVISOR_ENV = 'LUBBDUBB_SUPERVISOR';
 
 /**
- * Where the harness watches its own build, and where a deliberate upgrade is
- * driven from.
- *
- * **The reading is in memory; the intent is in the store.** They look like one
- * subject and are not. The standing is a fact about the outside world with a
- * timestamp on it — cheap to re-take, wrong to trust across a restart, and read by
- * nothing but this process. The intent is a decision an operator made, and its
- * whole reason for existing is to outlive the process that recorded it. Persisting
- * the first would add a table that says something already true; holding the second
- * in memory would lose it at the exact moment it is needed.
- *
- * **This decides no dispatch.** It pauses one — a drain is `RuntimeControl.paused`,
- * the same flag the operator's own pause button writes — and beyond that it writes
- * a row and, when asked, hands off. What happens to the fleet on the way back up is
- * the recovery desk's business, as it is for any restart.
+ * Where the harness watches its own build, and where a deliberate upgrade is driven from. →
+ * `docs/spec/21-self-update.md` **The reading is in memory; the intent is in the store**:
+ * the standing is a cheap fact about the world that must not be trusted across a restart,
+ * the intent is an operator's decision that has to outlive the process. This decides no
+ * dispatch — it pauses one, writes a row and, when asked, hands off.
  */
 export class UpdateDesk {
   private standing: BuildStanding | null = null;
@@ -42,12 +32,8 @@ export class UpdateDesk {
   private checking: Promise<void> | null = null;
   private lastCheckedMs = 0;
   /**
-   * When each update ask stops being hidden, as epoch millis; zero for one that is
-   * not snoozed.
-   *
-   * In memory on `RuntimeControl`'s terms — see {@link BuildReading.snoozedUntil}.
-   * A map keyed on the target rather than two fields, because the two asks share
-   * one length and one route and would otherwise be the same code twice.
+   * When each update ask stops being hidden, as epoch millis; zero for one that is not
+   * snoozed.
    */
   private snoozedUntilMs: Record<SnoozeTarget, number> = { upgrade: 0, projectPull: 0 };
   /** Set while an auto-pull is in flight, so a slow pull cannot be started twice. */
@@ -55,9 +41,8 @@ export class UpdateDesk {
 
   /**
    * How this process is asked to go down for an upgrade. Set by `src/server/main.ts`,
-   * which owns shutdown; left unset everywhere else, and then an `apply` records the
-   * intent and stops there — which is exactly what a test wants to assert, and what
-   * an embedded harness with no supervisor should do.
+   * which owns shutdown; unset elsewhere, and then an `apply` records the intent and
+   * stops there.
    *
    * @public assigned by `main.ts`, the one place that knows how to exit cleanly.
    */
@@ -73,25 +58,20 @@ export class UpdateDesk {
       checkIntervalMs: number;
       /** Whether the desk takes an update itself, rather than waiting to be clicked. */
       autoUpdate: boolean;
-      /** How long an automatic drain waits before it interrupts what is left. Zero waits forever. */
+      /** How long an automatic drain waits before it interrupts what is left. */
       drainDeadlineMs: number;
       /**
        * Whether the *worked* checkout is fast-forwarded without being asked —
-       * `selfUpdate.projectAutoPull`. Unlike `autoUpdate` this interrupts nothing
-       * and restarts nothing, which is why it defaults the other way.
+       * `selfUpdate.projectAutoPull`. Unlike `autoUpdate` this interrupts nothing and
+       * restarts nothing, which is why it defaults the other way.
        */
       projectAutoPull?: boolean;
       /** How long a snooze hides an ask on the rail. */
       snoozeMs?: number;
       /**
-       * The *worked* repository, read on this same timer — `config.repoRoot`
-       * against its own remote and `defaultBranch`.
-       *
-       * On the same timer deliberately, and not because it is convenient: these
-       * are two `ls-remote`s answering one question an operator asks once ("is
-       * anything waiting"), and two independent schedules would put the harness
-       * on the network twice as often to tell them apart. Absent, the project
-       * reading is null and nothing about the build changes.
+       * The *worked* repository, read on this same timer — `config.repoRoot` against its
+       * own remote and `defaultBranch`. Absent, the project reading is null and nothing
+       * about the build changes.
        */
       project?: { root: string; remote: string; branch: string };
       /** Injectable so a test can stand in a checkout it controls, or none at all. */
@@ -115,14 +95,9 @@ export class UpdateDesk {
 
   /**
    * One pulse's worth of work: take a reading if one is due, and move a finished
-   * drain to `ready`.
-   *
-   * **Never throws and never blocks the pulse on the network.** A check that is
-   * already in flight is joined rather than started again — the interval is longer
-   * than any check, but a manual check and a pulse can still collide — and a check
-   * that fails lands on the standing as `unavailable` rather than in the fault log:
-   * an air-gapped deployment is a deployment, not a fault, and a gauge reading
-   * "unknown" says so once instead of every hour.
+   * drain to `ready`. **Never throws.** A check already in flight is joined rather
+   * than restarted, and a failed check lands on the standing as `unavailable`
+   * rather than in the fault log — an air-gapped deployment is not a fault.
    *
    * @public called by `Harness.runCycle`, beside the other bookkeeping passes.
    */
@@ -133,20 +108,7 @@ export class UpdateDesk {
     this.advanceProjectPull();
   }
 
-  /**
-   * `selfUpdate.projectAutoPull`: fast-forward the worked checkout, unasked.
-   *
-   * **Not awaited by the pulse.** A pull reaches the network and then re-reads both
-   * checkouts; blocking the cycle on it would put the whole harness behind
-   * somebody's slow remote for a fast-forward nobody is waiting on. `pulling` is
-   * what keeps a slow one from being started again on the next beat.
-   *
-   * Every refusal is silent, because {@link projectPullability} has already worded
-   * every one of them and the rail draws that sentence: a dirty checkout is not a
-   * fault, it is a thing to tell the operator about once, in the place they answer
-   * things. A pull that was *allowed* and then failed is different — the world said
-   * yes and git said no — and that is a fault.
-   */
+  /** `selfUpdate.projectAutoPull`: fast-forward the worked checkout, unasked. */
   private advanceProjectPull(): void {
     if (!this.deps.projectAutoPull) return;
     if (this.pulling) return;
@@ -168,13 +130,9 @@ export class UpdateDesk {
   }
 
   /**
-   * Hide one of the two update asks for `selfUpdate.snoozeMs`.
-   *
-   * The clock is the whole of it: a snooze says nothing about *which* build was
-   * declined, so the ask comes back at whatever is waiting by then rather than at
-   * the commit it was pressed on. That is deliberate — the alternative records a
-   * head, and a head declined on an active repository is superseded within the
-   * hour, which makes a considered "no" behave like a very short "later".
+   * Hide one of the two update asks for `selfUpdate.snoozeMs`. The clock is the
+   * whole of it: a snooze records no build, so the ask returns on whatever is
+   * waiting by then rather than on the commit it was pressed on.
    *
    * @public called by the snooze route, which is the only way in.
    */
@@ -190,13 +148,7 @@ export class UpdateDesk {
     return { upgrade: stamp(this.snoozedUntilMs.upgrade), projectPull: stamp(this.snoozedUntilMs.projectPull) };
   }
 
-  /**
-   * Take a reading, unless one was taken recently and `force` is not set.
-   *
-   * The interval is a floor on *network* traffic, not on freshness of the answer:
-   * the standing is kept and served from memory in between, so the panel always has
-   * something to show and the cost of opening it is zero.
-   */
+  /** Take a reading, unless one was taken recently and `force` is not set. */
   async check(force: boolean): Promise<BuildStanding> {
     const dueAt = this.lastCheckedMs + this.deps.checkIntervalMs;
     if (!force && this.standing && Date.now() < dueAt) return this.standing;
@@ -210,9 +162,8 @@ export class UpdateDesk {
     const project = this.deps.project;
     this.checking = Promise.all([
       read({ remote: this.deps.remote, branch: this.deps.branch, now: this.now }),
-      // Not `Promise.all`-fatal: a project reading is a second opinion about a
-      // different repository, so its failure is a null beside the build's answer
-      // rather than a check that took neither.
+      // Not `Promise.all`-fatal: a project reading's failure is a null beside the
+      // build's answer rather than a check that took neither.
       project
         ? read({
             remote: project.remote,
@@ -228,9 +179,8 @@ export class UpdateDesk {
         this.project = projectStanding;
       })
       .catch((err: Error) => {
-        // The reader is written to return `unavailable` rather than throw, so
-        // arriving here means it broke rather than the network did — which is
-        // worth a fault, unlike an unreachable remote.
+        // The reader returns `unavailable` rather than throwing, so arriving here
+        // means it broke rather than the network did — worth a fault.
         this.deps.errors.record({
           source: 'cycle',
           message: `Self-update check failed: ${err.message}`,
@@ -247,12 +197,8 @@ export class UpdateDesk {
   }
 
   /**
-   * A drain that has run dry becomes a handoff that is safe to take.
-   *
-   * Deliberately *not* the handoff itself. An operator who asked the fleet to wind
-   * down has authorized the wind-down; taking the process out from under them the
-   * moment the last agent finishes — possibly hours later, possibly while they are
-   * reading the cockpit — is a second decision, and it stays theirs.
+   * A drain that has run dry becomes a handoff that is safe to take — deliberately not the
+   * handoff itself, which stays the operator's second decision.
    */
   private advanceDrain(): void {
     const intent = this.deps.store.readUpgradeIntent();
@@ -261,21 +207,7 @@ export class UpdateDesk {
     this.deps.store.writeUpgradeIntent({ ...intent, state: 'ready' });
   }
 
-  /**
-   * `selfUpdate.autoUpdate`: the two clicks, taken on the fleet's behalf.
-   *
-   * **A bounded loop, not one step a pulse.** A drain that finds an empty fleet is
-   * `ready` the moment it is asked for, and making an unattended upgrade sit in a
-   * state whose whole meaning is "go now" until the next heartbeat is the same
-   * mistake `applyUpgradeAction` already refuses to make for the operator. Three is
-   * the length of the longest legal run — drain, ready, apply — so it terminates on
-   * the shape of the machine rather than on the count.
-   *
-   * Every refusal is swallowed on purpose: a build that turned dirty, a tip that
-   * moved back, a reading that went unavailable between the check and here are all
-   * "not this pulse", and the operator's manual path says the same thing in words
-   * on the panel.
-   */
+  /** `selfUpdate.autoUpdate`: the two clicks, taken on the fleet's behalf. */
   private advanceAuto(): void {
     if (!this.deps.autoUpdate) return;
     for (let i = 0; i < 3; i++) {
@@ -298,25 +230,11 @@ export class UpdateDesk {
   }
 
   /**
-   * Carry the operator's own pause across the upgrade's restart.
-   *
-   * `RuntimeControl` is deliberately not persisted, so every boot seeds `paused`
-   * from `config.startPaused` — which is the right answer for a *cold* boot and the
-   * wrong one for this restart. An upgrade is one process handing the fleet to the
-   * next, and the pause an operator set before it is a live decision that a
-   * configured default has no business overruling: theirs would be dropped and the
-   * fleet would come back dispatching, while a deployment that starts paused by
-   * policy would park a fleet that was running a second ago. Neither is red, and
-   * with `autoUpdate` on nobody is at the screen to notice.
-   *
-   * `pausedByDrain` is already the fact needed — it records whether the *drain* is
-   * what paused dispatch — and it is on the one row written to outlive the process.
-   * Reading it here is what makes it load-bearing in both directions.
-   *
-   * Fenced on `applying` for the same reason `settleUpgrade` is: any other state
-   * means this restart was not the upgrade's, and the configured default is then
-   * exactly the right answer. Returns what the fleet comes back as, or null when
-   * this was not an upgrade's restart.
+   * Carry the operator's own pause across the upgrade's restart, off the durable
+   * `pausedByDrain`. `RuntimeControl` is not persisted, so a boot would otherwise
+   * seed `paused` from `config.startPaused` — right for a cold boot, and silently
+   * wrong here in both directions. Fenced on `applying`: any other state means this
+   * restart was not the upgrade's. Returns what the fleet comes back as, or null.
    *
    * @public called by `main.ts`, beside `RecoveryDesk.settleUpgrade`.
    */
@@ -328,7 +246,7 @@ export class UpdateDesk {
     return paused;
   }
 
-  /** What the gauge and the panel read. Serves the last reading; takes none. */
+  /** What the gauge and the panel read. */
   reading(): BuildReading {
     return buildReading({
       standing: this.standing ?? unknownStanding(this.now()),
@@ -343,24 +261,10 @@ export class UpdateDesk {
   }
 
   /**
-   * Fast-forward the project checkout onto its remote branch.
-   *
-   * **Why the cockpit has a button for somebody else's repository.** The project
-   * layer of the config — `lubbdubb.project.json`, the team's committed policy —
-   * is read from `repoRoot`, so a clone three days behind is a harness running a
-   * config the team has already changed. `src/server/main.ts` watches that file
-   * precisely because "it arrives by `git pull`"; this is the pull, and the
-   * watcher it was written for picks the change up on its own poll a second or
-   * two later. Nothing here reloads the config, and nothing here should: one path
-   * applies a config change, and it is the one an operator's own `git pull`
-   * already goes through.
-   *
-   * A refusal is a value with the reason in it, on `request`'s terms — the
-   * request was well-formed and the world simply moved.
-   *
-   * The reading is re-taken **forced** on success, because the whole point of the
-   * click was to change the answer and a card still saying "3 commits waiting" is
-   * a button that looks like it did nothing.
+   * Fast-forward the project checkout onto its remote branch — the project config layer is
+   * read from `repoRoot`, so a stale clone is a harness on a policy the team has already
+   * changed. **Nothing here reloads the config**: `main.ts`'s watcher picks the change up
+   * on its own poll.
    */
   async pullProject(): Promise<{ ok: true; build: BuildReading } | { ok: false; error: string }> {
     const target = this.deps.project;
@@ -374,14 +278,7 @@ export class UpdateDesk {
     return { ok: true, build: this.reading() };
   }
 
-  /**
-   * Apply an operator's request. Returns a refusal rather than throwing, so a
-   * stale button in a second cockpit reads as a 409 with a reason rather than a 500.
-   *
-   * The pause is written **after** the transition is accepted and unwritten as part
-   * of a cancel, so the flag and the row cannot disagree: every path that sets one
-   * sets the other, and a refusal sets neither.
-   */
+  /** Apply an operator's request. */
   request(action: UpgradeAction, opts: { interrupt?: boolean } = {}): UpgradeTransition {
     const standing = this.standing ?? unknownStanding(this.now());
     const intent = this.deps.store.readUpgradeIntent();
@@ -399,17 +296,16 @@ export class UpdateDesk {
     if (!result.ok) return result;
 
     if (action === 'cancel') {
-      // Only the pause this drain put on. One the operator set themselves outlives
-      // the upgrade they cancelled.
+      // Only the pause this drain put on; the operator's own outlives the cancel.
       if (intent.pausedByDrain) this.deps.runtimeControl.apply({ paused: false });
     } else {
       this.deps.runtimeControl.apply({ paused: true });
     }
     this.deps.store.writeUpgradeIntent(result.intent);
 
-    // The handoff is last, and only once the row says `applying`: the marker has to
-    // be durable *before* the process can go, or a shutdown that wins the race
-    // leaves the next boot with interrupted agents and no record that anyone meant it.
+    // The handoff is last, and only once the row says `applying`: the marker must be
+    // durable before the process can go, or the next boot finds interrupted agents
+    // and no record that anyone meant it.
     if (result.intent.state === 'applying') this.onHandoff?.();
     return result;
   }
@@ -428,10 +324,8 @@ export class UpdateDesk {
 }
 
 /**
- * How long the drain in this intent has been waiting, or null when it is not one
- * or never recorded when it was asked for. An unparseable stamp reads as null and
- * so waits forever, which is the safe direction: the deadline exists to interrupt
- * agents, and one armed off a timestamp nobody can read would do it immediately.
+ * How long the drain in this intent has been waiting, or null when it is not one or
+ * recorded no stamp.
  */
 function drainingForMs(intent: { state: string; requestedAt: string | null }, nowMs: number): number | null {
   if (intent.state !== 'draining' || !intent.requestedAt) return null;

@@ -1,51 +1,20 @@
 import type { Issue, IssueRelative } from './types.js';
 
 /**
- * What a tracker's *hierarchy* means to the harness.
- *
- * GitHub Issues are flat: one kind of item, no parent, and every gate in the
- * dispatcher was written against that. Azure DevOps Boards are not — a work item
- * has a type and hangs in a tree, and two rules of that tree change what the
- * harness may do with an item rather than merely describing it:
- *
- * - **A container is never worked directly.** A Feature is a statement of intent
- *   that its stories deliver; dispatching an agent at one asks it to implement a
- *   goal whose decomposition already exists in the tracker, next to it.
- * - **A leaf is meant to have a parent.** A story, bug or tech-debt item under no
- *   feature is an item whose *why* is nowhere — which the harness reports and does
- *   not invent, because guessing the feature is the one mistake that would be
- *   invisible in the resulting work.
- *
- * Everything here is pure over the issue plus operator policy, so both the gate
- * and the note the agent reads are unit-testable without a world, and the cockpit
- * chip and the dispatcher cannot form different opinions about the same item.
+ * What a tracker's hierarchy means to the harness. Two rules: a container (Feature/Epic) is
+ * never worked directly, and a leaf is meant to have a parent — a missing one is reported, never
+ * guessed. Everything here is pure over the issue plus operator policy, so the gate, the agent's
+ * note and the cockpit chip cannot form different opinions.
  */
 
-/**
- * Work-item types that hold other work rather than being work — the default for
- * `issueContainerTypes`. Azure's own process templates name these consistently
- * across Agile ("Feature"/"Epic"), Scrum and CMMI, so the default is right for a
- * stock project and an operator with a customised process overrides it.
- *
- * Matched case-insensitively, because a process template's type names are display
- * strings and an operator writing "feature" in config means the same thing.
- */
+/** Work-item types that hold other work rather than being work — the default for `issueContainerTypes`, overridable per process template. Matched case-insensitively. */
 export const DEFAULT_CONTAINER_TYPES: readonly string[] = ['Feature', 'Epic'];
 
 /**
- * Types whose items are expected to hang off a container — the default for
- * `issueParentedTypes`. Everything a team actually works is here; anything else
- * (a Task under a story, say) is left out of the orphan report rather than being
- * nagged about a parent it doesn't need.
- *
- * A **default** rather than the list, for the reason `issueBugType` is its own
- * key: what a process template calls the thing a team works is exactly what
- * varies between projects, and a closed word list decides — silently, and only on
- * the projects that named their types something else — that no item on the board
- * is expected to have a parent. Nothing errors: the orphan note never reaches an
- * appraiser, the candidate containers are never offered, no placement is ever
- * proposed and the missing-parent question is never asked, on every item, for
- * ever. Matched case-insensitively, as every type comparison here is.
+ * Types whose items are expected to hang off a container — the default for `issueParentedTypes`;
+ * anything else is left out of the orphan report. A default, never a closed list: a project
+ * naming its types differently would otherwise have the missing-parent question silently never
+ * asked, on every item, with nothing red. Matched case-insensitively.
  */
 export const DEFAULT_PARENTED_TYPES: readonly string[] = [
   'User Story',
@@ -65,39 +34,18 @@ function includesType(types: readonly string[], type: string): boolean {
   return types.some((t) => t.trim().toLowerCase() === needle);
 }
 
-/**
- * Is this a container type — a Feature or an Epic — under the operator's policy?
- *
- * An issue with no `issueType` (GitHub, the fake) is never a container, which is
- * what keeps every flat tracker behaving exactly as it did.
- */
+/** Is this a container type — a Feature or an Epic — under the operator's policy? An issue with no `issueType` (GitHub, the fake) is never a container, keeping every flat tracker unchanged. */
 export function isContainerIssue(issue: Issue, containerTypes: readonly string[] | undefined): boolean {
   return isContainerType(issue.issueType ?? null, containerTypes);
 }
 
-/**
- * The same question asked of a bare type word — what the mirror holds, where
- * {@link isContainerIssue} needs a whole world issue.
- *
- * Split out rather than duplicated for the feature board (`src/features/`), which
- * reads `tracker_items` and never the world: a second case-folding of the
- * operator's `issueContainerTypes` is a second opinion about which items are work,
- * and the two would disagree on exactly the deployment that spells its process
- * template differently.
- *
- * A null type (GitHub, the fake) is never a container, which is what keeps every
- * flat tracker behaving exactly as it did.
- */
+/** The same question asked of a bare type word — for the feature board (`src/features/`), which reads `tracker_items` and never the world. Shared so the two cannot disagree. A null type is never a container. */
 export function isContainerType(type: string | null, containerTypes: readonly string[] | undefined): boolean {
   if (type === null) return false;
   return includesType(containerTypes ?? DEFAULT_CONTAINER_TYPES, type);
 }
 
-/**
- * The pickup gate's reason for leaving a container alone, or null when the item
- * is workable. Phrased as the other half of the sentence — what to work instead —
- * because "Feature" on its own reads as a classification, not a refusal.
- */
+/** The pickup gate's reason for leaving a container alone, or null when the item is workable. Phrased as "what to work instead" — "Feature" on its own reads as a classification, not a refusal. */
 export function containerPickupReason(issue: Issue, containerTypes: readonly string[] | undefined): string | null {
   if (!isContainerIssue(issue, containerTypes)) return null;
   const kids = issue.children?.length ?? 0;
@@ -110,20 +58,11 @@ export function containerPickupReason(issue: Issue, containerTypes: readonly str
 }
 
 /**
- * Is this a leaf that should have had a parent and doesn't?
- *
- * Three conditions, and all three matter. The provider must *track* hierarchy
- * (`parent === null`, not `undefined`) — otherwise every GitHub issue is an
- * orphan. It must not be a container itself, since a Feature legitimately sits at
- * the top. And its type must be one teams put under a feature, so a Task under a
- * story is not reported as parentless when it never wanted a feature.
- *
- * The third reads the operator's `issueParentedTypes`, exactly as the second
- * reads their `issueContainerTypes` — one policy about type names, stated in one
- * file, rather than a word list in here that a customised process template walks
- * straight past. This is the predicate the missing-parent question is asked
- * through as well as the note, so a project it silently answers "no" for is a
- * project the harness never mentions a missing parent on at all.
+ * Is this a leaf that should have had a parent and doesn't? Three conditions: the provider
+ * tracks hierarchy (`parent === null`, not `undefined` — otherwise every GitHub issue is an
+ * orphan), the item is not itself a container, and its type is one teams put under a feature.
+ * Gates the note and the missing-parent question, so a project it answers "no" for never hears
+ * about a missing parent at all.
  */
 export function isOrphanIssue(
   issue: Issue,
@@ -136,23 +75,11 @@ export function isOrphanIssue(
 }
 
 /**
- * Every item a watch write on `issue` reaches: the item itself, then — when it is
- * a container — every descendant beneath it, breadth-first and in issue order.
- *
- * **Watching a Feature means watching the work it stands for.** A container is
- * never worked itself, so a tag on one alone would change nothing an operator can
- * see; the promise the click makes is about the stories under it, and this is the
- * list that keeps it. Un-watching walks the same tree, which is what stops a
- * dropped feature leaving its children tagged and still being worked.
- *
- * The walk is over the **world**, not the relation summaries: a child is followed
- * further only when the snapshot holds it as an issue of its own, so an Epic
- * reaches its features' stories while an id the provider never returned is
- * reported as a leaf rather than silently dropped. `children` on a relative names
- * nothing further, so the recursion is finite even before the seen-set.
- *
- * Pure over the issue plus the world, so the route's write list and anything the
- * cockpit says the click will do are the same list.
+ * Every item a watch write on `issue` reaches: the item itself, then — when it is a container —
+ * every descendant beneath it, breadth-first and in issue order. Watching a Feature means
+ * watching the work it stands for; un-watching walks the same tree, so a dropped feature can't
+ * leave its children tagged and still being worked. Follows the world, so an id the provider
+ * never returned is reported as a leaf rather than dropped.
  */
 export function watchCascadeTargets(
   issue: Issue,
@@ -164,8 +91,7 @@ export function watchCascadeTargets(
 
   const byNumber = new Map(issues.map((i) => [i.number, i]));
   const seen = new Set([issue.number]);
-  // Breadth-first, so a feature's own stories are written before its
-  // sub-features' — a partial failure then stops at a tree level rather than
+  // Breadth-first, so a partial failure stops at a tree level rather than
   // part-way down one branch.
   const queue: Issue[] = [issue];
   while (queue.length > 0) {
@@ -186,38 +112,14 @@ export function watchCascadeTargets(
 /** How much of a parent's description rides into a prompt before it is cut. */
 const PARENT_BODY_LIMIT = 4000;
 
-/**
- * How many candidate parents an orphan's **note** offers. A list long enough to be
- * a menu stops being a suggestion — and the agent's job is to name the best fit or
- * say none of them are it, not to work through a board.
- *
- * Applied where the note is written and not inside {@link candidateParents},
- * because the cap is about prompt economy and the cockpit's picker is the one
- * surface where a truncated list is a dead end: the container an operator wants is
- * either offered or unreachable, and "the thirteenth by id" is not a rule anybody
- * can learn from a select box with nothing in it.
- */
+/** How many candidate parents an orphan's note offers. Applied where the note is written, never inside {@link candidateParents} — the cockpit's picker must stay whole. */
 const CANDIDATE_LIMIT = 12;
 
 /**
- * The containers an orphan could plausibly belong to — every open Feature/Epic
- * the harness can see, from two places, because neither alone is the board:
- *
- * - the **containers in the world** itself, and
- * - the **parents of other items**, which is where most of them come from: the
- *   provider's item list is narrowed by tag/assignee, so a Feature is usually
- *   visible only as something else's parent.
- *
- * Deduplicated by number, open only — a closed feature is not somewhere to put
- * new work — and in id order so the same board produces the same list twice
- * running. Pure over the world, so the suggestion an agent is offered and the one
- * the cockpit shows are the same list — the cockpit's arrives on
- * `CockpitWorld.parentCandidates`, because `web/src/` cannot re-derive this half
- * and the half it *can* re-derive (containers in the world) is the one that is
- * almost always empty.
- *
- * Whole, and capped only where it is written into a prompt
- * ({@link CANDIDATE_LIMIT}).
+ * The containers an orphan could plausibly belong to — every open Feature/Epic the harness can
+ * see, taken both from the world's own containers and from the parents of other items (where
+ * most come from, since the provider's list is narrowed by tag/assignee). Deduplicated by
+ * number, open only, in id order. Whole; capped only where written into a prompt ({@link CANDIDATE_LIMIT}).
  */
 export function candidateParents(issues: readonly Issue[], containerTypes?: readonly string[]): IssueRelative[] {
   const byNumber = new Map<number, IssueRelative>();
@@ -232,8 +134,7 @@ export function candidateParents(issues: readonly Issue[], containerTypes?: read
       });
     }
     const parent = issue.parent;
-    // A parent is a container by position rather than by type — whatever the
-    // process template calls it, something already hangs off it.
+    // A parent is a container by position rather than by type.
     if (parent && parent.state === 'open' && !byNumber.has(parent.number)) {
       byNumber.set(parent.number, { ...parent, body: undefined });
     }
@@ -247,18 +148,9 @@ function relativeLine(rel: IssueRelative): string {
 }
 
 /**
- * What an agent must know about the item's neighbourhood, as a block **appended**
- * to a rendered prompt — never interpolated into one.
- *
- * Appending is the rule every added instruction follows (see `caveatNotice`
- * and `docs/spec/05-dispatcher.md`): prompt templates are operator-overridable and
- * `loadPromptTemplates` rejects only *unknown* placeholders, so a `{related}` token
- * would be dropped silently by exactly the deployments that customised most —
- * losing the feature's goal on the installs most likely to have one.
- *
- * Empty when there is nothing to say — a flat tracker, or a leaf whose parent is
- * simply present and unremarkable produces the parent block and nothing else — so
- * nothing is appended at all and the GitHub path is byte-for-byte what it was.
+ * What an agent must know about the item's neighbourhood, appended to a rendered prompt —
+ * never interpolated, since an operator's override that never learned a new placeholder would
+ * drop it silently. Empty when there is nothing to say. → `docs/spec/05-dispatcher.md`
  */
 export function relatedWorkNote(
   issue: Issue,
@@ -274,8 +166,7 @@ export function relatedWorkNote(
     const body = (p.body ?? '').trim();
     if (body !== '') {
       const shown = body.length > PARENT_BODY_LIMIT ? `${body.slice(0, PARENT_BODY_LIMIT)}\n…(truncated)` : body;
-      // The parent's description is the overall goal; the item you were handed is
-      // one step towards it, and saying so is the whole point of carrying it.
+      // The parent's description is the overall goal the item serves.
       lines.push(`That parent's description — the overall goal this item serves:\n\n${shown}`);
     } else {
       lines.push(
@@ -290,12 +181,8 @@ export function relatedWorkNote(
         `work what this item says, and note the missing parent in your write-up.`,
     );
     // The suggestion, not the link: the harness reads the tracker's hierarchy and
-    // never writes it, so what an agent can do about an orphan is name the feature
-    // a human should hang it off. Offered only for an orphan — a suggestion beside
-    // an item that already has a parent is an invitation to re-file work.
-    // Capped here rather than in `candidateParents`: a prompt pays for every line
-    // and an agent is asked for a judgement, where the cockpit's picker is asked
-    // for a click and a list it cut would put the right answer out of reach.
+    // never writes it. Offered only for an orphan, and capped here rather than in
+    // `candidateParents` so the cockpit's picker stays whole.
     const open = candidates.filter((c) => c.number !== issue.number).slice(0, CANDIDATE_LIMIT);
     if (open.length > 0) {
       lines.push(

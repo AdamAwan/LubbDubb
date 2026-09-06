@@ -3,36 +3,10 @@ import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchRea
 import type { EnvironmentConfig } from './policy.js';
 
 /**
- * What a finding does, as arithmetic.
- *
- * Three outlets and no fourth, and this file is the first two of them: the bench
- * row a regressed watch files, and the sentence the close-out carries about what
- * the watch says. The third — a bug — is an operator's click and lives in the
- * cockpit, because the route from a reading to new work is deliberately outside
- * the harness.
- *
- * Pure, and separate from the desk for {@link watchCheckVerdict}'s reason: what a
- * reading *means for a person* is the rule, and a rule that can only be exercised
- * by standing a server up is a rule nobody exercises.
- *
- * Three lines carry the module, and each fails silently if it goes the other way:
- *
- * **One row per window, never one per reading.** A `human_tasks` row per
- * 30-minute reading is 96 rows per check per environment, which is the Needs-you
- * rail burying its own asks under one goal's telemetry. The row is keyed on the
- * window, refreshed in place by `recordHumanTask`'s dedup, and its detail states
- * what the watch says *now*.
- *
- * **`unknown` is not a finding.** A window nobody could read has said nothing
- * about the work, and a row filed off one would put an expired credential in
- * front of a person as though it were a regression. It is the same rule as the
- * fold's, one layer up, and the same mistake if it is folded.
- *
- * **Nothing here is a `WorldEvent`.** `deliveryHold` expires a standing delivery
- * verdict on any world event matching the goal's issue ref, so a finding written
- * as one would un-park the goal it just reported on and hand the finished fix
- * back to the fleet. A bench row is not one, and neither is the close-out's
- * sentence. → `docs/spec/29-post-deploy-watch.md#what-a-finding-does`
+ * What a finding does, as arithmetic: the bench row a regressed watch files, and the
+ * sentence the close-out carries. One row per window, never one per reading; `unknown` is
+ * not a finding; nothing here is a `WorldEvent`.
+ * → `docs/spec/29-post-deploy-watch.md#what-a-finding-does`
  */
 
 /** What a pass decided, as data — so the decisions are testable without a store. */
@@ -45,20 +19,8 @@ type WatchFindingStep =
 type WatchWindowVerdict = WatchCheckVerdict | 'unread';
 
 /**
- * What a whole window says, in the one word the goal page's strip already folds
- * it to — and in the same direction, because two folds of one set of readings is
- * how a rail and a card come to disagree about a goal.
- *
- * **One-directional.** `regressed` is answered first, then an environment nobody
- * could read, then one nothing has asked yet; and only a window whose every check
- * came back clean says so. Nothing that is not a clean reading is ever folded into
- * an all-clear — the card underneath still draws every check, which is where a
- * goal whose signal passed and whose measure failed is legible as both.
- *
- * `unknown` is kept apart from `unread` here where the strip collapses the two
- * into *watch not read*, and the difference is what the surface has room for: a
- * stage has one line and a bench row has a sentence, and told apart, "could not be
- * read" is the one that names something an operator can go and fix.
+ * What a whole window says, folded in the same direction as the goal page's strip.
+ * One-directional: nothing that is not a clean reading is ever folded into an all-clear.
  */
 function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): WatchWindowVerdict {
   if (readings.length === 0) return 'unread';
@@ -68,7 +30,10 @@ function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): Wa
   return 'clean';
 }
 
-/** One window with its checks' newest readings resolved — what both halves of this file work from. */
+/**
+ * One window with its checks' newest readings resolved — what both halves of this file work
+ * from.
+ */
 interface WatchWindowReading {
   window: WatchWindow;
   verdict: WatchWindowVerdict;
@@ -78,11 +43,8 @@ interface WatchWindowReading {
 
 /**
  * Resolve every window against the goal's declared checks and their newest
- * readings.
- *
- * The newest per `(window, check)` and nothing older, which is what makes the
- * bench row one row: a window is a series of readings and the ask is about where
- * it has got to, not about each answer along the way.
+ * readings — the newest per `(window, check)` and nothing older, which is what
+ * keeps the bench row one row.
  *
  * @public read by both the bench arm and the close-out's sentence, which must not disagree
  */
@@ -100,9 +62,8 @@ export function watchWindowReadings(input: {
     const read = checks.map((c) => newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null);
     return {
       window,
-      // A window whose goal declares no live check at all reads *unread* rather
-      // than clean: the checks an amendment dropped took their readings with them,
-      // and a window with nothing left to ask has answered nothing.
+      // A window whose goal declares no live check reads *unread*, not clean:
+      // one with nothing left to ask has answered nothing.
       verdict: watchWindowVerdict(read.map((r) => r?.verdict ?? null)),
       regressed: checks.flatMap((check, i) => {
         const reading = read[i];
@@ -114,20 +75,9 @@ export function watchWindowReadings(input: {
 }
 
 /**
- * The bench rows a regressed watch owes, and the standing ones a later reading
- * has answered.
- *
- * Filed while the window reads `regressed`, whether it is still open or has
- * settled — the spec's *settled or settling regressed*. A window still open is
- * the more useful of the two: the row arrives while somebody can still watch the
- * next reading come in.
- *
- * **The retraction is the harness's own**, and wears {@link DESK_SETTLED} like
- * every one of its siblings: a later reading inside an open window coming back
- * clean says the obligation is not owed *right now*, which is a different thing
- * from a person saying they have dealt with it. Without the marker
- * `recordHumanTask`'s dedup would refresh the operator's own settled row's detail
- * and leave it settled, and the finding would come back invisible.
+ * The bench rows a regressed watch owes, and the standing ones a later reading has
+ * answered. A retraction here must wear {@link DESK_SETTLED} — without the marker the
+ * dedup refreshes an operator's settled row in place and the finding comes back invisible.
  */
 export function watchFindings(input: {
   readings: readonly WatchWindowReading[];
@@ -140,10 +90,8 @@ export function watchFindings(input: {
     const title = findingTitle(window.environment);
     const existing = byKey.get(`${window.goalRef} ${title}`);
     if (verdict !== 'regressed') {
-      // Not a finding, and `unknown` is the case that matters: a window nobody
-      // could read has said nothing about the work. A row already standing over a
-      // reading that has since come back clean is retracted rather than left, so
-      // the rail carries what the watch says now.
+      // Not a finding — a window nobody could read has said nothing about the
+      // work. A standing row whose reading has since come back clean is retracted.
       if (existing?.status === 'open' && verdict === 'clean')
         steps.push({
           kind: 'settle',
@@ -155,9 +103,8 @@ export function watchFindings(input: {
     }
     const detail = findingDetail(window, regressed);
     // An operator's own verdict stands forever; one the harness retracted is owed
-    // again the moment the reading regresses again. Reopened rather than re-filed,
-    // because the dedup ignores status and would refresh a settled row's detail
-    // and leave it settled.
+    // again. Reopened rather than re-filed: the dedup ignores status and would
+    // refresh a settled row's detail and leave it settled.
     if (existing && existing.status !== 'open') {
       if (deskSettled(existing)) steps.push({ kind: 'reopen', taskId: existing.id, detail });
       continue;
@@ -168,23 +115,17 @@ export function watchFindings(input: {
 }
 
 /**
- * Stable per window, because the dedup key is `(agent_id, origin_ref, title,
- * kind)` and stability is the whole of how one window keeps one row across 96
- * readings. It names the environment for the same reason: a goal watched in three
- * environments has three windows and three asks, and one title for all of them
- * would fold them into one row that keeps rewriting itself.
+ * Stable per window and naming the environment: the dedup key is `(agent_id, origin_ref,
+ * title, kind)`, so stability is how one window keeps one row across many readings, and one
+ * title for three environments would fold three asks into one.
  */
 function findingTitle(environment: string): string {
   return `The post-deploy watch on ${environment} is reporting a regression`;
 }
 
 /**
- * What the row says: which checks are outside what they declared, in the words the
- * reading itself used, and what the two ways out are.
- *
- * The numbers are quoted rather than summarised. No model read them and none will
- * — the whole subsystem's argument is that where a number needs interpreting, that
- * is a row on the bench with the number in front of a person.
+ * What the row says: which checks read outside what they declared, in the reading's own
+ * words, and the two ways out. Numbers are quoted, never summarised — no model reads them.
  */
 function findingDetail(window: WatchWindow, regressed: { title: string; said: string }[]): string {
   const still = window.settledAt === null ? 'The window is still open' : 'The window has settled';
@@ -200,18 +141,8 @@ function findingDetail(window: WatchWindow, regressed: { title: string; said: st
 
 /**
  * What the close-out's detail says about the watch, or **null where there is
- * nothing to say**.
- *
- * Reporting, and never gating: the row is filed and the ticket is closable
- * whatever this sentence says. That is the whole of the arrangement — a 48-hour
- * hold on every delivered goal would put every goal on the bench in a state
- * nobody can act on, which is the argument that keeps an environment gate off the
- * Needs-you rail one document over.
- *
- * A row settled early is therefore closed **in front of** the reading rather than
- * past it, which is `validate`'s arrangement exactly: the detail is rewritten on
- * every pulse, so the sentence an operator reads at the moment they close the
- * ticket is what the watch says then.
+ * nothing to say**. Reporting, never gating: the row is filed and the ticket is
+ * closable whatever this sentence says, and the detail is rewritten every pulse.
  * → `docs/spec/20-validation.md#saying-so-on-the-bench`
  *
  * @public read by the close-out pass, which carries it and does not act on it
@@ -231,32 +162,19 @@ export function watchCloseOutLine(goalRef: string, readings: readonly WatchWindo
 const WATCH_SAID: Record<WatchWindowVerdict, string> = {
   clean: 'read every declared check clean',
   regressed: 'is answering outside what was declared',
-  // Never *clean so far*: a check nobody could read is not a check that passed,
-  // and this is the reading that most looks like success.
+  // Never *clean so far*: a check nobody could read is not a check that passed.
   unknown: 'could not be read',
   unread: 'has not been read yet',
 };
 
 /**
  * The goals a `holds` opt-in has **cleared** for this obligation, or **null where
- * no environment declares one** — which is every deployment, since `holds` is off.
+ * no environment declares one**. Never fold null into an empty set: an empty set
+ * withholds the obligation everywhere and looks identical to the feature working.
  *
- * {@link openedGoals}' shape exactly, and nullable for its reason: an empty set
- * would withhold the obligation on every deployment on earth and would look
- * identical to the feature working. A caller that folded null into an empty set is
- * the one mistake this shape exists to make impossible.
- *
- * **What clears a goal is a window that has *settled*, and nothing else.** Not an
- * arrival, and not an open window: a hold scoped to open windows would hold
- * nothing at all, because the obligation is filed on the delivery — pulses or days
- * before the work arrives anywhere — and both gates here hold a *new* row only. It
- * would read as configured and never withhold a thing.
- *
- * Satisfied by whichever declaring environment settles first, exactly as a gate is
- * satisfied by whichever the goal reaches first: two acceptance environments are
- * two entries, not a ranking. And an operator's *not waiting on an environment*
- * clears it too, for the reason it clears a gate — a goal whose work will never
- * reach an environment must not sit delivered with an empty bench for good.
+ * Only a *settled* window clears a goal (a hold scoped to open windows would
+ * withhold nothing), satisfied by whichever declaring environment settles first,
+ * and an operator's *not waiting on an environment* clears it too.
  *
  * @public read by the two desks that file the obligations `holds` can name
  */

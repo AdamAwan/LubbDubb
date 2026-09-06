@@ -21,146 +21,73 @@ import type { McpTool } from './protocol.js';
 /**
  * What the operator's own Claude Code is handed, and the deps behind it. Its own
  * module because `desktopTools.ts` and `desktopOps.ts` both build tools from it.
- *
- * The surface is narrowed by construction, not by a filter: neither module reaches
- * `buildTools`, so there is no code path from a desktop connection to a fleet tool.
+ * The surface is narrowed by construction: neither module reaches `buildTools`,
+ * so there is no code path from a desktop connection to a fleet tool.
  * → `docs/spec/11-mcp-tools.md#the-desktop-channel`
  */
 export interface DesktopToolDeps {
   store: Store;
   /** `validation.desktopClaimMinutes`. */
   claimMinutes: number;
-  /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
+  /** `config.validationRoot` — where a goal's fixtures live. */
   validationRoot: string;
-  /**
-   * `config.environments` — the deployments a goal's merged work travels to, in
-   * the order the operator declared them.
-   *
-   * Here because "is it on hallway yet" is one of the questions {@link goalRead}
-   * exists to answer, and the answer is a fold over the operator's own list: an
-   * environment nobody configured is not a place work can have failed to reach.
-   * Empty is the honest answer on a deployment that configured none, and the tool
-   * says so rather than drawing a verdict about nowhere.
-   */
+  /** `config.environments`, in declared order. Empty means no verdict is drawn. */
   environments: EnvironmentConfig[];
-  /**
-   * How the configured provider links a pull request in prose, so the plan
-   * rendering here names a part's pull request the way the operator's own
-   * session can follow it. Omitted means `#`, which is right everywhere but
-   * Azure DevOps. → `src/prRef.ts`
-   */
+  /** How the configured provider links a pull request in prose. Omitted means `#`, wrong only on Azure DevOps. → `src/prRef.ts` */
   prRefStyle?: PrRefStyle;
-  /**
-   * The machine's one dev environment, lazily — the runner is built after this
-   * server in `system.ts`, the same thunk `proposals` uses for the same reason.
-   *
-   * A handle on the runner rather than a copy of what to run: this channel and the
-   * cockpit's panel both start a run, and they must be starting *the same thing*.
-   * The tool used to render an instruction and let the session act on it, which
-   * meant two definitions of what running meant and a harness that could not stop
-   * what it had told somebody to start.
-   */
+  /** The machine's one dev environment, lazily (built after this server in `system.ts`). */
   localRun(): LocalRunner;
-  /**
-   * The run's readings — ports and freshness — lazily, for the runner's reason: the
-   * watch is built beside it, after this server.
-   */
+  /** The run's readings — ports and freshness — lazily, built beside the runner. */
   localRunWatch(): LocalRunWatch;
-  /**
-   * The proposal desk, lazily — an amendment has to withdraw the card the
-   * operator would otherwise approve, and the desk is constructed after this
-   * server in `system.ts`. Same thunk the fleet deps use for `filing`.
-   */
+  /** The proposal desk, lazily — an amendment withdraws the card the operator would otherwise approve. */
   proposals(): ProposalDesk;
-  /** A manual cycle, lazily and for the same reason: it is what puts the fresh card up. */
+  /** A manual cycle, lazily — what puts the fresh card up. */
   runCycle(): Promise<void>;
 
   /**
-   * The live dispatch controls — the cap and the pause — read and written by
-   * `fleet_status` and `fleet_control`. Direct rather than lazy: `RuntimeControl`
-   * is constructed well above this server in `src/system.ts`.
-   *
-   * **By reference, never snapshotted at boot.** The cap is read on every
-   * `WorktreeManager.ensure`, and a copy taken here would be a second opinion
-   * about how big the fleet is.
+   * The live dispatch controls — cap and pause — read/written by `fleet_status`
+   * and `fleet_control`. By reference, never snapshotted: the cap is read on
+   * every `WorktreeManager.ensure`.
    */
   runtimeControl: RuntimeControl;
-  /**
-   * The dispatcher's "Up next" projection from the last pulse, lazily — the
-   * harness is built below this server in `src/system.ts`, as is everything else
-   * in this block.
-   *
-   * A thunk over the harness rather than the plan itself, because the plan is
-   * recomputed every cycle: a value captured here would be whatever the queue
-   * looked like at boot, for ever.
-   */
+  /** The dispatcher's last "Up next" projection, lazily. A thunk — the plan is recomputed every cycle. */
   harness(): { upcoming: UpcomingPlan | null };
   /** Where a question put to a person is answered — `escalation_answer`'s free-text arm. */
   escalations(): EscalationInbox;
   /** The fleet, for `agent_control`'s six verbs on a live session. */
   agents(): AgentManager;
-  /**
-   * How the harness files a tracker item, lazily — `job_create`'s code arm files a
-   * watched ticket rather than dispatching, through the same `ticketFiler` the
-   * cockpit's own brief route uses.
-   */
+  /** How the harness files a tracker item, lazily — `job_create`'s code arm files a watched ticket through the same `ticketFiler` the cockpit uses. */
   filing(): TicketFiler;
-  /**
-   * The whole running config, lazily, for `submitBrief` — which reads the tracker
-   * coordinates, the label prefix and the container types off it. By reference and
-   * not a copy: `labelPrefix` is live-applied, and a brief filed against a snapshot
-   * of it would carry a tag the gate no longer reads.
-   */
+  /** The whole running config, lazily, for `submitBrief`. By reference — `labelPrefix` is live-applied. */
   briefConfig(): Config;
   /** Renders `brief-ticket-body`, which is operator-overridable. → `job_create`. */
   renderTicketBody(vars: Record<string, string>): string;
-  /**
-   * The model profiles this deployment configures, for `goal_control`'s pin. A
-   * profile named by nothing prices nothing while reading as a decision taken, so
-   * the tool refuses an unknown name exactly as the cockpit's route does.
-   */
+  /** The model profiles this deployment configures, for `goal_control`'s pin. An unknown name is refused. */
   profileNames(): string[];
-  /**
-   * The permission backstop. Its own arm on `escalation_answer` rather than a
-   * second tool, for the route's reason: an agent blocked inside a tool call is
-   * not at a prompt, so free text would type into nothing, and the two live in one
-   * inbox that a session reads with one call.
-   */
+  /** The permission backstop — its own arm on `escalation_answer`, since an agent blocked inside a tool call has no prompt for free text. */
   permissions(): PermissionDesk;
   /** Agents orphaned by a crash — read by `attention_read`, and a refusal on `escalation_answer`. */
   recovery(): RecoveryDesk;
   /**
-   * The outbound seam this channel's four tracker writes go through: the watch tag
-   * and the model pin (`goal_control`), and the container and area path
-   * (`goal_placement`).
-   *
-   * Narrowed method by method rather than taking the whole `ActionSink`, and that
-   * is the fence rather than a convenience: an `ActionSink` here would put
-   * `mergePr`, `postPrReply` and `createIssue` one line away from a channel whose
-   * whole claim is that it steers the fleet and never acts for it. Each name added
-   * here widens that fence by exactly one verb, deliberately — the two placement
-   * writes are an operator answering a question the harness asked them, which is
-   * the same act as the watch tag and not the same as publishing on their behalf.
+   * The outbound seam this channel's four tracker writes go through: the watch
+   * tag and model pin (`goal_control`), the container and area path
+   * (`goal_placement`). Narrowed method by method rather than the whole
+   * `ActionSink` — that narrowing fences this channel off from acting for the fleet.
    */
   connector: IssueWatchContext['sink'] & {
     canPlaceWorkItem(): boolean;
     setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
     setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
   };
-  /**
-   * Where a failed tag write is recorded. Optional for the reason everything on
-   * this channel is best-effort: the server is constructed with one and a test
-   * need not be, and a watch write that could not be logged is still a watch write.
-   */
+  /** Where a failed tag write is recorded. Optional: a test need not supply one. */
   errors?: ErrorRecorder;
   /** `config.labelPrefix` and `config.issueContainerTypes`, for `applyIssueWatch`. */
   labelPrefix: string;
   issueContainerTypes: string[];
   /**
-   * `config.agentModels`, for `goal_control`'s pin — which writes the model *label*
-   * and therefore needs the whole set to sweep, not just the names {@link
-   * DesktopToolDeps.profileNames} answers with. Undefined on a deployment that
-   * configures none, where the pin refuses rather than tagging nothing.
+   * `config.agentModels`, for `goal_control`'s pin — writes the model *label* and
+   * so needs the whole set, not just {@link DesktopToolDeps.profileNames}.
+   * Undefined when none are configured, and the pin then refuses.
    */
   agentModels: AgentModels | undefined;
   now(): string;
@@ -168,8 +95,8 @@ export interface DesktopToolDeps {
 
 /**
  * What one desktop connection holds. Per-connection, not per-credential: two
- * terminals share one token, and a claim that belonged to the credential would
- * let the second report a reading against the first one's check.
+ * terminals share one token, and a credential-scoped claim would let the second
+ * report a reading against the first one's check.
  */
 export interface DesktopSession {
   /** The label claims are taken under, as it appears in the cockpit. */
@@ -178,8 +105,5 @@ export interface DesktopSession {
   held: { originRef: string; checkId: string; claimedAt: string | null } | null;
 }
 
-/**
- * How one tool is built: from the deps and the connection's own session, because
- * a claim belongs to the connection rather than to the credential.
- */
+/** How one tool is built: from the deps and the connection's own session. */
 export type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;

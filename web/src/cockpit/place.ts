@@ -10,15 +10,10 @@ import type {
 } from '../types.js';
 
 /**
- * Where the cockpit is — every piece of state that answers *what am I looking
- * at*, and nothing that answers *what is true*. The snapshot is the harness's;
- * this is the operator's, and it is the whole of what the address bar carries.
- *
- * One record rather than the ten `useState`s it replaced, because the back
- * button is a single history of *places*: a drawer opened over a goal page on
- * the tickets tab is one place, and stepping back out of it has to restore all
- * three at once. Ten independent pieces of state can express that; ten
- * independent history entries cannot.
+ * Where the cockpit is — every piece of state that answers "what am I looking at", never "what
+ * is true". One record rather than many `useState`s, because the back button is a single
+ * history of places: a drawer over a goal page on the tickets tab is one place, and stepping
+ * back restores all three at once. → `docs/spec/17-cockpit.md#the-address-bar`
  */
 export interface Place {
   /** Where the nav is. A selected goal outranks it — see {@link ConsoleTab}. */
@@ -26,14 +21,9 @@ export interface Place {
   /** The goal whose page is open, as `issue:<n>`, or null for the tab. */
   goal: string | null;
   /**
-   * The pull request whose page is open, by number.
-   *
-   * **It outranks the goal**, which outranks the tab — the same ladder, one rung
-   * further in: a pull request is reached *from* a goal, and the crumb back names
-   * the goal it was reached from. Held here rather than replacing {@link goal}
-   * precisely so that crumb exists, and so the back button lands on the goal
-   * page rather than on the tab.
-   * → `docs/spec/17-cockpit.md#the-pull-request-page`
+   * The pull request whose page is open, by number. Outranks the goal, which outranks the tab;
+   * held beside {@link goal} rather than replacing it so the crumb back names the goal it was
+   * reached from. → `docs/spec/17-cockpit.md#the-pull-request-page`
    */
   pr: number | null;
   /** Which full-surface panel is in front, or null. */
@@ -45,131 +35,47 @@ export interface Place {
   /** The goal whose retrospective is open, as an `issue:<n>` ref. */
   retro: string | null;
   /**
-   * The egg whose shell is coming off, by pet id.
-   *
-   * A place rather than a `useState` for the reason every field here is one: the
-   * back button steps out of the ceremony, and a link to it opens on the creature
-   * it named. It survives a reload landing on an already-opened pet, which is the
-   * ordinary case — the shell comes off the moment the modal mounts, so a refresh
-   * mid-wobble is a reveal rather than a second roll. Nothing is ever re-decided
-   * by arriving here. → `docs/spec/22-pets.md#the-egg`
+   * The egg whose shell is coming off, by pet id. Nothing is re-decided by arriving here: the
+   * shell comes off when the modal mounts, so a reload mid-wobble is a reveal, not a re-roll.
+   * → `docs/spec/22-pets.md#the-egg`
    */
   hatch: string | null;
   /** The goal whose notepad is open, as an `issue:<n>` ref. */
   scratchpad: string | null;
-  /**
-   * The pull request whose review pack is open over the goal page, by number.
-   *
-   * A place rather than a `useState` for the reason every field here is one, and
-   * stated by [31](../../../docs/spec/31-review-packs.md#reading-it): a surface held
-   * outside the address bar is stepped over by the back button and dropped by a
-   * reload, both silently — and "look at the pack for #684" is a link somebody sends.
-   */
+  /** The pull request whose review pack is open over the goal page, by number. → [31](../../../docs/spec/31-review-packs.md#reading-it) */
   reviewPack: number | null;
-  /**
-   * Which idea of the open pack is unfolded, by the id the author minted, or
-   * `all` for every one — the open-all control on the page. Meaningless without
-   * {@link reviewPack}, and read as null whenever that is null, so a stray `?idea=`
-   * never survives on its own.
-   */
+  /** Which idea of the open pack is unfolded, by its minted id, or `all` for every one. Read as null whenever {@link reviewPack} is null. */
   reviewIdea: string | null;
-  /**
-   * The obstacle whose sightings are unfolded on the Obstacles page, by id.
-   *
-   * A place rather than a `useState` in the page for the reason every field here is
-   * one, and this one twice over: the fold is the only place the matcher can be
-   * seen working or getting it wrong, so "look at what these three agents actually
-   * hit, and why the harness thought they were one thing" is exactly the link an
-   * operator sends someone — and a row held open in component state works right up
-   * until the back button steps over it or a reload drops it.
-   * → `docs/spec/27-obstacles.md#in-the-cockpit`
-   */
+  /** The obstacle whose sightings are unfolded on the Obstacles page, by id. → `docs/spec/27-obstacles.md#in-the-cockpit` */
   obstacle: string | null;
-  /**
-   * Whether the Obstacles page's terminal tail is **opened**.
-   *
-   * Opened rather than folded away, so the default — the tail shut — is the empty
-   * value and a bare URL — and the trade is paid for the other way: what
-   * a fold could otherwise cost is paid for by the heading stating its own size, so
-   * a tail that names itself and its count can never let *resolved* read as
-   * *deleted*.
-   */
+  /** Whether the Obstacles page's terminal tail is opened — that way round so the default (shut) is a bare URL. */
   obstacleEnded: boolean;
   /**
-   * The goal page's foldable sections the operator has **opened**, by name.
-   *
-   * Two lists rather than one, because a section's default is no longer *shut*: it
-   * is {@link goalSectionsOpen}'s reading of how far the goal has got, and that
-   * reading moves under the operator as the work does. One list could only say
-   * "not the default", so a card folded away while the goal was mid-flight would
-   * spring open the moment it shipped — and a card opened early would slam shut
-   * for the same reason. Two lists say which way the operator went, and both
-   * outrank the default.
-   *
-   * The empty pair is still the page as it stands: a bare URL is every section at
-   * whatever the goal's own progress makes it.
-   *
-   * A place rather than a `useState` in the page for the reason every field here
-   * is one: a disclosure opened and then stepped back out of has to come back, and
-   * a link somebody sends to a goal's ticket body has to open on it.
+   * The goal page's foldable sections the operator has opened, by name. Two lists rather than
+   * one, because a section's default follows how far the goal has got, and that moves under the
+   * operator; a single list could only say "not the default". Both lists outrank the default.
    */
   goalOpen: string[];
-  /** The same, for the sections the operator has **folded away**. See {@link goalOpen}. */
+  /** The same, for sections the operator has folded away. See {@link goalOpen}. */
   goalShut: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
   configGroup: string | null;
-  /**
-   * Which reading the Insights page is showing, and the stretch of time every
-   * reading on it is measured over.
-   *
-   * Two fields rather than the three booleans they replaced (`spend`,
-   * `reliability` and the `output` panel). Those were independent, so
-   * `?spend=1&reliability=1&panel=output` was a representable place that drew
-   * all three at once — which is precisely the shape {@link ConsolePanel} is one
-   * value to rule out, and these two escaped it by being modals rather than
-   * panels. A destination cannot be in front of itself.
-   */
+  /** Which reading the Insights page is showing, and the time window every reading is measured over. Two fields, since a destination cannot be in front of itself. */
   insightsView: InsightsView;
   insightsWindow: InsightsWindow;
-  /**
-   * Which project the shared pool reading is narrowed to, or null for every one.
-   *
-   * A field of its own rather than a `useState` in the panel, for every reason the
-   * two above are places — and one more that is specific to it: `byCheck` is drawn
-   * only inside a project, so "which project" is the difference between a table
-   * being there and not, and a link somebody sends has to open on the same one.
-   * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`
-   */
+  /** Which project the shared pool reading is narrowed to, or null for every one. → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit` */
   poolProject: string | null;
-  /**
-   * The tickets tab's feature headings that are **collapsed**, by issue number.
-   *
-   * Collapsed rather than expanded, so the default — every feature open — is the
-   * empty list and a bare URL. It is a place rather than a `useState` for the
-   * usual reason: folding three features away and stepping back into the tab has
-   * to restore the same three, and a reload of a shared link has to show what the
-   * sender was looking at.
-   */
+  /** The tickets tab's feature headings that are collapsed, by issue number — that way round so the default (every feature open) is a bare URL. */
   collapsed: number[];
   /**
-   * How the Tickets tab is narrowed, arranged and ordered (issues #329, #351).
-   *
-   * On `Place` rather than in the panel because the tab exists to be *asked* —
-   * "all unclosed watched items" is a question someone sends a link to, and a
-   * filter held in a `useState` compiles, renders and works right up until the
-   * back button steps over it or a reload drops it. The scroll offset deliberately
-   * is not here: a URL restoring an offset into a list that has since grown lands
-   * somewhere else entirely, so Back returns to the filter and the list re-reads
-   * its first page.
+   * How the Tickets tab is narrowed, arranged and ordered — on `Place` because the tab exists
+   * to be asked, and a question is a link somebody sends. The scroll offset is deliberately not
+   * here: restoring an offset into a list that has grown lands somewhere else entirely.
    */
   ticketWatch: TicketWatchFilter;
-  /**
-   * What the harness is doing about an item, which is not what the tracker calls
-   * it. Defaults to `live` — the tab is the surface work happens on now, and
-   * opening it on a thousand frozen rows would bury the ones that are still work.
-   */
+  /** What the harness is doing about an item, not what the tracker calls it. Defaults to `live`, so the tab doesn't open on a thousand frozen rows. */
   ticketTracking: TicketTrackingFilter;
   /** The tracker's own word, or `any`. Free-form: the vocabulary is the tracker's. */
   ticketState: TicketStateFilter;
@@ -178,106 +84,42 @@ export interface Place {
   /** Features as headings, or one flat list with a feature column. */
   ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
-  /**
-   * The table, or the board of state columns.
-   *
-   * A place rather than a `useState` for the reason every field here is one: a view
-   * switched and then stepped back out of has to come back, and a link somebody
-   * sends has to open on the view they were looking at. Defaults to the table, which
-   * is what the tab has always been.
-   */
+  /** The table, or the board of state columns. Defaults to the table. */
   ticketView: 'table' | 'card';
-  /**
-   * The board columns hidden from view — the **hidden** ones, not the shown ones.
-   *
-   * Inverted for `collapsed`'s reason: the default is the empty list and so a bare
-   * URL, and a state the tracker starts reporting later appears on its own instead
-   * of being excluded by a list written before it existed.
-   */
+  /** The board columns hidden from view, not the shown ones: the default is a bare URL, and a new tracker state appears on its own. */
   ticketColumns: string[];
-  /**
-   * The Feature (or promoted goal) whose card on the Features tab is open, by issue
-   * number, or null for every card folded to its brief.
-   *
-   * One card at a time is the tab's shape, so a number rather than a list. A place
-   * rather than a `useState` for the reason every field here is one: stepping back
-   * out of a card has to fold it, and "look at what #812 is doing" is a link
-   * somebody sends. Validated like {@link pr}: a hand-typed `?card=abc` opens nothing.
-   */
+  /** The Feature (or promoted goal) whose card on the Features tab is open, by issue number, or null. Validated like {@link pr}: `?card=abc` opens nothing. */
   featureCard: number | null;
-  /**
-   * How the Features tab's list is ordered. Defaults to `wants-you` — the cards
-   * asking for a decision first, which is what the tab is opened for.
-   */
+  /** How the Features tab's list is ordered. Defaults to `wants-you` — the cards asking for a decision first. */
   featureSort: FeatureSort;
-  /**
-   * Which pull requests the open card lists. Defaults to `open` — the ones still in
-   * flight are the ones a card is opened to look at; the landed ones are history.
-   */
+  /** Which pull requests the open card lists. Defaults to `open`. */
   featurePrs: FeaturePrFilter;
 }
 
-/**
- * The orderings the Features tab offers. `FEATURE_SORTS` is exported for the board
- * to draw its buttons from, so the controls and the parser cannot disagree about
- * which spellings exist.
- */
+/** The orderings the Features tab offers. `FEATURE_SORTS` is exported so the controls and the parser agree on which spellings exist. */
 export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
 export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
 /** Which of an open card's pull requests are listed. */
 export type FeaturePrFilter = 'open' | 'done' | 'all';
 const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 
-/**
- * Every tab a `?tab=` may name — the parser's whole vocabulary, and wider than the
- * nav on purpose: `config` and `pets` are reachable without being drawn there.
- *
- * `features` is listed for the same reason `pets` is: the address bar must
- * round-trip it, or a link an operator saved to the board parses straight back to
- * the overview with nothing saying so. Whether it can be *reached* is a separate
- * question the console answers — see `ConsoleRoot`'s `tabBody`, which sends a
- * stale `?tab=features` to the overview on a deployment with no board.
- */
+/** Every tab a `?tab=` may name — wider than the nav on purpose. A tab missing here round-trips to the overview with nothing saying so. */
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'features', 'insights', 'pets', 'config'];
 
 /**
- * The tabs a goal or a pull request can hang off — the ones that *list* work.
- *
- * `tab` is what the crumb at the head of the situation area names, and until this
- * existed it named wherever the nav happened to be last rather than where the
- * entity was reached from. Nothing that opens a goal moves the nav — the queue
- * rail is drawn on every tab, and a `<Ref>` opens a page from anywhere — so an
- * operator reading Insights who clicked a rail row got a goal page whose way out
- * said *Insights*, and a pull request under it whose trail led back there. That
- * is a crumb the surface cannot honour: no reading on Insights contains that
- * goal, so the trail leads to a page the operator never came from.
- *
- * The fix is to make the relation a real one rather than to relabel it. A goal
- * and a pull request are children of the surfaces that list them, and of nothing
- * else, so a selection made from anywhere else moves the nav to
- * {@link DEFAULT_HOME} and the crumb tells the truth. Applied on the way in as
- * well as at the call sites, so a hand-edited or saved `?tab=insights&goal=…`
- * cannot land on the lying shape either.
- * → `docs/spec/17-cockpit.md#nesting`
+ * The tabs a goal or a pull request can hang off — the ones that list work. A selection made
+ * from anywhere else moves the nav to {@link DEFAULT_HOME}, so the crumb never leads to a page
+ * that doesn't contain the goal. → `docs/spec/17-cockpit.md#nesting`
  */
 const HOME_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features'];
 
-/**
- * Where a goal or a pull request hangs when it was not reached from a tab that
- * lists one. The overview rather than the tickets tab, because it is the tab
- * every deployment has — the feature board is behind a flag and a provider with a
- * hierarchy — and because it is the surface the queue rail belongs to, which is
- * where most such selections actually come from.
- */
+/** Where a goal or pull request hangs when not reached from a tab that lists one: the overview. */
 const DEFAULT_HOME: ConsoleTab = 'overview';
 
 /**
- * The tab a goal or pull request opened from `tab` belongs under.
- *
- * Identity on the three that list work, {@link DEFAULT_HOME} on everything else.
- * Exported because the same answer has to be given twice — once by `readPlace`
- * for a link, once by `selectGoal` / `selectPr` for a click — and two copies of
- * it is one edit away from the address bar and the crumb disagreeing.
+ * The tab a goal or pull request opened from `tab` belongs under: identity on the three that
+ * list work, {@link DEFAULT_HOME} otherwise. Exported so `readPlace` and `selectGoal` /
+ * `selectPr` cannot disagree.
  */
 export function homeTab(tab: ConsoleTab): ConsoleTab {
   return HOME_TABS.includes(tab) ? tab : DEFAULT_HOME;
@@ -294,16 +136,7 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'usage',
   'pool',
 ];
-/**
- * The windows the time bar offers, and what a bare Insights URL means.
- *
- * Spelled here rather than imported from the server module that owns them,
- * because `web/src/` may name nothing but `src/wire.ts` — so this list and
- * `INSIGHTS_WINDOWS` are two statements of one set, held together by
- * `InsightsWindow` itself: dropping a member server-side turns the unused entry
- * here into a type error rather than a window the page offers and the route
- * refuses.
- */
+/** The windows the time bar offers. Spelled here because `web/src/` may name nothing but `src/wire.ts`. */
 const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['session', '6h', '24h', '7d', '30d', 'all'];
 const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
 
@@ -323,14 +156,11 @@ export const NOWHERE: Place = {
   goalOpen: [],
   goalShut: [],
   obstacle: null,
-  // Shut, which is what the tail's own count buys: the page as it stands is the
-  // empty value and a bare URL.
   obstacleEnded: false,
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
-  // Every project, which is the honest default: `byCheck` is absent until somebody
-  // narrows, rather than summed across pipelines that share no naming.
+  // Every project: `byCheck` is absent until somebody narrows.
   poolProject: null,
   insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
@@ -349,87 +179,34 @@ export const NOWHERE: Place = {
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
 /**
- * Tabs that no longer exist, and where they went.
- *
- * The backlog was folded into the tickets tab, which is a strict superset of it —
- * and an unknown tab resolves to the overview, so without this every bookmark and
- * shared link to `?tab=backlog` would land somewhere else with nothing saying so.
- * An alias is one entry; a stranded link is a bug report.
- *
- * `work` is the second, and it lands on the same place for a weaker reason worth
- * stating: the tickets tab is not a superset of the work tab. It has the half of
- * it an operator *acted* on — the unrecorded-work call-out — while the record
- * itself is the `record` panel now, reachable from the bar at every width. A tab
- * alias cannot open a panel, and of the two halves this is the one a saved link to
- * `?tab=work` was overwhelmingly about.
+ * Tabs that no longer exist, and where they went. `work` lands on tickets even though that
+ * isn't a superset of it — a tab alias can't open the `record` panel, and tickets is the half a
+ * saved `?tab=work` was overwhelmingly about.
  */
 const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   backlog: 'tickets',
   work: 'tickets',
-  // Knowledge was a tab until the claim store behind it went, and every link an
-  // operator saved to it spells `?tab=knowledge`. It lands on the board that
-  // replaced it rather than on the overview: the question the page answered — what
-  // has the fleet run into that it should not pay for twice — is the obstacle
-  // board's, and a saved link parsing back to the overview with nothing saying so
-  // is the stranded link an alias is one entry against.
+  // Knowledge was a tab until the claim store went; lands on the obstacle board.
   knowledge: 'obstacles',
 };
 
-/**
- * Panels that became destinations, and the tab each is now — the same apology
- * {@link TAB_ALIASES} makes, owed to the other half of the address bar.
- *
- * Knowledge was a panel before it was a tab, so every link an operator saved to a
- * claim spells `?panel=knowledge&fact=…`, and `findings` and `lessons` were panels
- * before that. None is a name `PANELS` knows, so without this each parses back to
- * null and the link opens the overview — the shape of a stranded link, and silent.
- *
- * All three land where {@link TAB_ALIASES} sends `?tab=knowledge`: the obstacle
- * board, which is the surface that replaced the store they named. The `fact` id
- * beside them is dropped rather than carried, because there is no longer a row it
- * could open — a parameter kept for a page that cannot honour it is the stranded
- * link one layer down.
- *
- * It is consulted only when nothing else named a tab, so `?tab=tickets&panel=knowledge`
- * still lands on tickets: an explicit tab is the operator saying where they meant
- * to be, and an alias must not overrule one.
- */
+/** Panels that became destinations, and the tab each is now. A `fact` id beside them is dropped, since no row could open. Consulted only when nothing else named a tab. */
 const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   knowledge: 'obstacles',
   findings: 'obstacles',
   lessons: 'obstacles',
 };
-/**
- * The goal page's foldable sections, validated like every other parameter here: a
- * name this list does not carry is dropped rather than carried, because a
- * hand-edited `?open=` is an input an operator can type and an unknown entry would
- * be a section held open that does not exist.
- *
- * Read off {@link GOAL_SECTIONS} rather than written again, because the page's
- * defaults are keyed on the same union: a section the page learned to fold and
- * this list never learned about is one whose disclosure writes a parameter that is
- * parsed straight back to nothing, so the fold works until you reload.
- */
+/** The goal page's foldable sections. Read off {@link GOAL_SECTIONS} rather than written again, or a section this list never learned about would fold only until reload. */
 const SECTIONS: readonly string[] = GOAL_SECTIONS;
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
-// Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
-// panel missing from here is not merely unshareable: the place round-trips through
-// the query string, so an unlisted name is parsed straight back to null and the
-// panel will not open at all.
 /**
- * Every panel name the address bar round-trips, as a `Record` over the union
- * rather than a hand-written list.
- *
- * A list compiles perfectly well while missing a member, and what that costs is
- * invisible: the panel opens on a click and is simply *not there* after a reload,
- * because `readPlace` did not recognise its own name and fell through to null. A
- * `Record` over `ConsolePanel` makes the omission a compile error instead — the
- * same shape `PANEL_TITLE` in `ConsoleRoot.tsx` already uses, which is what caught
- * the last panel that forgot one of these.
+ * Every panel name the address bar round-trips — every member of `ConsolePanel` bar the ask,
+ * which carries its own parameter. A `Record` over the union, not a list: a list compiles while
+ * missing a member and the omission costs a panel that opens on a click and is gone after reload.
  */
 const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> = {
   faults: true,
@@ -453,13 +230,9 @@ function param(query: URLSearchParams, key: string): string | null {
 }
 
 /**
- * Read a place out of a query string.
- *
- * **Every value is validated back into its type rather than cast**, because this
- * is the one input to the cockpit an operator can type: a hand-edited `?tab=`,
- * a URL from a version that had a fourth tab, a link someone truncated. An
- * unrecognised tab or panel is not an error worth a screen — it is a place that
- * does not exist, and the answer to that is the overview.
+ * Read a place out of a query string. Every value is validated back into its type rather than
+ * cast: this is the one input to the cockpit an operator can type, and an unrecognised tab or
+ * panel is a place that doesn't exist, which resolves to the overview.
  */
 export function readPlace(search: string): Place {
   const query = new URLSearchParams(search);
@@ -468,9 +241,7 @@ export function readPlace(search: string): Place {
   const ask = param(query, 'ask');
   const goal = param(query, 'goal');
   const pr = readPrNumber(param(query, 'pr'));
-  // `?settings=1` opened the modal this page replaced, so it is honoured as a
-  // way in for `?tab=backlog`'s reason: a bookmark that lands somewhere else
-  // with nothing saying so is a bug report.
+  // `?settings=1` opened the modal this page replaced, honoured for `?tab=backlog`'s reason.
   const named: ConsoleTab = query.has('settings')
     ? 'config'
     : (TABS.find((t) => t === tab) ??
@@ -478,17 +249,12 @@ export function readPlace(search: string): Place {
       (panel !== null ? PANEL_ALIASES[panel] : undefined) ??
       'overview');
   return {
-    // A place naming a goal or a pull request is a place one rung in, and the tab
-    // is what the crumb calls the rung underneath — so it is narrowed to a tab
-    // that could have led there. Applied here and not only at the call sites
-    // because a link is the other way in, and a saved `?tab=insights&goal=…`
-    // draws exactly the trail-to-nowhere the rule exists to rule out.
+    // A goal or PR is one rung in, so the tab is narrowed to one that could have led there.
     tab: goal !== null || pr !== null ? homeTab(named) : named,
     goal,
     pr,
-    // The ask panel carries its row, so it is its own parameter rather than a
-    // prefix on `panel` — an id is opaque and free to contain whatever the
-    // harness minted, including the separator a prefix would have to split on.
+    // The ask panel carries its row, so it is its own parameter: an id is opaque and free to
+    // contain the separator a prefix would split on.
     panel: ask !== null ? { ask } : (PANELS.find((p) => p === panel) ?? null),
     agent: param(query, 'agent'),
     plan: param(query, 'plan'),
@@ -501,17 +267,12 @@ export function readPlace(search: string): Place {
     obstacle: param(query, 'obs'),
     obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
-    // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
-    // heading mode), and two places reading one parameter is a place that opens
-    // showing whatever the other one was set to.
+    // `keys`, not `group`: the tickets tab owns `?group=`.
     configGroup: param(query, 'keys'),
     insightsView: INSIGHTS_VIEWS.find((v) => v === param(query, 'view')) ?? 'economics',
     poolProject: param(query, 'project') ?? null,
     insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
-    // Validated back into their types like every other parameter here, and for
-    // the same reason: these are the ones an operator is most likely to hand-edit,
-    // since the whole tab is a question spelled in the address bar.
     ticketWatch: TICKET_WATCH.find((w) => w === param(query, 'watch')) ?? 'any',
     ...readTracking(param(query, 'tracking'), param(query, 'state')),
     ticketFeature: readFeature(param(query, 'feature')),
@@ -519,9 +280,7 @@ export function readPlace(search: string): Place {
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
     ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
     ticketColumns: readStrings(param(query, 'hide')),
-    // `card`, `sort` and `prs`, not `feature`, `order` and `view`: the tickets tab
-    // owns those three, and two places reading one parameter is a place that opens
-    // showing whatever the other one was set to — `configGroup`'s reason exactly.
+    // `card`, `sort` and `prs`: the tickets tab owns `feature`, `order` and `view`.
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
@@ -529,19 +288,10 @@ export function readPlace(search: string): Place {
 }
 
 /**
- * The two coarse axes, and the one alias between them — the cockpit's half of the
- * route's `coarseAxes`, and it has to stay its half.
- *
- * `state` used to be `open` / `closed` and is now the tracker's own word, with the
- * harness's reading moved to `tracking`. Reading those two literals as the old axis
- * is what keeps every saved link working; the alternative is a filter that quietly
- * matches nothing. No tracker spells a state that way — Azure capitalises, GitHub
- * has none at all — so the alias cannot swallow a real one.
- *
- * The state is otherwise **not validated against a list**, unlike every other
- * parameter here, because the list is the tracker's and this file cannot know it. A
- * state no item carries narrows to an empty list, which is a filter that found
- * nothing rather than a place that does not exist.
+ * The two coarse axes, and the one alias between them. `state` used to be `open` / `closed`, so
+ * those two literals are read as the old axis to keep saved links working; no tracker spells a
+ * state that way, so the alias can't swallow a real one. Otherwise not validated against a list
+ * — that list is the tracker's, and an unknown state narrows to an empty list.
  */
 function readTracking(
   tracking: string | null,
@@ -556,21 +306,10 @@ function readTracking(
 }
 
 /**
- * Where picking a state chip lands — the state itself, and the tracking axis it
- * has to be reachable under.
- *
- * A closing state is on frozen rows by definition, so under the tab's default
- * `live` narrowing a pick of `Closed` would return an empty list while the chip
- * that was just clicked counted sixty-eight. Widening is the only reading of that
- * click that is not a lie: the reader asked for the closed items, and the axis
- * they are behind is not one anything told them about. **Only ever widened, and
- * only where the two axes actually conflict** — a state with live rows narrows
- * exactly as it always did, and nothing here ever makes the list smaller than the
- * chip's own count implies.
- *
- * Here rather than in the panel because it is a statement about two `Place`
- * fields, and because a `.tsx` is a module no test can import.
- * → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
+ * Where picking a state chip lands: the state itself, and the tracking axis it must be
+ * reachable under. A closing state is on frozen rows, so under the default `live` narrowing the
+ * pick would return empty while the chip counted sixty-eight. Only ever widened, and only where
+ * the two axes conflict. → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
  */
 export function statePick(
   facet: TicketStateFacet | null,
@@ -581,45 +320,19 @@ export function statePick(
   return { state: facet.state };
 }
 
-/**
- * The coarse pair the tab lands on: the harness's own work surface, with the
- * history behind it.
- *
- * Read off {@link NOWHERE} rather than written out, because it is *the landing
- * view* that has to be offered back and not a second opinion about what that is —
- * a literal here would go stale the day the tab's default narrowing changes, and
- * silently, since a control offering the wrong pair still works.
- */
+/** The coarse pair the tab lands on. Read off {@link NOWHERE} rather than written out, so it can't silently go stale. */
 export const LIVE_WORK: { tracking: TicketTrackingFilter; state: TicketStateFilter } = {
   tracking: NOWHERE.ticketTracking,
   state: NOWHERE.ticketState,
 };
 
 /**
- * The state the tracking axis is currently widened for, or null — {@link statePick}'s
- * predicate read back off the place it wrote (issue #418).
- *
- * The widening is a one-way door without this. `statePick` moves `tracking` to
- * `any` on a pick of a state with nothing live under it, which is the only reading
- * of that click that is not a lie; but nothing moves it back, and the State tier's
- * own `Any` returns `{state: 'any'}` alone — so a reader who lands on the tab, picks
- * `Closed`, and then asks for every state again is left on the whole history with
- * the axis that widened it two controls away and no sentence anywhere saying it
- * moved. The reported symptom is exactly that: the filter set the tab *starts* on
- * turns out to be the one it cannot offer.
- *
- * So the axis says so where it landed, and the way back is the pair rather than the
- * axis: narrowing to `live` while `Closed` is still picked is the empty list the
- * widening exists to avoid, so the offer is {@link LIVE_WORK} — both coarse axes at
- * once, which is the view the reader is asking to return to.
- *
- * **It announces and offers; it never moves an axis nobody touched.** An operator
- * who chose `any` by hand and then picked a closing state sits under this same
- * predicate, and their axis is theirs: undoing it for them would be the silent move
- * this exists to apologise for, in the other direction.
- *
- * Here rather than in the panel for `statePick`'s reason — it is a statement about
- * two `Place` fields, and a `.tsx` is a module no test can import.
+ * The state the tracking axis is currently widened for, or null — {@link statePick}'s predicate
+ * read back off the place it wrote. Without it the widening is a one-way door: nothing moves
+ * `tracking` back, so a reader who picks `Closed` and then asks for every state is left on the
+ * whole history with nothing saying the axis moved. The way back is the pair ({@link LIVE_WORK}),
+ * not the axis, since narrowing to `live` alone is the empty list the widening exists to avoid.
+ * It announces and offers; it never moves an axis nobody touched.
  * → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
  */
 export function widenedFor(
@@ -628,23 +341,12 @@ export function widenedFor(
   states: readonly TicketStateFacet[],
 ): TicketStateFacet | null {
   if (tracking !== 'any' || state === 'any') return null;
-  // Unknown to the facets — a hand-edited `?state=` — narrows to nothing and is not
-  // a widening anybody asked for, so it is left alone like every other junk value here.
+  // Unknown to the facets — a hand-edited `?state=` — is not a widening anybody asked for.
   const facet = states.find((f) => f.state === state);
   return facet && facet.live === 0 ? facet : null;
 }
 
-/**
- * Which pull request's pack is open and which idea is unfolded in it. The number
- * is validated like every other parameter here — a hand-typed `?pack=abc` opens
- * nothing — and the idea is carried only under a pack, since without one it names
- * a fold on a page that is not open.
- */
-/**
- * The pull request whose page is open, validated back into a number for
- * `readReviewPack`'s reason: this is an operator-typed input, and `?pr=main` is a
- * place that does not exist rather than a page drawn for `NaN`.
- */
+/** The pull request whose page is open, validated into a number: `?pr=main` is a place that doesn't exist rather than a page drawn for `NaN`. */
 function readPrNumber(value: string | null): number | null {
   const number = Number(value);
   return value !== null && Number.isInteger(number) && number > 0 ? number : null;
@@ -664,15 +366,7 @@ function readFeature(value: string | null): number | 'none' | null {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
-/**
- * A comma-separated list of tracker state words, validated the way every parameter
- * here is: blanks are dropped rather than carried, because a hand-edited `?hide=` is
- * an input an operator can type and an empty entry would hide a column that does not
- * exist. Deduplicated and sorted, so one set of hidden columns has one spelling.
- *
- * A comma is therefore the one character a state word cannot contain here. Encoding
- * one would be a second grammar in the address bar, for a case no tracker produces.
- */
+/** A comma-separated list of tracker state words: blanks dropped, deduplicated and sorted, so a comma is the one character a state word can't contain here. */
 function readStrings(value: string | null): string[] {
   if (value === null) return [];
   const seen = new Set<string>();
@@ -683,13 +377,7 @@ function readStrings(value: string | null): string[] {
   return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * A comma-separated issue-number list, validated the way every other parameter
- * here is: anything that is not a positive integer is dropped rather than
- * carried, because a hand-edited `?collapsed=` is an input an operator can type
- * and a `NaN` in this list would fold a heading that does not exist. Deduplicated
- * and sorted so one set of folded features has one spelling.
- */
+/** A comma-separated issue-number list: anything but a positive integer is dropped, deduplicated and sorted. */
 function readNumbers(value: string | null): number[] {
   if (value === null) return [];
   const seen = new Set<number>();
@@ -701,13 +389,9 @@ function readNumbers(value: string | null): number[] {
 }
 
 /**
- * The query string for a place, `?…` or empty — the inverse of {@link readPlace}
- * for every place `readPlace` can produce.
- *
- * Defaults are omitted rather than written out, so the overview with nothing
- * open is a bare URL. That is what makes the comparison in `useNavigation`
- * sound: two spellings of one place would push a history entry that goes
- * nowhere.
+ * The query string for a place, `?…` or empty — the inverse of {@link readPlace}. Defaults are
+ * omitted, so the overview with nothing open is a bare URL; two spellings of one place would
+ * push a history entry in `useNavigation` that goes nowhere.
  */
 export function placeQuery(place: Place): string {
   const query = new URLSearchParams();
@@ -727,9 +411,7 @@ export function placeQuery(place: Place): string {
     query.set('pack', String(place.reviewPack));
     if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
   }
-  // `readStrings` already sorted these on the way in, so opening the ticket then
-  // the record and the record then the ticket are one place rather than two
-  // history entries.
+  // Already sorted on the way in, so opening two sections in either order is one place.
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
   if (place.obstacle !== null) query.set('obs', place.obstacle);
@@ -739,14 +421,9 @@ export function placeQuery(place: Place): string {
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
   if (place.poolProject !== null) query.set('project', place.poolProject);
   if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
-  // Sorted on the way out as on the way in, so folding A then B and folding B
-  // then A are one place rather than two history entries.
   if (place.collapsed.length > 0) {
     query.set('collapsed', [...place.collapsed].sort((a, b) => a - b).join(','));
   }
-  // Defaults omitted, so "all items, newest first" is a bare `?tab=tickets` rather
-  // than a second spelling of the same page — which is what keeps the comparison in
-  // `useNavigation` sound.
   if (place.ticketWatch !== 'any') query.set('watch', place.ticketWatch);
   if (place.ticketTracking !== 'live') query.set('tracking', place.ticketTracking);
   if (place.ticketState !== 'any') query.set('state', place.ticketState);
@@ -754,13 +431,9 @@ export function placeQuery(place: Place): string {
   if (place.ticketGroup !== 'feature') query.set('group', place.ticketGroup);
   if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
   if (place.ticketView !== 'table') query.set('view', place.ticketView);
-  // Sorted on the way out as on the way in, so hiding A then B and B then A are
-  // one place rather than two history entries.
   if (place.ticketColumns.length > 0) {
     query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
   }
-  // Defaults omitted for the tickets tab's reason: a bare `?tab=features` is the
-  // board as it opens, not a second spelling of it.
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);

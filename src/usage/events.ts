@@ -2,40 +2,20 @@
  * The usage vocabulary: everything the harness measures about what a **person**
  * did, declared once and named from both sides of the wire.
  *
- * ## Two axes, not a flat list of names
+ * Two axes rather than a flat list — a subject and a verb, with the verbs shared
+ * across subjects, so "how much of this is rejecting" is one `group by`. **A
+ * subject is a thing, never a screen**: keying on the screen resets every number a
+ * redesign touches.
  *
- * `src/remedies/remedies.ts`' arrangement, for its reason exactly. A subject is a
- * thing the product offers and a verb is what somebody did to it, and because the
- * verbs are shared across subjects, *how much of what this fleet does is
- * rejecting* and *what happens to plans* are one `group by` each. On a flat enum
- * of sixty-nine names they are neither, and no amount of care at the call site
- * gets them back.
- *
- * **A subject is a thing, never a screen.** `pr` is the pull request wherever it
- * is worked, so a control that moves to another surface keeps its row and the
- * history stays one series. Keying on the screen is how a redesign silently
- * resets every number it touches.
- *
- * ## Why the event is a string and not a member of an object
- *
- * Forced rather than preferred: `web/src/` may name only `src/wire.ts`, and
- * `test/wireContract.test.ts` asserts that module contributes **no runtime** — so
- * a `Usage.plan.view` const object could not cross the wire without either
- * breaking that rule or being hand-copied into the SPA, which is the drift
- * `src/wire.ts` exists to end. A string-literal union is erased entirely,
- * autocompletes identically, and a typo is still a compile error.
- * {@link UsageEvent} is narrowed by {@link VERBS_BY_SUBJECT}, so `plan.defer` — a
- * cell that table leaves empty — does not typecheck.
- *
+ * The event is a string-literal union, not a const object, because `web/src/` may
+ * name only `src/wire.ts` and that module must contribute no runtime.
  * → `docs/spec/34-usage-metrics.md#the-event-registry`
  */
 
 /**
- * What a person did, shared across subjects on purpose.
- *
- * `plan.reject` and `validation.reject` being the *same* verb is what makes the
- * rejection question above answerable at all; two per-subject vocabularies would
- * make it a join nobody writes.
+ * What a person did, shared across subjects on purpose — `plan.reject` and
+ * `validation.reject` being the *same* verb is what keeps the rejection question
+ * one `group by` rather than a join nobody writes.
  */
 export type UsageVerb =
   /** The surface was reached. */
@@ -69,16 +49,8 @@ export type UsageVerb =
  * Which verbs each subject offers — `CAUSES_BY_KIND`' shape and its purpose.
  *
  * **An empty cell is a statement**: the product offers no such control on that
- * subject. The day it does, the cell is where it is added, and every fold and
- * every digest section keyed on this registry picks it up without being edited.
- *
- * Five cells were removed when the call sites were wired, and the removals are
- * that statement being made rather than a narrowing of the vocabulary: the pull
- * request page draws no disclosure, the cockpit cannot edit a tracker item's own
- * content, the feature board offers no filter, a retro is drawn flat and a pet's
- * card is always whole. A `ui` cell with no control behind it is a **permanent
- * silent zero** — the "never named" failure `src/mcpInsights.ts` exists to
- * diagnose, one actor over — so a cell is added on the day the control is.
+ * subject. A `ui` cell with no control behind it is a permanent silent zero, so a
+ * cell is added on the day the control is.
  */
 export const VERBS_BY_SUBJECT = {
   plan: ['view', 'expand', 'edit', 'accept', 'reject', 'abandon'],
@@ -117,33 +89,22 @@ export type UsageEvent = {
 }[UsageSubject];
 
 /**
- * Where an event is seen, and the field that keeps `collectActions`' objection
- * structurally unreachable rather than merely remembered.
+ * Where an event is seen.
  *
  * - **`ui`** — nothing durable records it, so the call site is the only witness.
- *   Every `view`, `expand` and `filter` is one of these: a person opening the pull
- *   request page leaves no trace in any table, and if the click does not say so,
- *   nothing does.
- * - **`record`** — a table already holds it, distinguishably and with a stamp, so
- *   the ledger sweeps the record and **the call site does not log it at all**. A
- *   settle logged where it happens counts only while that route is the one that
- *   settles it; swept from the record, a second route is picked up for free.
+ * - **`record`** — a table already holds it with a stamp, so the ledger sweeps the
+ *   record and **the call site does not log it at all**.
  *
- * An event logged **both** ways would be counted twice by two readings that
- * disagree quietly, which is why {@link UiUsageEvent} cannot express it.
+ * An event logged **both** ways would be counted twice, which is why
+ * {@link UiUsageEvent} cannot express it.
  */
 export type UsageEventSource = 'ui' | 'record';
 
 /**
- * The split, per event.
- *
- * `record` is claimed **only where a table has actually been checked** to hold the
- * act with a stamp that survives the next write. Several acts that feel durable
- * are not: an un-watch is a label *removal* nothing writes back
- * (`src/watchLabels.ts`), a config edit is a file write with no row behind it, and
- * an undone validation reading leaves a check `unrun`, which is indistinguishable
- * from one nobody ever ran. Those are `ui`, and calling them otherwise would be a
- * ledger row that is permanently zero with nothing saying why.
+ * The split, per event. `record` is claimed **only where a table has actually been
+ * checked** to hold the act with a stamp that survives the next write; several acts
+ * that feel durable are not, and claiming one is a ledger row permanently zero with
+ * nothing saying why.
  */
 const EVENT_SOURCE = {
   'plan.view': 'ui',
@@ -218,10 +179,8 @@ const EVENT_SOURCE = {
 } as const satisfies Record<UsageEvent, UsageEventSource>;
 
 /**
- * The `ui`-sourced subset, and the whole of what a call site may log.
- *
- * Passing a `record` event is a compile error, so the double count is unreachable
- * rather than a rule somebody has to keep.
+ * The `ui`-sourced subset, and the whole of what a call site may log. Passing a
+ * `record` event is a compile error, so the double count is unreachable.
  */
 export type UiUsageEvent = {
   [E in UsageEvent]: (typeof EVENT_SOURCE)[E] extends 'ui' ? E : never;
@@ -233,10 +192,8 @@ export function usageEventSource(event: UsageEvent): UsageEventSource {
 }
 
 /**
- * What each event means, in the operator's words.
- *
- * A `Record` over the union — `CAUSE_COPY`'s discipline — so an event with no
- * label does not compile, and the panel never restates a name the server owns.
+ * What each event means, in the operator's words. A `Record` over the union, so an
+ * event with no label does not compile.
  */
 export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = {
   'plan.view': { label: 'Opened a plan', blurb: 'The plan page was reached' },
@@ -308,23 +265,12 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
 
 /**
  * Where the cockpit was when something happened — a closed vocabulary, and the
- * second half of {@link UiUsageEvent}'s privacy boundary.
+ * second half of {@link UiUsageEvent}'s privacy boundary. It is a **place**, never
+ * a URL, a title or a ref, so no identifier can be recorded here at all.
  *
- * It is a **place**, never a URL, never a title, never a ref. That is not a
- * scrubbing pass bolted on after the fact: there is nowhere in the parameter list
- * to put an identifier, so none can be recorded by a call site in a hurry, and it
- * is what lets the aggregate cross to the pool at all.
- *
- * The keys are the cockpit's own layout — `web/src/cockpit/place.ts`'s tabs,
- * panels and one-rung-in pages, folded to one name per *surface*. The vivarium is
- * one key whether it is reached as a tab or as a panel, because an operator who
- * opened it opened the same thing either way.
- *
- * **It stays local to the fleet.** The digest is keyed on subject and verb, which
- * are vocabularies the harness owns; this one a redesign moves, and a cross-fleet
- * series keyed on it would break at a release rather than at a change of
- * behaviour.
- *
+ * The keys are `web/src/cockpit/place.ts`'s layout folded to one name per surface.
+ * **It stays local to the fleet** — a redesign moves it, so a cross-fleet series
+ * keyed on it would break at a release.
  * → `docs/spec/34-usage-metrics.md#surface-reach`
  */
 export const PLACE_KEYS = [
@@ -359,26 +305,16 @@ export const PLACE_KEYS = [
 export type PlaceKey = (typeof PLACE_KEYS)[number];
 
 /**
- * How a place was arrived at, and the column that makes a quiet surface
- * diagnosable.
- *
- * `never-linked` is a verdict about the harness's own navigation rather than
- * about the operator, and it can only be told from `linked-never-visited` if a
- * visit records how it was arrived at: `linked` is a control inside the cockpit
- * that carried somebody there, `direct` is an address — a typed URL, a reload, a
- * bookmark, a link somebody was sent.
+ * How a place was arrived at — `linked` is a control inside the cockpit that
+ * carried somebody there, `direct` is an address. The distinction is what tells
+ * `never-linked` from `linked-never-visited`.
  */
 export type UsageArrival = 'linked' | 'direct';
 
 /**
- * What each subject is called, in the operator's words.
- *
- * A `Record` over the union like {@link USAGE_COPY}, so a subject added to
- * {@link VERBS_BY_SUBJECT} without a label does not compile — which is what makes
- * "a new subject is a row plus its label" true rather than aspirational.
- *
- * The **subject**, never the screen it is worked on: `pr` is the pull request
- * wherever it lives, so the label survives a redesign that moves the control.
+ * What each subject is called, in the operator's words. A `Record` over the union,
+ * so a subject added to {@link VERBS_BY_SUBJECT} without a label does not compile.
+ * Names the **subject**, never the screen it is worked on.
  */
 export const SUBJECT_LABEL: Record<UsageSubject, string> = {
   plan: 'Plans',
@@ -403,11 +339,7 @@ export const SUBJECT_LABEL: Record<UsageSubject, string> = {
   pet: 'The vivarium',
 };
 
-/**
- * What each verb is called. The same discipline one axis over, and the reason the
- * panel can draw a subject's breakdown without restating a vocabulary the server
- * owns.
- */
+/** What each verb is called — the same discipline one axis over. */
 export const VERB_LABEL: Record<UsageVerb, string> = {
   view: 'Reached',
   expand: 'Opened something inside',

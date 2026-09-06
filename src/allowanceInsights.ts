@@ -1,106 +1,34 @@
 /**
- * The account's allowance as a reading about *time* — what the usage chip could
- * never be.
- *
- * `account_rate_limits` answers "how much of the five hours is spent" and answers
- * it by discarding the previous reading on every turn, which is the right shape
- * for a chip and the wrong one for every question an operator actually asks next:
- * when did it climb, what was running while it did, and will the week reach its
- * reset. `rate_limit_readings` keeps the same figures as a series
- * ([14](../docs/spec/14-persistence.md)), and this is the fold over it.
- *
- * ## Percentage is not money, and the difference is the whole design
- *
- * The harness already prices a goal to the cent, and that reading is *measured*:
- * every dollar has an agent's name on it. The account's percentage has no name on
- * it at all — it is one global counter, moved by every agent at once and by the
- * operator's own Claude Code on the same account, and no event says which turn
- * moved it. So nothing here measures a percentage per goal. It **apportions** one,
- * and says so:
- *
- * - The rise is taken between consecutive readings, so the unit of attribution is
- *   a few minutes rather than the whole window. Within one interval the model mix
- *   is whatever it is; across a window it moves, and a single window-wide split by
- *   cost share would silently absorb that drift. This is the reason the fold is
- *   per interval and not one division at the end.
- * - Each interval's rise is split between the goals whose agents *reported cost
- *   inside that interval*, by their share of it. An interval with no fleet spend
- *   in it attributes nothing — its rise is the operator's own session, or an
- *   agent the harness cannot see, and pretending otherwise is the one lie this
- *   module exists to avoid telling.
- * - What is left is {@link AllowanceApportionment.unattributedPoints}, and it is
- *   carried rather than divided up. `EconomicsTab`'s `unattributedCostUsd` is the
- *   same decision about the same kind of remainder.
- *
- * A local run's money is real spend on the same account, but its dated deltas
- * carry no run id ({@link CostDelta}), so it can never name a goal. It therefore
- * counts in the denominator of an interval — it did move the account — and its
- * share lands in the residual rather than inflating whichever goals happened to
- * be running. The alternative is a goal charged for an operator's own afternoon.
- *
- * ## Resets, and why a fall is never a negative
- *
- * A window reset is a fall in the percentage, and the account's five-hour window
- * resets four or five times a day. A delta taken blind would net those falls
- * against the rises and report a fleet that spent almost nothing. Every fall is
- * therefore read as a reset boundary and contributes zero, so the window's total
- * is the sum of its segments — which is what "spent in this window" means when
- * the allowance refilled inside it.
- *
- * ## A gap is not a reset
- *
- * A reading arrives only when an agent takes a turn, so an idle fleet produces
- * none at all while the real window keeps moving. The rise across such a gap is
- * **counted** — it happened — and attributes to nobody, which is exactly how the
- * operator's own session shows up in the reading. What the gap changes is the
- * drawing: {@link AllowanceReading.afterGap} tells the cockpit not to join two
- * readings an hour apart with a line that claims to know what happened between
- * them.
- *
- * → docs/spec/18-observability.md#the-allowance, docs/spec/17-cockpit.md#allowance
+ * The account's allowance as a reading about *time* — the fold over `rate_limit_readings`,
+ * which keeps as a series what the usage chip discards each turn. **A fall is a reset
+ * boundary and contributes zero**, never a negative, or the window's refills would net
+ * against its rises. → docs/spec/18-observability.md#the-allowance,
+ * docs/spec/17-cockpit.md#allowance
  */
 
 import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } from './types.js';
 import type { SpendGoal } from './spendInsights.js';
-// `roundUsd` rounds a float sum, not a currency: a percentage accumulated over a
-// hundred intervals ships `13.999999999999998` for exactly the reason a dollar
-// total does, and one rounding keeps every reader of the wire on one figure.
+// `roundUsd` rounds a float sum, not a currency: an accumulated percentage ships
+// `13.999999999999998` for the same reason a dollar total does.
 import { issueBehind, roundUsd, unmeasured } from './issueSpend.js';
 import type { InsightsWindowView } from './insightsWindow.js';
 
 /**
- * How long a silence has to run before two readings stop being joined.
- *
- * Well above a turn and well below a park: a stream agent reports on every turn,
- * so a working fleet's readings are minutes apart, and anything past this is the
- * fleet not running rather than a turn taking a while. It is a *drawing*
- * threshold and nothing else — no total, share or projection reads it — so
- * getting it slightly wrong costs a line segment, not a figure.
+ * How long a silence has to run before two readings stop being joined. A *drawing*
+ * threshold and nothing else — no total, share or projection reads it.
  */
 const GAP_MS = 15 * 60_000;
 
 /**
- * The stretch the burn-down's rate is fitted over.
- *
- * Not the whole seven days, and that is the point: the question is whether *this
- * week's current* pace reaches the limit before the reset, and a quiet Monday
- * folded into the average is how a fleet that has been flat out since Thursday
- * reports that it has days of headroom left. Two days is long enough to survive
- * one busy afternoon and short enough to notice a change of pace.
+ * The stretch the burn-down's rate is fitted over — not the whole seven days, because the
+ * question is whether the *current* pace reaches the limit before the reset.
  */
 const FIT_MS = 48 * 3_600_000;
 
 /** Below this many readings in the fit stretch there is no line to fit, only two dots. */
 const MIN_FIT_READINGS = 3;
 
-/**
- * How many voices the goal palette has.
- *
- * Server-side because the *assignment* is, and the two must agree: the stylesheet
- * declares `--al-goal-0` through `--al-goal-4`, and a fold handing out a sixth
- * slot would name a custom property nothing declares — which `var()` answers with
- * silence, not with an error.
- */
+/** How many voices the goal palette has. */
 const SLOTS = 5;
 
 /** One reading, as the cockpit draws it. */
@@ -111,26 +39,20 @@ export interface AllowanceReading {
   fiveHour: number | null;
   sevenDay: number | null;
   /**
-   * Whether the previous reading is far enough back ({@link GAP_MS}) that nothing
-   * should be drawn between them. False on the first reading, which has no
-   * predecessor to be far from.
+   * Whether the previous reading is far enough back ({@link GAP_MS}) that nothing should be
+   * drawn between them.
    */
   afterGap: boolean;
   /**
-   * Whether the five-hour window reset between this reading and the one before —
-   * a fall in the percentage. The cockpit breaks the line here rather than
-   * drawing a cliff, which would read as the fleet having given something back.
+   * Whether the five-hour window reset between this reading and the one before — a fall in
+   * the percentage.
    */
   afterReset: boolean;
 }
 
 /**
- * One agent run, as a lane under the timeline.
- *
- * The lanes are the whole of the timeline's argument: they let a reader see which
- * agents were running while the line climbed, without the chart ever claiming
- * that the tallest one caused it. Adjacency is not attribution, and a lane is
- * adjacency drawn honestly.
+ * One agent run, as a lane under the timeline — which agents were running while the line
+ * climbed, without the chart claiming any of them caused it.
  */
 export interface AllowanceLane {
   /** The agent's id — what the cockpit's drawer opens on. */
@@ -140,18 +62,14 @@ export interface AllowanceLane {
   /** The goal its money was folded into, or null where it reached none. */
   issueNumber: number | null;
   /**
-   * The goal's colour slot, or null where the run reached no goal — which the
-   * cockpit draws in the residual's grey rather than in a voice of its own.
+   * The goal's colour slot, or null where the run reached no goal — which the cockpit draws
+   * in the residual's grey rather than in a voice of its own.
    */
   slot: number | null;
   startedAt: string;
   /** Null while it is still running, which the cockpit draws as running to `now`. */
   endedAt: string | null;
-  /**
-   * Whether the run reported any usage at all. A PTY agent reports none, so it
-   * gets a lane — it was running, which is what a lane says — and is drawn muted:
-   * it moved the account by nothing this harness can see.
-   */
+  /** Whether the run reported any usage at all. */
   measured: boolean;
 }
 
@@ -161,37 +79,23 @@ export interface AllowanceGoal {
   originRef: string;
   title: string | null;
   /**
-   * Which of the palette's {@link SLOTS} voices draws this goal, on the bar, in
-   * its lanes and in the table.
-   *
-   * Assigned here rather than in the browser so the three surfaces cannot
-   * disagree, and derived from the issue number so a goal keeps its colour across
-   * a redraw — but **collisions are resolved to the next free slot**, which is the
-   * trade this field exists to make. Modulo alone put `#412` and `#417` in one
-   * voice, adjacent on the bar and identical in the table, and a legend whose
-   * swatch matches two rows is not a legend. With more goals than voices some
-   * repainting is unavoidable; drawing two of them the same never is.
+   * Which of the palette's {@link SLOTS} voices draws this goal, on the bar, in its lanes
+   * and in the table.
    */
   slot: number;
   /** The goal's measured cost inside the window — the share's basis, and a fact. */
   costUsd: number;
   /**
-   * Points of the account's five-hour allowance apportioned to this goal.
-   *
-   * A point is one percent of the window. Apportioned, never measured — see the
-   * module note.
+   * Points of the account's five-hour allowance apportioned to this goal — one point is one
+   * percent of the window. Apportioned, never measured; see the module note.
    */
   points: number;
   /** Pull requests merged inside the window whose lineage reaches this goal. */
   landed: number;
   /**
-   * {@link AllowanceGoal.points} per landed change, or **null where nothing
-   * landed**.
-   *
-   * Null rather than `Infinity`, for `EconomicsTab`'s reason: a goal that
-   * consumed a tenth of the account and landed nothing is the single most
-   * important row this table draws, and it has to render as the sentence it is
-   * rather than as a symbol.
+   * {@link AllowanceGoal.points} per landed change, or **null where nothing landed** —
+   * never `Infinity`: that row is the most important one the table draws and has to render
+   * as a sentence.
    */
   pointsPerLanded: number | null;
 }
@@ -199,12 +103,8 @@ export interface AllowanceGoal {
 /** The window's rise, and who it is charged to. */
 export interface AllowanceApportionment {
   /**
-   * The rise across the window's readings — the sum of the positive steps, with
-   * every reset boundary contributing zero.
-   *
-   * Null where there are fewer than two readings: one reading is a level, not a
-   * change, and reporting zero for it would say the account did not move when
-   * what happened is that nothing watched it.
+   * The rise across the window's readings — the sum of the positive steps, every reset
+   * boundary contributing zero.
    */
   observedPoints: number | null;
   /** The part of {@link observedPoints} that reached a goal. */
@@ -212,12 +112,9 @@ export interface AllowanceApportionment {
   /** The rest of it: intervals with no attributable fleet spend, and local runs. */
   unattributedPoints: number;
   /**
-   * Points of allowance per dollar the fleet spent, over this window.
-   *
-   * The calibration the whole apportionment rests on, shipped because it is worth
-   * reading on its own: it moves with the model mix, and a figure that drifts is
-   * telling an operator that something outside the fleet is eating the account.
-   * Null when the window measured no spend, which is not a rate of zero.
+   * Points of allowance per dollar the fleet spent over this window — the calibration the
+   * apportionment rests on, worth reading on its own because a drift says something outside
+   * the fleet is eating the account.
    */
   pointsPerUsd: number | null;
   /** Apportioned-costliest first. */
@@ -225,12 +122,8 @@ export interface AllowanceApportionment {
 }
 
 /**
- * The weekly burn-down: does this pace reach the limit before the window resets.
- *
- * The one reading here that can be acted on *before* the fact, which is why it is
- * built even when the page's own window is five hours — it is always about the
- * seven-day window, and an operator who changes the cap because of it changes it
- * for the week rather than for the afternoon.
+ * The weekly burn-down: does this pace reach the limit before the window resets? Always
+ * about the seven-day window, whatever window the page itself is showing.
  */
 export interface AllowanceProjection {
   /** The freshest seven-day reading's used percentage. */
@@ -240,18 +133,15 @@ export interface AllowanceProjection {
   /** When the weekly window resets, where the CLI reported it. */
   resetsAt: string | null;
   /**
-   * Points per hour over {@link FIT_MS}, or null where the stretch held too few
-   * readings to fit ({@link MIN_FIT_READINGS}) or the account did not rise in it.
+   * Points per hour over {@link FIT_MS}, or null where the stretch held too few readings to
+   * fit ({@link MIN_FIT_READINGS}) or the account did not rise in it.
    */
   ratePerHour: number | null;
   /** When the allowance reaches 100% at that rate, or null where there is no rate. */
   exhaustsAt: string | null;
   /**
-   * Whether exhaustion lands before the reset — the reading in one field.
-   *
-   * Null where either date is unknown, and never guessed: a projection with no
-   * reset to beat is a slope, and drawing it as a verdict would invent the half
-   * the CLI did not report.
+   * Whether exhaustion lands before the reset. Null where either date is unknown, and never
+   * guessed — a projection with no reset to beat is a slope, not a verdict.
    */
   beforeReset: boolean | null;
   /** How many readings the fit was over, so the cockpit can say how thin it is. */
@@ -268,8 +158,8 @@ export interface AllowanceInsights {
   lanes: AllowanceLane[];
   apportionment: AllowanceApportionment;
   /**
-   * The weekly burn-down, or null on a deployment whose readings carry no
-   * seven-day window at all — API-key auth, or a CLI too old to report one.
+   * The weekly burn-down, or null on a deployment whose readings carry no seven-day window
+   * at all — API-key auth, or a CLI too old to report one.
    */
   projection: AllowanceProjection | null;
 }
@@ -277,25 +167,14 @@ export interface AllowanceInsights {
 interface AllowanceInput {
   /** The readings inside the page's window, oldest first. */
   readings: readonly AccountRateLimits[];
-  /**
-   * The readings over the last {@link FIT_MS} and more, for the projection alone.
-   *
-   * A second list rather than a slice of the first, because the burn-down is not
-   * about the page's window: an operator reading the five-hour session still
-   * needs to know whether the *week* survives, and slicing a five-hour list for a
-   * two-day fit would give a projection that silently narrowed with the control.
-   */
+  /** The readings over the last {@link FIT_MS} and more, for the projection alone. */
   weekReadings: readonly AccountRateLimits[];
   /**
-   * The agents' dated cost deltas inside the window — the only source that says
-   * **whose** money went out and when, which is what an interval split needs.
+   * The agents' dated cost deltas inside the window — the only source that says **whose**
+   * money went out and when, which is what an interval split needs.
    */
   usageEvents: readonly UsageEvent[];
-  /**
-   * Every dated delta whatever spent it, for the interval denominator. The
-   * difference from {@link usageEvents} is exactly the local runs, whose money
-   * moved the account and can name no goal.
-   */
+  /** Every dated delta whatever spent it, for the interval denominator. */
   costDeltas: readonly { costUsd: number; at: string }[];
   /** The window's agent runs, for the lanes. */
   agents: readonly Agent[];
@@ -317,9 +196,8 @@ export function buildAllowanceInsights(input: AllowanceInput): AllowanceInsights
   const { readings, agents, tasks, attribution, window, now } = input;
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   const apportionment = apportion(input);
-  // The lanes take the apportionment's own slots rather than deriving their own:
-  // a lane and the bar segment above it are the same goal, and two independent
-  // assignments of one palette is the disagreement the field exists to prevent.
+  // The lanes take the apportionment's own slots rather than deriving their own: a lane
+  // and the bar segment above it are the same goal.
   const slotOfGoal = new Map(apportionment.goals.map((goal) => [goal.issueNumber, goal.slot]));
 
   return {
@@ -345,14 +223,7 @@ export function buildAllowanceInsights(input: AllowanceInput): AllowanceInsights
   };
 }
 
-/**
- * The readings with their two drawing flags on them.
- *
- * Computed here rather than in the browser for the reason every other split is:
- * the reset test and the gap threshold are statements about what the data means,
- * and a cockpit free to pick its own would draw a line the server's own totals
- * disagree with.
- */
+/** The readings with their two drawing flags on them. */
 function markReadings(readings: readonly AccountRateLimits[]): AllowanceReading[] {
   return readings.map((reading, i) => {
     const previous = readings[i - 1] ?? null;
@@ -363,20 +234,16 @@ function markReadings(readings: readonly AccountRateLimits[]): AllowanceReading[
       fiveHour: used,
       sevenDay: reading.sevenDay?.usedPercentage ?? null,
       afterGap: previous !== null && Date.parse(reading.capturedAt) - Date.parse(previous.capturedAt) > GAP_MS,
-      // Both readings have to carry a percentage for a fall to mean anything —
-      // a window that went from unreported to reported is not a reset.
+      // Both readings must carry a percentage: unreported → reported is not a reset.
       afterReset: used !== null && before !== null && used < before,
     };
   });
 }
 
 /**
- * Split each interval's rise among the goals that were spending inside it.
- *
- * The loop is over *intervals* rather than over goals, which is the shape the
- * honesty rests on: a goal's share is only ever taken from the rise that happened
- * while it was reporting cost, so a goal that ran for ten minutes of a five-hour
- * window can never be charged for the other four hours and fifty.
+ * Split each interval's rise among the goals that were spending inside it. The loop is over
+ * *intervals*, never goals, so a goal is only ever charged from the rise that happened
+ * while it was reporting cost.
  */
 function apportion(input: AllowanceInput): AllowanceApportionment {
   const { readings, usageEvents, costDeltas, agents, goals, attribution, nodes } = input;
@@ -385,8 +252,7 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
   let unattributed = 0;
   let attributed = 0;
 
-  // The deltas dated once, so the interval scan is not re-parsing ISO strings
-  // inside a nested loop over every reading.
+  // Dated once, so the interval scan is not re-parsing ISO strings in a nested loop.
   const goalOfAgent = new Map(agents.map((a) => [a.id, attribution.get(a.id) ?? null]));
   const agentSpend = usageEvents.map((e) => ({ at: Date.parse(e.at), costUsd: e.costUsd, agentId: e.agentId }));
   const allSpend = costDeltas.map((d) => ({ at: Date.parse(d.at), costUsd: d.costUsd }));
@@ -396,9 +262,8 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
     const to = readings[i];
     const before = from?.fiveHour?.usedPercentage ?? null;
     const after = to?.fiveHour?.usedPercentage ?? null;
-    // A reading with no five-hour figure spans nothing: there is no rise to
-    // charge, and inventing one from the readings either side of it would put a
-    // number on the one stretch the CLI declined to describe.
+    // A reading with no five-hour figure spans nothing: there is no rise to charge, and
+    // inventing one would put a number on the stretch the CLI declined to describe.
     if (from === undefined || to === undefined || before === null || after === null) continue;
     const rise = after - before;
     // A fall is a reset boundary and contributes zero — see the module note.
@@ -407,13 +272,12 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
 
     const startMs = Date.parse(from.capturedAt);
     const endMs = Date.parse(to.capturedAt);
-    // Every dollar that went out inside the interval, whoever spent it. The
-    // denominator is the *total*, so a local run's share dilutes the goals'
-    // rather than being left out of a split it genuinely belongs in.
+    // Every dollar out inside the interval, whoever spent it: the denominator is the
+    // *total*, so a local run's share dilutes the goals' rather than being excluded.
     const total = allSpend.reduce((sum, d) => (d.at > startMs && d.at <= endMs ? sum + d.costUsd : sum), 0);
     if (total <= 0) {
-      // Nothing of ours was spending, and the account still moved. This is the
-      // operator's own session, and it is the reading that must not be divided up.
+      // Nothing of ours was spending and the account still moved — the operator's own
+      // session, the one reading that must not be divided up.
       unattributed += rise;
       continue;
     }
@@ -427,9 +291,8 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
       charged += share;
     }
     attributed += charged;
-    // Whatever the split did not reach: a local run, or an agent whose money
-    // never found a goal. The subtraction is what keeps the three totals adding
-    // up however the shares fell.
+    // Whatever the split did not reach. The subtraction keeps the three totals adding up
+    // however the shares fell.
     unattributed += rise - charged;
   }
 
@@ -449,8 +312,8 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
         pointsPerLanded: merged > 0 ? roundUsd(share / merged) : null,
       };
     })
-    // A goal that was apportioned nothing is a goal that did not spend inside the
-    // window — it belongs to the spend fold's list, not to this one.
+    // Apportioned nothing = did not spend inside the window; that is the spend fold's
+    // list, not this one.
     .filter((goal) => goal.points > 0)
     .sort((a, b) => b.points - a.points || a.issueNumber - b.issueNumber);
   const slots = assignSlots(rows.map((row) => row.issueNumber));
@@ -466,16 +329,9 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
 }
 
 /**
- * A colour slot per goal: its own where the palette has room, the next free one
- * where it does not.
- *
- * `issueNumber % SLOTS` first, so a goal keeps its voice from one draw of the tab
- * to the next. Where two goals want one voice the later of them takes the next
- * free slot, because two rows drawn identically is a legend that has stopped
- * being one — and with more goals than voices, that is a failure the reader
- * cannot even see, whereas a goal whose colour moved between windows is one they
- * can. Beyond {@link SLOTS} goals the voices are reused, which is the honest end
- * of a five-colour palette.
+ * A colour slot per goal: `issueNumber % SLOTS` first, so a goal keeps its voice between
+ * draws, with collisions taking the next free slot — two rows drawn identically is a legend
+ * that has stopped being one.
  */
 function assignSlots(issueNumbers: readonly number[]): Map<number, number> {
   const taken = new Set<number>();
@@ -491,11 +347,8 @@ function assignSlots(issueNumbers: readonly number[]): Map<number, number> {
 }
 
 /**
- * Merges inside the window, charged to the goal their lineage reaches.
- *
- * The same walk the money takes ({@link issueBehind}), and deliberately so: a
- * per-landed figure whose numerator and denominator disagreed about which goal a
- * pull request belongs to would be a ratio between two different goals.
+ * Merges inside the window, charged to the goal their lineage reaches — the same walk the
+ * money takes ({@link issueBehind}), so the per-landed ratio has one goal on both sides.
  */
 function landedByGoal(
   mergeEvents: readonly WorldEvent[],
@@ -512,13 +365,7 @@ function landedByGoal(
   return landed;
 }
 
-/**
- * The weekly burn-down, fitted over the last {@link FIT_MS}.
- *
- * The fit starts at the **last reset inside the stretch** where there is one: a
- * rate taken across a refill is the account's whole week averaged against a fresh
- * allowance, which reads as a fleet that has stopped spending.
- */
+/** The weekly burn-down, fitted over the last {@link FIT_MS}. */
 function project(weekReadings: readonly AccountRateLimits[], now: number): AllowanceProjection | null {
   const withWeek = weekReadings.filter((r) => r.sevenDay !== null);
   const latest = withWeek.at(-1);
@@ -551,9 +398,8 @@ function project(weekReadings: readonly AccountRateLimits[], now: number): Allow
 
   const hours = (Date.parse(latest.capturedAt) - Date.parse(first.capturedAt)) / 3_600_000;
   const rise = usedPercentage - (first.sevenDay?.usedPercentage ?? 0);
-  // A flat or falling fit has no exhaustion to name. Reporting one anyway — at a
-  // rate of nearly zero, arriving in four hundred hours — is a date that is worse
-  // than no date: it renders, and it is read.
+  // A flat or falling fit has no exhaustion to name; a date from a rate of nearly zero
+  // is worse than no date, because it renders and is read.
   if (hours <= 0 || rise <= 0) return base;
 
   const ratePerHour = rise / hours;

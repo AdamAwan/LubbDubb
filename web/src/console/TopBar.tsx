@@ -14,63 +14,13 @@ import { untriagedCount } from '../worldBuckets.js';
 import { useThemeUnsaved } from '../hooks.js';
 import { signalRows } from './WorldSignals.js';
 
-/**
- * The nav's destinations, in reading order — the order the tabs are drawn in.
- *
- * Four. Insights is the one destination here that is read rather than acted on,
- * which is worth stating because the nav used to be described as "the surfaces
- * work happens on": the rule that actually holds is that the nav is where you
- * *go*, and Config stays out of it because it is set up once, not because it is
- * passive. Insights is somewhere an operator goes several times a day and comes
- * back from.
- *
- * **Obstacles is the fourth, and it holds the slot Knowledge held.** The board
- * shipped reachable by URL only, and the operator lifted that; it takes Knowledge's
- * slot rather than a fifth because Knowledge is the surface it replaces, and two
- * tabs answering one question is how an operator ends up ruling on the same thing
- * twice. It carries **no badge**, and that is the whole of it rather than an
- * omission: a badge counts what is waiting on a decision, and nothing on the board
- * is — every state there has an exit that is not you. Knowledge's badge was
- * `factsNeedingYou`, over a queue only a person emptied, which is exactly the shape
- * the board is arranged not to have.
- * → `docs/spec/27-obstacles.md#in-the-cockpit`
- *
- * **Work was the second of these and is not here any more.** Every part of it had
- * found a better home — a goal's record onto its goal page, the unrecorded-work
- * call-out onto the tickets tab, and the roots nothing has claimed into the
- * `record` panel on this bar — so what the slot held by the end was a disclosure
- * triangle over an index of pages that are one click away anyway. A nav slot is
- * the most expensive space in the cockpit and it was buying a fold.
- *
- * **Pets was the third of these and is not here any more.** It is drawn at full
- * size in the bottom-left corner already, on a strip that was itself a button, so
- * the tab was a second way to a surface the eye lands on anyway — and a nav slot is
- * the most expensive space in the cockpit. The Vivarium bar carries the destination
- * now, which also puts it where the thing it names is. → `Vivarium`
- */
+/** The nav's destinations, in reading order. → `docs/spec/27-obstacles.md#in-the-cockpit` */
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
- * deliberately not derived from `github.owner`/`github.repo`.
- *
- * Those name the repo this harness *works on*, which is LubbDubb only while it is
- * dogfooding itself. A fault in the cockpit belongs on the cockpit's own tracker
- * whatever repo the fleet happens to be pointed at, so a deployment driving a
- * customer's repo — or a fork — is sent here too. That is the trade: the link is
- * about the tool, not about the work, and nothing on the wire has to carry it.
- *
- * It lands on the *form* rather than the repo or the issue list, because the whole
- * point is the number of clicks between noticing something and having written it
- * down (#404).
- *
- * Since #413 it is the **fallback** rather than the only path: a connected cockpit
- * gets a compose modal that creates the issue directly. Since #449 the modal files
- * *here* too, through the operator's own `gh` login, so the two faces of this
- * control are one destination reached two ways rather than two destinations. The
- * constant survives because the modal's every refusal ends here, and because the one
- * state this control most has to work in — a dropped socket — is the one the harness
- * cannot be posted to.
+ * deliberately not derived from `github.owner`/`github.repo`, which name the repo the
+ * harness *works on*.
  */
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
@@ -85,22 +35,8 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
 };
 
 /**
- * Where you are, and the other places you can be.
- *
- * It sits in the top bar rather than at the head of the situation area, which
- * scrolls: the primary navigation of a page must not be a thing you scroll away
- * from, and the bar is the one row of the shell that is always on screen.
- *
- * A click clears *both* pieces of state, because a nav click means "go here" and
- * either half left standing would land somewhere else. Two of the tabs carry a
- * badge and the rest carry none — see {@link navBadge} for which number and why.
- *
- * Tabs and nothing else: the open goal's crumb is drawn at the head of the
- * situation area instead ({@link ConsoleRoot}). A title is as long as whoever
- * filed it made it, and one in here widens the nav by whatever that is — pushing
- * the readings onto a second line on the act of opening a goal. The bar is the
- * row an operator glances at without looking; it has to be the same shape every
- * time they do.
+ * Where you are, and the other places you can be. In the top bar rather than the scrolling
+ * situation area: primary navigation must not be a thing you scroll away from.
  */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
@@ -144,26 +80,9 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
 }
 
 /**
- * What is waiting behind a nav button, as a number and the sentence that explains
- * it — or null, for a tab with no number that decides whether to look.
- *
- * **A badge, not a phrase.** Tickets reads `2 to triage`: the question is *is
- * there anything here for me*, and the answer is the digit. The words were a
- * sentence in the one row an operator glances at without reading, and they widened
- * the button by however long they happened to be, which is the thing the nav most
- * has to not do. The sentence survives as the button's `title`, where it costs no
- * width and is there for whoever wants it.
- *
- * Hidden at zero: a badge that always shows is one nobody reads.
- *
- * The number is the *same* number the surface behind it draws — `untriagedCount`
- * over the watch bucket the tickets tab's Unwatched filter uses — so the badge and
- * the rows behind it cannot differ.
- *
- * **Obstacles has none**, and never gains one: a badge counts what is waiting on a
- * decision, the board has nothing that is, and a count there would be the first
- * step back toward the queue only a person emptied that killed the store it
- * replaced. → `docs/spec/27-obstacles.md#in-the-cockpit`
+ * What is waiting behind a nav button, as a number and the sentence that explains it — or
+ * null for a tab with no number. **Obstacles has none**, and never gains one. →
+ * `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: string } | null {
   if (tab === 'tickets') {
@@ -174,28 +93,8 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
 }
 
 /**
- * The wordmark, the link lamp, and the one thing on this bar that is about
- * LubbDubb rather than about the work.
- *
- * A component rather than markup in `TopBar` because **both** arms draw it — the
- * live bar and the dropped-socket one. A socket that just went down is a moment an
- * operator has something to report, and a way to report it that is only there when
- * the harness is healthy is missing exactly then. The lamp is the only thing that
- * differs between the two: green from the stylesheet, red inline when the link is
- * gone.
- *
- * That is also why the control has two faces rather than one. Where the harness can
- * file, it is a button opening {@link RaiseIssueModal} and the issue is created in
- * the tracker directly; where it cannot — no tracker configured, or no socket — it
- * is the external link it has always been. The fallback is not a nicety: this whole
- * component exists because the offline bar draws it, and a compose modal is the one
- * shape of this feature that offline cannot serve.
- *
- * The link sits here and not among the readings for the reason the readings are a
- * group at all — every one of them is a gauge on the fleet or on this build, read
- * left to right as one sentence about what is happening. "Issue!" answers
- * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
- * widths would cost a line to say so.
+ * The wordmark and the link lamp — the one thing on this bar about LubbDubb rather than the
+ * work.
  */
 function Ident({ view }: { view: CockpitView }): JSX.Element {
   return (
@@ -208,35 +107,9 @@ function Ident({ view }: { view: CockpitView }): JSX.Element {
 }
 
 /**
- * The bar's two ways out — file one, or ask one — drawn together at the right-hand
- * end beside the readings.
- *
- * **Beside each other, always.** The two are the same moment — something looks
- * wrong — and the cheaper reading of it is offered first; split up, the expensive
- * one ends up the only one on the bar.
- *
- * They sit with the readings rather than against the wordmark because that is
- * where the operator's hand already is: every other control on this strip that
- * *does* something rather than naming the product is in this group, and the
- * wordmark's job is to say where you are. It also stops the pair inheriting the
- * ident's 600, which read them as a second half of the wordmark.
- *
- * **All three faces are the shared button** — `Button` connected, `ExtLink` with a
- * `look` offline, `DesktopLink` beside them — at `ghost small`, which is the
- * console's chip size to begin with. `console.css` used to draw the chrome itself,
- * on a wrapper `<span>`, because `ExtLink` took no class and a rule naming
- * `.ext-ref` is the one thing this stylesheet is tested not to do. What that bought
- * was a pill inside a pill once the question hand-off became a `DesktopLink` and
- * arrived wearing the button kit: two borders, two radii and two grounds on one
- * control. The wrapper is gone and the seam is the `look` prop, which is the same
- * bargain `DesktopLink` already made.
- *
- * One word and a mark each. `Raise an issue` and `Got a question?` were two
- * sentences in the same weight and the same ink, a hand's width apart, and read as
- * one run of small print; the punctuation is what tells them apart at a glance,
- * since it is the difference between them — one files, one asks. It carries that
- * difference alone now: the accent edge the question wore was the wrapper's, and a
- * tone is the one thing `className` on a button may not carry.
+ * The bar's two ways out — file one, or ask one — drawn together at the right-hand end
+ * beside the readings. **Beside each other, always**: they are the same moment, and split
+ * up the expensive one ends up the only one on the bar.
  */
 function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   // Local state and not `Place`: a half-typed report is not somewhere you can come
@@ -310,12 +183,8 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * What the Environments chip draws: the worst reading, said in one count and one
- * word, and the sentence behind it.
- *
- * The fold is exported for the tests, like {@link usageReading}'s: this is the
- * whole of the chip's judgement — which reading is worst, and what to call it — and a rank
- * that drifts is a bar reporting an outage as an amber.
+ * What the Environments chip draws: the worst reading, said in one count and one word, and
+ * the sentence behind it.
  */
 interface EnvironmentsReading {
   /** `1 red`, `2 not well`, `1 no answer`, `4 well`. */
@@ -328,12 +197,9 @@ interface EnvironmentsReading {
 }
 
 /**
- * Worst first, and an **untiered `unhealthy` ranks with a red**: an unstated
- * severity is not a reason to rank an outage below one that stated it, which is
- * the card's rule for the tone read as an ordering.
- *
- * `unknown` sits below both because it is not a claim that anything is wrong —
- * and above `healthy` because it is not a claim that anything is right.
+ * Worst first, and an **untiered `unhealthy` ranks with a red**: an unstated severity is
+ * not a reason to rank an outage below one that stated it, which is the card's rule for the
+ * tone read as an ordering.
  */
 function healthRank(reading: EnvironmentHealthReading): number {
   if (reading.state === 'unhealthy') return reading.tier === 'orange' ? 1 : 0;
@@ -341,27 +207,18 @@ function healthRank(reading: EnvironmentHealthReading): number {
   return 3;
 }
 
-/** What one reading is called on the chip — the tier where it named one, else the state's word. */
+/**
+ * What one reading is called on the chip — the tier where it named one, else the state's
+ * word.
+ */
 function healthWord(reading: EnvironmentHealthReading): string {
   if (reading.tier !== null) return reading.tier;
   return reading.state === 'healthy' ? 'well' : reading.state === 'unknown' ? 'no answer' : 'not well';
 }
 
 /**
- * Fold the readings to the one thing a glance can settle: is anything out there
- * broken, and how many.
- *
- * **The value is a count and a word, never a bare number.** `Env 1` would leave
- * an operator opening the card to find out which of three quite different things
- * it meant, which is the only thing they wanted to know.
- *
- * The count is of environments sharing the *worst* word rather than of every
- * environment that is not well, so `2 red` and `1 orange` never add up into a
- * single figure that describes neither.
- *
- * `unknown` takes the amber the orange takes and is told apart by its word, which
- * is the card's pairing exactly: a check that could not answer is a thing to look
- * at, and drawing it green or red would be claiming an answer it did not give.
+ * Fold the readings to the one thing a glance can settle: is anything out there broken, and
+ * how many.
  */
 export function environmentsReading(readings: readonly EnvironmentHealthReading[], now: number): EnvironmentsReading {
   const worst = [...readings].sort((a, b) => healthRank(a) - healthRank(b))[0]!;
@@ -386,29 +243,10 @@ export function environmentsReading(readings: readonly EnvironmentHealthReading[
 }
 
 /**
- * The Environments chip — **drawn only while something out there is not well**,
- * and beside the fleet cap rather than on the overview.
- *
- * It is the one reading on this bar that comes and goes, which is the opposite of
- * the strip's own rule that a quiet reading is dimmed and never removed. The rule
- * holds for gauges of the fleet: a fault count that vanished at zero is a count an
- * operator has to hunt for on the day it moves. This is not one. An environment is
- * well nearly all of its life and there is nothing to do about it when it is, so a
- * permanent `3 well` is a chip earning its width on the days it says nothing —
- * while an outage is the one thing on this bar that should be impossible to miss.
- * Its absence *is* the healthy reading, in the same way the rack's absence of a red
- * PR is.
- *
- * Beside the fleet cap for the same reason the countdown is: both are the state of
- * the world the fleet is dispatching into, read left to right — what the fleet is
- * allowed to do, when it next gets to, and whether where it ships is up.
- *
- * Nothing here re-decides anything. The word is the check's own tier, the count is
- * of environments sharing it, and the reasons ride the `title` verbatim. **Which**
- * environment, and what each check said, is one press away — the Environments panel,
- * the same one the menu row opens, because two surfaces drawing one check's
- * sentences are two places for them to disagree.
- * → docs/spec/24-environments.md#in-the-cockpit
+ * The Environments chip — **drawn only while something out there is not well**, and beside
+ * the fleet cap rather than on the overview. Nothing here re-decides anything — the word is
+ * the check's own tier and the reasons ride the `title` verbatim. →
+ * docs/spec/24-environments.md#in-the-cockpit
  */
 function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
   const readings = view.state.environmentHealth ?? [];
@@ -435,30 +273,9 @@ function Environments({ view, actions }: { view: CockpitView; actions: CockpitAc
 }
 
 /**
- * The pulse countdown, and the way to force one — drawn **inside the fleet reading,
- * beside the pause control** rather than as a chip of its own further along the bar.
- *
- * The two are one subject. Pause is the control that stops the next dispatch
- * decision from happening and this is the clock counting down to it, so a reader
- * asking "is anything about to happen" was reading two separated chips that only
- * make sense together. Beside it they are one gauge, read left to right: what the
- * fleet is allowed to do, and when it next gets to.
- *
- * **Beside and not under.** Stacking it was tried and reads worse: the bar is a
- * single row of chips at one height, and a two-row gauge in it is a gauge that has
- * grown a row whatever the pixels say. Inline it costs the bar nothing and stays on
- * the baseline the readings share.
- *
- * **It carries no label.** "Scan" named the mechanism, and the mechanism is not the
- * question — `47s`, `paused` and `held` each say what they are, in the one spot
- * where the countdown is the only thing that could be counting down. The word cost
- * a third of the chip's width to restate the row it was in. The sentence it carried
- * is the `title`, which is where the two states that are *not* a countdown explain
- * themselves.
- *
- * It acts rather than opening a panel, so it carries no chevron: a reading that
- * opens something and a reading that does something are different promises, and the
- * chevron is the only thing that says which.
+ * The pulse countdown, and the way to force one — drawn **inside the fleet reading, beside
+ * the pause control**, because the two are one subject: what the fleet is allowed to do,
+ * and when it next gets to.
  */
 function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const stopped = view.pulseHeld || view.state.control.paused;
@@ -482,20 +299,8 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * Where the harness's own build stands — the one reading in this menu that is about
- * the process rather than the work.
- *
- * It wears the ordinary reading chrome and **stays in place at every state**,
- * including the one it spends almost all its life in: `current`, muted, saying
- * nothing. That is the whole design. A notification that appears only when there is
- * news is one an operator has to notice; a gauge in a fixed spot is one they can
- * glance at, and the mute is what keeps it from competing with the readings beside
- * it for the 99% of the time nothing has changed.
- *
- * It is deliberately not the recovery banner's treatment. That is a stop sign, and
- * it is loud because the harness is running *no cycles* while it is up. An update
- * being available stops nothing, so borrowing the banner would say something untrue
- * — and after the second time, be scrolled past.
+ * Where the harness's own build stands — the one reading in this menu about the process
+ * rather than the work.
  */
 function buildReading(view: CockpitView): MenuReading {
   const build = view.state.build;
@@ -519,16 +324,8 @@ function buildReading(view: CockpitView): MenuReading {
 }
 
 /**
- * Whether anything is running on this machine, and which goal's code it is.
- *
- * A reading rather than a nav tab: it is a state of the operator's own machine, not
- * a surface work happens on, and `TABS` is deliberately the ones that are. Quiet
- * when nothing is up — which is most of the time, and is the reading rather than
- * the absence of one.
- *
- * The **goal number** is the value, because that is the question. "Running" alone
- * would leave an operator opening the panel to find out whether it is the goal they
- * are looking at, which is the only thing they wanted to know.
+ * Whether anything is running on this machine, and which goal's code it is. Quiet when
+ * nothing is up, which is the reading rather than the absence of one.
  */
 function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const run = view.state.localRun;
@@ -558,20 +355,14 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
 }
 
 /**
- * How stale a limits reading has to be before the chip says so beside the figures.
- *
- * The reading is turn-bound — it arrives only when an agent takes a turn — so an
- * idle fleet's ages while the account's real windows keep moving underneath it:
- * an operator's own Claude Code spends from the same allowance. Ten minutes is
- * about a turn. Under it the numbers are what the account looks like now; over it
- * they are history, and the chip has to stop implying otherwise.
- * → docs/spec/18-observability.md
+ * How stale a limits reading has to be before the chip says so beside the figures. →
+ * docs/spec/18-observability.md
  */
 const USAGE_STALE_MS = 10 * 60 * 1000;
 
 /**
- * One window's slot on the chip. Both are always drawn and always in the same
- * order — see {@link usageReading}.
+ * One window's slot on the chip. Both are always drawn and always in the same order — see
+ * {@link usageReading}.
  */
 interface UsageSlot {
   /** `5h` / `7d`, drawn above-left of the figure it labels. */
@@ -582,7 +373,10 @@ interface UsageSlot {
   binds: boolean;
 }
 
-/** What the Usage chip draws: the figures, the tone they carry, and the sentence behind them. */
+/**
+ * What the Usage chip draws: the figures, the tone they carry, and the sentence behind
+ * them.
+ */
 interface UsageReading {
   /** The two windows, five-hour then weekly. Empty when nothing reported either. */
   slots: UsageSlot[];
@@ -604,30 +398,10 @@ function resetIn(iso: string, now: number): string {
 }
 
 /**
- * The account's allowance as one reading — **both** subscriber windows where an
- * agent has reported them, and the rolling cost where none has.
- *
- * **Both windows, because either one parks the fleet.** A chip carrying only the
- * five-hour reads fine on the morning a weekly allowance runs out, which is the
- * failure a gauge exists to prevent.
- *
- * **Five-hour left, weekly right, always.** Ordering them by which is worse would
- * put the number an operator glances at without reading in a slot that moves, so
- * the *position* is fixed and the **weight** carries which one bites: the window
- * nearer its limit is `binds`, lettered at full strength and the one the tone reads,
- * while the other sits dim. Without that mark the chip is two numbers and a shrug —
- * the comparison is precisely the work it exists to have already done.
- *
- * **A window nothing reported is an em dash, never `0%`.** Each is independently
- * nullable on the wire, and a zero would claim a fresh allowance nobody measured.
- * Where *neither* was reported — API-key auth, an older CLI, a fleet that has not
- * taken a turn — there is no pair to draw, so the five-hour cost stands in: it is
- * self-computed and always there, and a chip that went blank would leave a hole in
- * the bar on the deployments least able to spare one.
- *
- * **A stale reading is drawn stale, never hidden and never freshened.** No probe can
- * ask the account directly, so the honest chip is the figures with their age on them.
- * → docs/spec/10-agent-runtimes.md#the-account-usage-windows
+ * The account's allowance as one reading — **both** subscriber windows where an agent has
+ * reported them, and the rolling cost where none has. **A stale reading is drawn stale,
+ * never hidden and never freshened.** →
+ * docs/spec/10-agent-runtimes.md#the-account-usage-windows
  */
 export function usageReading(usage: CockpitView['state']['usage'], now: number): UsageReading {
   const limits = usage.rateLimits;
@@ -674,29 +448,10 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
 }
 
 /**
- * What the account has left, in the one row an operator glances at.
- *
- * It leads the readings because it is the only gauge here that can stop everything:
- * an allowance that runs out parks the whole fleet, and learning that from a parked
- * agent's row is learning it afterwards. Beside the fleet cap it reads as the second
- * half of one sentence — what the fleet is allowed to run, and what the account has
- * left to run it on.
- *
- * **A way-in now, and the only reading here whose destination is a whole page.**
- * It was a plain reading for as long as the honest answer to "spent on what?" was
- * nothing — the chip could give a percentage and the page had no span that matched
- * it. The `session` window is that span: the same five hours the account is
- * metering, anchored to the reset this chip already reads
- * ([18](../../../docs/spec/18-observability.md#the-window)). A gauge that can stop
- * the whole fleet and cannot be asked what spent it is the state this replaces, so
- * the chevron is owed rather than promised.
- *
- * It carries the same title either way: the click is an *addition* to the reading,
- * and an operator who has always glanced at the numbers and moved on loses nothing.
- *
- * The slots are `<i>` and their labels `<em>`, deliberately: `.cn-read span` is a
- * *descendant* rule and would letter a wrapping `<span>` as a second chip label —
- * uppercase, faint and 11px — which is the reading's own name, not a window's.
+ * What the account has left, in the one row an operator glances at — the only gauge
+ * here that can stop everything. It is also a way-in to a whole page: the `session`
+ * window is the same five hours the account meters, anchored to the reset this chip
+ * already reads ([18](../../../docs/spec/18-observability.md#the-window)).
  */
 function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
@@ -757,11 +512,7 @@ function originIssueNumber(originRef: string): number | null {
 interface MenuReading {
   value: string | null;
   tone: 'ill' | 'watch' | null;
-  /**
-   * A zero, or a state saying nothing — dimmed, never removed. The strip's own
-   * rule, and it survives the fold: a row that vanished at zero would be a
-   * reading an operator had to hunt for on the days it had nothing to say.
-   */
+  /** A zero, or a state saying nothing — dimmed, never removed. */
   quiet: boolean;
   title: string;
 }
@@ -772,36 +523,17 @@ interface MenuEntry extends MenuReading {
   icon: 'alert' | 'rocket' | 'download' | 'globe' | 'bolt' | 'book' | 'gear';
   label: string;
   /**
-   * Something is waiting on this row that its value cannot say — an unsaved theme
-   * edit on Config, and so far only that (issue #680). A **dot and not a count**,
-   * for the reason Config carries no value at all: what is pending is a fact, not a
-   * quantity.
+   * Something is waiting on this row that its value cannot say — an unsaved theme edit on
+   * Config, and so far only that (issue #680).
    */
   pending?: boolean;
   onPick: () => void;
 }
 
 /**
- * The seven ways-in the bar keeps folded away, in reading order.
- *
- * They are together because none of them is a gauge an operator glances at on
- * every pulse: faults and briefs are counts that are usually zero, the build is
- * `current` nearly all its life, and Record and Config are aimed at rather than
- * read. Spread across the strip they cost the width that pushed the bar into a
- * second row at laptop sizes; folded, each keeps its count — the menu's own
- * button carries the dot when any of them has something to say, so nothing that
- * used to be visible has become invisible.
- *
- * Exported for the tests, like {@link usageReading} and {@link environmentsReading}:
- * the rows are behind a button an operator opens, so a rendered bar cannot say
- * whether the fold that fills them is right — and every one of them was an
- * assertion on the bar's own markup before it moved in here.
- *
- * **Environments is absent, not zeroed, where no environment declares a check** —
- * the card's own exception, for its reason: a row reading `0 well` on a deployment
- * that configured none announces a feature as broken. It opens the overview rather
- * than a panel of its own, because the reasons and the per-environment rows are the
- * card's and a second surface drawing them is a second place for them to disagree.
+ * The seven ways-in the bar keeps folded away, in reading order. **Environments is absent,
+ * not zeroed, where no environment declares a check** — a row reading `0 well` announces a
+ * feature as broken.
  */
 export function menuEntries(view: CockpitView, actions: CockpitActions, themeUnsaved = false): MenuEntry[] {
   const faults = view.state.errors.length;
@@ -904,15 +636,8 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
 }
 
 /**
- * The bar's menu: one button, and the seven ways-in behind it.
- *
- * Closed on `Escape` and on focus leaving the group, which is the pair a keyboard
- * and a pointer each need — a document-level listener would be a third thing to
- * unsubscribe on a component the shell mounts and unmounts with the connection.
- *
- * The button takes a dot whenever a row inside has a tint, so the one thing the
- * fold could have cost — noticing a fault or an upgrade without opening anything —
- * is bought back in the spot the readings used to occupy.
+ * The bar's menu: one button, and the seven ways-in behind it. The button takes a dot
+ * whenever a row inside has a tint, so the fold costs no visibility.
  */
 function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -976,26 +701,9 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
 }
 
 /**
- * The control-room strip: ident, the nav, the pulse, the fleet cap, and the
- * readings. The nav is here because this is the only row of the shell that never
- * scrolls — everything else lives inside `.cn-sit`, which does. The ident is the
- * wordmark and nothing else; the two ways off this bar to a tracker — the compose
- * modal where the harness can file, and the external form it falls back to where it
- * cannot — ride the readings group at the other end ({@link Asks}).
- *
- * Each reading is one subject stated once, in a plain text-and-number face — the
- * console has no icon set of its own to draw from. None reaches `api.js`: every
- * one is a method on `CockpitActions`, and the fleet cap is the shared
- * `FleetControl`, which is already on that seam.
- *
- * **Spend, Yield and Output are no longer here.** They were three readings of one
- * subject — what the fleet cost, what it landed, how much of that survived — and
- * each of the three had grown a version of the other two on its own panel. They
- * are the Insights destination now, which is in the nav: a reading you go to and
- * come back from rather than a number you glance at, and one whose window an
- * operator changes rather than accepts. What is left on this bar is what a glance
- * can actually settle — counts of things waiting on a person, and the state of
- * this build. → docs/spec/17-cockpit.md#insights
+ * The control-room strip: ident, the nav, the pulse, the fleet cap, and the readings. The
+ * nav is here because this is the only row of the shell that never scrolls. →
+ * docs/spec/17-cockpit.md#insights
  */
 export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { state } = view;

@@ -30,13 +30,9 @@ export const AGENT_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The `agents` row and the three tables that hang off it: `usage_events` (the
- * cost delta behind each rolling window), `agent_flags` (artifacts an agent
- * surfaced) and `agent_files` (every path the file-events hook saw it write).
- *
- * Together because they are written together: {@link recordAgentUsage} folds a
- * cumulative report onto the agent row *and* appends the delta in one breath, and
- * a flag or a file is meaningless without the agent it is attributed to.
+ * The `agents` row and the three tables that hang off it: `usage_events` (the cost delta
+ * behind each rolling window), `agent_flags` (artifacts an agent surfaced) and `agent_files`
+ * (every path the file-events hook saw it write). Together because they are written together.
  */
 export class AgentStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -90,23 +86,17 @@ export class AgentStore {
   }
 
   /**
-   * Stamp (or clear) the moment an agent was seen working *after* it parked.
-   * Separate from {@link updateAgent} because it is deliberately not part of the
-   * status patch: this records an observation about a park, and folding it in
-   * would invite callers to set it alongside a status they think it implies.
+   * Stamp (or clear) the moment an agent was seen working *after* it parked. Deliberately not
+   * part of {@link updateAgent}'s status patch: it records an observation, not a status.
    */
   setAgentResumed(id: string, at: string | null): void {
     this.ctx.db.prepare(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
   }
 
   /**
-   * Count one automatic re-attach after a mid-run crash, returning the new total
-   * (issue #318). Incremented in SQL over a `COALESCE`, so a row written before
-   * the column existed counts from zero rather than staying null forever.
-   *
-   * Never cleared. The budget is the agent's whole life, not its current launch:
-   * a reset on progress would let an agent that crashes once per turn resume
-   * without limit, which is the loop the bound exists to stop.
+   * Count one automatic re-attach after a mid-run crash, returning the new total. Incremented
+   * over a `COALESCE`, so a row from before the column counts from zero rather than staying
+   * null. **Never cleared** — the budget is the agent's whole life, not its current launch.
    */
   countAgentResumeAttempt(id: string): number {
     const row = this.ctx.db
@@ -127,10 +117,8 @@ export class AgentStore {
   }
 
   /**
-   * Fold a session's *cumulative* usage report onto the agent row, and record
-   * the cost delta since the previous report as a timestamped `usage_events`
-   * row — so rolling account windows (5h/7d) are a plain SUM later, with no
-   * delta re-derivation.
+   * Fold a session's *cumulative* usage report onto the agent row and append the delta since
+   * the previous report to `usage_events`, so rolling account windows are a plain SUM later.
    */
   recordAgentUsage(id: string, usage: AgentUsage): void {
     const existing = this.getAgent(id);
@@ -150,8 +138,8 @@ export class AgentStore {
                 num_turns=@numTurns WHERE id=@id`,
       )
       .run({ id, ...next });
-    // Clamp: a cumulative total should never regress, but a restarted CLI would
-    // reset it — never let that poison the window sum with a negative delta.
+    // Clamp: a restarted CLI resets the cumulative total, which must never reach the window
+    // sum as a negative delta.
     const delta = Math.max(0, (usage.costUsd ?? 0) - (existing.costUsd ?? 0));
     if (delta > 0) {
       this.ctx.db
@@ -163,17 +151,9 @@ export class AgentStore {
   /**
    * Record an agent's own one-line account of what it is doing (`note_progress`).
    *
-   * **Latest value, not a stream** — which is why this is two columns on the agent
-   * row and not a table. One row per call would be an audit trail, and that audit
-   * trail already exists: every call appears in the agent's transcript as a tool
-   * use, in order, with everything around it for context. A second, lossier copy
-   * in SQLite would answer nothing the transcript doesn't. What the transcript
-   * cannot answer cheaply — from a fleet view, for eight agents at once — is
-   * "where is this one up to *now*", so exactly that is stored: overwritten each
-   * call, and read straight off {@link listAgents} with no new snapshot key.
-   *
-   * The note deliberately survives the agent: a finished agent's last note is the
-   * best one-line summary of the run there is, and it costs nothing to keep.
+   * **Latest value, not a stream**: two columns on the agent row, overwritten each call, so a
+   * fleet view can ask "where is this one up to now" cheaply. The per-call audit trail is the
+   * transcript. The note deliberately survives the agent as the run's one-line summary.
    */
   recordAgentNote(id: string, note: string): string {
     const at = this.ctx.now();
@@ -191,12 +171,8 @@ export class AgentStore {
   }
 
   /**
-   * The same rows {@link sumUsageCostSince} totals, oldest first and unaggregated
-   * — for the reader that needs *when* rather than *how much*.
-   *
-   * Bucketing is left to the caller rather than done in SQL: the windows a reader
-   * wants are its own business, and a `strftime` grouping here would fix one
-   * shape of answer in the store and force the next one to be a second query.
+   * The same rows {@link sumUsageCostSince} totals, oldest first and unaggregated — for the
+   * reader that needs *when* rather than *how much*. Bucketing is the caller's.
    */
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
     const rows = this.ctx.db
@@ -206,11 +182,8 @@ export class AgentStore {
   }
 
   /**
-   * The agents dispatched on the named tasks, newest first.
-   *
-   * Takes task ids rather than a goal, for {@link listFilesForAgents}' reason:
-   * the whole table is the read this exists to avoid, and which tasks belong to a
-   * goal is the tasks store's question. An empty list reads nothing at all.
+   * The agents dispatched on the named tasks, newest first. Takes task ids rather than a
+   * goal, so the whole table is never read; an empty list reads nothing at all.
    */
   listAgentsForTasks(taskIds: readonly string[]): Agent[] {
     if (taskIds.length === 0) return [];
@@ -318,25 +291,12 @@ export class AgentStore {
   }
 
   /**
-   * Every path the agents on one goal have written: `agent_files` joined out
-   * through `agents` to the task whose origin says which goal it was working,
-   * one row per path and newest first.
+   * Every path the agents on one goal have written, one row per path and newest first.
    *
-   * **Scoped by the goal's subtree** — the `issue:<n>` root and its `:plan`,
-   * `:appraisal`, `:assess`, `:retro` and `:part:<slug>` arms, which is the
-   * population `padOriginFor` already resolves. Asked as a prefix rather than
-   * re-derived from a second taxonomy, so this cannot drift from the pad's
-   * membership. The ref is `issue:<n>`, so it carries no `LIKE` wildcards.
-   *
-   * **Code tasks only**, `detectFileOverlaps`'s narrowing for its reason: a desk
-   * agent works in a scratch directory, so a retro's `write-up.md` is not a file
-   * the repository has. Listing it under a heading about where a goal's code
-   * lives would be a *false* statement rather than a stale one.
-   *
-   * **One row per path, dated by the last write.** The row is already deduped per
-   * (agent, path) with its stamp bumped on rewrite, so the newest row for a path
-   * is the one that dates it, and the origin returned is whose that write was.
-   * Ties break on `rowid` so the same database renders the same list twice.
+   * Scoped by the goal's subtree as an `issue:<n>` prefix rather than a second taxonomy, so
+   * it cannot drift from the pad's membership (the ref carries no `LIKE` wildcards). **Code
+   * tasks only**: a desk agent works in a scratch directory, so its files are not in the
+   * repository at all. One row per path, dated by the last write, ties broken on `rowid`.
    */
   listGoalFiles(goalRef: string): GoalFile[] {
     const rows = this.ctx.db
@@ -357,34 +317,16 @@ export class AgentStore {
   }
 
   /**
-   * Which **other** goals have already been in `paths`, and what each one's
-   * retrospective said — {@link listGoalFiles}'s join with a goal on the far side
-   * of it rather than the near one (issue #354, phase 2).
+   * Which **other** goals have already been in `paths`, and what each one's retrospective
+   * said — {@link listGoalFiles}'s join with a goal on the far side of it.
    *
-   * **"Closed" is spelled `has a retrospective`, and that is not a shortcut.** An
-   * issue's open/closed state is a *world* fact, and the briefing this feeds
-   * refuses those on principle: pasted into a prompt it would be a stale second
-   * reading of something `world_read` answers properly. A retrospective is a row
-   * this database owns, written by rule `issue-retro` only once a goal is done —
-   * so it is the harness's own stored answer to the same question, and it is also
-   * the thing being handed over. The gate and the payload are one join.
-   *
-   * **The liveness test is dropped, not inverted.** `detectFileOverlaps` scopes to
-   * concurrently-live agents because it is answering "is this happening now"; this
-   * asks who has been here before. A goal still being worked is excluded anyway, by
-   * the retrospective gate rather than by a second liveness predicate — one reading
-   * of "finished", not two.
-   *
-   * **Code tasks only, and the subtree is a prefix**, both {@link listGoalFiles}'s
-   * rules for its reasons. The prefix is built from `retrospectives.origin_ref`,
-   * which is always the `issue:<n>` root (`retroSubmitOrigin` resolves it), so it
-   * carries no `LIKE` wildcards and `issue:1` never reaches `issue:12`.
-   *
-   * **No ranking.** Neighbours come back by the recency of their last write and
-   * ties break on the ref, which is a stored timestamp and a stored key. Ordering
-   * them by how many paths they share would be a relevance score — the second
-   * opinion about somebody else's work that `priorWork.ts` and `retroDossier` both
-   * refuse — so the count is stated by the reader and never sorts the list.
+   * "Closed" is spelled *has a retrospective*: an issue's open/closed state is a world fact
+   * this briefing refuses, and the retrospective is both the gate and the payload, so they
+   * are one join. There is no separate liveness test — the retrospective gate is the one
+   * reading of "finished". Code tasks only, and the subtree is a prefix built from
+   * `retrospectives.origin_ref` (always the `issue:<n>` root), so `issue:1` never reaches
+   * `issue:12`. **No ranking**: recency of last write, ties on the ref; a shared-path count
+   * would be a relevance score, and the reader states it rather than sorting on it.
    */
   listGoalNeighbours(goalRef: string, paths: string[]): GoalNeighbour[] {
     if (paths.length === 0) return [];
@@ -403,14 +345,13 @@ export class AgentStore {
           ORDER BY created_at DESC, r.origin_ref ASC, f.path ASC`,
       )
       .all(goalRef, ...paths) as { goal_ref: string; summary: string; path: string; created_at: string }[];
-    // Folded here rather than with a `group_concat`, because a path is arbitrary
-    // text and any separator that joins it is one a path may contain.
+    // Folded here rather than with `group_concat`: a path may contain any separator.
     const byGoal = new Map<string, GoalNeighbour>();
     for (const row of rows) {
       const seen = byGoal.get(row.goal_ref);
       if (seen) seen.sharedPaths.push(row.path);
-      // Rows arrive newest-first, so the first one for a goal is the write that
-      // dates it and insertion order is the order the caller renders.
+      // Rows arrive newest-first, so the first for a goal dates it and insertion order is
+      // the order the caller renders.
       else
         byGoal.set(row.goal_ref, {
           goalRef: row.goal_ref,
@@ -423,16 +364,10 @@ export class AgentStore {
   }
 
   /**
-   * Every recorded file written by the named agents, newest first — the overlap
-   * detector's feed.
-   *
-   * Takes the agent ids rather than answering the whole table, because the whole
-   * table is what it used to answer: `agent_files` grows for the life of a
-   * deployment and nothing ever deletes from it, so an unbounded read here was a
-   * cost the snapshot paid on every poll for a reading only concurrent agents can
-   * contribute to. The caller names the window
-   * (`OVERLAP_AGENT_WINDOW` in `src/fileOverlap.ts`); an empty list reads nothing
-   * at all.
+   * Every recorded file written by the named agents, newest first — the overlap detector's
+   * feed. Takes agent ids because `agent_files` grows for the life of a deployment and
+   * nothing deletes from it; the caller names the window (`OVERLAP_AGENT_WINDOW` in
+   * `src/fileOverlap.ts`), and an empty list reads nothing at all.
    */
   listFilesForAgents(agentIds: readonly string[]): AgentFile[] {
     if (agentIds.length === 0) return [];
@@ -498,10 +433,8 @@ function rowToAgent(r: AgentRow): Agent {
     costUsd: r.cost_usd,
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
-    // Null on every row written before the columns existed, which is the truth
-    // there: those runs measured a gross figure and nothing about its cache
-    // share. Not defaulted to 0 — that would report a 0% hit rate for history
-    // that was never measured.
+    // Null on rows from before the columns existed: those runs measured nothing about their
+    // cache share. Not defaulted to 0, which would report a 0% hit rate for unmeasured history.
     cacheReadTokens: r.cache_read_tokens,
     cacheCreationTokens: r.cache_creation_tokens,
     numTurns: r.num_turns,

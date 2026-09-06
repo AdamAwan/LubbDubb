@@ -25,17 +25,11 @@ import type { StoreContext } from './context.js';
  * ledger of who has been told what, `obstacle_notices`, and the goals parked
  * behind a row, `obstacle_blocks`.
  *
- * **The uniqueness constraint is on a key's `value`, and not on `(kind, value)`.**
- * The value is the identity; the kind is a column beside it. Two agents may
- * reasonably disagree about whether something is a flaking test or a broken check,
- * and if the kind were part of the index that disagreement would split one obstacle
- * into two — the prose problem this store replaces, rebuilt with a smaller
- * vocabulary. `check:test (windows)` and `test:test (windows)` are one key.
- *
- * **The claim is made inside the synchronous write** `CLAUDE.md` already
- * guarantees: insert the keys, read back which obstacle won, attach the loser's
- * report to the winner. Two agents reporting in the same millisecond cannot both
- * create a row, and neither waits.
+ * **The uniqueness constraint is on a key's `value`, never on `(kind, value)`** —
+ * the value is the identity, so `check:test (windows)` and `test:test (windows)`
+ * are one key and a disagreement about kind cannot split one obstacle into two.
+ * **The claim is made inside the synchronous write**: insert the keys, read back
+ * which obstacle won, attach the loser's report to the winner.
  *
  * The tables were new once, and being new *once* is what stops that keeping them
  * exempt: `obstacles.ended_by` is the first column added to one of them after the
@@ -173,16 +167,10 @@ export class ObstacleStore {
   constructor(private readonly ctx: StoreContext) {}
 
   /**
-   * File a report, or record that somebody else has now seen what is already on
-   * the board.
-   *
-   * One entry point for both because they are one act from the reporter's side: an
-   * agent in pain calls the tool, and whether anybody else has hit the same thing
-   * is exactly what it cannot know. **The report is filed either way** and never
-   * held pending anything — a round trip is a report that may never come back.
-   *
-   * Everything below happens in one transaction, which is what makes the race
-   * unreachable rather than unlikely.
+   * File a report, or record that somebody else has now seen what is already on the
+   * board — one entry point, because from the reporter's side it is one act.
+   * **The report is filed either way**, never held pending anything. All of it is
+   * one transaction, which makes the race unreachable rather than unlikely.
    */
   recordObstacleSighting(report: ObstacleReport, observer: ObstacleObserver): ObstacleOutcome {
     return this.ctx.db.transaction((): ObstacleOutcome => {
@@ -194,14 +182,12 @@ export class ObstacleStore {
       // than attach a sighting to an id no reader can resolve.
       const filed = existing === null;
       const obstacle = existing ?? this.insertObstacle(report, at);
-      // Insert the keys *after* the row exists, and read back which obstacle each
-      // value actually landed on: a value another report claimed first stays that
-      // report's, and this one's sighting follows it there.
+      // Keys after the row exists, then read back where each value landed: a value
+      // another report claimed first stays that report's, and this sighting follows it.
       const winner = this.attachKeys(obstacle.id, report.keys, at);
       const home = winner === obstacle.id ? obstacle : (this.getObstacle(winner) ?? obstacle);
-      // The loser's report goes to the winner — its keys included, so the row that
-      // stood carries every way into the thing rather than only the first one
-      // anybody used.
+      // The loser's report goes to the winner, keys included, so the row that stood
+      // carries every way into the thing.
       if (home.id !== obstacle.id) this.foldInto(obstacle.id, home.id);
       const sightingId = this.insertSighting(home.id, observer, matched?.matchedBy ?? 'fresh', at);
       const voices = this.obstacleVoices(home.id);
@@ -213,9 +199,8 @@ export class ObstacleStore {
         voices,
         matchedBy: matched?.matchedBy ?? 'fresh',
         sightingId,
-        // Only where nothing bound. A report that joined a row has already found
-        // the one it meant, and offering it neighbours would be inviting a second
-        // guess at a question the keys answered.
+        // Only where nothing bound: a report that joined a row already found the one
+        // it meant.
         near: [
           ...(matched !== null
             ? []
@@ -226,12 +211,9 @@ export class ObstacleStore {
                 lookup,
                 exclude: home.id,
               })),
-          // The suggestions standing *on the row this landed on*, which are
-          // answered whether or not a key bound. They are not a second guess at
-          // the question the keys answered: they are a merge somebody — the model
-          // desk, or a key another row already held — proposed about this row
-          // itself, and an agent's answer is the only place one is ever offered
-          // for confirmation. It is still only a suggestion, confirmed by id.
+          // Suggestions standing on the row this landed on, answered whether or not a
+          // key bound: an agent's answer is the only place one is offered for
+          // confirmation. Still only a suggestion, confirmed by id.
           ...this.listObstacleSuggestions(home.id),
         ],
       };
@@ -240,16 +222,10 @@ export class ObstacleStore {
 
   /**
    * Claim the one notice this agent may ever be sent about this obstacle, and say
-   * whether the claim was won.
-   *
-   * **The claim comes before the message, not after it.** *Once per agent per
-   * obstacle, ever* is the rule the mid-session channel is worth reading for, and
-   * the failure it guards against is a notice arriving twice — which reads as a
-   * second problem. A row written after a successful send would leave a crash
-   * between the two able to send it again; written first, the same crash loses a
-   * notice to an agent that is in all likelihood already gone. The primary key
-   * makes the same claim unwinnable twice, so two desks on one pulse cannot both
-   * take it either. → `docs/spec/27-obstacles.md#delivery`
+   * whether the claim was won. **The claim comes before the message, never after**:
+   * written after a send, a crash between the two resends it, and a notice arriving
+   * twice reads as a second problem. The primary key makes the claim unwinnable
+   * twice. → `docs/spec/27-obstacles.md#delivery`
    */
   claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
     const result = this.ctx.db
@@ -267,13 +243,10 @@ export class ObstacleStore {
   }
 
   /**
-   * How many notices have actually gone out, over the whole board and all time.
-   *
-   * The one *told* this subsystem keeps a record of. Dispatch-time delivery
-   * (`src/obstacles/delivery.ts`) writes nothing — it is a paragraph appended to a
-   * prompt — so a page that summed the two would be drawing a number half of which
-   * nothing counted. Read only by the cockpit, and drawn under the name of what it
-   * actually counts. → `docs/spec/27-obstacles.md#in-the-cockpit`
+   * How many notices have gone out, over the whole board and all time — the one
+   * *told* this subsystem records. Dispatch-time delivery
+   * (`src/obstacles/delivery.ts`) writes nothing, so the two must never be summed.
+   * → `docs/spec/27-obstacles.md#in-the-cockpit`
    */
   obstacleNoticesSent(): number {
     const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
@@ -281,21 +254,14 @@ export class ObstacleStore {
   }
 
   /**
-   * Take a standing row for the harness, or say it was already taken.
+   * Take a standing row for the harness, or say it was already taken. **The claim is
+   * the transition, made transactionally on `owner IS NULL`**, so two desks on one
+   * pulse cannot both win it; nothing an agent calls reaches this.
    *
-   * **The claim is the transition, made transactionally on `owner IS NULL`** — so
-   * *do not all pile on* is a uniqueness constraint rather than an instruction, and
-   * two desks on one pulse cannot both win it. Nothing an agent calls reaches this:
-   * a lock an agent takes is a lock an agent forgets.
-   *
-   * It moves the row to `owned` **before** the owner exists, and that order is
-   * deliberate. Filing a ticket is a round trip to a provider, and a claim taken
-   * after it would let the pulse either side of that trip file a second ticket for
-   * one obstacle. The window is closed from the other end instead: a row left
-   * `owned` with no owner is released by {@link releaseObstacle} at the top of the
-   * next pass, so a crash mid-filing costs a pulse rather than a row nobody can
-   * ever own.
-   * → `docs/spec/27-obstacles.md#ownership`
+   * It moves the row to `owned` **before** the owner exists, so the round trip that
+   * files the ticket cannot produce a second one. The window closes from the other
+   * end: an `owned` row with no owner is released by {@link releaseObstacle} at the
+   * top of the next pass. → `docs/spec/27-obstacles.md#ownership`
    */
   claimObstacle(id: string): boolean {
     const at = this.ctx.now();
@@ -316,11 +282,9 @@ export class ObstacleStore {
   }
 
   /**
-   * Hand a claimed row back, and only one that was never filled.
-   *
-   * Guarded on `owner_ref IS NULL` rather than trusted to the caller: an `owned`
-   * row with an owner is a ticket somebody is working, and releasing one would put
-   * *do not fix this* back to *nobody has this* while an agent was on it.
+   * Hand a claimed row back, and only one that was never filled. Guarded on
+   * `owner_ref IS NULL`, never trusted to the caller: releasing a row with an owner
+   * would reopen it while an agent was on it.
    */
   releaseObstacle(id: string): void {
     this.ctx.db
@@ -329,10 +293,8 @@ export class ObstacleStore {
   }
 
   /**
-   * Park a goal behind an obstacle, replacing whatever it was parked behind.
-   *
-   * One row per goal — the obstacle the agent named is the one it could not get
-   * past, and a second would leave the desk asking which of them has to clear.
+   * Park a goal behind an obstacle, replacing whatever it was parked behind. One row
+   * per goal: a second would leave the desk asking which has to clear.
    */
   recordObstacleBlock(input: {
     originRef: string;
@@ -370,18 +332,11 @@ export class ObstacleStore {
   }
 
   /**
-   * End a row, and record which of the endings took it.
-   *
-   * Guarded on the states an ending may take, which is what keeps every ending
-   * honest at once: **`muted` is never moved** — an operator said never tell the
-   * fleet this, and a world reading that un-muted a row would be the harness
-   * arguing with them — and a row already `resolved` or `dormant` keeps the ending
-   * that first took it rather than being restamped by whichever sweep noticed
-   * second.
-   *
-   * `dormant` narrows further, in the caller's own predicate as well as here: decay
-   * is *nothing has said it*, which an owned row cannot be.
-   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   * End a row, and record which of the endings took it. Guarded on the states an
+   * ending may take: **`muted` is never moved**, and a row already `resolved` or
+   * `dormant` keeps the ending that first took it. `dormant` narrows further in the
+   * caller's own predicate — decay is *nothing has said it*, which an owned row
+   * cannot be. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
     const result = this.ctx.db
@@ -394,21 +349,12 @@ export class ObstacleStore {
   }
 
   /**
-   * Say never tell the fleet this, or take it back — the one control on this
-   * board that is a person's and only a person's.
-   *
-   * **It is the one state whose exit is you**, carved out by name in
-   * `OBSTACLE_STATES_A_PERSON_MUST_LEAVE`, so both halves are here rather than one
-   * of them being a state a sweep could reach. Guarded on the states
-   * `OBSTACLE_EXITS` actually declares the transition from, which is what keeps
-   * this from becoming a general `setState`: a row that has already ended is not
-   * reaching anybody to be silenced, and un-muting lands on `standing` because
-   * that is where the exits say it goes — an operator taking the silence off is
-   * saying tell the fleet again, and `sighted` would say the opposite.
-   *
-   * `ended_by` is cleared with the move for {@link setState}'s reason: a row being
-   * told to the fleet must not go on naming an ending that took it.
-   * → `docs/spec/27-obstacles.md#states`
+   * Say never tell the fleet this, or take it back — the one control on this board
+   * that is a person's and only a person's, and **the one state whose exit is you**
+   * (`OBSTACLE_STATES_A_PERSON_MUST_LEAVE`). Guarded on the states `OBSTACLE_EXITS`
+   * declares, so it cannot become a general `setState`; un-muting lands on
+   * `standing`, not `sighted`. `ended_by` is cleared with the move, for
+   * {@link setState}'s reason. → `docs/spec/27-obstacles.md#states`
    */
   muteObstacle(id: string, muted: boolean): boolean {
     const at = this.ctx.now();
@@ -427,14 +373,9 @@ export class ObstacleStore {
 
   /**
    * Promise to watch one condition, or say nothing where it is already promised.
-   *
-   * `INSERT OR IGNORE` against the UNIQUE on `(obstacle_id, check_name, branch)`:
-   * the harness re-reads the same red check every pulse it is still red, and a row
-   * per pulse would be a board of duplicate promises whose `met_at` columns
-   * disagreed about how far through the two readings the condition was.
-   *
-   * Nothing an agent calls reaches this. An agent naming a condition would be
-   * naming something nothing watches.
+   * `INSERT OR IGNORE` against the UNIQUE on `(obstacle_id, check_name, branch)`,
+   * or duplicate promises would disagree about `met_at`. Nothing an agent calls
+   * reaches this.
    */
   watchObstacleCondition(input: { obstacleId: string; kind: 'check-green'; checkName: string; branch: string }): void {
     this.ctx.db
@@ -454,14 +395,10 @@ export class ObstacleStore {
   }
 
   /**
-   * Stamp a condition as met by *this* reading, or clear it because this reading
-   * says it is not.
-   *
-   * The stamp is the first of the two consecutive real world readings a resolution
-   * needs, and clearing on an unmet reading is what makes them consecutive rather
-   * than merely two. Only the transitions are written: a condition met on ten
-   * readings running keeps the instant of the first, so the column says when the
-   * world started agreeing rather than when it was last asked.
+   * Stamp a condition as met by *this* reading, or clear it because this reading says
+   * it is not — clearing is what makes the two readings a resolution needs
+   * *consecutive*. Only transitions are written, so the column says when the world
+   * started agreeing rather than when it was last asked.
    */
   setObstacleConditionMet(id: string, met: boolean): void {
     if (!met) {
@@ -474,12 +411,9 @@ export class ObstacleStore {
   }
 
   /**
-   * Record the documentation job a note is being written up by.
-   *
-   * `OR IGNORE` on the obstacle's own primary key, so a note is written up **once,
-   * ever**: a write-up that was abandoned leaves the note standing to decay like
-   * anything else, where re-queueing it every pulse would be the subsystem whose
-   * point is not spending the fleet twice on one thing spending it on itself.
+   * Record the documentation job a note is being written up by. `OR IGNORE` on the
+   * obstacle's primary key, so a note is written up **once, ever**: an abandoned
+   * write-up leaves the note to decay rather than being re-queued every pulse.
    */
   recordObstacleWriteUp(obstacleId: string, jobId: string): void {
     this.ctx.db
@@ -505,12 +439,9 @@ export class ObstacleStore {
   }
 
   /**
-   * Stamp the pull request a write-up's job opened, once and never again.
-   *
-   * Before the verdict and separately from it, for the graduation sweep's reason:
-   * a write-up that lands and one that is closed unmerged both need the reference
-   * drawn, and the graph's memory of which job produced a pull request outlives
-   * neither.
+   * Stamp the pull request a write-up's job opened, once and never again — before the
+   * verdict and separately from it, since a write-up that lands and one closed
+   * unmerged both need the reference drawn.
    */
   noteObstacleWriteUpPr(obstacleId: string, prRef: string): void {
     this.ctx.db
@@ -532,25 +463,12 @@ export class ObstacleStore {
   }
 
   /**
-   * The rows the model desk has not read since somebody last said something about
-   * one.
+   * The rows the model desk has not read since somebody last said something about one.
    *
-   * **The inbox is a comparison and never a clock.** A reading records the row's
-   * own `lastSeenAt`, so a row is back in the inbox exactly when a further voice
-   * has landed words on it — which is the only thing that gives the desk anything
-   * new to read. A pass over a board nobody has said anything about is a pass that
-   * calls no model at all, which is what "only where the inbox is non-empty" buys.
-   *
-   * `sighted` and `standing` only. An `owned` row has its ticket, and a terminal
-   * or muted row is owed nothing by anybody — reading either would be spending a
-   * model call on prose nothing will ever be written from.
-   *
-   * **And only a row an agent has actually said something about.** Extraction is a
-   * language judgement over an agent's prose; the harness's own voice is *gated but
-   * never extracted*, because a prose pass over its sentence would happily turn the
-   * branch name in it into a `path` key that the check beside it then grounds —
-   * which is the harness carrying a row to `standing` on its own reading, through a
-   * door the rules close everywhere else.
+   * **The inbox is a comparison and never a clock**: a reading records the row's own
+   * `lastSeenAt`, so a row returns exactly when a further voice lands words on it.
+   * `sighted` and `standing` only, and **only a row an agent has actually spoken on**
+   * — the harness's own voice is gated but never extracted.
    * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   obstacleInbox(): ObstacleStanding[] {
@@ -584,15 +502,10 @@ export class ObstacleStore {
   }
 
   /**
-   * Record what the desk read, and that it has read this much of the row.
-   *
-   * Upserted rather than appended: a reading is a restatement of the whole row as
-   * its sightings stand now, and an operator asking what the desk made of
-   * something is asking about the words it holds today. The stamp is written even
-   * where every half of the reading came back empty — a row the desk could make
-   * nothing of is still a row it has read, and re-reading it every pulse would be
-   * the subsystem whose point is not spending the fleet twice on one thing
-   * spending it on itself.
+   * Record what the desk read, and that it has read this much of the row. Upserted
+   * rather than appended — a reading restates the whole row as its sightings stand
+   * now. The stamp is written even when the reading came back empty, or the row
+   * would be re-read every pulse.
    */
   recordObstacleReading(input: {
     obstacleId: string;
@@ -614,17 +527,10 @@ export class ObstacleStore {
 
   /**
    * Attach keys the desk read out of a row's own prose, and answer which of them
-   * named something another row already holds.
-   *
-   * **It never merges, and that is the whole of what makes this door safe.** A
-   * value another obstacle owns is left exactly where it is and reported back, so
-   * the desk can record it as a *suggestion* — deciding two reports are one
-   * obstacle is the job no model may do, and a key arriving from a model is not a
-   * back door to it. A value this row already holds is a no-op.
-   *
-   * The keys have been through the same three gates an agent's report goes
-   * through (`src/obstacles/keys.ts`), so a wrong one fails to resolve and falls
-   * back to prose.
+   * named something another row already holds. **It never merges**: a value another
+   * obstacle owns is left where it is and reported back as a suggestion, since
+   * deciding two reports are one obstacle is the job no model may do. The keys have
+   * already been through the three gates in `src/obstacles/keys.ts`.
    */
   addObstacleKeys(obstacleId: string, keys: readonly GatedKey[]): { added: number; taken: string[] } {
     return this.ctx.db.transaction((): { added: number; taken: string[] } => {
@@ -650,13 +556,9 @@ export class ObstacleStore {
   }
 
   /**
-   * Record that something thinks two rows are one obstacle.
-   *
-   * **A suggestion and never a merge**, which is why it is a row of its own rather
-   * than a key moving: a wrong merge hides one agent's report inside another's,
-   * and the swallowed report is answered *already owned* with nobody fixing it. An
-   * agent or an operator confirms this by id, or nobody does and the rows stay
-   * apart.
+   * Record that something thinks two rows are one obstacle. **A suggestion and never
+   * a merge** — a wrong merge hides one agent's report inside another's, answered
+   * *already owned* with nobody fixing it. Confirmed by id, or not at all.
    */
   suggestObstacleMerge(obstacleId: string, suggestedId: string, source: 'model' | 'key'): void {
     if (obstacleId === suggestedId) return;
@@ -669,11 +571,8 @@ export class ObstacleStore {
   }
 
   /**
-   * The rows suggested as this one, from **either** end of the pair.
-   *
-   * The pair is one suggestion however it was proposed: a desk reading row A and
-   * naming row B says nothing different from the same reading arriving the other
-   * way round, and an agent that landed on B is owed the line either way.
+   * The rows suggested as this one, from **either** end of the pair — the pair is one
+   * suggestion however it was proposed.
    */
   listObstacleSuggestions(obstacleId: string): NearCandidate[] {
     const rows = this.ctx.db
@@ -689,12 +588,9 @@ export class ObstacleStore {
 
   /**
    * Say what a row is *for* — a ticket somebody fixes, or a documentation change.
-   *
-   * Guarded on the row being one nothing has taken yet, which is what keeps this
-   * from being a state move wearing another name: a row an owner is on has a
-   * ticket filed against it, and turning that into a note would leave an agent
-   * dispatched for something the board no longer says exists. It answers whether
-   * the write took.
+   * Guarded on the row being one nothing has taken yet: turning an owned row into a
+   * note would leave an agent dispatched for something the board no longer holds.
+   * Answers whether the write took.
    */
   setObstacleKind(id: string, kind: ObstacleKind): boolean {
     const result = this.ctx.db
@@ -709,12 +605,8 @@ export class ObstacleStore {
 
   /**
    * The board as anything that reads it wants it: the row, its keys, how many
-   * independent voices carry it, and the goals that have said it.
-   *
-   * One read rather than a walk per row at each call site, and the voice count is
-   * {@link obstacleVoices}' own rather than a second fold of the sightings — the
-   * number that promotes a row and the number a repair dispatch is judged against
-   * are the same number.
+   * independent voices carry it, and the goals that have said it. The voice count is
+   * {@link obstacleVoices}' own, never a second fold of the sightings.
    */
   obstacleBoard(): ObstacleStanding[] {
     return this.listObstacles().map((obstacle) => {
@@ -758,18 +650,10 @@ export class ObstacleStore {
   }
 
   /**
-   * How many **independent** voices have said it.
-   *
-   * A voice is a goal, or the harness — and a goal is counted as a goal, never as
-   * an origin and never as an agent. One goal saying a thing twice is one voice;
-   * the harness observing the same transition on ten pulses is one voice, because
-   * the transition is the identity. A sighting with neither a goal nor a transition
-   * behind it counts as itself, which is the honest answer: nothing about it can be
-   * shown to be an echo of anything else.
-   *
-   * Sessions fold too: a re-dispatch inherits the conversation through `spawn`'s
-   * `resumeSessionId`, so an agent corroborating its own predecessor arrives
-   * carrying its session id.
+   * How many **independent** voices have said it. A voice is a goal — never an origin
+   * and never an agent — or the harness, whose identity is the transition. A sighting
+   * with neither counts as itself. Sessions fold too, so a re-dispatch corroborating
+   * its own predecessor is one voice.
    */
   obstacleVoices(obstacleId: string): number {
     const rows = this.listObstacleSightings(obstacleId);
@@ -800,9 +684,8 @@ export class ObstacleStore {
       id: `obs-${nanoid(8)}`,
       what: report.what,
       kind: report.kind,
-      // Never anything else on a first report. **One report is not evidence**, and
-      // it is the case the harness cannot tell apart from an agent mis-diagnosing
-      // its own breakage.
+      // Never anything else on a first report: **one report is not evidence**, and is
+      // indistinguishable from an agent mis-diagnosing its own breakage.
       state: 'sighted',
       ownerRef: null,
       until: report.untilHours === null ? null : new Date(Date.parse(at) + report.untilHours * 3_600_000).toISOString(),
@@ -824,12 +707,9 @@ export class ObstacleStore {
 
   /**
    * Insert this report's keys and answer which obstacle actually holds them.
-   *
    * `INSERT OR IGNORE` against the UNIQUE on `value`, then a read back: a value
-   * another row already owns stays that row's, and the caller follows its sighting
-   * there rather than writing a second copy of one obstacle. A key that only ever
-   * suggests is attached exactly the same way — it is on the row and in the answer;
-   * what it does not do is resolve one.
+   * another row owns stays that row's, and the caller follows its sighting there.
+   * A suggesting-only key is attached the same way but never resolves one.
    */
   private attachKeys(obstacleId: string, keys: readonly GatedKey[], at: string): string {
     const movable = new Set(resolvingKeys(keys).map((key) => key.value));
@@ -841,9 +721,8 @@ export class ObstacleStore {
     for (const key of keys) {
       insert.run(`obk-${nanoid(8)}`, obstacleId, key.kind, key.value, key.binds ? 1 : 0, at);
       const owner = this.obstacleIdForKey(key.value);
-      // Only a *binding* key may move the report: a signature the board already
-      // holds is a suggestion, and following it would be a model's merge wearing a
-      // key's clothes.
+      // Only a *binding* key may move the report: a signature the board already holds
+      // is a suggestion, not a merge.
       if (owner !== null && owner !== obstacleId && movable.has(key.value) && home === obstacleId) home = owner;
     }
     return home;
@@ -857,12 +736,9 @@ export class ObstacleStore {
   }
 
   /**
-   * Hand one row's keys to another and drop the empty one.
-   *
-   * Reachable only for a row this same call created a moment ago, which is why
-   * nothing is merged and nothing is lost: a row with sightings on it has been
-   * *told to somebody*, and folding one of those would be exactly the invisible
-   * merge no model is allowed to make either.
+   * Hand one row's keys to another and drop the empty one. Reachable only for a row
+   * this same call just created, so nothing with sightings on it is ever folded —
+   * that would be the invisible merge no model may make either.
    */
   private foldInto(from: string, to: string): void {
     this.ctx.db.prepare(`UPDATE obstacle_keys SET obstacle_id=? WHERE obstacle_id=?`).run(to, from);
@@ -898,18 +774,12 @@ export class ObstacleStore {
   }
 
   /**
-   * Move a row, and stamp when it was last seen either way.
-   *
-   * `last_seen_at` moves on every sighting even where the state does not, because
-   * decay reads it: a row re-reported daily and never promoted is not dormant, and
-   * a row whose state is unchanged is not a row nothing has said.
+   * Move a row, and stamp when it was last seen either way. `last_seen_at` moves on
+   * every sighting even where the state does not, because decay reads it.
    */
   private setState(obstacle: Obstacle, state: ObstacleState, at: string): Obstacle {
-    // `ended_by` goes back to null with it, because no state {@link
-    // stateAfterSighting} can write is a terminal one: a row reopened by a matching
-    // report is standing again, and one that went on saying which ending took it
-    // would be a row the board describes as over while it is being told to the
-    // fleet.
+    // `ended_by` goes back to null with it: no state {@link stateAfterSighting} can
+    // write is terminal, so a reopened row must not go on naming an ending.
     this.ctx.db
       .prepare(`UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=? WHERE id=?`)
       .run(state, at, at, obstacle.id);

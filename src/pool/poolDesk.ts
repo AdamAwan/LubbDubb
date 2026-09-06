@@ -7,51 +7,16 @@ import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash } from './docum
 import type { PoolTransport } from './transport.js';
 
 /**
- * One desk in the pulse, and **the pulse is the clock**.
- *
- * Not a timer of its own: a `setInterval` keeps firing during a pause, during
- * shutdown and during the upgrade handoff, which is the class of failure
- * `docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered` is written
- * about.
- *
- * |                | Attempts when         | At the default cadence (30s busy, 5m idle)|
- * | -------------- | --------------------- | ----------------------------------------- |
- * | Claims publish | the document is dirty | the next pulse                            |
- * | Claims poll    | every pulse           | the same                                  |
- * | Digest publish | an hour since the last| the next pulse after the hour             |
- * | Backstop       | an hour since the last| re-derives **both** documents and compares|
- * | Packs          | a share is standing   | the next pulse; and prunes the dead ones  |
- *
- * **The dirty flag is a hint. The content hash is the truth.** An operator's ruling
- * marks the claims document dirty and the next pulse publishes it — the fast path,
- * and an optimisation rather than a correctness requirement, since a flag can be
- * lost to a crash between the ruling and the pulse. So on the slow clock the desk
- * re-derives both documents and compares their hash to what is published: different,
- * publish; same, do nothing. Anything the flag misses self-heals within the hour,
- * and the same comparison is what makes an hourly cadence cheap — an idle fleet
- * computes a hash and writes nothing.
- *
- * **The publish is never inside a route handler.** A route that did the network
- * write would make an operator's click wait on a push to another continent, and a
- * failed push there is a 500 on a ruling that *succeeded locally* — the operator
- * told their decision failed when the store took it. The store write is the truth
- * and the publish is a consequence.
- *
- * **Every failure is caught, recorded through `errors.record` and non-fatal.** A
- * publish that fails leaves the document dirty, so the next pulse retries. A fetch
- * that fails leaves the last-known-good mirror in place rather than emptying it.
- * Nothing about the harness stops: no dispatch is held, no agent waits, no boot
- * fails. And **there is no backoff** — retry is the next pulse, which is already a
- * five-minute floor, and exponential backoff on top would mostly mean a recovered
- * pool taking an hour to be noticed.
- *
+ * One desk in the pulse, and **the pulse is the clock** — never a `setInterval`,
+ * which keeps firing through a pause, shutdown and the upgrade handoff. The dirty
+ * flag is a hint and the content hash is the truth; the publish is never inside a
+ * route handler; every failure is caught, recorded and non-fatal, and there is no
+ * backoff because retry is the next pulse.
  * → `docs/spec/28-cross-fleet-pool.md#the-clocks`
  */
 export class PoolDesk {
   /**
-   * The last successful poll, or null while there has never been one.
-   *
-   * What the page's "the reading is stale and this old" is drawn from. *Could not
+   * The last successful poll, or null while there has never been one. *Could not
    * reach the pool* is never folded into *nobody has published anything*.
    */
   private polledAt: string | null = null;
@@ -69,9 +34,8 @@ export class PoolDesk {
       now: () => string;
       digestIntervalMs: number;
       /**
-       * How long a closed pull request stays in the world the cockpit draws. A
-       * shared pack is pruned on the first publish after its pull request has been
-       * closed that long, so it outlives its pull request's row by nothing.
+       * How long a closed pull request stays in the world the cockpit draws; a shared
+       * pack is pruned on the first publish after that, so it outlives its row by nothing.
        * → `docs/spec/31-review-packs.md#sharing-a-pack`, `docs/spec/07-pull-requests.md`
        */
       closedPrWindowMs: number;
@@ -80,17 +44,9 @@ export class PoolDesk {
   ) {}
 
   /**
-   * One pass.
-   *
-   * Poll first, then publish. The order is not arbitrary: an arrival that
-   * corroborates a local claim can carry it to `lookup`, and a claim that reached
-   * `lookup` this pass is not publishable anyway (it has no ruling yet) — so
-   * polling first costs nothing and means the digest and claims published this pass
-   * describe a store that has already absorbed the pulse's arrivals.
-   *
-   * **On boot the first pass polls and runs the backstop** rather than waiting an
-   * hour: a deployment may have been off for a week, and claims vouched while the
-   * pool was unreachable go out immediately rather than sixty minutes later.
+   * One pass. **Poll before publish**, so what goes out describes a store that has
+   * already absorbed this pulse's arrivals; on boot the first pass polls and runs
+   * the backstop rather than waiting out the hour.
    */
   async run(): Promise<void> {
     const boot = this.firstPass;
@@ -101,41 +57,29 @@ export class PoolDesk {
   }
 
   /**
-   * The third document, and the one nothing here decides to publish.
-   *
-   * A pack leaves because a person asked for that pack to be shared, so this arm
-   * has no clock, no dirty flag and no hash: it carries out the asks that are
-   * standing, and prunes the ones whose pull request has been closed long enough.
-   * It runs here rather than in the route for
-   * `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`'s
-   * reason — a failed push must not read as a share that failed locally — and a
-   * publish that throws leaves the row unpublished, so the next pulse retries it
-   * exactly as a dirty document is retried.
+   * The third document, and the one nothing here decides to publish: it carries out
+   * the standing asks and prunes the dead ones, with no clock, flag or hash. Here
+   * rather than in the route so a failed push cannot read as a share that failed
+   * locally. → `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`
    */
   private async carryPacks(): Promise<void> {
     for (const share of this.deps.store.listReviewPackShares()) {
-      // Withdrawn first, and before the death check: an unshare is a person
-      // saying *take it out now*, and it is the same removal the prune does — one
-      // path, so a withdrawal cannot take a route a prune has never taken.
+      // Withdrawn first, and before the death check: one removal path, so a
+      // withdrawal cannot take a route a prune has never taken.
       if (share.withdrawnAt !== null || this.dead(share)) {
         await this.prune(share);
         continue;
       }
-      // Published already, or refused: both are settled states, and a refusal is
-      // never retried into a publish — the pack has to be written again.
+      // Published or refused: both settled. A refusal is never retried into a publish.
       if (share.publishedAt !== null || share.refusal !== null) continue;
       await this.publishPack(share);
     }
   }
 
   /**
-   * One asked-for pack into the namespace, with the backstop run over it again
-   * first.
-   *
-   * Run **again** rather than trusted from the ask: the refusal the route gave is
-   * about the document as it stood then, and this is the last thing between the
-   * pack and a repository that never forgets. It refuses and never rewrites, and
-   * the refusal names the line.
+   * One asked-for pack into the namespace. The secret backstop is run **again**
+   * rather than trusted from the ask — this is the last thing between the pack and
+   * a repository that never forgets. It refuses and never rewrites.
    */
   private async publishPack(share: ReviewPackShare): Promise<void> {
     const record = this.deps.store.getReviewPackAt(share.prNumber, share.headSha);
@@ -148,8 +92,7 @@ export class PoolDesk {
     }
     const refusal = packSecretRefusal(record.pack);
     if (refusal !== null) {
-      // Not an error-log entry: a refusal is this control working, and the row is
-      // where the person who asked reads it.
+      // Not an error-log entry: a refusal is this control working.
       this.deps.store.recordReviewPackShareRefusal(share.prNumber, refusal);
       return;
     }
@@ -169,22 +112,19 @@ export class PoolDesk {
       await this.deps.transport.publish(document);
       this.deps.store.recordReviewPackShared(share.prNumber);
     } catch (error) {
-      // Left unpublished deliberately: the put is a whole replace, so the next
-      // pulse re-derives and retries, and there is nothing to queue or replay.
+      // Left unpublished deliberately: the put is a whole replace, so the next pulse retries.
       this.record(`Could not publish the review pack for #${share.prNumber} to the pool`, error);
     }
   }
 
   /**
-   * Take a shared pack out of the namespace — because its pull request has been
-   * closed long enough, or because somebody unshared it. **The local `review_packs`
-   * row is kept** — it is the fleet's own record, and the cost of keeping it is the fleet's; what goes is
-   * the copy in a substrate everybody clones, and the share row that described it.
+   * Take a shared pack out of the namespace — its pull request closed long enough
+   * ago, or somebody unshared it. **The local `review_packs` row is kept**; what
+   * goes is the copy in the shared substrate and the share row describing it.
    */
   private async prune(share: ReviewPackShare): Promise<void> {
     if (share.publishedAt === null) {
-      // Never landed, so there is nothing in the namespace to remove and no reason
-      // to make a commit saying so.
+      // Never landed, so there is nothing in the namespace to remove.
       this.deps.store.deleteReviewPackShare(share.prNumber);
       return;
     }
@@ -192,56 +132,37 @@ export class PoolDesk {
       await this.deps.transport.unpublish({ fleetId: this.deps.fleetId, prNumber: share.prNumber });
       this.deps.store.deleteReviewPackShare(share.prNumber);
     } catch (error) {
-      // The row stays, so the next pulse tries again: a pack left in the pool
-      // because one push failed is the thing pruning exists to prevent.
+      // The row stays so the next pulse tries again: a pack left in the pool is what pruning prevents.
       this.record(`Could not prune the shared review pack for #${share.prNumber}`, error);
     }
   }
 
   /**
-   * Whether a shared pack's pull request has been closed for `closedPrWindowMs` —
-   * read off the same world the cockpit draws, and never off a silence. With no
-   * baseline at all nothing is pruned: *the harness has not looked* must not be
-   * folded into *the pull request is long gone*.
+   * Whether a shared pack's pull request has been closed for `closedPrWindowMs`,
+   * read off the world the cockpit draws. With no baseline nothing is pruned:
+   * *the harness has not looked* is never *the pull request is long gone*.
    */
   private dead(share: ReviewPackShare): boolean {
     const world = this.deps.store.getWorldBaseline();
     if (!world) return false;
     if (world.pullRequests.some((pr) => pr.number === share.prNumber)) return false;
     const closed = world.closedPullRequests?.find((pr) => pr.number === share.prNumber);
-    // Out of the closed window entirely: the row the cockpit drew is gone, which is
-    // the clock this is the same side of.
+    // Out of the closed window entirely: the row the cockpit drew is gone.
     if (!closed) return true;
     if (!closed.closedAt) return false;
     return new Date(this.deps.now()).getTime() - new Date(closed.closedAt).getTime() >= this.deps.closedPrWindowMs;
   }
 
   /**
-   * A person asking for one pack to be shared. **Never by default and never on
-   * the ask for a pack**: this is a second, deliberate act, and it is the only
-   * thing that puts a pack in the namespace.
-   *
-   * The backstop runs here, synchronously, so the person who clicked is told which
-   * line stopped it rather than watching a share that silently never happens —
-   * and **no row is written for a refusal with a caller to tell**, because a row
-   * would leave a "refused" state nothing clears. The refusal the arm records
-   * later is the one nobody is there to hear.
-   *
-   * The publish itself is not here: it is the next pulse's, for
-   * `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`'s
-   * reason.
+   * A person asking for one pack to be shared: a second, deliberate act, never a
+   * default. The backstop runs here synchronously so the caller is told which line
+   * stopped it, and **no row is written for a refusal with a caller to tell**. The
+   * publish itself is the next pulse's.
    */
   /**
-   * The inverse: a person taking a shared pack back out. **Immediate** in the only
-   * sense a route may be — the ask is recorded at once and the copy is gone on the
-   * next pulse, because the network write is the pool's and never a route
-   * handler's
-   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
-   * A share the pool never carried has nothing to remove and the row simply goes.
-   *
-   * There is nothing to refuse here that a share can refuse: no backstop, no
-   * document to read. Unsharing something nobody shared is answered as done rather
-   * than as an error — the caller wanted it out of the pool, and it is.
+   * The inverse: a person taking a shared pack back out. The ask is recorded at
+   * once and the copy goes on the next pulse — the network write is never a route
+   * handler's. Unsharing something nobody shared is answered as done, not an error.
    * → `docs/spec/31-review-packs.md#unsharing-a-pack`
    */
   unshareReviewPack(prNumber: number): { share: ReviewPackShare | null } {
@@ -282,11 +203,9 @@ export class PoolDesk {
   }
 
   /**
-   * Pull everybody's documents and land them.
-   *
-   * A failed fetch leaves the last-known-good mirror in place rather than emptying
-   * it, and the page says the reading is stale and how old it is — read as absence,
-   * an outage would say in the operator's words that nobody else knows anything.
+   * Pull everybody's documents and land them. A failed fetch leaves the
+   * last-known-good mirror in place rather than emptying it, so an outage never
+   * reads as "nobody else knows anything".
    * → `docs/spec/24-environments.md#the-three-verdicts`
    */
   private async poll(): Promise<void> {
@@ -301,8 +220,7 @@ export class PoolDesk {
     for (const entry of fetched) {
       const parsed = parsePoolDocument(entry.text, entry.addressedTo ?? undefined);
       if (!parsed.ok) {
-        // Per document, always. A version inside the body would fail the whole fetch
-        // and take every other fleet's contribution down with it.
+        // Per document, always: one bad body must not take every other fleet's down with it.
         if (parsed.reason === 'ahead') {
           if (parsed.fleetId !== null) {
             this.deps.store.recordPoolFleetReading({
@@ -323,13 +241,10 @@ export class PoolDesk {
   }
 
   /**
-   * One parsed document into the mirror.
-   *
-   * **This fleet's own document is read back and never landed.** `fetch` returns
-   * everyone's, mine included, which is what lets the page say whether the last
-   * publish actually arrived — but landing it would fold this fleet's own numbers
-   * back into the aggregate as another fleet's. Nothing would error, and it would
-   * look like the pool working.
+   * One parsed document into the mirror. **This fleet's own document is read back
+   * and never landed**: landing it folds this fleet's numbers into the aggregate as
+   * another fleet's, and looks exactly like the pool working.
+   * → `docs/spec/28-cross-fleet-pool.md`
    */
   private land(document: PoolClockDocument): void {
     try {
@@ -354,12 +269,7 @@ export class PoolDesk {
     }
   }
 
-  /**
-   * Publish one document if it needs publishing.
-   *
-   * What makes it due is the clock, and the hash decides what actually goes out:
-   * the freshly derived content is compared against what was last published.
-   */
+  /** Publish one document if it needs publishing: the clock makes it due, the hash decides what goes out. */
   private async publishKind(kind: PoolClockKind, boot: boolean): Promise<void> {
     const publication = this.deps.store.getPoolPublication(kind);
     const now = this.deps.now();
@@ -367,8 +277,7 @@ export class PoolDesk {
       boot ||
       publication.checkedAt === null ||
       new Date(now).getTime() - new Date(publication.checkedAt).getTime() >= this.deps.digestIntervalMs;
-    // No fast path: nothing an operator does moves a number the way a ruling moved
-    // a claim, so the clock is the whole of what makes this due.
+    // No fast path: the clock is the whole of what makes this due.
     if (!slowClockDue) return;
 
     let document: PoolClockDocument;
@@ -380,8 +289,7 @@ export class PoolDesk {
     }
     const hash = poolContentHash(document);
     if (hash === publication.contentHash) {
-      // Nothing changed. Stamping the check rather than pushing is what keeps an
-      // idle fleet from committing an identical file twenty-four times a day.
+      // Nothing changed: stamp the check rather than push, so an idle fleet writes nothing.
       this.deps.store.recordPoolChecked(kind);
       return;
     }
@@ -389,8 +297,7 @@ export class PoolDesk {
       await this.deps.transport.publish(document);
       this.deps.store.recordPoolPublish(kind, hash);
     } catch (error) {
-      // Left dirty deliberately: the put is a whole replace, so the next pulse
-      // re-derives and retries, and there is nothing to queue, reorder or replay.
+      // Left dirty deliberately: the put is a whole replace, so the next pulse retries.
       this.deps.store.markPoolDirty(kind);
       this.record(`Could not publish this fleet's ${kind} document to the pool`, error);
     }
@@ -406,13 +313,7 @@ export class PoolDesk {
     return buildDigestDocument(this.deps.store, context);
   }
 
-  /**
-   * One error record per failure, and no backoff.
-   *
-   * What a persistently failing pool needs is to be *visible*, which is this plus
-   * the Knowledge page saying when this fleet last published successfully — not a
-   * retry schedule that would mostly mean a recovered pool taking an hour to notice.
-   */
+  /** One error record per failure, and no backoff: a failing pool needs to be visible, not rescheduled. */
   private record(message: string, error: unknown): void {
     this.deps.errors?.record({
       source: 'cycle',

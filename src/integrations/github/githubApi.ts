@@ -1,18 +1,10 @@
 import type { MergeMethod } from '../../sink/actionSink.js';
 
 /**
- * The narrow GitHub network seam.
- *
- * Only the operations the two GitHub integrations actually use live here — not
- * the whole GitHub surface. This is the boundary that isolates network I/O: the
- * real {@link OctokitGitHubApi} wraps one `Octokit` instance, and tests inject a
- * scripted fake, so the mapping logic in the integrations is exercised without a
- * single HTTP request (mirroring the repo's `FakePtyBackend` / `streamSpawner`
- * fakes).
- *
- * Every method is scoped to one already-bound `owner`/`repo`; the payload types
- * are minimal structural shapes describing only the fields we read, so octokit's
- * enormous generated types don't leak across the codebase.
+ * The narrow GitHub network seam: only the operations the two GitHub integrations
+ * use, all scoped to one already-bound `owner`/`repo`. Tests inject a scripted
+ * fake here, so extending this interface means extending that fake in the same
+ * change. → `docs/spec/15-integrations.md`
  */
 export interface GitHubApi {
   /** The authenticated login. Used to decide whether a review thread is "handled". */
@@ -22,12 +14,8 @@ export interface GitHubApi {
   listOpenPulls(): Promise<GhPullSummary[]>;
   /**
    * PRs closed (merged or not) at or after `since`, newest activity first.
-   *
-   * Summary-only by design: a closed PR gets no review/check/comment fan-out, so
-   * this stays one paginated call rather than O(closed PRs) requests. The
-   * implementation stops paginating at the first page that falls out of the
-   * window, so a repo closing fewer than a page of PRs in the window costs
-   * exactly one request per snapshot.
+   * Summary-only; paginating stops at the first page outside the window, so
+   * this stays one request per snapshot in the common case.
    */
   listRecentlyClosedPulls(since: string): Promise<GhClosedPull[]>;
   /** Single-PR detail, the only place `mergeable`/`merged` are populated. */
@@ -35,31 +23,14 @@ export interface GitHubApi {
   listPullReviews(number: number): Promise<GhReview[]>;
   listPullReviewComments(number: number): Promise<GhReviewComment[]>;
   /**
-   * Whether each review thread is **resolved** — the reviewer's own verdict on
-   * whether their comment has been dealt with, and the only authoritative answer
-   * to that question.
-   *
-   * Separate from {@link listPullReviewComments} because GitHub splits it that
-   * way, not because we wanted two calls: resolution exists **only in GraphQL**
-   * (`PullRequestReviewThread.isResolved`). The REST comments endpoint the other
-   * method wraps returns no resolution state at all, which is the whole reason
-   * `handled` was ever inferred from authorship.
-   *
-   * Threads are keyed by their root comment's `databaseId`, which is the same id
-   * the REST endpoint returns — that shared key is what lets the two reads be
-   * joined without a second notion of thread identity.
+   * Whether each review thread is **resolved**. Separate from
+   * {@link listPullReviewComments} because resolution exists only in GraphQL;
+   * the two reads join on the root comment's `databaseId`.
    */
   listPullReviewThreads(number: number): Promise<GhReviewThread[]>;
   /**
-   * Mark a review thread resolved — the reviewer's own verdict, written by the
-   * harness on an agent's say-so.
-   *
-   * Keyed on the **root comment's** database id, the same id a reply is threaded
-   * under, because that is the only handle anything outside this file has: the
-   * GraphQL node id the mutation needs is resolved here, where the one GraphQL
-   * read already lives. Answers `false` when no thread on the pull request has
-   * that root — a stale reading rather than a fault. Idempotent: a thread already
-   * resolved answers `true` without a second mutation.
+   * Mark a review thread resolved, keyed on the root comment's database id.
+   * Answers `false` when no thread has that root (stale, not a fault); idempotent.
    */
   resolveReviewThread(number: number, rootCommentId: number): Promise<boolean>;
   /** Combined commit status for a head SHA (the legacy statuses API). */
@@ -67,23 +38,14 @@ export interface GitHubApi {
   /** Check-runs for a head SHA (the Checks API). */
   listCheckRuns(sha: string): Promise<GhCheckRun[]>;
   /**
-   * A check run's failure **annotations** — the `{path, line, message}` triples
-   * GitHub renders beside the diff. The cheap half of CI evidence: already
-   * extracted, small, and one request.
-   *
-   * Empty for the large set of jobs that emit no `::error` and carry no problem
-   * matcher, which is why {@link getJobLog} exists behind it rather than instead
-   * of it. → [`src/ci/ciEvidence.ts`]
+   * A check run's failure **annotations** — the cheap half of CI evidence. Empty
+   * for jobs with no `::error` and no problem matcher, which is why
+   * {@link getJobLog} exists behind it. → [`src/ci/ciEvidence.ts`]
    */
   listCheckRunAnnotations(checkRunId: number): Promise<GhAnnotation[]>;
   /**
-   * An Actions job's log, as text.
-   *
-   * **The whole log.** The endpoint answers with a redirect to a blob and honours
-   * no line range, so a "tail" is a full download that is then mostly discarded —
-   * the reason the annotation read above is tried first. Callers take the tail
-   * themselves. Throws when the job has expired out of retention (GitHub keeps
-   * logs far less long than it keeps the check run that names them).
+   * An Actions job's log, as text — the whole log: no line range, so callers
+   * take the tail themselves. Throws when the job has expired out of retention.
    */
   getJobLog(jobId: number): Promise<string>;
 
@@ -91,13 +53,8 @@ export interface GitHubApi {
   listOpenIssues(label?: string): Promise<GhIssue[]>;
   /**
    * Issues in **either** state that GitHub last saw change at or after `since`,
-   * optionally narrowed to a label. Includes PRs — caller filters them out.
-   *
-   * The mirror's read (issue #329), and the only place the harness asks GitHub for
-   * a closed issue. `since` filters on *updated* rather than created, which is what
-   * lets a sweep ask for the little that has moved instead of re-listing the
-   * tracker; it is also why the mirror's one-month floor is a floor rather than a
-   * cut, since an older item touched inside the window comes back too.
+   * optionally narrowed to a label. Includes PRs — caller filters them out. The
+   * mirror's read, and the only place the harness asks for a closed issue.
    */
   listIssuesChangedSince(since: string, label?: string): Promise<GhIssue[]>;
   /** Timeline events for an issue, used to find the PR that references/closes it. */
@@ -111,10 +68,8 @@ export interface GitHubApi {
   updateIssueComment(commentId: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
   /**
-   * Close a pull request without merging it — `state: 'closed'` on the pulls API.
-   * Idempotent: closing a closed pull request is a no-op that succeeds. GitHub
-   * carries no close *reason* for a pull request the way it does for an issue, so
-   * unlike {@link closeIssue} there is nothing to state.
+   * Close a pull request without merging it. Idempotent. GitHub carries no
+   * close *reason* for a PR the way it does for an issue, unlike {@link closeIssue}.
    */
   closePull(number: number): Promise<void>;
   /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
@@ -123,18 +78,13 @@ export interface GitHubApi {
   setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
   /**
    * Close an issue, with the reason GitHub draws on the timeline —
-   * `not_planned` reads very differently from `completed`, and the back-out's
-   * whole point is which of the two it was. Idempotent: closing a closed issue is
-   * a no-op that succeeds.
+   * `not_planned` reads very differently from `completed`. Idempotent.
    */
   closeIssue(number: number, reason: 'completed' | 'not_planned'): Promise<void>;
   /**
-   * Open an issue. Returns the new number.
-   *
-   * Labels and the assignee ride on the **create**, not on follow-up writes: an
-   * item that exists for a moment unlabelled is an item the watch gate can miss and
-   * a filing nobody is assigned, and GitHub accepts both fields on the create call
-   * so there is no reason to pay two requests for a weaker guarantee (issue #394).
+   * Open an issue. Returns the new number. Labels and the assignee must ride
+   * on the create, never a follow-up write — an item unlabelled for a moment
+   * is one the watch gate can miss.
    */
   createIssue(input: { title: string; body: string; labels: string[]; assignee: string | null }): Promise<{
     number: number;
@@ -146,15 +96,14 @@ export interface GitHubApi {
   /** Retarget a pull request's base — a stack rung whose parent merged. */
   setPullBase(number: number, base: string): Promise<void>;
   /**
-   * Merge the base branch into a pull request that is behind it —
-   * `PUT /repos/{owner}/{repo}/pulls/{n}/update-branch`, GitHub's own server-side
-   * merge. Throws when GitHub refuses (a branch that has moved on under us, a
-   * conflict it did not report, a repository that forbids the write).
+   * Merge the base branch into a PR that is behind it — GitHub's own
+   * server-side merge. Throws when GitHub refuses (branch moved, unreported
+   * conflict, forbidden write).
    */
   updatePullBranch(number: number): Promise<void>;
   /**
-   * Delete a branch. Returns whether a ref was actually removed: `false` means it
-   * was already gone, which the reap treats as success (see {@link ActionSink.deleteBranch}).
+   * Delete a branch. Returns whether a ref was actually removed: `false` means
+   * it was already gone, which the reap treats as success.
    */
   deleteBranch(branch: string): Promise<boolean>;
 }
@@ -175,35 +124,22 @@ export interface GhPullSummary {
   /** Label names on the PR (the Issues/PR `labels` array). */
   labels: string[];
   /**
-   * `assignees[].login` — who a person has put the pull request on.
-   *
-   * Read off the **list** payload, which already carries it, so the one signal
-   * with no rule behind it costs no request of its own. Deliberately not
-   * `requested_reviewers`: a review request is a different obligation, and on a
-   * repository with a team review rule it is one the operator's whole org shares.
+   * `assignees[].login` — who a person put the pull request on. Deliberately
+   * not `requested_reviewers`, a different obligation shared by the whole org
+   * on a team review rule.
    */
   assigneeLogins: string[];
   /**
-   * `updated_at` — the **change token** the snapshot's hydration cache gates the
-   * per-PR review / comment / detail fan-out on. Rides on the list payload that
-   * is fetched anyway, so it costs no request.
-   *
-   * Optional in the same sense as {@link GhCheckRun.id}: the real API always
-   * sends one, and a fixture that predates the cache does not. Absent means "no
-   * token", which resolves to a full re-hydration every pulse — i.e. exactly the
-   * behaviour before this existed.
-   *
-   * **It does not cover CI.** A check run completing or a commit status posting
-   * moves nothing here, which is why those two reads are gated on `head.sha` and
-   * on the cached verdict being terminal instead.
+   * `updated_at` — the change token the hydration cache gates the per-PR
+   * fan-out on. Absent means a full re-hydration every pulse. Does not cover
+   * CI: those reads gate on `head.sha` instead.
    */
   updatedAt?: string;
 }
 
 /**
- * A PR that has left the open set. Deliberately narrower than
- * {@link GhPullSummary}: nothing downstream reads CI, labels or a head SHA off a
- * dead PR, and not asking for them is what keeps the extra call cheap.
+ * A PR that has left the open set. Narrower than {@link GhPullSummary} —
+ * nothing downstream reads CI, labels or a head SHA off a dead PR.
  */
 export interface GhClosedPull {
   number: number;
@@ -221,9 +157,8 @@ export interface GhClosedPull {
   /** closed_at — when it left the open set. */
   closedAt: string;
   /**
-   * `merge_commit_sha` — the commit the merge produced on the base branch, and the
-   * only report of it anything gets. Null on a PR closed without merging, and on
-   * one GitHub has not finished computing it for.
+   * `merge_commit_sha` — the commit the merge produced on the base branch.
+   * Null on a PR closed without merging, or one GitHub hasn't computed it for.
    */
   mergeCommitSha: string | null;
 }
@@ -251,11 +186,8 @@ export interface GhReviewComment {
   /** in_reply_to_id — null for a thread root, the root's id for a reply. */
   inReplyToId: number | null;
   /**
-   * The file the comment hangs on, and the line in it. Display only — nothing
-   * dispatches on either — and both **optional** in the honest sense: a comment
-   * attached to no line (a review's summary) carries neither, and neither does a
-   * fixture written before they were read. A surface without them names the
-   * thread and not the place, rather than guessing one.
+   * The file the comment hangs on, and the line in it. Display only, both
+   * optional — a comment with no line carries neither.
    */
   path?: string;
   line?: number | null;
@@ -263,8 +195,8 @@ export interface GhReviewComment {
 
 /**
  * A review thread's resolution state, joined to {@link GhReviewComment} on the
- * root comment's id. Only what REST cannot answer — the comments themselves stay
- * on the REST read, so a GraphQL failure costs the verdict and not the thread.
+ * root comment's id — only what REST cannot answer, so a GraphQL failure costs
+ * the verdict and not the thread.
  */
 export interface GhReviewThread {
   /** `databaseId` of the thread's first comment — the same id REST calls `id`. */
@@ -278,9 +210,8 @@ export interface GhCombinedStatus {
   /** How many statuses rolled into `state`. Zero means "no signal". */
   totalCount: number;
   /**
-   * The individual statuses behind `state`, named by their context. Carried so
-   * per-check CI policy can act on *which* one failed; `state` stays the fold
-   * every existing gate reads. Absent on a fixture that predates it.
+   * The individual statuses behind `state`, named by their context, so per-check
+   * CI policy can act on *which* one failed. Absent on a fixture predating it.
    */
   statuses?: Array<{ context: string; state: string }>;
 }
@@ -294,17 +225,13 @@ export interface GhCheckRun {
   conclusion: string | null;
   /**
    * The check run's own id — what {@link GitHubApi.listCheckRunAnnotations}
-   * addresses. Optional in the same sense as {@link GhCombinedStatus.statuses}:
-   * the real API always sends one, and a fixture that predates evidence does
-   * not. Absent means no {@link CiCheck.evidenceRef}, i.e. today's prompt.
+   * addresses. Absent on a fixture predating evidence; means no
+   * {@link CiCheck.evidenceRef}.
    */
   id?: number;
   /**
-   * `details_url`. Carried for one reason: an Actions check run's log lives under
-   * a **job** id, which is not this check run's id and appears nowhere else in the
-   * payload — only in this URL's `/job/<id>` segment. A check run from any other
-   * app points somewhere with no log API at all, which is why parsing it is
-   * allowed to fail and yield no log rather than being treated as an error.
+   * `details_url`. An Actions check run's log lives under a job id found only
+   * in this URL's `/job/<id>` segment. Parsing it is allowed to fail and yield no log.
    */
   detailsUrl?: string | null;
 }

@@ -1,62 +1,38 @@
 import { z } from 'zod';
 
 /**
- * The bounded action vocabulary the dispatcher may emit. The dispatcher reasons
- * freely, but its output is validated against these schemas at the boundary —
- * anything malformed is rejected and logged rather than executed. This is what
- * keeps an LLM decision-maker safe: it can only ever ask for one of these.
+ * The bounded action vocabulary the dispatcher may emit. Output is validated against these
+ * schemas at the boundary; anything malformed is rejected and logged rather than executed.
  */
 
 const base = {
   reason: z.string().min(1),
-  /**
-   * Which dispatcher rule produced this action (a `DISPATCH_RULES` id), so the
-   * audit log can explain the decision beyond its free-text reason. Optional —
-   * an act reaching the executor from outside the pulse (an accepted proposal,
-   * agent lifecycle) has no proposing rule — so it defaults to null.
-   */
+  /** Which dispatcher rule produced this action (a `DISPATCH_RULES` id), for the audit log. Null for an act reaching the executor from outside the pulse. */
   rule: z.string().nullable().default(null),
   /**
    * What *became* of the proposal `rule` names — an `admission`-kind id from the
-   * same registry (`branch-notify`, `cooldown-escalate`), lifted into its own
-   * decision column beside `rule`. Null for the ordinary case, which is a rule's
-   * proposal admitted unchanged; the two columns answer different questions and
-   * neither is the other's fallback.
-   *
-   * Only the admissions that **emit an action** reach here. The rest
-   * (`cooldown`, `capped`, `unapproved`, `superseded`, `waiting`) hold a
-   * candidate that was never executed, so they are queue statuses on the Up next
-   * projection and produce no decision row at all.
+   * same registry, in its own column. Null when a rule's proposal was admitted
+   * unchanged; the two columns answer different questions.
    */
   admission: z.string().nullable().default(null),
 };
 
-/**
- * Human-readable context about the item that triggered a dispatch, carried onto
- * the task so the cockpit can explain a running agent at a glance (issue #17).
- * Optional — an act composed outside a rule has no world item to describe — so
- * both default to null.
- */
+/** Human-readable context about the item that triggered a dispatch, carried onto the task so the cockpit can explain a running agent. Null for an act composed outside a rule. */
 const origin = {
   originTitle: z.string().nullable().default(null),
   originSummary: z.string().nullable().default(null),
 };
 
-/**
- * Links a dispatch back to the operator-launched {@link Job} it drains, so the
- * executor can mark that job dispatched once its agent spawns. Null for every
- * world-driven dispatch — only the queue-draining rule sets it.
- */
+/** Links a dispatch back to the operator-launched {@link Job} it drains, so the executor can mark that job dispatched once its agent spawns. Null for every world-driven dispatch. */
 const job = {
   jobId: z.string().nullable().default(null),
 };
 
 /**
- * Links a dispatch to the {@link PlanPart} it works, so the executor can record the
- * part dispatched once its agent spawns — and carries the branch that part stacks
- * on. `base` is only consulted when the branch doesn't exist yet (see
- * `WorktreeManager.ensure`); null means the executor's configured default branch,
- * which is every dispatch but a stacked part's.
+ * Links a dispatch to the {@link PlanPart} it works, so the executor can record
+ * the part dispatched once its agent spawns — and carries the branch that part
+ * stacks on. `base` is only consulted when the branch doesn't exist yet; null
+ * means the executor's default branch.
  */
 const part = {
   partId: z.string().nullable().default(null),
@@ -64,28 +40,18 @@ const part = {
 };
 
 /**
- * Whether this dispatch needs a **read-only** checkout rather than a branch of its
- * own (issue #396) — see `Worktrees.ensureReadOnly` and `readOnlyDispatch`.
- *
- * Defaults to false, which is what every dispatch that writes code is, so a rule
- * that says nothing gets the writable shape it always had. The three rules that
- * only read say so through `readOnlyDispatch`, never by setting this themselves:
- * three literals is three chances for one of them to drift back to minting a
- * branch nothing will ever reap.
+ * Whether this dispatch needs a **read-only** checkout rather than a branch of
+ * its own. Defaults false. Read-only rules say so through `readOnlyDispatch`
+ * and never by setting this themselves.
  */
 const checkout = {
   readOnly: z.boolean().default(false),
 };
 
 /**
- * The model profile this dispatch's origin is pinned to (issue #342) — a goal's
- * tag, or the profile its plan named for this part. Null for the ordinary case,
- * which is a dispatch priced by its rule.
- *
- * Carried on the action rather than resolved at the executor because the pin is a
- * property of the *world* — a label on a ticket, a field on a plan row — and the
- * executor sees neither. Stamped in one place, where a candidate clears the
- * headroom cut, so no rule can compose a dispatch that quietly loses it.
+ * The model profile this dispatch's origin is pinned to — a goal's tag, or the
+ * profile its plan named for this part. Null means priced by the rule. Carried
+ * on the action because the pin is a property of the world the executor cannot see.
  */
 const pin = {
   profile: z.string().min(1).nullable().default(null),
@@ -93,23 +59,15 @@ const pin = {
 
 /**
  * MCP servers this dispatch carries **beside** the harness's own, and the local
- * validation row it is for.
- *
- * Both are set by the two `local-validation*` rules and by nothing else, and both
- * exist for the same reason the CI checks do: the executor has to record something
- * structural on the task row, and re-deriving it from the origin string at the
- * other end would be a parser where a field will do.
- *
- * `mcpServers` defaults to an empty list rather than null, so a launch that
- * declared none is the same shape as one that never heard of them.
+ * validation row it is for. Set by the two `local-validation*` rules and
+ * nothing else.
  */
 const extraTools = {
   mcpServers: z
     .array(
       z.object({
-        // The `mcpServers` key, which every `mcp__<key>__<tool>` permission name is
-        // derived from — so the grammar is the grammar of a permission rule, and a
-        // key with a `_` or a space in it would grant something else or nothing.
+        // Every `mcp__<key>__<tool>` permission name derives from this key, so a `_` or a
+        // space in it would grant something else, or nothing.
         key: z.string().regex(/^[a-z][a-z0-9-]*$/, 'an MCP server key is lower-case letters, digits and hyphens'),
         command: z.string().min(1),
         args: z.array(z.string()).default([]),
@@ -129,21 +87,9 @@ const ActionSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
-    /**
-     * The individual world signals this dispatch was launched to answer, when
-     * they are finer-grained than `originRef`. Only the review-comment rule sets
-     * more than one: it folds every open thread on a PR onto a single origin so
-     * one agent answers the whole review, which leaves the origin unable to say
-     * *which* threads the agent already has. Recorded here so the branch-notify
-     * de-dup doesn't read them straight back to it (`dispatchedSignalsByBranch`).
-     */
+    /** The individual world signals this dispatch answers, finer-grained than `originRef` — used for `dispatchedSignalsByBranch` de-dup. */
     signalRefs: z.array(z.string()).optional(),
-    /**
-     * The CI checks this dispatch answers, as the provider names them. Carried
-     * onto the task so spend can be read back per check (`src/taskTypeSpend.ts`)
-     * — the dispatch reason names them too, but only in a sentence, and the read
-     * path must never parse one. Set by the two CI rules; absent everywhere else.
-     */
+    /** The CI checks this dispatch answers, as the provider names them. Set by the two CI rules; absent elsewhere. */
     ciChecks: z.array(z.string()).optional(),
     ...origin,
     ...job,
@@ -185,21 +131,9 @@ const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
     draft: z.string().min(1),
-    /**
-     * Mark the thread resolved once the reply lands. The agent's own verdict on
-     * the thread it answered (`reply_to_review`'s `resolved`), carried on the act
-     * so the operator authorizes the reply and the resolution together — the
-     * reply is what the resolution claims to justify. Ignored without a
-     * `commentId`: there is no thread to resolve on a reply to the pull request.
-     */
+    /** Mark the thread resolved once the reply lands. Ignored without a `commentId`: a reply to the pull request has no thread to resolve. */
     resolve: z.boolean().default(false),
-    /**
-     * The dispatch origin that asked for this reply, where an agent did — the one
-     * thing that says *which* reply this is once it has been through JSON and a
-     * proposal row. The review's publication of its findings is a reply like any
-     * other on the way out, and this is what lets the send record the thread it
-     * opened against the review it belongs to. Null on a reply a rule drafted.
-     */
+    /** The dispatch origin that asked for this reply, where an agent did — identifies which reply this is once through JSON and a proposal row. Null on a rule's draft. */
     originRef: z.string().nullable().default(null),
     ...base,
   }),
@@ -211,12 +145,9 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...base,
   }),
   /**
-   * Put an issue's decomposition to a human before anything is scheduled from it
-   * (issue #109 phase 3). Unlike every other proposal-bearing action this one
-   * carries no act to publish: the executor turns it into an inbox item plus a
-   * `plan` proposal, and accepting that proposal releases the plan row. It is an
-   * action rather than a store write at ingestion time so proposals keep being
-   * born in exactly one place — the executor, from a validated action.
+   * Put an issue's decomposition to a human before anything is scheduled from
+   * it. Carries no act to publish: the executor turns it into an inbox item
+   * plus a `plan` proposal, and accepting releases the plan row.
    */
   z.object({
     type: z.literal('propose_plan'),
@@ -224,19 +155,9 @@ const ActionSchema = z.discriminatedUnion('type', [
     planId: z.string().min(1),
     /** The issue the plan hangs off (`issue:12`) — the proposal's ref is derived from it. */
     originRef: z.string().min(1),
-    /**
-     * What the plan diagnosed and what it will do about it, as quoted markdown —
-     * carried beside `prompt` for `propose_shortfall`'s reason: the cockpit labels
-     * the block, and an operator's prompt override cannot bury the planner's own
-     * words in a paragraph. Null when the planner wrote neither.
-     */
+    /** What the plan diagnosed and will do, as quoted markdown. Null when the planner wrote neither. */
     detail: z.string().min(1).nullable().default(null),
-    /**
-     * What the plan raises that has to be *read* before it may be released —
-     * `src/plans/planCaveats.ts`. Carried on the action rather than re-derived at
-     * accept time so the gate compares the operator's ticks against the list they
-     * were actually shown; empty is a plan that raises nothing, and no gate.
-     */
+    /** What the plan raises that must be *read* before release (`src/plans/planCaveats.ts`). Carried rather than re-derived at accept time. Empty is no gate. */
     caveats: z
       .array(
         z.object({
@@ -252,14 +173,10 @@ const ActionSchema = z.discriminatedUnion('type', [
   }),
   /**
    * Put a change to a **running** plan to a human (`src/plans/planAmendment.ts`).
-   * Like `propose_plan` it carries no act to publish: the executor turns it into an
-   * inbox item plus a `plan_amendment` proposal, and accepting that proposal
-   * ingests the amended document while the plan stays released.
-   *
-   * The document is deliberately **not** in the payload — it is on the
-   * `plan_amendments` row, which is also what the rule reads and what both
-   * settlements rewrite. An action carrying the document would be a second copy of
-   * it that could be accepted after the row it came from was superseded.
+   * Like `propose_plan` it carries no act to publish; accepting ingests the
+   * amended document while the plan stays released. The document is
+   * deliberately **not** in the payload — it lives on the `plan_amendments` row,
+   * since a copy here could be accepted after the row it came from was superseded.
    */
   z.object({
     type: z.literal('propose_plan_amendment'),
@@ -269,27 +186,14 @@ const ActionSchema = z.discriminatedUnion('type', [
     planId: z.string().min(1),
     /** The goal the plan hangs off (`issue:12`). */
     originRef: z.string().min(1),
-    /**
-     * What the operator is shown: what is being changed, and what each verdict
-     * does.
-     *
-     * There is no `detail` beside it, unlike every other proposing action. The
-     * card's body — why, what changes, what it will not change — is a *reading of
-     * the plan as it stands*, built by the executor from the store when the card
-     * is created, so it cannot describe a diff against a plan that has moved on
-     * since the rule ran.
-     */
+    /** What the operator is shown: what is being changed, and what each verdict does. No `detail` beside it — the card's body is built at card time so it cannot describe a stale diff. */
     prompt: z.string().min(1),
     ...base,
   }),
   /**
    * Put an assessor's "worked, and the goal is not reached" to a human, with the
-   * arm its declared cause routes to (issue #159). Like `propose_plan` it carries
-   * no act to publish: the executor turns it into an inbox item plus a `shortfall`
-   * proposal, and accepting that proposal performs the arm — a replan, or a
-   * follow-up part. It is a proposal rather than an automatic action because both
-   * arms spend a fleet and a plan the harness rewrote on its own would churn
-   * `plan_parts` under whatever was already running.
+   * arm its declared cause routes to. Accepting performs the arm — a replan, or
+   * a follow-up part. A proposal, not automatic: both arms spend a fleet.
    */
   z.object({
     type: z.literal('propose_shortfall'),
@@ -305,11 +209,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     partSlug: z.string().min(1).nullable().default(null),
     /** The assessor's own words: the replan's context, or the follow-up part's scope. */
     summary: z.string().min(1),
-    /**
-     * The assessor's verdict as quoted markdown, for the card's body. Carried
-     * beside `prompt` rather than inside it so the cockpit can label the block —
-     * and so an operator's prompt override cannot bury it in a paragraph.
-     */
+    /** The assessor's verdict as quoted markdown, beside `prompt` so the cockpit can label the block and an override cannot bury it. */
     detail: z.string().min(1).nullable().default(null),
     /** What the operator is shown: what fell short, and what accepting does. */
     prompt: z.string().min(1),
@@ -317,66 +217,31 @@ const ActionSchema = z.discriminatedUnion('type', [
   }),
   /**
    * Bring a pull request that is merely **behind** its base up to date, without
-   * spending a code agent on two git commands (issue #332).
-   *
-   * Emitted only by rule `pr-base-update` — the case the provider has already
-   * said merges cleanly — and never by `pr-base-update-conflict`, which is
-   * judgement and keeps its agent. It claims no headroom and is pushed straight
-   * through, like `merge_pr` and `set_work_item_state`; the executor performs it
-   * against the sink and audits the outcome under `originRef`, which is what keeps
-   * the origin's cooldown and attempt accounting whole.
+   * spending a code agent on two git commands. Emitted only by rule
+   * `pr-base-update`. Claims no headroom; audited under `originRef`.
    */
   z.object({
     type: z.literal('update_pr_branch'),
     prNumber: z.number().int(),
-    /** The base branch being merged in — for the audit line, not for the provider. */
+    /** The base branch being merged in — for the audit line, not the provider. */
     base: z.string().min(1),
-    /**
-     * The PR's own branch — the thing being written to. Carried so the executor
-     * can re-check the branch gate it re-checks for a dispatch, and for the same
-     * reason: the rule only proposes this for a free branch, but every path that
-     * reaches the executor must be covered, not just the one that checked first.
-     */
+    /** The PR's own branch, the thing being written to. Carried so the executor can re-check the branch gate. */
     branch: z.string().min(1),
-    /**
-     * `pr:<n>:mergeable`, the concern's own origin. Required rather than
-     * defaulted: it is the key the attempt counter and the next cycle's fallback
-     * both read, and an act that carried none would be invisible to both.
-     */
+    /** `pr:<n>:mergeable`, the concern's own origin — the key the attempt counter and fallback both read. */
     originRef: z.string().min(1),
     ...base,
   }),
   /**
-   * Queue a fresh run of the **expired** build policies holding a pull request's
-   * gate, without spending a code agent on it (issue #395).
-   *
-   * Emitted only by rule `pr-ci-gate`'s expired arm — a check the provider itself
-   * says nothing is running and nothing will start for, whose resolution the
-   * harness therefore knows without asking a model. The *guided* arm keeps its
-   * agent: only the operator's words can say what releases a check they asked to
-   * be watched, and a check that is both expired and guided keeps them too.
-   *
-   * Like {@link update_pr_branch} it claims no headroom, is pushed straight
-   * through, and is audited under `originRef` so the gate's cooldown and attempt
-   * accounting stay whole whoever performed the attempt.
+   * Queue a fresh run of the **expired** build policies holding a pull
+   * request's gate, without spending a code agent. Emitted only by rule
+   * `pr-ci-gate`'s expired arm. Claims no headroom and is audited under `originRef`.
    */
   z.object({
     type: z.literal('requeue_ci_check'),
     prNumber: z.number().int(),
-    /**
-     * Every expired check on this gate, as a name for the audit line and the
-     * provider's own opaque handle for the write.
-     *
-     * A list rather than one check because the concern is one per pull request: a
-     * repository with two required builds expires both on the same push, and
-     * splitting them across pulses would spend the origin's whole attempt budget
-     * on a gate nothing was wrong with. One write each, one pulse, one decision row.
-     */
+    /** Every expired check on this gate: a name for the audit line and the provider's opaque requeue handle. */
     checks: z.array(z.object({ name: z.string().min(1), requeueRef: z.string().min(1) })).min(1),
-    /**
-     * `pr:<n>:ci-gate`, the concern's own origin — the key the attempt counter and
-     * the next cycle's fallback both read, for {@link update_pr_branch}'s reason.
-     */
+    /** `pr:<n>:ci-gate`, the concern's own origin. */
     originRef: z.string().min(1),
     ...base,
   }),

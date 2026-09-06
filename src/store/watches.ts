@@ -12,64 +12,34 @@ import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
 /**
- * Three tables. `goal_watches` — what each goal declared a running system would
- * have to show for its work to have done what it claimed, and what the dry run
- * read against it — plus the two the window is made of: `watch_windows`, one per
- * `(goal, environment)` an arrival opened, and `watch_readings`, what each check
- * answered each time the window was read.
+ * Three tables. `goal_watches` — what each goal declared a running system would have to show,
+ * and what the dry run read against it — plus `watch_windows`, one per `(goal, environment)`
+ * an arrival opened, and `watch_readings`, what each check answered each time.
  *
- * `goal_watches` is one row per `(goal_ref, check_id)`, written `OR REPLACE` on
- * the declaration: the merge key is the author's own slug, exactly as a part's is
- * and a validation check's is, so an amended plan lands on the row rather than
- * beside it.
+ * `goal_watches` is one row per `(goal_ref, check_id)`, `OR REPLACE` on the declaration, so
+ * an amended plan lands on the row rather than beside it.
  *
- * **A reading is not a `WorldEvent`, and this table is why it does not have to
- * be.** `deliveryHold` expires a standing delivery verdict on *any* world event
- * matching the goal's issue ref, so a reading written as one would un-park the
- * goal it just reported on and hand finished work back to the fleet to do again.
- * Own table, own wire list, merged at the feed's door — what arrivals already do.
+ * **A reading is never written as a `WorldEvent`**: `deliveryHold` expires a standing
+ * delivery verdict on any world event matching the goal's issue ref, so one would un-park
+ * the goal it just reported on. Own table, own wire list, merged at the feed's door.
  *
- * The tables were new *once*, which is exactly what does not keep them exempt:
- * measures, the pending amendment and an operator's extension have since added
- * columns to all three, and they are declared in {@link WATCH_COLUMNS} below.
- * `watch_windows.settled_at` null means *still watching*, so a column added to
- * **that** table needs its null read before anything else — one whose absence
- * means something needs a backfill gated on `ensureColumns`' report, or every
+ * `watch_windows.settled_at` null means *still watching*, so a new column on that table
+ * whose null means something needs a backfill gated on `ensureColumns`' report, or every
  * settled window reopens on the boot an operator takes the build.
  * → `docs/spec/29-post-deploy-watch.md#persistence`
  */
 
 /**
- * The columns added to `goal_watches` and `watch_readings` since they were
- * created — measures, the baseline, and the pending amendment.
+ * The columns added to these tables since they were created — measures, the baseline, the
+ * pending amendment, the extension. Without these entries each reads `undefined` on every
+ * older database, and a measure that can never fail looks like a measure passing.
  *
- * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without these
- * entries every one of them is invisible on every database from before this
- * build: a threshold, a baseline and a reading's `value` all read `undefined`,
- * which is a measure that can never fail on exactly the deployments with a
- * history. Nothing errors, and a measure nothing can fail looks like a measure
- * passing.
- *
- * **None of them needs a backfill, and each for a stated reason.**
- * `baseline_value` null means *never taken*, which the fold already reads as
- * `unknown` rather than as clean — a database full of nulls declares no measures
- * anyway, since the schema refused them until now. `expect_baseline` and `live`
- * carry SQL defaults that are the honest reading of a row written before either
- * existed: a signal declares no baseline, and every check the operator's own plan
- * approval already authorised is live.
- *
- * `authored` needs no backfill for the same kind of reason: its default is
- * `'plan'`, which is what every row written before an operator could edit one
- * actually was. The wrong default would be the expensive one here — a database
- * whose rows all read `operator` is a fleet no replan can amend.
- *
- * `watch_windows.extended_at` is the third table's first added column, and it is
- * the one the table's own warning is about: `settled_at` null means *still
- * watching*, so a column here whose null meant something would reopen every
- * settled window on the boot an operator takes the build. This one's null means
- * **never extended**, which is true of every row written before the column
- * existed, so there is nothing to backfill and nothing gated on
- * `ensureColumns`' report. That is a property of what the column says, not luck.
+ * None needs a backfill, each for a stated reason: `baseline_value` null already means
+ * *never taken*; `expect_baseline` and `live` carry SQL defaults that are the honest reading
+ * of an older row; `authored` defaults to `'plan'`, which is what every pre-edit row was (a
+ * database reading `operator` throughout is a fleet no replan can amend); and
+ * `watch_windows.extended_at` null means *never extended*, which is why this one column on
+ * the settled-window table owes nothing despite that table's warning.
  * → `docs/spec/14-persistence.md#when-a-null-means-something`
  */
 export const WATCH_COLUMNS: ColumnMigrations = {
@@ -95,38 +65,14 @@ export class WatchStore {
   /**
    * Fold a document's `watch` block onto a goal's rows.
    *
-   * A document speaks for the **whole** watch, so a check it stopped declaring is
-   * removed rather than left behind: at this stage a check row carries nothing but
-   * its declaration and the dry run of that declaration, both of which the
-   * amendment has replaced, and a row nothing declares is a query the harness
-   * would go on asking on behalf of a plan that no longer asks it.
+   * A document speaks for the **whole** watch, so a check it stopped declaring is removed,
+   * and a dropped check takes its readings with it in the same transaction — a reading of a
+   * check nothing declares is a number with no rule. Dry-run columns are not carried across
+   * a re-declaration: a reading is a reading of *that* query.
    *
-   * The dry-run columns are **not** carried across a re-declaration, and that is
-   * the point rather than an omission: the reading is a reading *of that query*,
-   * and an amended query has never been run.
-   *
-   * **A dropped check takes its readings with it**, in the same transaction. Once
-   * a window's readings hang off a check, deleting the row alone would orphan the
-   * evidence behind a verdict — and the honest answer is not to keep the evidence
-   * for a question nobody is asking any more, but to leave neither: a verdict with
-   * nothing behind it is the shape that is unreadable six weeks later, and a
-   * reading of a check no document declares is a number with no rule.
-   *
-   * **The sweep is over live rows only.** A row an agent proposed and nobody has
-   * ruled on was never part of this document, so a replan neither adopts it nor
-   * throws it away — it is the operator's to accept or decline, and a decision
-   * taken off somebody without their seeing it is the failure this whole approval
-   * exists to avoid. A pending amendment *to* a check the document still declares
-   * is dropped with the re-declaration, because it was an amendment to text that
-   * no longer stands.
-   *
-   * **An operator's own check is neither swept nor overwritten**, which is the one
-   * exception to "a document speaks for the whole watch" — because for those rows
-   * it does not. A check written on the goal page was never in this document, so
-   * removing it would be a replan deleting somebody's work without their seeing
-   * it; a check they *edited* is a deliberate correction of the plan's wording, so
-   * the plan's version of that id is dropped on the floor rather than restored on
-   * the next amendment.
+   * Two exclusions. The sweep is over **live rows only**, so a proposal nobody has ruled on
+   * is neither adopted nor thrown away. And an **operator's own check is neither swept nor
+   * overwritten**, because it was never in this document.
    * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
    * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
    */
@@ -170,17 +116,9 @@ export class WatchStore {
   }
 
   /**
-   * What the dry run read, stored on the check it was a reading of — **and, for a
-   * measure that answered a number, the baseline.**
-   *
-   * The baseline is not a second reading: it is this one, kept rather than
-   * discarded, which is the whole of why it can be trusted as a before. A second
-   * call, on a second schedule, would be free to ask a different question of a
-   * system that had already changed.
-   *
-   * `value` null leaves the columns as they are rather than clearing them, because
-   * the one thing that clears a baseline is a re-declaration — a baseline is a
-   * reading of *that* query, and a dry run that failed has not replaced it.
+   * What the dry run read, stored on the check it was a reading of — and, for a measure that
+   * answered a number, the baseline. The baseline is this reading kept, never a second one.
+   * `value` null leaves the columns alone: only a re-declaration clears a baseline.
    */
   recordWatchDryRun(
     originRef: string,
@@ -209,14 +147,10 @@ export class WatchStore {
   }
 
   /**
-   * Every **live** check, in document order within each goal, each carrying
-   * whatever amendment is pending against it.
-   *
-   * Live only, and that is the guard rather than a filter: every reader of this —
-   * the dry run, the window pass, the card — would otherwise put an agent's
-   * unapproved query to the operator's own telemetry, which is the one thing the
-   * approval exists to prevent. A row awaiting a ruling is reached through
-   * {@link listProposedGoalWatches}, which nothing but the plan sheet reads.
+   * Every **live** check, in document order within each goal, each carrying whatever
+   * amendment is pending against it. Live-only is the guard, not a filter: otherwise every
+   * reader would put an agent's unapproved query to the operator's own telemetry. Rows
+   * awaiting a ruling come through {@link listProposedGoalWatches}.
    */
   listGoalWatches(): GoalWatch[] {
     return (
@@ -232,16 +166,12 @@ export class WatchStore {
   }
 
   /**
-   * An agent's declaration, filed against the operator rather than against the
-   * environment.
+   * An agent's declaration, filed against the operator rather than against the environment.
    *
-   * **Nothing here is live.** A slug the goal already carries takes the proposal
-   * on its row and leaves the live check untouched; a slug it does not gets a row
-   * of its own with `live=0`, whose declaration columns are the proposal's so that
-   * accepting is the flag rather than a second write of the same text. Either way
-   * no query is put to an environment, because the query runs inside the
-   * operator's own command with the operator's own credential — and that approval
-   * is the whole authorisation story.
+   * **Nothing here is live.** A slug the goal already carries takes the proposal on its row
+   * and leaves the live check untouched; a new slug gets a `live=0` row whose declaration
+   * columns are the proposal's, so accepting is the flag rather than a second write. No
+   * query reaches an environment until the operator approves it.
    * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
    */
   proposeGoalWatch(originRef: string, checks: readonly GoalWatchInput[], note: string): { proposed: string[] } {
@@ -291,17 +221,11 @@ export class WatchStore {
   }
 
   /**
-   * The operator's ruling on one pending declaration.
-   *
-   * Accepting writes the proposal over the live columns and **clears every reading
-   * of the text it replaced** — the dry run, the baseline and the window's own
-   * readings — for the reason a planner's amendment does: a reading is a reading
-   * of *that* query, and leaving one standing under new text is a verdict about a
-   * question nobody asked. The caller re-runs the dry run, which is what takes the
-   * new baseline.
-   *
-   * Declining leaves a live check exactly as it was, and deletes a row that was
-   * never anything but a proposal.
+   * The operator's ruling on one pending declaration. Accepting writes the proposal over the
+   * live columns and **clears every reading of the text it replaced** — dry run, baseline and
+   * window readings — because a reading standing under new text is a verdict about a question
+   * nobody asked; the caller re-runs the dry run. Declining leaves a live check exactly as it
+   * was and deletes a row that was only ever a proposal.
    */
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
     const row = this.ctx.db
@@ -348,30 +272,15 @@ export class WatchStore {
   }
 
   /**
-   * The operator's own declaration, written from the goal page.
+   * The operator's own declaration, written from the goal page. Upsert on the slug, the same
+   * merge key everything else here folds on.
    *
-   * Upsert on the slug, which is the same merge key everything else here folds
-   * on: an edit lands on the row and an id nothing carries starts one, so the
-   * route has one verb rather than a create and an update that could disagree
-   * about what a re-used slug means.
+   * **Live immediately**: `live=0` holds back a query *an agent* wrote until the operator has
+   * read it, and this one they typed. The caller runs the dry run straight after.
    *
-   * **Live immediately, and that is not the approval being skipped — it is the
-   * approval.** What `live=0` holds back is a query *an agent* wrote, until the
-   * operator has read it; a query the operator typed has been read by the only
-   * party the flag exists to protect. The caller runs the dry run straight after,
-   * exactly as accepting a proposal does, which is what puts it to the environment
-   * and takes a measure's baseline.
-   *
-   * **The readings are cleared only where the question changed.** An edited query
-   * or presence has never been run, so the dry run, the baseline and the window's
-   * own readings are readings of a question nobody is asking any more — the rule
-   * every other writer here follows. A re-worded title or a changed threshold is
-   * the *same* question, and dropping a baseline for it would cost a measure the
-   * before it cannot retake: the arrival has happened, and a baseline read now is
-   * a reading of the changed system.
-   *
-   * Any pending proposal on the row goes with the write, for the reason a replan
-   * drops one: it was an amendment to text that no longer stands.
+   * **Readings are cleared only where the question changed** — an edited query or presence.
+   * A re-worded title or changed threshold is the same question, and dropping its baseline
+   * would cost a measure a before it cannot retake. Any pending proposal goes with the write.
    */
   saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
     const now = this.ctx.now();
@@ -397,9 +306,8 @@ export class WatchStore {
         .run({
           ...check,
           expectBaseline: check.expectBaseline ? 1 : 0,
-          // The store's, never the caller's: `seq` is display order within this
-          // goal, so an edit keeps its position and a new check goes after the ones
-          // the reader has already placed rather than on top of one of them.
+          // The store's, never the caller's: `seq` is display order, so an edit keeps its
+          // position and a new check goes after the ones already placed.
           seq: row?.seq ?? this.nextWatchSeq(originRef),
           baselineValue: asked ? row.baseline_value : null,
           baselineAt: asked ? row.baseline_at : null,
@@ -423,15 +331,9 @@ export class WatchStore {
   }
 
   /**
-   * Drop a check and the readings taken against it, whoever wrote it.
-   *
-   * The readings go in the same transaction for the reason a replan's sweep takes
-   * them: a reading of a check nothing declares is a number with no rule, and a
-   * verdict with nothing behind it is the shape that is unreadable six weeks
-   * later.
-   *
-   * False back means there was no such row — refused by the route rather than
-   * reported as done, because a click that deleted nothing must not answer `ok`.
+   * Drop a check and the readings taken against it, whoever wrote it — both in one
+   * transaction, since a reading of a check nothing declares is a number with no rule. False
+   * back means there was no such row, which the route refuses rather than answering `ok`.
    */
   deleteGoalWatch(originRef: string, checkId: string): boolean {
     return this.ctx.db.transaction(() => {
@@ -453,13 +355,9 @@ export class WatchStore {
   }
 
   /**
-   * Open a window on an arrival.
-   *
-   * `OR IGNORE`, for {@link EnvironmentStore.recordGoalArrival}'s reason and one
-   * sharper: a goal that grows another pull request and is confirmed again has not
-   * arrived twice — and replacing would move `settles_at` forward, or worse clear
-   * `settled_at`, which is **a settled watch re-opened by a later reading**. That
-   * is a record of what happened after a deploy, not a monitor.
+   * Open a window on an arrival. `OR IGNORE`: a goal confirmed again has not arrived twice,
+   * and replacing would move `settles_at` forward or clear `settled_at` — a settled watch
+   * re-opened by a later reading.
    */
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.ctx.db
@@ -471,12 +369,9 @@ export class WatchStore {
   }
 
   /**
-   * Fix a window's verdict: its readings stop and its rows stay on the goal page
-   * as the permanent account of what production said about this work.
-   *
-   * The `settled_at IS NULL` guard is the whole of the one-way rule, in SQL rather
-   * than in a caller: a second settle cannot move the stamp, so nothing about when
-   * a window closed depends on which pass got to it.
+   * Fix a window's verdict: its readings stop and its rows stay as the permanent account of
+   * what production said. The `settled_at IS NULL` guard is the one-way rule, in SQL rather
+   * than in a caller, so a second settle cannot move the stamp.
    */
   settleWatchWindow(goalRef: string, environment: string): void {
     this.ctx.db
@@ -485,23 +380,12 @@ export class WatchStore {
   }
 
   /**
-   * Give a window more time, on the operator's own click.
+   * Give a window more time, on the operator's own click. It re-opens *this* window rather
+   * than opening a second one, so the goal's readings stay one series.
    *
-   * **It re-opens *this* window rather than opening a second one**, which is the
-   * shape the table has: a row is keyed on `(goal_ref, environment)`, so a second
-   * window would be a different key, and the goal's readings would be one series
-   * split across two rows nothing joins. Re-opening keeps the account whole — the
-   * readings taken before the window ran out are still the evidence behind what it
-   * says next.
-   *
-   * That is deliberately the one thing that clears `settled_at`, and it does not
-   * weaken {@link settleWatchWindow}'s guard: what that guard prevents is a
-   * *later reading* moving a stamp the harness already wrote, and nothing here is
-   * a reading. Between the two, a settled verdict is put back in play only by
-   * somebody deciding it should be.
-   *
-   * Null back means no such window, which the route refuses rather than reporting
-   * as done: a click that extended nothing must not answer `ok`.
+   * This is deliberately the only thing that clears `settled_at`; {@link settleWatchWindow}'s
+   * guard is about a later *reading* moving a stamp, and nothing here is a reading. Null back
+   * means no such window, which the route refuses rather than answering `ok`.
    */
   extendWatchWindow(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
     const now = this.ctx.now();
@@ -526,13 +410,9 @@ export class WatchStore {
   }
 
   /**
-   * Append what one check answered.
-   *
-   * Append-only and keyed on the read time, so a window keeps the series rather
-   * than the last answer: the readings are the evidence behind the verdict, and a
-   * row overwritten in place would leave the verdict standing with nothing behind
-   * it. Bounded by `for` over `watchIntervalMs` — 96 rows per check per
-   * environment on the defaults — rather than by a retention rule.
+   * Append what one check answered. Append-only and keyed on the read time, so a window
+   * keeps the series that is the evidence behind its verdict. Bounded by the window's own
+   * length over `watchIntervalMs`, not by a retention rule.
    */
   recordWatchReading(input: {
     goalRef: string;

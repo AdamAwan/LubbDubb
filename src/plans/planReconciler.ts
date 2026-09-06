@@ -43,23 +43,11 @@ interface PlanReconcilerDeps {
 
 /**
  * Fold observed reality onto the plan-part rows, once per pulse, next to
- * `worldDiff`. **The store holds intent; the outside world stays the source of
- * truth** — tracking that only records what LubbDubb meant to do goes fictional
- * within a day (a human merges a part by hand, or closes its PR, and the store
- * still says `dispatched`).
- *
- * Two sources, good at different things:
- *
- * - **Git** for branch reality. It is the only source that sees a branch before a
- *   PR exists, and "has this part actually pushed" is precisely what a dependent
- *   stacks on. It cannot see a merge: `merge_pr` squashes, and a squash-merged
- *   branch has no ancestry link to its base.
- * - **The provider**, from the world snapshot, for PR and merge state.
- *
- * It runs *before* `Dispatcher.decide` in the same cycle, so a part it moves to
- * `ready` is dispatchable immediately — intended, and safe because every fold is
- * idempotent: each writes a status derived from the observation, never toggled
- * relative to the previous one.
+ * `worldDiff`. The store holds intent; the outside world stays the source of
+ * truth. Two sources: git for branch reality (sees a branch before a PR
+ * exists, but not a squash merge), and the provider's snapshot for PR/merge
+ * state. Runs before `Dispatcher.decide` in the same cycle, so a part moved to
+ * `ready` is dispatchable immediately. Safe because every fold is idempotent.
  */
 export class PlanReconciler {
   private lastFetchAt = 0;
@@ -70,12 +58,9 @@ export class PlanReconciler {
   constructor(private readonly deps: PlanReconcilerDeps) {}
 
   async reconcile(world: WorldSnapshot): Promise<void> {
-    // `awaiting_approval` is reconciled too. It dispatches nothing, but readiness
-    // is what the "Up next" queue renders as held — an unreconciled plan's parts
-    // are all still `pending`, so the operator would be asked to approve a
-    // decomposition whose parts were invisible everywhere but the panel. (A
-    // replan of a live plan sits here as well, and its in-flight parts must keep
-    // being folded while the amendment waits on a human.)
+    // `awaiting_approval` is reconciled too: it dispatches nothing, but its parts
+    // would otherwise stay `pending` and invisible in "Up next" — and a replan of a
+    // live plan sits here with in-flight parts that must keep being folded.
     const plans = this.deps.store
       .listPlans()
       .filter((p) => p.status === 'active' || p.status === 'complete' || p.status === 'awaiting_approval');
@@ -119,18 +104,14 @@ export class PlanReconciler {
     if (issueNumber === null) return;
     const parts = store.listPlanParts(plan.id);
 
-    // `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist — git
-    // stores refs as files, so the flat branch blocks the directory. An issue picked
-    // up unplanned first and planned afterwards has exactly that branch, and every
-    // part branch would fail to create with a git error nobody can act on. Say it
-    // once, plainly, and park the parts that haven't been cut yet.
+    // Refs are files, so a flat `issue/12` branch blocks the directory
+    // `issue/12/<slug>` needs. Park the parts not yet cut and say so once.
     const flat = issueBranch(issueNumber);
     const presence = await this.deps.git.presence(flat);
     const flatTaken = presence.local || presence.remote;
 
-    // The backing rows for this plan's human steps. Read once per plan rather than
-    // per part, and *not* filtered to open ones: `declined` is precisely the state
-    // this loop has to see, and filtering would hand it silence for a refusal.
+    // This plan's human steps, read once per plan and *not* filtered to open ones:
+    // `declined` is precisely the state this loop has to see.
     const declined = new Set(
       this.deps.store
         .listHumanTasksForParts(parts.filter(partIsHuman).map((p) => p.id))
@@ -140,67 +121,41 @@ export class PlanReconciler {
 
     const next = new Map<string, Partial<PlanPart>>();
     for (const part of parts) {
-      // A human part has no pull request to fold and no agent to have stalled.
-      // What settles it is an operator marking its task done, which writes
-      // `concluded` directly; what stops it is their declining it, handled with
-      // the other blocking reading below.
+      // A human part has no PR to fold and no agent to have stalled — settled
+      // by marking its task done, stopped by declining it below.
       if (partIsHuman(part)) continue;
-      // A retired part is out of the plan: an amendment dropped it before anything
-      // was started for it, so there is no reality to fold on and nothing that
-      // should quietly bring it back.
-      //
-      // A concluded one is out for the opposite reason — it *finished*. And this is
-      // where the fold genuinely differs by kind: for a report or a determination
-      // there is no outside world to be the source of truth, because the record was
-      // durable in the store the moment the agent wrote it. The only thing this loop
-      // could do to such a part is undo it, which is exactly what a stray push or a
-      // PR opened on its branch would otherwise achieve.
+      // Retired: an amendment dropped it. Concluded: the store *is* the record
+      // for a report/determination — folding could only undo it.
       if (part.status === 'retired' || part.status === 'concluded') continue;
       const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
       if (patch) next.set(part.slug, patch);
     }
-    // Applied to a working copy so readiness below sees this pulse's observations,
-    // not last pulse's — a dependency that merged this cycle unblocks its dependent
-    // in the same cycle.
+    // A working copy, so readiness below sees this pulse's observations.
     const observed = parts.map((p) => ({ ...p, ...next.get(p.slug) }) as PlanPart);
     const index = bySlug(observed);
 
-    // A part whose branch *is* the flat one does not collide with it — it is what
-    // is on it. That is the shape a plan backfilled onto an issue the funnel had
-    // already picked up unplanned has (`backfillWholePlanParts`), and blocking it
-    // against its own branch would wedge exactly the plans the backfill exists to
-    // keep moving.
-    //
-    // A human part is skipped for the reason the fold loop skips it: it is never
-    // cut, so it is outside the branch namespace entirely and the flat branch is
-    // not in its way. Without the skip it falls through the `??` to a hypothetical
-    // branch nothing will ever ask git for, compares unequal, and is parked with a
-    // git instruction that is false about that part.
+    // A part whose branch *is* the flat one does not collide — the shape
+    // `backfillWholePlanParts` leaves. A human part is never cut, so it's
+    // outside the branch namespace and skipped.
     const collidesWith = (part: PlanPart): boolean =>
       flatTaken && !partIsHuman(part) && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
 
     for (const part of observed) {
       if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;
-      // Two things block a part, and the collision is asked first because it is
-      // the wider fact: when git cannot cut this part's branch, a declined step is
-      // not the reason the operator needs to read.
+      // Collision first: it is the wider fact, and when git cannot cut the branch a
+      // declined step is not the reason to show.
       const refused = declined.has(part.id);
       const collision = collidesWith(part);
       const status = collision || refused ? 'blocked' : await this.readiness(part, index, issueNumber);
-      // The reason travels with the status, so a part that is still blocked on a
-      // pulse where nothing flipped can still say why — and one that is no longer
-      // blocked stops claiming a collision that has been resolved. `differs` keeps
-      // both writes to real transitions.
+      // The reason travels with the status. `differs` keeps writes to real transitions.
       const blockedReason = collision
         ? refCollisionReason(issueNumber, presence)
         : refused
           ? declinedStepReason(part.title)
           : null;
-      // Which blocker, beside the sentence about it. `planIsWedged` escalates a
-      // collision and must not escalate a decline, and the reconciler is the one
-      // place that knows which it just wrote — a reader re-deriving it from the
-      // prose would be one rewording away from putting the operator's own refusal
-      // back in front of them. → `docs/spec/08-planning.md`
+      // `planIsWedged` escalates a collision and must not escalate a decline;
+      // re-deriving that from the prose would be one rewording from breaking.
+      // → `docs/spec/08-planning.md`
       const blockedBy: PlanPartBlocker | null = collision ? 'collision' : refused ? 'declined' : null;
       if (status !== part.status || blockedReason !== part.blockedReason || blockedBy !== part.blockedBy)
         next.set(part.slug, { ...next.get(part.slug), status, blockedReason, blockedBy });
@@ -213,9 +168,8 @@ export class PlanReconciler {
       store.updatePlanPart(part.id, patch);
       changed = true;
     }
-    // Still only on a flip: the Errors panel is a feed, and a line per pulse for a
-    // standing condition is how a feed stops being read. What the operator needs
-    // on every later pulse is on the part rows above.
+    // Only on a flip: the Errors panel is a feed, and the standing reason is on the
+    // part rows above.
     if (changed && observed.some(collidesWith)) {
       this.deps.errors?.record({
         source: 'cycle',
@@ -225,32 +179,18 @@ export class PlanReconciler {
 
     const rolled = store.rollUpPlanStatus(plan.id);
     const current = rolled ?? plan;
-    // Write the status comment when there is news — the plan appearing (no comment
-    // yet), a part moving, or the plan completing. It's edited in place, so this is
-    // one living comment rather than a stream, which is what keeps it off the
-    // auto-send gate: it's mechanical bookkeeping, not authored prose.
-    //
-    // Not while the plan is awaiting approval: the comment is the plan's progress
-    // channel, and an unapproved plan has no progress to report — posting it would
-    // announce a commitment on the tracker that the operator has not made, and a
-    // refusal would then leave that announcement standing.
+    // On news only, edited in place — keeps it off the auto-send gate. Never
+    // while awaiting approval: it would announce a commitment not yet made.
     if (current.status !== 'awaiting_approval' && (current.statusCommentRef === null || changed || rolled)) {
       await this.writeStatusComment(current, store.listPlanParts(plan.id), issueNumber);
     }
   }
 
   /**
-   * What the provider says about a part's PR — see {@link observePartPr} for the
-   * ordering, which is the whole substance of this fold.
-   *
-   * The reason it's worth naming here: absence used to be read as **merged**
-   * unconditionally, because both providers list only open PRs and the world model
-   * had no closed state to tell a merge from an abandonment. That inference is now
-   * the *fallback* rather than the only reading — inside `closedPrWindowMs` the
-   * closed list says which it was, and a part whose PR was abandoned goes back to
-   * `ready` instead of silently completing its plan. Outside the window nothing
-   * changes, deliberately: a PR that merged last week is still absent, and reading
-   * that as un-merged would be a far worse bug than the one this fixes.
+   * What the provider says about a part's PR — see {@link observePartPr} for
+   * the ordering. Inside `closedPrWindowMs` the closed list distinguishes a
+   * merge from an abandonment; outside it, an absent PR falls back to
+   * "merged", deliberately.
    */
   private foldPr(
     part: PlanPart,
@@ -275,22 +215,10 @@ export class PlanReconciler {
 
   /**
    * `ready` once every dependency has pushed a branch worth stacking on, else
-   * `pending`.
-   *
-   * **This is where the arity rule lives** (issue #170). Ingestion used to refuse a
-   * part naming more than one dependency, as the static form of "at most one *open*
-   * dependency"; it now accepts a rejoin, and the real rule is enforced here, where
-   * "open" is a thing that can actually be observed. Two halves, and the second is
-   * not optional: every dependency must be satisfied, **and at most one of them may
-   * still be unsettled** — because `partBase` cuts this part's branch from that one,
-   * and with two in flight there are two candidate branches and no way to choose. A
-   * rejoin therefore waits for all of its prerequisites to reach a terminal and then
-   * bases on the integration branch, which is the case the old cap refused for a
-   * reason that was never true of it.
-   *
-   * Only an unsettled dependency costs a git read: `dependencySatisfied` answers for
-   * a settled one without asking. So a chain — every plan written before this — makes
-   * exactly the one shell-out it always did, and a rejoin makes at most one too.
+   * `pending`. This is where the dependency arity rule lives: every dependency
+   * must be satisfied *and* at most one may still be unsettled, since
+   * `partBase` cuts this branch from that one and two in flight give no way
+   * to choose.
    */
   private async readiness(
     part: PlanPart,
@@ -314,20 +242,16 @@ export class PlanReconciler {
   }
 
   private async writeStatusComment(plan: Plan, parts: PlanPart[], issueNumber: number): Promise<void> {
-    // The validation plan rides in the same comment, read here rather than
-    // threaded down from the caller because it is the same one living body: a
-    // check marked off changes what the ticket says, so it has to reach the
-    // memoisation below or the edit is never written.
+    // The validation plan rides in the same comment, so a checked-off check
+    // reaches the memoisation below — otherwise the edit is never written.
     const body = renderPlanComment(
       plan,
       parts,
       this.deps.prRefStyle ?? '#',
       this.deps.store.listValidationChecks(plan.originRef),
     );
-    // The caller gates on observed news before it gets here; this is the second
-    // guard, and the one that makes a re-render free. Memoised rather than stored:
-    // a restart costs one idempotent edit, and a column would be a copy of the
-    // comment we already have a ref to.
+    // Second guard, after the caller's news gate. Memoised, not stored — a
+    // restart costs one idempotent edit.
     if (this.lastComment.get(plan.id) === body) return;
     try {
       const result = await this.deps.sink.upsertIssueComment({
@@ -338,8 +262,7 @@ export class PlanReconciler {
       if (result.ref && result.ref !== plan.statusCommentRef) this.deps.store.setPlanStatusComment(plan.id, result.ref);
       this.lastComment.set(plan.id, body);
     } catch (err) {
-      // Progress reporting must never take the pulse down with it — the plan keeps
-      // running, and the failure shows up in the Errors panel.
+      // Progress reporting must never take the pulse down with it.
       this.deps.errors?.record({
         source: 'cycle',
         message: `Could not update the plan status comment on #${issueNumber}: ${(err as Error).message}`,
@@ -349,19 +272,10 @@ export class PlanReconciler {
 }
 
 /**
- * Why a part a person owned is `blocked`: they were asked, and they said no.
- *
- * A declined step is not folded into a terminal, and that is the decision this
- * function encodes. Concluding the part would settle it, `partSettled` would
- * answer true, and every dependent waiting on the thing that was refused would be
- * released to an agent — the plan completing on work nobody did. So the part stops
- * where it is, its dependents stay `pending`, and the operator's own words stand
- * on the row as the account of why. The ways out are the two already on the panel:
- * Replan, or abandon the decomposition.
- *
- * The operator's note is not repeated here. It is on the {@link HumanTask} row the
- * panel draws beside this one, and a copy would be a second place for it to be
- * edited out of step.
+ * Why a part a person owned is `blocked`: they were asked, and said no. A
+ * declined step is never folded into a terminal — concluding it would make
+ * `partSettled` true and release every dependent, completing the plan on work
+ * nobody did.
  */
 function declinedStepReason(title: string): string {
   return (
@@ -371,30 +285,11 @@ function declinedStepReason(title: string): string {
 }
 
 /**
- * Why every part of a plan is `blocked`, in the harness's own words.
- *
- * This is one of the two things that block a part — the other is
- * {@link declinedStepReason} — and {@link PlanReconciler.readiness} is still not
- * among them: it answers `pending` or `ready` and never `blocked`. Both blocking
- * readings are facts the reconciler observes rather than derives from the graph,
- * which is why they live together in its loop and why each states its own reason.
- *
- * It is one function because the sentence the operator reads on the Goal Floor
- * and the sentence in the Errors panel have to be one string. Before, only the
- * second existed, and it was recorded under `changed && collision` — the honest
- * shape for an event feed, since a feed carries news, but it means a plan blocked
- * yesterday explains itself to nobody today and to nobody at all across a
- * restart. So the feed keeps the news and the *reason* moves onto the row beside
- * the status it explains, where it stands for exactly as long as the block does.
- * The floor draws a stopped machine's plate from it verbatim, composing nothing.
- *
- * It takes the {@link BranchPresence} rather than the boolean the reconciler acts
- * on, because *where* the branch is decides which action works, and the two are
- * not interchangeable: a remote branch cannot be cleared by any local command, and
- * `maybeFetch`'s own `git fetch --prune` restores its remote-tracking ref on the
- * next pulse. An operator told only "delete or rename the branch" deletes the local
- * ref, watches nothing change, and repeats it — the reason read correctly and was
- * useless, which is the failure mode a standing explanation has to avoid.
+ * Why every part of a plan is `blocked`, in the harness's own words — one
+ * string, so the Goal Floor plate and the Errors panel line cannot diverge.
+ * Takes the {@link BranchPresence}, not a boolean, because *where* the branch
+ * is decides which command works: a remote branch cannot be cleared locally,
+ * since `maybeFetch`'s `git fetch --prune` restores it next pulse.
  */
 export function refCollisionReason(issueNumber: number, presence: BranchPresence): string {
   const flat = issueBranch(issueNumber);

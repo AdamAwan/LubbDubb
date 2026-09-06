@@ -1,46 +1,19 @@
 import { DISPATCH_PIPELINE } from '../dispatcher/rules.js';
 
 /**
- * Which model each kind of work runs on, keyed on the dispatch rule that proposed
- * it (issue #321).
- *
- * The key is a `DISPATCH_RULES` id because that is already what a task records
- * (`Task.rule`) and already the axis `src/taskTypeSpend.ts` prices work by — so
- * config, spend and the decision log share one vocabulary rather than growing a
- * second.
- *
- * The rule points at a **named profile**, and a profile is a model and how hard
- * to run it. The indirection buys a stable name (`fast`, `deep`) that survives a
- * model being replaced: when a new model ships, one profile value changes and
- * every rule pointing at it follows. It is also what makes the load-time
- * rejection below possible at all — a bare model string can only be validated by
- * the installed CLI.
- *
- * Deliberately carries no *launch* setting but those two: no permission mode, no
- * extra args. `claudeArgs` stays the single global escape hatch, which
- * structurally removes the risk of a profile's args clobbering the
- * `--allowedTools` MCP grants. Both launch fields here are flags the harness
- * emits itself, which is what keeps them out of that argument. The profile's
- * other two fields — its rank and its description — are read by the harness and
- * never reach the command line, so they do not widen that surface.
- *
- * Which profile a run gets is answered in {@link resolveAgentProfile}, and it is
- * no longer the rule alone: a goal can be pinned to a profile on its ticket, and
- * a plan can name one per part (issue #342). The rule stays the default axis.
+ * Which model each kind of work runs on, keyed on the dispatch rule that proposed it — the
+ * same id `Task.rule` and `src/taskTypeSpend.ts` already use. →
+ * `docs/spec/02-configuration.md#model-assignment-by-rule`
  */
 export interface AgentModels {
   /**
-   * Profile name to the model it runs and the depth it runs at. Both are for one
-   * launch, and the profile is the only place they are paired: a rule assigned
-   * `fast` gets that model *and* that effort, never one from one profile and one
-   * from another.
+   * Profile name to the model it runs and the depth it runs at. The profile is the only
+   * place the pair is made, so the two never come from different profiles.
    */
   profiles: Record<string, AgentProfile>;
   /**
-   * The profile every rule with no {@link byRule} entry runs on, **and** every
-   * dispatch composed outside a rule. An operator who sets only this has moved
-   * the whole fleet with one line. Omitted, an unassigned rule carries no
-   * `--model` at all.
+   * The profile every rule with no {@link byRule} entry runs on, **and** every dispatch
+   * composed outside a rule.
    */
   default?: string;
   /** The per-kind assignments: dispatch rule id to profile name. */
@@ -49,67 +22,21 @@ export interface AgentModels {
 
 /** One named profile: what to launch, and how hard to think. */
 interface AgentProfile {
-  /**
-   * Where this profile sits on the cheap-to-deep ladder, low first. Unique across
-   * `profiles`, and refused at boot when it is not.
-   *
-   * Required because three things need to compare two profiles and none of them
-   * can do it from a name: the goal-profile gate has to say whether the appraiser
-   * proposed something *cheaper* or *deeper* than what is standing, the cockpit
-   * orders its dropdowns by it, and both draw a non-default choice loudly in the
-   * direction it went. Declaration order was the alternative and is not one — a
-   * config key's position is not a value, and a reordered JSON block would
-   * silently re-rank the fleet.
-   *
-   * The number is ordinal only. Nothing reads the gaps, so leaving room between
-   * ranks costs nothing.
-   */
+  /** Where this profile sits on the cheap-to-deep ladder, low first. */
   rank: number;
-  /**
-   * One sentence saying what this profile is *for*, written for an agent rather
-   * than an operator.
-   *
-   * This is the whole of what the appraiser knows about the deployment's profiles:
-   * `appraise_issue` enumerates them with these descriptions, so the agent proposes
-   * from the operator's own vocabulary rather than from an abstract difficulty
-   * scale that would then need mapping back. A profile whose description does not
-   * say when to pick it makes the proposal a guess — which is the one failure here
-   * that nothing can catch, since a plausible wrong profile reads exactly like a
-   * right one.
-   */
+  /** One sentence saying what this profile is *for*, written for an agent. */
   description: string;
   /**
-   * Whatever string `claude --model` accepts — an alias (`haiku`, `sonnet`,
-   * `opus`) or a full model id. The harness never validates the model itself;
-   * only the installed CLI knows the valid set, so a profile holding a bad alias
-   * fails at spawn rather than at boot.
-   *
-   * Prefer a full id. Both are accepted, but an alias re-points itself the day a
-   * new model ships — which is the profile *name*'s job, and makes a stored
-   * `Task.model` a worse record of what a run actually cost.
+   * Whatever string `claude --model` accepts — an alias or a full id; prefer a full id,
+   * since an alias re-points itself when a new model ships. Never validated here: only the
+   * installed CLI knows the set, so a bad value fails at spawn.
    */
   model: string;
-  /**
-   * Passed to `claude --effort`. Omitted leaves the flag off, and the CLI's own
-   * default applies — which is not the same as a low setting: the CLI defaults to
-   * the top of the ladder, so an unset effort is the *expensive* choice, not the
-   * neutral one.
-   *
-   * Which levels a model accepts is the CLI's business, not the harness's — the
-   * smaller models reject the flag outright. Like {@link model}, a level this
-   * deployment's models cannot take fails at spawn.
-   */
+  /** Passed to `claude --effort`. */
   effort?: AgentEffort;
 }
 
-/**
- * The levels `claude --effort` takes, cheapest first.
- *
- * Not exported: the config surface is the profile, and a second name for this in
- * `src/types.ts` is the vocabulary drift the rule-id-as-key choice above exists
- * to avoid. `Task.effort` stores the resolved string for the same reason
- * `Task.rule` is a plain string — a domain type does not reach in here.
- */
+/** The levels `claude --effort` takes, cheapest first. */
 type AgentEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -120,50 +47,20 @@ interface ResolvedProfile {
   name: string;
   model: string;
   effort: string | null;
-  /**
-   * Which level of {@link resolveAgentProfile}'s chain answered.
-   *
-   * Stored beside the name rather than re-derived when the run is read: config
-   * moves, and a drawer that recomputed "was this pinned?" against today's
-   * `byRule` would relabel a finished run whenever the policy changed. It is also
-   * the whole of what makes a pinned run legible — a bumped agent that reads as
-   * an ordinary one is the invisible half of the feature.
-   */
+  /** Which level of {@link resolveAgentProfile}'s chain answered. */
   source: ProfileSource;
 }
 
-/**
- * Which level of the precedence chain named the profile a run launched on.
- *
- * `pin` covers all three things that can pin one dispatch — the goal's tag, the
- * plan's part profile, and the operator's queue override — because
- * what it tells a reader is that this run is *not* priced by its rule, and which
- * of the three wrote it is a question the object that carries it answers.
- */
+/** Which level of the precedence chain named the profile a run launched on. */
 export type ProfileSource = 'pin' | 'rule' | 'default';
 
 /** The rule ids that can actually appear on a dispatched action's `rule`. */
 const STAGE_RULE_IDS: ReadonlySet<string> = new Set(DISPATCH_PIPELINE.map((r) => r.id));
 
 /**
- * Refuse a model policy that cannot do what it says, at load, naming the key.
- *
- * Every rejection is here because the alternative is invisible rather than
- * because validation is virtuous: a profile name that resolves to nothing would
- * launch with no flag (or a garbage one) and read as working, and a typo'd rule
- * id would simply never match — the exact failure class the config rules exist to
- * prevent.
- *
- * The bare-string profile is refused by name for that reason too. It was the
- * shape before profiles carried an effort, and accepting both would leave one
- * config key with two spellings — the drift the named profile exists to end. A
- * deployment carrying the old shape stops at boot with the fix in the message,
- * rather than starting with a profile the resolver reads as having no model.
- *
- * Validated against the *pipeline* ids rather than the whole `DISPATCH_RULES`
- * registry: `admission` and `terminal` entries (`cooldown-escalate`, `idle`)
- * never reach `action.rule`, so accepting one as a key would make the typo check
- * weaker than it looks.
+ * Refuse a model policy that cannot do what it says, at load, naming the key — every fault
+ * here is otherwise invisible (an unresolvable profile launches with no flag, a typo'd rule
+ * id never matches). → `docs/spec/02-configuration.md#model-assignment-by-rule`
  */
 export function validateAgentModels(models: AgentModels | undefined): void {
   if (!models) return;
@@ -196,10 +93,8 @@ export function validateAgentModels(models: AgentModels | undefined): void {
           `proposes one, so a missing or empty one makes every proposal a guess.`,
       );
   }
-  // Ranks decide a direction, so two profiles cannot share one: "the appraiser
-  // proposed deeper than your pin" has no answer when the two compare equal, and
-  // the cockpit's ordering would fall back to whatever order the object was
-  // written in — the implicitness `rank` exists to remove.
+  // Ranks decide a direction, so two profiles cannot share one: equal ranks leave
+  // "cheaper or deeper?" unanswerable and the cockpit ordering implicit.
   const byRank = new Map<number, string>();
   for (const [name, profile] of Object.entries(profiles)) {
     const clash = byRank.get(profile.rank);
@@ -229,25 +124,9 @@ export function validateAgentModels(models: AgentModels | undefined): void {
 }
 
 /**
- * What a run dispatched by this rule launches on, or null for "pass neither flag"
- * — which is exactly today's behaviour, and what a deployment with no
- * `agentModels` block gets everywhere.
- *
- * Resolved as a **whole profile**, never field by field: the model and the effort
- * a rule runs at are one decision, and a lookup that fell back for one and not
- * the other could pair a cheap model with a depth chosen for an expensive one.
- *
- * Called once, at dispatch, where the task row is written. Resolving here rather
- * than at spawn is what makes a boot-resumed agent re-launch on what it started
- * on rather than whatever config now says, and it keeps `AgentManager` ignorant
- * of both rules and profiles — it forwards two strings.
- *
- * A pure function of the rule and the pin: a retry runs the same profile, so no
- * dispatch depends on run history. The pin is a property of the *origin* — the
- * goal's tag, or the profile its plan named for this part — which is what keeps
- * that true while letting one issue run deeper than its rule (issue #342). A
- * re-dispatch resolves it again from the same two inputs, and a resumed agent
- * re-launches on what its task row stored.
+ * What a run dispatched by this rule launches on, or null for "pass neither flag" — what a
+ * deployment with no `agentModels` gets everywhere. Resolved as a whole profile, never
+ * field by field, so a fallback cannot pair one profile's model with another's effort.
  */
 export function resolveAgentProfile(
   models: AgentModels | undefined,
@@ -255,12 +134,9 @@ export function resolveAgentProfile(
   pinned?: string | null,
 ): ResolvedProfile | null {
   if (!models) return null;
-  // The pin wins, and it wins whether it is deeper or cheaper than the rule's
-  // entry: it is not an escalation, it is the answer to "which profile does this
-  // work want", asked of whoever knew most about it. An unknown pin falls
-  // through rather than resolving to nothing — the tag on a ticket is written by
-  // a human and cannot be refused at boot, so `resolveModelTag` records the
-  // fault and the rule's own entry still answers.
+  // The pin wins whether deeper or cheaper than the rule's entry. An unknown pin
+  // falls through rather than resolving to nothing — a ticket tag is human-written
+  // and cannot be refused at boot, so the rule's own entry still answers.
   const pin = pinned && Object.hasOwn(models.profiles, pinned) ? pinned : undefined;
   const source: ProfileSource = pin ? 'pin' : rule && models.byRule?.[rule] ? 'rule' : 'default';
   const name = pin ?? (rule ? models.byRule?.[rule] : undefined) ?? models.default;
@@ -271,14 +147,8 @@ export function resolveAgentProfile(
 }
 
 /**
- * The configured profile names, cheapest first — the order every operator-facing
- * and agent-facing list of them uses.
- *
- * One function rather than each caller sorting, because the cockpit's dropdown,
- * the appraisal tool's enum and the gate's direction wording must agree about which
- * way "up" is. Empty for a deployment with no `agentModels`, which leaves every
- * surface that renders a choice with nothing to render — correct, since there is
- * no choice to make.
+ * The configured profile names, cheapest first — the one order every operator- and
+ * agent-facing list uses, so they agree about which way "up" is.
  */
 export function orderedProfiles(models: AgentModels | undefined): { name: string; description: string }[] {
   if (!models) return [];
@@ -288,10 +158,8 @@ export function orderedProfiles(models: AgentModels | undefined): { name: string
 }
 
 /**
- * Where a profile sits on the ladder, or null when this deployment has no such
- * profile. Null rather than a sentinel number: a caller comparing two profiles
- * has to handle "there is nothing to compare" explicitly, and a `-1` would sort
- * an unknown name below the cheapest and read as a downgrade.
+ * Where a profile sits on the ladder, or null when this deployment has no such profile —
+ * null rather than a sentinel, which would read as a downgrade.
  */
 export function profileRank(models: AgentModels | undefined, name: string | null | undefined): number | null {
   if (!models || !name) return null;

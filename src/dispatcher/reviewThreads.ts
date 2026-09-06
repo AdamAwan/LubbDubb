@@ -1,48 +1,20 @@
 import type { PrComment } from '../types.js';
 
-/**
- * The dispatch origin for a PR's review feedback — **one per PR**, not one per
- * thread.
- *
- * A review is written as a unit: the same person leaves three comments in one
- * pass, each assuming the others. Handing an agent one thread in isolation is how
- * you get a fix for comment 1 that contradicts comment 3, or the same edit made
- * twice by two agents a cycle apart. Origin and branch stay 1:1 (the property
- * every dispatch gate leans on), and the whole review now costs one attempt cap
- * rather than one per thread.
- */
+/** The dispatch origin for a PR's review feedback — **one per PR**, not per thread: a review is written as a unit, origin and branch stay 1:1, and the whole review costs one attempt cap. */
 export function prCommentsOrigin(prNumber: number): string {
   return `pr:${prNumber}:comments`;
 }
 
-/**
- * The ref of a single review thread. No longer a dispatch origin — it is what
- * notify de-dup keys on, so a reviewer's fourth comment still reaches a running
- * agent instead of being swallowed by the origin its first three already claimed.
- * Deliberately the same string {@link replyProposalRef} names a drafted reply
- * with: one thread, one ref, whoever is asking about it.
- */
+/** The ref of a single review thread — not a dispatch origin, but what notify de-dup keys on. Deliberately the same string {@link replyProposalRef} names a drafted reply with. */
 export function prCommentOrigin(prNumber: number, commentId: string): string {
   return `pr:${prNumber}:comment:${commentId}`;
 }
 
 /**
- * The notify de-dup key for one thread — {@link prCommentOrigin} while the thread
- * is just its root, and the root **plus its newest message** once somebody has
- * replied under it.
- *
- * De-dup asks "has this agent already been told this?", and keyed on the thread
- * alone the answer was yes forever after the first delivery. A reviewer's
- * follow-up on a thread the agent was handed at dispatch is then a signal
- * delivered to nobody — which is exactly the shape of feedback an operator gives
- * while watching an agent work, and the one it must never be. The key moves when
- * the conversation does, so the follow-up reaches the running agent and the
- * unchanged thread still does not repeat itself every pulse.
- *
- * Not folded into `prCommentOrigin`: that string is a *ref* — the one a refused
- * `reply_draft` proposal is filed under, and the one `rejectionGuidance` matches
- * whole — and it has to stay the same string across the life of a thread. A key
- * that must move and a ref that must not are two jobs, so they are two functions.
+ * The notify de-dup key for one thread — {@link prCommentOrigin} while it is just its root, and the
+ * root **plus its newest message** once somebody has replied. The key must move when the
+ * conversation does, or a follow-up is a signal delivered to nobody. Not folded into
+ * `prCommentOrigin`: that string is a *ref* and must stay the same across the thread's life.
  */
 export function prCommentSignalRef(prNumber: number, thread: PrComment): string {
   const origin = prCommentOrigin(prNumber, thread.id);
@@ -51,20 +23,7 @@ export function prCommentSignalRef(prNumber: number, thread: PrComment): string 
   return newest === undefined ? origin : `${origin}@${newest.id}`;
 }
 
-/**
- * The unresolved threads, rendered for the end of the `pr-review-comment` prompt.
- *
- * **Appended, never interpolated**, for `ciFailureNote`'s reason: the template is
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so an override written against the old one-comment-per-agent
- * prompt declares no token for a thread list — interpolating would hand exactly
- * the deployments that customised most a single comment out of five, silently.
- * Appending has no fallback to get wrong.
- *
- * The thread id is named because it is what an agent needs to reply to the right
- * thread, and the count is stated up front so a truncated read still knows how
- * many there were.
- */
+/** The unresolved threads, rendered for the end of the `pr-review-comment` prompt. **Appended, never interpolated**, so an operator override without the token doesn't drop it. The thread id is named so the agent can reply to the right thread. */
 export function reviewThreadsNote(threads: PrComment[]): string {
   if (threads.length === 0) return '';
   const heading =
@@ -75,21 +34,7 @@ export function reviewThreadsNote(threads: PrComment[]): string {
   return `${heading}\n\n${bodies.join('\n\n')}${lastWordNote(threads)}`;
 }
 
-/**
- * One thread as the agent must read it: the root, then **every reply under it**,
- * oldest first, each named by its author.
- *
- * The root alone was the whole of what an agent ever saw, and a review thread is
- * not its opening line. A reviewer narrows a finding in the reply; the operator
- * says which of a bot's five comments actually needs fixing, and what the fix is,
- * in the reply. Handed the root by itself, the agent answers the wrong question
- * confidently — and to the person who wrote the reply that is indistinguishable
- * from being ignored, because the harness's answer never mentions what they said.
- *
- * A reply the harness itself sent is marked as such rather than left to be read
- * as the reviewer's. Without it an agent re-reads the fleet's own last answer as a
- * fresh instruction, which is how a thread gets the same fix twice.
- */
+/** One thread as the agent must read it: root then every reply, oldest first, each named by author. A reply the harness itself sent is marked as such, or an agent re-reads it as a fresh instruction. */
 function threadTranscript(thread: PrComment): string {
   const head = `${thread.author} (thread ${thread.id}):\n${quote(thread.body)}`;
   const replies = thread.replies ?? [];
@@ -100,16 +45,7 @@ function threadTranscript(thread: PrComment): string {
   return `${head}\n${rendered.join('\n')}`;
 }
 
-/**
- * The line that says what the transcript above is *for*, appended only when
- * there is a conversation to read.
- *
- * The list looks like a list of comments, and an agent that treats it as one
- * answers each root and skips the replies underneath — the same failure the
- * transcript exists to end, moved one step later. So the ordering rule is stated
- * outright: the newest message is the live ask, and an earlier one it revises is
- * history rather than a second instruction.
- */
+/** The line that says what the transcript above is *for*, appended only when there is a conversation to read. */
 function lastWordNote(threads: PrComment[]): string {
   if (!threads.some((t) => (t.replies?.length ?? 0) > 0)) return '';
   return (
@@ -123,25 +59,9 @@ function lastWordNote(threads: PrComment[]): string {
 }
 
 /**
- * The closing check appended after {@link reviewThreadsNote}: read the threads
- * again before finishing, and answer what is there now.
- *
- * The list in the prompt is a reading taken at dispatch, and a review is a live
- * thing — a reviewer leaves a fourth comment, or rewords the second, while the
- * agent is working. The branch-notify path in `prCiFailing` covers only part of
- * that: it delivers a thread the agent was never told about, only while the
- * agent is *running*, and an **edit** to a thread already in the prompt is no
- * new signal at all, so it is delivered to nobody. Anything it misses waits for
- * the next dispatch, which costs another attempt against the cooldown cap and,
- * at the cap, escalates to a human instead.
- *
- * Checking is cheap and the agent is the one who can do it: `world_read` serves
- * the same snapshot the dispatcher decided on, `unresolvedComments` and all, so
- * comparing it against the list it was handed is a read of the current review
- * rather than a memory of the one it started from.
- *
- * **Appended, never interpolated**, for {@link reviewThreadsNote}'s reason — and
- * more so here, since an override predating this cannot know to ask for it.
+ * The closing check appended after {@link reviewThreadsNote}: read the threads again before
+ * finishing. The prompt's list is a reading taken at dispatch, and branch-notify delivers no
+ * signal for an *edit* to a thread already in it. **Appended, never interpolated.**
  */
 export function reviewRecheckNote(prNumber: number): string {
   return (
@@ -159,17 +79,11 @@ export function reviewRecheckNote(prNumber: number): string {
   );
 }
 
-/**
- * The line a *running* agent on the branch is sent when a thread it has not been
- * told about appears. One per thread, collapsed into a single note by the caller.
- */
+/** The line a *running* agent on the branch is sent when a thread it has not been told about appears. One per thread, collapsed into a single note by the caller. */
 export function reviewThreadNote(prNumber: number, thread: PrComment): string {
   const replies = thread.replies ?? [];
   const head = `Review comment from ${thread.author} on PR #${prNumber} (thread ${thread.id}): "${thread.body}"`;
-  // The replies, for `threadTranscript`'s reason and one more: this line is often
-  // the *only* delivery a follow-up gets — it is sent because the thread moved,
-  // and the thing that moved it is the reply. Naming the root alone would deliver
-  // the notification and drop its content.
+  // Often the *only* delivery a follow-up gets; naming the root alone drops the reply's content.
   if (replies.length === 0) return head;
   const rendered = replies
     .map((r) => `${r.author}${r.ours ? ' (the fleet, earlier)' : ''}: "${r.body}"`)
@@ -186,27 +100,9 @@ function quote(body: string): string {
 }
 
 /**
- * Which pull request's review this caller may reply to, refusing every other
- * origin **by name and with what to do instead** — `remedyOrigin`'s shape, for
- * its reason.
- *
- * The pull request comes out of the origin rather than out of an argument, so an
- * agent cannot answer a review on a pull request it was not dispatched for. That
- * is the tool channel's one structural guarantee, and it is the whole of what
- * makes a reply the harness sends attributable at all.
- *
- * **Two origins, not one.** `pr:<n>:comments` is the agent answering a reviewer's
- * threads. `pr:<n>:review` is the fleet's own reviewer publishing what it found,
- * which `publishNote` has told it to do through this tool since the tool existed —
- * against an origin check that admitted only the first, so every deployment with
- * `review.publish` on refused the call it had just instructed, and the reviewer's
- * only remaining route was the operator's own credential in its shell, which the
- * same prompt forbids. The findings then reached the pull request as nothing at
- * all.
- *
- * Still fenced against `pr:<n>:ci`: a CI agent is answering a red check, and a
- * reply from it is a comment nobody asked for on a thread somebody else's agent
- * is working.
+ * Which pull request's review this caller may reply to, refusing every other origin by name. The
+ * PR comes out of the origin rather than an argument, so an agent cannot answer a review it was not
+ * dispatched for. Two origins: `pr:<n>:comments` and `pr:<n>:review`, still fenced against `pr:<n>:ci`.
  */
 export function replyOrigin(
   originRef: string | null,
@@ -224,22 +120,7 @@ export function replyOrigin(
   };
 }
 
-/**
- * The appendix that names {@link replyToReview} — and, just as importantly, tells
- * the agent **not** to post to the thread itself.
- *
- * The tool existing is not enough. This prompt hands an agent every thread id it
- * needs to reply with, a deployment's `agentAllowedTools` commonly grants it a
- * shell that reaches the tracker's CLI, and the sentence above about defending an
- * approach reads as an instruction to answer *somewhere*. Left to fill that in,
- * an agent posts as whoever is logged in on the machine: unsigned, unrecorded by
- * the harness, and attributed to the operator rather than to the fleet — with
- * nothing anywhere saying it happened.
- *
- * **Appended, never interpolated**, for {@link reviewThreadsNote}'s reason, and
- * unconditionally: an override written before the tool existed is exactly the
- * deployment whose agents still reach for `gh`.
- */
+/** The appendix that names {@link replyToReview} and tells the agent **not** to post to the thread itself, which would post as whoever is logged in, unsigned and unrecorded. **Appended, never interpolated**, unconditionally. */
 export function replyToolNote(): string {
   return (
     '\n\nWhen you have a reply for a thread — a defence, an answer, or a note about what you changed — ' +

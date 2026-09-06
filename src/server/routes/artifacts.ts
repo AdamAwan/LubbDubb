@@ -8,49 +8,34 @@ import { localValidationOutputDir } from '../../localValidation/origin.js';
 import type { RouteContext } from './context.js';
 
 /**
- * Serving a local file the cockpit may look at — one an agent flagged, or one an
- * operator attached to a brief — and the capability that authorizes it.
- *
- * The two routes share a shape because they share a problem: both are reached by
- * the browser *without* the cockpit's bearer token (a navigation for the first, an
- * `<img>` load for the second), so both sit outside the `/api` prefix guard and
- * carry a short-lived, per-subject capability instead.
+ * Serving a local file the cockpit may look at — one an agent flagged, one an operator
+ * attached to a brief, or a validation screenshot — and the capability that authorizes it.
+ * All are reached by the browser *without* the cockpit's bearer token (a navigation or an
+ * `<img>` load), so all sit outside the `/api` prefix guard and carry a short-lived,
+ * per-subject capability instead.
  */
 export function register(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
   const { store, config } = system;
 
   // Operator-configured absolute docsFolderPrefix entries are trusted roots this
-  // route may serve from, on top of each agent's worktree. Relative entries add
-  // nothing here — they're already covered by the worktree root.
+  // route may serve from, on top of each agent's worktree.
   const artifactRoots = absolutePrefixes(config.docsFolderPrefix);
 
-  // Serve a local artifact an agent flagged (a design doc, a report), addressed by
-  // its flag id. The path is taken from the *stored* flag row, not the request, so
-  // a client can only fetch a ref an agent actually surfaced — and the served path
-  // is confined to that agent's worktree or an operator-configured absolute
-  // `docsFolderPrefix` root (a symlink or `..` that escapes every root is refused).
-  // The response is sandboxed (CSP `sandbox`) so agent-authored HTML can't script
-  // the cockpit's origin. Rate-limited since it reads off disk. URL flags aren't
-  // served here; the cockpit links those directly.
+  // Serve a local artifact an agent flagged, addressed by its flag id. The path comes
+  // from the stored flag row, never the request, and is confined to that agent's
+  // worktree or an absolute `docsFolderPrefix` root. Sandboxed CSP so agent-authored
+  // HTML can't script the cockpit's origin.
   //
-  // **This route lives outside the `/api` prefix on purpose (issue #129).** It is
-  // reached by a top-level browser navigation — the operator clicks a chip, a new
-  // tab opens here — and a navigation cannot set an `Authorization` header, only
-  // `fetch` can. So the cockpit's bearer token (attached by hand to every `fetch`,
-  // held in a fragment the browser never sends) structurally cannot reach a route
-  // under `/api`, and the prefix guard would 401 it. Rather than carve an exception
-  // *into* the guard — which would erode "guarded by prefix, not per-route opt-in"
-  // — the route sits outside the prefix and authorizes itself with a per-flag
-  // capability the navigation can carry in the query string (see
-  // {@link ./artifactCapability.ts} for why that is not the cockpit token in a URL).
+  // Outside the `/api` prefix on purpose: a top-level navigation cannot set an
+  // `Authorization` header, so it authorizes itself with a per-flag capability in
+  // the query string instead.
   app.get(
     '/artifacts/:id',
     { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
     checked({ params: IdParams }, async ({ params, req, reply }) => {
       const { id } = params;
-      // Capability first, before the flag is even looked up: it is bound to this id,
-      // and refusing early keeps the route from confirming which flag ids exist to a
-      // caller that holds no capability. Skipped only when auth is off (no key).
+      // Capability first, before the flag is looked up, so the route does not confirm
+      // which flag ids exist to a caller holding none. Skipped only when auth is off.
       if (artifactKey) {
         const tk = (req.query as { tk?: unknown })?.tk;
         if (typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, id, Date.now()))
@@ -72,18 +57,9 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
     }),
   );
 
-  // Serve an image the operator attached to a brief (issue #249), addressed by
-  // its attachment id. Outside `/api` for the artifact route's reason and one more:
-  // this is loaded as an `<img src>`, a subresource fetch the browser makes on its
-  // own, which can no more carry the cockpit's `Authorization` header than a
-  // navigation can. So it authorizes itself with the same per-run capability,
-  // minted per attachment into the state snapshot.
-  //
-  // The path comes from the *stored row*, never from the request, and is
-  // re-confined to `attachmentRoot` before it is read — the same belt-and-braces
-  // the artifact route applies to a flag's ref. Nothing but this harness writes
-  // under that root, so the check has nothing to catch today; it is what keeps
-  // that true if something ever does.
+  // Serve an image the operator attached to a brief, addressed by its attachment id.
+  // Outside `/api` because an `<img src>` subresource fetch carries no `Authorization`
+  // header. The path comes from the stored row and is re-confined to `attachmentRoot`.
   app.get(
     '/attachments/:id',
     { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
@@ -99,33 +75,21 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       const file = confinedTo(config.attachmentRoot, attachment.path);
       if (!file) return reply.code(404).send({ error: 'attachment not found' });
       reply
-        // The stored mime, which was sniffed from the bytes rather than declared by
-        // whoever uploaded them — with `nosniff`, so the browser does not go looking
-        // for a second opinion. `sandbox` for the artifact route's reason: these
-        // bytes came from outside the harness and are rendered on its own origin.
+        // The stored mime, sniffed from the bytes rather than declared by the uploader,
+        // with `nosniff`. `sandbox`: outside bytes rendered on the harness's own origin.
         .header('content-type', attachment.mime)
         .header('content-security-policy', 'sandbox')
         .header('x-content-type-options', 'nosniff')
-        // Immutable: an attachment's bytes never change, and its id is minted with
-        // them. It is worth setting because the URL is stable across polls (see
-        // {@link attachmentSignerFor}); `private` because a capability URL must
-        // never be held by a shared cache.
+        // Immutable: an attachment's bytes never change, and the URL is stable across
+        // polls. `private`, because a capability URL must never sit in a shared cache.
         .header('cache-control', 'private, max-age=300, immutable');
       return reply.send(readFileSync(file));
     }),
   );
 
-  // Serve a screenshot a validating agent saved, addressed by its validation and
-  // its file name. Outside `/api` and capability-authorized for the attachment
-  // route's reason, word for word: this is loaded as an `<img src>` beside the
-  // finding it belongs to, and a subresource fetch carries no `Authorization`
-  // header.
-  //
-  // The **directory** comes from the stored row and the **name** from the request,
-  // which is the one thing here that differs from the two routes above — so the
-  // name is checked for a separator before it is joined, and the joined path is
-  // re-confined to the row's own directory afterwards. Either check alone would
-  // do; both are what keeps that true if the schema ever widens.
+  // Serve a screenshot a validating agent saved, outside `/api` for the attachment
+  // route's reason. Unlike the routes above the name comes from the request, so it
+  // is checked for a separator before joining and re-confined to the row's own directory.
   app.get(
     '/local-validations/:id/files/:name',
     { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
@@ -145,17 +109,13 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       const file = confinedTo(dir, resolve(dir, name));
       if (!file) return reply.code(404).send({ error: 'screenshot not found' });
       reply
-        // Sniffed from the extension rather than declared: these bytes were written
-        // by a browser this harness launched, into a directory only it writes to.
-        // `sandbox` and `nosniff` for the attachment route's reasons — they are
-        // still bytes from outside the harness, rendered on its own origin.
+        // Sniffed from the extension; `sandbox` and `nosniff` for the attachment
+        // route's reasons — still outside bytes on the harness's own origin.
         .header('content-type', artifactMime(file))
         .header('content-security-policy', 'sandbox')
         .header('x-content-type-options', 'nosniff')
-        // Immutable for the attachment route's reason: a validation's directory is
-        // written once, by an agent that has since finished, and the URL is stable
-        // across polls. `private`, because a capability URL must never be held by a
-        // shared cache.
+        // Immutable: written once by an agent that has since finished, URL stable across
+        // polls. `private`, because a capability URL must never sit in a shared cache.
         .header('cache-control', 'private, max-age=300, immutable');
       return reply.send(readFileSync(file));
     }),
@@ -163,34 +123,16 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
 }
 
 /**
- * What an attachment capability is signed over. Namespaced so a capability minted
- * for a flag cannot open an attachment (or the reverse) even if the two id spaces
- * ever collided — free, and it means the two routes never have to reason about
- * each other's ids.
+ * What an attachment capability is signed over. Namespaced so a capability minted for a
+ * flag cannot open an attachment, or the reverse, even if the id spaces ever collided.
  */
 function attachmentSubject(id: string): string {
   return `attachment:${id}`;
 }
 
 /**
- * Mint a capability into every attachment URL the state snapshot ships — the
- * `artifactSignerFor` of the route above, and deliberately the same key: both are
- * per-run, both are short-lived, and one secret with two subjects is less to get
- * wrong than two secrets.
- *
- * **The expiry is bucketed, unlike an artifact's.** An artifact URL is minted for
- * a click that may never come, so a fresh expiry every poll costs nothing. A
- * thumbnail is an `<img src>` the browser *is* loading, and a URL that changes on
- * every state poll is a URL the cache can never hit: the image would be re-fetched
- * every few seconds and flicker while it re-decoded. Rounding the expiry down to a
- * bucket makes the string identical across the polls inside one bucket, so the
- * browser's own cache does its job. The capability then lives between one and two
- * buckets rather than exactly one TTL, which is the same order of short.
- */
-/**
- * A screenshot's path parameters. The name is a **file name** — the grammar the
- * report tool already refuses a path in, restated here because this is the layer
- * where the string becomes a filesystem read.
+ * A screenshot's path parameters. The name is a file name, restated here because this
+ * is the layer where the string becomes a filesystem read.
  */
 const LocalValidationFileParams = z.object({
   id: z.string().min(1),
@@ -202,10 +144,8 @@ const LocalValidationFileParams = z.object({
 });
 
 /**
- * What a screenshot capability is signed over — namespaced for
- * {@link attachmentSubject}'s reason, and over the **pair**: a capability minted
- * for one file of a validation must not open another, since the name is the only
- * part of the address a caller could vary.
+ * What a screenshot capability is signed over — namespaced, and over the **pair**: a
+ * capability minted for one file of a validation must not open another.
  */
 function localValidationFileSubject(id: string, name: string): string {
   return `local-validation:${id}:${name}`;
@@ -213,9 +153,7 @@ function localValidationFileSubject(id: string, name: string): string {
 
 /**
  * Mint a capability into every screenshot URL the snapshot ships, on
- * {@link attachmentSignerFor}'s bucketed clock and for its reason: the URL has to
- * be stable across polls or every refetch would swap the `src` of an image the
- * browser has already loaded.
+ * {@link attachmentSignerFor}'s bucketed clock: the URL must be stable across polls.
  */
 export function localValidationFileSignerFor(key: Buffer): (id: string, name: string) => string {
   return (id, name) => {
@@ -224,6 +162,7 @@ export function localValidationFileSignerFor(key: Buffer): (id: string, name: st
   };
 }
 
+/** Mint a capability into every attachment URL the snapshot ships. The expiry is bucketed, unlike an artifact's: a thumbnail is an `<img src>` load, so a URL changing every poll could never hit the cache — it lives between one and two buckets rather than exactly one TTL. */
 export function attachmentSignerFor(key: Buffer): (attachmentId: string) => string {
   return (id) => {
     const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
@@ -232,10 +171,9 @@ export function attachmentSignerFor(key: Buffer): (attachmentId: string) => stri
 }
 
 /**
- * Resolve a stored absolute path, honoured only if it lands inside `root` and is a
- * regular file. Lexical containment first, then `realpathSync` on both sides, so a
- * symlink under the root cannot point outside it — the two guards
- * {@link resolveConfinedArtifact} makes, over one root and an always-absolute ref.
+ * Resolve a stored absolute path, honoured only if it lands inside `root` and is a regular
+ * file. Lexical containment first, then `realpathSync` on both sides, so a symlink under
+ * the root cannot point outside it.
  */
 function confinedTo(root: string, path: string): string | null {
   const target = resolve(path);
@@ -253,29 +191,23 @@ function confinedTo(root: string, path: string): string | null {
 }
 
 /**
- * Mint a capability into every artifact URL the state snapshot ships. Built here
- * rather than in `buildApp` so the ttl, the minting and the verifying are one
- * module — the route above is the only reader of what this signs.
+ * Mint a capability into every artifact URL the state snapshot ships. Built here so the
+ * ttl, the minting and the verifying stay one module.
  */
 export function artifactSignerFor(key: Buffer): (flagId: string) => string {
   return (flagId) => mintArtifactCapability(key, flagId, Date.now() + ARTIFACT_CAP_TTL_MS);
 }
 
 /**
- * Resolve a flagged artifact `ref` to an absolute path within one of the allowed
- * roots — the agent's worktree `cwd` plus any operator-configured `trustedRoots`
- * (the absolute `docsFolderPrefix` entries) — or null if it doesn't exist, isn't a
- * regular file, or escapes every root (via `..` or a symlink). A relative ref is
- * resolved against `cwd`; an absolute ref is honoured only if it lands inside a
- * trusted root. Two guards: a *lexical* containment check against some root runs
- * before any filesystem access, then `realpathSync` on both sides defeats symlink
- * traversal.
+ * Resolve a flagged artifact `ref` to an absolute path within one of the allowed roots —
+ * the agent's worktree `cwd` plus the absolute `docsFolderPrefix` entries — or null if it
+ * doesn't exist, isn't a regular file, or escapes every root via `..` or a symlink. Two
+ * guards: lexical containment before any filesystem access, then `realpathSync` on both
+ * sides against symlink traversal.
  */
 function resolveConfinedArtifact(cwd: string, ref: string, trustedRoots: string[]): string | null {
-  // A relative ref is worktree-relative; an absolute ref must land inside one of
-  // the operator-configured absolute prefixes (its own trusted root). The
-  // worktree cwd is always a trusted root. Serving re-validates containment here
-  // independently of the flag, so an odd stored ref can't read outside a root.
+  // A relative ref is worktree-relative; an absolute one must land inside a configured
+  // prefix. Containment is re-validated here independently of the flag.
   const target = isAbsolute(ref) ? resolve(ref) : resolve(cwd, ref);
   const roots = [cwd, ...trustedRoots];
   // Lexical containment against *some* root, before touching the filesystem.
@@ -303,12 +235,8 @@ export function absolutePrefixes(docsFolderPrefix?: string | string[]): string[]
 }
 
 /**
- * How long an artifact capability lives. Short, because a capability travels in a
- * URL (the one place a navigation can carry it) and a URL is the leakiest transport
- * we have. Long enough to comfortably outlast the gap between a state poll minting
- * the URL and the operator clicking it: the snapshot re-mints on every poll, so a
- * click is almost always against a capability seconds old, and even a backgrounded
- * tab's stale chip stays clickable for a few minutes.
+ * How long an artifact capability lives. Short, because it travels in a URL; long enough
+ * to outlast the gap between a state poll minting it and the operator clicking.
  */
 const ARTIFACT_CAP_TTL_MS = 5 * 60_000;
 

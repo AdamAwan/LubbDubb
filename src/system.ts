@@ -105,234 +105,87 @@ export interface System {
   connector: CompositeConnector;
   agents: AgentManager;
   escalations: EscalationInbox;
-  /**
-   * Where a human's accept/reject on a proposed act is applied (issue #109) — the
-   * missing wire between "approve" and "the approved thing happens".
-   */
+  /** Where a human's accept/reject on a proposed act is applied. */
   proposals: ProposalDesk;
-  /**
-   * Where an operator's standing authorization to land a whole stack is recorded,
-   * ended, and reconciled with the world each pulse (see `src/stacks/landing.ts`).
-   */
+  /** Where an operator's standing authorization to land a whole stack is recorded, ended, and reconciled with the world each pulse. */
   landings: StackLandingDesk;
-  /**
-   * The permission backstop (issue #130 phase B): where an agent's tool call that
-   * the allow-list doesn't cover blocks until the operator allows or denies it.
-   */
+  /** The permission backstop: an agent's tool call the allow-list doesn't cover blocks until the operator allows or denies it. */
   permissions: PermissionDesk;
-  /**
-   * The project's area tree, cached. Read by the state snapshot to tell an
-   * unclassified work item from a classified one, and by the appraisal tool to offer
-   * the nodes — both synchronously, which is the whole reason it is a directory
-   * rather than a provider call.
-   */
+  /** The project's area tree, cached; read synchronously by the state snapshot and the appraisal tool. */
   areaPaths: AreaPathDirectory;
-  /**
-   * Where agents orphaned by a crash or a shutdown wait for an operator to choose
-   * restore / requeue / remove. Its pending set holds the harness's pulse, so no
-   * new work is queued in front of work that was already in flight.
-   */
+  /** Where agents orphaned by a crash or shutdown wait for restore / requeue / remove. Its pending set holds the pulse. */
   recovery: RecoveryDesk;
   executor: ActionExecutor;
   /**
-   * What the executor is working on that is not an agent yet — the minutes a plan's
-   * dispatches spend queued behind each other's worktree handovers, which until it
-   * existed were visible nowhere at all. A reading, never a gate: nothing on it
+   * What the executor is working on that is not an agent yet. A reading, never a gate: nothing on it
    * counts against the cap. → `docs/spec/09-execution.md#what-is-being-readied`
    */
   readying: ReadyingBoard;
   dispatcher: Dispatcher;
   harness: Harness;
   /**
-   * Fires a local cycle when an agent ends, so the slot it just freed is filled in
-   * seconds rather than at the next heartbeat. Exposed for one reason: `main.ts`
-   * has to stop it on the way down, beside the heartbeat and for the same reason —
-   * a cycle is a thing that starts agents.
-   * → `docs/spec/04-harness-cycle.md#the-local-cycle`
+   * Fires a local cycle when an agent ends, so the freed slot is filled in seconds. Exposed because
+   * `main.ts` must stop it on the way down. → `docs/spec/04-harness-cycle.md#the-local-cycle`
    */
   localCycles: CycleTrigger;
   /**
-   * Verifies inbound webhook deliveries, invalidates exactly what they name, and
-   * asks for a real cycle. Exposed for the route module that fronts it — and for
-   * `main.ts`, which stops its trigger on the way down beside the heartbeat's.
-   * → `docs/spec/30-ingress.md`
+   * Verifies inbound webhook deliveries and asks for a real cycle. Exposed for the route module that
+   * fronts it and for `main.ts`, which stops its trigger on the way down. → `docs/spec/30-ingress.md`
    */
   ingress: Ingress;
-  /**
-   * The ingress's own cycle trigger. Separate from {@link localCycles} because what
-   * it fires is a **real** cycle, so it carries a floor that one has no need of.
-   */
+  /** The ingress's own cycle trigger, separate from {@link localCycles} because it fires a **real** cycle. */
   ingressCycles: CycleTrigger;
-  /**
-   * Writes the durable work graph each pulse. Exposed because the record outlives
-   * the world's memory of it — the routes and tests that read the graph back have
-   * no other handle on the thing that wrote it.
-   */
+  /** Writes the durable work graph each pulse; exposed because its readers have no other handle on the writer. */
   graph: WorkGraphRecorder;
-  /**
-   * Keeps the ticket mirror current, and the one thing that knows whether the
-   * first sweep has landed. Exposed because `/api/tickets` has to say so: an empty
-   * list mid-backfill and an empty list on an empty tracker are the same picture
-   * and different facts.
-   */
+  /** Keeps the ticket mirror current, and knows whether the first sweep has landed (an empty list mid-backfill differs from an empty tracker). */
   tickets: TicketSweep;
   /**
-   * The cross-fleet pool, or undefined on the `fake` default.
-   *
-   * Exposed because the cockpit reads its status — what this fleet last published,
-   * when it last polled, and which claims the secret backstop refused — and because
-   * the routes have no other handle on the thing that holds it. Absent, the Knowledge
-   * page draws no pool section at all, which is the honest reading rather than an
-   * empty one. → `docs/spec/28-cross-fleet-pool.md`
+   * The cross-fleet pool, or undefined on the `fake` default. → `docs/spec/28-cross-fleet-pool.md`
    */
   pool?: PoolDesk;
-  /**
-   * The post-deploy watch's dry run. Exposed because accepting an agent's
-   * declaration is route-driven: the operator clicks, the query is put to an
-   * environment once, and what it answered comes back in the same call — which is
-   * also where a measure's baseline is taken. → `docs/spec/29-post-deploy-watch.md`
-   */
+  /** The post-deploy watch's dry run, route-driven. → `docs/spec/29-post-deploy-watch.md` */
   watch: WatchDryRunner;
-  /**
-   * Files a tracker item (issue #394). Exposed because filing is **route-driven**:
-   * the operator clicks, waits, and is told the item's ref — so it is neither an
-   * executor action nor a desk pass on the pulse, and the four routes reach it
-   * here.
-   */
+  /** Files a tracker item; route-driven rather than an executor action or pulse desk. */
   filing: TicketFiler;
-  /**
-   * Files a report about **LubbDubb itself** into LubbDubb's own tracker, past the
-   * connector entirely (issue #449). Route-driven for {@link filing}'s reason: the
-   * operator clicks, waits, and is told what was created.
-   */
+  /** Files a report about LubbDubb itself into LubbDubb's own tracker, past the connector entirely. */
   upstream: UpstreamIssues;
-  /**
-   * Where the harness watches its **own** build and drives a deliberate upgrade of
-   * it. Always constructed and always exposed — the route and the snapshot need a
-   * handle on it either way, and with the watch off it simply never takes a
-   * reading, so the gauge reads unknown and every action refuses with that reason.
-   * `main.ts` is what gives it a way to hand this process off.
-   */
+  /** Where the harness watches its own build and drives an upgrade. Always constructed; with the watch off it reports unknown. */
   updates: UpdateDesk;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
-  /**
-   * The vivarium (`src/pets/`). Always constructed; with `pets.enabled` off it
-   * scans nothing and reports null, which is what the snapshot ships and what the
-   * routes refuse on — one object either way, rather than an optional every
-   * caller has to remember to check twice.
-   */
+  /** The vivarium (`src/pets/`). Always constructed; with `pets.enabled` off it scans nothing. */
   pets: PetKeeper;
-  /**
-   * The machine's one dev environment (`src/localRun/`): which goal's code is in it,
-   * and the process holding it up. Always constructed, `pets`' reason — with no
-   * `localRun.instruction` every start refuses with that as the reason, which is a
-   * surface that says why rather than one that is quietly missing. Exposed because
-   * it is route- and tool-driven rather than a pass on the pulse: an operator
-   * clicks, or their own Claude asks, and nothing about it happens on a cycle.
-   */
+  /** The machine's one dev environment (`src/localRun/`). Always constructed; refuses starts without `localRun.instruction`. */
   localRun: LocalRunner;
-  /**
-   * The fleet driving that environment (`src/localValidation/`): the desk that owns
-   * every validation row, and the sweep that settles the ones nobody will answer.
-   *
-   * Always constructed, `localRun`'s reason: with no `localRun.instruction` there
-   * is nothing to validate against and the route refuses saying so, which is a
-   * surface that explains itself rather than one that is quietly missing.
-   */
+  /** The fleet driving that environment (`src/localValidation/`). Always constructed. */
   localValidations: LocalValidationDesk;
-  /**
-   * The readings on that environment — which ports answer, how far the checkout has
-   * fallen behind — on a timer of its own that `main.ts` arms. Exposed for the
-   * snapshot, the desktop tool and the hub; nothing on the pulse reads it.
-   */
+  /** Readings on that environment, on a timer `main.ts` arms; nothing on the pulse reads it. */
   localRunWatch: LocalRunWatch;
-  /**
-   * Applies a reloaded config to this running process, and holds what is waiting
-   * for a restart. The one apply path a cockpit save and a hand edit to
-   * `lubbdubb.config.json` both go through.
-   */
+  /** Applies a reloaded config to this running process; the one apply path a cockpit save and a hand edit both go through. */
   liveConfig: LiveConfig;
-  /**
-   * The issue-pickup policy the dispatcher honours, exposed so the snapshot can
-   * compute the same per-issue pickup verdict the dispatcher will act on.
-   */
+  /** The issue-pickup policy the dispatcher honours, exposed so the snapshot computes the same verdict. */
   issuePickup: IssuePickupPolicy;
-  /**
-   * The operator-customisable prompt book. Exposed because one prompt is
-   * route-driven rather than dispatcher-driven: filing a finding as a ticket
-   * (`finding-ticket`), which renders on a click rather than on a pulse.
-   */
+  /** The operator-customisable prompt book, exposed because `finding-ticket` renders on a click. */
   prompts: PromptTemplates;
-  /**
-   * Per-agent spool for the file-events `PostToolUse` hook — where written paths
-   * land before {@link AgentManager.drainFileEvents} folds them into the files
-   * list / artifact chips. Always present; the hook feeding it is only wired for
-   * the real runtime (stream).
-   */
+  /** Per-agent spool for the file-events hook. Always present; only wired for the real (stream) runtime. */
   fileEvents: FileEventsSpool;
-  /**
-   * Where images attached to a brief are written (issue #249). Exposed because
-   * the launch route stores them and the cancel route removes them, and both need
-   * the same root the agents are granted read access to.
-   */
+  /** Where images attached to a brief are written. */
   attachments: AttachmentFiles;
-  /**
-   * The agents' typed channel back to the harness (issue #108). Always present,
-   * but inert until `listen()` succeeds *and* `config.mcp.enabled` let it reach
-   * the fleet — so a system built without either behaves exactly as it did before
-   * the channel existed. Tests reach tools through `mcp.session(agentId)`, which
-   * is the same entry point an agent's bridge lands on.
-   */
+  /** The agents' typed channel back to the harness; inert until `listen()` succeeds and MCP is enabled. */
   mcp: McpBridgeServer;
-  /**
-   * The operator's own Claude Code channel — validation checks run at their
-   * keyboard, on a machine that can reach what the fleet cannot. Always present
-   * and always constructed, but it binds nothing and writes no credential until
-   * `listen()` is called, which `main.ts` does unconditionally at boot. A test's
-   * system therefore has the channel addressable and listening on nothing.
-   */
+  /** The operator's own Claude Code channel; binds nothing until `listen()`, called only by `main.ts`. */
   desktop: McpDesktopServer;
-  /**
-   * The pool of worktree directories code dispatch leases slots from. Exposed
-   * because the lease is a property of the *whole* dispatch path — a slot held by a
-   * live agent is never handed to a second branch — and asserting that needs the
-   * same manager the executor and the reap are wired to, not a second one.
-   */
+  /** The pool of worktree directories code dispatch leases slots from. */
   worktrees: Worktrees;
-  /**
-   * The review pack author desk: the way a reviewer asks for a pack and the way
-   * the author agent hands one back. Outside the dispatcher on purpose — a pack is
-   * made on request, never by a rule — and exposed for the route module and the
-   * hub. → `docs/spec/31-review-packs.md#when-a-pack-is-made`
-   */
+  /** The review pack author desk. Outside the dispatcher — a pack is made on request, never by a rule. → `docs/spec/31-review-packs.md#when-a-pack-is-made` */
   reviewPacks: ReviewPackAuthor;
-  /**
-   * The review pack checker desk: follows the author onto the pack it wrote and
-   * merges the verdicts back. Exposed for the route module (`checking`) and the
-   * hub. → `docs/spec/31-review-packs.md#the-check`
-   */
+  /** The review pack checker desk: follows the author and merges verdicts back. → `docs/spec/31-review-packs.md#the-check` */
   reviewPackChecker: ReviewPackChecker;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
-  /**
-   * The config file a save writes and the watcher watches. Defaults to
-   * `lubbdubb.config.json` beside the launch directory, which for the test suite
-   * is **this repository** — so a test that exercises the config route without
-   * overriding it rewrites the developer's own config. Same hazard as
-   * `config.repoRoot` defaulting to `process.cwd()`, and the same fix: tests
-   * inject a temp path.
-   */
+  /** The config file a save writes and the watcher watches; a test exercising it must inject a temp path. */
   configFile: string;
-  /**
-   * The **targeted project's** shared config, at `<repoRoot>/lubbdubb.project.json`
-   * — the team's layer, underneath the operator's own file.
-   *
-   * Held here for `configFile`'s reason exactly: `config.repoRoot` defaults to
-   * `process.cwd()`, so a test that read this path off the running config would
-   * read whatever project config the checkout the suite runs in happens to carry
-   * — and pass or fail by machine on a file nobody wrote for it.
-   */
+  /** The targeted project's shared config at `<repoRoot>/lubbdubb.project.json`. Injected in tests for `configFile`'s reason. */
   projectConfigFile: string;
 }
 
@@ -341,191 +194,80 @@ interface BuildOptions {
   backend?: PtyBackend;
   /** Override the outbound sink (tests). Defaults to the FakeConnector. */
   sink?: ActionSink;
-  /**
-   * Override where a CI-fix dispatch's failing output comes from (tests inject a
-   * provider integration built on a scripted `*Api`). Defaults to the composite,
-   * which answers `[]` unless the selected provider can supply any.
-   */
+  /** Override where a CI-fix dispatch's failing output comes from. Defaults to the composite. */
   ciEvidence?: CiEvidenceReader;
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
-  /**
-   * Override how a killed agent's process *subtree* is taken down (tests inject a
-   * recorder). Defaulted below, and defaulted to a no-op whenever a fake transport
-   * is injected — see the wiring for why that pairing is not optional.
-   */
+  /** Override how a killed agent's process subtree is taken down. Defaults to a no-op whenever a fake transport is injected. */
   reapProcessTree?: ProcessReaper;
-  /**
-   * Override the git observer plan reconciliation reads branch reality through
-   * (tests inject `FakeGitObserver`). Injecting one also turns the reconciler's
-   * `git fetch` off — a scripted observer has no remote to refresh.
-   */
+  /** Override the git observer plan reconciliation reads through; injecting one also disables the reconciler's `git fetch`. */
   gitObserver?: GitObserver;
-  /**
-   * Override how the local run's listening ports are read (tests inject
-   * `FakePortLister`). Defaulted to the fake whenever a fake transport is injected,
-   * for the reaper's reason: the real one walks a process tree from a pid the fake
-   * transports mint, and shells out to do it.
-   */
+  /** Override how the local run's listening ports are read. Defaults to the fake alongside a fake transport. */
   portLister?: PortLister;
-  /**
-   * Override the worktree manager code dispatch cuts branches through (tests
-   * inject `FakeWorktreeManager`). Without it a test's `repoRoot` defaults to
-   * `process.cwd()`, so every dispatched code agent leaves a real branch behind
-   * in the developer's own checkout — and on a CI `pull_request` checkout, where
-   * there is no `main` ref to resolve a base against, `ensure` throws and the
-   * dispatch is rejected instead.
-   */
+  /** Override the worktree manager code dispatch cuts branches through; without it a test's `repoRoot` defaults to `process.cwd()`. */
   worktrees?: Worktrees;
-  /**
-   * Override how an environment is asked whether it holds a commit (tests inject
-   * `FakeEnvironmentProber`). Without it the real prober runs the operator's
-   * configured shell command — which a test has none of, and which would spawn a
-   * shell on the developer's machine if it did.
-   */
+  /** Override how an environment is asked whether it holds a commit. Without it the real prober shells out. */
   environmentProber?: EnvironmentProber;
-  /**
-   * Override how an environment is asked whether it is well (tests inject
-   * `FakeEnvironmentHealthProber`). Without it the real prober runs the operator's
-   * configured `health` command, on the same terms as the two seams either side of
-   * it — a test has none, and would spawn a shell on the developer's machine.
-   */
+  /** Override how an environment is asked whether it is well. Without it the real prober runs the configured `health` command. */
   environmentHealthProber?: EnvironmentHealthProber;
-  /**
-   * Override how a pull request is asked whether it has already been reviewed
-   * somewhere else (tests inject `FakeReviewProber`). Without it the real prober
-   * runs the operator's configured `review.reviewedElsewhere` command, on the same
-   * terms as the environment probes around it — a test has none, and would spawn a
-   * shell on the developer's machine.
-   */
+  /** Override how a pull request is asked whether it was reviewed elsewhere. Without it the configured command runs for real. */
   reviewProber?: ReviewProber;
-  /**
-   * Override how an environment's telemetry is asked a declared question (tests
-   * inject `FakeEnvironmentObserver`). Without it the real observer runs the
-   * operator's configured `observe` command — which a test has none of, and which
-   * would spawn a shell on the developer's machine if it did.
-   */
+  /** Override how an environment's telemetry is asked a declared question. Without it the configured `observe` command runs for real. */
   environmentObserver?: EnvironmentObserver;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
-  /**
-   * The inbound ingress secrets, for a test that drives the endpoint. Without it
-   * they come from `LUBBDUBB_INGRESS_SECRET` / `LUBBDUBB_INGRESS_BASIC` in the
-   * environment — so a test asserting the endpoint's behaviour would pass or fail
-   * by whether the operator running the suite happens to have a webhook wired up.
-   * The same hazard `configFile` and `projectConfigFile` carry, and the same fix.
-   * → `docs/spec/30-ingress.md#turning-it-on`
-   */
+  /** The inbound ingress secrets, for a test that drives the endpoint. → `docs/spec/30-ingress.md#turning-it-on` */
   ingressSecrets?: IngressSecrets;
-  /**
-   * Override the config file the write route targets (tests point it at a temp
-   * file). Without it a test that saves config rewrites the `lubbdubb.config.json`
-   * of whatever checkout the suite is running in — see {@link System.configFile}.
-   */
+  /** Override the config file the write route targets; see {@link System.configFile}. */
   configFile?: string;
-  /**
-   * Override the targeted project's shared config path (tests point it at a temp
-   * file, or at one that does not exist) — see {@link System.projectConfigFile}.
-   */
+  /** Override the targeted project's shared config path; see {@link System.projectConfigFile}. */
   projectConfigFile?: string;
-  /**
-   * Override how a report about LubbDubb itself is filed (tests inject
-   * `FakeUpstreamIssues`). Without it the two collection-level issue routes spawn
-   * the real `gh` against the real repository, which for a test is either a filed
-   * issue somebody has to close or a failure that depends on whose machine ran it.
-   */
+  /** Override how a report about LubbDubb itself is filed. Without it the collection-level issue routes hit the real repo. */
   upstream?: UpstreamIssues;
-  /**
-   * Override the pool's transport (tests inject `FakePoolTransport`). Wiring one
-   * also **wires the pool desk**, which is otherwise off on the `fake` provider —
-   * so a test can watch a document leave without a git remote behind it. The
-   * fleet name is still required: an unnamed fleet publishes nothing at all.
-   * → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
-   */
+  /** Override the pool's transport. Wiring one also wires the pool desk. → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet` */
   poolTransport?: PoolTransport;
-  /**
-   * How one obstacle's prose is read by a model (tests inject a scripted reader).
-   * Wiring one **wires the model desk**, which is otherwise off entirely: without
-   * it nothing in this subsystem calls a model at all, and a test asserting what
-   * the desk does with a reading would otherwise depend on a model answering.
-   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
-   */
+  /** How one obstacle's prose is read by a model. Wiring one wires the model desk. → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not` */
   obstacleReader?: ObstacleReader;
-  /**
-   * Override when crash recovery considers this process to have started (tests).
-   * Everything older is a previous run's orphan; everything newer is a dispatch
-   * this run is in the middle of. Defaults to module load.
-   */
+  /** Override when crash recovery considers this process to have started. Everything older is a previous run's orphan. Defaults to module load. */
   bootedAt?: string;
 }
 
 /**
- * The composition root. Wires every module together through its interface so any
- * one can be swapped — the tests build a System with a fake PTY backend and an
- * in-memory store, the server builds a real one, and nothing else changes.
+ * The composition root. Wires every module together through its interface so any one can be
+ * swapped: tests build a System with fakes and an in-memory store, the server builds a real one.
  */
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
-  // Recorded MCP-call arguments past their retention, cleared at boot as well as
-  // on the write path. The write path alone would be a retention promise kept
-  // only while the fleet is busy: a harness that goes quiet holds its arguments
-  // until something calls a tool again, which on a paused deployment is never.
-  // `force`, because the write path's hourly rate limit is about a hot loop and
-  // this runs once.
+  // Recorded MCP-call args past their retention, cleared at boot as well as on the write path.
   store.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
-  // Surface-reach rows past their ninety days, on the same terms and for the same
-  // reason: an operator who stops using the cockpit stops triggering the write
-  // path, and a retention promise kept only while somebody is clicking is not one.
   store.pruneSurfaceReach(true);
-  // The world is assembled from the integrations config selects (default: the
-  // fake provider for every capability), composed behind the Connector/ActionSink
-  // seams the harness and executor depend on. Swapping a provider is a config
-  // change; nothing here changes.
   const now = (): string => new Date().toISOString();
-  // The one error-recording path: everything that catches a failure routes it
-  // here so it's durable, mirrored to stderr, and streamed to the cockpit.
   const errors = new ErrorLog(store, opts.errorMirror);
-  // Built here, well above the harness, because the two ends of the ingress are
-  // wired at opposite ends of this file: the pulse drains the inbox, and the route
-  // that fills it needs a harness that does not exist yet. The inbox is the seam
-  // between them and holds nothing but refs.
+  // Built above the harness: the ingress's two ends are wired at opposite ends of this file.
   const ingressInbox = new IngressInbox();
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
     hotMaxAgeMs: config.hotReadMaxAgeMs,
     coldMaxAgeMs: config.coldReadMaxAgeMs,
   });
-  // The project's area tree, cached so the appraisal tool and the state snapshot can
-  // both read it without awaiting. Refreshed from the pulse under its own TTL, and
-  // null until the first read lands — which is the same reading a tracker with no
-  // classification tree gives, and the right one: nothing offered, nothing asked.
+  // Cached so the appraisal tool and state snapshot read it without awaiting; refreshed on
+  // its own TTL, null until the first read lands.
   const areaPaths = new AreaPathDirectory(connector, { now: () => Date.now(), errors });
   const backend = opts.backend ?? new NodePtyBackend();
 
-  // Live, in-memory dispatch controls both the harness and executor read by
-  // reference each cycle. Ephemeral by design: a restart reverts to config. Built
-  // here rather than beside its other consumers because the worktree pool's bound
-  // reads the cap too — see below.
+  // Live, in-memory dispatch controls; ephemeral by design, a restart reverts to config.
   const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
 
-  // Worktrees are a bounded pool of directories leased to branches, not one
-  // directory per branch — so a dispatch lands in a tree that still has the last
-  // occupant's ignored build state. `held` is the durable half of the lease: it is
-  // what stops a slot being reissued under an agent a restart restored into it, and
-  // what releases one the moment crash recovery settles the task behind it.
+  // Worktrees are a bounded pool of directories leased to branches. `held` is the durable
+  // half of the lease.
   const worktrees =
     opts.worktrees ??
     new WorktreeManager(
       config.repoRoot,
       config.worktreeRoot,
       {
-        // A getter, so the bound is the *live* cap's — the same by-reference read
-        // the harness's headroom does. The two are separate limits over one fleet
-        // and the lower wins: read once at boot, a cap raised in the cockpit would
-        // dispatch past the pool and be rejected for want of a directory forever,
-        // which presents as a full queue and an idle fleet with nothing red.
-        // The cap is the fleet's one size knob: the pool is sized off it and there
-        // is nothing else to set.
+        // A getter, so the bound is the live cap's — a raised cap would otherwise dispatch
+        // past the pool and be rejected forever.
         get size() {
           return defaultPoolSize(runtimeControl.cap);
         },
@@ -534,31 +276,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       config.localRunRoot,
       errors,
     );
-  // Branch reality for plan reconciliation — read-only, and the seam a test swaps
-  // to script "has this part pushed" without a repo.
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
 
-  // Pick the agent runtime and how it's launched from the configured mode.
-  // How a stopped agent's *descendants* die with it (issue: a Bash-tool shell
-  // outliving its agent pins the worktree cwd, and Windows then refuses rmdir on
-  // it forever). See {@link ProcessReaper}.
-  //
-  // **The real reaper is wired only alongside the real transports.** It signals
-  // whatever pid it is handed, and an injected `backend`/`streamSpawner` scripts a
-  // process whose pid belongs to something else entirely on the host — so with a
-  // fake in place the default must be, and is, a no-op. A test that wants to
-  // observe the reap injects its own recorder.
+  // How a stopped agent's descendants die with it. The real reaper is wired only alongside
+  // the real transports — a fake transport's pid belongs to something else on the host.
   const realTransport = opts.backend === undefined && opts.streamSpawner === undefined;
   const reapTree: ProcessReaper =
     opts.reapProcessTree ??
     (realTransport
       ? (pid) => killProcessTree(pid, (message) => errors.record({ source: 'agent', message }))
       : () => {});
-  // `raw` only, and the only terminal runtime left: the operator's argv (in
-  // practice the mock agent) run verbatim, line-oriented, speaking no protocol
-  // beyond the sentinels it prints. None of the TUI machinery the removed `pty`
-  // mode needed applies to it — it writes no session file to tail, it exits by
-  // itself, and it is legitimately silent between steps.
+  // `raw` only: the operator's argv runs verbatim, speaking no protocol beyond sentinels.
   const ptyFactory = (): SessionFactory => {
     return (spec) =>
       new PtySession(backend, {
@@ -575,30 +303,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const streamFactory: SessionFactory = (spec) =>
     new StreamJsonSession(spec, opts.streamSpawner, reapTree, config.agentSilenceParkMs);
 
-  // Brief attachments (issue #249): one canonical file per image under the
-  // config'd root, outside every worktree. Every launch is granted read access to
-  // that root, which is what makes the path in an agent's prompt openable.
+  // One canonical attachment file per image under the config'd root, outside every worktree.
   const attachments = new AttachmentFiles(config.attachmentRoot);
-  // Validation resources ride alongside for the same reason and on the same
-  // terms: a fixture is only useful to an agent that can open it, and the root is
-  // outside every worktree precisely so it survives the reap. Granted whether or
-  // not `validation.enabled` — the directory is the harness's own and empty on a
-  // deployment that never writes one, and a grant that came and went with a policy
-  // flag would make an agent's readable set depend on config it cannot see.
+  // Validation resources ride alongside, granted regardless of `validation.enabled` so an
+  // agent's readable set never depends on config it cannot see.
   const additionalDirectories = [config.attachmentRoot, config.validationRoot];
 
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
   const allowedTools = config.agentAllowedTools;
-  // The permission backstop's tool name (issue #130 phase B). Passed on every
-  // launch; it only takes effect when that launch also carries an `--mcp-config`.
   const permissionPromptTool = PERMISSION_PROMPT_TOOL;
-  // `mcpConfigPath` is per-launch (minted by AgentManager) and MUST be threaded
-  // through — without it neither `--mcp-config` nor `--permission-prompt-tool` is
-  // ever added, and the tool channel is dead in production.
-  // `model` is per-launch for the same reason and with the same trap: it is the
-  // task's own resolved model (issue #321), so a builder that accepts it and
-  // forgets to forward it type-checks clean and silently drops the flag.
+  // `mcpConfigPath` and `model` are per-launch (minted by AgentManager) and MUST be threaded
+  // through — a builder that accepts and forgets to forward either type-checks clean but is dead.
 
   type ArgsBuilder = (opts: {
     sessionId: string;
@@ -610,10 +326,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   }) => string[];
   const agentSetup = {
     stream: {
-      // Resumable like the PTY runtime, and for the same reason: the id is pinned up
-      // front so a restart can re-open *this* conversation. Headless `claude` honours
-      // both flags (issue #318) — which is what puts `restore` on the recovery desk
-      // for the default deployment instead of requeue-or-remove.
+      // Resumable: the id is pinned up front so a restart can re-open this conversation.
       buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort }) =>
         buildClaudeStreamArgs({
           permissionMode: perm,
@@ -636,8 +349,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       resumable: true,
     },
     raw: {
-      // Deliberately ignores `model`: running the operator's argv verbatim is this
-      // mode's whole contract, and it speaks no protocol to assign work by.
+      // Deliberately ignores `model`: running the operator's argv verbatim is this mode's whole contract.
       buildArgs: (() => config.claudeArgs) as ArgsBuilder,
       factory: ptyFactory(),
       initialInput: undefined,
@@ -647,92 +359,52 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
   }[config.agentMode];
 
-  // File-events capture (the PostToolUse hook's spool): one dir per agent under
-  // the OS tmpdir. Wired for every mode — the hook itself is only injected for
-  // the real runtimes (stream/pty), so mock/raw agents just leave it empty.
+  // File-events capture spool: one dir per agent under the OS tmpdir.
   const fileEvents = new FileEventsSpool(join(tmpdir(), 'lubbdubb', 'events'));
 
-  // The typed channel back to the harness (issue #108). Constructed unconditionally
-  // so `system.mcp` is always addressable, but only handed to the fleet when the
-  // operator leaves it on — and it still needs `listen()` (the server's boot does
-  // that) before any launch actually gets a `--mcp-config`. The `agents` thunk is
-  // the mutual reference: a launch needs a credential, a tool call needs the fleet.
-  // Both sides annotated so the mutual reference stays a *runtime* cycle and not
-  // an inference one — TS can't infer either type from the other.
+  // Constructed unconditionally so `system.mcp` is addressable; handed to the fleet only
+  // when the operator leaves it on. The lazy thunks below break construction-order cycles.
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
     agents: (): AgentManager => agents,
     argsRetentionDays: config.mcpArgsRetentionDays,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
-    // What the appraiser is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
-    // And what a triage agent is offered when it routes a pull request: the
-    // project's own review modes, in the order it declared them.
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
-    // What an obstacle's `path` key is validated against: the checkout itself. A
-    // key naming a file the tree does not have is dropped and the report is kept.
+    // What an obstacle's `path` key is validated against; a key naming a file the tree
+    // doesn't have is dropped and the report kept.
     repoRoot: config.repoRoot,
-    // What the appraiser is offered when it proposes where a goal belongs. A thunk
-    // rather than a snapshot: the directory refreshes on the pulse, and a list
-    // captured here would pin every agent to the tree as it stood at boot.
+    // A thunk, not a snapshot: captured here it would pin every agent to the tree at boot.
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
-    // Lazy for the same reason as `agents`: the desk is built after this server
-    // (it needs the escalation inbox).
     permissions: (): PermissionDesk => permissions,
-    // Lazy for the same reason again: the sink and the template book are both built
-    // below this. If this closure is ever dropped, `open_pr` reports itself unwired
-    // in production and no test catches it — the ArgsBuilder/mcpConfigPath trap.
     openPr: (): McpToolDeps['openPr'] => ({
       sink: opts.sink ?? connector,
       defaultBranch: config.defaultBranch,
       prompts,
-      // So the pull request the tool opens is watched the moment it exists, rather
-      // than on the next pulse — the fleet's own work is never briefly invisible
-      // to the fleet.
+      // So the pull request is watched the moment it exists, never briefly invisible.
       watchLabel,
-      // So the body guidance names the sigil this provider reads as "pull
-      // request" — `#12` is work item 12 on Azure, and a stacked part naming its
-      // base pull request that way links to an unrelated ticket.
+      // So body guidance names the sigil this provider reads as "pull request".
       prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
-    // Lazy for the same reason: `link_ticket` files the item an agent wrote up
-    // (issue #394), and the sink it files through is built below.
     filing: (): McpToolDeps['filing'] => filing,
-    // Lazy for the same reason again: the executor is built below this. It is
-    // where `reply_to_review` hands an agent's reply, so the reply takes the same
-    // route a rule-drafted one takes — held, authorized and signed — instead of
-    // being posted from inside the agent with the operator's credential.
+    // `reply_to_review` hands its reply here so it is held, authorized and signed like a
+    // rule-drafted one, instead of posted from inside the agent under the operator's credential.
     prReply: (): McpToolDeps['prReply'] => executor,
-    // Lazy for the same reason again: the dry run is built below this, and it is
-    // what turns a declared query from text in a document into a query somebody
-    // has proved resolves.
     watch: (): McpToolDeps['watch'] => watchDryRun,
-    // Lazy for the same reason: the desk needs the fleet and the worktrees, both
-    // built below this.
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
-    // Lazy for the same reason again, and more so: the runner is the last thing
-    // this file builds, being the one component that can spawn a session of its
-    // own, and the validation desk is built after it.
     localValidations: (): LocalValidationDesk => localValidations,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     errors,
   });
 
-  // Hoisted out of the RuleDispatcher's construction because the template book is
-  // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
-  // `finding-ticket` from it, and the desktop channel below renders `local-run`,
-  // both of which must work whether or not a cycle is running.
+  // Hoisted out of the RuleDispatcher: the findings route and desktop channel also render from it.
   const prompts = loadPromptTemplates(config.promptTemplatesDir);
 
-  // The project's review charters — the one that says how to choose a mode, and
-  // one per mode saying what it looks for. On the same terms as the template book
-  // above: read once, from the checkout rather than from any branch, and absent
-  // where the project names no file. A path that names nothing is recorded rather
-  // than swallowed — a team whose charter is not being read has no other way to
-  // find out.
+  // The project's review charters, read once from the checkout; a configured path that
+  // names nothing is recorded rather than swallowed.
   const reviewCharters = loadReviewCharters(config.repoRoot, config.review, (error, path) =>
     errors.record({
       source: 'boot',
@@ -741,30 +413,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
-  // The desktop channel (the operator's own Claude Code). Constructed
-  // unconditionally so `system.desktop` is addressable, and inert until
-  // `listen()` — which is the only thing that binds the stable socket or writes
-  // a credential into the operator's home directory. `main.ts` calls it on every
-  // boot; keeping the footprint in `listen()` rather than in the constructor is
-  // what keeps a test's system from writing into whoever is running the suite.
+  // Constructed unconditionally so `system.desktop` is addressable; inert until `listen()`,
+  // which is the only thing that binds the socket or writes a credential to the operator's home.
   const desktop = new McpDesktopServer({
     store,
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
-    // `goal_read` answers "has it reached hallway yet" off the operator's own list.
     environments: config.environments,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
-    // Lazily, for `proposals`' reason: the runner is built further down, and both
-    // this channel and the cockpit's panel must start *the same* run.
+    // Lazily: the runner is built further down, and this channel and the cockpit's panel
+    // must start the same run.
     localRun: (): LocalRunner => localRun,
     localRunWatch: (): LocalRunWatch => localRunWatch,
-    // The fleet half of the channel (`src/mcp/desktopOps.ts`). `runtimeControl` is
-    // handed over **by reference** rather than snapshotted: it is the live cap and
-    // pause the executor reads on every dispatch, and a copy taken here would be a
-    // second opinion about how big the fleet is. The rest are thunks for
-    // `proposals`' reason — the harness, the two desks and the recovery board are
-    // all constructed below this server.
+    // `runtimeControl` is handed over by reference — it is the live cap/pause the executor
+    // reads on every dispatch, and a copy would be a second opinion.
     runtimeControl,
     harness: () => harness,
     escalations: () => escalations,
@@ -772,20 +435,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     recovery: () => recovery,
     agents: () => agents,
     filing: () => filing,
-    // By reference, never a copy: `labelPrefix` is live-applied, so a brief filed
-    // against a snapshot of it would carry a tag the gate no longer reads.
+    // By reference: `labelPrefix` is live-applied, and a snapshot would carry a stale tag.
     briefConfig: () => config,
     renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
     profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
     connector,
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
-    // The whole set rather than the names: `goal_control`'s pin writes the model
-    // label, and pinning one profile has to clear the others.
+    // The whole set rather than the names: pinning one profile has to clear the others.
     agentModels: config.agentModels,
-    // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
-    // the superseded approval card and puts the fresh one up, and both the desk
-    // and the harness are built below this.
     proposals: () => proposals,
     runCycle: () => harness.runCycle('manual').then(() => undefined),
     now: () => new Date().toISOString(),
@@ -794,15 +452,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // What a Feature summary is gathered and digested with, or null where this
-  // deployment has no feature board — the same `featureBoardOn` conjunction the
-  // route refuses on and the cockpit draws its tab off, asked once here so the
-  // rule, the dossier and the key an agent's submission is stamped with cannot
-  // come to three different answers about whether the feature exists at all.
-  // The watch half of the pickup gate on its own, needed above where the policy
-  // proper is assembled: the sequence key digests the *watched* children, so the
-  // stamp and the rule have to apply one predicate. Priority plays no part in it,
-  // hence the two inert fields.
+  // What a Feature summary is gathered/digested with, or null with no feature board — asked
+  // once so the rule, the dossier and an agent's stamped key cannot disagree.
+  //
+  // The watch half of the pickup gate alone, needed here because the sequence key digests
+  // the watched children; priority plays no part, hence the two inert fields.
   const sequenceWatchPolicy: IssuePickupPolicy = {
     watchLabel: watchLabelFor(config.labelPrefix),
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
@@ -822,11 +476,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
     whitelistedApprovals: config.whitelistedApprovals,
-    // What a goal's work runs on today, so `recordAppraisal` can tell an agreeing
-    // proposal from a diverging one. Read off the world baseline rather than a
-    // live provider call: it is the same snapshot `world_read` serves an agent,
-    // so the appraiser and the harness are comparing against one reading. Absent
-    // when either half of a pin is unconfigured, and then no proposal is stored.
+    // What a goal's work runs on today, off the world baseline; absent when either half of
+    // a pin is unconfigured.
     goalProfile:
       config.labelPrefix && config.agentModels
         ? {
@@ -840,18 +491,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
             },
           }
         : undefined,
-    // Where a Feature's children stand at the moment a summary lands — read here
-    // and never at dispatch, or anything that moved during the run would match the
-    // stored key for ever and the Feature would never be summarised again.
+    // Where a Feature's children stand the moment a summary lands — taken here, never at
+    // dispatch, or the stored key would never re-match and the Feature would never be
+    // summarised again.
     featureStanding: featureBoard
       ? (featureOrigin: string): string | null =>
           featureRecords(store, featureBoard).find((f) => `issue:${f.number}` === featureOrigin)?.key ?? null
       : undefined,
-    // Which stories are under a Feature at the moment an order lands. Off the world
-    // baseline rather than the ticket mirror — the Predecessor links the key folds in
-    // are a hydration field and the mirror does not carry them — and through the same
-    // `sequenceableFeatures` the dispatcher walks, so the key an order is stamped with
-    // and the key the rule compares it against cannot come to two answers.
+    // Which stories are under a Feature the moment an order lands, off the world baseline
+    // (not the ticket mirror, which lacks the Predecessor links the key folds in).
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(
         store.getWorldBaseline()?.issues ?? [],
@@ -875,42 +523,29 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
     mcp,
-    // The `plan.json` transport's half of the approval gate — the tool transport
-    // gets the same flag above, so a verdict lands identically either way.
-    //
-    // And its half of the watch's dry run, wrapped rather than passed directly
-    // because the desk is built below this — the same lazy reference every other
-    // late-built component gets, in the one shape this option's type allows.
+    // The `plan.json` transport's half of the approval gate and the watch dry run, wrapped
+    // because the desk is built below this.
     watch: { run: (originRef: string): Promise<string[]> => watchDryRun.run(originRef) },
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
-  // The permission backstop (issue #130 phase B): where an agent's un-allowlisted
-  // tool call blocks until the operator allows or denies. Reaches the fleet via the
-  // MCP server's `permissions` thunk above; resolved on agent death via its `release`.
+  // The permission backstop, reached by the fleet via the MCP server's `permissions` thunk.
   const permissions = new PermissionDesk(escalations);
-  // Where a restart's orphaned agents wait for a verdict. `resumable` is the same
-  // runtime fact `AgentManager` uses, threaded in so the desk can say *why* restore
-  // isn't on offer rather than the cockpit guessing from a missing session id.
+  // Where a restart's orphaned agents wait for a verdict.
   const recovery = new RecoveryDesk({
     store,
     agents,
     escalations,
     resumable: agentSetup.resumable,
-    // The fence on the agentless arm. A test that wants a task read as an orphan of
-    // a previous run sets this ahead of the rows it built; production takes the
-    // module-load default.
+    // The fence on the agentless arm; production takes the module-load default.
     bootedAt: opts.bootedAt,
     errors,
   });
 
-  // Recorded before the executor, which asks it whether a rung's merge is already
-  // authorized. It reaches nothing but the store and the inbox, so the two are
-  // wired one way and there is no cycle to break.
+  // Before the executor, which asks it whether a rung's merge is already authorized.
   const landings = new StackLandingDesk(store, escalations, errors);
 
-  // Built beside the executor and owned by it: every write is one of that loop's,
-  // and its entries are alive for exactly as long as the frames that made them.
+  // Owned by the executor: every write is that loop's, and entries live only as long as the frame.
   const readying = new ReadyingBoard();
 
   const executor = new ActionExecutor({
@@ -926,31 +561,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
     errors,
-    // Read through the running config object, never copied: the key is
-    // live-applied, and the flip that matters is the one turning it back off.
+    // Through the running config, never copied: the flip that matters is turning it back off.
     autoSendReplies: () => config.sendPrRepliesWithoutApproval,
-    // The composite, never `opts.sink`: this is a *read* of the provider, and a
-    // test that swaps the outbound sink is not saying anything about where CI
-    // evidence comes from. It answers `[]` when no integration can supply any,
-    // so the fake provider composes exactly the prompt it always did.
+    // The composite, never `opts.sink`: a read of the provider, unrelated to the outbound sink.
     ciEvidence: opts.ciEvidence ?? connector,
-    // How an agent amends a goal's ticket, so a standing operator instruction
-    // that changes what the goal asks for can reach the record everyone else
-    // reads. Config, resolved per issue — null under the fake provider, where the
-    // note says there is nothing to update rather than naming a failing command.
+    // How an agent amends a goal's ticket; null under the fake provider.
     instructionTracker: (issueNumber) => ticketAmendCommands(config, issueNumber),
-    // Absent where there is no feature board, which is also where nothing
-    // dispatches a summariser — one conjunction, asked once, above.
     featureBoard: featureBoard ?? undefined,
   });
 
-  // The review pack author: a spawn outside the pulse, because a pack is made
-  // when a person asks and never when a rule notices. It leases its checkout
-  // through the same `worktrees` and reaps through the same `agents.kill`, so
-  // neither invariant is arranged twice; what it does not do is count against
-  // the cap, which is the cost 31 accepts. The fetch is wired only for the real
-  // observer, the reconciler's rule: a head the provider just reported may not
-  // be in the clone yet, and the observer is fetch-free by design.
+  // The review pack author: a spawn outside the pulse — a pack is made when a person asks,
+  // never on a rule. Leases through `worktrees`, reaps through `agents.kill`; does not count
+  // against the cap.
   const reviewPacks = new ReviewPackAuthor({
     store,
     agents,
@@ -963,10 +585,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The checker follows the author: it listens for an author's run ending with
-  // a pack written against its head, and spawns itself the same way — outside
-  // the pulse, a read-only slot under its own key, reaped through the same kill.
-  // No fetch: the head the author just diffed is in the clone.
+  // The checker follows the author: listens for a run ending with a pack against its head
+  // and spawns itself the same way. No fetch — the head the author just diffed is in the clone.
   const reviewPackChecker = new ReviewPackChecker({
     store,
     agents,
@@ -978,27 +598,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The accept/reject surface for every act the harness will not perform on its
-  // own — which is all of them. It runs an accepted act through the executor, so
-  // the outbound sink keeps a single caller and the human's authorization lands in
-  // the audit log.
+  // The accept/reject surface for every act the harness won't perform on its own; runs an
+  // accepted act through the executor so the outbound sink keeps a single caller.
   const proposals = new ProposalDesk(store, escalations, executor, {
-    // The same sink an accepted act runs through, so the back-out's comment and
-    // close are the one outbound seam rather than a second route to the tracker.
     sink: opts.sink ?? connector,
     config,
     errors,
   });
 
-  // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
-  // by whichever dispatcher is selected — provider-agnostic.
+  // Dispatcher-level issue-pickup policy (gate + label-encoded priority), provider-agnostic.
   const watchLabel = watchLabelFor(config.labelPrefix);
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
-    // The ownership gate needs both halves of the identity split: a project that
-    // wants filtering (`ownWorkOnly`) and somebody to filter to (`userId`). Either
-    // missing — the fake provider, a first run, a team that works each other's
-    // queue — and any tagger counts.
+    // Needs both halves: a project that wants filtering (`ownWorkOnly`) and someone to filter to.
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
@@ -1022,27 +634,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prRefStyle(config.integrations.sourceControl),
     config.review,
     reviewCharters,
-    // Rendered here rather than in the rule, so the dispatcher is handed a
-    // sentence rather than the environment config it was rendered from — the lens
-    // boundary `src/environments/` keeps in both directions.
+    // Rendered here, so the dispatcher gets a sentence rather than the config it came from.
     watchNote(config.environments),
-    // The working agent's half, rendered here for the same reason and appended by
-    // the two rules that dispatch work: it names `watch_declare`, which only an
-    // agent holding a diff has anything to say through.
     watchDeclareNote(config.environments),
   );
   const dispatcher: Dispatcher = rules;
 
-  // What a config change does to *this* process — the live keys' arms and the
-  // pending list behind them. Wired here because an arm reaches components only
-  // the composition root holds; a save from the cockpit and an edit to the file
-  // both land on it, which is what keeps the two from behaving differently.
+  // What a config change does to this process — the live keys' arms and pending list.
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
 
-  // The store holds scheduling intent; this folds git + provider reality back onto
-  // it every pulse. Its `git fetch` is wired only for the real observer: the seam
-  // is fetch-free by design, so refreshing the remote is the caller's call (floored
-  // by `planning.gitFetchIntervalMs` so a fast heartbeat can't storm the remote).
+  // The store holds scheduling intent; this folds git + provider reality back onto it every
+  // pulse. `git fetch` is wired only for the real observer, floored by `planning.gitFetchIntervalMs`.
   const plans = new PlanReconciler({
     store,
     git: gitObserver,
@@ -1054,14 +656,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The goal appraisal's outbound half: one living comment per refused goal, on the
-  // ticket. Beside the plan reconciler because it is the same act — mechanical
-  // bookkeeping through the same seam, not an action the executor gates.
+  // The goal appraisal's outbound half: one living comment per refused goal on the ticket.
   const appraisals = new AppraisalDesk({ store, sink: opts.sink ?? connector, errors });
-  // The naming convention's outbound half, and it asks whether the world *arrives*
-  // filtered rather than who the operator is: both providers apply the author
-  // filter at fetch time, and only while `ownWorkOnly` is on. With it off the
-  // harness sees everyone's pull requests, so it may not assume one is its own.
+  // Asks whether the world arrives filtered, not who the operator is: with `ownWorkOnly`
+  // off the harness sees everyone's pull requests and may not assume one is its own.
   const prAuthorConfigured = config.ownWorkOnly && config.userId !== undefined;
   const naming = new PrNamingDesk({
     sink: opts.sink ?? connector,
@@ -1070,30 +668,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     template: prompts.render('pr-title', {}),
     errors,
   });
-  // The other half of tidying up after a pull request: once it has merged, the
-  // branch behind it goes — worktree, local ref, then the remote. Only ever the
-  // operator's own pull requests, and never a branch another open PR still targets.
-  // The harness's own pull requests, tagged as watched so the fleet keeps working
-  // what it opened. `open_pr` tags one as it creates it; this is the floor under
-  // that — an agent that opened its own, a code job's, and everything already open
-  // the first pulse a deployment runs it. Once per pull request, so an operator's
-  // un-watch is never written back over.
+  // Tidying up after a pull request: once merged, worktree, local ref, then remote branch
+  // go — only the operator's own, never a branch another open PR still targets.
+  //
+  // Below: the harness's own PRs, tagged watched once per PR so an operator's un-watch is
+  // never written back over.
   const prWatch = new PrWatchDesk({
     sink: opts.sink ?? connector,
     store,
     watchLabel,
-    // The retired tag, read here and nowhere else: seeding is the one path that
-    // could put the fleet back on a pull request somebody explicitly parked.
+    // The retired tag: seeding is the one path that could put the fleet back on a PR
+    // somebody explicitly parked.
     legacyIgnoreLabel: config.labelPrefix ? `${config.labelPrefix}-ignore` : '',
     errors,
   });
 
-  // The other thing a pull request owes the moment it exists: the work item it was
-  // opened for, linked on the tracker rather than named in prose. Azure's "check for
-  // linked work items" policy blocks a pull request without one, and the harness has
-  // known the number since pickup — so this is a row read, not an agent. `open_pr`
-  // links one as it creates it; this is the floor under that, on the same terms as
-  // the watch seeding beside it.
+  // The other thing a pull request owes: the work item it was opened for, linked on the
+  // tracker (Azure's "linked work items" policy needs it). A row read, not an agent.
   const prWorkItems = new PrWorkItemDesk({
     sink: opts.sink ?? connector,
     store,
@@ -1110,34 +701,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // Where a goal's landed work has got to. The prober is the operator's own
-  // command, so the desk is built whether or not any environment is configured:
-  // the attribution half has to run regardless, because a merge SHA is only on
-  // offer while its pull request is inside `closedPrWindowMs` and is unrecoverable
-  // afterwards — a deployment that configures its first environment later still
-  // wants today's landings on record when it does.
-  // The operator's own telemetry, behind the seam the dry run already uses. One
-  // observer for both readers, so a stale wrapper script fails the same way at
-  // declaration time and at watch time.
+  // Where a goal's landed work has got to. Built whether or not any environment is
+  // configured: a merge SHA is only on offer inside `closedPrWindowMs` and unrecoverable after.
+  //
+  // The observer below is the operator's own telemetry, behind the seam the dry run also
+  // uses — one observer for both readers.
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
-    // Whether the environment is *well*, beside where it is: a different question
-    // on a different clock, so a different command and a different interval.
+    // Whether the environment is well, on a different clock than where it is.
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
-    // The clone answers "is this landing in what the environment named", which is
-    // what keeps the probe to one spawn per environment however many goals are in
-    // flight. The same observer the plan reconciler fetches for, so the objects
-    // this asks about are as fresh as `planning.gitFetchIntervalMs`.
+    // Answers "is this landing in what the environment named" once per environment however
+    // many goals are in flight.
     git: gitObserver,
     sink: opts.sink ?? connector,
     probeIntervalMs: config.environmentProbeIntervalMs,
     healthIntervalMs: config.environmentHealthIntervalMs,
-    // The window pass, handed to the desk rather than run beside it: it opens on an
-    // arrival the desk's own third pass records, so *where* it runs is the
-    // invariant and belongs in the file that runs it.
+    // Opens on an arrival the desk's own pass records, so where it runs is the invariant.
     watch: new WatchDesk({
       store,
       environments: config.environments,
@@ -1149,59 +731,39 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The layer above: what a goal declared production would have to show for its
-  // work to have done what it claimed. At this stage it only ever dry-runs — one
-  // reading per declared check, taken as the plan is submitted, so a query that
-  // resolves nothing is handed back to its author before an agent has spent a day
-  // on the work. Built whether or not any environment declares an `observe`; with
-  // none, `run` asks nothing and refuses nothing.
+  // What a goal declared production would have to show. Only ever dry-runs, one reading per
+  // declared check as the plan is submitted. Built whether or not any environment declares `observe`.
   const watchDryRun = new WatchDryRun({
     store,
     environments: config.environments,
     observer: environmentObserver,
   });
 
-  // The step after the launch, and the one station on the floor a person staffs:
-  // a delivered goal whose ticket is still open owes a close. Store-only — it
-  // files and settles a `human_tasks` row and touches no sink, because closing
-  // the item is precisely the part the harness is not doing.
-  // The one thing it asks the outside world, and it asks it about the *row's
-  // wording*: whether the close the row is about can be taken from the cockpit.
+  // A delivered goal whose ticket is still open owes a close. Store-only — files and settles
+  // a `human_tasks` row and touches no sink, since closing is precisely what the harness isn't doing.
   const closeOutSink = opts.sink ?? connector;
   const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
-  // The other ask a delivered goal owes: the fixtures and accounts its validation
-  // plan could not produce. Store-only on the close-out desk's terms, and gated on
-  // the same delivery — a resource is what makes a check runnable, and nothing
-  // runs a check before the goal is delivered.
+  // The other ask a delivered goal owes: fixtures and accounts its validation plan couldn't produce.
   const validationAsks = new ValidationAskDesk(store);
 
-  // The moment the checks become somebody's to run. Store-only on the close-out
-  // desk's terms and gated on the same delivery — and beside it deliberately: a
-  // goal is delivered, and the two things it then owes a person are a close and a
-  // validation.
+  // The moment the checks become somebody's to run. Store-only, gated on the same delivery.
   const validationReady = new ValidationReadyDesk(store, config.environments);
 
-  // The one cost reading taken while the money is still being spent. Store-only
-  // for the close-out desk's reason and one more: an expensive run is not a wrong
-  // run, so the verdict is a visible obligation and never a kill.
+  // The one cost reading taken while the money is still being spent: an expensive run is
+  // not a wrong run, so this is a visible obligation, never a kill.
   const burn = new SpendBurnDesk(store, config.spendBurn);
 
-  // The other reading taken while nothing is wrong: whether there is anything
-  // left for the fleet to do. Store-only on the burn watch's terms — it files a
-  // visible obligation and settles it when the queue recovers, and it is the one
-  // desk whose subject is the *pipeline* rather than a piece of work in it.
+  // Whether there is anything left for the fleet to do — the one desk whose subject is the
+  // pipeline rather than a piece of work in it.
   const runway = new RunwayDesk(store, config.runway);
 
-  // Where a recurrence becomes a queued job. Store-only, like the close-out desk:
-  // it writes the same `jobs` row the launch route writes and leaves every
-  // question about what happens to it to rule `manual-job`.
+  // Where a recurrence becomes a queued job. Writes the same `jobs` row the launch route
+  // writes and leaves the rest to rule `manual-job`.
   const schedules = new ScheduleDesk({ store, errors });
 
-  // The harness watching its own build. Store-and-flag only: it takes a reading,
-  // and a drain writes the same `paused` flag the operator's own pause writes. The
-  // repo it reads is resolved from this module's own path, never `config.repoRoot`
-  // — see `src/selfUpdate/buildStanding.ts` for why those are different questions.
+  // The harness watching its own build. Store-and-flag only — its repo is resolved from
+  // this module's own path, never `config.repoRoot`. → `src/selfUpdate/buildStanding.ts`
   const updates = new UpdateDesk({
     store,
     runtimeControl,
@@ -1213,81 +775,48 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     drainDeadlineMs: config.selfUpdate.drainDeadlineMs,
     projectAutoPull: config.selfUpdate.projectAutoPull,
     snoozeMs: config.selfUpdate.snoozeMs,
-    // The worked repository, on the same timer. `defaultBranch` and not
-    // `selfUpdate.branch`: this is the branch the fleet integrates onto, which is
-    // a different repository's different question.
     project: { root: config.repoRoot, remote: 'origin', branch: config.defaultBranch },
   });
 
-  // How the harness files a tracker item: three of the four filing arms call this
-  // straight from their route, and `link_ticket` calls it for the two that still
-  // have an agent writing the words (issue #394).
+  // How the harness files a tracker item.
   const filing = ticketFiler(config, opts.sink ?? connector);
-  // Not `opts.sink`, and not the connector at all: a fault in the cockpit belongs on
-  // the cockpit's tracker whatever the fleet is pointed at (issue #449).
+  // Not `opts.sink`, and not the connector at all: a cockpit fault belongs on the cockpit's
+  // own tracker whatever the fleet is pointed at.
   const upstream = opts.upstream ?? ghCliUpstreamIssues();
   const graph = new WorkGraphRecorder({ store, errors });
 
-  // The ticket mirror's keeper: one month of backfill on a fresh database, then an
-  // incremental changed-since read every pulse. A record, not a decision — nothing
-  // under `src/dispatcher/` reads it, and the tab it feeds is a lens.
+  // The ticket mirror's keeper: one month of backfill on a fresh database, then incremental
+  // changed-since reads every pulse. A record, not a decision.
   const tickets = new TicketSweep({ store, source: connector, errors });
 
-  // The harness's own voice on the obstacle board (`docs/spec/27-obstacles.md`,
-  // phase 5). Always wired, like the desks below: with nothing having changed
-  // between two readings it writes nothing, and a deployment without it is one
-  // where every row waits for a second *agent* to hit what the world model was
-  // already watching — which a fleet running four agents does not have.
+  // The harness's own voice on the obstacle board. Always wired: with nothing changed
+  // between two readings it writes nothing. → `docs/spec/27-obstacles.md`
   const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
 
-  // What a model may decide about a row nobody has read since a voice last landed
-  // words on it (`docs/spec/27-obstacles.md`, phase 6). Wired **only where a
-  // reader is injected**, unlike the desks around it: with none, every model call
-  // this subsystem could make is one it does not make, extraction stays the
-  // mechanical reading in `src/obstacles/keys.ts` and the ticket stays the
-  // mechanical composition — which is exactly what the harness did before this
-  // desk existed. The terms the ownership desk takes its tracker on, and the
-  // endings desk its prompt book.
+  // What a model may decide about a row nobody has read since a voice last landed words on
+  // it. Wired only where a reader is injected — without one this subsystem calls no model
+  // at all. → `docs/spec/27-obstacles.md`
   const obstacleDesk = opts.obstacleReader
     ? new ObstacleModelDesk({ store, reader: opts.obstacleReader, repoRoot: config.repoRoot, errors })
     : undefined;
 
-  // What has changed on the obstacle board since a running agent was dispatched
-  // (`docs/spec/27-obstacles.md`, phase 2). Always wired, like the three desks
-  // above: with an empty board it sends nothing, and a deployment without it is
-  // one where an agent goes on working around a thing the fleet has since taken
-  // ownership of, or spends its session on one two other goals have corroborated.
+  // What has changed on the obstacle board since a running agent was dispatched. Always wired.
   const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
 
-  // Who owns each standing obstacle, and which goals the board has let back out
-  // (`docs/spec/27-obstacles.md`, phase 3). Always wired, like the desks above:
-  // with an empty board it does nothing, and a deployment without it is one where
-  // an obstacle two goals corroborated sits on the board for ever with nobody on
-  // it — which is the state the fleet was in before any of this existed.
+  // Who owns each standing obstacle, and which goals the board has let back out. Always wired.
   //
-  // The filing arm is off where no tracker is configured: `trackerCoordinates`
-  // is the one gate every filing route already asks, so a deployment with nowhere
-  // to file simply never files rather than raising a provider error every pulse.
+  // The filing arm is off where no tracker is configured — `trackerCoordinates` is the same
+  // gate every filing route already asks.
   const obstacleOwnership = new ObstacleOwnershipDesk({
     store,
     filing: trackerCoordinates(config) ? filing : undefined,
-    // The item's **body**, not a prompt — nothing is dispatched to write it. How a
-    // ticket should read is house style, which is what an override is for.
+    // The item's body, not a prompt — nothing is dispatched to write it.
     ticketBody: (vars) => prompts.render('obstacle-ticket-body', vars),
     watchLabel,
     errors,
   });
 
-  // How each of them ends (`docs/spec/27-obstacles.md`, phase 4). Always wired,
-  // like the two desks above: without it a row stands where its sightings put it
-  // for ever, and a board that only grows is read past — which is what the store
-  // this replaces died of.
-  //
-  // The `docs-change` template a promoted claim already renders, and deliberately
-  // not a second id: everything it says about checking a claim before writing it
-  // down and finding the document that owns it is exactly as true of a note two
-  // agents corroborated, and an operator who overrode it to say where
-  // documentation lives in their repository said that once.
+  // How each obstacle ends. Always wired: without it a row stands forever.
   const obstacleEndings = new ObstacleEndingsDesk({
     store,
     dormantMs: config.obstacleDormantMs,
@@ -1295,23 +824,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
-  // to the others, and a daily digest of what it spent. Wired **only when the pool
-  // is selected** — unlike the two desks above, which are always on: with
-  // `integrations.pool` at its `fake` default there is nothing to publish to and
-  // nothing to read, so a desk here would be a pass that runs every pulse to write
-  // an in-memory map nobody reads.
+  // The cross-fleet pool: what this fleet has vouched for, carried to the others, and a
+  // daily spend digest. Wired only when the pool is selected. The coordinates come straight
+  // from config because `validatePool` has already refused a boot without them.
   //
-  // The coordinates are read straight from config because `validatePool` has already
-  // refused a boot without them — the reads below are the type's, not a second gate.
-  //
-  // **`fleetId` is the exception, and it is a gate.** It is not refused at load, so
-  // that a deployment which selects the pool before naming its fleet boots and is
-  // asked on **Needs you** rather than in a terminal — and an unnamed fleet must
-  // therefore publish nothing at all. `?? ''` below would make its address
-  // `fleets//claims.json`, which every other fleet in the pool reads as a document
-  // with no author, so the desk sits out entirely until the row is answered.
-  // → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
+  // `fleetId` is the exception, and it is a gate: not refused at load, so a deployment can
+  // select the pool before naming its fleet and boot to be asked on Needs You. An unnamed
+  // fleet must publish nothing at all. → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
   const fleetId = config.fleetId ?? '';
   const poolTransport =
     opts.poolTransport ??
@@ -1329,9 +848,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           harnessVersion: harnessVersion(),
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
-          // The clock a shared review pack is pruned on: the same one that drops a
-          // closed pull request out of the world the cockpit draws, so a shared
-          // pack outlives its pull request's row by nothing.
+          // The clock a shared review pack is pruned on: the same one that drops a closed
+          // pull request out of the world.
           closedPrWindowMs: config.closedPrWindowMs,
           errors,
         });
@@ -1341,8 +859,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     connector,
     dispatcher,
     executor,
-    // Empty on a deployment with no feature board, and then the pulse does no
-    // mirror read at all — the gather is several full-table reads.
+    // Empty with no feature board, so the pulse does no mirror read at all.
     featureStandings: featureBoard
       ? (): { number: number; title: string; key: string }[] =>
           featureRecords(store, featureBoard).map((f) => ({ number: f.number, title: f.title, key: f.key }))
@@ -1356,49 +873,36 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationReady,
     burn,
     runway,
-    // The gate the runway watch reads supply through — the same policy object the
-    // dispatcher carries, so the lens and rule `issue-pickup` cannot come to
-    // different answers about one issue.
+    // The same policy object the dispatcher carries, so the lens and rule `issue-pickup`
+    // cannot disagree.
     issuePickup,
     branchReaps,
     environments,
     prWatch,
     prWorkItems,
-    // The one thing the pulse needs of the review policy: whether to stamp the
-    // intake ledger the dispatcher reads a few lines later.
     review: config.review,
-    // Only where the project configured a command, so a deployment that did not
-    // asks nobody and spawns nothing — and the pulse's own guard reads the same
-    // absence, so the two cannot disagree about whether the check runs.
+    // Only where the project configured a command; the pulse's own guard reads the same absence.
     reviewProber:
       config.review.reviewedElsewhere === null
         ? undefined
         : (opts.reviewProber ?? new CommandReviewProber(config.repoRoot)),
     schedules,
-    // Only when the watch is on: absent, the pulse takes no reading and the gauge
-    // reads unknown, which is the behaviour of every deployment before this existed.
     updates: config.selfUpdate.enabled ? updates : undefined,
     graph,
     tickets,
-    // Dates the environment this process is holding, once a beat. Wrapped in a
-    // closure because `localRun` is constructed below this — it is the last thing
-    // built, being the one component that can spawn a session on its own — and this
-    // is only ever called from a later pulse.
+    // Dates the environment this process is holding, once a beat.
     localRun: { noteAlive: () => localRun.noteAlive() },
-    // Settles the rows an agent will never answer: the environment went away, or
-    // the agent ended without reporting. Wrapped for `localRun`'s reason — the desk
-    // is built below this, and this only ever runs from a later pulse.
+    // Settles the rows an agent will never answer: the environment went away, or it ended
+    // without reporting.
     localValidations: {
       sweep: () => {
         localValidations.sweep();
       },
     },
     landings,
-    // Holds the pulse while a previous run's agents await a verdict.
     recovery,
-    // Sweeps "Needs you" items whose agent has died, whatever route it died by.
     escalations,
-    // Resumes the agents parked on a usage limit whose window has turned over.
+    // Resumes agents parked on a usage limit whose window has turned over.
     fleet: agents,
     obstacleVoice,
     obstacleDesk,
@@ -1408,17 +912,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
-    // The two lane backstops, handed to the world read each pulse. The composite
-    // connector holds the same pair for the reads taken *outside* the pulse, and
-    // both come from this one config — a second default anywhere would be a second
-    // answer, differing exactly where an operator changed it.
     readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
     errors,
     runtime: runtimeControl,
     prWatchLabel: watchLabel,
-    // Only when both halves exist: pins are labels naming profiles, so a
-    // deployment with no `labelPrefix` has nowhere to write one and a deployment
-    // with no `agentModels` has nothing for one to name.
+    // Only when both halves exist: pins are labels naming profiles.
     modelPins:
       config.labelPrefix && config.agentModels
         ? { labelPrefix: config.labelPrefix, models: config.agentModels }
@@ -1427,16 +925,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     freshReads: ingressInbox,
   });
 
-  // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.
-  // Idempotent per agent: an agent already has at most one open escalation, so a
-  // repeat 'waiting' (e.g. a resumed agent re-surfacing its park) never doubles up.
-  // Enrich with the task's originating signal and a tail of the agent's output so
-  // the human can answer from the card without opening the drawer for context.
-  //
-  // `ask` is present only when the park came through the `escalate` tool, which is
-  // the whole point of that tool: the *type* and the answer options are things the
-  // agent knows and the WAITING sentinel had no way to say. Absent, this behaves
-  // exactly as it did — one free-text question filed as `answer_question`.
+  // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox. Idempotent
+  // per agent. `ask` is present only when the park came through the `escalate` tool.
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.getTask(taskId);
@@ -1456,19 +946,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
-  // A dead agent can never receive an answer, so cascade-dismiss its open
-  // escalations at every terminal-dead transition. Kill surfaces as a `killed`
-  // status; every other ending surfaces as a `done` event, whichever of the two
-  // statuses it carries and whoever declared it — an agent that finished with a
-  // question of its own still open is the same un-answerable card as one that
-  // crashed with it. (An agent orphaned by a *restart* is not dismissed here on
-  // purpose: it may be restored, and a restored agent must come back to the
-  // question it parked on — see `RecoveryDesk`, where the dismissal hangs off the
-  // requeue/remove verdicts.)
+  // A dead agent can never answer, so cascade-dismiss its open escalations at every
+  // terminal-dead transition. An agent orphaned by a restart is deliberately not dismissed
+  // here — it may be restored and must come back to its question (see `RecoveryDesk`).
   //
-  // These two are the fast path only. The pulse sweeps the same set through
-  // `EscalationInbox.tidyDeadAgents`, so a death that reaches neither listener is
-  // still tidied within a heartbeat.
+  // The fast path only: the pulse also sweeps dead agents through `EscalationInbox.tidyDeadAgents`.
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
   });
@@ -1485,17 +967,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     );
   });
 
-  // A code agent's worktree slot is released once its process has actually exited
-  // ('reaped'), and nothing is deleted: the slot keeps its checkout and everything
-  // git ignores in it for whichever branch is handed it next, and a failed or killed
-  // agent's tree stays readable until then. The rendezvous on the exit is still
-  // load-bearing — a live process is sitting in that directory, and the next
-  // occupant cleans and switches it.
+  // A code agent's worktree slot is released once its process has actually exited, and
+  // nothing is deleted — the slot keeps its checkout for whichever branch is handed it next.
   //
-  // **Every status, not just `done`.** Nothing else releases a lease, so skipping
-  // the failed and killed ones would shrink the pool by one per failure with nothing
-  // to say so. Slots are shared per-branch, so hands off while any sibling task on
-  // the branch is still active.
+  // Every status, not just `done`: skipping failed/killed would shrink the pool with
+  // nothing to say so. Slots are shared per-branch, so hold off while a sibling task is active.
   agents.on('reaped', ({ taskId }) => {
     const task = store.getTask(taskId);
     const branch = task?.branch;
@@ -1507,23 +983,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
-  // The latency an operator actually feels, closed: nothing used to react to an
-  // agent ending, so the slot it freed sat idle until the next beat — up to
-  // `heartbeatIntervalMs` (five minutes on the deployment of the day) of an idle
-  // fleet with work queued in front of it. What fires here is a **local** cycle: the full
-  // decide/execute sequence against the world the last real cycle read, with every
-  // world-facing pass skipped, so reacting to an internal event costs a store pass
-  // and no provider traffic. → `docs/spec/04-harness-cycle.md#the-local-cycle`
+  // What fires here is a local cycle: full decide/execute against the world the last real
+  // cycle read, every world-facing pass skipped — a store pass and no provider traffic
+  // instead of a freed slot sitting idle. → `docs/spec/04-harness-cycle.md#the-local-cycle`
   //
-  // Wired here rather than inside `Harness` because it is the composition root that
-  // knows both halves: the harness has no handle on the fleet, and `AgentManager`
-  // must stay ignorant of the pulse. Both terminal events, deliberately — `done` is
-  // when the row stops counting against the cap, `reaped` is when its worktree slot
-  // goes back, and neither implies the other in time. The trigger's debounce folds
-  // the pair (and a whole fleet's worth of them) into one cycle.
-  //
-  // A reaction to a termination, not a termination path: it signals nothing, reaps
-  // nothing, and cannot run while a real cycle is in flight.
+  // Wired here because only the composition root knows both halves: `done` is when a row
+  // stops counting against the cap, `reaped` is when its worktree slot goes back.
   const localCycles = new CycleTrigger({
     run: () => harness.runCycle('local'),
     ready: () => store.open,
@@ -1532,13 +997,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   agents.on('done', () => localCycles.request());
   agents.on('reaped', () => localCycles.request());
 
-  // The ingress's half of the same wiring, and the same reason it is here: the
-  // route knows nothing about the harness and the harness knows nothing about the
-  // port. What differs is the cycle — a **real** one, because a delivery announces
-  // something in the outside world and a local cycle is defined by not reading it —
-  // and so a floor on how often that may happen, which is the only thing standing
-  // between a verified flood and this fleet's provider budget.
-  // → `docs/spec/30-ingress.md#what-a-delivery-is-allowed-to-cost`
+  // The ingress's half of the same wiring — a real cycle, floored so a verified flood can't
+  // burn the provider budget. → `docs/spec/30-ingress.md#what-a-delivery-is-allowed-to-cost`
   const ingressCycles = new CycleTrigger({
     run: () => harness.runCycle('ingress'),
     ready: () => store.open,
@@ -1553,11 +1013,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // The vivarium reads what the operator has already done and writes only its own
-  // five tables. Wired to the pulse's own event rather than into `Harness` — it
-  // decides nothing, so `harness.ts` has no reason to know it exists, and the
-  // pulse does not wait on it. The routes that settle an operator action call
-  // `scan()` too, for latency; this is what guarantees delivery.
+  // The vivarium reads what the operator has already done and writes only its own tables.
+  // Wired to the pulse's event rather than into `Harness`: it decides nothing.
   const pets = new PetKeeper(store, config.pets);
   harness.on('cycle:end', () => {
     try {
@@ -1567,18 +1024,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }
   });
 
-  // The machine's one dev environment. Constructed unconditionally — with no
-  // `localRun.instruction` every start refuses with that as its reason, which is a
-  // surface that says why rather than one that is quietly absent.
+  // The machine's one dev environment. Constructed unconditionally.
   const localRun = new LocalRunner({
     store,
     worktrees,
-    // The same factory the fleet's agents come from, already narrowed by
-    // `agentMode` — so a test's fake runtime holds the environment up too, and this
-    // module never learns that a real `claude` exists.
+    // The same factory the fleet's agents come from, so a test's fake runtime holds the
+    // environment up too.
     sessions: agentSetup.factory,
-    // By reference, so an instruction corrected in the cockpit reaches the next
-    // start: `LIVE_ARMS` assigns a new object onto the running config.
+    // By reference, so an instruction corrected in the cockpit reaches the next start.
     policy: () => config.localRun,
     claudeCommand: config.claudeCommand,
     claudeArgs: config.claudeArgs,
@@ -1586,11 +1039,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultBranch: config.defaultBranch,
     choicesFor: (originRef) => {
       const plan = store.getPlanByOrigin(originRef);
-      // The goal's own branch as well as its parts', through the same
-      // `openPrForIssue` the pickup verdict uses: a goal nobody decomposed has its
-      // work on one pull request, and it is the whole answer for that goal. Read off
-      // the baseline rather than the provider, like everything else that asks the
-      // world a question outside a pulse.
+      // The goal's own branch as well as its parts', through the same `openPrForIssue` the
+      // pickup verdict uses, off the baseline.
       const number = planIssueNumber(originRef);
       const world = store.getWorldBaseline();
       const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
@@ -1600,20 +1050,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reap: reapTree,
     errors,
   });
-  // The readings on that environment. Built here, armed in `main.ts`: the timer
-  // probes ports and asks git, and belongs only to a harness that is running — every
-  // test builds a `System`. The lister follows the reaper's rule, and the fetch the
-  // reconciler's: both are real only when nothing about the transport or the clone
-  // has been faked.
+  // Built here, armed in `main.ts`: the timer probes ports and asks git, and belongs only
+  // to a running harness — every test builds a `System`.
   const localRunWatch = new LocalRunWatch({
     runner: localRun,
     git: gitObserver,
     fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
     ports: opts.portLister ?? (realTransport ? new CommandPortLister(errors) : new FakePortLister()),
-    // The branch this ref was cut from, asked where the plan is: a part's base is the
-    // one unsettled dependency's branch or the integration branch (`partBase`), the
-    // goal's own branch is based wherever its pull request says, and the integration
-    // branch has no base at all.
+    // The branch this ref was cut from: a part's base is its one unsettled dependency's
+    // branch or the integration branch, the goal's own branch is based wherever its PR says.
     baseFor: (originRef, ref) => {
       if (ref === config.defaultBranch) return null;
       const number = planIssueNumber(originRef);
@@ -1627,14 +1072,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fetchIntervalMs: config.planning.gitFetchIntervalMs,
     errors,
   });
-  // The fleet driving that same environment (`src/localValidation/`): the desk that
-  // owns every row, and the two things that end one without an agent saying so.
-  //
-  // Constructed after the runner, and its sweep wired onto the runner's own
-  // `changed` as well as onto the pulse: an operator who swaps the environment is
-  // looking at the page while they do it, and a row that says "validating" for a
-  // heartbeat after the environment it was pinned to has gone is the panel telling
-  // them something that is not true.
+  // The fleet driving that same environment. Its sweep is wired onto the runner's own
+  // `changed` as well as the pulse, so a row doesn't say "validating" after the environment
+  // it was pinned to has gone.
   const localValidations = new LocalValidationDesk({
     store,
     validationRoot: config.validationRoot,
@@ -1643,12 +1083,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   localRun.on('changed', () => {
     localValidations.sweep();
   });
-  // A row saying `running` after a restart describes a process this harness never
-  // spawned, so nothing may go on trusting it — but the machine it left behind is
-  // half an environment rather than none, and what happens to both is
-  // `LocalRunner.resumeInterrupted`. It is called from `main.ts` rather than here
-  // because it can spawn a session, and everything that can is below that file's
-  // shutdown handlers. → docs/spec/23-local-runs.md
+  // A row saying `running` after a restart describes a process this harness never spawned.
+  // What happens to it is `LocalRunner.resumeInterrupted`, called from `main.ts` (it can
+  // spawn a session, so it must run below that file's shutdown handlers).
+  // → docs/spec/23-local-runs.md
   return {
     config,
     store,

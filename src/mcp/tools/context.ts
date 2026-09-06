@@ -39,11 +39,8 @@ import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
 /**
- * What the tool layer needs from the fleet. Narrow on purpose, and every method
- * is here for the same reason: each has a fleet-side transition or event that
- * must not be bypassed. `ask` goes through the *same* park the WAITING sentinel
- * drives; `recordProgress` persists and then emits, so the
- * cockpit hears the moment it happens rather than on the next pulse.
+ * What the tool layer needs from the fleet. Narrow on purpose: every method here has a
+ * fleet-side transition or event that must not be bypassed.
  */
 export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
@@ -53,9 +50,8 @@ export interface AgentToolTarget {
   ): { ok: true; task: HumanTask } | { ok: false; error: string };
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
   /**
-   * Which filing this credential resolves to — asked *before* the item is created,
-   * because the harness files it and a bug is created as a different type and
-   * linked back to its story (issue #394).
+   * Which filing this credential resolves to — asked *before* the item is created, since a
+   * bug is a different type and is linked back to its story.
    */
   filingTarget(agentId: string): { ok: true; kind: 'bug'; storyNumber: number | null } | { ok: false; error: string };
   linkTicket(agentId: string, ticketRef: string): { ok: true; bug: BugFiling } | { ok: false; error: string };
@@ -77,10 +73,7 @@ export interface AgentToolTarget {
     cause: ShortfallCause | null,
     part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
-  /**
-   * The planner's "there is nothing to build here". Takes no issue argument for
-   * the reason none of these do: the issue is the credential's own.
-   */
+  /** The planner's "there is nothing to build here". */
   recordGoalMet(
     agentId: string,
     summary: string,
@@ -92,14 +85,8 @@ export interface AgentToolTarget {
     summary: string,
     profile: string | null,
     /**
-     * Where the appraiser says this goal belongs on the backlog — the container it
-     * should hang off, and the area node it should sit on. Both null where it
-     * proposed neither, which is every `unclear` verdict and every flat tracker.
-     *
-     * One object rather than two more positional arguments: they are one
-     * statement about placement, they arrive together, and a fifth and sixth
-     * `string | null` beside `profile` is a call site where two nulls can be
-     * transposed with nothing red.
+     * Where the appraiser says this goal belongs on the backlog. One object rather than two
+     * more `string | null` positionals, which transpose silently.
      */
     placement?: { parent: number | null; areaPath: string | null },
   ):
@@ -124,18 +111,15 @@ export interface AgentToolTarget {
     decision: PadDecision | null,
   ): { ok: true; entry: ScratchEntry } | { ok: false; error: string };
   readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string };
-  /**
-   * The Feature's own account of itself. Takes no container argument for the
-   * reason none of these do: the Feature is the credential's own.
-   */
+  /** The Feature's own account of itself. */
   recordFeatureSummary(
     agentId: string,
     input: FeatureSummaryInput,
   ): { ok: true; featureOrigin: string } | { ok: false; error: string };
   /**
-   * The order the stories under the credential's own Feature go in. Always written
-   * as a proposal: an order holds work, and nothing the fleet says about its own
-   * output may hold work.
+   * The order the stories under the credential's own Feature go in. Always written as a
+   * proposal: an order holds work, and nothing the fleet says about its own output may hold
+   * work.
    */
   recordFeatureSequence(
     agentId: string,
@@ -156,27 +140,20 @@ export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
   /**
-   * This deployment's model profiles, cheapest first, as `appraise_issue` presents
-   * them to an appraiser (issue #342). Absent or empty for a deployment with no
-   * `agentModels`, which is what turns the whole proposal off: no argument is
-   * offered, none is required, and every dispatch resolves on its rule alone.
+   * This deployment's model profiles, cheapest first, as `appraise_issue` presents them.
+   * Absent or empty turns the whole proposal off: no argument is offered and every dispatch
+   * resolves on its rule alone.
    */
   profiles?: { name: string; description: string }[];
   /**
-   * The project's area tree as the harness last read it, or null where the
-   * tracker has no such concept and while the first read has not landed.
-   *
-   * A thunk for the reason `agents` and `openPr` are: the directory behind it is
-   * refreshed on the pulse, and a value captured when the tool set was composed
-   * would pin every later agent to the tree as it stood at the first launch. Read
-   * at description-build time, which is why it cannot be a promise.
+   * The project's area tree as the harness last read it, or null where the tracker has no
+   * such concept and while the first read has not landed.
    */
   areaPaths?: () => AreaPathTree | null;
   /**
-   * The review modes this project declared, in declaration order, as
-   * `review_route` offers them to a triage agent. Empty or absent for a
-   * deployment that declared none — and then no triage is ever dispatched, so
-   * nothing is calling the tool anyway.
+   * The review modes this project declared, in declaration order, as `review_route` offers
+   * them to a triage agent. Empty or absent for a deployment that declared none — and then
+   * no triage is ever dispatched, so nothing is calling the tool anyway.
    */
   reviewModes?: string[];
   /**
@@ -185,94 +162,63 @@ export interface McpToolDeps {
    */
   reviewAllowSkip?: boolean;
   /**
-   * The permission backstop (issue #130 phase B). Present when
-   * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.
-   * Absent, that tool reports the backstop is off rather than blocking forever.
+   * The permission backstop. Absent, that tool reports the backstop is off rather than
+   * blocking forever.
    */
   permissions?: PermissionDesk;
   /**
-   * What `open_pr` needs to author a pull request. Optional, and that is the
-   * degradation floor rather than laziness: unwired — no sink, `mcp.enabled` off,
-   * a `claude` that ignores the server — an agent opens its own PR exactly as it
-   * did before the tool existed, which is what every prompt still tells it to do.
+   * What `open_pr` needs to author a pull request. Optional: unwired, an agent opens its
+   * own PR exactly as it did before the tool existed.
    */
   openPr?: {
     sink: ActionSink;
     defaultBranch: string;
     prompts: PromptTemplates;
     /**
-     * `${labelPrefix}-watch`, written onto the pull request as it is created so the
-     * fleet keeps working what it just opened (pull requests are opt-in). Empty =
-     * the gate is off, and nothing is tagged because nothing needs to be.
+     * `${labelPrefix}-watch`, written onto the pull request as it is created so the fleet
+     * keeps working what it just opened (pull requests are opt-in). Empty = the gate is
+     * off, and nothing is tagged because nothing needs to be.
      */
     watchLabel: string;
     /**
-     * How this provider links a pull request in prose, so the body guidance can
-     * name the sigil rather than leave the agent to GitHub's habit. On Azure a
-     * sibling pull request written `#12` links to *work item* 12.
-     * → `src/prRef.ts`
+     * How this provider links a pull request in prose — on Azure a sibling pull request
+     * written `#12` links to *work item* 12. → `src/prRef.ts`
      */
     prRefStyle: PrRefStyle;
   };
   /**
-   * Where `reply_to_review` hands the reply it was given. The `ActionExecutor`,
-   * narrowed to the one method — the tool raises a `reply_on_pr` act and returns,
-   * because the executor is the only path that asks the hold, applies the
-   * operator's authority and signs what goes out.
-   *
-   * Optional for {@link McpToolDeps.openPr}'s reason, and the floor is *not* the
-   * agent posting it itself: unwired, the tool says so and tells the agent to put
-   * the reply in its summary. An agent posting with the operator's credential is
-   * the behaviour this tool exists to end, so it cannot be the fallback.
+   * Where `reply_to_review` hands the reply it was given: the `ActionExecutor`, narrowed to
+   * the one method — the only path that asks the hold and signs what goes out. Unwired, the
+   * tool tells the agent to put the reply in its summary; the agent posting it itself must
+   * never be the fallback.
    */
   prReply?: PrReplyDesk;
-  /**
-   * How `link_ticket` creates the item an agent has written up (issue #394).
-   * Optional for {@link McpToolDeps.openPr}'s reason and with the same floor: with
-   * no tracker configured there is nothing to file into, nothing dispatches a
-   * filing job, and the tool says so rather than pretending.
-   */
+  /** How `link_ticket` creates the item an agent has written up. */
   filing?: TicketFiler;
   /**
-   * The post-deploy watch's dry run, as `plan_submit` reaches it: every declared
-   * check put to the environment once, the moment the plan lands, so a query that
-   * resolves nothing comes back to its author while it is still cheap to fix.
-   *
-   * Optional for {@link McpToolDeps.openPr}'s reason and with the same floor:
-   * unwired, the plan is stored exactly as it was before the block existed and
-   * nothing is asked of any environment.
+   * The post-deploy watch's dry run, as `plan_submit` reaches it: every declared check put
+   * to the environment once, so a query that resolves nothing comes back to its author.
    */
   watch?: WatchDryRunner;
   /**
    * Where `review_pack_submit` hands the pack it was given: the author desk, which
-   * re-derives what the pack is checked against from the task row and writes the
-   * document. Narrowed to the one method, and optional for {@link McpToolDeps.openPr}'s
-   * reason with the same floor: unwired, the tool says so, and nothing is recorded.
+   * re-derives what the pack is checked against from the task row. Unwired, the tool says
+   * so and nothing is recorded.
    */
   reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
   /**
-   * Where `review_pack_check` hands its verdicts: the checker desk, which merges
-   * them onto the stored document and can reach nothing else in it. Same shape
-   * and same floor as {@link McpToolDeps.reviewPacks}.
+   * Where `review_pack_check` hands its verdicts: the checker desk, which merges them onto
+   * the stored document and can reach nothing else in it.
    */
   reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
   /**
-   * The checkout an obstacle's `path` key is validated against — `config.repoRoot`.
-   *
-   * Optional for {@link McpToolDeps.openPr}'s reason and with a floor of the same
-   * shape: unwired, no path key validates, so those keys are **dropped and the
-   * report is kept**. A refusal an agent cannot satisfy is a report that was never
-   * filed, and that is the one loss the board cannot recover from.
+   * The checkout an obstacle's `path` key is validated against — `config.repoRoot`. Unwired,
+   * no path key validates, so those keys are dropped and the report kept: a refusal an agent
+   * cannot satisfy is a report that was never filed.
    */
   /**
-   * The desk the three local-validation tools write through, as thunks.
-   *
-   * Thunks because of construction order rather than taste: the MCP server is built
-   * in `system.ts` well above the local runner and the desk that reads it, and a
-   * value captured at that point would be undefined. Optional for
-   * {@link McpToolDeps.openPr}'s reason, with the same floor — unwired, the tools
-   * answer that they are not available on this deployment, which is honest and is
-   * what every test that never builds a runner gets.
+   * The desk the three local-validation tools write through, as thunks — the MCP server is
+   * built in `system.ts` above the local runner, so a captured value would be undefined.
    */
   localValidations?: () => LocalValidationDesk;
   /** The environment as `local_run_read` reads it: the runner and its watch, same terms. */
@@ -301,10 +247,9 @@ export interface McpIdentity {
 }
 
 /**
- * The situational-awareness envelope every tool response carries. Cheap to
- * compute and it removes the need for a polling tool: an agent that calls
- * anything at all learns its origin, whether a human is currently parked on it,
- * and how its plan is progressing.
+ * The situational-awareness envelope every tool response carries — it removes the need for
+ * a polling tool: an agent that calls anything learns its origin, whether a human is parked
+ * on it, and how its plan is progressing.
  */
 interface StatusEnvelope {
   origin: string | null;
@@ -334,19 +279,10 @@ function statusEnvelope(store: Store, agent: Agent, task: Task): StatusEnvelope 
 }
 
 /**
- * What one tool's body runs against — the seam between the assembly in
- * `../tools.ts` and the module per tool beside this file.
- *
- * Every tool used to be an object literal inside one 844-line function, sharing
- * that function's scope: the caller, the deps and the `ok` helper were closed
- * over rather than named, so "what does a tool get to reach" had no answer short
- * of reading the whole thing. This is the answer, and it is the same shape
- * `StageContext` gives a dispatch rule for the same reason.
- *
- * **The caller is on the context, never in an argument.** That is the channel's
- * one structural guarantee (`token -> agent -> task -> origin`), and putting the
- * resolved identity here rather than letting a handler read it from its own args
- * is what keeps a tool module from being able to accept one.
+ * What one tool's body runs against — the seam between the assembly in `../tools.ts` and
+ * the module per tool beside this file. **The caller is on the context, never in an
+ * argument** — a tool module that accepted an identity argument would break the channel's
+ * one structural guarantee (`token -> agent -> task -> origin`).
  */
 interface ToolContext {
   /** The wiring the channel was built with, verbatim. */
@@ -359,15 +295,7 @@ interface ToolContext {
   ok: (payload: Record<string, unknown>) => ToolCallResult;
 }
 
-/**
- * One tool's body: everything except its name.
- *
- * The name is supplied by the registry in `../tools.ts`, keyed on
- * `MCP_TOOL_NAMES`, so a module cannot name itself something the launch config's
- * `--allowedTools` grants do not cover — the "connected server whose every call
- * is refused" trap `names.ts` exists to prevent, now closed at compile time
- * rather than by an array index literal per module.
- */
+/** One tool's body: everything except its name. */
 export type ToolFactory = (ctx: ToolContext) => Omit<McpTool, 'name'>;
 
 /** Build the context one resolved caller's tools run against. */

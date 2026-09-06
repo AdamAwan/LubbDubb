@@ -16,24 +16,10 @@ const TAIL_LINES = 200;
 
 /**
  * What the session is told on top of the operator's own instruction, appended and
- * never interpolated — the prompt templates' rule, for their reason: an operator
- * writing down how their project starts has no way to know these five things, and
- * an instruction that had to remember them would be one edit from dropping one.
- *
- * Every line is here because leaving it out breaks the run in a way that looks like
- * something else:
- *
- * - **Background, and stay alive.** The dev server is a descendant of this session.
- *   A session that runs the server in the foreground blocks its own turn and then
- *   times out; one that starts it and exits takes the server with it.
- * - **Do not stop it**, because the turn ending is not the run ending.
- * - **Do not commit.** The checkout is detached at somebody else's commit.
- * - **Say where it landed**, which is the one thing the harness cannot observe and
- *   the operator most wants — `localRun.url` is what was *configured*, not what
- *   happened.
- * - **Say each step before taking it**, prefixed `phase:`. A bring-up is minutes of
- *   work inside one turn, and until that turn ends the harness knows only that it
- *   started — which reads on the glass exactly like a start that has hung.
+ * never interpolated. Each line is here because leaving it out breaks the run in a
+ * way that looks like something else: run in the background (the dev server is a
+ * descendant of this session), do not stop it, do not commit, say where it landed,
+ * and say each step before taking it. → `docs/spec/23-local-runs.md`
  */
 const RUN_RULES = [
   'How this works, on top of the above:',
@@ -53,17 +39,10 @@ const RUN_RULES = [
 ].join('\n');
 
 /**
- * What a session bringing an **interrupted** run back is told, on top of the
- * operator's own resume instruction — appended, never interpolated, for the prompt
- * templates' reason.
- *
- * `STOP_RULES_ALONE`'s first bullet, for `STOP_RULES_ALONE`'s reason, pointed the
- * other way: this session has no memory of the bring-up either, and the mistake it
- * would make left to infer things is the mirror image. A start's session finds the
- * ports free; this one finds them held by the containers the reap could not touch,
- * and a session that reads that as a collision either brings up a second stack or
- * gives up. It is told outright that what it finds is its own predecessor's work and
- * that attaching to it is the job.
+ * What a session bringing an **interrupted** run back is told, appended to the
+ * operator's resume instruction. It is told outright that what it finds still
+ * running is its predecessor's work, or it reads the held ports as a collision and
+ * either brings up a second stack or gives up.
  */
 const RESUME_RULES = [
   'How this works, on top of the above:',
@@ -87,19 +66,15 @@ const RESUME_RULES = [
 ].join('\n');
 
 /**
- * How long a stop instruction is given before the session is killed anyway.
- *
- * There has to be a bound: a stop that never finishes would otherwise leave a
- * harness that can never start anything again, since a swap waits for it. Generous,
- * because `docker compose down` on a cold machine is not quick and the honest
+ * How long a stop instruction is given before the session is killed anyway. There has
+ * to be a bound — a swap waits for the stop — and it is generous, because the honest
  * failure here is "killed something that was halfway down".
  */
 const STOP_TIMEOUT_MS = 120_000;
 
 /**
- * Every event that means "the turn ended and the session did not fail". Declared
- * once, because the two places that listen for a turn end used to name two of
- * these each and miss the one the runtime actually emits — see `wire`.
+ * Every event that means "the turn ended and the session did not fail". Declared once:
+ * a listener naming a subset misses the one the runtime actually emits — see `wire`.
  */
 const TURN_ENDED = ['done', 'waiting', 'stalled', 'limited'] as const;
 
@@ -121,13 +96,9 @@ const STOP_RULES = [
 ].join('\n');
 
 /**
- * The same, for a session that did **not** start the environment — spawned because
- * the one that did is gone (a crash, a restart, a start that failed halfway).
- *
- * It has no memory of the bring-up, so it is told that outright. Left to infer it,
- * a session finds a checkout with nothing of its own running in it and reasonably
- * reports that there is nothing to do — which is the one answer that leaves the
- * containers up.
+ * The same, for a session that did **not** start the environment. It is told that
+ * outright: left to infer it, it reports there is nothing to do, which is the one
+ * answer that leaves the containers up.
  */
 const STOP_RULES_ALONE = [
   'How this works, on top of the above:',
@@ -144,14 +115,9 @@ const STOP_RULES_ALONE = [
 
 /**
  * What the session holding a **running** environment is told when the checkout under
- * it has moved — after the operator's own `localRun.refreshInstruction`, which may be
- * blank, since a dev server that hot-reloads needs nothing said.
- *
- * A function rather than a constant because the harness's own facts — which ref,
- * from which commit to which — are part of it. That is not the interpolation the
- * prompt-template rule bans: the rule protects operator-overridable templates from
- * an override that never learned a token, and nothing here is overridable. The
- * operator's text is prepended verbatim and these lines are the harness's own.
+ * it has moved, after the operator's own `localRun.refreshInstruction`. A function
+ * because the harness's own facts are part of it; nothing here is operator-
+ * overridable, so this is not the interpolation the prompt-template rule bans.
  */
 function refreshRules(ref: string, from: string | null, to: string, alone: boolean): string {
   return [
@@ -173,14 +139,9 @@ function refreshRules(ref: string, from: string | null, to: string, alone: boole
 }
 
 /**
- * The stage out of a line the session printed, or null if it was not one.
- *
- * Tolerant of decoration, because what comes back is a model's prose and a bullet
- * or a bolded label in front of the line is the common case rather than the odd
- * one. What it will not do is *guess*: a line that does not say `phase` is output,
- * and output has its own place on the panel. A stage inferred from whatever the
- * session last happened to say would be a caption the harness made up, which is
- * worse than no caption — it is unfalsifiable from the glass.
+ * The stage out of a line the session printed, or null if it was not one. Tolerant of
+ * decoration, since what comes back is a model's prose — but it never *guesses*: a
+ * line that does not say `phase` is output, and a made-up caption is worse than none.
  */
 function phaseOf(line: string): string | null {
   const plain = line.split('**').join('').trim();
@@ -189,13 +150,7 @@ function phaseOf(line: string): string | null {
   return said === '' ? null : said;
 }
 
-/**
- * A span of milliseconds in the words an operator reading a note would use.
- *
- * Rounded to the coarsest unit that still says something, because the note it lands
- * in is a sentence rather than a reading: "3 hours" is the useful half of "3 hours 14
- * minutes", and the run it describes is gone either way.
- */
+/** A span of milliseconds in the words an operator would use, rounded to the coarsest unit that still says something. */
 function describeAge(ms: number): string {
   const minutes = Math.round(ms / 60_000);
   if (minutes < 60) return `${String(Math.max(minutes, 1))} minute${minutes === 1 ? '' : 's'}`;
@@ -214,9 +169,8 @@ interface LocalRunnerDeps {
    */
   sessions: SessionFactory;
   /**
-   * The live policy, **by reference** — `LIVE_ARMS` assigns a new object onto the
-   * running config, so a function is what makes an instruction corrected in the
-   * cockpit apply to the next start rather than the next restart.
+   * The live policy, **by reference** — a function, so an instruction corrected in the
+   * cockpit applies to the next start rather than the next restart.
    */
   policy: () => LocalRunPolicy;
   claudeCommand: string;
@@ -230,22 +184,13 @@ interface LocalRunnerDeps {
    */
   choicesFor: (originRef: string) => LocalRunChoices;
   /**
-   * Kills the session's whole process **subtree**. The dev server is a descendant,
-   * not the process itself, so a reaper that only signalled the child would leave
-   * the port held and the checkout unremovable.
+   * Kills the session's whole process **subtree**. The dev server is a descendant, so
+   * signalling only the child leaves the port held and the checkout unremovable.
    */
   reap: ProcessReaper;
-  /**
-   * How long a stop instruction is given before the session is killed anyway.
-   * Injected rather than read from the constant so a test can bound it at
-   * milliseconds; unset means {@link STOP_TIMEOUT_MS}.
-   */
+  /** How long a stop instruction is given before the kill. Injected for tests; unset means {@link STOP_TIMEOUT_MS}. */
   stopTimeoutMs?: number;
-  /**
-   * The clock the resume window is measured against. Injected so a test can hold a
-   * run's interruption at an hour ago without sleeping through one; unset means
-   * `Date.now`.
-   */
+  /** The clock the resume window is measured against. Injected for tests; unset means `Date.now`. */
   now?: () => number;
   errors: ErrorRecorder;
 }
@@ -254,25 +199,19 @@ interface LocalRunnerDeps {
  * The one local run: the machine's dev environment, which goal's code is in it, and
  * the process holding it up.
  *
- * **One at a time, and the store is what enforces it** —
- * `Store.beginLocalRun` ends whatever was live in the same transaction that writes
- * the new row. This class kills the old session when that happens, but it is not
- * the thing keeping the count at one: a runner that checked first and wrote second
- * would leave two servers on one port with the cockpit drawing one of them.
- *
- * **Nothing here polls the application.** `running` means the session finished its
- * turn without failing and its process is still alive. Whether the declared port is
- * answering, and how far the checkout has fallen behind its branch, are the
- * readings of `LocalRunWatch` (`./watch.ts`) — probes on a timer, kept out of this
- * class so the thing that holds the process never blocks on git or a socket.
+ * **One at a time, and the store enforces it** — `Store.beginLocalRun` ends whatever
+ * was live in the transaction that writes the new row; this class only kills the old
+ * session. **Nothing here polls the application**: `running` means the session
+ * finished a turn without failing and its process is alive, and the port and
+ * staleness probes belong to `LocalRunWatch` so this class never blocks on a socket.
+ * → `docs/spec/23-local-runs.md`
  */
 export class LocalRunner extends EventEmitter {
   private session: AgentSession | null = null;
   private runId: string | null = null;
   /**
    * The turn in flight on the held session, or null between turns. Not the row's
-   * status: a `running` environment can have a refresh or a message turn going on
-   * top of it, and the panel draws the stage line for exactly as long as one is.
+   * status: a `running` environment can have a refresh or message turn on top of it.
    */
   private inFlight: LocalRunTurn | null = null;
   private tail: string[] = [];
@@ -304,38 +243,25 @@ export class LocalRunner extends EventEmitter {
   }
 
   /**
-   * What the session last said it was doing, or null if it has not said.
-   *
-   * On the snapshot rather than dug out of {@link output} by the cockpit, for the
-   * reason `live` is: which of a session's lines counts as a stage is one rule, and
-   * a component re-deriving it could disagree with what the panel's own log shows.
-   *
-   * Cleared when the run comes up or settles, because a stage is a claim about work
-   * in flight and neither has any. An environment that is up, still reading
-   * "starting the containers", is the panel describing something that stopped
-   * happening — which is exactly the failure this whole field exists to end.
+   * What the session last said it was doing, or null. On the snapshot rather than
+   * re-derived by the cockpit, so one rule decides what counts as a stage. Cleared
+   * when the run comes up or settles: a stage is a claim about work in flight.
    */
   phase(): string | null {
     return this.stage;
   }
 
   /**
-   * Which turn the held session is in the middle of, or null between turns.
-   *
-   * `starting` and `stopping` are row statuses and say the same for those two; this
-   * is what says it for a refresh or a message, both of which happen on top of a
-   * `running` row. On the snapshot for {@link phase}'s reason: the panel draws a
-   * stage line for as long as a turn is in flight, and which turn that is belongs
-   * beside the thing that started it.
+   * Which turn the held session is in the middle of, or null between turns — what says
+   * it for a refresh or a message, both of which happen on top of a `running` row.
    */
   turn(): LocalRunTurn | null {
     return this.inFlight;
   }
 
   /**
-   * Whether this process holds a session for the live run — false after a restart
-   * that could not bring the run back, and during a stop driven by a fresh session.
-   * The panel offers the message box only when there is somebody to send to.
+   * Whether this process holds a session for the live run — false after a restart that
+   * could not bring it back, and during a stop driven by a fresh session.
    */
   holdsSession(): boolean {
     return this.session !== null;
@@ -343,15 +269,9 @@ export class LocalRunner extends EventEmitter {
 
   /**
    * Start `originRef`'s work in the local environment, stopping whatever was there.
-   *
-   * `at` runs an **earlier part of the same goal** instead of the default — the tip
-   * of its stack. It is checked against that goal's own part branches rather than
-   * taken as given: the panel offers a choice from a plan, and a ref that is not one
-   * of them did not come from the panel. Without the check this method is a way to
-   * check out any ref in the repository through an HTTP route.
-   *
-   * A refusal is a returned reason rather than a throw, because both callers — the
-   * route and the desktop tool — hand it straight back to a person.
+   * `at` runs an earlier part of the same goal, and is **checked against that goal's
+   * own part branches** — without the check this is a way to check out any ref in the
+   * repository through an HTTP route. A refusal is a returned reason, never a throw.
    */
   async start(originRef: string, at?: string): Promise<{ ok: true; run: LocalRun } | { ok: false; error: string }> {
     const instruction = this.deps.policy().instruction.trim();
@@ -373,23 +293,17 @@ export class LocalRunner extends EventEmitter {
       };
     const ref = at ?? choices.target ?? this.deps.defaultBranch;
 
-    // Everything that could refuse has refused by now, because the next line takes
-    // the operator's environment down: a swap is a stop and a start, and stopping is
-    // a turn rather than a signal (see {@link stop}).
+    // Everything that could refuse has refused by now: the next line takes the
+    // operator's environment down.
     const stopped = this.deps.store.liveLocalRun() !== null;
     await this.stop('superseded by a run of another goal');
 
     let checkout: { dir: string; commit: string };
     try {
       // **After** the stop, and that order is load-bearing: the stop instruction runs
-      // *in this checkout* — `docker compose down` reads the compose file that is in
-      // it — and `ensurePreview` is a `reset --hard` and a `clean -fd` on the same
-      // directory. Preparing first pulls the project out from under the session being
-      // asked to shut it down.
-      //
-      // The cost is that a checkout that cannot be prepared now fails with the
-      // previous environment already gone, so the refusal says so rather than leaving
-      // an operator to wonder what happened to what they were looking at.
+      // in this checkout, and `ensurePreview` is a `reset --hard` and a `clean -fd` on
+      // it. The cost is that a checkout that cannot be prepared fails with the previous
+      // environment already gone, so the refusal says so.
       checkout = await this.deps.worktrees.ensurePreview(ref);
     } catch (err) {
       return {
@@ -428,35 +342,16 @@ export class LocalRunner extends EventEmitter {
   }
 
   /**
-   * Bring back the run a previous harness left behind, or settle the row if it
-   * cannot be brought back. The boot sweep, and the only thing that clears a live
-   * row at startup.
+   * Bring back the run a previous harness left behind, or settle the row if it cannot
+   * be brought back. The boot sweep, and the only thing that clears a live row at
+   * startup. **A row saying `running` at boot is not a run** — its pid is a dead
+   * parent's — but a shutdown cannot touch a container, so what survived is attached
+   * to via a third instruction ({@link LocalRunPolicy.resumeInstruction}).
    *
-   * **A row saying `running` at boot is not a run**, which is what the sweep this
-   * replaces was right about: the pid in it belongs to a dead parent, or worse to
-   * whatever has since been given that number, so nothing may go on trusting it. What
-   * the sweep was wrong about is what follows from that. A shutdown reaps the
-   * session's subtree and takes the dev server with it, and cannot touch a container
-   * or anything the start handed to a service — so the machine after a restart is
-   * half an environment, with a row that says `stopped` in front of it and an
-   * operator several minutes from getting the other half back. Continuing it is a
-   * third instruction rather than a re-run of the first, because attaching to what
-   * survived is a different sentence from starting from nothing
-   * ({@link LocalRunPolicy.resumeInstruction}).
-   *
-   * **Called from `main.ts`, below the shutdown handlers**, and not from
-   * `buildSystem`: this spawns a process, and everything that can is below that line
-   * for the reason that file states — a Ctrl-C above it runs no handler, so the
-   * session would be a real orphan holding the checkout with a row claiming it is
-   * live. The cost is that the row reads live for the length of a boot, which is the
-   * truth of it: it is about to be.
-   *
-   * Synchronous, because unlike {@link start} there is no checkout to prepare. That
-   * is deliberate and not an accident of the code: `ensurePreview` is a `reset --hard`
-   * and a `clean -fd`, and running it here would pull the project out from under
-   * containers that are still up — the same ordering hazard a swap's stop-then-prepare
-   * exists for. The checkout already stands at the run's own commit, since
-   * `ensurePreview` is the only thing that ever touches `localRunRoot`.
+   * **Called from `main.ts`, below the shutdown handlers**, never from `buildSystem`:
+   * it spawns a process. Synchronous and deliberately preparing no checkout —
+   * `ensurePreview` resets and cleans, which would pull the project out from under
+   * containers that are still up. → `docs/spec/21-self-update.md`
    */
   resumeInterrupted():
     | { outcome: 'nothing' }
@@ -469,9 +364,8 @@ export class LocalRunner extends EventEmitter {
       return { outcome: 'settled', run: live, reason };
     };
 
-    // A `stopping` row is a teardown the last harness was in the middle of, which is
-    // an operator who asked for this environment to go away. Bringing it back would
-    // be answering the opposite of the last thing they said.
+    // A `stopping` row is an operator who asked for this environment to go away;
+    // bringing it back answers the opposite of the last thing they said.
     if (live.status === 'stopping')
       return give(
         'it was being taken down when the harness went, so it was not brought back — whatever was left running is still running',
@@ -484,9 +378,8 @@ export class LocalRunner extends EventEmitter {
           'restart may still be running. Set `localRun.resumeInstruction` on the Config page.',
       );
 
-    // Checked rather than discovered through a spawn that fails: a bad `cwd` surfaces
-    // as an async spawn error rather than a throw, which would leave this method
-    // reporting a resume that never happened.
+    // Checked rather than discovered through a spawn: a bad `cwd` surfaces async, which
+    // would leave this method reporting a resume that never happened.
     if (!existsSync(live.dir)) return give(`its checkout at ${live.dir} is gone`);
 
     // Last, because it is the least specific reason of the four: a run whose checkout
@@ -495,15 +388,12 @@ export class LocalRunner extends EventEmitter {
     if (stale !== null) return give(stale);
 
     this.deps.store.setLocalRunStatus(live.id, 'starting', 'the harness restarted; this run is being brought back');
-    // The stamp described an interruption that is now being answered. Left on, the
-    // next hard crash would be dated to this one, and a run interrupted a minute ago
-    // would be refused as hours old.
+    // The stamp described an interruption now being answered. Left on, the next hard
+    // crash would be dated to this one and refused as hours old.
     this.deps.store.markLocalRunInterrupted(live.id, null);
     this.runId = live.id;
     this.inFlight = 'start';
-    // The tail and the stage belong to the session that printed them, and that
-    // session is gone. Kept, they would caption this bring-up with the last thing the
-    // dead one said.
+    // Tail and stage belong to the dead session; kept, they would caption this bring-up.
     this.tail = [];
     this.stage = null;
 
@@ -513,8 +403,7 @@ export class LocalRunner extends EventEmitter {
       cwd: live.dir,
     });
     this.session = session;
-    // The bring-up's handlers, not a stop's: the turn ending here means the
-    // environment is up again, exactly as it does on a start.
+    // The bring-up's handlers: a turn ending here means the environment is up again.
     this.wire(session, live.id);
     try {
       session.start();
@@ -531,32 +420,20 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * Why this run is too old to bring back, or null if it is not.
-   *
-   * **A resume is for a restart**, and the whole case for spending a session on one is
-   * that the operator is a minute from wanting their environment back and the
-   * containers the reap could not touch are still up. Neither holds for a harness that
-   * was off overnight: the machine has probably been rebooted, there is nothing left
-   * to attach to, and the boot spends a session bringing up an environment nobody
-   * asked for and nobody is watching. The row was still live, so the old code brought
-   * it back regardless of when it stopped being true.
-   *
-   * **An unstamped row is unknown, and unknown is refused.** Null in `interruptedAt`
-   * means nothing wrote a line on the way down — a kill, a power cut, a machine that
-   * rebooted under the harness — and `startedAt` is not a stand-in for it: a run
-   * brought up on Monday and still in use this afternoon would read as days stale.
-   * The safe direction is the operator clicking Start, not a session spent on a guess.
+   * Why this run is too old to bring back, or null if it is not. **A resume is for a
+   * restart** — for a harness that was off overnight there is nothing left to attach
+   * to, and the boot would spend a session on an environment nobody asked for.
+   * **An unstamped row is unknown, and unknown is refused**; `startedAt` is not a
+   * stand-in for it.
    */
   private staleness(live: LocalRun): string | null {
     const windowMs = this.deps.policy().resumeWindowMs;
-    // Not a bound at all, which is a supported setting: a deployment whose environment
-    // really does survive anything says so here and gets the behaviour it had before.
+    // No bound at all is a supported setting, for an environment that survives anything.
     if (!Number.isFinite(windowMs) || windowMs <= 0) return null;
 
-    // The shutdown's own stamp first, and the last pulse that held the run behind it.
-    // The fallback is not a nicety: the paths an operator most often takes — closing
-    // the window, End task, pulling the power — run no line at all, so `interruptedAt`
-    // is null on exactly the crashes a resume is most wanted for.
+    // The shutdown's own stamp first, the last pulse that held the run behind it. The
+    // fallback matters: End task and a power cut run no line, so `interruptedAt` is
+    // null on exactly the crashes a resume is most wanted for.
     const stamp = live.interruptedAt ?? live.lastSeenAt;
     if (stamp === null)
       return (
@@ -569,8 +446,7 @@ ${RESUME_RULES}`);
     const now = (this.deps.now ?? Date.now)();
     const ageMs = now - at;
     if (ageMs <= windowMs) return null;
-    // Said as "last held" where that is what the figure is, because an operator who
-    // pulled the power is owed a sentence that matches what they did.
+    // Said as "last held" where that is what the figure is.
     const what = live.interruptedAt === null ? 'the harness was last holding it' : 'it was interrupted';
     return (
       `${what} ${describeAge(ageMs)} ago, longer than the ${describeAge(windowMs)} a run may be ` +
@@ -580,48 +456,25 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * Record that this harness is still holding the run, if it is holding one.
-   *
-   * **Called from the pulse**, and it is what makes the resume window survive a force
-   * close. `stopFast` stamps the interruption on the way down, which covers a Ctrl-C
-   * and an upgrade — and covers none of `taskkill /F`, Task Manager's End task, a
-   * power cut, or a console window closed on Windows, where the process is taken
-   * without running a line. Those are the crashes a resume is most wanted for, and
-   * before this they were the ones it refused.
-   *
-   * **Only while `runId` is set**, which is the whole safety of it: that field is this
-   * process's claim on the row, dropped by a stop and never held for a row a boot
-   * declined to bring back. Stamping "whatever is live" instead would date a row this
-   * harness refused, and the boot after would bring back an environment two harnesses
-   * ago — the exact thing the window exists to stop.
-   *
-   * Deliberately above the pulse's recovery hold: it says the harness is alive, which
-   * is true whether or not a cycle did any work. Held for three hours and then killed,
-   * a run dated at the last cycle *that ran* would read as three hours stale.
+   * Record that this harness is still holding the run. **Called from the pulse**, and
+   * what makes the resume window survive a force close — `stopFast` covers Ctrl-C and
+   * an upgrade, and nothing else. **Only while `runId` is set**: that field is this
+   * process's claim on the row, and stamping "whatever is live" would date a row this
+   * harness refused. Deliberately above the pulse's recovery hold — it says the
+   * harness is alive, not that a cycle did work.
    */
   noteAlive(): void {
     if (this.runId === null) return;
-    // This runner's clock, never the store's: `staleness` measures the stamp against
-    // the same clock, and a window compared across two of them is not a window.
+    // This runner's clock, never the store's: `staleness` measures against the same one.
     this.deps.store.markLocalRunSeen(this.runId, new Date((this.deps.now ?? Date.now)()).toISOString());
   }
 
   /**
-   * Type into the session holding the environment — "run the migrations", "restart
-   * the API" — the fleet's `AgentManager.respond` for the one session that is not an
-   * agent.
-   *
-   * Refused between the states where it means something: while nothing is up, while
-   * the run is being stopped, while it is still coming up (a stream session queues
-   * the message behind the bring-up turn, so `running` would arrive only when *this*
-   * turn ended and the panel would say "starting" for a turn it never saw), and
-   * while another turn is in flight, for the same reason. Refused too when nothing
-   * holds the session — a restart that could not bring the run back leaves a live
-   * row and nobody to tell.
-   *
-   * **Echoed into the tail**, because the stream runtime renders only what comes
-   * back: without this the message leaves no trace on the one surface an operator
-   * is watching. The PTY runtime records both halves itself and says so.
+   * Type into the session holding the environment — `AgentManager.respond` for the one
+   * session that is not an agent. Refused outside the states where it means something:
+   * nothing up, being stopped, still coming up, another turn in flight, or nothing
+   * holding the session. **Echoed into the tail**, because the stream runtime renders
+   * only what comes back.
    */
   send(text: string): { ok: true } | { ok: false; error: string } {
     const message = text.trim();
@@ -655,26 +508,13 @@ ${RESUME_RULES}`);
   /**
    * Move the checkout to the tip of the run's own ref and tell the session what moved.
    *
-   * The half of staleness the harness can act on. The watch says the branch has
-   * commits the checkout does not; this puts them on disk — `ensurePreview` is a
-   * `reset --hard` and a `clean -fd`, with everything git ignores left standing, so
-   * dependencies survive — and hands the session the operator's
-   * `localRun.refreshInstruction` plus the facts of what moved. Only the project
-   * knows whether that means a rebuild, a migration or nothing at all.
-   *
-   * **Resolved before anything is touched.** A refresh at the tip refuses, and it has
-   * to find that out from `previewCommit` rather than from `ensurePreview`: the latter
-   * would already have reset and cleaned the tree under a running server to move it
-   * nowhere.
-   *
-   * **The reset under a running server is the accepted hazard**, and it is why the
-   * control is a click and never automatic ([23](../../docs/spec/23-local-runs.md)).
-   * A tree that will not reset — a file held open on Windows — leaves the recorded
-   * commit alone and says the tree may be part-reset, because it may be.
-   *
-   * With nothing holding the session (a restart that could not bring the run back)
-   * the checkout still moves and the note says nobody was told, which is the honest
-   * half of the job.
+   * **Resolved before anything is touched**: a refresh at the tip must refuse from
+   * `previewCommit`, since `ensurePreview` would already have reset and cleaned the
+   * tree to move it nowhere. **The reset under a running server is the accepted
+   * hazard**, which is why the control is a click and never automatic; a tree that
+   * will not reset leaves the recorded commit alone. With nothing holding the session
+   * the checkout still moves and the note says nobody was told.
+   * → [23](../../docs/spec/23-local-runs.md)
    */
   async refresh(): Promise<
     { ok: true; run: LocalRun; moved: { from: string | null; to: string } } | { ok: false; error: string }
@@ -711,8 +551,6 @@ ${RESUME_RULES}`);
       };
     }
     // Two awaits have passed; the run may have been stopped or swapped under them.
-    // The checkout has moved either way, but the row and the session to tell are
-    // whatever is live *now*.
     const still = this.deps.store.liveLocalRun();
     if (still === null || still.id !== live.id || still.status !== 'running' || this.stopping !== null)
       return { ok: false, error: 'The run was stopped while the checkout was being moved.' };
@@ -742,24 +580,15 @@ ${RESUME_RULES}`);
 
   /**
    * Stop the run, if one is going: the stop **instruction** first, then the reap.
-   *
-   * **A dev environment is not a process tree**, which is the whole reason this is a
-   * turn and not a signal. Reaping the session's subtree is right and takes the
-   * session and its own children with it — and it cannot touch a Docker container,
-   * which belongs to the daemon, or anything a start handed to a service. Nothing
-   * the harness can send stops those. So the row used to read `stopped` while the
-   * containers ran on: an outcome nothing had checked.
-   *
-   * Idempotent, and **one stop at a time**: every caller — a second click, a swap,
-   * the desktop tool — awaits the same promise rather than starting a second
-   * teardown of the same environment.
+   * **A dev environment is not a process tree** — a reap cannot touch a Docker
+   * container — which is why this is a turn and not a signal. Idempotent, and **one
+   * stop at a time**: every caller awaits the same promise.
    */
   async stop(note = 'stopped from the cockpit'): Promise<void> {
     if (this.stopping !== null) return this.stopping;
     const live = this.deps.store.liveLocalRun();
     if (live === null) {
-      // Nothing is recorded as up, so there is nothing to instruct — but a session we
-      // are still holding is ours to clean up regardless.
+      // Nothing recorded as up, so nothing to instruct — but a held session is ours to clean up.
       this.stopSession();
       return;
     }
@@ -770,23 +599,15 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * Stop without the instruction: reap, kill, settle.
-   *
-   * For shutdown, and deliberately not for anything else. The handlers in `main.ts`
-   * run on Ctrl-C and on the upgrade handoff, and both want out *now* — an upgrade
-   * especially, since it is a restart. Waiting for a model turn there would hang the
-   * one path that must not hang, so the environment is allowed to outlive the harness
-   * and the note says so: the panel states it on the next boot rather than leaving an
-   * operator to find the containers themselves.
+   * Stop without the instruction: reap, kill, settle. For shutdown only — waiting for a
+   * model turn on Ctrl-C or the upgrade handoff would hang the one path that must not
+   * hang, so the environment may outlive the harness and the note says so.
    * → [21](../../docs/spec/21-self-update.md)
    */
   stopFast(note = 'the harness shut down'): void {
     const live = this.deps.store.liveLocalRun();
-    // Before the kill, and this is the switch that lets the row outlive the process
-    // below. The wired `exit` handler settles a run whose session dies while it is
-    // meant to be up, which is right everywhere except here: the session dying *is*
-    // the shutdown, and a `failed` written on the way out is a row the next boot
-    // would refuse to bring back.
+    // Before the kill: the wired `exit` handler would settle this as `failed`, and the
+    // next boot would refuse to bring that row back. Here the session dying *is* the shutdown.
     this.runId = null;
     this.inFlight = null;
     this.stopSession();
@@ -799,12 +620,8 @@ ${RESUME_RULES}`);
             ? `${note} — the session was killed, so whatever it started may still be running.`
             : `${note} — the stop instruction was not run on the way down, so whatever it started may still be running.`,
         );
-      // Otherwise the row is **left live on purpose**, which is the whole of how a
-      // resume is possible at all. Nothing else records that there is an environment
-      // to come back to: the note the settle used to write was a sentence for a
-      // person to read, and `resumeInterrupted` cannot act on prose. The status is
-      // left exactly as it was rather than moved — the harness is going down, and it
-      // has learned nothing about this run to justify writing a different one.
+      // Otherwise the row is **left live on purpose**: nothing else records that there
+      // is an environment to come back to, and the status is left exactly as it was.
       else {
         this.deps.store.setLocalRunStatus(
           live.id,
@@ -812,11 +629,8 @@ ${RESUME_RULES}`);
           `${note} — it is left standing to be brought back on the next boot.`,
         );
         // **The only line that dates the interruption**, and the next boot's resume is
-        // judged on it. Without it the row says it is live and nothing says since when,
-        // so a harness started tomorrow morning brings back last night's environment —
-        // which is the whole of #682. A stamp nobody wrote is read as unknown rather
-        // than as recent, so forgetting this refuses the resume rather than granting a
-        // stale one.
+        // judged on it. A stamp nobody wrote reads as unknown rather than recent, so
+        // forgetting it refuses the resume rather than granting a stale one.
         this.deps.store.markLocalRunInterrupted(live.id, new Date((this.deps.now ?? Date.now)()).toISOString());
       }
     }
@@ -825,16 +639,13 @@ ${RESUME_RULES}`);
 
   /**
    * The stop itself: mark it `stopping`, get the instruction carried out, reap, settle.
-   *
-   * `stopping` is a live status ({@link LocalRunStatus}) because a run being taken
-   * down still holds the environment — the store must go on refusing a second run
-   * beside it, and the panel must not offer one.
+   * `stopping` is a live status because a run being taken down still holds the
+   * environment, so the store must go on refusing a second run beside it.
    */
   private async runStop(live: LocalRun, note: string): Promise<void> {
     this.deps.store.setLocalRunStatus(live.id, 'stopping');
-    // The wired handlers are keyed on `runId`, and the stop turn ends in a `done`
-    // like any other — which `up()` would read as "the environment is up". Dropping
-    // the id is the one switch that keeps the bring-up's handlers out of the teardown.
+    // The stop turn ends in a `done` like any other, which `up()` would read as "the
+    // environment is up". Dropping the id keeps the bring-up's handlers out of it.
     this.runId = null;
     this.inFlight = 'stop';
     this.stage = null;
@@ -847,9 +658,7 @@ ${RESUME_RULES}`);
       outcome = `the stop did not complete: ${(err as Error).message}`;
       this.deps.errors.record({ source: 'agent', message: `Local run stop failed: ${(err as Error).message}` });
     }
-    // The reap comes **after** the instruction and happens either way: the session
-    // and its own children are the harness's to clean up whether or not the
-    // instruction managed its half.
+    // The reap comes **after** the instruction and happens either way.
     this.stopSession();
     this.settle(live.id, 'stopped', `${note} — ${outcome}`);
   }
@@ -863,11 +672,8 @@ ${RESUME_RULES}`);
         'running. Set `localRun.stopInstruction` on the Config page.'
       );
 
-    // The session that brought it up if it is still there — it knows what it
-    // started, and it is already warm. Otherwise a fresh one in the same checkout,
-    // which is the case that hurt most: after a restart the containers are up and
-    // the harness holds nothing, so a swap would have started a second stack on the
-    // same ports.
+    // The session that brought it up if it is still there; otherwise a fresh one in
+    // the same checkout, or a swap starts a second stack on the same ports.
     const held = this.session;
     const fresh = held === null ? this.spawnStopSession(live.dir, live.id) : null;
     const session = held ?? fresh;
@@ -881,8 +687,7 @@ ${RESUME_RULES}`);
       if (how === 'failed') return `the session failed while stopping it: ${this.lastWords() ?? 'no reason given'}`;
       return this.lastWords() ?? 'the session reported it had stopped';
     } finally {
-      // A session spawned only to run the stop is ours to take down here; the held
-      // one is reaped by `stopSession` on the way out of `runStop`.
+      // A session spawned only to run the stop is ours to take down here.
       if (fresh !== null) {
         if (fresh.pid !== null) this.deps.reap(fresh.pid);
         try {
@@ -905,9 +710,8 @@ ${RESUME_RULES}`);
         args: [...STREAM_TRANSPORT_ARGS, '--permission-mode', this.deps.permissionMode, ...this.deps.claudeArgs],
         cwd: dir,
       });
-      // Its output and its usage, but not `wire` — the bring-up's handlers would read
-      // this session's turn ending as the environment coming up. The money goes on the
-      // run it is taking down: the stop is part of what that run cost.
+      // Output and usage but not `wire`: the bring-up's handlers would read this
+      // session's turn ending as the environment coming up.
       this.absorb(session, runId);
       session.start();
       return session;
@@ -921,18 +725,11 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * The next turn ending, bounded.
-   *
-   * The bound is the point: a stop instruction that never finishes must not leave a
-   * harness that can never start anything again. On the timeout the caller kills the
-   * session anyway and says the stop was not confirmed — which is the honest reading,
-   * and a different one from "it stopped".
-   *
-   * Four events mean "ended", and `stalled` is the one that actually fires here: a
-   * local run's session carries no protocol prompt, so it never prints a sentinel,
-   * and the stream runtime announces a sentinel-free turn end as `stalled` rather
-   * than `waiting`. `limited` is the account running out mid-turn — the turn is over
-   * whatever the instruction managed.
+   * The next turn ending, bounded — a stop that never finishes must not leave a harness
+   * that can never start anything again; on the timeout the caller kills the session
+   * and says the stop was not confirmed. Four events mean "ended", and `stalled` is
+   * the one that actually fires: a local run's session carries no protocol prompt, so
+   * it never prints a sentinel.
    */
   private turnEnds(session: AgentSession): Promise<'ended' | 'failed' | 'timeout'> {
     return new Promise((resolve) => {
@@ -957,18 +754,15 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * Kill the session and forget it, without touching the row.
-   *
-   * Separate from {@link stop} because a start supersedes the old row itself, in the
-   * transaction that writes the new one — this is the process half alone, and
-   * calling both would stamp the superseded row twice.
+   * Kill the session and forget it, without touching the row — the process half alone,
+   * since a start supersedes the old row in the transaction that writes the new one.
    */
   private stopSession(): void {
     const session = this.session;
     this.session = null;
     if (!session) return;
-    // Reap first. Descendants are resolved through the root pid, so a reap *after*
-    // the process dies finds nothing — and the descendant here is the dev server.
+    // Reap first: descendants resolve through the root pid, so a reap after the
+    // process dies finds nothing — and the descendant here is the dev server.
     if (session.pid !== null) this.deps.reap(session.pid);
     try {
       session.kill();
@@ -979,18 +773,12 @@ ${RESUME_RULES}`);
 
   /**
    * Take a session's output into the tail and the stage, and its usage onto the row.
-   *
-   * Shared by the session that brings the environment up and by one spawned only to
-   * take it down: a teardown an operator is watching needs the same account of itself
-   * as a bring-up, and a stop session whose output went nowhere would leave the panel
-   * with nothing to say for the minute it takes.
+   * Shared by the bring-up session and by one spawned only to take it down.
    */
   private absorb(session: AgentSession, runId: string): void {
-    // Cumulative, per session, held in this closure — which is exactly the scope the
-    // reading belongs to. The row accumulates across sessions (a teardown by a fresh
-    // session is a second one), so what it needs from each is the difference since
-    // that session's own last report; a field the runtime did not report stays null
-    // and adds nothing. A PTY session emits none of this and the run stays unmeasured.
+    // Cumulative per session, held in this closure. The row accumulates across
+    // sessions, so what it needs from each is the difference since that session's own
+    // last report. A PTY session emits none of this and the run stays unmeasured.
     let last: AgentUsage | null = null;
     session.on('usage', (usage: AgentUsage) => {
       const since = (now: number | null, before: number | null): number | null =>
@@ -1010,17 +798,14 @@ ${RESUME_RULES}`);
   }
 
   /**
-   * Lines into the tail and the newest `phase:` among them into the stage. One path
-   * for what a session prints and for what is typed into it, so an echoed message
-   * rolls off the top with everything else.
+   * Lines into the tail and the newest `phase:` among them into the stage. One path for
+   * printed and typed alike, so an echoed message rolls off the top with everything else.
    */
   private takeIn(delta: string): void {
     for (const line of delta.split('\n')) {
       if (line.trim() === '') continue;
       this.tail.push(line);
-      // Newest wins, and a line that is not a phase leaves the last one standing:
-      // the session says `phase: installing` and then prints a page of npm output,
-      // and "installing" is still the true answer throughout it.
+      // Newest wins, and a non-phase line leaves the last one standing.
       const said = phaseOf(line);
       if (said !== null) this.stage = said;
     }
@@ -1031,20 +816,13 @@ ${RESUME_RULES}`);
   private wire(session: AgentSession, id: string): void {
     this.absorb(session, id);
     // The turn ending is the environment being up, which is the whole of what the
-    // harness knows: `done`, `waiting` and `stalled` are all "it stopped talking and
-    // did not fail", and none means the process has gone. `stalled` is the one a
-    // local run actually produces — no protocol prompt, so no sentinel — and for
-    // three revisions nothing listened for it, so on a real deployment the row sat
-    // in `starting` for the life of the environment.
-    //
-    // A refresh or a message turn ends through here too. Writing `running` onto a
-    // row that already says so is idempotent, and clearing the stage and the turn
-    // is exactly what their ending means.
+    // harness knows. `stalled` is the one a local run actually produces — no protocol
+    // prompt, so no sentinel — and listening for only a subset left the row in
+    // `starting` for the life of the environment. A refresh or message turn ends here too.
     const up = (): void => {
       if (this.runId !== id) return;
       this.deps.store.setLocalRunStatus(id, 'running');
-      // Nothing is in flight any more, so there is no stage. Left standing, the last
-      // step of the bring-up would caption a finished one forever.
+      // Nothing in flight, so no stage: left standing it would caption a finished bring-up forever.
       this.stage = null;
       this.inFlight = null;
       this.emit('changed');
@@ -1053,9 +831,8 @@ ${RESUME_RULES}`);
       if (event === 'limited')
         session.on(event, () => {
           if (this.runId !== id) return;
-          // The turn is over because the account is, not because the work is. The
-          // row says `running` — the session did not fail — and the record says why
-          // that may be less true than it looks.
+          // The turn is over because the account is, not because the work is: the row
+          // says `running` and the record says why that may be less true than it looks.
           this.deps.errors.record({
             source: 'agent',
             message: 'The local run hit the account usage limit mid-turn; the environment may not be fully up.',
@@ -1065,15 +842,13 @@ ${RESUME_RULES}`);
       else session.on(event, up);
     }
     session.on('failed', () => {
-      // Guarded like `exit` below and for the same reason: during a stop this session
-      // is being driven by `carryOutStop`, which reports what happened itself. Two
-      // writers on one row settle it twice, with whichever lands second as the story.
+      // Guarded like `exit` below: during a stop `carryOutStop` reports what happened,
+      // and two writers settle one row twice.
       if (this.runId !== id) return;
       this.settle(id, 'failed', this.lastWords() ?? 'the session failed');
     });
     session.on('exit', (code: number) => {
-      // An exit is only a failure while the run is meant to be up. A stop kills the
-      // session on purpose, and its row is already settled by then.
+      // An exit is only a failure while the run is meant to be up.
       if (this.runId !== id) return;
       const live = this.deps.store.liveLocalRun();
       if (!live || live.id !== id) return;

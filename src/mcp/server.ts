@@ -26,83 +26,42 @@ const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 interface McpBridgeServerOptions {
   store: Store;
   /**
-   * Resolved lazily: the fleet and this server are mutually referential (an agent
-   * launch needs a credential; a tool call needs the fleet), and a thunk is the
-   * honest way to say "not until someone actually calls a tool".
+   * Resolved lazily: the fleet and this server are mutually referential — an agent
+   * launch needs a credential, a tool call needs the fleet.
    */
   agents: () => AgentToolTarget;
   /** Where per-agent `--mcp-config` files are written (one per launch, 0600). */
   configDir: string;
   /** The socket (POSIX) or named pipe (Windows) agents' bridges connect back on. */
   socketPath: string;
-  /**
-   * This deployment's model profiles, cheapest first, for `appraise_issue` to offer
-   * an appraiser (issue #342). Absent/empty = no `agentModels`, and then no
-   * profile is asked for and none is stored.
-   */
+  /** This deployment's model profiles, cheapest first, for `appraise_issue` to offer an appraiser. Absent/empty = no `agentModels`, nothing asked or stored. */
   profiles?: { name: string; description: string }[];
-  /**
-   * The project's review modes, in declaration order, for `review_route` to offer
-   * a triage agent. Absent/empty = a project that declared none, and then no
-   * triage is ever dispatched and nothing calls the tool.
-   */
+  /** The project's review modes, in declaration order, for `review_route`. Absent/empty means a project that declared none — no triage is ever dispatched. */
   reviewModes?: string[];
   /** Whether `review_route` offers a skip — `review.allowSkip`. */
   reviewAllowSkip?: boolean;
-  /**
-   * The project's area tree, for `appraise_issue` to offer an appraiser when it says
-   * where a goal belongs. A thunk for {@link agents}' reason — the directory
-   * behind it refreshes on the pulse. Absent/null = no tree the harness could
-   * read, and then nothing is offered and nothing accepted.
-   */
+  /** The project's area tree, for `appraise_issue` to say where a goal belongs. A thunk since it refreshes on the pulse. Absent/null = no tree, nothing offered. */
   areaPaths?: () => AreaPathTree | null;
-  /**
-   * The permission backstop (issue #130 phase B), resolved lazily for the same
-   * reason as {@link agents}: it is built after this server (it needs the
-   * escalation inbox, which needs the fleet). The `request_permission` tool reaches
-   * it, and {@link release} denies any request a leaving agent was blocked on.
-   */
+  /** The permission backstop, resolved lazily (built after this server). `request_permission` reaches it, and {@link release} denies any request a leaving agent was blocked on. */
   permissions?: () => import('../agents/permissionDesk.js').PermissionDesk | undefined;
-  /**
-   * What `open_pr` needs to author a pull request, resolved lazily like the two
-   * above. Absent, the tool says so and the agent opens its own PR — the floor
-   * every prompt still describes.
-   */
+  /** What `open_pr` needs to author a pull request, resolved lazily. Absent, the tool says so and the agent opens its own PR. */
   openPr?: () => McpToolDeps['openPr'];
-  /** Lazy for `openPr`'s reason: the sink it files through is built after this server. */
+  /** Lazy: the sink it files through is built after this server. */
   filing?: () => McpToolDeps['filing'];
-  /**
-   * Where `reply_to_review` hands a reply — the executor, which is built after
-   * this server, so lazy for `openPr`'s reason and with the same floor: absent,
-   * the tool says replying is not wired rather than sending anything itself.
-   */
+  /** Where `reply_to_review` hands a reply — the executor, built after this server, so lazy. Absent, the tool says replying is not wired. */
   prReply?: () => McpToolDeps['prReply'];
-  /**
-   * The watch's dry run, resolved lazily for `openPr`'s reason: it is built after
-   * this server, and a closure dropped here leaves `plan_submit` silently storing
-   * queries nobody has ever put to an environment.
-   */
+  /** The watch's dry run, resolved lazily — dropping this leaves `plan_submit` silently storing queries nobody ever put to an environment. */
   watch?: () => McpToolDeps['watch'];
-  /** The author desk `review_pack_submit` hands a pack to. Lazy for `filing`'s reason. */
+  /** The author desk `review_pack_submit` hands a pack to. Lazy. */
   reviewPacks?: () => McpToolDeps['reviewPacks'];
-  /** The checker desk `review_pack_check` hands its verdicts to. Lazy for the same reason. */
+  /** The checker desk `review_pack_check` hands its verdicts to. Lazy. */
   reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
-  /**
-   * The desk the three local-validation tools write through, and the environment
-   * `local_run_read` reports on. Lazy for `filing`'s reason, and more so: the local
-   * runner is the last component `system.ts` builds.
-   */
+  /** The desk the three local-validation tools write through, and the environment `local_run_read` reports on. Lazy — the local runner is the last component `system.ts` builds. */
   localValidations?: McpToolDeps['localValidations'];
   localRun?: McpToolDeps['localRun'];
-  /**
-   * The checkout an obstacle's `path` key is validated against. Absent, no path
-   * key validates and those keys are dropped — the report is kept either way.
-   */
+  /** The checkout an obstacle's `path` key is validated against. Absent, no path key validates; the report is kept either way. */
   repoRoot?: string;
-  /**
-   * How long a recorded call's arguments are kept, in days. `0` records none at
-   * all. Absent takes the store's own default — see `McpCallStore`.
-   */
+  /** How long a recorded call's arguments are kept, in days. `0` records none. Absent takes the store's own default. */
   argsRetentionDays?: number;
   errors?: ErrorRecorder;
 }
@@ -120,25 +79,15 @@ interface McpSession {
 }
 
 /**
- * The typed channel back to the harness (issue #108): a tools-only MCP server
- * every spawned agent is wired to.
- *
- * **Shape.** One server process — this one, inside the harness — rather than one
- * per agent. Agents reach it through a per-launch stdio bridge that is a pure
- * pipe, so there is a single store connection and no protocol logic outside this
- * module. Identity is `token -> agent -> task -> origin`, minted at spawn and
- * carried in the launch config's env rather than in any tool argument: an agent
- * cannot name itself, so it cannot address another agent's work.
- *
- * **Transport.** A Unix domain socket (named pipe on Windows), never a TCP port.
- * The cockpit's HTTP surface is already unauthenticated on `0.0.0.0`; a second
- * one with fleet-wide write access to the store is not a trade worth making.
- *
- * **Fail open, everywhere.** If the socket can't be created, {@link listen}
- * returns false, {@link open} hands back a null `configPath`, no `--mcp-config`
- * is passed, and agents run exactly as they do today on the sentinels alone. The
- * same is true per-agent if the config file can't be written. Nothing here is on
- * the critical path of an agent finishing its work.
+ * The typed channel back to the harness: a tools-only MCP server every spawned
+ * agent is wired to. One server process, reached through a per-launch stdio
+ * bridge. Identity is `token -> agent -> task -> origin`, minted at spawn and
+ * carried in the launch config's env, never in a tool argument — an agent
+ * cannot name itself, so it cannot address another agent's work. Transport is
+ * a Unix domain socket (named pipe on Windows), never a TCP port. **Fail open,
+ * everywhere**: a socket or config file that cannot be written leaves
+ * {@link listen} false / `configPath` null and agents running on the
+ * sentinels alone.
  */
 export class McpBridgeServer {
   private readonly channel: SocketChannel;
@@ -176,11 +125,7 @@ export class McpBridgeServer {
     await this.channel.close();
   }
 
-  /**
-   * Mint a credential for one launch. The token is always minted (so the
-   * in-process {@link session} path works even in tests that never listen); the
-   * config file is written only when there is a socket for it to point at.
-   */
+  /** Mint a credential for one launch. The token is always minted (so the in-process {@link session} path works even in tests that never listen); the config file is written only when there is a socket for it. */
   open(extra: readonly ExtraMcpServer[] = []): McpCredential {
     const token = randomUUID();
     this.identities.set(token, null);
@@ -220,11 +165,7 @@ export class McpBridgeServer {
     }
   }
 
-  /**
-   * An in-process caller for an agent, or null if it has no live credential. The
-   * socket path and this one converge on {@link invoke}, so a test drives exactly
-   * the code an agent's bridge reaches — there is no test-only tool path.
-   */
+  /** An in-process caller for an agent, or null if it has no live credential. Converges with the socket path on {@link invoke} — there is no test-only tool path. */
   session(agentId: string): McpSession | null {
     const token = [...this.identities.entries()].find(([, id]) => id === agentId)?.[0];
     if (!token) return null;
@@ -233,13 +174,10 @@ export class McpBridgeServer {
 
   /**
    * The `--mcp-config` document for one launch. The server key is
-   * {@link MCP_SERVER_ID} because Claude Code derives the `mcp__<key>__<tool>`
-   * permission names from it, and those are what `--allowedTools` grants.
-   *
-   * `extra` is what a single kind of dispatch brings with it — today a browser, for
-   * a local validation ({@link Task.mcpServers}). It goes in **this** document
-   * rather than a second `--mcp-config`, so a launch still writes one 0600 file and
-   * the grants still come off one list.
+   * {@link MCP_SERVER_ID}: Claude Code derives the `mcp__<key>__<tool>`
+   * permission names from it, which is what `--allowedTools` grants. `extra`
+   * goes in **this** document rather than a second `--mcp-config`, so a launch
+   * writes one 0600 file and the grants come off one list.
    */
   private launchConfig(token: string, extra: readonly ExtraMcpServer[]): unknown {
     const mcpServers: Record<string, unknown> = {
@@ -251,10 +189,8 @@ export class McpBridgeServer {
       },
     };
     for (const server of extra) {
-      // A dispatch that named our own key would replace the fleet's channel with
-      // somebody else's tools — the agent would connect, list, and be refused or
-      // answered by the wrong server for every call it made. Dropped and recorded
-      // rather than thrown: the launch is still worth having without the extra.
+      // A dispatch naming our own key would replace the fleet's channel with
+      // somebody else's tools. Dropped and recorded rather than thrown.
       if (server.key === MCP_SERVER_ID) {
         this.opts.errors?.record({
           source: 'agent',
@@ -293,28 +229,18 @@ export class McpBridgeServer {
   }
 
   /**
-   * Answer one request frame against the tools of the token's identity.
-   *
-   * **Every `tools/call` that gets this far is recorded**, including the ones
-   * refused for want of an identity — those especially. A run whose
-   * `mcp__lubbdubb__*` grants were dropped makes no call at all and so appears
-   * here not once; that silence is only legible against the runs that existed,
-   * which is why the usage reading joins these rows to `agents` rather than
-   * reading them alone. See `src/mcpInsights.ts`.
-   *
-   * The record is taken *after* the answer, so it carries what the tool actually
-   * did, and it is never allowed to change the answer: the frame is dispatched,
-   * the response is what this returns, and the row is written on the way past.
+   * Answer one request frame against the tools of the token's identity. Every
+   * `tools/call` that gets this far is recorded, including ones refused for
+   * want of an identity — see `src/mcpInsights.ts`. The record is taken
+   * *after* the answer and never changes it.
    */
   private async dispatch(token: string, frame: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const call = this.calls.callOf(frame);
     const startedAt = Date.now();
     const resolved = this.resolve(token);
     if (!resolved.ok) {
-      // `initialize`/`tools/list` are still answered (with an empty tool set) so a
-      // bridge that raced ahead of `bind` completes its handshake and can retry;
-      // only an actual tool call needs a real identity behind it, and it gets the
-      // reason as a handled error rather than a dead channel.
+      // `initialize`/`tools/list` are still answered (empty tool set) so a bridge
+      // racing ahead of `bind` completes its handshake and can retry.
       if (frame.method === 'tools/call') {
         if (call !== null) {
           this.calls.record({
@@ -348,9 +274,8 @@ export class McpBridgeServer {
         watch: this.opts.watch?.(),
         reviewPacks: this.opts.reviewPacks?.(),
         reviewPackChecker: this.opts.reviewPackChecker?.(),
-        // Wrapped rather than called: `McpToolDeps` takes these as thunks so a tool
-        // reads the desk at call time, and calling here would resolve them on every
-        // request whether or not a validation tool was the one being invoked.
+        // Thunks, so a tool reads the desk at call time rather than resolving on
+        // every request.
         localValidations: this.opts.localValidations,
         localRun: this.opts.localRun,
         repoRoot: this.opts.repoRoot,
@@ -366,9 +291,8 @@ export class McpBridgeServer {
         tool: call.tool,
         agentId: resolved.identity.agent.id,
         taskId: resolved.identity.task.id,
-        // The origin as it is *now*, copied onto the row: a task retargeted later
-        // would otherwise silently re-file every call it ever made under a
-        // different phase.
+        // The origin as it is *now*: a task retargeted later would otherwise
+        // re-file every call it ever made under a different phase.
         originRef: resolved.identity.task.originRef,
         ok: refusal === null,
         error: refusal,

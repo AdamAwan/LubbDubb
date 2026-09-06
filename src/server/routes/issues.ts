@@ -22,24 +22,9 @@ import type { RouteContext } from './context.js';
 import type { FilingTargetProbe, GoalAgentsPayload, IssueFiled } from '../../wire.js';
 
 /**
- * The operator's own arm of every verdict an agent can cast about an issue —
- * watch, conclusion, appraisal, delivery, shortfall — plus ending its run.
- *
- * Each of the five verdict routes writes the *harness's* record and never the
- * tracker: concluding an issue in the harness's own view is what stops the
- * re-pickup, while the tracker transition to a done state stays a human act.
- *
- * `/bug` is the exception that proves it. Raising a bug is not a verdict about
- * this issue at all — it is new work, filed into the tracker by a desk agent, and
- * it leaves the story's own record exactly where it found it.
- *
- * The two collection-level routes at the foot — `GET /api/issues/filing-target`
- * and `POST /api/issues` — are the same exception without the agent (issue #413):
- * they are about no issue in particular, which is why they carry no `:number`, and
- * they file what the operator already typed rather than dispatching somebody to
- * write it. They are also the only two on this surface that do not go near the
- * configured tracker at all: what they file is a report about **LubbDubb**, and it
- * belongs on LubbDubb's tracker whatever repo the fleet is pointed at (issue #449).
+ * The operator's own arm of every verdict an agent can cast about an issue — watch,
+ * conclusion, appraisal, delivery, shortfall — plus ending its run. Each verdict route
+ * writes the harness's own record and never the tracker; `/bug` is the exception.
  */
 
 /** Long enough for a repro with steps; short of pasting a log file in. */
@@ -49,20 +34,15 @@ const MAX_BUG_SUMMARY = 4000;
 const MAX_ISSUE_TITLE = 200;
 
 /**
- * How long the filing-target probe may take before it is reported as unavailable.
- *
- * A live provider call is the point of the probe, and a rate-limited or wedged
- * GitHub is exactly the case it exists to catch — but a request that never answers
- * leaves the modal that fired it spinning with no way out, which is worse than the
- * failure it was checking for. So the slow answer and the dead one are reported the
- * same way, and the cockpit's fallback (the external new-issue form) is reachable
- * either way.
+ * How long the filing-target probe may take before it is reported as unavailable. A request
+ * that never answers leaves the modal spinning with no way out, so the slow answer and the
+ * dead one are reported the same way.
  */
 const PROBE_TIMEOUT_MS = 8000;
 
 /**
- * The probe's deadline. `finally` clears the timer on both arms, so a fast answer
- * leaves nothing pending behind it.
+ * The probe's deadline. `finally` clears the timer, so a fast answer leaves nothing
+ * pending.
  */
 function withDeadline<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -75,29 +55,21 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const { store, connector, harness, config, errors } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
 
-  // Toggle an issue's watch state from the cockpit. Issues are opt-in, so "watch"
-  // adds the one tag and un-watching takes it off again — a single write, because
-  // there is no second label to keep it exclusive with. Provider-agnostic through
-  // the same outbound seam.
+  // Toggle an issue's watch state. Issues are opt-in, so this is a single label
+  // write, provider-agnostic through the outbound seam.
   //
-  // **A container cascades.** Watching a Feature tags every descendant beneath it
-  // (`watchCascadeTargets`), because a container is never worked itself: a tag on
-  // one alone would be a click that changed nothing. Un-watching walks the same
-  // tree, or a dropped feature would leave its stories tagged and still worked.
-  //
-  // The cascade is a real write per item and a partial failure is *reported*, not
-  // swallowed — an operator who is told "watched" while three of eight children
-  // kept the old tag has been lied to about what the harness will pick up.
+  // **A container cascades**: watching a Feature tags every descendant
+  // (`watchCascadeTargets`), and un-watching walks the same tree. Each is a real
+  // write, and a partial failure is *reported* rather than swallowed.
   const WatchBody = z.object({ watched: requiredBoolean('watched must be a boolean') });
   app.post(
     '/api/issues/:number/watch',
     checked({ params: IssueNumberParams, body: WatchBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
       const { watched } = body;
-      // The cascade, the two mirrors and the partial-failure report are one
-      // behaviour shared with the plan back-out and the desktop channel's
-      // `goal_control` — `src/issueWatch.ts` holds it. What stays here is what is
-      // about *this* surface: the broadcast, the cycle, and the shape of the reply.
+      // The cascade, mirrors and partial-failure report live in
+      // `src/issueWatch.ts`, shared with the back-out and `goal_control`. What stays
+      // here is the broadcast, the cycle and the shape of the reply.
       const outcome = await applyIssueWatch(
         {
           store,
@@ -112,13 +84,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       );
       const { targets, failed } = outcome;
 
-      // Whatever landed, landed — the world is now different from the one the
-      // cockpit is showing even on a partial failure, so it is republished before
-      // the refusal rather than after a success only.
+      // Whatever landed, landed: republish before the refusal, since even a partial
+      // failure changed the world the cockpit is showing.
       hub.broadcast({ type: 'world:changed' });
-      // `targets` is empty only where the deployment configures no label prefix —
-      // the gate is off, everything is watched, and there was nothing to write. That
-      // is a success with nothing done, not a total failure.
+      // `targets` is empty only with no label prefix configured: the gate is off and
+      // there was nothing to write — a success with nothing done.
       if (targets.length > 0 && failed.length === targets.length) {
         return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });
       }
@@ -134,18 +104,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Move a work item to one of the tracker's own states — the card view's drag, and
-  // the first thing in the cockpit that writes one.
+  // Move a work item to one of the tracker's own states — the card view's drag.
   //
-  // **The state word is not validated here.** The provider owns its process
-  // template: a check against the states the mirror has seen would refuse a
-  // legitimately configured but still-empty column, and a check against nothing at
-  // all is what lets the provider's own refusal reach the operator intact. The schema
-  // asks only that a state was named.
-  //
-  // The capability *is* checked, because `setWorkItemState` throws where no
-  // integration implements it — an exception the operator would read as this write
-  // failing rather than as the deployment not having the operation at all.
+  // **The state word is not validated here**: the provider owns its process
+  // template, and a check against the states the mirror has seen would refuse a
+  // legitimate but still-empty column. The capability *is* checked, because
+  // `setWorkItemState` throws where nothing implements it.
   const StateBody = z.object({
     state: requiredText('state must name a tracker state', {
       length: 80,
@@ -171,17 +135,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       } catch (err) {
         const message = (err as Error).message;
         errors.record({ source: 'server', message: `Failed to move #${number} to "${state}": ${message}` });
-        // The provider's own sentence, quoted whole: it is the only account of why the
-        // card is going back where it came from, and a paraphrase would be the only
-        // account there is.
+        // The provider's own sentence, quoted whole: it is the only account of why
+        // the card is going back where it came from.
         return reply.code(400).send({ error: message });
       }
 
-      // Both readings, in this order, for the watch route's reasons: `/api/state`
-      // serves the baseline, so a broadcast ahead of the write only makes the cockpit
-      // redraw the old column; and the Tickets tab's own list is built from
-      // `tracker_items`, which the sweep would carry only at the end of a cycle that
-      // coalesces away while another is in flight.
+      // Both mirrors, before the broadcast: `/api/state` serves the baseline, and the
+      // Tickets tab reads `tracker_items`, which the sweep may not reach this cycle.
       store.patchWorldState({ number, state });
       store.patchTicketState({ number, state });
       hub.broadcast({ type: 'world:changed' });
@@ -190,17 +150,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Pin this issue's work to a model profile, or clear the pin (issue #342).
-  //
-  // The label sweep, the refusal by name and the settlement of the appraiser's
-  // question are `src/intake/profilePin.ts`'s — shared with the desktop channel's
-  // `goal_control`, whose own copy of half of it left the gate holding goals it
-  // reported as answered. What stays here is what is about *this* surface: the
+  // Pin this issue's work to a model profile, or clear the pin. The label sweep,
+  // the refusal and the settlement of the appraiser's question are
+  // `src/intake/profilePin.ts`'s, shared with `goal_control`; what stays here is the
   // broadcast, the cycle and the shape of the reply.
   //
-  // Absent or empty clears the pin, which is the same shape every other optional
-  // text body in this file uses — and the right one here: "no profile" is the
-  // state a ticket starts in, not a third value.
+  // Absent or empty clears the pin — "no profile" is the state a ticket starts in,
+  // not a third value.
   const ProfileBody = z.object({ profile: optionalText('profile') });
   app.post(
     '/api/issues/:number/profile',
@@ -212,8 +168,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         body.profile ?? null,
       );
       if (!outcome.ok) {
-        // Republished before the refusal for the watch route's reason: a partial
-        // sweep has already changed the world the cockpit is showing.
+        // Republished before the refusal: a partial sweep already changed the world.
         if (outcome.wrote) hub.broadcast({ type: 'world:changed' });
         return reply.code(400).send({ error: outcome.error });
       }
@@ -223,28 +178,19 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Settle one of a goal's two **placement** questions: which container it hangs
-  // off, and which area node it sits on. One route each, and each takes the three
-  // answers the appraisal's proposal has — take it, use a different value, or say it
-  // does not apply.
+  // Settle one of a goal's two **placement** questions: its container, and its area
+  // node. Each takes the three answers the appraisal's proposal has — take it, use
+  // another value, or say it does not apply.
   //
-  // The write is the harness's, never an agent's, and never a shell command in a
-  // prompt: it goes through `ActionSink` exactly as the watch toggle and the
-  // profile pin do, for `src/tickets/filing.ts`'s reason. What an agent proposed
-  // is a suggestion; what changes the tracker is a click here.
+  // The write goes through `ActionSink`, never a shell command in a prompt: what an
+  // agent proposed is a suggestion, what changes the tracker is a click here.
   //
-  // Every answer stamps the row, including the two that also change the work item.
-  // The question's visibility is derived from the live item, and that read is a
-  // pulse behind this write — a row that came back for one refresh would read as a
-  // click that did not take.
-  //
-  // Nothing here holds anything up, so nothing here runs a cycle for urgency's
-  // sake — the manual cycle is only what refreshes the world the cockpit is
-  // showing, the way the profile route's does.
+  // Every answer stamps the row, including the two that also change the work item —
+  // the question's visibility is derived from the live item, a pulse behind this
+  // write, so a row that came back would read as a click that did not take.
   const PlacementBody = z.object({
-    // Absent is the third answer — "this goal wants no parent" — rather than a
-    // missing field: the route settles the question either way, and a separate
-    // `/dismiss` route would be a second place the goal-ref scoping is written.
+    // Absent is the third answer — "this goal wants no parent" — not a missing
+    // field: the route settles the question either way.
     parent: z.number().int().positive().optional(),
   });
   app.post(
@@ -276,21 +222,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Mark this goal a priority, or clear the mark: everything the harness dispatches
-  // under it ranks ahead of the natural cross-rule order until it is cleared.
+  // Mark this goal a priority, or clear it: everything dispatched under it ranks
+  // ahead of the natural cross-rule order until cleared.
   //
-  // The harness's own record and not a tracker label, unlike the watch and profile
-  // routes above. Those two are statements about the *goal* that a human reading
-  // the ticket needs; this is a statement about **this deployment's queue** — what
-  // its fleet works next while it is short of slots — and a label saying so would
-  // claim something the tracker cannot honour and every other deployment reading
-  // the same board would inherit.
+  // The harness's own record, never a tracker label, unlike the watch and profile
+  // routes: this is a statement about **this deployment's queue**, which every other
+  // deployment reading the same board would otherwise inherit.
   //
-  // A cycle is run immediately for the reason `/api/upnext/order` runs one: the
-  // ranking is what changed, so the operator should see the new queue rather than
-  // wait a heartbeat to find out whether the click did anything. It is safe to run
-  // for the same reason too — the flag only re-orders, and never un-holds an item
-  // held by a cooldown, a cap, an unapproved plan or an ignore tag.
+  // A cycle runs immediately, and safely — the flag only re-orders, and never
+  // un-holds an item held by a cooldown, a cap, an unapproved plan or an ignore tag.
   const PriorityBody = z.object({ priority: requiredBoolean('priority must be a boolean') });
   app.post(
     '/api/issues/:number/priority',
@@ -304,23 +244,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Set (or clear) an issue's conclusion by hand — the operator's override of what
-  // the agent that worked it said, and of what its plan derives.
+  // Set (or clear) an issue's conclusion by hand — the operator's override of the
+  // agent's verdict and of what its plan derives.
   //
-  // It writes the *harness's* record, not the tracker: nothing here moves the work
-  // item, because concluding an issue in the harness's own view is what stops the
-  // re-pickup, while the tracker transition to a done state stays a human act (in
-  // the workflow this was built for, a finished item is still waiting on test).
-  // Rule `work-item-back-to-pickup` then reads the verdict on the next cycle, which is why `more_work`
-  // runs one immediately — the operator's "no, there's more here" should bounce
-  // the item back to pickup now rather than on the next heartbeat.
-  // The cockpit writes `more_work` through `/instruction` rather than here, since a
-  // bounce-back carrying none of what the operator wants is the weaker half of what
-  // they were doing. This arm stays: it is the API's way to say it, and it is what
-  // `null` clears.
+  // Writes the *harness's* record, never the tracker: concluding in the harness's
+  // view is what stops the re-pickup. `more_work` runs a cycle immediately, since
+  // rule `work-item-back-to-pickup` reads the verdict there. The cockpit writes
+  // `more_work` through `/instruction` instead; this arm stays as the API's way to
+  // say it, and as what `null` clears.
+  //
   // `null` is a member of the verdict rather than an absence, because it is what
-  // clears the row — and absence is refused, since a body that names no verdict
-  // asks for nothing.
+  // clears the row; absence is refused.
   const ConclusionBody = z.object({
     verdict: z.union([z.literal('done'), z.literal('more_work'), z.null()], {
       errorMap: () => ({ message: 'verdict must be "done", "more_work" or null' }),
@@ -344,8 +278,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const conclusion = store.recordIssueConclusion({
         originRef,
         verdict,
-        // An operator toggling from the cockpit has the row itself as context, so
-        // unlike the tool a note is optional here; the default says who decided.
+        // The operator has the row as context, so the note is optional and the
+        // default says who decided.
         note: note ?? 'Set by the operator from the cockpit.',
         by: 'operator',
       });
@@ -355,67 +289,30 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Tell the fleet what to do on a goal, in the operator's own words — "change the
-  // button to primary", "the permission is wrong", "the loading icon is broken".
+  // Tell the fleet what to do on a goal, in the operator's own words. The
+  // instruction is appended to every dispatch on the goal until one concludes it
+  // (see src/goalInstructions.ts).
   //
-  // This is what the bare `more_work` toggle became. That toggle bounced the item
-  // back to pickup carrying a fixed note, so the next agent re-read the ticket that
-  // had already produced the thing the operator was unhappy with; the words are the
-  // whole feature (see src/goalInstructions.ts).
+  // It writes the instruction and then **restarts the goal**, because the two states
+  // an operator presses this in are the two the funnel has already stopped in: a
+  // standing **delivery**, which holds the goal out of `eligibleIssues` entirely,
+  // and a **settled plan**, which `resolvePlanRoute` answers `parts` for whatever its
+  // status. Without the restart the words land, the cockpit draws them, and no agent
+  // is ever going to read them.
   //
-  // It writes the instruction and then **restarts the goal**, because those are two
-  // different jobs and only the first one used to happen. The instruction is what
-  // reaches the agent — appended to every dispatch on the goal until one concludes
-  // it. What makes there *be* a next dispatch is everything below it, and the two
-  // states an operator presses this control in are exactly the two the funnel has
-  // already stopped in (issue #603):
+  // The **conclusion** is written on a delivered goal too, clearing the delivery
+  // through `VERDICT_EXCLUSIONS.conclusion`: `delivered` and "there is more work
+  // here" are opposite answers to one question, and the operator outranks the
+  // assessor. `issue-retro`, `validate-check` and the close-out obligation all stop
+  // while the goal is back in play; a retrospective already written stays written.
   //
-  // - **a standing delivery**, which holds the goal out of `eligibleIssues`
-  //   entirely — so no planner, no pickup and no part is scheduled for it;
-  // - **a settled plan**, which `resolvePlanRoute` answers `parts` whatever its
-  //   status, so rule `issue-pickup` skips it as planned and rule `plan-part` finds
-  //   every part finished and schedules nothing.
+  // The **replan** is one status write — `shortfallArm`'s arm A through this door —
+  // so rule `issue-plan` routes the plan back to a planner and rule `issue-assess`
+  // skips on `planInFlight`. Nothing is torn down.
   //
-  // That is the gap `src/delivery/shortfall.ts` names for the *assessor's* negative
-  // verdict, reached through the operator's door instead: the harness was told the
-  // goal is not reached and scheduled nothing, anywhere. The words landed, the
-  // cockpit drew them, and no agent was ever going to read them.
-  //
-  // The **conclusion** is written on a delivered goal too, which clears the delivery
-  // through `VERDICT_EXCLUSIONS.conclusion`. That is the point rather than a cost:
-  // `delivered` and "there is more work here" are opposite answers to one question,
-  // and `resolveIssueConclusion`'s first arm already says the operator outranks the
-  // assessor on it — "an operator looking at a complete plan and saying there is
-  // more to do here must not be argued with by a derivation". It used to be skipped
-  // on the grounds that the retrospective would read the instruction anyway, and it
-  // does; but `issue-retro` dispatches a *desk* agent with no branch and no
-  // worktree, deliberately, so the one agent the words reached was the one agent
-  // structurally unable to act on them — and once it had written up the run, nothing
-  // was dispatched for that goal again. `issue-retro`, `validate-check` and the
-  // close-out obligation all stop while the goal is back in play, which is the
-  // honest reading of a goal whose owner has just said it is not finished — and
-  // none of it is a new path: `closeOutPass` already declines an open close-out
-  // when the delivery row goes and reopens it when the goal is delivered again,
-  // which is the retraction `/delivered` has always been able to cause. A
-  // retrospective already written stays written.
-  //
-  // The **replan** is one status write, `shortfallArm`'s arm A through this door:
-  // rule `issue-plan` already routes a plan row in `planning` back to a planner with
-  // the `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
-  // narrows the cooldown to decisions since `plan.updatedAt`. So the goal is planned
-  // out again, put to the operator for approval as usual, and then worked — which is
-  // what the control has always promised. Nothing is torn down, exactly as
-  // `POST /api/plans/:id/replan` tears nothing down. It also stops the assessor
-  // racing the planner it just asked for: `planInFlight` is true of a `planning`
-  // plan, and rule `issue-assess` skips on it.
-  //
-  // The words are **not** appended to the plan's reason. They reach the replanning
-  // agent through `operatorInstructionsNote`, whose `padOriginFor` scope covers the
-  // `:plan` origin, and one fact rendered twice in one prompt reads as two — the
-  // same reason the verdict's note below does not repeat the instruction either.
-  //
-  // The cycle runs for the toggle's reason, sharpened — an operator who has just
-  // said what they want should not wait a heartbeat to be listened to.
+  // The words are **not** appended to the plan's reason: they reach the replanning
+  // agent through `operatorInstructionsNote`, and one fact rendered twice in one
+  // prompt reads as two.
   const InstructionBody = z.object({
     text: z
       .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
@@ -426,9 +323,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/instruction',
     checked({ params: IssueNumberParams, body: InstructionBody }, async ({ params, body }) => {
-      // The row, the `more_work` verdict that retracts a delivery, and the settled
-      // plan sent back to a planner are one act — `writeGoalInstruction`'s, shared
-      // with the desktop channel's `goal_instruct`.
+      // The row, the `more_work` verdict and the replan are one act —
+      // `writeGoalInstruction`'s, shared with `goal_instruct`.
       const { instruction, conclusion, replanned } = writeGoalInstruction(
         store,
         issueConclusionOrigin(params.number),
@@ -440,22 +336,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Take one back. The escape hatch every write on this surface has, and the only
-  // way an instruction stops standing other than an agent concluding the goal.
+  // Take one back — the only way an instruction stops standing other than an agent
+  // concluding the goal.
   //
-  // Withdrawing the **last** one clears the operator's `more_work` with it, and
-  // only ever that one: the two rows were written together, so leaving the verdict
-  // behind would keep bouncing the item back to pickup for words nobody is going to
-  // read. An agent's own declaration is left exactly where it was found — it is
-  // about the work, not about the instruction.
+  // Withdrawing the **last** one clears the operator's own `more_work` with it, and
+  // only ever that one; an agent's own declaration is left where it was found.
   //
-  // What a withdrawal does **not** undo is the rest of the restart: a delivery the
-  // write retracted stays retracted, and a plan it sent back to a planner stays in
-  // `planning`. Neither is recoverable by guessing — a cleared verdict has no row
-  // to resurrect, and a plan re-marked `complete` from here would claim a roll-up
-  // that nothing re-derived. Both have their own control (`/delivered`,
-  // `/api/plans/:id/approve` once the replan lands), which is where an operator who
-  // meant to take the whole act back goes.
+  // It does **not** undo the rest of the restart: a retracted delivery stays
+  // retracted and a plan sent back stays `planning`. Neither is recoverable by
+  // guessing, and both have their own control.
   const InstructionParams = IssueNumberParams.extend({ id: z.string() });
   app.delete(
     '/api/issues/:number/instruction/:id',
@@ -467,19 +356,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Override a goal appraisal — the escape hatch a blocking gate has to have.
+  // Override a goal appraisal — the escape hatch a blocking gate has to have, in
+  // both directions.
   //
-  // `unclear` is the only verdict that stops anything, and it stops it for an issue
-  // the operator has explicitly tagged for the harness. So the operator must be able
-  // to say "work it anyway" without editing the ticket to say something they do not
-  // mean, and must be able to say "no, this really is unworkable" without waiting for
-  // an agent to agree. Both arms are here.
-  //
-  // Clearing is a delete rather than a stored third verdict, for `clearDelivery`'s
-  // reason: the absence of an appraisal keeps exactly one representation, and it is
-  // also the state a crashed appraiser leaves behind — the fail-open. The goal
-  // fingerprint of an operator's verdict is taken from the issue as the harness
-  // currently sees it, so it expires on the next edit exactly as an agent's does.
+  // Clearing is a delete rather than a stored third verdict, so the absence of an
+  // appraisal keeps one representation — also the state a crashed appraiser leaves
+  // behind. The goal fingerprint is taken from the issue as the harness sees it now,
+  // so an operator's verdict expires on the next edit exactly as an agent's does.
   const AppraisalBody = z.object({
     verdict: z.union([z.literal('workable'), z.literal('unclear'), z.null()], {
       errorMap: () => ({ message: 'verdict must be "workable", "unclear" or null' }),
@@ -499,17 +382,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         await harness.runCycle('manual');
         return { ok: true, appraisal: null };
       }
-      // The text the verdict is about, from the world the cockpit is showing. Absent
-      // (an issue the last snapshot did not carry) is refused rather than guessed: a
-      // verdict fingerprinted against an empty goal would expire the instant the
-      // issue was next fetched, which is a silent no-op dressed as an override.
+      // Absent from the last snapshot is refused, not guessed: a verdict
+      // fingerprinted against an empty goal expires the instant the issue is next
+      // fetched — a silent no-op dressed as an override.
       const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
       const appraisal = store.recordAppraisal({
         originRef,
         verdict,
-        // As on the conclusion and delivery routes, an operator has the item in front
-        // of them, so the summary is optional and the default says who decided.
+        // The operator has the item in front of them, so the summary is optional.
         summary: summary ?? 'Set by the operator from the cockpit.',
         goalRef: goalFingerprint(issue.title, issue.body),
         by: 'operator',
@@ -521,17 +402,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Park an issue as delivered by hand, or release one the assessor parked.
-  //
-  // The operator's own arm of the same verdict rule `issue-assess`'s agent casts, and the
-  // escape hatch for it — an operator looking at a finished issue must not have to
-  // wait for an agent to agree, and one looking at a wrongly-parked issue must be
-  // able to say so without moving the ticket. It writes the *harness's* record and
-  // never the tracker: `delivered` is deliberately weaker than `closed`, and
-  // closing the ticket stays a human act performed in the tracker itself.
-  //
-  // Clearing is a delete rather than a stored "not delivered", so the absence of a
-  // verdict keeps exactly one representation — `clearIssueConclusion`'s reason.
+  // Park an issue as delivered by hand, or release one the assessor parked — the
+  // operator's own arm of rule `issue-assess`'s verdict, and its escape hatch.
+  // Writes the *harness's* record, never the tracker: `delivered` is deliberately
+  // weaker than `closed`. Clearing is a delete, so the absence of a verdict keeps
+  // one representation.
   const DeliveredBody = z.object({
     delivered: requiredBoolean('delivered must be a boolean'),
     summary: optionalText('summary'),
@@ -551,8 +426,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }
       const delivery = store.recordDelivery({
         originRef,
-        // As on the conclusion route, an operator has the row in front of them, so
-        // the summary is optional and the default says who decided.
+        // The operator has the row in front of them, so the summary is optional.
         summary: summary ?? 'Marked delivered by the operator.',
         by: 'operator',
       });
@@ -561,20 +435,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Say that this goal is not waiting on an environment, or put it back to
-  // waiting.
-  //
-  // The escape hatch an environment gate has to have. With `arrival.opens`
-  // configured, a delivered goal's `validate` and `close_out` rows are withheld
-  // until its work reaches the environment that opens them — and a goal that is
-  // never going to reach one (a docs change, a config change, work whose
-  // deployment nothing here can see) would otherwise sit delivered with an empty
-  // bench for good, which is the harness losing an obligation rather than holding
-  // it.
+  // Say that this goal is not waiting on an environment, or put it back to waiting
+  // — the escape hatch an environment gate has to have. With `arrival.opens`
+  // configured, a goal that will never reach an environment would otherwise sit
+  // delivered with an empty bench for good.
   //
   // The note is required by {@link GateReleaseBody}, unlike every other operator
-  // verdict's summary — the rule and its reasoning live beside the release itself.
-  // Clearing is a delete, for `clearIssueConclusion`'s reason.
+  // verdict's summary. Clearing is a delete.
   app.post(
     '/api/issues/:number/environment-gate',
     checked({ params: IssueNumberParams, body: GateReleaseBody }, async ({ params, body }) => {
@@ -584,34 +451,22 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         hub.broadcast({ type: 'world:changed' });
         return { ok: true, released: null };
       }
-      // `note` is required alongside `released` by the schema's own refine, so
-      // this is a narrowing rather than a check.
+      // `note` is required by the schema's refine, so this is a narrowing.
       const release = store.releaseEnvironmentGate(goalRef, body.note ?? '');
       hub.broadcast({ type: 'world:changed' });
-      // The obligations it opens are filed by desks on the pulse, so the row an
-      // operator just asked for arrives now rather than on the next beat.
+      // The obligations it opens are filed by desks on the pulse.
       await harness.runCycle('manual');
       return { ok: true, released: release };
     }),
   );
 
-  // Record by hand that an issue was worked and its goal is not reached, or clear
-  // a standing shortfall.
+  // Record by hand that an issue was worked and its goal is not reached, or clear a
+  // standing shortfall — the operator's arm of the assessor's negative verdict, and
+  // its escape hatch: rejecting the proposal deliberately leaves the verdict
+  // standing, so without this the row would stand for good.
   //
-  // The operator's own arm of the assessor's negative verdict, and — more
-  // importantly — the escape hatch it has to have. A shortfall lives until the arm
-  // it named is performed, and *rejecting* the proposal deliberately leaves it
-  // standing (the verdict is still true; you simply declined to act on it). So
-  // without this the row and its chip would stand for good, with no way to say
-  // "no, that is settled now" short of marking the issue delivered, which claims
-  // something different.
-  //
-  // Clearing is a delete rather than a stored "no shortfall", for
-  // `clearIssueConclusion`'s reason. Writing one clears any standing delivery, in
-  // the store — the two are opposite answers to one question.
-  //
-  // The body's own rules — the absent / explicit-`null` / named-cause tri-state
-  // and the one cross-field refinement on this surface — live in
+  // Clearing is a delete. Writing one clears any standing delivery in the store —
+  // the two are opposite answers to one question. The body's rules live in
   // {@link ShortfallBody}, beside `shortfallArm`, which routes on the same fact.
   app.post(
     '/api/issues/:number/shortfall',
@@ -629,8 +484,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         originRef,
         cause: body.cause ?? null,
         partSlug: body.part ?? null,
-        // As on the conclusion and delivery routes, an operator has the row in front
-        // of them, so the summary is optional and the default says who decided.
+        // The operator has the row in front of them, so the summary is optional.
         summary: body.summary ?? 'Marked as not delivered by the operator.',
         by: 'operator',
       });
@@ -640,46 +494,18 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   // Overrule a standing shortfall: the assessment is wrong, and here is the
-  // correction in the operator's own words.
+  // correction in the operator's own words. Neither accept nor reject says this —
+  // rejecting leaves the verdict standing, so a fresh assessor records the same
+  // shortfall, and nothing the operator types into that card reaches an agent.
   //
-  // ## The gap this closes
+  // It writes two rows, `/instruction`'s arrangement and for its reason. The
+  // **delivery** is the verdict: it clears the shortfall through the exclusion
+  // matrix rather than a hand-rolled `DELETE`, parks the assessor, and releases the
+  // three things gated on `deliveryParked`. The **instruction** gets the correction
+  // into the record, in front of the retrospective agent the delivery dispatches.
+  // One text in both, so the two cannot drift.
   //
-  // The shortfall card offers accept and reject, and neither says this. Accepting
-  // spends an agent on a follow-up part for work that is already done; rejecting
-  // means "do not act on it", which deliberately leaves the verdict standing — so
-  // rule `issue-assess` dispatches again, the fresh assessor reads the same
-  // repository, and records the same shortfall. Nothing the operator can type into
-  // that card survives the loop either: `shortfallRef` is nobody's dispatch origin,
-  // so `rejectionGuidance` reaches no agent with the note (see
-  // {@link file://../../delivery/shortfall.ts}). An operator who knew exactly why
-  // the assessment was wrong had no way to say it that anything would read.
-  //
-  // ## Why it writes two rows
-  //
-  // `/instruction`'s arrangement, for its reason — half of this does nothing.
-  //
-  // The **delivery** is the verdict: it clears the shortfall through the exclusion
-  // matrix rather than by a hand-rolled `DELETE`, parks the assessor that would
-  // otherwise re-derive it, and releases the three things gated on `deliveryParked`
-  // — `issue-retro`, `validate-check` and the close-out obligation. Those are the
-  // steps that come after delivery, and while a shortfall stands none of them can
-  // run at all.
-  //
-  // The **instruction** is what gets the correction into the record. The harness
-  // never edits the ticket itself — only an agent can tell "this changes the goal"
-  // from "this is a note about how to do the work" — so the instruction block is
-  // the one mechanism there is, and it already carries the tracker's own read/amend
-  // commands. On a delivered goal it lands in front of the retrospective agent,
-  // which is dispatched by the delivery this same call writes.
-  //
-  // One text, in both: the operator's words are the summary of *why* it is
-  // delivered and the correction to be written down, and quoting them twice from
-  // one field is what keeps the two from drifting.
-  //
-  // The **proposal is not settled here.** Rejecting it is the cockpit's existing
-  // call and the honest verb for "no follow-up part" — folding it in would give
-  // this route a second opinion about a settlement `/api/proposals/:id/reject`
-  // already owns.
+  // The **proposal is not settled here** — `/api/proposals/:id/reject` owns that.
   const OverruleBody = z.object({
     text: z
       .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
@@ -694,35 +520,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!outcome.ok) return reply.code(409).send({ error: outcome.error });
       const { delivery, instruction } = outcome;
       hub.broadcast({ type: 'world:changed' });
-      // The retrospective this releases should be dispatched now rather than on the
-      // next heartbeat — the operator has just answered the question that was
-      // holding the goal, and the write-up is what carries their answer onward.
+      // The retrospective this releases carries the operator's answer onward, so
+      // dispatch it now.
       await harness.runCycle('manual');
       return { ok: true, delivery, instruction };
     }),
   );
 
-  // End a run (issues #203, #234). The only thing that ends one — no pulse, poll
-  // or ticket close does — and it persists across a restart. Since #234 it stops
-  // the dispatcher as well as removing the card: a dismissed run is not unioned
-  // back into the issue list, so nothing is scheduled for it again. Idempotent:
-  // dismissing an already-dismissed or unrecorded run is a no-op 409, not an error
-  // state. One-way; how it ended (`judged` / `abandoned`) is stamped from the row.
+  // End a run. The only thing that ends one, and it persists across a restart: a
+  // dismissed run is not unioned back into the issue list, so nothing is scheduled
+  // for it again. Idempotent — a second dismissal is a 409, not an error state.
+  // One-way.
   //
-  // **It is destructive, and the destruction is the point.** Stopping the
-  // dispatcher only governs what is *started*, so it left the goal's live agents,
-  // its queued jobs and its standing instructions running on under a run the
-  // cockpit had already drawn as over. `clearGoalWork` ends those too, and the
-  // counts come back so the cockpit can say what it just did rather than a bare
-  // `ok` (`src/floor/endRun.ts`).
+  // **It is destructive, and the destruction is the point**: stopping the dispatcher
+  // governs only what is *started*, so `clearGoalWork` also ends the goal's live
+  // agents, queued jobs and standing instructions (`src/floor/endRun.ts`).
   //
-  // **A flagged validation plan costs a sentence here**, and this is the sharper
-  // of the two places it does: the close-out obligation is an ask an operator may
-  // never open, but this is the button that ends the harness's run at a goal, it
-  // is one-way, and it is exactly the "close the goal and move on" it is named
-  // after. It still blocks nothing — the note is the whole of the requirement,
-  // and it is kept on the run so what the goal owed and what was said about it
-  // survive together.
+  // **A flagged validation plan costs a sentence here.** It blocks nothing — the
+  // note is the whole requirement, kept on the run so what the goal owed and what
+  // was said about it survive together.
   const DismissRunBody = z.object({ note: optionalText('note') });
   app.post(
     '/api/issues/:number/dismiss-run',
@@ -735,12 +551,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         });
       const dismissed = store.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
-      // The other half of ending a run, and the half the dismissal alone never did:
-      // stopping the dispatcher says what will not be *started*, so without this the
-      // goal's live agents kept working, its queued job took the next slot and its
-      // standing instructions waited for whoever picked it up — all under a run the
-      // cockpit had already drawn as over. Below the dismissal, so a 409 clears
-      // nothing.
+      // The other half of ending a run: without it the goal's live agents keep
+      // working under a run the cockpit has drawn as over. Below the dismissal, so a
+      // 409 clears nothing.
       const cleared = clearGoalWork(store, system.agents, params.number);
       hub.broadcast({ type: 'dirty' });
       return { ok: true, cleared };
@@ -748,19 +561,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   // Raise a bug against a story: the operator ran the thing and it does not do what
-  // they expect. The one route on this surface that files into the **tracker**
-  // rather than writing the harness's own record — and the only one carrying a fact
-  // no agent can derive, since none of them ran the feature.
+  // they expect. The one route here that files into the **tracker** rather than
+  // writing the harness's own record.
   //
-  // The story's verdict is deliberately untouched. The bug is its own work item and
-  // carries the work, which is also the only arrangement where the fleet is handed
-  // the operator's actual words as the goal — a `more_work` verdict here would give
-  // the next agent the weaker of the two briefs (see src/bugFiling.ts).
-  //
-  // `summary` is required where every other body on this surface takes an optional
-  // one: elsewhere the operator has the row in front of them and the default says
-  // who decided, but here their report *is* the feature, and an empty one asks for
-  // nothing.
+  // The story's verdict is deliberately untouched — the bug is its own work item and
+  // carries the work, which is the only arrangement handing the fleet the operator's
+  // actual words as the goal (see src/bugFiling.ts). `summary` is required, unlike
+  // every other body here: their report *is* the feature.
   const RaiseBugBody = z.object({
     summary: z
       .string({ required_error: 'summary is required', invalid_type_error: 'summary must be a string' })
@@ -773,40 +580,37 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/issues/:number/bug',
     checked({ params: IssueNumberParams }, async ({ params, req, reply }) => {
       const { number: issueNumber } = params;
-      // The appraisal route's check, for its reason: an override on an issue the harness
-      // has never seen would be a silent no-op dressed as an action.
+      // The appraisal route's check: an issue the harness has never seen would be a
+      // silent no-op dressed as an action.
       const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
-      // With no tracker configured there is nowhere to file — the same gate all four
-      // filing arms ask. The cockpit hides the button in this case, so reaching here
-      // means a direct call.
+      // With no tracker configured there is nowhere to file — the gate all four
+      // filing arms ask. The cockpit hides the button, so this means a direct call.
       const tracker = trackerCoordinates(config);
       if (!tracker)
         return reply
           .code(409)
           .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
 
-      // The body last, after every 404/409 the store answers — the order both other
-      // filing routes use, and `checked` applied by hand is what keeps the refusal
-      // path one.
+      // The body last, after every 404/409 the store answers, so the refusal path
+      // stays one.
       return checked({ body: RaiseBugBody }, async ({ body }) => {
         const derived = bugTicketFields(issue, body.summary, tracker);
         const title = body.title ?? derived.title;
-        // Rendered from the operator's template book, not built here: how a bug should
-        // be worded is exactly the sort of house style an override exists for. The
-        // duplicate candidates are **appended** rather than given a placeholder, so an
-        // override that never learned about them cannot silently drop them.
+        // Rendered from the operator's template book. The duplicate candidates are
+        // **appended** rather than given a placeholder, so an override that never
+        // learned about them cannot silently drop them.
         const candidates = renderCandidates(dedupeCandidates(store.listTrackerItems(), body.summary));
         const prompt = [system.prompts.render('raise-bug', derived.vars), candidates]
           .filter((part) => part !== null)
           .join('\n\n');
-        // Desk, not code: filing touches no repository. The operator's report rides in
-        // this prompt and is not stored again — see src/store/bugFilings.ts.
+        // Desk, not code: filing touches no repository, and the report rides in this
+        // prompt rather than being stored again — see src/store/bugFilings.ts.
         const job = store.createJob({ title, prompt, kind: 'desk' });
         // Job first, then the filing row — a failed create leaves nothing behind.
         const filing = store.createBugFiling({ jobId: job.id, originRef: issueConclusionOrigin(issueNumber) });
         hub.broadcast({ type: 'world:changed' });
-        // The operator's report should reach the fleet now, not on the next heartbeat.
+        // The report should reach the fleet now, not on the next heartbeat.
         const report = await harness.runCycle('manual');
         return { ok: true, filing, job, report };
       })(req, reply);
@@ -814,44 +618,28 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   // -------------------------------------------------------------------------
-  // Raising an issue about LubbDubb from the cockpit (issues #413, #449)
+  // Raising an issue about LubbDubb from the cockpit
   //
-  // Two collection-level routes, and neither is about an issue that exists — nor
-  // about the tracker the rest of this file writes to. Both go through
-  // `system.upstream`, which files into LubbDubb's own repository through the `gh`
-  // CLI: the probe answers "can I file, where, and as whom" from a live call, and
-  // the create files what the operator typed. No agent and no model, either way.
+  // Two collection-level routes about no issue in particular, and not about the
+  // tracker the rest of this file writes to. Both go through `system.upstream`,
+  // which files into LubbDubb's own repository through the `gh` CLI. No agent and
+  // no model, either way.
   // -------------------------------------------------------------------------
 
-  // The live half of the gate on the top bar's compose modal. `gh` is asked
-  // whether it can answer at all, and as whom, because that is the one thing about
-  // filing here that nothing else can prove: the harness's own `GITHUB_TOKEN` is
-  // scoped to the repo the fleet works on and has no bearing on this destination.
+  // The live half of the gate on the compose modal: only `gh` can prove it can
+  // answer and as whom, since the harness's `GITHUB_TOKEN` has no bearing on this
+  // destination.
   //
   // Every failure arm is a 200 carrying `available: false` and a reason, never a
-  // 5xx: a logged-out CLI is an answer to the question that was asked, and the
-  // caller is a modal that wants to say why it is falling back rather than one that
-  // wants an exception. The failure is still *recorded* — an operator whose `gh`
-  // login has lapsed should find that in the Errors panel and not only in a modal
-  // they closed.
+  // 5xx — a logged-out CLI is an answer to the question asked. The failure is still
+  // *recorded*, so a lapsed `gh` login reaches the Errors panel.
   /**
-   * Every agent that has worked one goal, with the tasks they were dispatched on
-   * — the goal page's "On this goal" card, fetched when the page opens.
-   *
-   * Its own route rather than a slice of `/api/state`, for the reason
-   * `/api/agents/:id/files` is one: the snapshot carries the fleet's live agents
-   * and a bounded tail of ended ones, because the all-time list grew for the life
-   * of a deployment and was re-serialised on every `dirty`. A goal's history is
-   * the one thing that needed the rest of it, and it is one goal at a time.
-   * → `docs/spec/16-http-api.md#bulk-collections`
-   *
-   * `prs` names the goal's pull requests, because which pull requests are a
-   * goal's is the cockpit's own three-way match (`ownsPr`) — the same list it
-   * draws on the page. Resolving them again here would be a second matcher, free
-   * to disagree with the pull requests shown beside the agents it selected.
-   *
-   * No 404 for a goal the world has dropped: a run whose ticket closed still has
-   * a page and still has a history, which is the case this card most exists for.
+   * Every agent that has worked one goal, with the tasks they were dispatched on — the goal
+   * page's "On this goal" card. → `docs/spec/16-http-api.md#bulk-collections` `prs` is
+   * supplied by the caller because which pull requests are a goal's is the cockpit's own
+   * three-way match (`ownsPr`); resolving them again here would be a second matcher free to
+   * disagree with it. No 404 for a goal the world has dropped — a run whose ticket closed
+   * still has a page and a history.
    */
   const GoalAgentsQuery = z.object({
     prs: z
@@ -895,25 +683,16 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }
   });
 
-  // File the operator's own report about LubbDubb, directly. The one route on this
-  // surface that creates a tracker item without a desk agent between the click and
-  // the create: the operator has already written the thing up, and dispatching
-  // somebody to re-type it would cost a model call to add nothing (see `/bug`
-  // above, where the dedupe and the write-up are the point).
+  // File the operator's own report about LubbDubb, directly — the one route here
+  // that creates a tracker item with no desk agent between the click and the create,
+  // since the operator has already written it up.
   //
-  // It goes through `system.upstream` and **not** `system.filing`, which is the
-  // whole of issue #449: `ticketFiler` files into the tracker the fleet is pointed
-  // at, and this is a bug report about the cockpit. The type/assignee resolution
-  // the other filing arms need does not arise — one repository, no work item types,
-  // and the byline is the operator's own `gh` login rather than the harness's
-  // credential.
+  // Through `system.upstream` and **not** `system.filing`: `ticketFiler` files into
+  // the tracker the fleet is pointed at, and this is a report about the cockpit.
   //
   // **`watch` is opt-in, defaults off, and is only honoured where it can mean
-  // anything.** The label is what makes the fleet pick an issue up, so defaulting
-  // it on would mean an operator's half-formed thought is being worked before they
-  // have finished reading it back — and on a deployment whose fleet works some
-  // other repo it is dropped, because the report lands where those agents never
-  // look. The probe says which, so the modal does not draw a box that does nothing.
+  // anything** — the label is what makes the fleet pick an issue up, and on a
+  // deployment whose fleet works some other repo it is dropped.
   const RaiseIssueBody = z.object({
     title: z
       .string({ required_error: 'title is required', invalid_type_error: 'title must be a string' })
@@ -941,18 +720,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           labels: body.watch && watchable ? [watchLabel] : [],
         });
       } catch (err) {
-        // `/api/work/:ref/file`'s arm: the CLI refusing is an answer, not an
-        // unanticipated fault, so it is a 502 with its own words and the modal keeps
-        // what the operator typed.
+        // The CLI refusing is an answer, not an unanticipated fault: a 502 with its
+        // own words, and the modal keeps what the operator typed.
         const message = (err as Error).message;
         errors.record({ source: 'provider', message: `filing an issue from the cockpit failed: ${message}` });
         return reply.code(502).send({ error: `${UPSTREAM_REPO} refused the issue: ${message}` });
       }
-      // No cycle and no broadcast, unlike every other filing route. What was created
-      // is in LubbDubb's tracker, which on all but the dogfooding deployment this
-      // harness does not sweep at all — and on that one the next pulse finds it. The
-      // modal's success state is the address of the thing, not a row in the world
-      // the cockpit draws, so there is nothing here for a refresh to reveal.
+      // No cycle and no broadcast, unlike every other filing route: what was created
+      // is in LubbDubb's tracker, which this harness does not sweep, and the modal's
+      // success state is the address rather than a row in the world.
       const answer: IssueFiled = { ok: true, number: filed.number, url: filed.url };
       return answer;
     }),

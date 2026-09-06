@@ -12,55 +12,26 @@ import {
 } from './insightsWindow.js';
 
 /**
- * The MCP tool channel as a reading: what the fleet reached for, and — the whole
- * reason this exists — what it never reached for, with the harness's own answer
- * for why.
+ * The MCP tool channel as a reading: what the fleet reached for and — the reason
+ * this exists — what it never reached for, with the harness's answer for why. An
+ * agent whose `mcp__lubbdubb__*` grants were dropped is refused every call,
+ * finishes on the sentinels alone, and reports nothing; its transcript looks like
+ * an agent that chose not to use the tools.
  *
- * Every other Insights tab folds records that were already being kept for some
- * other purpose. This one folds a table (`mcp_calls`) that exists only for it,
- * because the failure it is about leaves no trace anywhere else. An agent whose
- * `mcp__lubbdubb__*` grants were dropped — an operator's `claudeArgs` carrying its
- * own `--allowedTools`, which is appended last and wins — connects to the channel,
- * is refused every call, finishes its work on the sentinels alone, and reports
- * nothing. Its transcript looks like an agent that chose not to use the tools.
- *
- * ## A count of zero is not a finding
- *
- * "Nothing called `request_human_task` this week" is not a bug report; it is one
- * of four different facts wearing the same face, and they want opposite actions:
- *
- * - **nobody could have called it** — its name appears in neither the protocol
- *   addendum nor any prompt the window dispatched. Nothing told an agent it
- *   exists, and `tools/list` alone does not count: an agent reaches for what its
- *   instructions named, and shells out to `gh` for the rest.
- * - **it was named and nobody reached for it** — the wording is not landing, or
- *   the job it does never came up.
- * - **it was called and always refused** — the tool is reachable and its contract
- *   is rejecting every attempt, which is the one case where the silence is the
- *   tool's own fault.
- * - **the channel was dark** — the runs that would have called it made no call at
- *   all, and then no per-tool reading in this window means anything.
- *
- * So this module does not ship counts for the cockpit to interpret. It ships a
- * {@link McpQuietTool} per silent tool carrying the **verdict** and the evidence
- * behind it, for the reason `PHASE_COPY` and `OUTCOME_COPY` ship their own words:
- * it is a claim about what the harness did, and a cockpit re-deriving it from
- * three numbers would be a second opinion drawn inches from the first.
- *
- * ## Where the evidence comes from
+ * **A count of zero is not a finding.** It is four facts wearing one face —
+ * nobody could have called it, it was named and nobody reached for it, it was
+ * called and always refused, or the channel was dark. So this module ships a
+ * {@link McpQuietTool} carrying the **verdict** and its evidence rather than
+ * counts for the cockpit to interpret.
  *
  * `TOOL_NAMING` states where each tool is *supposed* to be named; the addendum
- * text and the dispatched prompts are whether it actually was. Keeping those
- * separate is deliberate — a tool classified `addendum` whose name is not in
- * {@link MCP_PROTOCOL_ADDENDUM} is a defect this reading can name outright, and
- * one that a check of the classification alone would agree was fine.
+ * text and the dispatched prompts are whether it actually was. Kept separate so a
+ * tool classified `addendum` and absent from {@link MCP_PROTOCOL_ADDENDUM} is a
+ * defect this reading can name.
  *
- * ## The two channels are never summed
- *
- * The fleet's calls arrive on a per-agent credential over one tool set and the
- * operator's on a long-lived one over another, and `validation_report` is two
- * different tools with one name. A total across them would be a number about
- * nothing, so `totals` is the fleet's and the desktop channel is its own section.
+ * **The two channels are never summed** — `validation_report` is two different
+ * tools with one name — so `totals` is the fleet's and the desktop channel is its
+ * own section.
  *
  * → `docs/spec/17-cockpit.md#mcp`, `docs/spec/11-mcp-tools.md#what-is-recorded`
  */
@@ -81,10 +52,8 @@ const VERDICT_ORDER: readonly McpQuietVerdict[] = [
 
 /**
  * What each verdict means and what to do about it, in the operator's words.
- *
- * Shipped with the figures for `PHASE_COPY`'s reason. `remedy` is separate from
- * `blurb` because they answer different questions and only one of them is always
- * actionable: `desktop-unused` is a reading with nothing to fix.
+ * `remedy` is separate from `blurb` because not every verdict is actionable —
+ * `desktop-unused` is a reading with nothing to fix.
  */
 const VERDICT_COPY: Record<McpQuietVerdict, { label: string; blurb: string; remedy: string | null }> = {
   'always-refused': {
@@ -189,12 +158,10 @@ export interface McpQuietTool {
 }
 
 /**
- * A run that settled having made no MCP call at all.
- *
- * The alarm the tab is built around, and the one reading here that is about runs
- * rather than tools. It carries the profile because that is where the answer
- * usually is: a profile whose `claudeArgs` carries its own `--allowedTools` wins
- * over the harness's and silently drops every `mcp__lubbdubb__*` grant.
+ * A run that settled having made no MCP call at all — the alarm the tab is built
+ * around. It carries the profile because that is usually the answer: a profile
+ * whose `claudeArgs` carries its own `--allowedTools` wins over the harness's and
+ * silently drops every `mcp__lubbdubb__*` grant.
  */
 export interface McpSilentRun {
   agentId: string;
@@ -273,15 +240,10 @@ export interface McpInsights {
   naming: McpNamingTotal[];
   refusals: McpRefusal[];
   /**
-   * Whether this deployment's `claudeArgs` carries its own `--allowedTools`.
-   *
-   * A **live config read**, not a fold of the window, and the only thing on this
-   * payload that is not. It is the single commonest cause of the alarm above and
-   * it is invisible everywhere else: operator args are appended last, so an
-   * explicit `--allowedTools` there beats the harness's and drops every
-   * `mcp__lubbdubb__*` grant — leaving a connected channel whose every call is
-   * refused. Reported whether or not any run has gone silent yet, because the
-   * point is to catch it before one does.
+   * Whether this deployment's `claudeArgs` carries its own `--allowedTools` — a
+   * **live config read**, the only thing here that is not a fold of the window.
+   * Operator args are appended last, so one there drops every `mcp__lubbdubb__*`
+   * grant. Reported whether or not a run has gone silent yet.
    */
   allowedToolsOverridden: boolean;
 }
@@ -312,10 +274,9 @@ interface McpInsightsInput {
    */
   lastCallByTool: Map<string, string>;
   /**
-   * How many calls each agent has made **over all time**, for the silent-run
-   * alarm alone. Every other figure on this page is a window reading; a silence
-   * is asked of the run's whole life, because the failure it reports — grants
-   * dropped at launch — is a property of the whole run and not of a slice of it.
+   * How many calls each agent has made **over all time**, for the silent-run alarm
+   * alone. Every other figure here is a window reading; a silence must be asked of
+   * the run's whole life, since dropped grants are a property of the whole run.
    */
   callsEverByAgent: Map<string, number>;
   /** This deployment's operator-supplied `claudeArgs`, for the override check. */
@@ -330,10 +291,8 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
   const tasksById = new Map(input.tasks.map((t) => [t.id, t]));
 
   // The runs the window covers, on the same instant the spend and reliability
-  // folds use: where a run *ended*, and where it started only while it is still
-  // going. A run that opened before the window and finished inside it belongs to
-  // the window's denominator — but its calls may all predate the window, which is
-  // why the silence below is asked of `callsEverByAgent` and not of these.
+  // folds use. A run that opened before the window may have made all its calls
+  // outside it, which is why the silence below reads `callsEverByAgent`.
   const settled = input.agents.filter((a) => a.endedAt !== null && inWindow(window, runInstant(a)));
   const callsByAgent = new Map<string, number>();
   for (const call of calls) {
@@ -360,14 +319,9 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
     );
 
   const perRun = settled.map((a) => callsByAgent.get(a.id) ?? 0);
-  // The one figure on this page taken over the run's whole life rather than over
-  // the window, and the asymmetry is the fix: a run that opened before the window
-  // and ended inside it made every one of its calls outside it, and read against
-  // the windowed count it is reported as a run that could not reach the channel.
-  // Any run alive at the instant the window opens is a candidate, so that is up
-  // to the concurrency cap's worth of phantoms every time a 24h view is opened —
-  // each arriving with the full "check this profile's `claudeArgs`" remedy, on
-  // the reading drawn above the others because it invalidates them.
+  // Over the run's whole life, never the window: a run that opened before the
+  // window made its calls outside it, and against a windowed count would be
+  // reported as a run that could not reach the channel at all.
   const silent = settled.filter((a) => (input.callsEverByAgent.get(a.id) ?? 0) === 0);
 
   return {
@@ -382,10 +336,8 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
       busiestRunCalls: perRun.reduce((most, n) => Math.max(most, n), 0),
       medianMs: median(fleetCalls.map((c) => c.durationMs)),
       toolsAdvertised: MCP_TOOL_NAMES.length,
-      // Over the advertised set only. A retired name being called is its own
-      // finding — it is *not* a live tool gone quiet — and counting it here read
-      // as 24 tools to answer for out of 20 advertised, on exactly the
-      // deployment the verdict exists to help.
+      // Over the advertised set only: a retired name being called is its own
+      // finding, not a live tool gone quiet, and would push this above its total.
       toolsQuiet: quiet.filter((q) => q.channel === 'fleet' && q.naming !== 'retired').length,
       toolsRetiredCalled: quiet.filter((q) => q.channel === 'fleet' && q.naming === 'retired').length,
       argsBytes: calls.reduce((sum, c) => sum + c.argsBytes, 0),
@@ -410,19 +362,10 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
 }
 
 /**
- * Whether the addendum names a tool.
- *
- * A word-boundary match on the tool's own name rather than on `name(`, because a
- * prompt that names a tool in prose has named it just as surely as one that
- * writes its signature. The two names this could over-match on are `raise` and
- * `escalate`, which are ordinary English words — and both are named in the
- * addendum in any case, so the ambiguity cannot produce a wrong verdict. Every
- * other tool name is snake_case and occurs in no sentence.
- *
- * One matcher for the addendum and for the prompts (`countTasksNamingTools` uses
- * SQL `instr`, which is the same question asked of the same text), because two
- * ways of asking whether a prompt names a tool is how one of them comes to
- * disagree.
+ * Whether the addendum names a tool. A word-boundary match on the name itself: a
+ * prompt naming a tool in prose has named it. The only over-matchable names
+ * (`raise`, `escalate`) are in the addendum anyway, so the ambiguity cannot
+ * produce a wrong verdict. One matcher for the addendum and the prompts.
  */
 function addendumNames(tool: string): boolean {
   return new RegExp(`\\b${tool}\\b`).test(MCP_PROTOCOL_ADDENDUM);
@@ -452,11 +395,9 @@ function toolUsage(
 }
 
 /**
- * The verdict for one tool, or null when it has nothing to answer for.
- *
- * The ladder is ordered by what would make the others meaningless: a tool that
- * was called cannot be unnamed, and a retired name that is being called is a
- * finding whatever else is true of it.
+ * The verdict for one tool, or null when it has nothing to answer for. The ladder
+ * is ordered by what would make the others meaningless: a tool that was called
+ * cannot be unnamed, and a retired name being called is a finding regardless.
  */
 function quietTool(usage: McpToolUsage, calls: McpCall[]): McpQuietTool | null {
   const verdict = verdictFor(usage);
@@ -481,8 +422,7 @@ function quietTool(usage: McpToolUsage, calls: McpCall[]): McpQuietTool | null {
 }
 
 function verdictFor(usage: McpToolUsage): McpQuietVerdict | null {
-  // A retired name being called at all is the finding, whether or not the
-  // refusals are its only outcome — they always are, since that is all it does.
+  // A retired name being called at all is the finding.
   if (usage.naming === 'retired') return usage.calls > 0 ? 'retired' : null;
   if (usage.calls > 0) return usage.refused === usage.calls ? 'always-refused' : null;
   if (usage.channel === 'desktop') return 'desktop-unused';
@@ -490,12 +430,9 @@ function verdictFor(usage: McpToolUsage): McpQuietVerdict | null {
 }
 
 /**
- * `toolsCalled` counts the **advertised** names called, because it is drawn over
- * `toolsAdvertised` as a fraction. Calls carry whatever name the model reached
- * for — a retired one, or one that never existed — and counting those here put
- * the numerator above its denominator on the deployment the reading is for.
- * Retired names are counted once, on the totals; an unknown name is a naming
- * class of its own.
+ * `toolsCalled` counts the **advertised** names only, because it is drawn over
+ * `toolsAdvertised` as a fraction — a retired or never-existing name the model
+ * reached for would put the numerator above its denominator.
  */
 function channelUsage(channel: McpChannel, channelCalls: McpCall[], advertised: readonly string[]): McpChannelUsage {
   const live = new Set(advertised);
@@ -525,10 +462,9 @@ function silentRun(agent: Agent, task: TaskSummary | undefined): McpSilentRun {
 }
 
 /**
- * Two call counts, not one, and the split is the same asymmetry the headline
- * draws: `callsByAgent` is the window's — it feeds `perRun`, which is genuinely
- * a window reading — and `callsEverByAgent` is the run's whole life, which is
- * what a silence has to be asked of.
+ * Two call counts: `callsByAgent` is the window's, feeding `perRun`, and
+ * `callsEverByAgent` is the run's whole life, which is what a silence must be
+ * asked of.
  */
 function byPhase(
   settled: readonly Agent[],
@@ -544,9 +480,8 @@ function byPhase(
     runs.set(phase, (runs.get(phase) ?? 0) + 1);
     if ((callsEverByAgent.get(agent.id) ?? 0) === 0) silent.set(phase, (silent.get(phase) ?? 0) + 1);
   }
-  // Off the call's **own** origin rather than its agent's task as it stands now:
-  // the ref was copied onto the row at call time for exactly this, so a task
-  // retargeted since does not silently re-file every call it ever made.
+  // Off the call's **own** origin, copied at call time, so a task retargeted since
+  // does not silently re-file every call it ever made.
   const callsIn = new Map<SpendPhase, number>();
   for (const call of fleetCalls) {
     const phase = phaseOf(call.originRef);
@@ -568,10 +503,8 @@ function byPhase(
 
 function namingTotals(tools: readonly McpToolUsage[], fleetCalls: readonly McpCall[]): McpNamingTotal[] {
   const classes: readonly McpNaming[] = ['addendum', 'point-of-use', 'retired', 'unknown'];
-  // A call to a name that is neither live nor retired belongs to no `tools` row,
-  // so without a class of its own its traffic is in the total and in none of the
-  // shares — the by-task-type table's remainder, unstated. Stated instead, since
-  // a prompt naming a tool that has never existed is itself the finding.
+  // A name neither live nor retired belongs to no `tools` row, so without a class
+  // of its own its traffic sits in the total and in none of the shares.
   const known = new Set(tools.filter((t) => t.channel === 'fleet').map((t) => t.tool));
   const unknown = fleetCalls.filter((c) => !known.has(c.tool));
   return (
@@ -600,9 +533,8 @@ function namingTotals(tools: readonly McpToolUsage[], fleetCalls: readonly McpCa
           toolsCalled: mine.filter((t) => t.calls > 0).length,
         };
       })
-      // A retired name nothing has called does not earn a row: it is the expected
-      // state, and drawing it would put a permanent zero beside two real readings.
-      // Same for a name nothing has ever reached for, which is every deployment.
+      // A retired or unknown name nothing has called is the expected state and
+      // would draw a permanent zero beside two real readings.
       .filter((row) => (row.naming !== 'retired' && row.naming !== 'unknown') || row.tools > 0)
   );
 }
