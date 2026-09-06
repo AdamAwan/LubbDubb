@@ -66,7 +66,6 @@ import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
 import { acceptanceCriteria, bySlug, partDepth, partOrigin, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
-import { appraisalSignalQuery } from '../intake/appraisal.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { localRunIsLive } from '../store/localRuns.js';
@@ -384,7 +383,6 @@ export function buildStateSections(
     else instructionsByOrigin.set(instruction.originRef, [instruction]);
   }
   const appraisals = store.listAppraisals();
-  const appraisalWindow = appraisalSignalQuery(appraisals);
   // Keyed the same way the conclusion and shortfall maps below are, so the
   // per-issue verdict beside them reads off one lookup.
   const appraisalsByOrigin = new Map(appraisals.map((a) => [a.originRef, a]));
@@ -412,7 +410,6 @@ export function buildStateSections(
     // reads it, so the chip reports an issue *awaiting* an appraisal rather than
     // calling it eligible for a pickup that has not happened yet.
     appraisals,
-    appraisalSignals: appraisalWindow ? store.listWorldEventsSince(appraisalWindow.since, appraisalWindow.refs) : [],
     // The third park: a goal an agent concluded `blocked` on, behind an obstacle
     // that still reaches agents. Read the same way `Harness.runCycle` reads it, so
     // the chip says what is holding the goal rather than calling it eligible.
@@ -1337,10 +1334,11 @@ function padReading(pad: ScratchPadSummary | undefined) {
  */
 function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue, placement: PlacementContext) {
   if (!appraisal) return null;
-  const { verdict, summary, by, decidedAt, proposedProfile } = appraisal;
+  const { verdict, summary, missing, by, decidedAt, proposedProfile } = appraisal;
   return {
     verdict,
     summary,
+    missing,
     by,
     decidedAt,
     commentRef: issueCommentRef(appraisal.originRef, appraisal.commentRef),

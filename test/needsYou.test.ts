@@ -384,6 +384,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
                 appraisal: {
                   verdict: 'workable' as const,
                   summary: 'Three subsystems and an auth guard between them.',
+                  missing: [],
                   by: 'appraiser' as const,
                   decidedAt: '2026-01-01T00:00:00.000Z',
                   commentRef: null,
@@ -449,6 +450,7 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
                 appraisal: {
                   verdict: over.verdict,
                   summary: 'The ticket names two systems and does not say which one is wrong.',
+                  missing: [],
                   by: 'appraiser' as const,
                   decidedAt: '2026-02-02T00:00:00.000Z',
                   commentRef: null,
@@ -513,6 +515,7 @@ test('each open placement question is its own row, and a settled one is gone', (
                 appraisal: {
                   verdict: 'workable' as const,
                   summary: 'Reconcile the statement totals.',
+                  missing: [],
                   by: 'appraiser' as const,
                   decidedAt: '2026-01-01T00:00:00.000Z',
                   commentRef: null,

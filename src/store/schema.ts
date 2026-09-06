@@ -356,6 +356,7 @@ CREATE TABLE IF NOT EXISTS issue_appraisals (
   origin_ref  TEXT PRIMARY KEY,     -- "issue:12"
   verdict     TEXT NOT NULL,        -- workable | unclear
   summary     TEXT NOT NULL,
+  missing     TEXT,                 -- JSON list: what the author has to add, one question per entry
   goal_ref    TEXT NOT NULL,        -- fingerprint of the title+body judged
   by          TEXT NOT NULL,        -- appraiser | operator
   proposed_profile    TEXT,         -- the model profile the appraiser proposed for this goal's work

@@ -62,6 +62,13 @@ export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
     proposed_area_path: 'TEXT',
     /** {@link parent_settled_at} for the area path, and null on old rows for its reason. */
     area_path_settled_at: 'TEXT',
+    /**
+     * The appraiser's checklist — see {@link IssueAppraisal.missing}. JSON, one
+     * string per entry. Null on rows from before it existed, read as an empty
+     * list: an old refusal keeps holding on its summary, and the comment for it
+     * simply has no checklist to draw.
+     */
+    missing: 'TEXT',
   },
 };
 
@@ -370,6 +377,8 @@ export class IssueVerdictStore {
     originRef: string;
     verdict: GoalAppraisalVerdict;
     summary: string;
+    /** The author's checklist — see {@link IssueAppraisal.missing}. Absent = nothing to list. */
+    missing?: string[];
     goalRef: string;
     by: AppraisalAuthor;
     agentId?: string | null;
@@ -403,6 +412,7 @@ export class IssueVerdictStore {
       originRef: input.originRef,
       verdict: input.verdict,
       summary: input.summary,
+      missing: input.missing ?? [],
       goalRef: input.goalRef,
       by: input.by,
       proposedProfile,
@@ -427,12 +437,12 @@ export class IssueVerdictStore {
       decidedAt: prev?.decidedAt ?? ts,
       updatedAt: ts,
     };
-    return this.recordVerdict(
+    this.recordVerdict(
       'appraisal',
-      `INSERT INTO issue_appraisals (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
-       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+      `INSERT INTO issue_appraisals (origin_ref, verdict, summary, missing, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
+       VALUES (@originRef, @verdict, @summary, @missing, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
-         verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
+         verdict=excluded.verdict, summary=excluded.summary, missing=excluded.missing, goal_ref=excluded.goal_ref,
          by=excluded.by, proposed_profile=excluded.proposed_profile,
          profile_answered_at=excluded.profile_answered_at,
          proposed_parent=excluded.proposed_parent, parent_settled_at=excluded.parent_settled_at,
@@ -440,8 +450,9 @@ export class IssueVerdictStore {
          area_path_settled_at=excluded.area_path_settled_at,
          agent_id=excluded.agent_id, task_id=excluded.task_id,
          comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
-      row,
+      { ...row, missing: JSON.stringify(row.missing) },
     );
+    return row;
   }
 
   getAppraisal(originRef: string): IssueAppraisal | null {
@@ -455,8 +466,8 @@ export class IssueVerdictStore {
    * Every standing appraisal. **Unbounded on purpose**, as {@link listDeliveries} is: an
    * `unclear` verdict that aged out of a window would let the harness dispatch
    * against a goal it has already found unworkable, and a `workable` one aging out
-   * would re-appraise every issue on a clock. One row per appraised issue, and the
-   * event read it feeds is bounded by time and item (`appraisalSignalQuery`).
+   * would re-appraise every issue on a clock. One row per appraised issue, and
+   * nothing is read beside it: the hold is ended by the ticket's own text.
    */
   listAppraisals(): IssueAppraisal[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM issue_appraisals`).all() as IssueAppraisalRow[];
@@ -573,6 +584,8 @@ interface IssueAppraisalRow {
   origin_ref: string;
   verdict: string;
   summary: string;
+  /** JSON array of strings. Nullable *and* possibly absent: added by `ensureColumns` on older databases. */
+  missing: string | null;
   goal_ref: string;
   by: string;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
@@ -630,11 +643,23 @@ function rowToShortfall(r: IssueShortfallRow): IssueShortfall {
     updatedAt: r.updated_at,
   };
 }
+/** An absent or unparseable column is an empty list: the hold stands on the verdict, the checklist is a courtesy. */
+function parseMissing(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function rowToAppraisal(r: IssueAppraisalRow): IssueAppraisal {
   return {
     originRef: r.origin_ref,
     verdict: r.verdict as GoalAppraisalVerdict,
     summary: r.summary,
+    missing: parseMissing(r.missing),
     goalRef: r.goal_ref,
     by: r.by as AppraisalAuthor,
     // `?? null` rather than trusted: a row written before the columns existed

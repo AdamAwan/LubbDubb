@@ -511,8 +511,16 @@ repaints on the verdict rather than on the next pulse.
 
 ### `appraise_issue`
 
-Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary, missing?, profile?, parent?, area_path?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
+
+- **`missing` is required with `unclear` and dropped with `workable`** — one string per gap, each
+  the question the author has to answer, at most eight and each at most 300 characters; blanks are
+  dropped and an empty list is refused. It is what the ticket comment renders as the author's
+  checklist ([06](06-issue-pickup.md#what-the-appraiser-judges-against)); a refusal without it is a
+  refusal with no next step, which is the shape the tool exists to make impossible. The tool's
+  description carries the story rubric (`STORY_RUBRIC`) so the appraiser judges the same six things
+  the prompt names, whatever template a deployment overrides the prompt with.
 
 - **`appraiserOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
   each by name and pointed at the tool that is theirs. An agent already at work has answered the
@@ -521,7 +529,8 @@ identity structural as everywhere else — no issue argument, the origin resolve
 - **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the appraisal is
   not asked again for the same text — the planner's reason for persisting a plan whatever its size.
 - **`unclear` is a question, not a rejection**, and the tool description and response both say so:
-  nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
+  nothing is closed, and the hold ends by itself when the ticket is rewritten — and on nothing else,
+  so the response does not promise that a reply will do.
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
   its task, so an edit made mid-run is not silently swallowed.
 - **`profile` is the appraiser sizing the work** (issue #342), and the tool builds its `enum` and its
@@ -865,7 +874,9 @@ hand.
 `goal_read` takes a goal number and answers with the record. It is the widest read on either channel
 and that is what being a read buys: it settles nothing, schedules nothing and claims nothing, so the
 argument that fences every other tool on this socket — which check is this report about — has nothing
-to fence.
+to fence. It carries the goal's standing `appraisal` verbatim — verdict, summary, `missing`, who cast
+it — because the skill's `clarify` job ([20](20-validation.md#the-skill)) is that list worked through
+with the author, and it has to read the list from somewhere.
 
 **The history is the dossier the retrospective agent gets, through the same read and the same
 rendering.** `goalRecord` (`src/retro/record.ts`) is the one assembly of "what happened on this goal"

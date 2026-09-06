@@ -256,13 +256,6 @@ export interface DispatchContext {
    */
   retrospectiveOrigins?: string[];
   /**
-   * World transitions on the issues carrying a standing `unclear` verdict, since
-   * the oldest of them. One of the two things that ends such a hold (the other is
-   * the ticket's own text changing, which needs no read). Narrowed by
-   * `appraisalSignalQuery`, so it is empty until an issue is actually refused.
-   */
-  appraisalSignals?: WorldEvent[];
-  /**
    * Where every Feature's work stands right now, as `featureStandingKey` digests
    * it — number, title and key, and **never a word of what anybody wrote**. Rule
    * `feature-summary` compares the key to {@link featureSummaryKeys} and that is

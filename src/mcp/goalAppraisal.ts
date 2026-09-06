@@ -26,8 +26,38 @@ export const GOAL_APPRAISAL_VERDICT_HELP: Record<GoalAppraisalVerdictName, strin
   unclear:
     'the goal cannot be acted on as written — it is ambiguous about what "done" means, it contradicts ' +
     'itself or something already true of the repository, or it names things that do not exist. Nothing ' +
-    'is dispatched for it until the ticket changes or a human overrides you',
+    'is dispatched for it until the ticket itself is rewritten or a human overrides you',
 };
+
+/**
+ * What a story has to carry before an agent can start on it. The rubric the
+ * appraiser judges against, stated once so the prompt, the tool and the ticket
+ * comment all name the same things.
+ *
+ * Judged on **substance, never on headings**: the target repository is any
+ * project on any tracker, so no template can be assumed and a keyword search would
+ * pass a ticket that has the section and fail one that answers the question in
+ * prose. The first three are always required. The rest are required exactly when
+ * the ticket implies them — a change with no UI owes no mockup — and it is the
+ * appraiser, with the repository open, that decides whether it does.
+ */
+export const STORY_RUBRIC = {
+  always: [
+    'the problem — who has it and why it matters',
+    'what success looks like — observable, so someone could tell "done" from "not done"',
+    'the words it uses defined where they could mean two things',
+  ],
+  whenImplied: [
+    'a UI change: an attached design or mockup, or an exact description of layout, states and behaviour',
+    'data going in or out: an example of the shape — a real-looking sample, not just a type name',
+    'links to the specs or documentation it relates to',
+  ],
+  neverRequired: ['implementation hints, where the author already has an idea', 'what is out of scope'],
+} as const;
+
+/** Enough for one question per rubric item and a couple more; a longer list is a summary, not a checklist. */
+const MAX_MISSING = 8;
+const MAX_MISSING_ITEM = 300;
 
 /** Long enough to be prose, short of a pasted transcript. Matches the assessment cap. */
 const MAX_APPRAISAL_SUMMARY = 2000;
@@ -55,6 +85,8 @@ export function validateGoalAppraisal(
       ok: true;
       verdict: GoalAppraisalVerdictName;
       summary: string;
+      /** The questions the author has to answer, one per entry. Empty on `workable`. */
+      missing: string[];
       profile: string | null;
       parent: number | null;
       areaPath: string | null;
@@ -86,6 +118,8 @@ export function validateGoalAppraisal(
       error: `summary is too long (${summary.length} chars, max ${MAX_APPRAISAL_SUMMARY}). Summarise it.`,
     };
   }
+  const missing = checkMissing(args.missing, verdict as GoalAppraisalVerdictName);
+  if (!missing.ok) return missing;
   const named = verdict === 'workable' ? checkProfile(args.profile, profiles) : { ok: true as const, profile: null };
   if (!named.ok) return named;
   // Both placements are dropped on an `unclear` verdict for the profile's reason:
@@ -100,6 +134,7 @@ export function validateGoalAppraisal(
     ok: true,
     verdict: verdict as GoalAppraisalVerdictName,
     summary,
+    missing: missing.missing,
     profile: named.profile,
     parent: parent.parent,
     areaPath: area.areaPath,
@@ -136,6 +171,53 @@ function checkParent(value: unknown): { ok: true; parent: number | null } | { ok
       error: `parent must be the number of an existing work item — "${String(value)}" is not one. Omit it if none of the containers you were shown fit.`,
     };
   return { ok: true, parent: n };
+}
+
+/**
+ * The questions an `unclear` verdict is asking, or why the list is not one.
+ *
+ * **Required on `unclear`** — and that is the difference between a gate that
+ * blocks and one that strands: the summary says why the appraiser could not start,
+ * this says what the author does about it, one entry each, and the ticket comment
+ * renders it as the checklist they work through. A refusal with no list is a
+ * refusal with no next step, which is exactly the report that got this built.
+ *
+ * Dropped rather than refused on `workable`, for the profile's reason on
+ * `unclear`: a goal an agent can start on has nothing missing that matters, and a
+ * list beside it would be advice the prompt already tells the appraiser not to give.
+ */
+function checkMissing(
+  value: unknown,
+  verdict: GoalAppraisalVerdictName,
+): { ok: true; missing: string[] } | { ok: false; error: string } {
+  if (verdict === 'workable') return { ok: true, missing: [] };
+  const items = Array.isArray(value)
+    ? value
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0)
+    : [];
+  if (items.length === 0)
+    return {
+      ok: false,
+      error:
+        'missing is required with "unclear": one entry per thing the ticket has to say before an agent could ' +
+        'start — the problem, what "done" looks like, a defined term, a mockup, a sample of the data, a link — ' +
+        'each phrased as the specific question the author has to answer. It is rendered on the ticket as ' +
+        'the list they work through, so an entry that only says "unclear" leaves them exactly where they were.',
+    };
+  if (items.length > MAX_MISSING)
+    return {
+      ok: false,
+      error: `missing has ${items.length} entries (max ${MAX_MISSING}). Keep the ones the author must answer before anything could start.`,
+    };
+  const long = items.find((v) => v.length > MAX_MISSING_ITEM);
+  if (long !== undefined)
+    return {
+      ok: false,
+      error: `each entry in missing is one question (max ${MAX_MISSING_ITEM} chars) — "${long.slice(0, 40)}…" is too long.`,
+    };
+  return { ok: true, missing: items };
 }
 
 /**

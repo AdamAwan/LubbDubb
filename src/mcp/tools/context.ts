@@ -99,9 +99,10 @@ export interface AgentToolTarget {
      * One object rather than two more positional arguments: they are one
      * statement about placement, they arrive together, and a fifth and sixth
      * `string | null` beside `profile` is a call site where two nulls can be
-     * transposed with nothing red.
+     * transposed with nothing red. `missing` rides in the same object for the
+     * same reason: it is what an `unclear` verdict says beside its summary.
      */
-    placement?: { parent: number | null; areaPath: string | null },
+    placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
   ):
     | {
         ok: true;

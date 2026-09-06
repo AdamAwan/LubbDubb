@@ -1,7 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Issue, IssueAppraisal, WorldEvent, WorldSnapshot } from '../types.js';
+import type { Issue, IssueAppraisal, WorldSnapshot } from '../types.js';
 import { appraisalHold } from './appraisal.js';
 
 interface AppraisalDeskDeps {
@@ -65,7 +65,7 @@ export class AppraisalDesk {
    * fall out of re-deriving the state each pulse; neither would from a queue of
    * events to replay.
    */
-  async announce(world: WorldSnapshot, signals: WorldEvent[]): Promise<void> {
+  async announce(world: WorldSnapshot): Promise<void> {
     const appraisals = new Map(this.deps.store.listAppraisals().map((a) => [a.originRef, a]));
     if (appraisals.size === 0) return;
     for (const issue of world.issues) {
@@ -74,7 +74,7 @@ export class AppraisalDesk {
       // An expired verdict is still written — to say it expired. Leaving the
       // question standing on the thread after the harness stopped asking it is what
       // makes people stop believing a bot's comments.
-      const held = appraisalHold(appraisal, issue, { signals }) !== null;
+      const held = appraisalHold(appraisal, issue) !== null;
       if (!held && appraisal.commentRef === null) continue; // never asked; nothing to retract
       const body = renderAppraisalComment(appraisal, held);
       if (appraisal.commentRef !== null && body === this.lastBody.get(appraisal.originRef)) continue;
@@ -115,14 +115,27 @@ export class AppraisalDesk {
 export function renderAppraisalComment(appraisal: IssueAppraisal, held: boolean): string {
   if (!held) {
     return (
-      `${MARKER}\n\n**No longer waiting on this.** Something has changed here since the question below ` +
-      `was asked, so LubbDubb will look at this item again.\n\n> ${quote(appraisal.summary)}`
+      `${MARKER}\n\n**No longer waiting on this.** The description has changed since the questions below ` +
+      `were asked, so LubbDubb will look at this item again.\n\n> ${quote(appraisal.summary)}`
     );
   }
+  const number = appraisal.originRef.replace(/^issue:/, '');
+  // The checklist is the whole point of the comment: a refusal that says only why
+  // it refused leaves the author with the tickets tab and a guess. An old row with
+  // no list still says what the appraiser said, and no more.
+  const list =
+    appraisal.missing.length > 0
+      ? `\n\nBefore an agent can start, this ticket needs to say:\n\n${appraisal.missing.map((q) => `- [ ] ${q}`).join('\n')}`
+      : '';
   return (
     `${MARKER}\n\n**Nothing is scheduled for this yet — I could not work out what to do from the ` +
-    `description.**\n\n> ${quote(appraisal.summary)}\n\nEditing this item, or replying here, is enough: ` +
-    `either makes LubbDubb look again on its next pass. Nothing has been rejected and nothing is closed.`
+    `description.**\n\n> ${quote(appraisal.summary)}${list}\n\n` +
+    `**What to do:** edit this item so the description answers the points above. That alone is enough — ` +
+    `LubbDubb re-reads it on its next pass, with no button to press. Replies here are not read by the ` +
+    `agents, so an answer left in a comment does not restart it.\n\n` +
+    `Want a hand? Open the project in Claude Code and run \`/lubbdubb clarify ${number}\`: it reads what ` +
+    `the check found, talks it through with you, and drafts the rewrite.\n\n` +
+    `Nothing has been rejected and nothing is closed.`
   );
 }
 

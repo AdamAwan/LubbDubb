@@ -1227,6 +1227,7 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
     issue.appraisal = {
       verdict: 'workable',
       summary: 'Three subsystems and an auth guard between them.',
+      missing: [],
       by: 'appraiser',
       decidedAt: new Date(Date.now() - 3600_000).toISOString(),
       commentRef: null,
