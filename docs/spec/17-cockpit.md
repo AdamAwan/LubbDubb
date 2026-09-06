@@ -5506,7 +5506,9 @@ One state object, one socket.
   for the agent whose drawer is open, because output is delivered to subscribers only.
 - `agent:tail` lines land in a separate map.
 - The WS client is held in a ref so subscribe/unsubscribe survives effect churn, and it reconnects on
-  its own.
+  its own. It opens `ws(s)://<host>/ws` and **auto-reconnects with exponential backoff** on an
+  unexpected close or error, **re-asserting its subscriptions** on the new socket — so a drawer left
+  open across a dropped connection keeps receiving output rather than going quietly dead.
 
 The drawer subscribes to full output on open and unsubscribes on close or switch.
 
@@ -6640,6 +6642,11 @@ real vocabulary. The theme is load-bearing rather than decorative: an operator m
 the first time is trying to follow one story across nine panels, and a fixture set drawn from three
 unrelated products reads to them as a console that is showing them noise. A new fixture joins that story
 or it does not go in.
+
+**A demo interaction commits.** Where the real cockpit writes, the fake writes to its own world and
+the card stays where it was dropped — `setIssueState` moves the work item for real. A drop that
+animates and springs back teaches a visitor that the feature does not work, which is worse than not
+demonstrating it at all.
 
 **Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers thirteen ways
 ([06](06-issue-pickup.md)), and each answer is somebody's whole explanation of why nothing is happening

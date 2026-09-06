@@ -46,7 +46,8 @@ export function saveNotifyPrefs(prefs: NotifyPrefs): void {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch {
-    // Refused storage costs the preference its durability, not the session its notifications.
+    // TECHDEBT: a browser refusing storage (private mode, quota) costs the preference its
+    // durability, not the session its notifications.
   }
 }
 
@@ -228,7 +229,8 @@ export function fireNotifications(items: readonly NotifyItem[], prefs: NotifyPre
     try {
       new Notification(item.title, { body: item.body, tag: item.tag });
     } catch {
-      // Some engines throw on construction; a failed notification must never take the render down.
+      // TECHDEBT: some engines throw on Notification construction; a failed notification must
+      // never take the render down.
     }
   }
 }

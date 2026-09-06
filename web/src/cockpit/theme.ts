@@ -123,7 +123,7 @@ export function saveThemePrefs(prefs: ThemePrefs): void {
   try {
     localStorage.setItem(THEME_KEY, JSON.stringify(prefs));
   } catch {
-    // A browser refusing storage (private mode, quota) costs the theme its
+    // TECHDEBT: a browser refusing storage (private mode, quota) costs the theme its
     // durability, not the session its colours.
   }
 }

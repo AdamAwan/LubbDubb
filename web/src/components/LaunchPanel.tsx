@@ -121,6 +121,8 @@ export function LaunchPanel({
             e.preventDefault();
             void submit.run(launch);
           }}
+          // TECHDEBT: `preventDefault` on dragover is what makes the drop fire at all;
+          // without it the browser navigates away to the image, losing the half-written prompt.
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
