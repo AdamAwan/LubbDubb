@@ -23,6 +23,7 @@ import type { GoalPageView } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
+import type { FeaturePrFilter, FeatureSort } from '../cockpit/place.js';
 
 /**
  * Everything the console draws, derived once per render and handed over as plain data.
@@ -149,6 +150,14 @@ export interface CockpitView {
   ticketOrder: TicketOrder;
   ticketView: 'table' | 'card';
   ticketColumns: string[];
+  /**
+   * Where the Features tab is — the open card, the ordering, the open card's PR
+   * filter — carried through for the ticket fields' reason: the board is a component
+   * that is *told* where it is.
+   */
+  featureCard: number | null;
+  featureSort: FeatureSort;
+  featurePrs: FeaturePrFilter;
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
   /** Streamed output for the open drawer only; undefined for everyone else. */
@@ -373,6 +382,9 @@ interface ViewInputs {
   ticketOrder?: TicketOrder;
   ticketView?: 'table' | 'card';
   ticketColumns?: string[];
+  featureCard?: number | null;
+  featureSort?: FeatureSort;
+  featurePrs?: FeaturePrFilter;
   /** Optional for `collapsed`'s reason: the default is what a bare URL means. */
 }
 
@@ -470,6 +482,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketOrder: input.ticketOrder ?? 'added',
     ticketView: input.ticketView ?? 'table',
     ticketColumns: input.ticketColumns ?? [],
+    featureCard: input.featureCard ?? null,
+    featureSort: input.featureSort ?? 'wants-you',
+    featurePrs: input.featurePrs ?? 'open',
 
     // The snapshot first, then the open goal's fetched history: a row on that
     // page can be older than the fleet's tail, and a drawer that would not open

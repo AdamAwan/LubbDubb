@@ -1988,6 +1988,32 @@ export interface FeatureRollup {
    * about it.
    */
   lastLandingAt: string | null;
+  /**
+   * The landings under this Feature's goals, newest first and bounded
+   * (`FEATURE_LANDINGS`) — each a **stamp** quoted from `goal_landings`, never a
+   * rate. The cockpit counts them inside a window it names on the label ("3 landed
+   * in the last 7 days"); the lens ships the facts and says nothing about how many
+   * is enough. `goal` is carried so a goal promoted to a card of its own can read
+   * its landings out of the bucket it came with.
+   */
+  landings: FeatureLandingRow[];
+  /**
+   * The digest of where every child stands **now** — `featureStandingKey`'s
+   * answer, the same one rule `feature-summary` compares against
+   * `summary.standingKey` to decide whether to write again. Shipped so the card can
+   * say *moved since this was written* by an equality test, and nothing more: what
+   * moved, and how much, is not in a digest.
+   */
+  standingKey: string;
+}
+
+/** One landing under a Feature, as the board quotes it. */
+export interface FeatureLandingRow {
+  /** The goal it was work for. */
+  goal: number;
+  prNumber: number;
+  /** When the landing was recorded — the stamp the movement line is counted from. */
+  at: string;
 }
 
 /**
@@ -2015,7 +2041,7 @@ export interface FeatureBoardPayload {
    */
   orphans: Omit<
     FeatureRollup,
-    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary' | 'sequence'
+    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary' | 'sequence' | 'standingKey'
   > | null;
   /**
    * Items whose parent link was **never resolved** — no hierarchy, or a read that

@@ -18,6 +18,7 @@ import type {
   FeatureChildRow,
   FeatureChildStanding,
   FeatureCounts,
+  FeatureLandingRow,
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
@@ -32,6 +33,13 @@ export const FEATURE_CHILDREN = 25;
  * the count beside it says how many were cut, and the children below carry the rest.
  */
 export const FEATURE_BRIEFING_ROWS = 3;
+
+/**
+ * How many landings a card ships. The cockpit counts them inside a window it names,
+ * so the bound only has to outrun that window on a busy Feature; the total lives on
+ * `lastLandingAt` and the goals' own pages.
+ */
+export const FEATURE_LANDINGS = 25;
 
 interface BuildInput {
   items: readonly MirroredTicket[];
@@ -64,6 +72,20 @@ interface BuildInput {
    * cockpit's to derive from the edges.
    */
   sequences: ReadonlyMap<string, FeatureSequence>;
+  /**
+   * `featureStandingKey`'s digest per Feature number — `featureRecords`' answer,
+   * quoted, and the same value rule `feature-summary` compares against
+   * `summary.standingKey`. A second digest built here would drift from the one the
+   * rule reads and the card would say "moved" about a Feature the fleet is not
+   * going to re-summarise.
+   *
+   * A Feature absent from the map ships `''`, which means **not digested**, not
+   * "nothing has moved": an empty key never equals a real one, so a cockpit that
+   * compared it to `summary.standingKey` would draw a "moved" marker on every card
+   * of a deployment that never produced a digest. The cockpit must treat `''` as
+   * no reading and draw no marker for it.
+   */
+  standingKeys: ReadonlyMap<number, string>;
   /** The standing delivery verdicts — quoted for the briefing, never re-derived. */
   deliveries: readonly IssueDelivery[];
   /** The standing shortfall verdicts, likewise. */
@@ -108,6 +130,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
 
   const reachByGoal = new Map(input.reach.map((r) => [r.goalRef, r.environments]));
   const landedAt = lastLandingByGoal(input.landings);
+  const landingsByGoal = landingRowsByGoal(input.landings);
   const brief: BriefingContext = {
     running,
     deliveries: byIssueNumber(input.deliveries),
@@ -164,6 +187,8 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       costUsd: totalCost(group.rows),
       reach: foldReach(group.rows, reachByGoal, input.environments),
       lastLandingAt: latestLanding(group.rows, landedAt),
+      landings: landingsUnder(group.rows, landingsByGoal),
+      standingKey: input.standingKeys.get(number) ?? '',
     });
   }
 
@@ -178,6 +203,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
             children: orderChildren(orphanRows).slice(0, FEATURE_CHILDREN),
             costUsd: totalCost(orphanRows),
             lastLandingAt: latestLanding(orphanRows, landedAt),
+            landings: landingsUnder(orphanRows, landingsByGoal),
           },
     unresolved,
     environments: [...input.environments],
@@ -420,6 +446,33 @@ function lastLandingByGoal(landings: readonly GoalLanding[]): Map<string, string
   for (const landing of landings) {
     const seen = out.get(landing.goalRef);
     if (seen === undefined || landing.recordedAt > seen) out.set(landing.goalRef, landing.recordedAt);
+  }
+  return out;
+}
+
+/**
+ * Every landing under these goals, newest first and cut at {@link FEATURE_LANDINGS}.
+ * Each row is the `goal_landings` stamp quoted — no rate, no window; the cockpit
+ * names the window it counts inside.
+ */
+function landingsUnder(
+  rows: readonly FeatureChildRow[],
+  landingsByGoal: ReadonlyMap<number, FeatureLandingRow[]>,
+): FeatureLandingRow[] {
+  const out: FeatureLandingRow[] = [];
+  for (const row of rows) out.push(...(landingsByGoal.get(row.number) ?? []));
+  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, FEATURE_LANDINGS);
+}
+
+function landingRowsByGoal(landings: readonly GoalLanding[]): Map<number, FeatureLandingRow[]> {
+  const out = new Map<number, FeatureLandingRow[]>();
+  for (const landing of landings) {
+    const goal = issueNumberOf(landing.goalRef);
+    if (goal === null) continue;
+    const row: FeatureLandingRow = { goal, prNumber: landing.prNumber, at: landing.recordedAt };
+    const seen = out.get(goal);
+    if (seen) seen.push(row);
+    else out.set(goal, [row]);
   }
   return out;
 }

@@ -203,6 +203,7 @@ export type {
   FeatureChildRow,
   FeatureChildStanding,
   FeatureCounts,
+  FeatureLandingRow,
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,

@@ -35,6 +35,11 @@ const PATHS = {
    * are different claims and cannot share a mark.
    */
   play: ['M4.6 2.8 12.6 8l-8 5.2V2.8Z'],
+  /**
+   * An agent alive and stopped — parked on a question, or on the account's limit.
+   * Beside `play` so the two states of one chip read as one glyph family.
+   */
+  pause: ['M4.2 2.8h2.6v10.4H4.2Z', 'M9.2 2.8h2.6v10.4H9.2Z'],
   /** Settled by a verdict. */
   check: ['M2.8 8.4 6.2 11.8 13.2 4.6'],
   /** Terminal: ending the run. */

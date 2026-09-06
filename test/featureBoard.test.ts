@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFeatureBoard, FEATURE_BRIEFING_ROWS, FEATURE_CHILDREN } from '../src/features/featureBoard.js';
+import {
+  buildFeatureBoard,
+  FEATURE_BRIEFING_ROWS,
+  FEATURE_CHILDREN,
+  FEATURE_LANDINGS,
+} from '../src/features/featureBoard.js';
 import { featureBoardOn } from '../src/features/featureBoard.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
 import type { Escalation, GoalEnvironmentReach, GoalLanding, IssueDelivery, IssueShortfall } from '../src/types.js';
@@ -44,6 +49,7 @@ function build(over: Partial<Parameters<typeof buildFeatureBoard>[0]> = {}) {
     containerTypes: ['Feature', 'Epic'],
     watchLabel: WATCH,
     summaries: new Map(),
+    standingKeys: new Map(),
     ...over,
   });
 }
@@ -242,6 +248,59 @@ test('the last landing is the newest under any of the Feature’s goals', () => 
 
   assert.equal(board.features[0]?.lastLandingAt, '2026-03-01T00:00:00.000Z');
   assert.equal(build({ items: [item({ number: 1 })] }).features[0]?.lastLandingAt, null);
+});
+
+test('the landings are quoted newest first, each carrying its goal, and cut at FEATURE_LANDINGS', () => {
+  const landings: GoalLanding[] = [
+    { prNumber: 10, goalRef: 'issue:1', sha: 'a', recordedAt: '2026-02-01T00:00:00.000Z' },
+    { prNumber: 30, goalRef: 'issue:2', sha: 'c', recordedAt: '2026-04-01T00:00:00.000Z' },
+    { prNumber: 20, goalRef: 'issue:1', sha: 'b', recordedAt: '2026-03-01T00:00:00.000Z' },
+    // Under a goal this Feature does not hold: never attributed to it.
+    { prNumber: 99, goalRef: 'issue:99', sha: 'z', recordedAt: '2026-05-01T00:00:00.000Z' },
+  ];
+  const board = build({ items: [item({ number: 1 }), item({ number: 2 })], landings });
+
+  assert.deepEqual(board.features[0]?.landings, [
+    { goal: 2, prNumber: 30, at: '2026-04-01T00:00:00.000Z' },
+    { goal: 1, prNumber: 20, at: '2026-03-01T00:00:00.000Z' },
+    { goal: 1, prNumber: 10, at: '2026-02-01T00:00:00.000Z' },
+  ]);
+
+  // Bounded: a busy Feature ships the newest slice, and the cut is the oldest.
+  const many: GoalLanding[] = Array.from({ length: FEATURE_LANDINGS + 5 }, (_, i) => ({
+    prNumber: i + 1,
+    goalRef: 'issue:1',
+    sha: `s${i}`,
+    recordedAt: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+  }));
+  const busy = build({ items: [item({ number: 1 })], landings: many });
+  assert.equal(busy.features[0]?.landings.length, FEATURE_LANDINGS);
+  assert.equal(busy.features[0]?.landings[0]?.prNumber, FEATURE_LANDINGS + 5);
+  assert.equal(busy.features[0]?.landings.at(-1)?.prNumber, 6);
+});
+
+test('the orphan bucket carries its own landings', () => {
+  const landings: GoalLanding[] = [
+    { prNumber: 1, goalRef: 'issue:1', sha: 'a', recordedAt: '2026-02-01T00:00:00.000Z' },
+    { prNumber: 2, goalRef: 'issue:7', sha: 'b', recordedAt: '2026-03-01T00:00:00.000Z' },
+  ];
+  const board = build({ items: [item({ number: 1 }), item({ number: 7, parent: null })], landings });
+
+  assert.deepEqual(board.orphans?.landings, [{ goal: 7, prNumber: 2, at: '2026-03-01T00:00:00.000Z' }]);
+  assert.deepEqual(board.features[0]?.landings, [{ goal: 1, prNumber: 1, at: '2026-02-01T00:00:00.000Z' }]);
+});
+
+test('the standing key is quoted from the digest handed in, and empty where none was', () => {
+  const board = build({
+    items: [item({ number: 1 }), item({ number: 2, parent: { number: 901, title: 'Bare' } })],
+    standingKeys: new Map([[900, 'abc123']]),
+  });
+
+  const keyed = board.features.find((f) => f.number === 900);
+  const bare = board.features.find((f) => f.number === 901);
+  assert.equal(keyed?.standingKey, 'abc123');
+  // Not digested, not "unchanged": the cockpit draws no "moved" marker off ''.
+  assert.equal(bare?.standingKey, '');
 });
 
 test('features wanting a person sort first, and the ordering is not a verdict', () => {

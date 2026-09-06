@@ -1197,10 +1197,14 @@ drift into a tab whose every fetch 404s.
 
 Returns `{ features, orphans, unresolved, environments, backfilling, refUrls }`. Each feature carries
 its identity and hue slot, a six-way `counts` of its children, a `briefing`, a bounded slice of the
-child rows, its rolled-up `costUsd`, its per-environment `reach` and `lastLandingAt`. The briefing is
+child rows, its rolled-up `costUsd`, its per-environment `reach`, `lastLandingAt`, its bounded
+`landings` (stamps, newest first) and its current `standingKey` — the same digest rule
+`feature-summary` compares, so the cockpit can say a summary was written against a standing that has
+since moved ([17](17-cockpit.md#the-stamp-says-three-facts-and-never-what-moved)). The briefing is
 three bounded lists — what is being worked, what a delivery verdict stands on, and what is blocked,
 each carrying the sentence its author wrote, and each with the total it stood for
-([17](17-cockpit.md#the-briefing)). It reads escalations as well as the verdicts the rest of the
+([17](17-cockpit.md#two-questions-one-card)); the cockpit now draws the delivered list and reads the
+other two off the snapshot, which knows more. It reads escalations as well as the verdicts the rest of the
 payload folds, and quotes all of them: the route prepares nothing and filters nothing, so the lens
 holds the one definition of which escalations block. `orphans` is the same fold over
 the items the tracker says hang off nothing, and is `null` where there are none; `unresolved` counts

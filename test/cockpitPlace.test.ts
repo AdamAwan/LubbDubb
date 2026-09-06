@@ -58,6 +58,11 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights', insightsView: 'causes', insightsWindow: '24h' }),
     at({ tab: 'insights', insightsWindow: 'all' }),
     at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
+    at({ tab: 'features' }),
+    at({ tab: 'features', featureCard: 812 }),
+    at({ tab: 'features', featureCard: 812, featureSort: 'spend', featurePrs: 'all' }),
+    at({ tab: 'features', featureSort: 'moved' }),
+    at({ tab: 'features', featurePrs: 'done' }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
 });
@@ -294,6 +299,41 @@ test('every ticket filter on the place is forwarded into the view model', () => 
   for (const field of fields) {
     assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);
   }
+});
+
+// The Features tab's three fields have the same second leg, and the same silent
+// failure: a `feature*` field the hook never forwards leaves the board drawing its
+// default whatever the address bar says.
+test('every feature field on the place is forwarded into the view model', () => {
+  const place = readFileSync('web/src/cockpit/place.ts', 'utf8');
+  // Once each: the pattern matches the interface and the `NOWHERE` literal alike.
+  const fields = [...new Set([...place.matchAll(/^ {2}(feature[A-Za-z]+):/gm)].map((m) => m[1]!))];
+  assert.deepEqual(fields, ['featureCard', 'featureSort', 'featurePrs']);
+  const hook = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
+  for (const field of fields) {
+    assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);
+  }
+});
+
+// The board as it opens is a bare `?tab=features`, so the defaults write nothing
+// and a hand-typed value that names no card, ordering or filter reads as them.
+test('the Features tab defaults are the absent values, and junk reads as them', () => {
+  assert.equal(placeQuery(at({ tab: 'features' })), '?tab=features');
+  assert.equal(placeQuery(at({ featureSort: 'wants-you', featurePrs: 'open', featureCard: null })), '');
+  const junk = readPlace('?tab=features&card=abc&sort=alphabetical&prs=merged');
+  assert.equal(junk.featureCard, null);
+  assert.equal(junk.featureSort, 'wants-you');
+  assert.equal(junk.featurePrs, 'open');
+  assert.equal(readPlace('?tab=features&card=0').featureCard, null, 'a card is a positive integer');
+  assert.equal(readPlace('?tab=features&card=-3').featureCard, null);
+  assert.equal(readPlace('?tab=features&card=812').featureCard, 812);
+  // `card`, `sort` and `prs` are the board's own keys: the tickets tab's `feature`,
+  // `order` and `view` do not move the board, and the board's keys do not move the tab.
+  const tickets = readPlace('?tab=tickets&feature=812&order=cost&view=card');
+  assert.equal(tickets.featureCard, null);
+  assert.equal(tickets.featureSort, 'wants-you');
+  assert.equal(readPlace('?tab=features&card=812&sort=spend').ticketFeature, null);
+  assert.equal(readPlace('?tab=features&sort=spend').ticketOrder, 'added');
 });
 
 /** A facet as the route ships one — the count over the whole mirror, and how much of it is live. */

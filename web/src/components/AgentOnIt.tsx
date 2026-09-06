@@ -37,23 +37,36 @@ import { Icon } from './icons.js';
 export function AgentOnIt({
   agentId,
   note,
+  holding = false,
   actions,
 }: {
   agentId: string;
   note?: string | null;
+  /**
+   * The agent is alive and **stopped** — parked on a question nobody has answered,
+   * or on the account's usage limit. The same chip, amber and still, with a pause
+   * glyph: an operator counting agents down a column has to tell "working" from
+   * "waiting on me" without reading, and a second kind of mark for the second
+   * state would be a second legend. → docs/spec/17-cockpit.md#the-feature-board
+   */
+  holding?: boolean;
   actions: CockpitActions;
 }): JSX.Element {
-  const said = note ?? 'An agent is working this — open its transcript';
+  const said =
+    note ??
+    (holding
+      ? 'An agent is holding for an answer — open its transcript'
+      : 'An agent is working this — open its transcript');
   return (
     <button
       type="button"
-      className="cn-onit"
+      className={holding ? 'cn-onit cn-onit-hold' : 'cn-onit'}
       onClick={() => actions.select(agentId)}
       title={said}
-      aria-label={`Agent on it — ${said}`}
+      aria-label={`${holding ? 'Agent holding' : 'Agent on it'} — ${said}`}
     >
       <i className="cn-onit-dot">
-        <Icon name="play" size={11} />
+        <Icon name={holding ? 'pause' : 'play'} size={11} />
       </i>
     </button>
   );

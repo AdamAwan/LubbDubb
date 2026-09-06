@@ -3938,6 +3938,22 @@ button.cn-grow {
   border-color: var(--cn-green);
   color: var(--cn-green);
 }
+/* Alive and stopped: amber, the ask's own hue on the rail, and **no pulse** — the
+   pulse says "happening now", and a parked agent is the one thing that is not. */
+.cn-onit-hold,
+.cn-onit-hold .cn-onit-dot {
+  color: var(--cn-amber-ink);
+}
+.cn-onit-hold .cn-onit-dot {
+  border-color: color-mix(in srgb, var(--cn-amber) 40%, transparent);
+  background: color-mix(in srgb, var(--cn-amber) 14%, transparent);
+  animation: none;
+}
+.cn-onit-hold:hover .cn-onit-dot,
+.cn-onit-hold:focus-visible .cn-onit-dot {
+  border-color: var(--cn-amber);
+  color: var(--cn-amber);
+}
 @keyframes cn-onit-pulse {
   0%,
   100% {
