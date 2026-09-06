@@ -5,7 +5,6 @@ import type {
   IssueSpend,
   Plan,
   PlanDiff,
-  PlanEvidence,
   PlanHistory,
   PendingPlanAmendment,
   PlanPartView,
@@ -53,7 +52,6 @@ export function PlanModal({
   onDecide,
   onBackOut,
   onOpenGoal,
-  onAcceptance,
   onPartProfile,
   onRestartPart,
   canClosePr,
@@ -82,7 +80,6 @@ export function PlanModal({
   ) => Promise<unknown> | unknown;
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
   onOpenGoal: (issueRef: string) => void;
-  onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
   onRestartPart: (planId: string, slug: string) => Promise<unknown> | unknown;
   canClosePr: boolean;
@@ -91,7 +88,6 @@ export function PlanModal({
   desktopFolder: string;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
-  const [pins, setPins] = useState<Record<string, Pin>>({});
   const [focused, setFocused] = useState<string | null>(null);
   const history = usePlanHistory(plan.id, plan.updatedAt);
   const body = useRef<HTMLDivElement>(null);
@@ -219,7 +215,6 @@ export function PlanModal({
                 <div className="pm-vcell wrong">
                   <span className="pm-section-label">What&rsquo;s wrong</span>
                   <div className="pm-prose">{renderMarkdown(plan.diagnosis, refUrls)}</div>
-                  {plan.evidence.length > 0 && <Evidence evidence={plan.evidence} />}
                 </div>
               )}
               {headline && (
@@ -239,15 +234,6 @@ export function PlanModal({
                       {renderMarkdown(plan.verification, refUrls)}
                     </div>
                   )}
-                </div>
-              )}
-              {/* Evidence with no diagnosis to sit under still belongs on the
-                    sheet: it is what the planner read, and hiding it would lose the
-                    only checkable thing on a plan whose author skipped the field. */}
-              {!plan.diagnosis && plan.evidence.length > 0 && (
-                <div className="pm-vcell wrong">
-                  <span className="pm-section-label">What the planner read</span>
-                  <Evidence evidence={plan.evidence} />
                 </div>
               )}
             </section>
@@ -304,10 +290,6 @@ export function PlanModal({
                         seq={idx + 1}
                         queue={queued.get(originOf(part.slug))}
                         focused={part.slug === focused}
-                        pin={pins[part.slug]}
-                        pinnable={decidable !== null}
-                        onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
-                        onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
                         onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
                         onRestart={canClosePr ? () => onRestartPart(plan.id, part.slug) : undefined}
                         profiles={profiles}
@@ -430,7 +412,6 @@ export function PlanModal({
             issueNumber={issueNumber}
           />
         )}
-        <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
         {/* The four answers, the same component the inbox card draws. The sheet
             adds only `Decision` above them, which is the one thing it knows and the
             card does not: what approving *starts*. */}
@@ -441,7 +422,6 @@ export function PlanModal({
             approveLabel={approveLabel(live, queued, originOf)}
             outstanding={ack.outstanding}
             acknowledged={ack.acknowledged}
-            seedNote={composeNote(pins, live)}
             desktopFolder={desktopFolder}
             discussExplain={discuss}
             onDecide={onDecide}
@@ -487,8 +467,6 @@ export function PlanModal({
     </Modal>
   );
 }
-
-type Pin = 'drop' | 'ask';
 
 function usePlanHistory(planId: string, updatedAt: string): PlanHistory | null {
   const [history, setHistory] = useState<PlanHistory | null>(null);
@@ -571,65 +549,6 @@ function approveLabel(
   return `Approve — start ${count} agent${count === 1 ? '' : 's'} now`;
 }
 
-function PinList({
-  pins,
-  parts,
-  onClear,
-}: {
-  pins: Record<string, Pin>;
-  parts: PlanPartView[];
-  onClear: (slug: string) => void;
-}) {
-  const entries = Object.entries(pins).filter(([slug]) => parts.some((p) => p.slug === slug));
-  if (entries.length === 0) return null;
-  return (
-    <div className="pm-pins">
-      <span className="pm-section-label">Sent with your verdict</span>
-      {entries.map(([slug, pin]) => (
-        <span key={slug} className={`pm-pin on ${pin}`}>
-          {pinText(slug, pin)}
-          <button className="pm-pin-x" title="Remove" onClick={() => onClear(slug)}>
-            ×
-          </button>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function pinText(slug: string, pin: Pin): string {
-  return pin === 'drop' ? `drop “${slug}”` : `question “${slug}”`;
-}
-
-function composeNote(pins: Record<string, Pin>, parts: PlanPartView[]): string | undefined {
-  const lines = Object.entries(pins)
-    .filter(([slug]) => parts.some((p) => p.slug === slug))
-    .map(([slug, pin]) => pinText(slug, pin));
-  return lines.length === 0 ? undefined : lines.join('; ');
-}
-
-function without(pins: Record<string, Pin>, slug: string): Record<string, Pin> {
-  const next = { ...pins };
-  delete next[slug];
-  return next;
-}
-
-function Evidence({ evidence }: { evidence: PlanEvidence[] }) {
-  return (
-    <div className="pm-cites">
-      {evidence.map((cite, i) => (
-        <div className="pm-cite" key={`${cite.path}:${cite.line ?? ''}:${i}`}>
-          <code>
-            {cite.path}
-            {cite.line === null ? '' : `:${cite.line}`}
-          </code>
-          {cite.note !== null && <em>{cite.note}</em>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function Caveat({
   kind,
   label,
@@ -675,10 +594,6 @@ function PartBlock({
   seq,
   queue,
   focused,
-  pin,
-  pinnable,
-  onPin,
-  onAcceptance,
   onPartProfile,
   onRestart,
   profiles,
@@ -688,10 +603,6 @@ function PartBlock({
   seq: number;
   queue: QueueItem | undefined;
   focused: boolean;
-  pin: Pin | undefined;
-  pinnable: boolean;
-  onPin: (pin: Pin) => void;
-  onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
   onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
   onRestart: (() => Promise<unknown> | unknown) | undefined;
   profiles: { name: string; description: string }[];
@@ -759,40 +670,12 @@ function PartBlock({
               onConfirm={onRestart}
             />
           )}
-          {pinnable && (
-            <span className="pm-part-pins">
-              <button
-                className={`pm-pin ask${pin === 'ask' ? ' on' : ''}`}
-                title="Flag this part in the note your verdict carries"
-                onClick={() => onPin('ask')}
-              >
-                ? question
-              </button>
-              <button
-                className={`pm-pin drop${pin === 'drop' ? ' on' : ''}`}
-                title="Ask for this part to be dropped, in the note your verdict carries"
-                onClick={() => onPin('drop')}
-              >
-                ✕ drop
-              </button>
-            </span>
-          )}
         </div>
-        {part.touches.length > 0 ? (
-          <div className="pm-touches">
-            {part.touches.map((path) => (
-              <code key={path}>{path}</code>
-            ))}
+        {part.scope !== '' && (
+          <div className="pm-field">
+            <b>what this achieves</b>
+            {part.scope}
           </div>
-        ) : (
-          <div className="pm-scope">{part.scope}</div>
-        )}
-        {/* Both, when both say something different: the prose says what the part is
-            for and the paths say what it may write, and only the second can be
-            checked. A planner that answered both with the same path list has said
-            one thing, and printing it twice reads as a rendering bug. */}
-        {part.touches.length > 0 && part.scope !== '' && !sameAsTouches(part) && (
-          <div className="pm-scope">{part.scope}</div>
         )}
         {part.outsideScope.length > 0 && (
           <div className="pm-drift">
@@ -802,15 +685,7 @@ function PartBlock({
             ))}
           </div>
         )}
-        {part.rationale && (
-          <div className="pm-field">
-            <b>why its own PR</b>
-            {part.rationale}
-          </div>
-        )}
-        {part.acceptanceCriteria.length > 0 && (
-          <Acceptance criteria={part.acceptanceCriteria} onAcceptance={onAcceptance} />
-        )}
+        {part.acceptanceCriteria.length > 0 && <Acceptance criteria={part.acceptanceCriteria} />}
         {/* A concluded part left a record rather than a pull request, so this is the
             only place its outcome is readable at all. */}
         {part.status === 'concluded' && part.outcomeSummary && (
@@ -839,11 +714,6 @@ function PartBlock({
   );
 }
 
-function sameAsTouches(part: PlanPartView): boolean {
-  const flat = (text: string): string => text.replace(/[\s,]+/g, ' ').trim();
-  return flat(part.scope) === flat(part.touches.join(' '));
-}
-
 function stackLine(part: PlanPartView): string {
   if (part.expectedKind === 'human') {
     return part.dependsOn.length === 0
@@ -861,22 +731,15 @@ function quoteList(slugs: string[]): string {
   return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
-function Acceptance({
-  criteria,
-  onAcceptance,
-}: {
-  criteria: AcceptanceCriterion[];
-  onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
-}) {
+function Acceptance({ criteria }: { criteria: AcceptanceCriterion[] }) {
   return (
     <div className="pm-accept">
       <b>done when</b>
       <div>
         {criteria.map((c) => (
-          <label className={`pm-crit${c.met ? ' met' : ''}`} key={c.text}>
-            <input type="checkbox" checked={c.met} onChange={() => void onAcceptance(c.text, !c.met)} />
+          <span className={`pm-crit${c.met ? ' met' : ''}`} key={c.text}>
             <span>{c.text}</span>
-          </label>
+          </span>
         ))}
       </div>
     </div>

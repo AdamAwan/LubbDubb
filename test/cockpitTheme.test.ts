@@ -440,7 +440,7 @@ test('accent-color is inherited from a container, never declared on a control', 
   }
   assert.deepEqual(
     owners,
-    ['web/src/styles.css → body', 'web/src/styles.css → .pm-crit input', 'web/src/console/console.css → .cn'],
+    ['web/src/styles.css → body', 'web/src/console/console.css → .cn'],
     'the hue belongs to the surface a box lands on',
   );
 });

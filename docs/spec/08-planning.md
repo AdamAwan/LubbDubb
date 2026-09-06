@@ -945,8 +945,12 @@ which needs them to be **concurrent** to notice. This needs nothing but a merged
 
 **The tick is a reviewer's, never the harness's.** Nothing derives whether a criterion holds — the
 same refusal `conclude_part` makes, for the same reason: inferring a positive terminal from incidental
-evidence is what the harness declines everywhere. What this adds is only that the criteria are in
-front of the merged pull request instead of in a plan nobody reopens.
+evidence is what the harness declines everywhere.
+
+**The plan sheet draws the criteria but does not tick them.** They are read there while a plan is
+being judged, which is before there is any work to judge against, so the checkbox asked for a
+reading nobody was in a position to give ([17](17-cockpit.md#the-parts)). The route stands and the
+column stands; what changed is only that the sheet no longer calls it.
 
 **Keyed on the criterion's text, not its index**, so a re-worded criterion loses its tick. That is the
 behaviour worth having: an amendment that changes what "done" means has withdrawn the thing that was
