@@ -4,13 +4,8 @@ import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * `human_tasks` was a fresh `CREATE TABLE`, and `kind` is the column that proved
- * the entry was worth declaring empty: every row written before it existed is an
- * `ask`, and the default is what says so on a database that predates the sweep.
- *
- * `dismissed_at` is nullable with no default, and null is already the right
- * answer for every row from before it existed: nobody had cleared anything off
- * the bench, because there was no way to.
+ * Additive columns for `human_tasks`. Every pre-existing row is an `ask`, hence
+ * the default; null `dismissed_at` already means "not cleared off the bench".
  */
 export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
   human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'`, dismissed_at: `TEXT` },
@@ -19,11 +14,8 @@ export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
 /**
  * The `human_tasks` table: work only a person can do.
  *
- * The dispatcher does not read this table, and that is the whole of the access
- * story. A human task holds work off the fleet only by *being* a plan part
- * (`part_id`), and a part is a node the reconciler and rule `plan-part` already
- * understand — so an agent that asks for one gains the ability to ask a person,
- * never the ability to stop the fleet.
+ * The dispatcher never reads this table; a human task holds work off the fleet
+ * only by *being* a plan part (`part_id`).
  */
 export class HumanTaskStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -33,13 +25,9 @@ export class HumanTaskStore {
    * resolved from its credential by the tool layer, or all null when an operator
    * filed it from the cockpit.
    *
-   * A repeat (same agent, same origin, same title) refreshes the existing row
-   * rather than inserting, exactly as `proposeFact` matches a claim and for its reason: an
-   * agent that asks for the same thing on every turn must not fill the operator's
-   * list. The status is deliberately *not* reset — a declined task asked for
-   * again stays declined, which is what declining it meant — and neither is
-   * `dismissed_at`, for the same reason: an answered row does not come back onto
-   * the bench because the asker repeated itself.
+   * A repeat (same agent, origin, title, kind) refreshes the existing row rather
+   * than inserting. Status and `dismissed_at` are deliberately never reset: an
+   * agent repeating itself must not resurrect a declined or dismissed task.
    */
   recordHumanTask(
     input: HumanTaskInput & {
@@ -52,9 +40,8 @@ export class HumanTaskStore {
   ): { task: HumanTask; created: boolean } {
     const ts = this.ctx.now();
     const kind: HumanTaskKind = input.kind ?? 'ask';
-    // `IS` rather than `=` so a null matches a null (SQL equality doesn't). `kind`
-    // is in the key so an operator who types the sweep's own sentence at it
-    // refreshes their own row rather than the harness's.
+    // `IS` so a null matches a null; `kind` is in the key so an operator typing
+    // the sweep's own sentence refreshes their own row, not the harness's.
     const existing = this.ctx.db
       .prepare(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=? AND kind=?`)
       .get(input.agentId, input.originRef, input.title, kind) as HumanTaskRow | undefined;
@@ -120,21 +107,12 @@ export class HumanTaskStore {
 
   /**
    * Every obligation the bench has ever held, oldest first — the runway lens's
-   * whole view of what a person owes the fleet, and of what they used to.
+   * view of what a person owes the fleet and what they used to.
    *
-   * Deliberately unbounded where {@link listHumanTasks} takes a limit, and the
-   * difference is the point: that one feeds a panel, where a cap hides the tail
-   * of a long list, and this one feeds a *count* and a *median*, where a cap
-   * would silently report a hundred when the answer is two hundred — on
-   * precisely the deployments furthest behind.
-   *
-   * **Settled rows are in it, and that is not laxity.** The debt count reads the
-   * open ones; the lead time reads the closed ones, because a hold that has
-   * ended is exactly the span the median must not have counted as work
-   * (`docs/spec/25-supply.md#the-lead-time-is-fleet-time`). One read rather than
-   * an open list beside a closed one, on {@link RunwayInput}'s rule: two lists of
-   * one table, either a subset of the other, is a caller free to pair a debt with
-   * somebody else's history.
+   * Deliberately unbounded: it feeds a count and a median, which a cap would
+   * silently understate. Settled rows are included — the debt count reads the
+   * open ones, the lead time the closed ones.
+   * → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
    */
   listAllHumanTasks(): HumanTask[] {
     const rows = this.ctx.db
@@ -147,9 +125,8 @@ export class HumanTaskStore {
    * The human tasks backing plan parts — what the reconciler reads to decide
    * whether a part a person owns is still waiting or has been refused.
    *
-   * Every one of them, not only the open ones: `declined` is precisely the state
-   * the reconciler has to see, and filtering here would hand it silence for a
-   * refusal.
+   * Every status, not only the open ones: `declined` is what the reconciler has
+   * to see, and filtering here would hand it silence for a refusal.
    */
   listHumanTasksForParts(partIds: string[]): HumanTask[] {
     if (partIds.length === 0) return [];
@@ -164,19 +141,9 @@ export class HumanTaskStore {
    * Every task of one kind — what the close-out sweep reads to find the rows it
    * filed on earlier pulses.
    *
-   * Every status, for {@link listHumanTasksForParts}' reason, and here it is both
-   * directions at once: a **settled** row is what stops the sweep filing the same
-   * obligation a second time, and an **open** one whose delivery has since been
-   * cleared is what it has to retract. Unbounded in age, as `listDeliveries` is
-   * and for its reason — one row per goal ever delivered, and a count bound would
-   * hide the oldest standing obligation rather than the least important one.
-   *
-   * The sweeps read the rows back *and* re-file the owed ones through
-   * `recordHumanTask` each pulse, which is not a contradiction: the read is how a
-   * settled row is recognised and a retraction found, and the re-file is how the
-   * standing row's `detail` stays current. Leaning on the dedup costs nothing on
-   * the panel — a repeat refreshes `updated_at`, and {@link listHumanTasks} orders
-   * on `created_at`, so a refreshed row does not jump the feed.
+   * Every status and unbounded in age: a settled row is what stops the sweep
+   * filing the same obligation twice, and an open one whose delivery has since
+   * been cleared is what it has to retract.
    */
   listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
@@ -186,10 +153,9 @@ export class HumanTaskStore {
   /**
    * Settle a human task: the person did it, or refused it.
    *
-   * Compare-and-set in the write (`WHERE id=? AND status='open'`), the same
-   * discipline as `decideProposal` and `linkFindingTicket`: a second click settles
-   * nothing and cannot overwrite the first verdict with the second. Returns null
-   * when there was no open task to settle, which the route turns into a 409.
+   * Compare-and-set on `status='open'` so a second click cannot overwrite the
+   * first verdict. Returns null when there was no open task, which the route
+   * turns into a 409.
    */
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     const ts = this.ctx.now();
@@ -204,40 +170,16 @@ export class HumanTaskStore {
 
   /**
    * Put a settled row back on the bench, under its own title, with fresh detail —
-   * an obligation that is owed **again**.
+   * an obligation that is owed **again**. The one caller is `RunwayDesk`,
+   * reopening a row it settled itself; {@link recordHumanTask} must not learn to
+   * do this, since its dedup ignores status on purpose.
    *
-   * The one caller is `RunwayDesk`, reopening a row it settled itself when the
-   * fleet returns to the state that filed it. {@link recordHumanTask} cannot do
-   * this and must not learn to: its dedup deliberately ignores status, because an
-   * agent repeating itself must not resurrect a task a person declined. So the
-   * distinction lives at the call site that has it — the desk knows which
-   * settlements are its own — and this is the narrow write that acts on it.
-   *
-   * **Only a settled row**, compare-and-set in the write on
-   * {@link settleHumanTask}'s discipline: an open row is already owed and needs
-   * nothing. `resolution` is cleared with the status it explained.
-   *
-   * **A dismissed row is reopened too, and `dismissed_at` is cleared with it.**
-   * That looks like reaching past the operator and is the opposite: dismissing says
-   * "I have read this record and am done with it", which is true of the episode it
-   * recorded and says nothing about the next one. Leaving it dismissed would hide
-   * an obligation that is genuinely owed again — the same silence this whole path
-   * exists to break — and {@link dismissHumanTask} is there to clear it once more.
-   *
-   * **`created_at` moves too**, which is the one field that looks like a lie and is
-   * not. {@link listHumanTasks} feeds the bench newest-first under a hundred-row
-   * cap, so a row keeping the timestamp of an episode that ended months ago is open
-   * in the store and off the end of the wire — the obligation owed and invisible,
-   * which is the silence this whole path exists to break. The row is a *fresh*
-   * obligation wearing an id the title dedup will not let it shed.
-   *
-   * That is the deliberate opposite of a **refresh**: {@link recordHumanTask}
-   * leaves `created_at` alone precisely so a standing row restated every pulse does
-   * not jump the feed ({@link listHumanTasksOfKind}). A reopen is not a restatement
-   * of a row that never left — it is an obligation that had ended and is owed
-   * again, and the feed should place it where it now belongs.
-   *
-   * Returns null when there was nothing to reopen.
+   * Only a settled row (compare-and-set), and `dismissed_at` is cleared with the
+   * status — leaving it dismissed would hide an obligation genuinely owed again.
+   * `created_at` moves too, so the reopened row does not fall off the end of
+   * {@link listHumanTasks}' newest-first cap; that is the deliberate opposite of
+   * a {@link recordHumanTask} refresh, which must not jump the feed. Returns null
+   * when there was nothing to reopen.
    */
   reopenHumanTask(id: string, detail: string): HumanTask | null {
     const ts = this.ctx.now();
@@ -255,18 +197,11 @@ export class HumanTaskStore {
    * Clear a settled task off the bench: the operator has read the record and is
    * done with it.
    *
-   * **Only a settled row**, which is the guard that makes this safe rather than a
-   * second way to make work disappear — an open obligation has two answers, and
-   * neither of them is "hide it". Compare-and-set on both halves
-   * (`status<>'open' AND dismissed_at IS NULL`), {@link settleHumanTask}'s
-   * discipline, so a second click dismisses nothing and cannot restamp the time.
-   * Returns null when there was no undismissed settled task, which the route
-   * turns into a 409.
-   *
-   * The row is updated, never deleted. The close-out sweep recognises its own
-   * settled row by finding it again, and a delete would have it file the same
-   * obligation on the next pulse — the same reason a dismissed finding stays in
-   * the list.
+   * Only a settled, undismissed row (compare-and-set on both halves), so an open
+   * obligation can never be hidden and a second click cannot restamp the time;
+   * returns null otherwise, which the route turns into a 409. The row is updated,
+   * never deleted — the close-out sweep recognises its own settled row by finding
+   * it again, and a delete would have it re-file on the next pulse.
    */
   dismissHumanTask(id: string): HumanTask | null {
     const ts = this.ctx.now();

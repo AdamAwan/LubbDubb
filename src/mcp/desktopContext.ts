@@ -19,29 +19,12 @@ import type { UpcomingPlan } from '../wire.js';
 import type { McpTool } from './protocol.js';
 
 /**
- * What the operator's own Claude Code is handed, and the deps behind it.
+ * What the operator's own Claude Code is handed, and the deps behind it. Its own
+ * module because `desktopTools.ts` and `desktopOps.ts` both build tools from it.
  *
- * Its own module because two files build the tools now — `desktopTools.ts` holds
- * the goal, plan and validation surface, `desktopOps.ts` the fleet one — and a
- * deps interface exported from one of them would make the other import it back.
- *
- * **The surface is narrowed by construction, not by a filter.** There is no code
- * path from a desktop connection to `conclude_work`, `open_pr` or any other fleet
- * tool, because neither module reaches `buildTools` and the desktop server reaches
- * nothing else. That matters more here than it does for the fleet: this credential
- * is long-lived, sits in the operator's home directory, and is held by a session
- * nobody dispatched — the blast radius of a filter that stopped filtering would be
- * the whole harness.
- *
- * **`plan_amend` is not `plan_submit`.** They carry the same document and share
- * the schema as one export rather than two literals — but the names differ on
- * purpose, because `validation_report` living on both channels is the trap this
- * repo has already been caught by once: an edit to "the plan tool" that silently
- * reaches only one side. What differs here is who may write and what settles
- * afterwards — the fleet's is fenced by the origin it was dispatched on, and this
- * one by the plan's own status, which decides between the two settlements it has:
- * a rewrite through `ingestPlanDocument` on `awaiting_approval`, and a proposal
- * on a plan that is already running.
+ * The surface is narrowed by construction, not by a filter: neither module reaches
+ * `buildTools`, so there is no code path from a desktop connection to a fleet tool.
+ * → `docs/spec/11-mcp-tools.md#the-desktop-channel`
  */
 export interface DesktopToolDeps {
   store: Store;

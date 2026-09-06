@@ -1,52 +1,11 @@
 /**
  * The failing output of a red CI check, fetched at dispatch and appended to the
- * agent's prompt.
- *
- * ## The gap
- *
- * A CI-fix agent used to be handed the **names** of the failing checks and
- * nothing else (`ciFailureNote`). Names are not output: the agent knows *that*
- * `lint` is red and nothing about *why*, so its cheapest route to the actual
- * error is to reproduce the failure locally — in this repository `npm run check`,
- * six passes over 151 test files, all of it landing in context before a single
- * edit, and again on every retry and every later CI dispatch on the same branch.
- *
- * The saving is not bytes off a prompt, it is **turns**. An agent handed the
- * failing assertion goes straight to the file; an agent handed a check name
- * rebuilds the world first.
- *
- * ## Structured errors first, log tail second
- *
- * Both providers expose the failure twice: once already extracted, once as raw
- * output. GitHub has check-run **annotations** (`{path, line, message}` — what
- * the pull request page renders beside the diff); Azure has the build
- * **timeline**, whose per-task records carry an `issues[]` of errors. Those are
- * preferred wherever they are populated, because they *are* the failing
- * assertion rather than a heuristic guess at where it lives, and because they
- * cost one small request instead of a log download.
- *
- * The raw tail is the fallback for the large set of jobs that emit no structured
- * error at all — a bare `npm test` with no problem matcher. Both providers cost
- * a whole download that is then tailed locally: Azure's endpoint does offer a
- * line range, but a range needs a total line count to take a *tail* from, which
- * is a second request, so `getBuildLog` fetches the log whole. What differs is
- * **granularity** — Azure's smallest unit is one failed task, GitHub's is the
- * entire job. That is a bandwidth cost, not a token cost, and it is why the
- * structured read is tried first rather than second.
- *
- * ## Why it is bounded, and why the cap is per prompt
- *
- * This is input tokens the harness *adds* to every CI dispatch, so it pays for
- * itself only if it is genuinely the failing part; an excerpt that is mostly
- * setup noise is a straight loss. Three red checks at a per-check cap would be
- * three times the budget on a prompt that is otherwise five lines, so
- * {@link MAX_EVIDENCE_CHARS} is a **whole-prompt** budget divided across the
- * checks that have evidence.
- *
- * What the cap dropped is always **named**, never silently cut — the rule
- * `priorWork.ts` already follows. An agent that reads a partial log as a whole
- * one draws a conclusion from the absence of an error that was merely trimmed,
- * which is worse than having no excerpt at all.
+ * agent's prompt, so the agent reads the assertion instead of reproducing the
+ * failure. Structured errors (GitHub check-run annotations, Azure timeline
+ * `issues[]`) are preferred over a raw log tail; the budget is per prompt, not
+ * per check, and whatever the cap drops is always named rather than silently cut.
+ * → `docs/spec/05-dispatcher.md#what-a-ci-fix-dispatch-carries`,
+ *   `docs/spec/15-integrations.md`
  */
 
 /** One failing check's evidence, as the provider was able to supply it. */
