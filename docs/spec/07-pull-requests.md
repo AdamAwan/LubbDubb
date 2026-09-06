@@ -39,6 +39,49 @@ check is not a CI check at all, and a check the provider says does **not block c
 why the PR is stuck. A _muted_ check is named, because the operator telling the harness to leave it
 alone does not stop the provider holding the PR on it.
 
+## How wide a pull request is
+
+`src/prSplit.ts` — pure, and read by rule `pr-split` ([05](05-dispatcher.md)) and by the planner and
+part prompts.
+
+```
+prBreadth(pr, budget) → { files, over } | null
+```
+
+`budget` is `planning.fileBudget` ([02](02-configuration.md)), 20 by default. `over` is
+`files > budget`, so a diff exactly at the budget is inside it.
+
+**The reading is three-valued, and `null` is not "narrow".** `PullRequest.changedFiles` is optional
+because only some providers report it: GitHub carries it on the pull detail the source-control
+integration already fetches, so it costs nothing, and Azure DevOps would need a second request per
+pull request to answer at all and therefore leaves it unset. A provider that did not say is
+`unknown`, and unknown fires nothing — the same shape as an environment's reach verdict
+([24](24-environments.md#the-three-verdicts)), and for the same reason: three states told apart
+badly is a rule that acts on the absence of evidence. A `fileBudget` of 0 or less is the off switch,
+and answers `null` for every pull request.
+
+**A count is a prompt to look, never a verdict.** Nothing in the harness refuses, blocks, holds or
+reshapes a pull request for being wide. A rename across sixty files is one concept and belongs in one
+pull request; twelve files spanning a schema change, an endpoint and an unrelated refactor are three,
+and should have been three. What separates the two is whether the pieces could have been reviewed,
+merged and reverted independently of each other — which is a reading of the diff rather than of its
+size, so the count only decides whether a model is asked to take that reading. Rule `pr-split` is
+where the asking happens and `split_assess` ([11](11-mcp-tools.md)) is where the answer lands.
+
+The budget has an earlier half. `budgetNote(budget)` is appended to the planner's prompt and to every
+part's prompt, so the number the late arm measures against is the number the plan was written to and
+the number the agent building the code was told before any diff existed. That is where a split is
+cheap: at the plan stage it is a part boundary, and after the fact it is an amendment, a restarted
+part and a pull request somebody already reviewed. The late arm exists because the early one is a
+judgement made before the code is read, and sometimes the seam is only visible once it is.
+
+`splitOrigin(n, pr)` is `issue:<n>:split:<pr>` and `splitBranch(pr)` is `split/pr/<pr>`. The origin
+names the **issue** rather than the pull request, because the thing an assessment can act on is the
+plan: `plan_correct` resolves its target from the origin, and an origin naming only the pull request
+would leave the agent with a finding and no way to propose the change it implies. `splitTargetPr`
+reads the pull request back out of it, and the origin is classified in `src/issueOrigins.ts` as
+**deliberation** — like planning and appraisal, it decides the shape of the work rather than doing it.
+
 ## `ciNeedsAttention(pr)`
 
 Is there a CI failure the harness should put an agent on? When `ciChecks` carries per-check detail
@@ -831,7 +874,7 @@ Three things follow from carrying it:
   delivery — so a follow-up on a thread already in the running agent's prompt reached nobody, which
   is precisely the feedback an operator gives while watching an agent work. The key is the thread ref
   plus the id of its newest message, so it moves when the conversation does. It is a second function
-  rather than a change to `prCommentOrigin`, because that string is a *ref*: it is what a refused
+  rather than a change to `prCommentOrigin`, because that string is a _ref_: it is what a refused
   `reply_draft` proposal is filed under and what `rejectionGuidance` matches whole, and it has to
   stay the same across the life of a thread. A key that must move and a ref that must not are two
   jobs.
@@ -1132,7 +1175,7 @@ policy sitting nowhere near the rule it duplicates.
 
 **Absent where the review is off**, which is the default, and absent is what draws no mark: a grey "no
 review" glyph on every row of every default deployment is a claim about a feature nobody turned on.
-It is the one reading a *closed* pull request keeps, because it is a record of what was read rather
+It is the one reading a _closed_ pull request keeps, because it is a record of what was read rather
 than a verdict about what happens next — and "why did this merge with three findings on it" is asked
 precisely after the merge.
 
@@ -1205,18 +1248,18 @@ Every field of `review` is written to be set by the **project** rather than by e
 what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries any
 key ([02](02-configuration.md#the-project-layer)), so all of it is committed once and shared.
 
-| Key                         | Default  | What it decides                                                                                                                                                                                                 |
-| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                                                                                                                              |
-| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.                                                                                                    |
-| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                |
-| `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
-| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                 |
-| `review.publishedThreadProperty` | `null` | The thread property your own review tooling stamps its threads with, so findings it published read as addressed once every stamped thread is resolved. Azure DevOps only. → [A thread the harness stamped](#a-thread-the-harness-stamped) |
-| `review.publishedThreadRole` | `null`  | Which stamped threads count — the value required on `"<property>.role"`. Null takes every stamped thread, summary threads included.                                                                             |
-| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                            |
-| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                          |
-| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                   |
+| Key                              | Default  | What it decides                                                                                                                                                                                                                           |
+| -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review.enabled`                 | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                                                                                                                                                        |
+| `review.blocking`                | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.                                                                                                                              |
+| `review.allowSkip`               | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                                          |
+| `review.reviewedElsewhere`       | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing.                           |
+| `review.publish`                 | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                                           |
+| `review.publishedThreadProperty` | `null`   | The thread property your own review tooling stamps its threads with, so findings it published read as addressed once every stamped thread is resolved. Azure DevOps only. → [A thread the harness stamped](#a-thread-the-harness-stamped) |
+| `review.publishedThreadRole`     | `null`   | Which stamped threads count — the value required on `"<property>.role"`. Null takes every stamped thread, summary threads included.                                                                                                       |
+| `review.modes`                   | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                                                      |
+| `review.defaultMode`             | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                                                    |
+| `review.routingCharterFile`      | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                                             |
 
 ```json
 {
@@ -1265,7 +1308,7 @@ the send, off the **origin that asked** for the reply and never off what the com
 it. It is the same discipline as `pr_replies_sent` and for the same reason: the credential the harness
 posts under is the operator's own on a single-operator deployment, so identity can settle nothing here.
 
-Three cases record nothing, and all three read as *not published*, which is the safe direction: a
+Three cases record nothing, and all three read as _not published_, which is the safe direction: a
 reply into an existing thread (a publication opens one), a provider that will not name the thread it
 created, and a provider whose pull-request comments are not threads at all — GitHub's are issue
 comments and cannot be resolved, so there is nothing there to record or later to read. A re-review
@@ -1487,7 +1530,7 @@ Two things fall out, and both are load-bearing:
   rule `cooldown-escalate` had already handed to a human. One origin means one attempt cap means one
   reading of whose turn it is. Keyed on the origin alone, a
   reviewer's fourth comment would be swallowed by the origin the first three already claimed — the
-  signal an operator sends while reviewing an agent's work as it goes. A *reply* on a thread the agent
+  signal an operator sends while reviewing an agent's work as it goes. A _reply_ on a thread the agent
   already has is that same signal, which is why the key is `prCommentSignalRef` and not the thread ref
   ([above](#the-thread-is-the-conversation)). `PrConcern.signals` carries those keys; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
   prompt, since `activeOrigins` sees task origins only and cannot tell that the running agent was

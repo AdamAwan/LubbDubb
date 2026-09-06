@@ -59,6 +59,7 @@ test('the planning funnel is deep-merged when overridden', () => {
   assert.deepEqual(loadConfig().planning, {
     maxConcurrentPartsPerIssue: 2,
     gitFetchIntervalMs: 60_000,
+    fileBudget: 20,
   });
   const cfg = loadConfig({ planning: { maxConcurrentPartsPerIssue: 4 } as never });
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4);

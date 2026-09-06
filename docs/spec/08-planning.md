@@ -43,6 +43,22 @@ carrying it (zod strips unknown keys), but one carrying no parts is, with a sent
 an operator override written against the old shape is corrected on its first submission rather than
 quietly ingesting as something else. `plan_submit` hands the reason back in the same turn.
 
+### How wide a part should be
+
+`planning.fileBudget` (20 by default) is the number the planner is told before it cuts anything up.
+`budgetNote` ([07](07-pull-requests.md#how-wide-a-pull-request-is)) is **appended** to the planner's
+rendered prompt and to every part's, so both ends of the work carry the same number: the planner
+declaring the parts, and the agent building one, who is the first reader who can see the diff getting
+away from the declaration.
+
+It is a prompt to look, never an arity rule. Nothing refuses a plan for declaring a wide part, no
+count is checked at ingestion, and a plan is not better for having more parts in it — the paragraph
+above still holds, and a twenty-minute fix cut into three parts costs far more than it saves. What the
+budget buys is that the split is considered at the moment it is cheapest: at plan time a boundary is a
+line in a document, and after the fact it is an amendment, a restarted part, and a pull request
+somebody has already read. Rule `pr-split` ([05](05-dispatcher.md)) is the late half of the same pair,
+for the seam that is only visible once the code exists.
+
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.

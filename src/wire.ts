@@ -91,6 +91,7 @@ import type {
   FeatureSummary,
   PlanRevision,
   Proposal,
+  PrSplitVerdict,
   PrState,
   PullRequest as WorldPullRequest,
   ReadyingAction,
@@ -124,6 +125,7 @@ export interface PullRequest extends WorldPullRequest {
   ciVerdict?: CiVerdict;
   pack?: PrPackStanding;
   review?: PrReviewState;
+  split?: PrSplitVerdict;
 }
 
 export interface OpenPullRequest extends PullRequest {

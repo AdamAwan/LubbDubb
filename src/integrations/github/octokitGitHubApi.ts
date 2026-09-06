@@ -204,7 +204,12 @@ export class OctokitGitHubApi implements GitHubApi {
   async getPull(number: number): Promise<GhPullDetail> {
     return resolvePullDetail(async () => {
       const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
-      return { mergeable: data.mergeable, mergeableState: data.mergeable_state ?? null, merged: data.merged };
+      return {
+        mergeable: data.mergeable,
+        mergeableState: data.mergeable_state ?? null,
+        merged: data.merged,
+        changedFiles: data.changed_files ?? null,
+      };
     });
   }
 

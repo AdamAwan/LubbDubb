@@ -14,6 +14,7 @@ import {
   planIssueNumber,
   siblingContext,
 } from '../../plans/parts.js';
+import { budgetNote } from '../../prSplit.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `plan-part`)
@@ -143,6 +144,7 @@ function partCandidate(
           remaining,
         }) +
         partDeclarationNote(part) +
+        budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
         s.watchDeclareNote,
       originRef: origin,

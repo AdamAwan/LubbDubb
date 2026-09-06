@@ -1089,6 +1089,7 @@ function PullRequests({
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <ThreadChip pr={pr} />
+            <SplitChip pr={pr} />
             {/* The fleet's own reading, left of the checks so the two verdicts
                 read in the order the harness produces them. */}
             <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
@@ -1122,6 +1123,20 @@ function PullRequests({
         ))}
       </div>
     </section>
+  );
+}
+
+// A pull request rule `pr-split` read and found to hold more than one concept.
+// Only the split verdict draws: a coherent one is the question asked and
+// answered, and a chip for it would sit on every wide pull request saying
+// nothing happened. → docs/spec/17-cockpit.md
+function SplitChip({ pr }: { pr: PullRequest }): JSX.Element | null {
+  const split = pr.split;
+  if (split === undefined || split.verdict !== 'split') return null;
+  return (
+    <Tag tone="amber" fill title={`${split.concepts.join(' · ')}\n\n${split.reason}`}>
+      {split.concepts.length} concepts
+    </Tag>
   );
 }
 

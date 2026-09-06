@@ -371,6 +371,7 @@ export class Harness extends EventEmitter {
         ],
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
+        prSplits: store.listPrSplitVerdicts(),
         prReviewedElsewhere: store.prsReviewedElsewhere(),
         obstacles: store.obstacleBoard(),
         obstacleBlocks: store.listObstacleBlocks(),

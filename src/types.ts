@@ -43,6 +43,7 @@ export interface PullRequest {
   author?: string;
   viewerAuthored?: boolean;
   viewerApproved?: boolean;
+  changedFiles?: number;
   url?: string;
 }
 
@@ -100,6 +101,21 @@ export interface PrReviewRoute {
 }
 
 export type PrReviewRouteInput = Omit<PrReviewRoute, 'decidedAt'>;
+
+export type PrSplitVerdictKind = 'split' | 'coherent';
+
+export interface PrSplitVerdict {
+  prNumber: number;
+  issueNumber: number;
+  verdict: PrSplitVerdictKind;
+  concepts: string[];
+  reason: string;
+  files: number;
+  agentId: string | null;
+  decidedAt: string;
+}
+
+export type PrSplitVerdictInput = Omit<PrSplitVerdict, 'decidedAt'>;
 
 export type PrReviewInput = Omit<PrReview, 'reviewedAt' | 'publishedThread'>;
 

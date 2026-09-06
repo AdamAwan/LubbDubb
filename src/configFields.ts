@@ -422,6 +422,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Minimum gap between the fetches plan reconciliation runs before reading branch reality.',
   },
   {
+    path: 'planning.fileBudget',
+    type: 'number',
+    access: 'plain',
+    why: 'Changed files past which a pull request is asked whether it is one piece of work or several — the number the planner and every code agent are told to build under, and the trigger for rule `pr-split`. Judgement, not a limit: the assessment is a model’s reading of the diff and a wide-but-coherent change is left alone. 0 turns both off.',
+  },
+  {
     path: 'validation.desktopClaimMinutes',
     type: 'number',
     access: 'plain',

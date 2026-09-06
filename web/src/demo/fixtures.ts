@@ -187,6 +187,7 @@ export function buildDemoState(): DemoSeed {
     planning: {
       maxConcurrentPartsPerIssue: 2,
       gitFetchIntervalMs: 60_000,
+      fileBudget: 20,
     },
     worldObservedAt: ago(0),
     world: {

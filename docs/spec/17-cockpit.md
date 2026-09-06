@@ -2117,6 +2117,16 @@ _n on us_. It is drawn only when there is one — a chip reading `0` on every se
 furniture — and never at all where the provider reports no threads, since a chip there would be a
 claim about a review the harness cannot see ([07](07-pull-requests.md#review-threads)).
 
+Beside it, and on the same rule, is the **split chip**: _n concepts_, drawn only where rule
+`pr-split` read the diff and found more than one ([07](07-pull-requests.md#how-wide-a-pull-request-is)).
+A `coherent` verdict draws nothing, and that asymmetry is the point rather than an omission — a
+verdict of "this is one thing" is the question asked and answered, and a chip for it would sit on
+every wide pull request in the fleet saying that nothing happened. The file count is not drawn either:
+a pull request under the budget was never asked about, and one over it that nothing has read yet is a
+number with no reading behind it. The chip's title carries the concepts and the reason, because what
+an operator does about it — accept the amendment, or leave the pull request alone — is decided on
+those and not on the count.
+
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
 checks are [their own mark](#the-checks-mark) — with **no check name written anywhere in this

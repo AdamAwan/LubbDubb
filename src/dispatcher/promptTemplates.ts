@@ -33,6 +33,7 @@ type PromptId =
   | 'pr-base-update-behind'
   | 'pr-base-update-conflict'
   | 'pr-review-triage'
+  | 'pr-split'
   | 'pr-review'
   | 'pr-review-comment'
   | 'review-pack-author'
@@ -607,6 +608,33 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'thorough mode: over-reading a small change costs minutes, and under-reading a dangerous one costs ' +
       'the defect nobody caught.',
     doc: "Sent to a desk agent to choose which review mode a pull request gets (rule pr-review-triage), on a project that declares more than one in `review.modes`. It sees no code: a routing decision that needed the diff would cost what the review costs. The project's routing charter (review.routingCharterFile) is appended after this text rather than interpolated, so an override cannot silently drop it. {modes} is the comma-joined list of declared mode names. Placeholders: {number} {title} {branch} {base} {modes}.",
+  },
+  'pr-split': {
+    placeholders: ['number', 'title', 'branch', 'base', 'files', 'budget', 'issue', 'plan'],
+    template:
+      'PR #{number} ("{title}") — branch {branch}, targeting {base} — changes {files} files, past this ' +
+      "project's budget of {budget}. Answer one question about it: **is this one piece of work, or several?**\n\n" +
+      'The count is why you are reading it. It is not the answer. A rename across sixty files is one concept ' +
+      'and belongs in one pull request; twelve files spanning a schema change, a new endpoint and an ' +
+      'unrelated refactor are three, and should have been three. What makes a diff several is that its ' +
+      'pieces could have been reviewed, merged and reverted independently of each other — not that it is ' +
+      'long.\n\n' +
+      'Read the diff against {base} with `git diff {base}...HEAD`, and read enough of the surrounding code to ' +
+      'tell a seam from a coincidence. It belongs to issue #{issue}.\n\n{plan}\n\n' +
+      'Then answer with `split_assess`, and answer once:\n\n' +
+      '- **coherent** — one concept, however wide. Nothing happens and nothing asks again, so your reason is ' +
+      'the whole record of why a wide pull request was left alone. This is the right answer more often than ' +
+      'the count suggests.\n' +
+      '- **split** — name the concepts, then propose the plan that separates them with `plan_correct` in this ' +
+      'same turn. One part per concept; the concept this pull request should keep goes first, under the slug ' +
+      'its part already has, and the rest become parts that depend on it. Submit the **whole** plan document, ' +
+      'every part you are keeping included.\n\n' +
+      'You are reading, not cutting. Your checkout is read-only: do not commit, do not push, do not close the ' +
+      'pull request and do not open another. An amendment changes nothing by itself — an operator decides, ' +
+      'the plan keeps running while they do, and the agent on this pull request is neither stopped nor ' +
+      're-dispatched. A run that ends without `split_assess` has answered nothing and the question is asked ' +
+      'again.',
+    doc: 'Sent to a read-only agent when a watched pull request has grown past `planning.fileBudget` changed files (rule pr-split). It reads the diff to say whether the width is one concept or several, and proposes the plan that separates them when it is several. {files} is what the provider reported, {budget} the configured number, {issue} the issue the pull request belongs to, and {plan} the current plan rendered for a corrector — or a sentence saying there is no plan. Placeholders: {number} {title} {branch} {base} {files} {budget} {issue} {plan}.',
   },
   'pr-review': {
     placeholders: ['number', 'title', 'branch', 'base'],
