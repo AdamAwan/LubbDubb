@@ -6120,7 +6120,16 @@ seventh name cannot be written at a call site, which is how the six came about i
 
 **They are anchors, never buttons.** A deep link is a destination.
 
-**The look is the component's, and it is the shared button kit's.** `className` used to stay the
+**Which kit it wears is the _row's_ answer, not the call site's.** `ControlGroup` publishes that its
+children are being drawn in a control row, and `DesktopLink` reads it: inside one it wears
+`CONTROL_CLASS`, everywhere else the shared button. The `control` flag is still a prop, for the one
+site that is a control row without being a `ControlGroup` — the top bar's `cn-asks`, where it sits
+beside `ControlButton` and `ExtLink` — and it wins over the context when it is given. It was the call
+site's alone, and the goal header's *Leave this page* row is what that cost: `Open ticket ↗` and
+`File a new bug` wore `.cn-tgl` beside a hand-off still wearing `.btn ghost small`, two kits in a row
+of three, on the one row the [top bar's pair](#the-top-bar-and-the-panels) is argued from.
+
+**The look is otherwise the component's, and it is the shared button kit's.** `className` used to stay the
 caller's, on the argument that the sites live in rows with different tones — and what that bought was
 `cn-tgl`, `cn-linkish`, `cn-ask-btn` and two different `buttonClass` looks on one control. It draws
 `buttonClass({ ghost: true, size: 'small' })` now, which carries `btn` twice and so survives

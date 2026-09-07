@@ -19,6 +19,7 @@ import {
 (globalThis as { React?: typeof React }).React = React;
 
 const { DesktopLink } = await import('../web/src/components/DesktopLink.js');
+const { ControlBar, ControlGroup } = await import('../web/src/components/controls.js');
 
 const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx', import.meta.url), 'utf8');
 const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
@@ -128,4 +129,25 @@ test('the bar’s question control prefills the skill and nothing else', () => {
     /<DesktopLink[\s\S]*?folder=\{view\.state\.config\.desktopFolder\}/.test(TOP_BAR),
     'and opens it on the repository the fleet works on',
   );
+});
+
+test('a hand-off inside a control row wears the control kit, not the button', () => {
+  const props = { folder: '/home/you/shop', prompt: askPrompt(284), explain: 'which answers it.' };
+
+  const alone = desktop(props);
+  assert.match(alone, /class="btn btn ghost small"/, 'on its own it is the shared button');
+
+  const inRow = renderToStaticMarkup(
+    createElement(
+      ControlBar,
+      null,
+      createElement(ControlGroup, {
+        caption: 'Leave this page',
+        icon: 'ticket',
+        children: createElement(DesktopLink, props),
+      }),
+    ),
+  );
+  assert.match(inRow, /<a class="cn-tgl"/, 'in a control row it wears the control class');
+  assert.ok(!inRow.includes('class="btn'), 'and never both kits at once');
 });

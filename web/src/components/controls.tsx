@@ -1,9 +1,21 @@
-import type { JSX, ReactNode } from 'react';
+import { createContext, useContext, type JSX, type ReactNode } from 'react';
 import { Icon } from './icons.js';
 
 // → docs/spec/17-cockpit.md
 
 export const CONTROL_CLASS = 'cn-tgl';
+
+const ControlRow = createContext(false);
+
+/**
+ * Whether the caller is being drawn inside a control row.
+ *
+ * @public — the seam the link components (`DesktopLink`) read so a row's kit is
+ * the row's answer rather than something every call site has to remember.
+ */
+export function useInControlRow(): boolean {
+  return useContext(ControlRow);
+}
 
 type Tone = 'on' | 'primary' | 'danger';
 
@@ -40,7 +52,9 @@ export function ControlGroup({
           <Icon name={icon} size={11} />
           {caption}
         </span>
-        <span className="cn-ctlrow">{children}</span>
+        <span className="cn-ctlrow">
+          <ControlRow.Provider value={true}>{children}</ControlRow.Provider>
+        </span>
       </span>
     </>
   );
