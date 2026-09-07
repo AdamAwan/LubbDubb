@@ -99,6 +99,7 @@ export function anchorWeight(anchor: ReviewAnchor): 'key' | 'normal' | 'minor' {
   const changed = anchor.code.filter((l) => l.startsWith('+') || l.startsWith('-'));
   if (changed.length === 0) return 'minor';
   if (changed.every((l) => IMPORT_LINE.test(l))) return 'minor';
+  if (commentOnly(anchor.range.path, changed)) return 'minor';
   const written = changed.reduce((n, l) => n + l.trim().length, 0);
   return changed.length <= MINOR_LINES && written <= MINOR_CHARS ? 'minor' : 'normal';
 }
@@ -109,6 +110,20 @@ const IMPORT_LINE =
 const MINOR_LINES = 2;
 
 const MINOR_CHARS = 160;
+
+/**
+ * A hunk that changed only comments — a doc line reworded, a `<summary>` rewritten.
+ * It is a change a reader has no decision to make about, so it is drawn as one.
+ * Prose files are exempt: in Markdown a `#` line is the text, not a comment about it.
+ */
+function commentOnly(path: string, changed: readonly string[]): boolean {
+  if (PROSE_FILE.test(path)) return false;
+  return changed.every((l) => COMMENT_LINE.test(l));
+}
+
+const PROSE_FILE = /\.(?:md|markdown|txt|html?|rst|adoc)$/i;
+
+const COMMENT_LINE = /^[+-]\s*(?:\/\/|\/\*|\*|#|--|<!--|<\/?summary>|<\/?remarks>)/;
 
 type CodeLanguage = 'ts' | 'json';
 
@@ -269,4 +284,67 @@ export function highlightCode(code: readonly string[], language: CodeLanguage | 
 
 export function shortSha(sha: string): string {
   return sha.slice(0, 7);
+}
+
+/**
+ * The summary with the author's emphasis flattened.
+ *
+ * → docs/spec/31-review-packs.md#the-page
+ */
+export function plainSummary(summary: string): string {
+  return summary.replace(/(\*\*|__)(\S(?:[\s\S]*?\S)?)\1/g, '$2');
+}
+
+/**
+ * A prose body, split into its first paragraph and the rest.
+ *
+ * → docs/spec/31-review-packs.md#the-page
+ */
+export function splitBody(body: string): { lead: string; rest: string } {
+  const at = body.indexOf('\n\n');
+  if (at < 0) return { lead: body.trim(), rest: '' };
+  return { lead: body.slice(0, at).trim(), rest: body.slice(at).trim() };
+}
+
+/**
+ * The scenarios a test file's code declares, named the way a person would say them.
+ *
+ * → docs/spec/31-review-packs.md#coverage
+ */
+export function testScenarios(path: string, code: readonly string[]): string[] {
+  if (!TEST_FILE.test(path)) return [];
+  const names: string[] = [];
+  for (const raw of code) {
+    const line = raw.replace(/^[+\- ]/, '');
+    const named = TEST_NAMED.exec(line);
+    if (named !== null) {
+      const name = named[1]!.trim();
+      if (name !== '' && !names.includes(name)) names.push(name);
+      continue;
+    }
+    const method = TEST_METHOD.exec(line);
+    if (method !== null) {
+      const name = humanise(method[1]!);
+      if (!names.includes(name)) names.push(name);
+    }
+  }
+  return names.length >= MIN_SCENARIOS ? names : [];
+}
+
+const TEST_FILE = /(?:[Tt]ests?|[Ss]pecs?)\.[a-z]+$|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)(?:tests?|specs?)\//;
+
+const TEST_NAMED = /^\s*(?:it|test)(?:\.\w+)?\s*\(\s*['"`]([^'"`]+)['"`]/;
+
+const TEST_METHOD =
+  /^\s*(?:\[[^\]]*\]\s*)?(?:public|internal|private|protected)\s+(?:static\s+)?(?:async\s+)?(?:Task|void)\s+([A-Za-z_]\w*)\s*\(/;
+
+const MIN_SCENARIOS = 2;
+
+function humanise(name: string): string {
+  const words = name
+    .replace(/[_.]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .trim();
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }

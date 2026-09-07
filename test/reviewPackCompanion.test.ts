@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderReviewPackCompanion, reviewPackCompanionPath } from '../src/reviewPacks/companion.js';
-import { anchorWeight, codeBlockLines, falseClaims, numberIdeas, packFacts } from '../src/reviewPacks/derive.js';
+import {
+  anchorWeight,
+  codeBlockLines,
+  falseClaims,
+  numberIdeas,
+  packFacts,
+  plainSummary,
+  splitBody,
+  testScenarios,
+} from '../src/reviewPacks/derive.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
 import type { ReviewAnchor, ReviewIdea, ReviewPack, ReviewPackRecord } from '../src/types.js';
 import {
@@ -10,6 +19,9 @@ import {
   falseClaims as webFalseClaims,
   numberIdeas as webNumberIdeas,
   packFacts as webPackFacts,
+  plainSummary as webPlainSummary,
+  splitBody as webSplitBody,
+  testScenarios as webTestScenarios,
   KNOWN_REVIEW_PACK_SCHEMA,
 } from '../web/src/view/reviewPack.js';
 
@@ -244,7 +256,7 @@ test('every embedded line is escaped, and a cited pad entry is said to have stay
   assert.equal(html.includes('<script>alert(1)</script>'), false, 'embedded code cannot become markup');
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(html, /Shown because &lt;b&gt;you need it&lt;\/b&gt;/);
-  assert.match(html, /not in this PR/);
+  assert.match(html, /This file is not in the pull request/);
   assert.match(html, /scr_abc123/);
   assert.match(html, /stayed on the fleet that wrote it/);
 });
@@ -263,6 +275,31 @@ const WEIGHTS: [string, ReviewAnchor, 'key' | 'normal' | 'minor'][] = [
   [
     'a region is never mechanical — somebody put it there on purpose',
     { ...hunk({ code: ['const x = 1;'] }), kind: 'region' },
+    'normal',
+  ],
+  [
+    'a hunk that reworded a doc comment is mechanical, however long it is',
+    hunk({
+      range: { path: 'src/Consumer.cs', start: 4, end: 12 },
+      code: [
+        '-    /// Resolves the workflow of a target that was just unmatched by the system,',
+        '-    /// which is the only case the projector raised it for.',
+        '+    /// Resolves the workflow of a target whose binding changed, which now covers',
+        '+    /// a first bind as well as an unmatch or a rematch.',
+      ],
+    }),
+    'minor',
+  ],
+  [
+    'a Markdown heading is the text, not a comment about it',
+    hunk({
+      range: { path: 'docs/projector.md', start: 40, end: 44 },
+      code: [
+        '-# The trigger is an unmatch',
+        '+# The trigger is any binding change',
+        '+Every Matched, Rematched or Unmatched raises it, ordered against the newest binding.',
+      ],
+    }),
     'normal',
   ],
 ];
@@ -360,7 +397,52 @@ test('the companion and the cockpit agree on the derivations neither can share',
     );
     assert.deepEqual(packFacts(p), webPackFacts(p));
     for (const [what, anchor] of WEIGHTS) assert.equal(anchorWeight(anchor), webAnchorWeight(anchor), what);
+    assert.equal(plainSummary(p.summary), webPlainSummary(p.summary));
+    assert.deepEqual(splitBody('One.\n\nTwo.'), webSplitBody('One.\n\nTwo.'));
+    const testCode = ['+        public async Task A_B()', '+        public async Task C_D()'];
+    assert.deepEqual(testScenarios('Tests/XTests.cs', testCode), webTestScenarios('Tests/XTests.cs', testCode));
   }
+});
+
+test('the author’s emphasis is flattened, so a bullet reads as a sentence', () => {
+  assert.equal(
+    plainSummary('- **A first `Matched`** now raises it, in **both** places.'),
+    '- A first `Matched` now raises it, in both places.',
+  );
+  assert.equal(plainSummary('__Only__ that consumer moved.'), 'Only that consumer moved.');
+  assert.equal(plainSummary('nothing to flatten'), 'nothing to flatten');
+  assert.equal(plainSummary('a * b * c'), 'a * b * c', 'a stray asterisk is not emphasis');
+});
+
+test('a finding leads with its first paragraph, and the argument is what follows', () => {
+  const split = splitBody('The claim is wrong.\n\n| a | b |\n|---|---|\n\nAnd the rest.');
+  assert.equal(split.lead, 'The claim is wrong.');
+  assert.match(split.rest, /^\| a \| b \|/);
+  assert.deepEqual(splitBody('One paragraph only.'), { lead: 'One paragraph only.', rest: '' });
+});
+
+test('a test file is drawn as the cases it covers, not as a wall of code', () => {
+  const cs = testScenarios('Tests/LocalDb.Tests/ReconciliationFirstBindTests.cs', [
+    '+        [Fact]',
+    '+        public async Task FirstBind_RaisesWorkflowResolve()',
+    '+        {',
+    '+        }',
+    '+        public async Task Unmatch_KeepsTheOldGuard()',
+  ]);
+  assert.deepEqual(cs, ['First bind raises workflow resolve', 'Unmatch keeps the old guard']);
+
+  const ts = testScenarios('test/reviewPackPage.test.ts', [
+    "+test('a mechanical stop is folded', () => {",
+    "+it('draws the rail', () => {",
+  ]);
+  assert.deepEqual(ts, ['a mechanical stop is folded', 'draws the rail']);
+
+  assert.deepEqual(testScenarios('src/a.ts', ['+public async Task Whatever()']), [], 'only a test file');
+  assert.deepEqual(
+    testScenarios('test/a.test.ts', ["+it('only one case', () => {"]),
+    [],
+    'one name is a code block, not a list',
+  );
 });
 
 test('the companion lives beside the document it renders', () => {
