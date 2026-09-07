@@ -19,6 +19,7 @@ export function PlanAnswers({
   seedNote,
   desktopFolder,
   discussExplain,
+  onReadPlan,
   onDecide,
   onBackOut,
 }: {
@@ -30,6 +31,7 @@ export function PlanAnswers({
   seedNote?: string;
   desktopFolder: string;
   discussExplain: string;
+  onReadPlan?: () => void;
   onDecide: (
     id: string,
     verdict: 'accept' | 'reject',
@@ -73,6 +75,20 @@ export function PlanAnswers({
         >
           Change something first
         </button>
+        {/* The way into the plan, drawn as a peer of the answers rather than as a
+            banner above them: it is one of the things you can do here, and a card
+            that asks for a verdict should put reading the plan on the same row as
+            giving one. */}
+        {onReadPlan && (
+          <button
+            type="button"
+            className={buttonClass({ ghost: true })}
+            title="The split, the evidence, what it rules out"
+            onClick={onReadPlan}
+          >
+            Read the full plan →
+          </button>
+        )}
         {issueNumber !== null && (
           <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discussExplain} />
         )}

@@ -6399,12 +6399,14 @@ other.
   `<pre>` and their 180px cap — they are evidence you glance at, not the thing you are deciding.
 - **A plan approval reads as _what the plan does_, plus a way into the plan.** The quoted block is the
   planner's diagnosis and approach ([08](08-planning.md#requiring-approval)) — not the decomposition,
-  which is a diagram in the plan panel and a poor flat list here. Below it, `Read the full plan` is
-  drawn full-width and toned like the accept button rather than as one more ghost link beside
-  `Open agent transcript`: it is the click the card is asking for, ahead of the two that settle it, and
-  everything an approver would want that will not fit on a card — the split, the evidence, the risks,
-  what it ruled out — is behind it. One control on the card, not two: it was rendered in both arms of
-  the agent-actions row before, which is how it ended up looking like an afterthought in each.
+  which is a diagram in the plan panel and a poor flat list here. `Read the full plan` is one of the
+  answers, drawn in `PlanAnswers`' row beside Approve rather than as a full-width banner above the
+  checklist: reading the plan is a thing you do here, and a card asking for a verdict should put it
+  on the same row as giving one — a banner between the prose and the boxes read as a second heading
+  and pushed the answers further from the question. Everything an approver would want that will not
+  fit on a card — the split, the evidence, the risks, what it ruled out — is behind it. Where the
+  card is **not** asking for a verdict (a plan already decided), there is no answers row to sit in
+  and it keeps the full-width form. One control on the card, not two.
 
 - **A plan approval's caveats are tick boxes, and Approve is held until they are ticked.**
   `CaveatChecklist` draws what the proposal's action declares (`planCaveatsOf` reads the same row the
@@ -6449,13 +6451,19 @@ name on it. So the button is disabled rather than hidden until there is text, an
 says which of the three arms needs it.
 
 A **plan proposal carries two more arms**, `Close the ticket` and `Hold — stop watching`, set apart
-below the two verdicts the way `Dismiss` is — because neither answers the question the card asked.
+below the two verdicts — because neither answers the question the card asked.
 Approve and Reject are both about the plan, and a rejection sends the goal back to a planner; these
 two are about the **ticket**, and they are what an operator reaches for when the plan is fine and the
 work is not wanted ([08](08-planning.md#backing-out-of-a-plan)). They post to
 [`/api/proposals/:id/back-out`](16-http-api.md#post-apiproposalsidback-out). Close is disabled until
 there is text, for the overrule arm's reason and one
 more: those words go on somebody else's tracker as the reason the item closed.
+
+**A card that asks for a verdict carries no Dismiss.** Clearing an item without answering it is drawn
+on questions and permission asks, where there is otherwise nothing that settles the card. A proposal
+already has that answer — Reject, and under a plan the two ticket arms — and a second control that
+rejects under another name is one an operator presses meaning "not now", spending the verdict they
+did not mean to give.
 
 A card raised by an **unannounced stop** carries a clock. The chip in its head reads `done in 4m 12s`
 and the row beside `Open agent transcript` gains **Give me 15 minutes** next to **Mark work done** —
