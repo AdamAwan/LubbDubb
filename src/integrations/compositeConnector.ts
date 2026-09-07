@@ -25,6 +25,7 @@ import type {
 import type { TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff } from '../sink/signOff.js';
+import { markdownToHtml } from '../sink/markdownToHtml.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
 import {
@@ -119,7 +120,8 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
   }
 
   private signed(handler: Integration, body: string): string {
-    return signOff(body, handler.bodyFormat ?? 'markdown');
+    const format = handler.bodyFormat ?? 'markdown';
+    return signOff(format === 'html' ? markdownToHtml(body) : body, format);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
