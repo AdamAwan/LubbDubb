@@ -5,7 +5,8 @@ import { planAmendmentProposalRef, planProposalRef } from '../../proposals/propo
 import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
 import { partRestartRefusal, restartPlanPart } from '../../plans/partRestart.js';
 import { latestPlanDiff, proposedPlanDiff } from '../../plans/planDiff.js';
-import { amendmentWarnings, supersedePlanAmendments } from '../../plans/planAmendment.js';
+import { amendPlanInPlace, amendmentWarnings, supersedePlanAmendments } from '../../plans/planAmendment.js';
+import { regroupedDocument } from '../../plans/regroup.js';
 import { planNarrative, planPartInputs, validatePlanDocument } from '../../plans/planDocument.js';
 import type { PendingPlanAmendment, PlanHistory } from '../../wire.js';
 import type { PlanAmendment, PlanNarrative, PlanPartInput } from '../../types.js';
@@ -102,6 +103,53 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, part: updated };
+    }),
+  );
+
+  const RegroupBody = z.object({
+    groups: z
+      .array(
+        z.object({
+          slug: requiredText('every group needs the slug of the part it is'),
+          atoms: z.array(z.string().min(1), { invalid_type_error: 'atoms must be a list of atom slugs' }).default([]),
+          title: optionalText('title'),
+          scope: optionalText('scope'),
+        }),
+        {
+          required_error: 'groups is required — one entry per part, saying which atoms it carries',
+          invalid_type_error: 'groups must be a list — one entry per part, saying which atoms it carries',
+        },
+      )
+      .min(1, 'a regrouped plan still needs at least one part'),
+  });
+  app.post(
+    '/api/plans/:id/regroup',
+    checked({ params: IdParams, body: RegroupBody }, async ({ params, body, reply }) => {
+      const plan = store.getPlan(params.id);
+      if (!plan) return reply.code(404).send({ error: 'plan not found' });
+      const regrouped = regroupedDocument({
+        plan,
+        parts: store.listPlanParts(plan.id),
+        atoms: store.listAllPlanAtoms().filter((a) => a.planId === plan.id),
+        groups: body.groups,
+      });
+      if (!regrouped.ok) return reply.code(400).send({ error: regrouped.error });
+
+      const result = amendPlanInPlace(
+        { store, proposals },
+        plan,
+        regrouped.document,
+        'superseded by a regroup in the cockpit',
+      );
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return {
+        ok: true,
+        detail:
+          `The plan for ${plan.originRef} is regrouped into ${regrouped.document.parts.length} part(s) and is ` +
+          'waiting on your approval. Nothing is scheduled until you give it.',
+        retired: result.retired,
+      };
     }),
   );
 

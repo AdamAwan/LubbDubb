@@ -1,5 +1,8 @@
 import type { Store } from '../store/store.js';
+import type { ProposalDesk } from '../proposals/proposalDesk.js';
+import { planProposalRef } from '../proposals/proposals.js';
 import type { Plan, PlanAmendment, PlanAmendmentAuthor, PlanPart, PlanPartInput } from '../types.js';
+import type { PlanDocument } from './planDocument.js';
 import { validatePlanDocument, planNarrative, planPartInputs } from './planDocument.js';
 import { ingestPlanDocument } from './planIngest.js';
 import { proposedPlanDiff } from './planDiff.js';
@@ -17,6 +20,23 @@ interface ProposedAmendment {
   amendment: PlanAmendment;
   diff: PlanDiff | null;
   warnings: string[];
+}
+
+export function amendPlanInPlace(
+  deps: { store: Store; proposals: ProposalDesk },
+  plan: Plan,
+  doc: PlanDocument,
+  supersedes: string,
+): { status: string; retired: string[] } {
+  const pending = deps.store
+    .listProposals()
+    .find((p) => p.kind === 'plan' && p.ref === planProposalRef(plan.originRef) && p.status === 'pending');
+  if (pending) {
+    deps.store.setPlanStatus(plan.id, 'planning');
+    deps.proposals.reject(pending.id, supersedes);
+  }
+  const result = ingestPlanDocument(deps.store, { doc, originRef: plan.originRef, title: plan.title });
+  return { status: result.status, retired: result.retired };
 }
 
 export function proposePlanAmendment(

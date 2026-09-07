@@ -2,11 +2,9 @@ import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
-import { ingestPlanDocument } from '../plans/planIngest.js';
-import { proposePlanAmendment } from '../plans/planAmendment.js';
+import { amendPlanInPlace, proposePlanAmendment } from '../plans/planAmendment.js';
 import { issueOrigin } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
-import { planProposalRef } from '../proposals/proposals.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
@@ -380,7 +378,7 @@ const planAmend: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     const found = decompositionFor(deps, ref.issue);
     if (!found.ok) return toolError(found.error);
-    const { plan, originRef } = found;
+    const { plan } = found;
 
     if (plan.status === 'active') return amendRunningPlan(deps, plan, args);
 
@@ -395,19 +393,12 @@ const planAmend: DesktopToolFactory = (deps) => ({
     const parsed = validatePlanDocument(submittedPlanDocument(args));
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
-    const pending = deps.store
-      .listProposals()
-      .find((p) => p.kind === 'plan' && p.ref === planProposalRef(originRef) && p.status === 'pending');
-    if (pending) {
-      deps.store.setPlanStatus(plan.id, 'planning');
-      deps.proposals().reject(pending.id, 'superseded by a discussion at the operator’s own keyboard');
-    }
-
-    const result = ingestPlanDocument(deps.store, {
-      doc: parsed.document,
-      originRef,
-      title: plan.title,
-    });
+    const result = amendPlanInPlace(
+      { store: deps.store, proposals: deps.proposals() },
+      plan,
+      parsed.document,
+      'superseded by a discussion at the operator’s own keyboard',
+    );
     await deps.runCycle();
 
     return toolJson({

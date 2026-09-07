@@ -90,6 +90,7 @@ export interface CockpitActions {
   extendWatch(issueNumber: number, environment: string): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
   viewPlan(planId: string | null): void;
+  regroupPlanView(on: boolean): void;
   viewRetro(issueRef: string | null): void;
   hatchEgg(id: string | null): void;
   viewScratchpad(issueRef: string | null): void;
@@ -169,6 +170,10 @@ export interface CockpitActions {
   setIssueAreaPath(issueNumber: number, areaPath: string | null): Promise<void>;
   setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
   restartPart(planId: string, slug: string): Promise<void>;
+  regroupPlan(
+    planId: string,
+    groups: { slug: string; atoms: string[]; title?: string; scope?: string }[],
+  ): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 

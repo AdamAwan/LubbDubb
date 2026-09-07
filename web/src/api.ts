@@ -290,6 +290,8 @@ const realApi = {
     post<{ ok: true }>(`/api/plans/${planId}/part-profile`, { slug, profile: profile ?? '' }),
   restartPart: (planId: string, slug: string) =>
     post<{ ok: true; detail: string }>(`/api/plans/${planId}/restart-part`, { slug }),
+  regroupPlan: (planId: string, groups: { slug: string; atoms: string[]; title?: string; scope?: string }[]) =>
+    post<{ ok: true; detail: string }>(`/api/plans/${planId}/regroup`, { groups }),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/conclusion`, { verdict }),
   addInstruction: (issueNumber: number, text: string) =>

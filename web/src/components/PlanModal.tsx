@@ -26,6 +26,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { PlanMap } from './PlanMap.js';
+import { PlanRegroup } from './PlanRegroup.js';
 import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { WatchDigest } from './WatchDigest.js';
@@ -59,6 +60,9 @@ export function PlanModal({
   onOpenGoal,
   onPartProfile,
   onRestartPart,
+  regrouping,
+  onRegroupView,
+  onRegroup,
   canClosePr,
   profiles,
   defaultProfile,
@@ -90,12 +94,20 @@ export function PlanModal({
   onOpenGoal: (issueRef: string) => void;
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
   onRestartPart: (planId: string, slug: string) => Promise<unknown> | unknown;
+  regrouping?: boolean;
+  onRegroupView?: (on: boolean) => void;
+  onRegroup?: (
+    planId: string,
+    groups: { slug: string; atoms: string[]; title?: string; scope?: string }[],
+  ) => Promise<unknown> | unknown;
   canClosePr: boolean;
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
   desktopFolder: string;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
+  const regroupable = atoms.length > 0 && plan.status === 'awaiting_approval' && !parts.some(partInFlight);
+  const regroup = regrouping === true && regroupable;
   const [focused, setFocused] = useState<string | null>(null);
   const history = usePlanHistory(plan.id, plan.updatedAt);
   const body = useRef<HTMLDivElement>(null);
@@ -125,6 +137,7 @@ export function PlanModal({
       : 'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.';
 
   const jump = (key: string): void => {
+    onRegroupView?.(false);
     setView('plan');
     requestAnimationFrame(() => sections.current[key]?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   };
@@ -191,6 +204,15 @@ export function PlanModal({
         {/* A view, not a jump — a different document, so it reads as a different
               control. Absent until there is a second revision to be a change from,
               or a change waiting on the operator to be asked about. */}
+        {regroupable && (
+          <button
+            className={`pm-jump history${regroup ? ' on' : ''}`}
+            title="Move an atom from one part to another — the work is the same, the merge boundaries are not"
+            onClick={() => onRegroupView?.(!regroup)}
+          >
+            {regroup ? 'Back to the plan' : 'Regroup'}
+          </button>
+        )}
         {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
           <button
             className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
@@ -210,7 +232,14 @@ export function PlanModal({
       </div>
 
       <div className="pm-body" ref={body}>
-        {view === 'history' ? (
+        {regroup ? (
+          <PlanRegroup
+            parts={live}
+            atoms={atoms}
+            onRegroup={(groups) => onRegroup?.(plan.id, groups)}
+            onClose={() => onRegroupView?.(false)}
+          />
+        ) : view === 'history' ? (
           <HistoryView history={history} now={now} />
         ) : (
           <>
@@ -956,4 +985,13 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
 function kindOf(part: PlanPartView): string | null {
   const kind = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : (part.expectedKind ?? null);
   return kind && kind !== 'code' ? kind : null;
+}
+
+function partInFlight(part: PlanPartView): boolean {
+  return (
+    part.status === 'dispatched' ||
+    part.status === 'in_review' ||
+    part.status === 'merged' ||
+    part.status === 'concluded'
+  );
 }

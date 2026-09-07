@@ -769,6 +769,24 @@ class DemoServer {
     return { ok: true, detail: `closed PR #${prNumber} and put "${slug}" back to ready` };
   }
 
+  async regroupPlan(
+    planId: string,
+    groups: { slug: string; atoms: string[]; title?: string; scope?: string }[],
+  ): Promise<{ ok: true; detail: string }> {
+    const parts = (this.state.planParts ?? []).filter((p) => p.planId === planId);
+    const byGroup = new Map(groups.map((g) => [g.slug, g]));
+    for (const part of parts) {
+      const group = byGroup.get(part.slug);
+      part.atoms = group?.atoms ?? [];
+    }
+    this.state.planParts = [
+      ...parts.filter((p) => byGroup.has(p.slug)),
+      ...(this.state.planParts ?? []).filter((p) => p.planId !== planId),
+    ];
+    this.dirty();
+    return { ok: true, detail: `regrouped into ${groups.length} part(s)` };
+  }
+
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
@@ -4106,6 +4124,8 @@ export const demoApi = {
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
     getServer().setPartProfile(planId, slug, profile),
   restartPart: (planId: string, slug: string) => getServer().restartPart(planId, slug),
+  regroupPlan: (planId: string, groups: { slug: string; atoms: string[]; title?: string; scope?: string }[]) =>
+    getServer().regroupPlan(planId, groups),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>

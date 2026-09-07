@@ -123,15 +123,48 @@ Beside the checks on parts above, `PlanDocumentSchema`'s refinement adds:
 field keeps the meaning it had and `scopeDrift` keeps working unchanged. A part that states its own
 `touches` keeps them: the part's claim is the one drift is measured against.
 
+### Regrouping
+
+**The grouping is the operator's, and changing it is an amended document — never a second write into
+`plan_parts`.** `POST /api/plans/:id/regroup` takes the grouping the operator wants (which atom slugs
+each part carries, plus any part they added), rebuilds the plan's **whole document** from what is
+stored — the narrative off the `plans` row, the atoms off `plan_atoms` verbatim, the parts off
+`plan_parts` with only their `atoms` replaced — and hands it to `ingestPlanDocument` like any other
+document. `src/plans/regroup.ts` builds it; `amendPlanInPlace` (`src/plans/planAmendment.ts`) is the
+one function that performs the in-place amendment, shared with `plan_amend`'s `awaiting_approval` arm
+so the two cannot drift.
+
+Because it is an ordinary document, **a regroup is refused by exactly the refinement above**. The
+cycle refusal is the one that matters here, and it is what stops a bad grouping rather than any check
+the surface invents: a grouping that puts two parts in a cycle is a part held `pending` forever with
+nothing red. What the cockpit adds is that the operator sees it _before_ they commit —
+[17](17-cockpit.md#regrouping-the-atoms) says how.
+
+**Only where the amendment rules already apply.** `regroupRefusal` offers it on `awaiting_approval`
+and nowhere else, and each refusal names the route that does apply: an `active` plan's change is an
+amendment its author proposes and the operator accepts, `planning` is already with a planner, and a
+settled plan schedules nothing. It refuses a plan with **no atoms** — there is nothing to regroup —
+and a plan with **work in flight on any part**, naming the part, its status and its pull request: a
+part with a branch is progress, and moving the merge boundaries through work already being carried
+out is not a thing an amendment may do.
+
+Two derivations make the rebuilt document mean what the grouping says:
+
+- **A part's `dependsOn` is recomputed** as its own declared edges (minus any part the regroup
+  dropped) plus the parts carrying the atoms its atoms depend on. Without that, moving an atom into a
+  new part would leave that part unstacked — dispatched in parallel with the work it waits on, off a
+  base that does not have it yet.
+- **A part whose `touches` were derived from its atoms goes back to deriving them.** Stored `touches`
+  that exactly equal the union of the atoms the part carries were the derivation above, so they are
+  omitted and re-derive from the atoms it now carries; `touches` the part actually stated are kept,
+  because the part's own claim is what `scopeDrift` is measured against.
+
 ### What is built, and what is not
 
-Built: the atoms in the document and the store, the refusals above, `atomNote`, and the plan sheet
-drawing a part's atoms **read-only** — the title, the intent, the paths, the acceptance, the routes
-the planner rejected. Nothing on that surface is a control.
+Built: the atoms in the document and the store, the refusals above, `atomNote`, the plan sheet drawing
+a part's atoms **read-only**, and the regroup route and surface above.
 
-Not built yet, and named here so the shape is not reinvented: _regrouping_ (an operator surface off
-the plan panel writing an amended document through the existing `awaiting_approval` amendment route —
-there is deliberately no second write path into `plan_parts`); _one commit per atom_ from the part
+Not built yet, and named here so the shape is not reinvented: _one commit per atom_ from the part
 agent, which would grow `partDeclarationNote`; and _the review pack keyed on the atom_
 ([31](31-review-packs.md)), where an idea would carry the atom it corresponds to and an idea the
 atoms do not cover is a finding rather than an error. Until those land, `partDeclarationNote` says
