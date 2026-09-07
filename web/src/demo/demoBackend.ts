@@ -51,7 +51,12 @@ import type {
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
+  ReviewAttention,
   ReviewCalibration,
+  ReviewMark,
+  ReviewMarksPayload,
+  ReviewPack,
+  ReviewRange,
   RemedyCause,
   RemedyInsights,
   RemedyRow,
@@ -2031,6 +2036,299 @@ function getServer(): DemoServer {
   return server;
 }
 
+const DEMO_PACK_HEAD = 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27';
+
+const DEMO_PAD_AT = new Date(Date.now() - 5 * 3_600_000).toISOString();
+
+/**
+ * The review pack for PR #413, the one open pull request whose plan part declares
+ * atoms. It is written and checked, so the page draws every reading it has: the
+ * gate over a false claim, the checker's order and cues, the two ideas that name
+ * the atoms their part carries, the idea that names none — the finding — and the
+ * `plumbing` idea, which is exempt from that reading rather than an example of it.
+ * → docs/spec/31-review-packs.md, docs/spec/17-cockpit.md#demo-mode
+ */
+const DEMO_REVIEW_PACK: ReviewPack = {
+  schema: 1,
+  prNumber: 413,
+  headSha: DEMO_PACK_HEAD,
+  headline: 'Every job is now checked against the catalog before its row is written.',
+  summary: [
+    '- The **enqueue** asks the catalog, so a bad payload never reaches the queue.',
+    '- The four routes **stop parsing** payloads of their own.',
+    '- The retry count moved too, and **the plan did not ask for that** — idea 02.',
+  ].join('\n'),
+  estimatedMinutes: 9,
+  order: ['idea_enqueue', 'idea_retries', 'idea_routes', 'plumbing'],
+  witnessed: true,
+  fake: 'nothing',
+  ideas: [
+    {
+      id: 'idea_enqueue',
+      atom: 'enqueue-validates',
+      claim: 'Every enqueue path validates its payload against the catalog before writing a row.',
+      title: 'A job is checked before it is queued, not after',
+      cue: 'Read: this is the guarantee the whole change exists to make.',
+      attention: 'read',
+      coverage: ['an unknown job type is refused by name', 'a valid payload still enqueues'],
+      anchors: [
+        {
+          kind: 'hunk',
+          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 18, end: 27 },
+          code: [
+            ' export async function enqueue(type: JobType, payload: unknown) {',
+            '+  const schema = catalog.schemaFor(type);',
+            '+  const parsed = schema.parse(payload);',
+            '-  return db.jobs.insert({ type, payload });',
+            '+  return db.jobs.insert({ type, payload: parsed });',
+            ' }',
+          ],
+          gist: 'The catalog is asked here, and the parsed payload is what gets stored.',
+          note: {
+            by: 'witness',
+            text: 'Chose to throw rather than to drop the job: a queue that silently loses work is worse than one that fails loudly.',
+            entryId: 'scr_kf20a7',
+            at: DEMO_PAD_AT,
+          },
+          caption: 'the whole guarantee',
+          mark: 'key',
+        },
+        {
+          kind: 'region',
+          range: { path: 'apps/watcher/src/worker-loop.ts', start: 64, end: 69 },
+          code: [
+            '  const job = await claimNextJob();',
+            '  // No validation here — the row was checked at enqueue.',
+            '  await runners[job.type](job.payload);',
+          ],
+          gist: 'Should the watcher have changed too? No — part 3 does that, and it is not in this diff.',
+          note: null,
+          caption: 'unchanged, and deliberately',
+          mark: null,
+        },
+      ],
+      claims: [
+        {
+          text: 'Every enqueue path goes through this function.',
+          provenance: { kind: 'inferred' },
+          verdict: 'false',
+          evidence:
+            'Three callers reach `db.jobs.insert` directly: apps/api/src/features/reindex/backfill.ts:88, apps/api/src/admin/replay.ts:41, and the seed script.',
+          finding: {
+            headline: 'The backfill still inserts jobs without asking the catalog.',
+            body: 'The claim is what the change rests on, and it is not true of `backfill.ts`, which builds its rows and calls `db.jobs.insert` itself. A reindex can still queue a payload the catalog would refuse, which is the exact failure this pull request exists to close.\n\nIt is one call site and the fix is the same two lines, but it is a decision rather than a nit: taking the backfill through `enqueue` also takes it through the rate limit, which it deliberately skips today.',
+            step: 1,
+            counter: {
+              range: { path: 'apps/api/src/features/reindex/backfill.ts', start: 86, end: 90 },
+              code: [
+                '  for (const doc of batch) {',
+                '    await db.jobs.insert({ type: "index", payload: { docId: doc.id } });',
+                '  }',
+              ],
+              caption: 'the path that skips the check',
+            },
+          },
+        },
+        {
+          text: 'The catalog throws by name on an unknown job type.',
+          provenance: { kind: 'witnessed', entryId: 'scr_kf20a7' },
+          verdict: 'true',
+          evidence:
+            'packages/jobs/src/catalog.ts:31 throws `UnknownJobType(type)`; the test at test/catalog.test.ts:22 covers it.',
+          finding: null,
+        },
+      ],
+    },
+    {
+      id: 'idea_retries',
+      atom: null,
+      claim: 'A failed job is retried three times rather than five, and the backoff is now exponential.',
+      title: 'Retries went from five to three, with a longer wait',
+      cue: 'Split: nobody asked for this, and it decides on its own how the queue behaves under load.',
+      attention: 'split',
+      coverage: [],
+      anchors: [
+        {
+          kind: 'hunk',
+          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 41, end: 45 },
+          code: [
+            '-  attempts: 5,',
+            '-  backoffMs: 30_000,',
+            '+  attempts: 3,',
+            '+  backoffMs: (n: number) => 30_000 * 2 ** n,',
+          ],
+          gist: 'The retry policy changed in the same commit as the validation.',
+          note: {
+            by: 'author',
+            text: 'Nothing in the plan or the pad mentions retries. It may be right — a payload the catalog refuses will never succeed on a retry — but it is a separate decision and it is not stated anywhere.',
+          },
+          caption: 'not asked for',
+          mark: 'key',
+        },
+      ],
+      claims: [
+        {
+          text: 'No job type depends on more than three attempts.',
+          provenance: { kind: 'inferred' },
+          verdict: 'cant_tell',
+          evidence:
+            'Nothing in the repository states an attempt budget per type; the only evidence either way is production data this checkout has no access to.',
+          finding: null,
+        },
+      ],
+    },
+    {
+      id: 'idea_routes',
+      atom: 'drop-route-parsers',
+      claim: 'No route parses a payload shape of its own; each hands the body to the enqueue.',
+      title: 'Four routes stop having opinions about payloads',
+      cue: 'Decide: three of the four are mechanical, and the fourth changes what a client is sent.',
+      attention: 'decide',
+      coverage: ['each route still rejects a malformed body', 'the error body keeps its shape'],
+      anchors: [
+        {
+          kind: 'hunk',
+          range: { path: 'apps/api/src/features/jobs/index.route.ts', start: 12, end: 16 },
+          code: [
+            '-  const body = IndexPayload.parse(await req.json());',
+            '-  await enqueue("index", body);',
+            '+  await enqueue("index", await req.json());',
+          ],
+          gist: 'The route hands the body over unparsed; one of four, all identical.',
+          note: null,
+          caption: 'one of four',
+          mark: null,
+        },
+      ],
+      claims: [
+        {
+          text: 'All four routes returned the same 400 body before, and still do.',
+          provenance: { kind: 'disputed', entryId: 'scr_kf31b2' },
+          verdict: 'true',
+          evidence:
+            'The pad says the search route returned a bare string; it does not — apps/api/src/features/jobs/search.route.ts:19 has used the shared error body since #341.',
+          finding: null,
+        },
+      ],
+    },
+    {
+      id: 'plumbing',
+      atom: null,
+      claim: 'These hunks carry nothing to review: an import order, a lockfile and a moved type.',
+      title: 'Formatting, a lockfile and one moved type',
+      cue: 'Skim: nothing here changes behaviour.',
+      attention: 'skim',
+      coverage: [],
+      anchors: [
+        {
+          kind: 'hunk',
+          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 1, end: 4 },
+          code: [
+            '-import { db } from "../db.js";',
+            '+import { catalog } from "@magpie/jobs";',
+            '+import { db } from "../db.js";',
+          ],
+          gist: 'The import the catalog needs, in the order the linter wants.',
+          note: null,
+          caption: 'imports',
+          mark: null,
+        },
+      ],
+      claims: [
+        {
+          text: 'None of these hunks changes behaviour.',
+          provenance: { kind: 'inferred' },
+          verdict: 'true',
+          evidence: 'Each is an import, a lockfile line or a type moved without its shape changing.',
+          finding: null,
+        },
+      ],
+    },
+  ],
+};
+
+const DEMO_REVIEW_PACK_WRITTEN_AT = new Date(Date.now() - 40 * 60_000).toISOString();
+
+/**
+ * The pull request's own pad — the witness log behind the pack for #413. It holds
+ * exactly the two entries the pack's claims cite, because a `witnessed` claim whose
+ * entry the reader cannot see is the retelling the verbatim rendering exists to
+ * prevent.
+ * → docs/spec/31-review-packs.md#the-witness-log
+ */
+const DEMO_PR_PAD = [
+  {
+    id: 'scr_kf20a7',
+    padRef: 'pr:413',
+    authorOriginRef: 'issue:390:part:validate',
+    agentId: 'agent_h72kd',
+    taskId: 'task-413-validate',
+    topic: 'enqueue',
+    note: 'The catalog lookup goes at enqueue, not in the watcher. By the time the watcher reads a row the bad job is already queued, and the queue is what a person ends up cleaning out by hand.',
+    decision: {
+      chose: 'Throw at enqueue when the catalog refuses the payload.',
+      because: 'A caller that gets an error can fix its request; a job that vanishes quietly cannot be found.',
+      rejected: [
+        {
+          alternative: 'Drop the job and log it.',
+          because: 'A queue that silently loses work is worse than one that fails loudly.',
+        },
+        {
+          alternative: 'Validate in the watcher, where the payload is actually read.',
+          because: 'The row is already written by then, and nothing tells the caller.',
+        },
+      ],
+      paths: ['apps/api/src/jobs/enqueue.ts'],
+    },
+    createdAt: DEMO_PAD_AT,
+  },
+  {
+    id: 'scr_kf31b2',
+    padRef: 'pr:413',
+    authorOriginRef: 'issue:390:part:validate',
+    agentId: 'agent_h72kd',
+    taskId: 'task-413-validate',
+    topic: 'routes',
+    note: 'Careful with the four routes: the search one returns a bare string on a 400 rather than the shared error body, so deleting its parser changes what a client sees.',
+    decision: null,
+    createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
+  },
+];
+
+/**
+ * The reviewer's marks, held beside the pack rather than in it — the demo's copy of
+ * the rule that what a reviewer does is never written back into the document. Held
+ * in module state so a mark survives leaving the pack and coming back, the way the
+ * real one survives a reload.
+ * → docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack
+ */
+const demoReviewMarks = new Map<string, ReviewMark>();
+
+const demoHunksOf = (ideaId: string): ReviewRange[] =>
+  (DEMO_REVIEW_PACK.ideas.find((i) => i.id === ideaId)?.anchors ?? [])
+    .filter((a) => a.kind === 'hunk')
+    .map((a) => a.range);
+
+const demoMarkKey = (hunk: ReviewRange): string => `${hunk.path}:${hunk.start}-${hunk.end}`;
+
+function demoMark(ideaId: string, patch: Partial<Pick<ReviewMark, 'read' | 'seen' | 'attention'>>): ReviewMarksPayload {
+  for (const hunk of demoHunksOf(ideaId)) {
+    const key = demoMarkKey(hunk);
+    const prev = demoReviewMarks.get(key);
+    demoReviewMarks.set(key, {
+      prNumber: 413,
+      hunk,
+      headSha: DEMO_PACK_HEAD,
+      attention: prev?.attention ?? null,
+      read: prev?.read ?? false,
+      seen: prev?.seen ?? false,
+      ...patch,
+      markedAt: new Date().toISOString(),
+    });
+  }
+  return { marks: [...demoReviewMarks.values()] };
+}
+
 const DEMO_REVIEW_CALIBRATION: ReviewCalibration = {
   window: {
     key: 'all',
@@ -2042,10 +2340,28 @@ const DEMO_REVIEW_CALIBRATION: ReviewCalibration = {
     buckets: 30,
     session: null,
   },
-  packs: 0,
-  overrides: { labelled: 0, overridden: 0, upgrades: 0, downgrades: 0, sideways: 0, pairs: [] },
-  plumbing: { hunks: 0, plumbingHunks: 0, ratio: null, worst: [] },
-  prominence: { packsWithFalse: 0, falseClaims: 0, ideas: 0, seen: 0, mergedUnseen: [] },
+  // The reading is of the one pack the demo holds (#413), counted rather than
+  // invented: four hunks of which one is plumbing, four labelled ideas none of
+  // which a reviewer has overridden yet, and the one false claim, unseen — a
+  // reading that would contradict the pack a visitor can open is worse than none.
+  packs: 1,
+  overrides: { labelled: 4, overridden: 0, upgrades: 0, downgrades: 0, sideways: 0, pairs: [] },
+  plumbing: {
+    hunks: 4,
+    plumbingHunks: 1,
+    ratio: 0.25,
+    worst: [
+      {
+        prNumber: 413,
+        headSha: DEMO_PACK_HEAD,
+        writtenAt: DEMO_REVIEW_PACK_WRITTEN_AT,
+        hunks: 4,
+        plumbingHunks: 1,
+        ratio: 0.25,
+      },
+    ],
+  },
+  prominence: { packsWithFalse: 1, falseClaims: 1, ideas: 4, seen: 0, mergedUnseen: [] },
 };
 
 const DEMO_RETROSPECTIVE = {
@@ -3962,15 +4278,37 @@ export const demoApi = {
   }) => Promise.resolve(demoTickets(query)),
   getRetrospective: (ref: string) =>
     Promise.resolve({ retrospective: ref === 'issue:364' ? DEMO_RETROSPECTIVE : null }),
-  getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : [] }),
-  getReviewPack: (): Promise<ReviewPackReading> => Promise.resolve({ kind: 'none', writing: false }),
+  getScratchpad: (ref: string) =>
+    Promise.resolve({
+      padRef: ref,
+      entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : ref === 'pr:413' ? DEMO_PR_PAD : [],
+    }),
+  getReviewPack: (prNumber: number): Promise<ReviewPackReading> =>
+    Promise.resolve(
+      prNumber === DEMO_REVIEW_PACK.prNumber
+        ? {
+            kind: 'pack',
+            payload: {
+              pack: DEMO_REVIEW_PACK,
+              writtenAt: DEMO_REVIEW_PACK_WRITTEN_AT,
+              marks: [...demoReviewMarks.values()],
+              head: DEMO_PACK_HEAD,
+              stale: null,
+              checking: false,
+              sharing: { available: false, share: null },
+            },
+          }
+        : { kind: 'none', writing: false },
+    ),
   requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
   shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
   unshareReviewPack: () => Promise.reject(new Error('the demo has no pool to unshare a review pack from')),
   getReviewCalibration: () => Promise.resolve({ calibration: DEMO_REVIEW_CALIBRATION }),
-  markReviewIdeaRead: () => Promise.reject(new Error('the demo has no review pack to mark')),
-  markReviewFindingSeen: () => Promise.reject(new Error('the demo has no review pack to mark')),
-  overrideReviewAttention: () => Promise.reject(new Error('the demo has no review pack to mark')),
+  markReviewIdeaRead: (_prNumber: number, ideaId: string, read: boolean) => Promise.resolve(demoMark(ideaId, { read })),
+  markReviewFindingSeen: (_prNumber: number, ideaId: string, seen: boolean) =>
+    Promise.resolve(demoMark(ideaId, { seen })),
+  overrideReviewAttention: (_prNumber: number, ideaId: string, attention: ReviewAttention | null) =>
+    Promise.resolve(demoMark(ideaId, { attention })),
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
   getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),

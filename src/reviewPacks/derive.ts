@@ -1,4 +1,5 @@
 import type { ReviewAnchor, ReviewClaim, ReviewIdea, ReviewPack, ReviewRange } from '../types.js';
+import { PLUMBING_IDEA_ID } from './hunks.js';
 
 // → docs/spec/31-review-packs.md
 
@@ -51,11 +52,16 @@ type IdeaAtom = { kind: 'declared'; slug: string } | { kind: 'undeclared' } | { 
  * covers is the pack's most valuable sentence — the work went somewhere the plan
  * did not declare — and a pack for a pull request with no atoms behind it draws
  * `none`, which is nothing at all.
+ *
+ * `plumbing` is exempt: it owns the hunks that carry nothing to review, which no
+ * planner would ever have declared an atom for, so reading it as undeclared work
+ * would put a false finding on every pack that has atoms.
  * → docs/spec/31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding
  */
 export function ideaAtom(pack: ReviewPack, idea: ReviewIdea): IdeaAtom {
   const named = idea.atom ?? null;
   if (named !== null) return { kind: 'declared', slug: named };
+  if (idea.id === PLUMBING_IDEA_ID) return { kind: 'none' };
   return pack.ideas.some((i) => (i.atom ?? null) !== null) ? { kind: 'undeclared' } : { kind: 'none' };
 }
 
