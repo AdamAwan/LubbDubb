@@ -455,3 +455,46 @@ test('the board needs the flag and a provider that can place a work item', () =>
   assert.equal(featureBoardOn({ featureBoard: false }, azure), false);
   assert.equal(featureBoardOn({ featureBoard: false }, github), false);
 });
+
+test('a closed story with no Feature leaves the board, but its spend does not', () => {
+  const board = build({
+    items: [
+      item({ number: 11, parent: null }),
+      item({ number: 12, parent: null, state: 'closed' }),
+      item({ number: 13, parent: { number: 900, title: 'Environments' }, state: 'closed' }),
+    ],
+    costs: new Map([
+      [11, 1],
+      [12, 2],
+      [13, 4],
+    ]),
+  });
+
+  assert.deepEqual(
+    board.orphans?.children.map((c) => c.number),
+    [11],
+    'the closed orphan is history, not a card',
+  );
+  assert.equal(board.orphans?.counts.total, 1);
+  assert.equal(board.orphans?.costUsd, 3, 'and its spend keeps rolling up under no Feature');
+  assert.deepEqual(
+    board.features[0]?.children.map((c) => c.number),
+    [13],
+    'a closed child under a Feature stays in its parent’s counts',
+  );
+});
+
+test('a bucket of nothing but closed orphans still says what it cost', () => {
+  const board = build({
+    items: [item({ number: 21, parent: null, state: 'closed' })],
+    costs: new Map([[21, 5]]),
+  });
+
+  assert.equal(board.orphans?.children.length, 0);
+  assert.equal(board.orphans?.counts.total, 0);
+  assert.equal(board.orphans?.costUsd, 5);
+});
+
+test('a board with no orphans at all still has no bucket', () => {
+  assert.equal(build({ items: [item({ number: 31 })] }).orphans, null);
+});
