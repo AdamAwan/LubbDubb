@@ -1,6 +1,6 @@
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
-import type { Plan, PlanPart } from '../../types.js';
+import type { Plan, PlanAtom, PlanPart } from '../../types.js';
 import {
   bySlug,
   liveParts,
@@ -39,6 +39,7 @@ export function planPart(s: StageContext): void {
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
 
     const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
+    const atoms = (ctx.planAtoms ?? []).filter((a) => a.planId === plan.id);
     const index = bySlug(parts);
     const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
     let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
@@ -54,7 +55,7 @@ export function planPart(s: StageContext): void {
           depth,
           issueNumber,
           seq: part.seq,
-          candidate: partCandidate(s, plan, issue, part, parts, index, issueNumber, 'unapproved'),
+          candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, 'unapproved'),
         });
         continue;
       }
@@ -84,7 +85,7 @@ export function planPart(s: StageContext): void {
         depth,
         issueNumber,
         seq: part.seq,
-        candidate: partCandidate(s, plan, issue, part, parts, index, issueNumber, held),
+        candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, held),
       });
     }
   }
@@ -98,6 +99,7 @@ function partCandidate(
   issue: { number: number; title: string },
   part: PlanPart,
   parts: PlanPart[],
+  atoms: PlanAtom[],
   index: Map<string, PlanPart>,
   issueNumber: number,
   held: 'cooldown' | 'capped' | 'unapproved' | undefined,
@@ -143,7 +145,7 @@ function partCandidate(
           done,
           remaining,
         }) +
-        partDeclarationNote(part) +
+        partDeclarationNote(part, atoms) +
         budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
         s.watchDeclareNote,

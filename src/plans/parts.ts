@@ -1,6 +1,6 @@
 import { prState } from '../prHealth.js';
 import { prRef, type PrRefStyle } from '../prRef.js';
-import type { PartOutcomeKind, Plan, PlanPart, PullRequest } from '../types.js';
+import type { PartOutcomeKind, Plan, PlanAtom, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/08-planning.md
 
@@ -199,8 +199,16 @@ export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
     .map((text) => ({ text, met: met.has(text) }));
 }
 
-export function partDeclarationNote(part: PlanPart): string {
-  if (part.touches.length === 0 && part.acceptance === null) return '';
+function partAtoms(part: PlanPart, planAtoms: readonly PlanAtom[]): PlanAtom[] {
+  const carried = part.atoms;
+  if (carried === undefined || carried.length === 0) return [];
+  const bySlug = new Map(planAtoms.map((a) => [a.slug, a]));
+  return carried.flatMap((slug) => bySlug.get(slug) ?? []);
+}
+
+export function partDeclarationNote(part: PlanPart, planAtoms: readonly PlanAtom[] = []): string {
+  const atoms = partAtoms(part, planAtoms);
+  if (part.touches.length === 0 && part.acceptance === null && atoms.length === 0) return '';
   const lines: string[] = [];
   if (part.touches.length > 0) {
     lines.push(
@@ -215,7 +223,33 @@ export function partDeclarationNote(part: PlanPart): string {
         `pull request, so treat it as the specification rather than as a summary of one.`,
     );
   }
+  const first = atoms[0];
+  if (first !== undefined) lines.push(atomCommitNote(first, atoms));
   return `\n\n---\n\n${lines.join('\n\n')}`;
+}
+
+function atomCommitNote(first: PlanAtom, atoms: readonly PlanAtom[]): string {
+  const declared = atoms
+    .map((atom) => {
+      const paths = atom.touches.length === 0 ? '' : `\n  paths: ${atom.touches.join(', ')}`;
+      const done = atom.acceptance === null ? '' : `\n  done when: ${atom.acceptance}`;
+      return `- \`${atom.slug}\` — ${atom.title}\n  why: ${atom.intent}${paths}${done}`;
+    })
+    .join('\n');
+  return (
+    `**The atoms of this part**, as its planner declared them. An atom is the smallest piece of this ` +
+    `change that could land, be reviewed and be rolled back on its own:\n${declared}\n\n` +
+    `**Write one commit per atom, in this order.** They are the journey, not the boundary: the part ` +
+    `is what gets merged, and the merge squashes them away. What they buy is a reviewer who can walk ` +
+    `your change in the order you reasoned it, before they open anything else. So the series is a ` +
+    `reading and nothing checks it — if the work turns out to need a different shape, write the ` +
+    `commits the work actually has and say so in your pull request rather than bending it back.\n\n` +
+    `The message is already written for you: the subject is the atom's slug and title, and the body ` +
+    `is its intent.\n\n` +
+    '```\n' +
+    `${first.slug}: ${first.title}\n\n${first.intent}\n` +
+    '```'
+  );
 }
 
 export function partOutcomeNote(part: PlanPart): string {
