@@ -1661,6 +1661,12 @@ select:disabled {
    whole point: they answer a different question, and a row of five peers is what
    let an operator who had decided the *ticket* was wrong press the one that
    re-plans the goal. */
+/* The answers themselves. The gap is the point: above them sits the amber box of
+   boxes to tick, and with no rule of its own the row of buttons read as part of
+   that box rather than as what the card is asking for. */
+.pa-row {
+  margin-top: 12px;
+}
 .pa-backout {
   display: flex;
   flex-wrap: wrap;

@@ -78,6 +78,11 @@ export function EscalationCard({
   const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
   const body = proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose;
   const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
+  /* The goal number, from the escalation's context or from the origin it was
+     raised on. Both spell the same goal, and only the first is always set: a card
+     that has just the origin was dropping the Claude Code hand-off, which is the
+     one answer here that needs the number. */
+  const issueNumber = goalNumber(context);
   const overrulable =
     decidable?.kind === 'shortfall' && onOverrule && typeof context.issueNumber === 'number'
       ? { proposalId: decidable.id, issueNumber: context.issueNumber }
@@ -202,7 +207,7 @@ export function EscalationCard({
         </div>
       ) : null}
 
-      {planId ? (
+      {planId && !planDecidable ? (
         <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
           <span className="esc-plan-open-label">Read the full plan</span>
           <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
@@ -248,11 +253,12 @@ export function EscalationCard({
           <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
           <PlanAnswers
             proposalId={planDecidable.id}
-            issueNumber={typeof context.issueNumber === 'number' ? context.issueNumber : null}
+            issueNumber={issueNumber}
             approveLabel={ACCEPT_LABEL.plan ?? 'Approve'}
             outstanding={ack.outstanding}
             acknowledged={ack.acknowledged}
             desktopFolder={desktopFolder}
+            {...(planId ? { onReadPlan: () => onViewPlan!(planId) } : {})}
             discussExplain="so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does."
             onDecide={onDecide!}
             onBackOut={onBackOut!}
@@ -326,15 +332,19 @@ export function EscalationCard({
         </form>
       )}
 
-      {onDismiss && (
+      {/* Not on a card that asks for a verdict: those already carry the answer
+          that clears them — Reject, or the ticket answers under a plan — and a
+          second control that rejects by another name is one an operator presses
+          meaning "not now". */}
+      {onDismiss && !decidable && (
         <div className="esc-dismiss">
           <AsyncButton
             ghost
             size="small"
-            title={DISMISS_HINT[decidable ? 'proposal' : permission ? 'permission' : 'question']}
+            title={DISMISS_HINT[permission ? 'permission' : 'question']}
             onClick={() => onDismiss(escalation.id, text.trim() || undefined)}
           >
-            {decidable ? 'Dismiss (rejects)' : permission ? 'Dismiss (denies)' : 'Dismiss'}
+            {permission ? 'Dismiss (denies)' : 'Dismiss'}
           </AsyncButton>
           {resumed && <span className="muted small">the agent moved on without this</span>}
         </div>
@@ -362,6 +372,12 @@ function splitCaution(body: string): [prose: string, caution: string] {
   return at === -1 ? [body, ''] : [body.slice(0, at).trim(), body.slice(at).trim()];
 }
 
+function goalNumber(context: Record<string, unknown>): number | null {
+  if (typeof context.issueNumber === 'number') return context.issueNumber;
+  const origin = typeof context.originRef === 'string' ? /^issue:(\d+)/.exec(context.originRef) : null;
+  return origin ? Number(origin[1]) : null;
+}
+
 function detailLabel(context: Record<string, unknown>, agentId: string | null | undefined): string {
   const declared = context.detailFrom;
   if (typeof declared === 'string' && declared.trim()) return declared.trim();
@@ -371,7 +387,6 @@ function detailLabel(context: Record<string, unknown>, agentId: string | null | 
 const DISMISS_HINT: Record<string, string> = {
   question: 'Clear this from "Needs you" without sending the agent anything',
   permission: 'Clear this by denying the command — the agent is told and carries on',
-  proposal: 'Clear this by rejecting the proposal — nothing goes out',
 };
 
 const ACCEPT_LABEL: Record<string, string> = {
