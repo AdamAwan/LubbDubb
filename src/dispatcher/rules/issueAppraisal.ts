@@ -13,10 +13,14 @@ export function issueAppraisal(s: StageContext): void {
     if (isAppraised(s.appraisals.get(issueOrigin(issue.number)) ?? null, issue)) continue;
     if (hasWorkStarted(issue.number, ctx.tasks)) continue;
     if (s.plansByOrigin.has(issueOrigin(issue.number))) continue;
+    const origin = appraisalOrigin(issue.number);
+    if (s.activeOrigins.has(origin)) {
+      s.appraising.add(issue.number);
+      continue;
+    }
     const root = issueOrigin(issue.number);
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
-    const origin = appraisalOrigin(issue.number);
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 

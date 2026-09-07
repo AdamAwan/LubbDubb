@@ -18,10 +18,14 @@ export function issueAssess(s: StageContext): void {
     if (!hasPriorWork(issue.number, ctx.tasks)) continue;
     const plan = s.plansByOrigin.get(issueOrigin(issue.number));
     if (plan && planInFlight(plan)) continue;
+    const origin = assessOrigin(issue.number);
+    if (s.activeOrigins.has(origin)) {
+      s.assessing.add(issue.number);
+      continue;
+    }
     const root = issueOrigin(issue.number);
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
-    const origin = assessOrigin(issue.number);
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 

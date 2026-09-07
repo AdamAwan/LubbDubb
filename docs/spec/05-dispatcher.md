@@ -278,6 +278,16 @@ after them (`issue-plan` reads the first; `issue-pickup` reads both) — the who
 its readers would not fail to compile, it would silently stop suppressing and put two agents on one
 issue.
 
+Each set names **an appraisal or an assessment that is pending _or_ in flight**, and the second half is
+the one that is easy to lose. A writer's own dispatch guards stand it down once its agent is running —
+the origin is active — so a set written only on the pulse that _proposes_ the deliberation is empty on
+every pulse after it: the reader sees nothing superseding it and dispatches beside the agent that is
+still deliberating, which is exactly the two agents on one issue the ordering exists to prevent. So a
+writer adds the issue to its set **before** the active-origin guard when its own origin is what is
+active, and the reader's hold lasts as long as the deliberation does. Every other stand-down — no
+verdict to act on, prior work, a plan row, a spent attempt cap — writes nothing, because those release
+the issue to the funnel rather than holding it.
+
 Adding a rule is still two things and not three: a registry entry in the position it should run, and a
 module registered in `STAGES` under that id. An id with no entry was covered by an earlier pass (the
 PR pass above), and nothing anywhere renders a position.
@@ -312,7 +322,7 @@ no queue entry and no reason anywhere. That is the same invisibility `capped` wa
 | `cooldown`   | Queued, held by the per-origin re-dispatch throttle.                          |
 | `capped`     | Queued, held by `maxConcurrentPartsPerIssue`.                                 |
 | `unapproved` | Queued, held because the plan's decomposition is still a proposal.            |
-| `superseded` | Queued, held because an earlier rule claimed this issue this cycle.           |
+| `superseded` | Queued, held because an earlier rule claimed this issue — for as long as it holds it. |
 | `waiting`    | Queued, held by fleet headroom — the only reason the cut decides, not a rule. |
 
 **Every held reason reaches the queue.** That is the contract, and it is what makes "nothing happened
@@ -414,12 +424,12 @@ is no second list to keep in step with it. What each stage contributes:
    winner would make the operator's escalation conditional on nobody having commented.
 3. **Goal appraisals** (`issue-appraisal`) — asking whether a goal can be worked from comes before deciding
    _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes both** the planner and
-   the pickup for that issue this cycle.
+   the pickup for that issue, from the pulse it is proposed on until the appraiser has answered.
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
 5. **Assessors** (`issue-assess`) — an assessment decides whether an issue needs work at all, so it
-   is asked before the work is scheduled. An assessed issue is **superseded** from `issue-pickup`
-   that cycle. `issue-shortfall`, which routes what an assessment found, claims no headroom and so
+   is asked before the work is scheduled. An issue being assessed is **superseded** from `issue-pickup`
+   for as long as the assessor is on it. `issue-shortfall`, which routes what an assessment found, claims no headroom and so
    appears nowhere in this ranking: it only proposes and escalates.
 6. **Retrospectives** (`issue-retro`), a desk agent per delivered goal with no write-up.
 7. **Plan parts** (`plan-part`), ranked by dependency depth, then issue number, then part sequence, so
@@ -770,8 +780,9 @@ hold are in [06](06-issue-pickup.md); the dispatcher's half is:
   own tasks filtered out, or a crashed appraiser would retire its own retry, and `issueOriginRole` now
   makes that exclusion for every deliberation origin), no plan row, and nothing live on `issue:N` or
   any `issue:N:*`.
-- **Suppresses rule `issue-plan` and rule `issue-pickup` for that issue this cycle**, from a set built once, so the three
-  rules cannot hold different opinions about which issues are in it.
+- **Suppresses rule `issue-plan` and rule `issue-pickup` for as long as the appraisal is pending or
+  running**, from a set built once, so the three rules cannot hold different opinions about which
+  issues are in it. → [the two load-bearing fields](#where-a-rules-body-lives)
 - **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
   the planner and the assessor do, because narrowing pickup without that would make the appraisal the
   most effective way to stop the harness working.
