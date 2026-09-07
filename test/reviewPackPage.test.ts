@@ -401,6 +401,22 @@ test('a long code block shows its head and folds the rest, saying how many lines
   assert.match(html, /line39/, 'which does not mean dropped');
 });
 
+test('the page carries a contents rail: every idea, the open one’s stops, and what is wrong', () => {
+  const html = render(payload(), 'idea_a');
+  assert.match(html, /<nav class="rp-rail" aria-label="Contents">/);
+  // Every idea, by the number the page draws on it, and the ids to land on.
+  assert.match(html, /href="#rp-i1"/);
+  assert.match(html, /href="#rp-i2"/);
+  assert.match(html, /id="rp-i2"/);
+  // Only the open idea's stops: the others are collapsed, so there is nothing
+  // on the page to jump to.
+  assert.match(html, /href="#rp-s2-1"/, 'the open idea’s first stop');
+  assert.doesNotMatch(html, /href="#rp-s1-/, 'a collapsed idea contributes no stops');
+  // The false claim is reachable from the rail, which is the one thing that has
+  // to survive a reader who opens nothing.
+  assert.match(html, /href="#rp-finding-1"/);
+});
+
 test('an idea lists the scenarios its tests cover, between the walk and the claims', () => {
   const pack = checkedPack();
   pack.ideas[0]!.coverage = ['b is exported', 'a is left alone'];

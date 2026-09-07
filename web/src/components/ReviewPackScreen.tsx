@@ -2,29 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReviewAttention, ReviewMark, ReviewPackSharing, ScratchEntryView } from '../types.js';
 import { api, type ReviewPackReading } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
-import { Modal } from './Modal.js';
-import { Ref } from './refs.js';
 import { ReviewPackPage } from './ReviewPackPage.js';
 import { Tag } from './tag.js';
 
-// → docs/spec/17-cockpit.md
+// → docs/spec/17-cockpit.md#the-review-pack
 
 const AGENT_POLL_MS = 4000;
 
-export function ReviewPackModal({
+export function ReviewPackScreen({
   prNumber,
   goalRef,
   openIdea,
   refUrls,
   onOpenIdea,
-  onClose,
 }: {
   prNumber: number;
   goalRef: string | null;
   openIdea: string | null;
   refUrls: Record<string, string>;
   onOpenIdea: (id: string | null) => void;
-  onClose: () => void;
 }) {
   const [reading, setReading] = useState<ReviewPackReading | 'loading' | 'failed'>('loading');
   const [marks, setMarks] = useState<ReviewMark[] | null>(null);
@@ -122,17 +118,7 @@ export function ReviewPackModal({
   );
 
   return (
-    <Modal
-      face="modal"
-      className="rp-modal"
-      title="Review pack"
-      chips={
-        <span className="cn-refs">
-          <Ref to={`pr:${prNumber}`} />
-        </span>
-      }
-      onClose={onClose}
-    >
+    <div className="rp-screen">
       {reading === 'loading' && <p className="empty">Loading the pack…</p>}
       {reading === 'failed' && <p className="empty">Could not load the pack. The harness may be unreachable.</p>}
       {reading !== 'loading' && reading !== 'failed' && reading.kind === 'none' && (
@@ -164,7 +150,7 @@ export function ReviewPackModal({
           refUrls={refUrls}
         />
       )}
-    </Modal>
+    </div>
   );
 }
 

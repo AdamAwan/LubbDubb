@@ -751,7 +751,7 @@ exists to avoid. An idea owning no hunk can carry no mark and reads unread.
 ## Reading it
 
 _Built_ — stage 5, the cockpit rendering; stage 6, the HTML companion. `web/src/components/ReviewPackPage.tsx`
-draws the page, `ReviewPackModal.tsx` fetches it and takes the marks, `ReviewPackControl.tsx` is the
+draws the page, `ReviewPackScreen.tsx` fetches it and takes the marks, `ReviewPackControl.tsx` is the
 control on the row, and `web/src/view/reviewPack.ts` holds the derivations; `test/reviewPackPage.test.ts`
 holds it.
 
@@ -868,9 +868,14 @@ The reference for the shape is the pack for #684, kept at
 measured against. It is a hand-made demo — its colophon says what in it is invented — and a pack the
 harness writes is expected to render to the same page.
 
-**The cockpit rendering** opens over the goal page, from the control on the pull request's row
-([17](17-cockpit.md#the-pull-requests-and-the-tail)) — there is no pull request page to put it on —
-and is the only one that takes input: the reviewer's marks, per
+**The cockpit rendering is a page**, the rung above the pull request's own
+([17](17-cockpit.md#the-pull-request-page)), reached from the control there and drawn by
+`ReviewPackScreen`. It was a modal, over the goal page, from a control on a row — from before there
+was a pull request page to put it on. A modal is the surface for a decision taken without leaving the
+page underneath, and a pack is the opposite: the longest read in the cockpit, a walk of code with a
+map beside it, which wants the width a modal will not give. Its rung sits **above the "that pull
+request is gone" answer**, because a pack is read over its own route and outlives the pull request's
+presence in the world. It is the only rendering that takes input: the reviewer's marks, per
 [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack). Its position — which pull
 request's pack, which idea is open — is `Place` state and lives in the query string as
 `?pack=<n>&idea=<id>`, not a `useState` in `useCockpit`: a surface held outside it is stepped over
@@ -886,7 +891,7 @@ since the desk refuses to write one for it. Both the control and the page re-rea
 only while an author or a checker is on the pull request.
 
 **A refused ask is drawn beside the ask that was refused**, wherever it is drawn — the row control,
-the empty page, the stale line, the unchecked band — held by the shell (`ReviewPackModal`) exactly
+the empty page, the stale line, the unchecked band — held by the shell (`ReviewPackScreen`) exactly
 as the share's refusal is, because the page is a pure function of the payload and a refusal is about
 a click. It is drawn and not flashed for the reason the share's is: the sentence _is_ the whole of
 what the reader can act on, and the four reasons the desk gives
@@ -926,29 +931,35 @@ no server module but `src/wire.ts`, which carries no runtime, so there is no one
 reach. The arrangement is the one `KNOWN_REVIEW_PACK_SCHEMA` already has and the defence is the same
 — `test/reviewPackCompanion.test.ts` runs both over one pack and asserts they agree, so a rule
 changed on one side and not the other fails there rather than shipping two pages that disagree about
-which idea is number one. Three differences are deliberate and are the absence of a harness rather than
-a second design: every idea is open, because there is no address bar to hold which one is not; a
-`witnessed` claim's pad entry is **said to have stayed behind** rather than drawn, because a shared
-pack carries the document and nothing else; and it carries **a contents rail** the cockpit has no need
-of ([The contents rail](#the-contents-rail)).
+which idea is number one. Two differences are deliberate and are the absence of a harness rather than
+a second design: every idea is open, because there is no address bar to hold which one is not — which
+is why its [contents rail](#the-contents-rail) lists every stop where the cockpit's lists the open
+idea's; and a `witnessed` claim's pad entry is **said to have stayed behind** rather than drawn,
+because a shared pack carries the document and nothing else.
 
 ### The contents rail
 
-_Built._ `contents` in `src/reviewPacks/companion.ts`, and only there.
+_Built._ `contents` in `src/reviewPacks/companion.ts`, and `Contents` in
+`web/src/components/ReviewPackPage.tsx`.
 
-Every idea is open on the companion, for the reason above — and that costs the reader the one thing
-the cockpit's collapsed rows give them for free: **a screen with the whole change on it**. The rail is
-that screen, held beside the page rather than at the top of it, so a reader eighty lines into a walk
-can still see which idea they are in and jump to another.
+A pack is the longest read either surface has: a walk of code, several ideas deep. The rail is the map
+of it, held beside the page rather than at the top, so a reader eighty lines into a walk can still see
+which idea they are in and jump to another.
 
 It lists every idea and every stop under it, and it draws each stop's
 [weight](#how-hard-to-look-at-one-stop) rather than only its name — a `key` stop marked, a `minor` one
 dimmed — so the map says where the time goes before the reader has scrolled far enough to find out.
 
-**The cockpit does not get one**, and that is not an omission: its rows already are the rail, its
-address bar holds which idea is open, and a second map inside a modal is a column it cannot spare.
-Below the width where the rail would leave the page too narrow to read, it folds to the top of the
-document — still a map, and costing no column.
+**The two draw different amounts of it, because the pages differ.** The companion has every idea open
+— there is no address bar to hold which one is not — so its rail lists every stop of every idea. The
+cockpit collapses all but one, so a collapsed idea's stops are not on the page to jump to and the rail
+lists only the open idea's; clicking an idea there opens it, which is a `Place` change like every
+other way in. The cockpit's also carries what a reader who opens nothing must still see: the idea
+holding a false claim, and the way to the finding.
+
+The rail is the cockpit's only because the pack became a **page**: inside the modal it was, there was
+no column to spare for it. Below the width where the rail would leave the page too narrow to read, it
+folds to the top of the document — still a map, and costing no column.
 
 ## Sharing a pack
 

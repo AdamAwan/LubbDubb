@@ -2328,6 +2328,13 @@ page's own control (`selectPr(null)`) lands on the goal underneath, which the pl
 and because a `<Ref>` reaches this page from anywhere at all, the tab it hangs off is narrowed to one
 that lists pull requests on the way in → [nesting](#nesting).
 
+**A review pack is the rung above it** ([31](31-review-packs.md#reading-it)) — `?pack=<n>`, drawn by
+`ReviewPackScreen` with the tab, the goal and the pull request behind it in the crumb. It sits **above
+the "that pull request is gone" answer** deliberately: a pack is fetched by number over its own route
+and never off the snapshot, so it outlives the pull request's presence in the world, and a reader
+following a link to the pack of a long-closed pull request must not be told there is nothing there
+while the pack sits behind the message.
+
 **The goal rung _selects_ the goal, rather than clearing the pull request over it.** The two are the
 same move only when the place already holds the goal, and it does not always: the overview's
 pull-request rack — and every `<Ref to="pr:…">` drawn away from a goal page — opens this page with
@@ -6029,24 +6036,29 @@ no token was added.
 
 ## The review pack
 
-`ReviewPackModal` (`web/src/components/`) is a pull request's [review pack](31-review-packs.md#reading-it)
-over the goal page it was opened from: the change restated as ideas, each followed through the code
-it touched, every claim with the checker's verdict beside it. It is the one rendering of a pack that
-takes input — the reviewer's marks — and the page it draws is `ReviewPackPage`, a pure function of
-the payload, so the order of things on it is asserted on static markup rather than hoped for.
+`ReviewPackScreen` (`web/src/components/`) is a pull request's [review pack](31-review-packs.md#reading-it),
+**the page one rung in from the pull request's own** ([the pull request page](#the-pull-request-page)):
+the change restated as ideas, each followed through the code it touched, every claim with the
+checker's verdict beside it. It is the one rendering of a pack that takes input — the reviewer's
+marks — and the page it draws is `ReviewPackPage`, a pure function of the payload, so the order of
+things on it is asserted on static markup rather than hoped for.
+
+It was a modal until there was a pull request page to hang it off. A modal is where a decision is
+taken without leaving what is underneath; a pack is the longest read in the cockpit and wants the
+column its [contents rail](31-review-packs.md#the-contents-rail) sits in, which a modal will not give.
 
 **Shell-owned**, opened through `viewReviewPack(prNumber | null)` and its fold through
 `openReviewIdea(id | null)` — the notepad's seam, for its reason: the modal reaches `api.js` for the
 pack, for the two pads the claims cite and for the marks, while the control that opens it is on the
-pull request's row the console draws. Both are `Place` fields (`?pack=`, `?idea=`), so the back
+pull request's own page. Both are `Place` fields (`?pack=`, `?idea=`), so the back
 button steps out of an idea and a link somebody sends lands on one; `idea=all` is the open-all
 control, a value of the same field rather than a second one. An idea row is a `<details>` whose open
 state is the address bar's — the click is a move, not a toggle the element does on its own.
 
 **Four states, and the 404 is one of them**: loading, no pack (not asked for, with the ask; or being
 written, with nothing to press), the pack, and an error — a fetch that failed must not read as
-"nobody asked". While an author or a checker is on the pull request the modal re-reads on a short
-clock; the `dirty` the hub emits for either is a snapshot signal the modal is not on.
+"nobody asked". While an author or a checker is on the pull request the screen re-reads on a short
+clock; the `dirty` the hub emits for either is a snapshot signal it is not on.
 
 **The page is [31](31-review-packs.md#the-page)'s order and nothing else**: masthead, the gate above
 the ideas when any claim is false, the idea rows numbered by the checker's order (or document order,
