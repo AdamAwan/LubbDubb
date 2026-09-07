@@ -115,11 +115,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     acknowledged: z
       .array(z.string().min(1), { invalid_type_error: 'acknowledged must be an array of caveat ids' })
       .optional(),
+    answers: z
+      .array(
+        z.object(
+          {
+            id: z
+              .string({ invalid_type_error: 'each answer names the caveat id it answers' })
+              .min(1, 'each answer names the caveat id it answers'),
+            answer: z.string({ invalid_type_error: "each answer is the operator's words, as text" }),
+          },
+          { invalid_type_error: 'each answer must be an object of {id, answer}' },
+        ),
+        { invalid_type_error: 'answers must be an array of {id, answer}' },
+      )
+      .optional(),
   });
   app.post(
     '/api/proposals/:id/accept',
     checked({ params: IdParams, body: AcceptBody }, async ({ params, body, reply }) => {
-      const result = await proposals.accept(params.id, body.note, body.acknowledged ?? []);
+      const result = await proposals.accept(params.id, body.note, body.acknowledged ?? [], body.answers ?? []);
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
       if ('unacknowledged' in result)
         return reply.code(400).send({

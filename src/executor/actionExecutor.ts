@@ -882,6 +882,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
   const files = store.listGoalFiles(issueOriginRef);
   const briefing = priorWorkBriefing({
     plan,
+    caveatAnswers: plan ? store.listPlanCaveatAnswers(plan.id) : [],
     parts: plan ? store.listPlanParts(plan.id) : [],
     appraisal: store.getAppraisal(issueOriginRef),
     conclusion: outstandingShown ? null : store.getIssueConclusion(issueOriginRef),

@@ -754,6 +754,37 @@ work, and putting a reading list in front of them would be friction on the safe 
 A tick is not proof of reading, and is not meant to be. What it does is make the skip **deliberate**,
 and give the harness a row that says the operator met the caveat rather than that the card rendered it.
 
+### A tick can carry words
+
+Half of what a plan raises is not a warning but a **question**: the planner's `openQuestions` is the
+assumption it would most like argued with, and it is often written as a choice between two things. The
+box beside it asked the operator to confirm they had read the question, and the only place on the card
+to answer it was _Change something first_ — which sends the whole plan back to a planner for a rewrite.
+So the operator who knew the answer had two moves: approve and say nothing, or pay for a replan to say
+one sentence. The first is what everybody did, and the answer was lost.
+
+Every caveat therefore takes an **optional line of words** beside its tick. They ride with the accept as
+`answers` — a caveat id and the operator's words — and `answeredCaveats` (`src/plans/planCaveats.ts`)
+keeps the ones that name a caveat this proposal actually raised and are not blank. `ProposalDesk.accept`
+writes them to `plan_caveat_answers` against the plan the proposal names, immediately after the
+compare-and-set and before the act runs, so an agent dispatched by the release already reads them.
+
+**Answering is not a verdict of its own.** The accept is still an approval and the plan is still
+released: nothing here re-opens the plan, sends it back to a planner, or holds the release for the words
+to be read. A change the operator wants _made_ is still _Change something first_ or a plan amendment;
+this is for the answer that does not change the plan's shape — which option, why the risk is acceptable,
+what to watch out for.
+
+**The words do not gate.** A blank answer on every box still approves; a written answer on an unticked
+box still refuses. The tick says the caveat was read, and only the tick does.
+
+**They are read as testimony, not as instruction.** `priorWorkBriefing` renders them to every later
+agent on the goal under _What the operator said when they approved this plan_
+([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)) — the newest thing anybody said about the work,
+and the one that was said last where it and the plan disagree. Nothing rewrites the plan's own fields
+with them: `plan.reason` is what the planner wrote and what a replan reads, and an operator's answer
+folded into it would come back to the planner as its own reasoning.
+
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
 settle window; a plan proposal is made once per **plan**, and both settlements rewrite the row the gate

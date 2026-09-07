@@ -6,7 +6,7 @@ import { DesktopLink } from './DesktopLink.js';
 import { buttonClass } from './button.js';
 import { heldTitle } from './CaveatChecklist.js';
 import { HeadRow } from './panel.js';
-import type { PlanCaveat } from '../types.js';
+import type { CaveatAnswerInput, PlanCaveat } from '../types.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -16,6 +16,7 @@ export function PlanAnswers({
   approveLabel,
   outstanding,
   acknowledged,
+  answers,
   seedNote,
   desktopFolder,
   discussExplain,
@@ -28,6 +29,7 @@ export function PlanAnswers({
   approveLabel: string;
   outstanding: PlanCaveat[];
   acknowledged: string[];
+  answers: CaveatAnswerInput[];
   seedNote?: string;
   desktopFolder: string;
   discussExplain: string;
@@ -37,6 +39,7 @@ export function PlanAnswers({
     verdict: 'accept' | 'reject',
     note?: string,
     acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
   ) => Promise<unknown> | unknown;
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
 }): JSX.Element {
@@ -63,7 +66,7 @@ export function PlanAnswers({
           title={
             held ? heldTitle(outstanding) : 'Release the plan — each part gets its own agent, branch and pull request'
           }
-          onClick={() => onDecide(proposalId, 'accept', undefined, acknowledged)}
+          onClick={() => onDecide(proposalId, 'accept', undefined, acknowledged, answers)}
         >
           {approveLabel}
         </AsyncButton>

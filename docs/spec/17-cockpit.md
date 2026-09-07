@@ -6491,6 +6491,22 @@ other.
   jump already goes, beside the prose it is asking about. The held Approve stays in the bar with its
   hint naming how many are outstanding, which is what points back up to the boxes.
 
+- **Each box takes an optional line of words, and it is drawn outside the label.** A caveat is often a
+  question — which of two things the planner named, or an assumption it wants argued with — and the only
+  answer the card had was _Change something first_, which pays for a whole replan to say one sentence
+  ([08](08-planning.md#a-tick-can-carry-words)). The field is quiet until it has something in it or has
+  the cursor: a dashed edge and no fill, so a row of them reads as four readings rather than four
+  questions. It sits **outside the `<label>`** — inside it, a click meant for the field would tick the
+  box — and it does not gate anything: Approve is held by the ticks alone, and the words ride with the
+  accept as `answers`. `useAcknowledgements` holds both, so the sheet and the inbox card behave
+  identically.
+
+- **What was answered stays on the plan sheet.** A released plan draws `Answered at approval` in its
+  caveats section, from `planCaveatAnswers` in the snapshot: the caveat's label and the operator's
+  words. It is above the write-up because it is the newest thing said about the work — the planner's
+  prose is what was proposed, this is what was decided — and it is the same text the agents on the goal
+  are reading ([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)).
+
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.
 Without it the card has no arm that says "that is wrong": approving spends an agent on a follow-up

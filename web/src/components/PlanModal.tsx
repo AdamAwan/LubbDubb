@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   AcceptanceCriterion,
   GoalWatch,
+  CaveatAnswerInput,
   IssueSpend,
+  PlanCaveatAnswer,
   Plan,
   PlanDiff,
   PlanHistory,
@@ -39,6 +41,7 @@ export function PlanModal({
   plan,
   parts,
   checks,
+  caveatAnswers,
   watches,
   upcoming,
   proposal,
@@ -62,6 +65,7 @@ export function PlanModal({
   plan: Plan;
   parts: PlanPartView[];
   checks: ValidationCheck[];
+  caveatAnswers: PlanCaveatAnswer[];
   watches: GoalWatch[];
   upcoming: QueueItem[];
   proposal?: Proposal;
@@ -77,6 +81,7 @@ export function PlanModal({
     verdict: 'accept' | 'reject',
     note?: string,
     acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
   ) => Promise<unknown> | unknown;
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
   onOpenGoal: (issueRef: string) => void;
@@ -378,8 +383,30 @@ export function PlanModal({
                   height, and the operator read the plan through a slot; here it is
                   the last thing in the section the rail's Caveats jump lands on,
                   and the plan gets the whole middle back. */}
+              {/* What the operator wrote beside the boxes when they released it.
+                  Later than the plan and above the fold of the write-up, because a
+                  choice made at the verdict is what the parts are actually being
+                  worked to. */}
+              {caveatAnswers.length > 0 && (
+                <div className="pm-answers">
+                  <span className="pm-section-label">Answered at approval</span>
+                  {caveatAnswers.map((a) => (
+                    <div key={a.id} className="pm-answer">
+                      <span className="muted small">{a.label}</span>
+                      <div className="pm-prose">{renderMarkdown(a.answer, refUrls)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {decidable && (
-                <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+                <CaveatChecklist
+                  caveats={caveats}
+                  ticked={ack.ticked}
+                  answers={ack.written}
+                  onToggle={ack.toggle}
+                  onAnswer={ack.answer}
+                  refUrls={refUrls}
+                />
               )}
             </section>
 
@@ -422,6 +449,7 @@ export function PlanModal({
             approveLabel={approveLabel(live, queued, originOf)}
             outstanding={ack.outstanding}
             acknowledged={ack.acknowledged}
+            answers={ack.answers}
             desktopFolder={desktopFolder}
             discussExplain={discuss}
             onDecide={onDecide}

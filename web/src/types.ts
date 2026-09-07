@@ -92,6 +92,8 @@ export type {
   AcceptanceCriterion,
   Plan,
   PlanCaveat,
+  PlanCaveatAnswer,
+  CaveatAnswerInput,
   PrPackStanding,
   PrReviewState,
   PrReviewStatus,

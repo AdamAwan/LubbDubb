@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AgentAskQuestion, Escalation, Proposal } from '../types.js';
+import type { AgentAskQuestion, CaveatAnswerInput, Escalation, Proposal } from '../types.js';
 import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
@@ -46,6 +46,7 @@ export function EscalationCard({
     verdict: 'accept' | 'reject',
     note?: string,
     acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
   ) => Promise<unknown> | unknown;
   onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
   onOverrule?: (issueNumber: number, proposalId: string, text: string) => Promise<unknown> | unknown;
@@ -250,13 +251,21 @@ export function EscalationCard({
         </div>
       ) : planDecidable ? (
         <>
-          <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+          <CaveatChecklist
+            caveats={caveats}
+            ticked={ack.ticked}
+            answers={ack.written}
+            onToggle={ack.toggle}
+            onAnswer={ack.answer}
+            refUrls={refUrls}
+          />
           <PlanAnswers
             proposalId={planDecidable.id}
             issueNumber={issueNumber}
             approveLabel={ACCEPT_LABEL.plan ?? 'Approve'}
             outstanding={ack.outstanding}
             acknowledged={ack.acknowledged}
+            answers={ack.answers}
             desktopFolder={desktopFolder}
             {...(planId ? { onReadPlan: () => onViewPlan!(planId) } : {})}
             discussExplain="so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does."
@@ -266,7 +275,14 @@ export function EscalationCard({
         </>
       ) : decidable ? (
         <>
-          <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+          <CaveatChecklist
+            caveats={caveats}
+            ticked={ack.ticked}
+            answers={ack.written}
+            onToggle={ack.toggle}
+            onAnswer={ack.answer}
+            refUrls={refUrls}
+          />
           <div className="esc-decide">
             <input
               placeholder={
@@ -279,7 +295,7 @@ export function EscalationCard({
               tone="primary"
               disabled={held}
               title={held ? heldTitle(ack.outstanding) : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')}
-              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined, ack.acknowledged)}
+              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined, ack.acknowledged, ack.answers)}
             >
               {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
             </AsyncButton>

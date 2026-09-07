@@ -19,6 +19,7 @@ import {
 } from '../src/plans/planApproval.js';
 import { planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
 import { caveatNotice, planCaveats, proposedCaveats, unacknowledgedCaveats } from '../src/plans/planCaveats.js';
+import { priorWorkBriefing } from '../src/briefing/priorWork.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
@@ -765,6 +766,72 @@ test('a plan that raises caveats is not approved until each of them is acknowled
   assert.ok(accepted && 'outcome' in accepted);
   assert.equal(accepted.outcome, 'performed');
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active');
+  system.store.close();
+});
+
+test('words written beside a tick are kept on the plan, and release it all the same', async () => {
+  const { system } = plannedSystem({ unsure: true });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  const accepted = await system.proposals.accept(
+    proposal.id,
+    undefined,
+    ['open-questions', 'risks'],
+    [
+      { id: 'open-questions', answer: 'Lock the table — the window is ours on a Sunday.' },
+      { id: 'risks', answer: '  ' },
+      { id: 'never-raised', answer: 'Dropped: this plan never raised it.' },
+    ],
+  );
+  assert.ok(accepted && 'outcome' in accepted);
+  assert.equal(accepted.outcome, 'performed');
+
+  const plan = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(plan.status, 'active', 'answering a caveat sent the plan back instead of releasing it');
+  assert.equal(plan.reason, 'Schema first.', "the answer was written into the planner's own reason");
+
+  const answers = system.store.listPlanCaveatAnswers(plan.id);
+  assert.deepEqual(
+    answers.map((a) => [a.caveatId, a.label, a.answer]),
+    [
+      [
+        'open-questions',
+        'Open questions — approving decides them the planner\u2019s way',
+        'Lock the table — the window is ours on a Sunday.',
+      ],
+    ],
+    'a blank answer or one for a caveat this plan never raised was kept',
+  );
+  system.store.close();
+});
+
+test('an answer is read by the agents that work the plan', async () => {
+  const { system } = plannedSystem({ unsure: true });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+  await system.proposals.accept(
+    proposal.id,
+    undefined,
+    ['open-questions', 'risks'],
+    [{ id: 'risks', answer: 'Take the write outage; announce it first.' }],
+  );
+  const plan = system.store.getPlanByOrigin('issue:12')!;
+  const briefing = priorWorkBriefing({
+    plan,
+    caveatAnswers: system.store.listPlanCaveatAnswers(plan.id),
+    parts: system.store.listPlanParts(plan.id),
+    appraisal: null,
+    conclusion: null,
+    delivery: null,
+    shortfall: null,
+    entries: [],
+    files: [],
+    neighbours: [],
+    forPart: true,
+  });
+  assert.match(briefing, /What the operator said when they approved this plan/);
+  assert.match(briefing, /Take the write outage/);
   system.store.close();
 });
 

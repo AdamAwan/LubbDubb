@@ -1,5 +1,5 @@
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
-import { proposedCaveats } from '../plans/planCaveats.js';
+import { proposedCaveats, type CaveatAnswerInput } from '../plans/planCaveats.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
@@ -14,6 +14,18 @@ const ACCEPT_MEANS: Record<string, string> = {
   reply_draft: 'the comment was POSTED to the tracker or pull request. It is public and cannot be unsent.',
   merge: 'the pull request was MERGED. This cannot be undone from here.',
 };
+
+function readAnswers(raw: unknown): CaveatAnswerInput[] {
+  if (!Array.isArray(raw)) return [];
+  const answers: CaveatAnswerInput[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { id, answer } = entry as Record<string, unknown>;
+    if (typeof id !== 'string' || id === '' || typeof answer !== 'string') continue;
+    answers.push({ id, answer });
+  }
+  return answers;
+}
 
 export const proposalRead: DesktopToolFactory = (deps) => ({
   description:
@@ -82,6 +94,21 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
           'Caveat ids from proposal_read, for a plan that raises them. A plan is not released until every one ' +
           'is named. Acknowledge them because the operator has read them, not to clear the gate.',
       },
+      answers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'The caveat id being answered.' },
+            answer: { type: 'string', description: "The operator's words, verbatim." },
+          },
+          required: ['id', 'answer'],
+        },
+        description:
+          'What the operator said back about a caveat — the option they picked between two the planner offered, ' +
+          'or the question they still have. Optional, and never a substitute for acknowledging: an answer is ' +
+          'appended to the plan for the agents that work it, and does not send the plan back for a replan.',
+      },
     },
     required: ['id', 'verdict'],
   },
@@ -144,7 +171,7 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
     }
 
     const acknowledged = Array.isArray(args.acknowledged) ? (args.acknowledged as string[]) : [];
-    const accepted = await desk.accept(id, note, acknowledged);
+    const accepted = await desk.accept(id, note, acknowledged, readAnswers(args.answers));
     if (!accepted) return toolError('The proposal was decided by something else just now. Nothing was changed.');
     if ('unacknowledged' in accepted)
       return toolJson({

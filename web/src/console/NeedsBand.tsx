@@ -274,7 +274,9 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       desktopFolder={view.state.config.desktopFolder}
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
       onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
-      onDecide={(id, verdict, note, acknowledged) => actions.decideProposal(id, verdict, note, acknowledged)}
+      onDecide={(id, verdict, note, acknowledged, answers) =>
+        actions.decideProposal(id, verdict, note, acknowledged, answers)
+      }
       onBackOut={(id, verdict, note) => actions.backOutProposal(id, verdict, note)}
       onOverrule={(issueNumber, proposalId, text) => actions.overruleShortfall(issueNumber, proposalId, text)}
       onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}

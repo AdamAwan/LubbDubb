@@ -2035,7 +2035,7 @@ first). Returns `{ ok: true, allowed }`.
 
 ### `POST /api/proposals/:id/accept`
 
-Body `{note?, acknowledged?: string[]}`. Authorizes the proposed act and performs it inline, through
+Body `{note?, acknowledged?: string[], answers?: {id, answer}[]}`. Authorizes the proposed act and performs it inline, through
 the same `ActionSink` auto-send would have used. `409` when the proposal is unknown or already decided;
 returns `{ok, proposal, outcome, detail}` otherwise, where `ok` is false for an act that was authorized
 and then failed.
@@ -2048,6 +2048,14 @@ inbox item still open, and the same click works once the boxes are ticked. Absen
 ticked, which is the right reading of an older client — it releases a plan that raises nothing and
 refuses one that does, rather than waving through the case the gate exists for. Every other proposal
 kind ignores the field.
+
+`answers` is what the operator wrote **beside** a tick — the option they picked between two the plan
+offered, or the question they still have
+([08](08-planning.md#a-tick-can-carry-words)). Each entry names a caveat id and the words; an entry
+naming a caveat this proposal never raised, or one whose words are blank, is dropped. It is recorded
+against the plan and changes nothing else about the accept: the verdict is still an approval, and the
+plan is still released. Answering is never a substitute for ticking — a plan with an answer on every
+caveat and a box unticked is refused exactly as before.
 
 ### `POST /api/proposals/:id/back-out`
 

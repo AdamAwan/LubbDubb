@@ -8,6 +8,7 @@ import type {
   UpgradeAction,
   SnoozeTarget,
   WorkNodeView,
+  CaveatAnswerInput,
 } from '../types.js';
 import type { Place } from './place.js';
 
@@ -69,7 +70,13 @@ export interface CockpitActions {
   answerEscalation(id: string, text: string): Promise<void>;
   answerQuestions(id: string, answers: (string | null)[]): Promise<void>;
   dismissEscalation(id: string, note?: string): Promise<void>;
-  decideProposal(id: string, verdict: 'accept' | 'reject', note?: string, acknowledged?: string[]): Promise<void>;
+  decideProposal(
+    id: string,
+    verdict: 'accept' | 'reject',
+    note?: string,
+    acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
+  ): Promise<void>;
   backOutProposal(id: string, verdict: 'close' | 'hold', note?: string): Promise<void>;
   overruleShortfall(issueNumber: number, proposalId: string, text: string): Promise<void>;
   releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<void>;

@@ -1387,6 +1387,7 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       },
     ],
+    planCaveatAnswers: [],
     planParts: [
       demoPart({
         id: 'plan-390:schemas',

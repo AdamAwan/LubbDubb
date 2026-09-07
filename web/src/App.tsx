@@ -49,6 +49,7 @@ export function App() {
       plan={viewedPlan}
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
+      caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
       watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
@@ -59,7 +60,9 @@ export function App() {
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
       onWatchProposal={(issueNumber, checkId, accept) => status.actions.ruleWatchProposal(issueNumber, checkId, accept)}
-      onDecide={(id, verdict, note, acknowledged) => status.actions.decideProposal(id, verdict, note, acknowledged)}
+      onDecide={(id, verdict, note, acknowledged, answers) =>
+        status.actions.decideProposal(id, verdict, note, acknowledged, answers)
+      }
       onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}

@@ -77,6 +77,8 @@ import type {
   WorkNodeView,
   WorldEvent,
   WorldEventKind,
+  CaveatAnswerInput,
+  PlanCaveat,
 } from '../types.js';
 import type { ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
@@ -1103,11 +1105,18 @@ class DemoServer {
     return { ok: true };
   }
 
-  async acceptProposal(id: string, note?: string, acknowledged?: string[]): Promise<{ ok: boolean; detail: string }> {
+  async acceptProposal(
+    id: string,
+    note?: string,
+    acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
+  ): Promise<{ ok: boolean; detail: string }> {
     const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
     if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
-    const unticked = planCaveatsOf(proposal).filter((c) => !(acknowledged ?? []).includes(c.id));
+    const raised = planCaveatsOf(proposal);
+    const unticked = raised.filter((c) => !(acknowledged ?? []).includes(c.id));
     if (unticked.length > 0) return { ok: false, detail: `${unticked.length} thing(s) still to acknowledge` };
+    this.recordCaveatAnswers(proposal, raised, answers ?? []);
     this.settle(proposal, 'accepted', note);
     const prNumber = proposal.action.prNumber as number | undefined;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
@@ -1124,6 +1133,21 @@ class DemoServer {
     this.addDecision(proposal.action.type, 'executed', detail);
     this.dirty();
     return { ok: true, detail };
+  }
+
+  private recordCaveatAnswers(proposal: Proposal, raised: PlanCaveat[], answers: CaveatAnswerInput[]): void {
+    const planId = proposal.action.planId;
+    if (proposal.kind !== 'plan' || typeof planId !== 'string') return;
+    const at = new Date().toISOString();
+    for (const { id, answer } of answers) {
+      const caveat = raised.find((c) => c.id === id);
+      const words = answer.trim();
+      if (!caveat || words === '') continue;
+      this.state.planCaveatAnswers = [
+        ...(this.state.planCaveatAnswers ?? []),
+        { id: `pca-${planId}-${caveat.id}`, planId, caveatId: caveat.id, label: caveat.label, answer: words, at },
+      ];
+    }
   }
 
   async rejectProposal(id: string, note?: string): Promise<{ ok: boolean; detail: string }> {
@@ -4125,8 +4149,8 @@ export const demoApi = {
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   closeHumanTaskTicket: (id: string, note?: string) => getServer().closeHumanTaskTicket(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
-  acceptProposal: (id: string, note?: string, acknowledged?: string[]) =>
-    getServer().acceptProposal(id, note, acknowledged),
+  acceptProposal: (id: string, note?: string, acknowledged?: string[], answers?: CaveatAnswerInput[]) =>
+    getServer().acceptProposal(id, note, acknowledged, answers),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
     getServer().backOutProposal(id, verdict, note),
