@@ -4297,6 +4297,17 @@ landings out of the bucket it came with; its holds and its agents from the same 
 Feature cards read. The frame is dashed, as the tickets tab hatches "no feature". There is no bar
 with a denominator of one dressed as progress — the standing chip says the one thing the bar would.
 
+**A promoted card the tracker has closed is not drawn.** A card on this board is a claim on somebody's
+next twenty minutes, and a story that hangs off nothing and is closed asks for none: it is history,
+and it crowds out the cards that are not. Only the promoted cards are filtered — a **Feature** stays on
+the board whatever state the tracker has it in, because a closed container is a portfolio reading in
+its own right, and a child under a Feature stays in its parent's counts, which are the progress the
+bar is drawn from. Closed orphans are dropped from the bucket's rows, its counts and its briefing —
+**never from its money**, which keeps folding them in below. Spend that answers to no container is the
+one thing this page must not quietly lose, and a hidden card
+is exactly the shape that loses it: so where every orphan is closed the bucket still stands, with no
+rows, no count, and the full figure in the header.
+
 **The orphan bucket's money is the most uncomfortable reading on the page, and it moves to the
 header.** Work answering to no container is invisible at portfolio level by construction, and a board
 that quietly dropped it would report a fleet whose every hour rolls up somewhere. So the page says,

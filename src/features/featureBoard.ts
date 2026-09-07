@@ -69,6 +69,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
 
   const groups = new Map<number, { title: string; rows: FeatureChildRow[] }>();
   const orphanRows: FeatureChildRow[] = [];
+  let closedOrphanCost: number | null = null;
   let unresolved = 0;
 
   for (const item of items) {
@@ -80,7 +81,8 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       continue;
     }
     if (item.parent === null) {
-      orphanRows.push(row);
+      if (item.state === 'closed') closedOrphanCost = addCost(closedOrphanCost, row.costUsd);
+      else orphanRows.push(row);
       continue;
     }
     const seen = groups.get(item.parent.number);
@@ -117,13 +119,13 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
   return {
     features: features.sort(byWantsYouThenSize),
     orphans:
-      orphanRows.length === 0
+      orphanRows.length === 0 && closedOrphanCost === null
         ? null
         : {
             counts: countStandings(orphanRows),
             briefing: briefingFor(orphanRows, brief),
             children: orderChildren(orphanRows).slice(0, FEATURE_CHILDREN),
-            costUsd: totalCost(orphanRows),
+            costUsd: totalCost(orphanRows, closedOrphanCost),
             lastLandingAt: latestLanding(orphanRows, landedAt),
             landings: landingsUnder(orphanRows, landingsByGoal),
           },
@@ -257,13 +259,14 @@ function issueNumberOf(ref: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function totalCost(rows: readonly FeatureChildRow[]): number | null {
-  let total: number | null = null;
-  for (const row of rows) {
-    if (row.costUsd === null) continue;
-    total = (total ?? 0) + row.costUsd;
-  }
+function totalCost(rows: readonly FeatureChildRow[], seed: number | null = null): number | null {
+  let total = seed;
+  for (const row of rows) total = addCost(total, row.costUsd);
   return total === null ? null : Math.round(total * 100) / 100;
+}
+
+function addCost(total: number | null, cost: number | null): number | null {
+  return cost === null ? total : (total ?? 0) + cost;
 }
 
 function foldReach(
