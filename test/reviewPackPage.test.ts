@@ -28,6 +28,7 @@ function idea(over: Partial<ReviewIdea> & { id: string }): ReviewIdea {
   return {
     claim: 'claim',
     title: `Title of ${over.id}`,
+    atom: null,
     cue: null,
     anchors: [],
     claims: [],

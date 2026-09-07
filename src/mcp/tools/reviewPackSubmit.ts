@@ -15,7 +15,9 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     "idea's hunk anchor**; give the ones with nothing to review to the idea whose id is `plumbing`. Under each " +
     'idea, `claims`: sentences that can be shown false, each with its `provenance` — `witnessed` citing the log ' +
     'entry it comes from, `disputed` citing the entry the code contradicts, or `inferred` for your own reading. ' +
-    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. **Tests are never an idea ' +
+    'A note on an anchor is `{by: "witness", entryId, text}` or `{by: "author", text}`. Where the pull request ' +
+    'was planned as **atoms**, give each idea the `atom` slug it corresponds to, and leave it out where none ' +
+    'fits — an idea no atom covers is a finding, not a mistake. **Tests are never an idea ' +
     "of their own**: give a test hunk to the idea it exercises, and list what it covers as that idea's `coverage` " +
     'lines — one short scenario each, named and not explained. Write nothing the checker ' +
     'owns: no verdicts, no attention labels, no cues, no reading order. **Every prose field is capped** — say ' +
@@ -60,6 +62,13 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
             title: {
               type: 'string',
               description: 'The same thing said across a desk, no identifiers — for the person. At most 60 characters.',
+            },
+            atom: {
+              type: 'string',
+              description:
+                'The slug of the atom this idea corresponds to, from the list in your prompt. Leave it out where ' +
+                'no atom fits — that is the right answer and nothing is refused for it; it says the work went ' +
+                'somewhere the plan did not declare. A slug that is not in the list is refused.',
             },
             anchors: {
               type: 'array',

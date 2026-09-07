@@ -223,6 +223,7 @@ function commission(diff = DIFF_WITH_TESTS): Commission {
     prNumber: 7,
     headSha: HEAD,
     hunks: parseDiffHunks(diff),
+    atoms: [],
     entries: [],
     readRegion: () => ['a line'],
   };

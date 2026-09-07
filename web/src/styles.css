@@ -9437,6 +9437,18 @@ select:disabled {
   color: var(--muted);
   font-size: 12.5px;
 }
+/* The atom an idea corresponds to, under the cue. Amber where no atom covers it:
+   that is a finding about the plan, not the red a contradicted claim is spent on. */
+.rp-atom {
+  grid-column: 3;
+  margin: 3px 0 0 102px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rp-atom-none {
+  color: var(--amber);
+  font-style: italic;
+}
 .rp-panel {
   padding: 4px 6px 16px 2px;
 }

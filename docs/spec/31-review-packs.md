@@ -3,6 +3,7 @@
 **Built.** [The witness log](#the-witness-log), [the pack document](#the-pack),
 [the author](#when-a-pack-is-made), [coverage](#coverage), [the check](#the-check) and its
 [attention labels](#attention), the eight routes, the two prompt ids,
+[the atom an idea names](#an-idea-names-the-atom-it-corresponds-to),
 [the cockpit rendering](#reading-it), [the HTML companion](#reading-it),
 [sharing a pack](#sharing-a-pack) and [unsharing one](#unsharing-a-pack) — the publish, the secret
 backstop over every embedded line, the prune and the withdrawal — and
@@ -188,6 +189,7 @@ sorting everything alphabetically by path.
 | `id`        | minted by the author on every run, so nothing durable is keyed to it ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)); the one reserved id is `plumbing` ([Coverage](#coverage)) |
 | `claim`     | one sentence, falsifiable, stating what this idea does                                                                                                                                   |
 | `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page))                                             |
+| `atom`      | the slug of the plan atom this idea corresponds to, or null where none does ([An idea names the atom](#an-idea-names-the-atom-it-corresponds-to))                                        |
 | `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is                                                                                            |
 | `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                                                                                                      |
 | `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                                                                                                          |
@@ -201,6 +203,109 @@ it is.
 An idea's walk crosses files freely and is expected to: a change in this repo is naturally vertical —
 domain type, wire type, store module, route, cockpit, spec, test — and reviewing those six files
 separately is how a whole class of the sharp edges gets missed.
+
+### An idea names the atom it corresponds to
+
+_Built._ `src/reviewPacks/atoms.ts` finds the atoms and writes what the author is told;
+`readAtom` in `src/reviewPacks/submission.ts` takes the field; `ideaAtom` in the two copies of the
+derivations draws it; `test/reviewPackAtoms.test.ts` holds it.
+
+An **atom** is the smallest piece of a change that could land, be reviewed and be rolled back on its
+own ([08](08-planning.md#atoms--the-pieces-a-part-is-made-of)) — and that is the same unit an idea
+is. The planner declared them before any of the code was written, and the part agent was told to
+write one commit per atom ([09](09-execution.md#the-atoms-of-a-part-reach-its-agent)); this is the
+reader those declarations were waiting for. So an idea carries `atom`: the slug it corresponds to,
+or null.
+
+#### The atoms behind a pull request
+
+A pack is keyed on a pull request and an atom hangs off a plan, so the whole of the join is: the
+plan part whose `prNumber` is this one, then the atoms it carries, in the order it carries them
+(`atomsForPr`). It is a pure function of the parts and the atom rows, so it is derivable — and
+asserted — without dispatching anything.
+
+**Everything with no part behind it answers with an empty list**, and that is most pull requests: a
+human-authored one, a job's, a pickup with no plan, a part from before atoms, a part naming only
+slugs the plan no longer holds. Fail open, on every arm — because the arms are not exotic, they are
+the ordinary case.
+
+#### What the author is told
+
+`atomList` is **appended** to the rendered `review-pack-author` prompt, on the same seam as the hunk
+list and the witness log, and never interpolated as a `{atoms}` placeholder: `loadPromptTemplates`
+rejects only _unknown_ placeholders, so a token an override never learned is dropped in silence on
+exactly the deployments that customised most ([05](05-dispatcher.md#prompt-templates)). It lists
+each atom's slug, title, intent, paths, acceptance and rejected routes, and says that an idea
+corresponds to one.
+
+**A pull request with no atoms behind it appends nothing**, and its prompt is byte-for-byte the one
+it was before this section existed. That is asserted rather than argued, because it is the arm that
+carries the ordinary case.
+
+#### An idea the atoms do not cover is a finding
+
+**The submit tool takes `atom: null` without complaint, and the prompt says plainly that null is the
+right answer where no atom fits.** An idea no atom covers says _the work went somewhere the plan did
+not declare_, which is the most valuable sentence a pack can carry — and every instinct to make it an
+error destroys it. A refusal teaches the author to relabel the idea under whichever slug is nearest,
+and a real signal becomes a false clean bill; a label that is nearly true costs the reader more than
+an honest gap.
+
+The symmetry with [Coverage](#coverage) is the whole of it: **an unowned hunk is refused because it
+is mechanical; an unowned idea is reported because it is a judgement.** `parseDiffHunks` computes
+hunk coverage and the author cannot argue with it. Whether an idea is the atom the planner meant is
+not a thing any function decides, so nothing decides it — and in particular **nothing refuses a pack
+for its atom coverage**, and no count of unowned ideas gates anything.
+
+What _is_ refused is an `atom` naming a slug the part does not carry. That is a typo rather than a
+finding, and the refusal names every slug the idea could have used. On a pull request with no atoms
+at all, naming one is refused saying so.
+
+**Both renderings draw it under the cue**, where the checker's own gap already sits: the slug where
+the idea names one, and where it does not — on a pack that has atoms behind it — the sentence saying
+so, drawn in the amber a dispute is drawn in rather than the red spent only on a claim the tree
+contradicts. **A pack with no atoms behind it draws nothing at all**, so its page is the page it
+was.
+
+It goes there and not into a table, because **the page has no table to key on the atom**. The page is
+the ideas with their walks under them and a contents rail beside them ([The page](#the-page)); the
+per-file table an atom column would have replaced never existed, and building one to be replaced
+would put back the wall this subsystem exists to take down. The atom belongs beside the idea's other
+one-line reading — the cue — because that is where the reader is when the question _what was this
+piece meant to be_ occurs to them.
+
+#### A plan-time rejection is provenance, never a claim
+
+An atom's `rejected` routes reach the author with the atom, and the rule
+[the witness log](#the-witness-log) already settles for a fork's `rejected` holds here too: an
+alternative is an **intention**, the checker's honest verdict on an intention is `cant_tell` by
+construction, and so it is shown as the entry it came from and never as a sentence with a verdict
+beside it.
+
+It has to be said again in its own words rather than by reference, because a plan's rejections are
+_more_ authoritative-looking than a pad's — written before the work, by the agent that decided what
+the work was, and stored in a table with the parts. That is exactly what makes them dangerous to
+restate as claims: a rejection turned into a claim reads as checked when nothing checked it, and it
+reads that way harder for having come from the plan. The pack document carries the atom's **slug**
+and no copy of its prose, so there is nothing on the page for a reader to mistake for a verified
+sentence; what the rejections buy is an author that understands why an atom is written the way it
+is.
+
+#### The schema is not bumped for it
+
+`REVIEW_PACK_SCHEMA` stays where it is, and `KNOWN_REVIEW_PACK_SCHEMA` with it. The version exists so
+a renderer refuses rather than silently dropping what it does not know
+([above](#the-document-carries-its-schema-version)), and the test for whether a field needs one is
+not _is the field new_ but **would its absence be drawn as something other than the truth**. Here it
+would not: a renderer a build behind draws a pack with `atom` missing exactly as it draws a pack for
+a pull request that had no atoms — which is an honest, complete page, missing an addition rather
+than misreporting a judgement. No claim, verdict, finding or gate is keyed on the field.
+
+The cost of bumping is the other half. Every pack already stored states the old number, and both
+renderers refuse a version they do not know exactly — so a bump would blank every pack in every
+running fleet to buy a warning about a field whose absence is already meaningful. A field that
+changed what an existing one meant, or that carried a judgement the reader must see, would be worth
+that; this one is not.
 
 ### Say it in fewer words
 
@@ -869,7 +974,10 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
 3. **The ideas.** A rule reading "The _n_ ideas — open one to see the code", an open-all control, and
    then one row per idea: its number, its attention label as a chip, its `title`, and a metadata
    line — steps, changes, and a red flag naming a false claim or a disputed one. Under the title,
-   the `cue`. The row is collapsed; the marks on it survive a reader who opens nothing. The numbers
+   the `cue`, and under that the `atom` this idea corresponds to — or, on a pack that has atoms
+   behind it and an idea that names none, the sentence saying the plan did not declare this work
+   ([An idea names the atom](#an-idea-names-the-atom-it-corresponds-to)); nothing at all where the
+   pull request had no atoms behind it. The row is collapsed; the marks on it survive a reader who opens nothing. The numbers
    carry the reading order the checker chose, which is why they are numbers.
 4. **The walk.** Opening an idea shows the anchors as steps down a rule, each numbered with its
    idea's — `01.3`, never `3`, because step numbers restart per idea and a bare one says nothing
@@ -1326,6 +1434,17 @@ the prose to disagree. → [What a false claim does](#what-a-false-claim-does)
 the checker may not edit the pack would be a sentence in a prompt; keyed to the ids and numbers the
 prompt handed out and merged by a function that can reach only the checker's fields, it is the shape
 of the tool. → [The check](#the-check)
+
+**An idea the atoms do not cover is reported, never refused.** The tempting rule is the one
+[Coverage](#coverage) already has, and it is right there and wrong here: hunk coverage is mechanical
+and an author cannot argue with it, while whether an idea is the atom the planner meant is a
+judgement. Refused, the author relabels the idea under the nearest slug and a real signal becomes a
+false clean bill. → [An idea the atoms do not cover is a finding](#an-idea-the-atoms-do-not-cover-is-a-finding)
+
+**Adding `atom` did not bump the schema.** The version is for a field whose absence a renderer would
+draw as something other than the truth; a missing `atom` draws as a pull request that had no atoms,
+which is honest. Bumping would have blanked every stored pack in every running fleet to buy a warning
+about that. → [The schema is not bumped for it](#the-schema-is-not-bumped-for-it)
 
 **The document embeds the code its anchors point at.** The alternative — anchors as paths and ranges,
 resolved at render — needs a file-at-a-commit route and a diff viewer the cockpit does not have, and

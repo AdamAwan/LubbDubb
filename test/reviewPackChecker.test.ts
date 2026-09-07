@@ -193,6 +193,7 @@ test('the merge reaches only the checker’s fields, and refuses an incomplete c
         id: 'idea_1',
         claim: 'c',
         title: 't',
+        atom: null,
         cue: null,
         attention: null,
         anchors: [
