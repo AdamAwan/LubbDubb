@@ -3858,9 +3858,14 @@ It sits beside `Issue!` because the two are the same moment — something looks 
 reading of it should be the one nearer to hand. Unconditional, like every other deep link, and with
 the command in its title for the operator whose machine the link cannot reach.
 
-**Both are drawn as the shared button, one word and a mark each** — `Button` connected, `ExtLink` with a
-`look` offline, `DesktopLink` beside them, all three at `ghost small`, which is this bar's chip size to
-begin with. They were two sentences in one weight and one ink a hand's width apart, and read as a single
+**Both are drawn as the [control kit](#the-headers-controls)'s control, a glyph and one word each** —
+`ControlButton` connected, `ExtLink` with `control` offline, `DesktopLink` with the same flag beside
+them, all three wearing `.cn-tgl`. They were the shared button at `ghost small`, a transparent word on a
+strip of readings; the row they are the bar's copy of — `Open in Claude Code ↗`, `Open ticket ↗`,
+`File a new bug` under _Leave this page_ on a goal — reads as controls because it is filled, glyphed and
+one kit throughout, and these two did not. Two kits for one act was the whole complaint. The flag is a
+boolean on each of the two link components rather than a class handed in, for the reason a tone is:
+`.btn` and `.cn-tgl` are two kits, and a `className` that mixes them draws a border inside a border. They were two sentences in one weight and one ink a hand's width apart, and read as a single
 run of small print: an operator scanning the bar saw neither, which is the whole failure for a control
 whose value is being noticed at the moment something looks wrong. The punctuation carries the difference
 between them, because that is the difference: one files, one asks.
@@ -3870,10 +3875,10 @@ between them, because that is the difference: one files, one asks.
 which took no class of its own — and a rule naming `.ext-ref` is the one thing this stylesheet is
 [tested not to do](#tokens). What that bought was a pill inside a pill the moment the question hand-off
 became a `DesktopLink` and arrived already wearing [the button](#the-button): two borders, two radii and
-two grounds on one control. The seam that replaced the wrapper is `ExtLink`'s `look` prop — the same
-bargain `DesktopLink` makes with `buttonClass` — so the group is layout and nothing else, and the
-accent edge the question wore is gone with it: a tone is the one thing `className` on a button may not
-carry.
+two grounds on one control. The seam that replaced the wrapper is a look prop on each link —
+`ExtLink`'s `look`, then `control` on both it and `DesktopLink` — so the group is layout and nothing
+else, and the accent edge the question wore is gone with it: a tone is the one thing `className` on a
+button may not carry.
 
 **Both faces of `Issue!` go to LubbDubb's own repository, and neither follows
 `github.owner`/`github.repo`** (issue #449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
