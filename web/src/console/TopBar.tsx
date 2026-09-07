@@ -6,7 +6,7 @@ import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { Icon } from '../components/icons.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
-import { Button } from '../components/button.js';
+import { ControlButton } from '../components/controls.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
@@ -88,17 +88,17 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
   return (
     <div className="cn-asks">
       {canCompose ? (
-        <Button
-          ghost
-          size="small"
+        <ControlButton
+          icon="bug"
           title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
           onClick={() => setComposing(true)}
         >
           Issue!
-        </Button>
+        </ControlButton>
       ) : (
-        <ExtLink href={NEW_ISSUE_URL} look={{ ghost: true, size: 'small' }} title="Raise an issue on the LubbDubb repo">
-          Issue!
+        <ExtLink href={NEW_ISSUE_URL} control title="Raise an issue on the LubbDubb repo">
+          <Icon name="bug" />
+          Issue! ↗
         </ExtLink>
       )}
       {/* The bar's second way out, and the one that answers rather than files.
@@ -121,6 +121,7 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
           the browser is on, and `DesktopLink` puts the command in the title for
           exactly the operator it cannot reach. */}
       <DesktopLink
+        control
         folder={view.state.config.desktopFolder}
         prompt={questionPrompt()}
         label="Question?"

@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import { buttonClass, type ButtonLook } from './button.js';
+import { CONTROL_CLASS } from './controls.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -21,17 +22,27 @@ export function ExtLink({
   title,
   boxed,
   look,
+  control,
   children,
 }: {
   href: string;
   title?: string;
   boxed?: boolean;
   look?: ButtonLook;
+  control?: boolean;
   children: ReactNode;
 }): JSX.Element {
   return (
     <a
-      className={look === undefined ? (boxed === true ? 'ext-ref ref-out' : 'ext-ref') : buttonClass(look)}
+      className={
+        control === true
+          ? CONTROL_CLASS
+          : look === undefined
+            ? boxed === true
+              ? 'ext-ref ref-out'
+              : 'ext-ref'
+            : buttonClass(look)
+      }
       href={href}
       title={title}
       target="_blank"
