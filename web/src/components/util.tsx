@@ -161,6 +161,25 @@ export function elapsed(fromIso: string, toIso: string | null, now: number = Dat
   return `${h}h ${m % 60}m`;
 }
 
+/**
+ * How long there is left, worded as a span: `in 7h 12m`, `in 4m`, `any moment`
+ * once it is up.
+ *
+ * `relTime` is for a stamp that has already happened, and clamps a future one to
+ * `0s ago` — which is not a rounding error, it is the wrong sentence: an ejection
+ * with seven hours left read as one the harness was about to take back, and a
+ * stall park read as already spent. A deadline is a different question from an
+ * age, so it gets its own reading. → `ejectedRow`, `agentState`
+ */
+export function timeLeft(iso: string, now: number = Date.now()): string {
+  const secs = Math.round((new Date(iso).getTime() - now) / 1000);
+  if (!Number.isFinite(secs)) return '';
+  if (secs <= 0) return 'any moment';
+  if (secs < 60) return `in ${secs}s`;
+  const m = Math.floor(secs / 60);
+  return m < 60 ? `in ${m}m` : `in ${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 export function decisionAttribution(
   d: { rule: string | null; admission?: string | null },
   rules: Record<string, { name: string; description: string; kind: string }>,

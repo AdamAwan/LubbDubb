@@ -2573,6 +2573,21 @@ Three of them carry the rules that kept being forgotten:
   the one card off the grid, a quarter wide under a page of half-width ones. It is a panel now, which
   is the room its rows always wanted.
 
+- **A card whose widest row overruns a rail widens that rail on itself, not on the token.** The
+  measures above are one edit for every card, which is what keeps the columns in line from card to
+  card — but a card can hold something no other card does, and then the shared measure is wrong for
+  exactly one surface. The Fleet card's ejected row is that case twice over: its state word is
+  `taken off the fleet` where `--cn-w-state` was measured for `at a keyboard`, and its action is
+  _two_ controls — the deep link into the operator's own Claude Code and the hand-back — where every
+  other action on the card is one button. A rail slot is `overflow: visible`, so neither clipped: the
+  chip painted over the control beside it and the link wrapped its label into a stack the height of
+  three rows ([35](35-ejection.md#in-the-cockpit)). Both are widened on `.cn-fleet .cn-rows`, the
+  same shape `.cn-read-marks` uses for the pull-request rack's three marks, and for the same reason —
+  widening the tokens would open a gutter on every card that has a word or a control for room only
+  this row needs. A control's label is also `white-space: nowrap` in the button kit, so the failure
+  when a rail is measured too small is a slot overrun, which is visible as a measure being wrong,
+  rather than a label coming apart, which reads as the row being broken.
+
 - **`toggle` is the row's switch, and it leads the readings.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
   is for and why `action` has the width. It sits with the readings because it answers the same kind of
