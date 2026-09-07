@@ -3231,8 +3231,8 @@ select:disabled {
 }
 .pm-wave-label {
   fill: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
   text-transform: uppercase;
 }
 .pm-edge {
