@@ -120,19 +120,30 @@ function decode(html: string): string {
     .replace(/&amp;/g, '&');
 }
 
-function pickerHtml(candidates: IssueRelative[], goalNumber = 12): string {
+function pickerHtml(candidates: IssueRelative[], goalNumber = 12, proposed: number | null = null): string {
   const state = buildDemoState().state as AppState;
   state.world.parentCandidates = candidates;
   const view = { state, now: Date.now() } as unknown as CockpitView;
   const goal = { ...issue({ number: goalNumber, parent: null }) } as unknown as WebIssue;
-  return decode(renderToStaticMarkup(createElement(ParentPicker, { issue: goal, proposed: null, view, actions })));
+  return decode(renderToStaticMarkup(createElement(ParentPicker, { issue: goal, proposed, view, actions })));
 }
+
+test('the accept button names the proposed parent rather than its number', () => {
+  const html = pickerHtml([FEATURE], 12, 300);
+  assert.match(html, /Use “Statement reconciliation”/, 'a work item number is not something an operator recognises');
+  assert.doesNotMatch(html, /Use #300</);
+});
+
+test('a proposal the browser holds no title for keeps the number', () => {
+  const html = pickerHtml([FEATURE], 12, 999);
+  assert.match(html, /Use #999/, 'a title the browser does not have is not one to invent');
+});
 
 test('the picker offers every candidate the world carries', () => {
   const html = pickerHtml([FEATURE, { ...FEATURE, number: 301, title: 'Ledger exports' }]);
   assert.match(html, /<select/, 'the list is the answer that resolves the warning — it has to be drawn');
-  assert.match(html, /#300 — Statement reconciliation/);
-  assert.match(html, /#301 — Ledger exports/);
+  assert.match(html, /Statement reconciliation \(#300\)/);
+  assert.match(html, /Ledger exports \(#301\)/);
   assert.match(html, /Choose a Feature/, 'with no proposal to compare against, the list is the whole offer');
 });
 

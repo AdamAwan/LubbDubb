@@ -20,3 +20,10 @@ export function orphanGoal(state: AppState, issue: Issue): OrphanGoal | null {
 export function orphanCount(state: AppState, issues: readonly Issue[]): number {
   return issues.filter((issue) => orphanGoal(state, issue) !== null).length;
 }
+
+export function proposedParentTitle(state: AppState, number: number | null): string | null {
+  if (number === null) return null;
+  const candidate = state.world.parentCandidates.find((c) => c.number === number);
+  if (candidate !== undefined) return candidate.title;
+  return state.world.issues.find((i) => i.number === number)?.title ?? null;
+}

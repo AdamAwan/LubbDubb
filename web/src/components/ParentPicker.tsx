@@ -4,6 +4,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { proposedParentTitle } from '../view/orphanGoal.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -20,15 +21,16 @@ export function ParentPicker({
 }): JSX.Element {
   const [chosen, setChosen] = useState<string>('');
   const options = view.state.world.parentCandidates.filter((c) => c.number !== issue.number);
+  const proposedTitle = proposedParentTitle(view.state, proposed);
   return (
     <div className="cn-acts">
       {proposed !== null && (
         <AsyncButton
           tone="primary"
           onClick={() => actions.setIssueParent(issue.number, proposed)}
-          title={`Hang this goal off #${proposed}`}
+          title={`Hang this goal off #${proposed}${proposedTitle === null ? '' : ` — ${proposedTitle}`}`}
         >
-          Use #{proposed}
+          {proposedTitle === null ? `Use #${proposed}` : `Use “${proposedTitle}”`}
         </AsyncButton>
       )}
       {options.length > 0 && (
@@ -45,7 +47,7 @@ export function ParentPicker({
             <option value="">{proposed === null ? 'Choose a Feature…' : 'Choose another…'}</option>
             {options.map((o) => (
               <option key={o.number} value={String(o.number)}>
-                #{o.number} — {o.title}
+                {o.title} (#{o.number})
               </option>
             ))}
           </select>

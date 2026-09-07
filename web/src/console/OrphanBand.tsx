@@ -5,7 +5,7 @@ import type { Issue } from '../types.js';
 import { Ref } from '../components/refs.js';
 import { ParentPicker } from '../components/ParentPicker.js';
 import { relTime } from '../components/util.js';
-import { orphanGoal } from '../view/orphanGoal.js';
+import { orphanGoal, proposedParentTitle } from '../view/orphanGoal.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -20,6 +20,7 @@ export function OrphanBand({
 }): JSX.Element | null {
   const orphan = orphanGoal(view.state, issue);
   if (orphan === null) return null;
+  const proposedTitle = proposedParentTitle(view.state, orphan.proposed);
 
   if (orphan.settledAt !== null) {
     return (
@@ -54,7 +55,7 @@ export function OrphanBand({
         <p>Nothing has been suggested for it.</p>
       ) : (
         <p>
-          The appraiser suggested
+          The appraiser suggested {proposedTitle === null ? `work item #${orphan.proposed}` : `“${proposedTitle}”`}.
           <span className="cn-refs">
             <Ref to={`issue:${orphan.proposed}`} title="Open the suggested parent and check it before you accept it" />
           </span>
