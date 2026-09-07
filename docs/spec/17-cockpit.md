@@ -455,6 +455,7 @@ once.
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                          |
 | `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                                                                       |
 | `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                                                                   |
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
@@ -5839,10 +5840,10 @@ exists to surface.
 ([08](08-planning.md#atoms--the-pieces-a-part-is-made-of)), each atom shows its title, its intent,
 what it would touch, what it is done when, and the routes the planner rejected and why — the last of
 these drawn as what it is, a reason from before any code existed, rather than as a claim about what
-the code now does. There is no control in the block: the grouping is the operator's act but
-_regrouping_ is not built, so offering half of it here would be a surface that looks editable and is
-not. A part with no atoms draws exactly what it drew before, which is every part of every plan
-written before atoms existed.
+the code now does. There is no control in the block: reading the plan and rearranging it are two
+different sittings, and the grouping is changed on [its own surface](#regrouping-the-atoms) rather
+than half-offered here. A part with no atoms draws exactly what it drew before, which is every part
+of every plan written before atoms existed.
 
 **A part in review carries a restart**, beside its PR chip: a two-step `ConfirmButton` that closes the
 pull request, drops the branch and puts the part back to `ready`
@@ -5851,6 +5852,46 @@ means an open pull request with no agent running — the other states are refusa
 to explain. And drawn **not at all** where `config.canClosePr` is false, the way the board draws no
 drag where `canSetWorkItemState` is false: the whole feature is absent on a provider that cannot close
 a pull request, rather than a control that fails on the deployments nobody tested.
+
+### Regrouping the atoms
+
+`PlanRegroup` (`web/src/components/`), reached from the rail once the plan is read — the operator
+gets to the sheet through the approval card's **Read the full plan**, and the grouping is what they
+reach _after_ agreeing the work is right. It is deliberately **not a question on the approval card**:
+[08](08-planning.md#the-approval-gate) took the split out of the ask body on purpose, and putting a
+grouping exercise back at that moment undoes it. Which means the planner's proposed grouping has to
+be good enough to accept blind, and this is a screen an operator visits when they want it.
+
+**Offered exactly where the amendment rules already apply**, and drawn not at all otherwise: a plan
+with no atoms, a plan that is not `awaiting_approval`, or a plan with work in flight on any part has
+no control on the rail. Where the route would refuse ([08](08-planning.md#regrouping)) the surface
+does not offer — an operator is never handed a control whose only outcome is a sentence explaining
+why it does nothing.
+
+It draws the parts, each with the atoms it carries, and one control per atom: **move to**, a select of
+the other parts. A part can be added — slug, title, what it achieves — and one that was added can be
+dropped, but only once it is empty, because dropping a part cannot decide where its work goes. Saving
+posts the grouping and the sheet goes back to the plan, which is now waiting on approval again.
+
+**Two things it must draw, and the first is the loud one.**
+
+- **The cycle, before the save it blocks.** A grouping whose atom dependencies put two parts in a
+  circle is refused by the schema — but a rejection string arriving after the click is a refusal an
+  operator has to decode. So the surface finds it as they build the grouping and says which two atoms,
+  which two parts, and which of the two to move, in a red band above the parts, with the save disabled
+  under it. This is the one refusal that has to be loud, because the failure it prevents is silent: a
+  part held `pending` forever with nothing red. `web/src/cockpit/regroup.ts` is the browser's copy of
+  the walk `PartSchema`'s refinement does, and the harness's refusal stays the backstop — the surface
+  can be wrong, the route cannot.
+- **What the grouping costs, honestly.** A line of arithmetic nobody has to do: _n_ parts is _n_
+  branches, _n_ pull requests, _n_ review rounds and _n_ merges. A part carrying one atom on its own
+  is named, as a whole review round and a whole merge for one piece — _sometimes that is exactly
+  right, and often it is not_. It is stated and never enforced: **nothing here refuses a grouping for
+  its atom count**, for the reason [08](08-planning.md#atoms--the-pieces-a-part-is-made-of) gives.
+
+**Where the operator is inside the sheet is on `Place`**, not a `useState` — `regroup` in the query
+string, under `plan`. The rule is [the address bar](#the-address-bar)'s: a view that is only in a
+component's state is a view the back button and a reload both lose.
 
 ### The validation digest
 

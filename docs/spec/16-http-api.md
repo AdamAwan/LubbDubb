@@ -1881,6 +1881,18 @@ pending part costs and an operator re-pricing one about to go out wants that to 
 part already dispatched keeps what its task row stored, since resolution happens once, at dispatch.
 Returns `{ ok: true, part }`. → [02](02-configuration.md#pinning-one-goal-to-a-profile)
 
+### `POST /api/plans/:id/regroup`
+
+`{ groups: [{ slug, atoms, title?, scope? }] }`. Moves atoms between the parts of a plan still
+**awaiting approval**, as an amended plan document rather than a write into `plan_parts`: the whole
+document is rebuilt from the stored plan, its atoms and its parts with only the grouping replaced, and
+ingested by `ingestPlanDocument` like any other. 404 when the plan is unknown; 400 with the reason when
+the plan is not `awaiting_approval`, declares no atoms, has work in flight on a part, names a new part
+without a title and a scope, or produces a document the schema refuses — the atom-dependency cycle
+among them, which is the refusal the surface draws before it ever gets here. Broadcasts `world:changed`
+and runs a cycle. Returns `{ ok: true, detail, retired }`.
+→ [08](08-planning.md#regrouping), [17](17-cockpit.md#regrouping-the-atoms)
+
 ### `POST /api/plans/:id/restart-part`
 
 `{ slug }`. Takes one plan part with an **in-flight pull request** back to `ready`, so rule

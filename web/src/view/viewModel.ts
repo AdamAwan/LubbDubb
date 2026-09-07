@@ -89,6 +89,7 @@ export interface CockpitView {
   agentOnGoal: ReadonlyMap<string, Agent>;
 
   viewingPlan: string | null;
+  regroupingPlan: boolean;
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
@@ -141,6 +142,7 @@ interface ViewInputs {
   lastPulseAt: number;
   goalAgents?: GoalAgentsPayload | null;
   viewingPlan: string | null;
+  regroupingPlan?: boolean;
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
@@ -299,6 +301,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
       }),
     ),
     viewingPlan: input.viewingPlan,
+    regroupingPlan: input.regroupingPlan === true,
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,

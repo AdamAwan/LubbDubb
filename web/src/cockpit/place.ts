@@ -18,6 +18,7 @@ export interface Place {
   panel: ConsolePanel;
   agent: string | null;
   plan: string | null;
+  planRegroup: boolean;
   retro: string | null;
   hatch: string | null;
   scratchpad: string | null;
@@ -82,6 +83,7 @@ export const NOWHERE: Place = {
   panel: null,
   agent: null,
   plan: null,
+  planRegroup: false,
   retro: null,
   hatch: null,
   scratchpad: null,
@@ -168,6 +170,7 @@ export function readPlace(search: string): Place {
     panel: ask !== null ? { ask } : (PANELS.find((p) => p === panel) ?? null),
     agent: param(query, 'agent'),
     plan: param(query, 'plan'),
+    planRegroup: query.has('regroup'),
     retro: param(query, 'retro'),
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
@@ -279,7 +282,10 @@ export function placeQuery(place: Place): string {
     else query.set('panel', place.panel);
   }
   if (place.agent !== null) query.set('agent', place.agent);
-  if (place.plan !== null) query.set('plan', place.plan);
+  if (place.plan !== null) {
+    query.set('plan', place.plan);
+    if (place.planRegroup) query.set('regroup', '1');
+  }
   if (place.retro !== null) query.set('retro', place.retro);
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);

@@ -67,6 +67,9 @@ export function App() {
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
       onRestartPart={(id, slug) => status.actions.restartPart(id, slug)}
+      regrouping={status.view.regroupingPlan}
+      onRegroupView={(on) => status.actions.regroupPlanView(on)}
+      onRegroup={(id, groups) => status.actions.regroupPlan(id, groups)}
       canClosePr={state.config.canClosePr}
       profiles={state.config.profiles}
       defaultProfile={state.config.defaultProfile}
