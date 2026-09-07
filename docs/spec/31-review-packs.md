@@ -235,6 +235,46 @@ the one example that does more than any adjective:
 >
 > _Yes:_ "Get the relevant pull requests in the right order, use the latest."
 
+### Say it in plainer words
+
+_Built._ `src/reviewPacks/plainness.ts`, called from both submit tools through `plainRefusal`.
+
+A cap makes writing short. It does nothing about the **register** — a field can be sixty characters
+and still read like a legal notice, and that is the failure a reader actually reports: "so much of it
+tells me nothing". So the same enforcement the cap gets, plainness gets: four rules, checked when the
+pack is submitted, refused with the exact sentence that broke one.
+
+| Rule                         | Why it is a rule and not advice                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| no semicolon                 | it is a full stop that will not admit it, and it is how two ideas get one line          |
+| no clause hung off a dash    | a dash with a space each side is how a long sentence hides that it is two               |
+| no sentence over **24** words | one idea per sentence, and the count is what makes an author choose which idea         |
+| reading ease at least **60** | the backstop for the register itself, which no per-field rule catches                   |
+
+The first three are per-field and their refusal quotes the sentence, so the fix is obvious. The
+fourth is one Flesch reading-ease score over **every prose field the reader is shown unfolded**,
+because each sentence can pass all three rules and every word still be one the reader has to look up.
+60 is about a newspaper. Its refusal names the three sentences that cost the score most, since a
+score alone is a number nobody can act on.
+
+**Code is never counted.** Backticked spans, fenced blocks, table rows and any word that looks like an
+identifier — a path, a flag, a version, something with an internal capital — are dropped from both the
+sentence count and the syllable count. A gist that names the method it is about would otherwise be
+refused for doing the right thing.
+
+**Both agents are held to it**, on the same code path: the author's headline, summary, titles, claims,
+gists, captions and coverage; the checker's cues, finding headlines and finding bodies. Two fields are
+exempt and deliberately so — a witness `note` is testimony and is [rendered verbatim](#provenance),
+and a claim's `evidence` is a machine transcript of greps that is folded on the page. Neither is the
+author's voice, and rewriting either to score better would be the retelling this whole design exists
+to prevent.
+
+The trade is stated rather than hidden: **a rule this blunt refuses some good writing.** A caption
+reading "the template — edit this one" is fine English and is refused. That is accepted, because the
+failure it prevents is the one the reader hits on every pack and the one it causes costs an author one
+rewrite. If packs start failing to land on the score rather than the three rules, the floor is the
+number to move, not the rule to drop.
+
 ### An anchor
 
 An anchor is a place in the tree the walk stops at, with one line saying why it stops there. Two

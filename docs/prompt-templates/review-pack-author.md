@@ -16,7 +16,14 @@ Write for the person: the `title` of an idea and the `gist` of an anchor say wha
 
 **A `gist` says why, never what.** The code is directly under it, so a gist the reader could have written from the diff is a line spent saying nothing: "new interface member", "the comment now says X", "fold and predicate become shared consts". Say what the reader would otherwise have had to work out — why the change is there, what it means for them, what it would have broken done the other way. If the only true thing to say is what the diff already shows, the anchor is one to drop, not to caption.
 
-**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so write short first rather than trimming afterwards. Shortest word that is still accurate; one idea per sentence; no clauses hung off dashes; no word a reader would have to look up. Before and after:
+**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so write short first rather than trimming afterwards. Four rules, and the tool refuses a field that breaks any of them, naming the sentence:
+
+1. **No semicolon.** It is a full stop that will not admit it. Use the full stop.
+2. **No clause hung off a dash.** A dash with a space each side is how one long sentence hides that it is two. Write the two.
+3. **No sentence over 24 words.** One idea per sentence.
+4. **The plainest word that is still true**, and the identifiers in the code rather than the prose. The pack as a whole is scored for reading ease and refused under 60, which is about a newspaper.
+
+Before and after:
 
 - *No:* "Which pull requests are the goal's, and in what order. Archive first, the world's closed window second, so the fresher reading of the same PR wins."
 - *Yes:* "Get the relevant pull requests in the right order, use the latest."

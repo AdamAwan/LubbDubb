@@ -118,7 +118,7 @@ async function submit(system: System, agent: Agent, args: Record<string, unknown
 function fullSubmission(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     headline: 'The module imports y and notes why.',
-    summary: 'Two files change; **the import is the point**, the rest is tidy-up.',
+    summary: 'Two files change. **The import is the point**, the rest is tidy-up.',
     estimatedMinutes: 4,
     ideas: [
       {
@@ -132,7 +132,7 @@ function fullSubmission(extra: Record<string, unknown> = {}): Record<string, unk
             path: 'src/unchanged.ts',
             start: 2,
             end: 3,
-            gist: 'Should this have changed? No — it never read x either.',
+            gist: 'Should this have changed? No. It never read x either.',
             note: { by: 'author', text: 'Checked every importer.' },
           },
         ],

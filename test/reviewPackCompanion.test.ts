@@ -105,7 +105,7 @@ test('the companion is one self-contained file that draws the page in the spec�
         evidence: 'src/b.ts still reads it',
         finding: {
           headline: 'The deleted constant is still read.',
-          body: 'The build breaks. **Blocking; the author’s call.**',
+          body: 'The build breaks. **Blocking. The author’s call.**',
           step: 1,
           counter: {
             range: { path: 'src/b.ts', start: 2, end: 2 },
@@ -143,7 +143,7 @@ test('the companion is one self-contained file that draws the page in the spec�
   assert.match(html, />01<\/span><span class="rp-att rp-att-decide">Decide/);
   assert.match(html, /1 false claim/);
   assert.match(html, /the surviving reader/);
-  assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/, 'the finding’s markdown is rendered');
+  assert.match(html, /<strong>Blocking\. The author’s call\.<\/strong>/, 'the finding’s markdown is rendered');
 });
 
 test('an unwitnessed pack says so, and an unchecked one is drawn as itself', () => {

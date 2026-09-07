@@ -147,7 +147,7 @@ function fullCheck(pack: ReviewPack, extra: Record<string, unknown> = {}): Recor
       {
         id: plumbing!.id,
         attention: 'skim',
-        cue: 'A deletion nothing depended on — except one thing did.',
+        cue: 'A deletion nothing depended on, except one thing did.',
         claims: [
           {
             claim: 1,
@@ -155,7 +155,7 @@ function fullCheck(pack: ReviewPack, extra: Record<string, unknown> = {}): Recor
             evidence: 'src/unchanged.ts:2 still reads old.',
             finding: {
               headline: 'The deleted constant is still read.',
-              body: 'src/unchanged.ts reads `old` on line 2, so the build breaks. **Blocking; the author’s call.**',
+              body: 'src/unchanged.ts reads `old` on line 2, so the build breaks. **Blocking. The author’s call.**',
               step: 1,
               counter: { path: 'src/unchanged.ts', start: 2, end: 2, caption: 'the surviving reader' },
             },
@@ -416,7 +416,7 @@ test('the checker’s verdicts land on the stored document and nothing else in i
   assert.equal(plumbing!.claims[0]!.verdict, 'false');
   assert.deepEqual(plumbing!.claims[0]!.finding, {
     headline: 'The deleted constant is still read.',
-    body: 'src/unchanged.ts reads `old` on line 2, so the build breaks. **Blocking; the author’s call.**',
+    body: 'src/unchanged.ts reads `old` on line 2, so the build breaks. **Blocking. The author’s call.**',
     step: 1,
     counter: {
       range: { path: 'src/unchanged.ts', start: 2, end: 2 },

@@ -1,3 +1,4 @@
+import { plainRefusal } from './submission.js';
 import type { ReviewAttention, ReviewFinding, ReviewPack, ReviewRange, ReviewVerdict } from '../types.js';
 
 // → docs/spec/31-review-packs.md
@@ -22,6 +23,7 @@ export function applyCheck(
 
   if (!Array.isArray(args.ideas)) return refuse('ideas must be a list — one entry per idea you were handed.');
   const seen = new Set<string>();
+  const prose: [string, string][] = [];
   for (const [i, raw] of (args.ideas as unknown[]).entries()) {
     const at = `ideas[${i}]`;
     if (!isRecord(raw)) return refuse(`${at} must be an object.`);
@@ -40,6 +42,7 @@ export function applyCheck(
           `shortest plain wording, one idea, no clauses hung off dashes. Was: "${cue}"`,
       );
     }
+    prose.push([`${at}.cue`, cue]);
     if (!Array.isArray(raw.claims)) return refuse(`${at}.claims must be a list — one entry per claim, by number.`);
     const answered = new Set<number>();
     for (const [j, rawClaim] of (raw.claims as unknown[]).entries()) {
@@ -73,6 +76,10 @@ export function applyCheck(
       }
       const finding = readFinding(commission, rawClaim.finding, `${where}.finding`, idea.anchors.length);
       if (!finding.ok) return refuse(finding.error);
+      prose.push(
+        [`${where}.finding.headline`, finding.finding.headline],
+        [`${where}.finding.body`, finding.finding.body],
+      );
       claim.finding = finding.finding;
       if (finding.finding.step !== null) idea.anchors[finding.finding.step - 1]!.mark = 'false';
     }
@@ -87,6 +94,9 @@ export function applyCheck(
   if (unlabelled.length > 0) {
     return refuse(`every idea gets a label, and these have none: ${unlabelled.map((x) => x.id).join(', ')}.`);
   }
+
+  const plain = plainRefusal(prose);
+  if (plain !== null) return refuse(plain);
 
   if (!Array.isArray(args.order)) return refuse('order must be a list of every idea id, in the order to read them.');
   const order = (args.order as unknown[]).map((o) => line(o));

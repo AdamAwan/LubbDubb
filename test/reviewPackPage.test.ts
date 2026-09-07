@@ -42,7 +42,7 @@ function checkedPack(): ReviewPack {
     prNumber: 7,
     headSha: HEAD,
     headline: 'The module imports y.',
-    summary: 'Two files change; **the import is the point**.',
+    summary: 'Two files change. **The import is the point**.',
     estimatedMinutes: 4,
     order: ['idea_b', 'idea_a'],
     witnessed: true,
@@ -114,7 +114,7 @@ function checkedPack(): ReviewPack {
             evidence: 'src/unchanged.ts:2 still reads old.',
             finding: {
               headline: 'The deleted constant is still read.',
-              body: 'The build breaks. **Blocking; the author’s call.**',
+              body: 'The build breaks. **Blocking. The author’s call.**',
               step: 1,
               counter: {
                 range: { path: 'src/unchanged.ts', start: 2, end: 2 },
@@ -293,7 +293,7 @@ test('the page draws the masthead, then the gate, then the ideas — and the pul
   assert.match(html, /href="#rp-finding-1"/);
   assert.match(html, /<a[^>]*href="https:\/\/example\.test\/pull\/7"[^>]*>PR 7<\/a>/);
   assert.match(html, /The module imports y\./);
-  assert.match(html, /Two files change; the import is the point\./);
+  assert.match(html, /Two files change\. The import is the point\./);
   assert.doesNotMatch(html, /<strong>the import is the point<\/strong>/, 'the author’s bold is flattened');
   assert.match(html, /~4 min/);
 });
@@ -315,7 +315,7 @@ test('no gate when nothing is false, and the collapsed row still carries the fla
   assert.match(html, /the surviving reader/);
   assert.match(html, /class="rp-hl-keyword">const<\/span> two = old;/);
   assert.match(html, /step 1 — src\/b\.ts:9/);
-  assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/);
+  assert.match(html, /<strong>Blocking\. The author’s call\.<\/strong>/);
 });
 
 test('opening an idea shows the walk, the marks, the claims and the false claim at the top', () => {
