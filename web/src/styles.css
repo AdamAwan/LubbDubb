@@ -3215,6 +3215,119 @@ select:disabled {
   font-size: 12px;
   margin-bottom: 8px;
 }
+/* The map. An SVG element takes none of the document's colours: with no rule for
+   these classes every `<rect>` filled and every `<path>` closed in the UA default
+   black, which drew the decomposition as three black slabs with its lettering
+   invisible inside them. Fills and strokes are stated here, in tokens, for that
+   reason. → docs/spec/17-cockpit.md#the-map */
+.pm-map {
+  margin: 6px 0 10px;
+  overflow-x: auto;
+}
+.pm-map-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.pm-wave-label {
+  fill: var(--muted);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+}
+.pm-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+/* A rejoin waits for every parent to merge, so nothing flows down any one of
+   them — dashed, and never mistakable for a stack. */
+.pm-edge.rejoin {
+  stroke-dasharray: 4 3;
+}
+.pm-edge-head {
+  fill: var(--border);
+  stroke: none;
+}
+.pm-node {
+  cursor: pointer;
+}
+.pm-node-box {
+  fill: var(--panel-2);
+  stroke: var(--border);
+  stroke-width: 1;
+  rx: 4;
+}
+.pm-node:hover .pm-node-box,
+.pm-node:focus-visible .pm-node-box {
+  stroke: var(--muted);
+}
+.pm-node.on .pm-node-box {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.pm-node.human .pm-node-box {
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+}
+.pm-node-title {
+  fill: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pm-node-slug,
+.pm-node-state,
+.pm-node-pr {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.pm-node-slug {
+  font-family: var(--font-mono);
+}
+/* Status as a stripe, one hue per tone — the same family the rest of the sheet
+   states a state in. */
+.pm-node-stripe {
+  fill: var(--grey);
+}
+.pm-node.done .pm-node-stripe {
+  fill: var(--green);
+}
+.pm-node.review .pm-node-stripe {
+  fill: var(--blue);
+}
+.pm-node.live .pm-node-stripe {
+  fill: var(--accent);
+}
+.pm-node.bad .pm-node-stripe {
+  fill: var(--red);
+}
+.pm-node.wait .pm-node-stripe {
+  fill: var(--grey);
+}
+.pm-map-key {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.pm-map-key span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pm-map-key i {
+  display: inline-block;
+  width: 16px;
+  border-top: 1.5px solid var(--border);
+}
+.pm-map-key i.dash {
+  border-top-style: dashed;
+}
+.pm-map-key .human {
+  color: var(--accent);
+}
+
 .pm-flags {
   display: flex;
   flex-direction: column;
@@ -9436,6 +9549,18 @@ select:disabled {
   margin: 3px 0 0 102px;
   color: var(--muted);
   font-size: 12.5px;
+}
+/* The atom an idea corresponds to, under the cue. Amber where no atom covers it:
+   that is a finding about the plan, not the red a contradicted claim is spent on. */
+.rp-atom {
+  grid-column: 3;
+  margin: 3px 0 0 102px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rp-atom-none {
+  color: var(--amber);
+  font-style: italic;
 }
 .rp-panel {
   padding: 4px 6px 16px 2px;

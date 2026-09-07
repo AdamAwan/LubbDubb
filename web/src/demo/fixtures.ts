@@ -389,6 +389,7 @@ export function buildDemoState(): DemoSeed {
           number: 413,
           title: '#390 [2/3] refactor(jobs): validate every payload through the catalog',
           branch: 'issue/390/validate',
+          headSha: 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27',
           ciStatus: 'passing',
           unresolvedComments: [],
           approved: true,
@@ -1420,6 +1421,35 @@ export function buildDemoState(): DemoSeed {
         dependsOn: ['catalog-module'],
         rejected: [],
       },
+      {
+        id: 'plan-390:enqueue-validates',
+        planId: 'plan-390',
+        slug: 'enqueue-validates',
+        seq: 3,
+        title: 'Validate the payload at enqueue, against the catalog',
+        intent: 'The one place every job is created is the one place worth checking it.',
+        touches: ['apps/api/src/jobs/enqueue.ts'],
+        acceptance: 'An enqueue with a payload the catalog rejects throws before the row is written.',
+        dependsOn: ['catalog-module'],
+        rejected: [
+          {
+            route: 'Validate in the watcher, where the payload is actually read.',
+            because: 'The bad row is already written by then, and the queue is what a person has to clean up.',
+          },
+        ],
+      },
+      {
+        id: 'plan-390:drop-route-parsers',
+        planId: 'plan-390',
+        slug: 'drop-route-parsers',
+        seq: 4,
+        title: 'Delete the payload parsers the four routes each carried',
+        intent: 'Four parsers that can disagree with the catalog are four ways to enqueue something invalid.',
+        touches: ['apps/api/src/features/jobs/'],
+        acceptance: 'No route parses a payload shape of its own; each hands the body to the enqueue.',
+        dependsOn: ['enqueue-validates'],
+        rejected: [],
+      },
     ],
     planParts: [
       demoPart({
@@ -1446,6 +1476,7 @@ export function buildDemoState(): DemoSeed {
       }),
       demoPart({
         id: 'plan-390:validate',
+        atoms: ['enqueue-validates', 'drop-route-parsers'],
         planId: 'plan-390',
         slug: 'validate',
         seq: 2,

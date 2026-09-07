@@ -6,6 +6,7 @@ import type {
   ReviewFinding,
   ReviewIdea,
   ReviewMark,
+  ReviewPack,
   ReviewPackPayload,
   ReviewPackSharing,
   ReviewRange,
@@ -25,6 +26,7 @@ import {
   codeBlockLines,
   codeLanguage,
   highlightCode,
+  ideaAtom,
   ideaOpen,
   KNOWN_REVIEW_PACK_SCHEMA,
   layMarks,
@@ -126,6 +128,7 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
           {numbered.ideas.map((entry) => (
             <IdeaRow
               key={entry.idea.id}
+              pack={pack}
               entry={entry}
               marks={laid.get(entry.idea.id) ?? { read: false, attention: null, seen: false }}
               entries={props.entries}
@@ -555,6 +558,7 @@ function IdeasRule({
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 function IdeaRow({
+  pack,
   entry,
   marks,
   entries,
@@ -564,6 +568,7 @@ function IdeaRow({
   onAttention,
   wrong,
 }: {
+  pack: ReviewPack;
   entry: NumberedIdea;
   marks: IdeaMarks;
   entries: ReadonlyMap<string, ScratchEntryView> | null;
@@ -619,6 +624,7 @@ function IdeaRow({
         ) : (
           <div className="rp-cue rp-gap">no cue — the checker has not written one</div>
         )}
+        <AtomLine pack={pack} idea={idea} />
       </summary>
       {open && (
         <div className="rp-panel">
@@ -681,6 +687,28 @@ function IdeaRow({
         </div>
       )}
     </details>
+  );
+}
+
+/**
+ * The atom this idea corresponds to, under the cue. An idea no atom covers is drawn
+ * as the finding it is; a pack with no atoms behind it draws nothing.
+ * → docs/spec/31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding
+ */
+function AtomLine({ pack, idea }: { pack: ReviewPack; idea: ReviewIdea }): JSX.Element | null {
+  const atom = ideaAtom(pack, idea);
+  if (atom.kind === 'none') return null;
+  if (atom.kind === 'declared') {
+    return (
+      <div className="rp-atom">
+        atom <code>{atom.slug}</code>
+      </div>
+    );
+  }
+  return (
+    <div className="rp-atom rp-atom-none">
+      no atom — the plan did not declare this work, which is what makes it worth a look
+    </div>
   );
 }
 

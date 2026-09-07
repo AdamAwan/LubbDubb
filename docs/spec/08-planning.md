@@ -161,9 +161,9 @@ Two derivations make the rebuilt document mean what the grouping says:
 
 ### What is built, and what is not
 
-Built: the atoms in the document and the store, the refusals above, `atomNote`, the plan sheet drawing
-a part's atoms **read-only**, the regroup route and surface above, and **one commit per atom** from the
-part agent.
+Built, all of it: the atoms in the document and the store, the refusals above, `atomNote`, the plan
+sheet drawing a part's atoms **read-only**, the regroup route and surface above, **one commit per
+atom** from the part agent, and **the review pack keyed on the atom**.
 
 That last one is `partDeclarationNote` (`src/plans/parts.ts`) growing a third block, beside the paths
 the part owns and what it is done when: the atoms the part carries — each one's title, why it exists,
@@ -174,11 +174,19 @@ refuses a part whose series does not line up, and no surface draws the series as
 [09](09-execution.md#the-atoms-of-a-part-reach-its-agent) says why, and what the note has to say for
 the commits to be worth writing at all.
 
-_Not built yet_, and named here so the shape is not reinvented: _the review pack keyed on the atom_
-([31](31-review-packs.md)), where an idea would carry the atom it corresponds to and an idea the atoms
-do not cover is a finding rather than an error. Until that lands, a pack derives its ideas exactly as
-it does today, and **the commit series a part agent now writes has no reader but a human opening the
-pull request**.
+And the **review pack keyed on the atom** ([31](31-review-packs.md#an-idea-names-the-atom-it-corresponds-to)):
+the pack's author is handed the atoms of the part that owns the pull request, an idea carries the
+slug of the atom it corresponds to, and an idea the atoms do not cover carries null — which is
+reported as a finding, never refused, because whether an idea is the atom the planner meant is a
+judgement rather than a mechanical fact. That is the last reader the declarations were waiting for,
+and with it an atom is named in three places by the one slug: the plan that declared it, the commit
+that wrote it and the pack idea that restates it. **The commit series remains a reading for a human
+opening the pull request** — nothing reads it back as a record, and the pack reaches the atoms
+through the plan rather than through the commits, so [09](09-execution.md#the-atoms-of-a-part-reach-its-agent)'s
+decision that nothing enforces the series stands.
+
+Nothing about atoms is built beyond that, and nothing here is a gate: no atom is dispatched for, no
+count is refused, and no pack, part or merge is blocked for one.
 
 ## The four arms
 

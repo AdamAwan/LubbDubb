@@ -5,6 +5,7 @@ import {
   anchorWeight,
   codeBlockLines,
   falseClaims,
+  ideaAtom,
   numberIdeas,
   packFacts,
   plainSummary,
@@ -17,6 +18,7 @@ import {
   anchorWeight as webAnchorWeight,
   codeBlockLines as webCodeBlockLines,
   falseClaims as webFalseClaims,
+  ideaAtom as webIdeaAtom,
   numberIdeas as webNumberIdeas,
   packFacts as webPackFacts,
   plainSummary as webPlainSummary,
@@ -32,6 +34,7 @@ function idea(over: Partial<ReviewIdea> = {}): ReviewIdea {
     id: 'idea_one',
     claim: 'a.ts gains a dependency on y.',
     title: 'One new import',
+    atom: null,
     cue: 'The import is the whole change.',
     attention: 'read',
     anchors: [
@@ -372,9 +375,11 @@ test('the companion and the cockpit agree on the derivations neither can share',
       },
     ],
   });
+  const keyed = idea({ atom: 'catalog-module' });
   for (const p of [
     pack({ ideas: [idea(), wrong] }),
     pack({ ideas: [idea(), wrong], order: ['idea_two', 'idea_one'] }),
+    pack({ ideas: [keyed, wrong] }),
   ]) {
     for (const [code, diff] of [
       [[' a', '-b', '+c'], true],
@@ -396,6 +401,7 @@ test('the companion and the cockpit agree on the derivations neither can share',
       webFalseClaims(p).map((f) => [f.idea.id, f.number, f.claimNumber]),
     );
     assert.deepEqual(packFacts(p), webPackFacts(p));
+    for (const i of p.ideas) assert.deepEqual(ideaAtom(p, i), webIdeaAtom(p, i));
     for (const [what, anchor] of WEIGHTS) assert.equal(anchorWeight(anchor), webAnchorWeight(anchor), what);
     assert.equal(plainSummary(p.summary), webPlainSummary(p.summary));
     assert.deepEqual(splitBody('One.\n\nTwo.'), webSplitBody('One.\n\nTwo.'));

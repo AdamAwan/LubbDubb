@@ -63,6 +63,7 @@ function idea(over: {
     id: over.id,
     claim: `${over.id} does something`,
     title: over.id,
+    atom: null,
     cue: 'because',
     anchors: over.hunks.map((range) => ({
       kind: 'hunk' as const,

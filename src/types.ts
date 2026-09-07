@@ -604,6 +604,7 @@ export interface ReviewIdea {
   id: string;
   claim: string;
   title: string;
+  atom: string | null;
   cue: string | null;
   anchors: ReviewAnchor[];
   claims: ReviewClaim[];

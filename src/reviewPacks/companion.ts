@@ -4,6 +4,7 @@ import type {
   ReviewAttention,
   ReviewClaim,
   ReviewIdea,
+  ReviewPack,
   ReviewPackRecord,
   ReviewRange,
   ReviewVerdict,
@@ -14,6 +15,7 @@ import {
   codeLanguage,
   falseClaims,
   highlightCode,
+  ideaAtom,
   ideaFlags,
   numberIdeas,
   packFacts,
@@ -49,7 +51,7 @@ export function renderReviewPackCompanion(record: ReviewPackRecord): string {
     wrong.length > 0 ? gate(wrong) : '',
     `<div class="rp-rule"><span>The ${facts.ideas} ${facts.ideas === 1 ? 'idea' : 'ideas'} — open one to see the code</span>` +
       `<i>${numbered.by === 'order' ? 'numbered in the order the checker says to read them' : 'in document order — the checker has not ordered them'}</i></div>`,
-    `<div class="rp-ideas">${numbered.ideas.map((entry) => ideaRow(entry.idea, entry.number, wrong)).join('')}</div>`,
+    `<div class="rp-ideas">${numbered.ideas.map((entry) => ideaRow(pack, entry.idea, entry.number, wrong)).join('')}</div>`,
     wrong.length > 0
       ? `<div class="rp-rule"><span>${wrong.length === 1 ? 'The one problem' : `The ${wrong.length} problems`}</span></div>` +
         wrong.map((item, i) => finding(item, i + 1)).join('')
@@ -144,7 +146,7 @@ function gate(wrong: FalseClaim[]): string {
   );
 }
 
-function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string {
+function ideaRow(pack: ReviewPack, idea: ReviewIdea, number: number, wrong: FalseClaim[]): string {
   const flags = ideaFlags(idea);
   const steps = idea.anchors.length;
   const changes = idea.anchors.filter((a) => a.kind === 'hunk').length;
@@ -165,6 +167,7 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
     (idea.cue !== null
       ? `<div class="rp-cue">${esc(idea.cue)}</div>`
       : `<div class="rp-cue rp-gap">no cue — the checker has not written one</div>`) +
+    atomLine(pack, idea) +
     `</summary>` +
     `<div class="rp-panel">` +
     (raised.length > 0
@@ -178,6 +181,21 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
     `<ul class="rp-claims">${idea.claims.map((c) => `<li>${claimLine(c, findingIndex(wrong, idea, c))}</li>`).join('')}</ul>` +
     (idea.claims.length === 0 ? `<p class="rp-gap">The author made no claims for this idea.</p>` : '') +
     `</div></details>`
+  );
+}
+
+/**
+ * The atom this idea corresponds to, under the cue. An idea no atom covers is drawn
+ * as the finding it is; a pack with no atoms behind it draws nothing.
+ * → docs/spec/31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding
+ */
+function atomLine(pack: ReviewPack, idea: ReviewIdea): string {
+  const atom = ideaAtom(pack, idea);
+  if (atom.kind === 'none') return '';
+  if (atom.kind === 'declared') return `<div class="rp-atom">atom <code>${esc(atom.slug)}</code></div>`;
+  return (
+    `<div class="rp-atom rp-atom-none">no atom — the plan did not declare this work, ` +
+    `which is what makes it worth a look</div>`
   );
 }
 
@@ -504,6 +522,8 @@ a { color: var(--rp-accent); }
 .rp-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: baseline; }
 .rp-n { color: var(--rp-dim); font-variant-numeric: tabular-nums; }
 .rp-meta, .rp-cue { color: var(--rp-dim); font-size: .82rem; }
+.rp-atom { margin-top: .25rem; color: var(--rp-dim); font-size: .78rem; }
+.rp-atom-none { color: var(--rp-warn); font-style: italic; }
 .rp-cue { margin-top: .25rem; }
 .rp-gap { color: var(--rp-dim); font-style: italic; }
 .rp-flag { color: var(--rp-bad); font-weight: 600; }

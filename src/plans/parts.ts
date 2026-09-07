@@ -199,7 +199,7 @@ export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
     .map((text) => ({ text, met: met.has(text) }));
 }
 
-function partAtoms(part: PlanPart, planAtoms: readonly PlanAtom[]): PlanAtom[] {
+export function partAtoms(part: PlanPart, planAtoms: readonly PlanAtom[]): PlanAtom[] {
   const carried = part.atoms;
   if (carried === undefined || carried.length === 0) return [];
   const bySlug = new Map(planAtoms.map((a) => [a.slug, a]));
