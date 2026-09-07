@@ -291,6 +291,22 @@ test('the references slot is a column, drawn on rows that have nothing to put in
   );
 });
 
+test('a surface off its own route merges that route’s refUrls over the shell’s', () => {
+  const root = fileURLToPath(new URL('../web/src/components/', import.meta.url));
+  for (const [file, map] of [
+    ['FeatureBoard.tsx', 'board.refUrls'],
+    ['TicketsBoard.tsx', 'refUrls'],
+    ['AllowanceTab.tsx', 'refUrls'],
+    ['RecordPanel.tsx', 'subtree.refUrls'],
+  ] as const) {
+    const src = readFileSync(join(root, file), 'utf8');
+    assert.ok(
+      new RegExp(`<RefLinksExtended refUrls=\\{${map.replace('.', '\\.')}\\}`).test(src),
+      `${file} draws refs against the shell's map alone — every ref its own route resolved renders as plain text`,
+    );
+  }
+});
+
 test('nothing outside refs.tsx strips a ref down to a number', () => {
   const root = fileURLToPath(new URL('../web/src/', import.meta.url));
   const walk = (dir: string): string[] =>

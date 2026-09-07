@@ -6,7 +6,7 @@ import { FEATURE_SORTS, type FeaturePrFilter, type FeatureSort } from '../cockpi
 import type { CockpitView } from '../view/viewModel.js';
 import { featureHolds, goalPullRequests } from '../view/featureHolds.js';
 import type { FeatureHold, FeatureHolds, FeaturePresence, GoalPullRequest } from '../view/featureHolds.js';
-import { Ref } from './refs.js';
+import { Ref, RefLinksExtended } from './refs.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AgentOnIt } from './AgentOnIt.js';
 import { Button } from './button.js';
@@ -71,51 +71,53 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
   const paused = features.filter((f) => f.paused !== null).length;
 
   return (
-    <div className="cn-fb">
-      <div className="cn-fb-head">
-        <h2>Features</h2>
-        <span className="cn-psub">
-          {features.length} {features.length === 1 ? 'feature' : 'features'}
-          {/* A pause withholds work, so it is counted out loud. A rested card that
-              nothing says is resting is the silent version of this button. */}
-          {paused > 0 && ` · ${paused} paused`}
-          {promoted > 0 && ` · ${promoted} ${promoted === 1 ? 'story' : 'stories'} with no Feature`}
-          {/* The orphan bucket's money, said once about the page: this much was spent
-              under no Feature, which is also the sentence that says every roll-up
-              below understates its own. */}
-          {orphans !== null && orphans.costUsd !== null && ` · ${fmtUsd(orphans.costUsd)} spent under no Feature`}
-          {board.backfilling ? ' · still filling' : ''}
-        </span>
-        <SortControl sort={view.featureSort} actions={actions} />
+    <RefLinksExtended refUrls={board.refUrls}>
+      <div className="cn-fb">
+        <div className="cn-fb-head">
+          <h2>Features</h2>
+          <span className="cn-psub">
+            {features.length} {features.length === 1 ? 'feature' : 'features'}
+            {/* A pause withholds work, so it is counted out loud. A rested card that
+                nothing says is resting is the silent version of this button. */}
+            {paused > 0 && ` · ${paused} paused`}
+            {promoted > 0 && ` · ${promoted} ${promoted === 1 ? 'story' : 'stories'} with no Feature`}
+            {/* The orphan bucket's money, said once about the page: this much was spent
+                under no Feature, which is also the sentence that says every roll-up
+                below understates its own. */}
+            {orphans !== null && orphans.costUsd !== null && ` · ${fmtUsd(orphans.costUsd)} spent under no Feature`}
+            {board.backfilling ? ' · still filling' : ''}
+          </span>
+          <SortControl sort={view.featureSort} actions={actions} />
+        </div>
+
+        {cards.map((card) =>
+          card.kind === 'feature' ? (
+            <FeatureCard
+              key={`f:${card.rollup.number}`}
+              card={card}
+              view={view}
+              actions={actions}
+              onAnswered={() => void read()}
+            />
+          ) : (
+            <GoalCard
+              key={`g:${card.row.number}`}
+              card={card}
+              environments={board.environments}
+              view={view}
+              actions={actions}
+            />
+          ),
+        )}
+
+        {unresolved > 0 && (
+          <p className="cn-psub cn-fb-unresolved">
+            {unresolved} {unresolved === 1 ? 'item’s' : 'items’'} parent link could not be read, so{' '}
+            {unresolved === 1 ? 'it is' : 'they are'} counted nowhere above.
+          </p>
+        )}
       </div>
-
-      {cards.map((card) =>
-        card.kind === 'feature' ? (
-          <FeatureCard
-            key={`f:${card.rollup.number}`}
-            card={card}
-            view={view}
-            actions={actions}
-            onAnswered={() => void read()}
-          />
-        ) : (
-          <GoalCard
-            key={`g:${card.row.number}`}
-            card={card}
-            environments={board.environments}
-            view={view}
-            actions={actions}
-          />
-        ),
-      )}
-
-      {unresolved > 0 && (
-        <p className="cn-psub cn-fb-unresolved">
-          {unresolved} {unresolved === 1 ? 'item’s' : 'items’'} parent link could not be read, so{' '}
-          {unresolved === 1 ? 'it is' : 'they are'} counted nowhere above.
-        </p>
-      )}
-    </div>
+    </RefLinksExtended>
   );
 }
 

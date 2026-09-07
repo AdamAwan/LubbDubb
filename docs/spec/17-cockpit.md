@@ -4198,6 +4198,14 @@ the watch bucket is [`src/watchLabels.ts`](../../src/watchLabels.ts)', which ite
 polled, for the tickets tab's reason: it reads the whole mirror, and the snapshot comes round every
 couple of seconds.
 
+**The board merges the route's own `refUrls` over the shell's** (`RefLinksExtended`), the Tickets and
+Allowance tabs' arrangement and for the sharpest version of their reason: the shell's map is assembled
+from the world, and this board's whole subject is the tracker's hierarchy — Features, settled stories
+and orphans the fleet never watched are exactly the rows the snapshot does not carry. Unmerged, the
+route resolves an address for every row ([16](16-http-api.md#get-apifeatures)) and the card draws its
+number as **plain text** anyway: the surface that most needs a way onto the tracker is the one with
+none. `test/refLinks.test.ts` pins the merge here beside the other three.
+
 ### The two gates
 
 The board needs **both** the operator's `featureBoard` flag ([02](02-configuration.md)) and a provider

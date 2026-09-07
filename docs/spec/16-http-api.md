@@ -1220,7 +1220,13 @@ cost from `buildSpendGoals`, the watch bucket from `src/watchLabels.ts`, which i
 from `isContainerType`, and the environment fold from `rollUpReach` — the **same function** a goal's
 own landings are folded with, so `unknown` cannot collapse into `absent` one tier up. It ships **no
 verdict about a Feature**: no risk word, no forecast, no age judgement. It is a lens, and no rule under
-`src/dispatcher/` reads it. → [17](17-cockpit.md#the-feature-board),
+`src/dispatcher/` reads it.
+
+**`refUrls` is resolved off the connector, not read from the snapshot's map**, and covers every number
+the board draws — each Feature, each child row and each orphan. The board's subject is the tracker's
+hierarchy, so most of what it lists is exactly what the world slice does not carry: a settled story, a
+Feature nobody watches, an orphan. The cockpit merges this map over the shell's for that reason
+([17](17-cockpit.md#the-feature-board)). → [17](17-cockpit.md#the-feature-board),
 [24](24-environments.md#the-three-verdicts)
 
 ### `POST /api/features/:number/pause`
