@@ -162,13 +162,23 @@ Two derivations make the rebuilt document mean what the grouping says:
 ### What is built, and what is not
 
 Built: the atoms in the document and the store, the refusals above, `atomNote`, the plan sheet drawing
-a part's atoms **read-only**, and the regroup route and surface above.
+a part's atoms **read-only**, the regroup route and surface above, and **one commit per atom** from the
+part agent.
 
-Not built yet, and named here so the shape is not reinvented: _one commit per atom_ from the part
-agent, which would grow `partDeclarationNote`; and _the review pack keyed on the atom_
-([31](31-review-packs.md)), where an idea would carry the atom it corresponds to and an idea the
-atoms do not cover is a finding rather than an error. Until those land, `partDeclarationNote` says
-nothing about atoms and a pack derives its ideas exactly as it does today.
+That last one is `partDeclarationNote` (`src/plans/parts.ts`) growing a third block, beside the paths
+the part owns and what it is done when: the atoms the part carries — each one's title, why it exists,
+its paths and what it is done when — and the convention that each becomes one commit, with the message
+already written by the declaration. It is **appended** to the rendered `plan-part` prompt for
+`atomNote`'s reason, and it is a **reading, not a boundary** — nothing counts the commits, nothing
+refuses a part whose series does not line up, and no surface draws the series as a record.
+[09](09-execution.md#the-atoms-of-a-part-reach-its-agent) says why, and what the note has to say for
+the commits to be worth writing at all.
+
+_Not built yet_, and named here so the shape is not reinvented: _the review pack keyed on the atom_
+([31](31-review-packs.md)), where an idea would carry the atom it corresponds to and an idea the atoms
+do not cover is a finding rather than an error. Until that lands, a pack derives its ideas exactly as
+it does today, and **the commit series a part agent now writes has no reader but a human opening the
+pull request**.
 
 ## The four arms
 

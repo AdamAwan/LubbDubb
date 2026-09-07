@@ -14,6 +14,7 @@ import type {
   ObstacleStanding,
   Plan,
   PlanAmendment,
+  PlanAtom,
   PlanPart,
   PriorityOverride,
   ProfileOverride,
@@ -56,6 +57,7 @@ export interface DispatchContext {
   ejections?: Ejection[];
   plans?: Plan[];
   planParts?: PlanPart[];
+  planAtoms?: PlanAtom[];
   planAmendments?: PlanAmendment[];
   validationChecks?: ValidationCheck[];
   localRun?: LocalRun | null;

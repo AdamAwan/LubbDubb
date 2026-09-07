@@ -564,6 +564,41 @@ prompt.
   tighter still, because each of its lines carries a whole summary and is a pointer to work done
   somewhere else.
 
+## The atoms of a part reach its agent
+
+A part's prompt carries three declarations its planner wrote, all **appended** by
+`partDeclarationNote` (`src/plans/parts.ts`) rather than interpolated, for
+[05](05-dispatcher.md#prompt-templates)'s reason — a `{token}` an override never learned is dropped in
+silence, on exactly the deployments that customised most. Two of them are old: **the paths the part
+owns**, and **what it is done when**. The third is the atoms it carries
+([08](08-planning.md#atoms--the-pieces-a-part-is-made-of)): each atom's title, the intent behind it,
+its paths and its own acceptance, in the order the part carries them — followed by the convention that
+**each atom becomes one commit**, and the message the declaration already writes: the atom's slug and
+title as the subject, its intent as the body. Stated once, in the note, so the agent does not invent a
+format per part.
+
+The note is a pure function of the part and the plan's atoms, so it is derivable — and asserted —
+without dispatching anything. The atoms reach rule `plan-part` as `DispatchContext.planAtoms`, filtered
+to the plan, the way `planParts` already does; a slug with no atom row behind it is dropped rather than
+half-declared.
+
+**The commits are the journey, not the boundary.** The part is what gets merged, and `merge_pr`
+squashes by default, so the series does not survive the merge and nothing after it needs one. What it
+buys is a reviewer who can walk the change in the order it was reasoned, before opening anything else.
+
+Which is why **nothing enforces it**, and that is a decision rather than an omission. No check counts
+the commits against the atoms, no dispatch is refused for a series that does not line up, no verdict
+reads it and no cockpit surface draws it as a record. Each of those would turn a reading into a gate,
+and this is a gate the harness cannot actually hold: an agent that finds the work has a different shape
+than the plan declared should write the commits the work has and say so, which the note tells it to do.
+A gate would instead teach it to bend the series back to a declaration that turned out wrong — the
+false record being worse than no record, for the reason a stale spec is worse than no spec.
+
+**A part with no atoms appends nothing.** `part.atoms` absent (a plan from before atoms), empty, or
+naming only slugs the plan does not hold all render the note byte-for-byte as it rendered before atoms
+existed. A human-authored pull request, a replan of a live plan and a deployment mid-upgrade all pass
+through this code.
+
 ## Where a goal's merges are reaches the assessor
 
 Rule `issue-assess` reads the story again against the code, from a read-only checkout of the default

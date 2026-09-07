@@ -349,6 +349,7 @@ export class Harness extends EventEmitter {
         ejections,
         plans,
         planParts,
+        planAtoms: store.listAllPlanAtoms(),
         planAmendments: store.listPendingPlanAmendments(),
         validationChecks: store.listAllValidationChecks(),
         localRun: store.liveLocalRun(),

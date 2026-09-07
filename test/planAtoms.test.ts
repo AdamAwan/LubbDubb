@@ -9,14 +9,18 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePlanDocument, planAtomInputs, planPartInputs } from '../src/plans/planDocument.js';
 import { atomNote } from '../src/plans/atoms.js';
+import { partDeclarationNote } from '../src/plans/parts.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import { DEFAULT_PLANNING } from '../src/plans/planning.js';
+import { pastTheFunnel } from './support/plans.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
 import { PLAN_COLUMNS } from '../src/store/plans.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { PlanAtom, PlanPart } from '../src/types.js';
+import type { Issue, PlanAtom, PlanPart } from '../src/types.js';
 import type { PlanPartView } from '../src/wire.js';
 
 (globalThis as { React?: typeof React }).React = React;
@@ -406,4 +410,131 @@ function planningConfig() {
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
+}
+
+// The note is a pure function of a part and the plan's atoms — every assertion below
+// derives it without dispatching anything. → docs/spec/09-execution.md
+const PRE_ATOMS_NOTE =
+  '\n\n---\n\n**The paths this part owns**, as its planner declared them:\n- packages/jobs/src/catalog.ts\n\n' +
+  'Writing outside them is not blocked, and sometimes it is right — but it is recorded and shown to the ' +
+  'operator beside this part, so if you have to, say why in your pull request.\n\n' +
+  '**This part is done when:** An unknown job type throws by name.\n\n' +
+  'A reviewer is shown that as a checklist against your pull request, so treat it as the specification ' +
+  'rather than as a summary of one.';
+
+function declared(over: Partial<PlanPart> = {}): string {
+  return partDeclarationNote(
+    part({
+      slug: 'catalog',
+      touches: ['packages/jobs/src/catalog.ts'],
+      acceptance: 'An unknown job type throws by name.',
+      ...over,
+    }),
+    ATOMS.map(atom),
+  );
+}
+
+test("a part's declaration note carries its atoms and asks for one commit each", () => {
+  const note = declared({ atoms: ATOMS.map((a) => a.slug) });
+  for (const seed of ATOMS) {
+    assert.ok(note.includes(seed.slug), `the note names the atom ${seed.slug}`);
+    assert.ok(note.includes(seed.title), `the note carries ${seed.slug}'s title`);
+    assert.ok(note.includes(seed.intent), `the note carries ${seed.slug}'s intent`);
+    for (const path of seed.touches) assert.ok(note.includes(path), `the note carries ${seed.slug}'s paths`);
+  }
+  assert.match(note, /An unknown job type throws by name\./);
+  assert.match(note, /one commit per atom/i);
+  assert.ok(
+    note.includes(`${CATALOG.slug}: ${CATALOG.title}\n\n${CATALOG.intent}`),
+    'the commit message is stated once, as the atom slug and title over its intent',
+  );
+  assert.ok(note.indexOf(CATALOG.slug) < note.indexOf(MOVE.slug), 'the atoms keep the order the part carries them in');
+});
+
+test('the atom note is narrative, and says so — nothing checks the series', () => {
+  const note = declared({ atoms: ATOMS.map((a) => a.slug) });
+  assert.match(note, /squash/, 'the note says the commits do not survive the merge');
+  assert.match(note, /nothing checks it/, 'the series is a reading, never a gate');
+});
+
+test('the atom note is appended, and carries no placeholder a template override could drop', () => {
+  const note = declared({ atoms: ATOMS.map((a) => a.slug) });
+  assert.ok(note.startsWith('\n\n---\n\n'), 'the note is its own appended block, not text spliced into a template');
+  assert.ok(!/\{[A-Za-z]+\}/.test(note), 'a {token} here would be dropped by any override that never learned it');
+});
+
+test('a part with no atoms renders exactly the note it rendered before atoms existed', () => {
+  assert.equal(declared(), PRE_ATOMS_NOTE, 'a plan from before atoms appends nothing new');
+  assert.equal(declared({ atoms: [] }), PRE_ATOMS_NOTE, 'an empty grouping appends nothing new');
+  assert.equal(
+    declared({ atoms: ['a-slug-the-plan-does-not-hold'] }),
+    PRE_ATOMS_NOTE,
+    'an atom slug with no row behind it is dropped rather than half-declared',
+  );
+  assert.equal(
+    partDeclarationNote(part({ slug: 'bare', touches: [], acceptance: null, atoms: [] })),
+    '',
+    'a part that declares nothing at all still renders nothing at all',
+  );
+});
+
+test('a dispatched part carries its atoms in its prompt, and an atomless one carries nothing new', async () => {
+  const system = buildSystem(planningConfig(), {
+    backend: new FakePtyBackend(),
+    worktrees: new FakeWorktreeManager(),
+  });
+  const parsed = parsePlanDocument(doc());
+  assert.equal(parsed.ok, true);
+  const { plan } = ingestPlanDocument(system.store, {
+    doc: parsed.ok ? parsed.document : (undefined as never),
+    originRef: 'issue:390',
+    title: 'Issue 390',
+  });
+  const prompt = await partPrompt(system, plan.id);
+  assert.ok(prompt.includes(CATALOG.intent), 'the part agent is told what each atom is for');
+  assert.match(prompt, /one commit per atom/i);
+
+  const stripped = parsePlanDocument(
+    doc({ atoms: [], parts: [{ slug: 'catalog', title: 'The catalog', scope: 'packages/jobs', atoms: [] }] }),
+  );
+  assert.equal(stripped.ok, true);
+  ingestPlanDocument(system.store, {
+    doc: stripped.ok ? stripped.document : (undefined as never),
+    originRef: 'issue:390',
+    title: 'Issue 390',
+  });
+  const atomless = await partPrompt(system, plan.id);
+  assert.ok(!atomless.includes(CATALOG.intent), 'a part carrying no atoms says nothing about them');
+  assert.ok(!/one commit per atom/i.test(atomless));
+
+  system.store.close();
+});
+
+async function partPrompt(system: System, planId: string): Promise<string> {
+  system.store.upsertPlan({ originRef: 'issue:390', title: 'Issue 390', status: 'active' });
+  for (const p of system.store.listPlanParts(planId)) system.store.updatePlanPart(p.id, { status: 'ready' });
+  const issue: Issue = {
+    id: 'issue_390',
+    number: 390,
+    title: 'Issue 390',
+    body: 'Do the thing.',
+    state: 'open',
+    labels: [],
+    linkedPrNumber: null,
+  };
+  const result = await new RuleDispatcher({}, {}, undefined, 'main', DEFAULT_PLANNING).decide({
+    world: { takenAt: '2026-07-25T12:00:00.000Z', pullRequests: [], issues: [issue] },
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    agentHeadroom: 5,
+    plans: system.store.listPlans().filter((p) => p.id === planId),
+    planParts: system.store.listAllPlanParts(),
+    planAtoms: system.store.listAllPlanAtoms(),
+    recentDecisions: pastTheFunnel(390),
+  });
+  const action = result.actions.find((a) => a.type === 'dispatch_code_agent' && a.rule === 'plan-part');
+  assert.ok(action && action.type === 'dispatch_code_agent', 'the ready part is dispatched');
+  return action.prompt;
 }
