@@ -5,7 +5,6 @@ import { AgentDrawer } from './components/AgentDrawer.js';
 import { HatchModal } from './components/HatchModal.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
-import { ReviewPackModal } from './components/ReviewPackModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { RefLinks } from './components/refs.js';
 import { hasPrPage } from './view/prPage.js';
@@ -125,19 +124,6 @@ export function App() {
       )}
       {status.view.viewingScratchpad && (
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />
-      )}
-      {/* Over the goal page, from the pull request's row; which pack and which
-          idea are open are both places, so the back button steps out of them. */}
-      {status.view.viewingReviewPack !== null && (
-        <ReviewPackModal
-          key={status.view.viewingReviewPack}
-          prNumber={status.view.viewingReviewPack}
-          goalRef={status.view.selectedGoal}
-          openIdea={status.view.reviewIdea}
-          refUrls={state.refUrls}
-          onOpenIdea={(id) => status.actions.openReviewIdea(id)}
-          onClose={() => status.actions.viewReviewPack(null)}
-        />
       )}
     </RefLinks>
   );

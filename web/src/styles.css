@@ -9318,6 +9318,99 @@ select:disabled {
   gap: 6px;
 }
 
+/* The pack as a page: the contents rail, and the page beside it. A pack is the
+   longest read in the cockpit, and a page has the column a modal never did.
+   → docs/spec/31-review-packs.md#the-contents-rail */
+.rp-wrap {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.rp-main {
+  min-width: 0;
+}
+.rp-rail {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  font-size: 12px;
+}
+.rp-c-grp {
+  margin-bottom: 10px;
+}
+.rp-c-idea {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  padding: 2px 0;
+}
+.rp-c-idea:hover {
+  text-decoration: underline;
+}
+.rp-c-idea.rp-c-on {
+  color: var(--accent);
+}
+.rp-c-idea.rp-c-bad {
+  color: var(--red);
+}
+.rp-c-read {
+  margin-left: auto;
+  color: var(--green);
+}
+.rp-rail ol {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  border-left: 1px solid var(--border);
+}
+.rp-rail ol a {
+  display: flex;
+  gap: 6px;
+  padding: 1px 8px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rp-rail ol a:hover {
+  color: var(--text);
+  background: var(--well);
+}
+.rp-rail .rp-c-n {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.rp-rail li.rp-c-minor a {
+  opacity: 0.55;
+}
+.rp-rail li.rp-c-key a {
+  color: var(--text);
+  font-weight: 600;
+}
+.rp-rail li.rp-c-key .rp-c-n {
+  color: var(--accent);
+}
+/* Below the width where the rail would leave the page too narrow to read, it
+   folds to the top of the document — still a map, and costing no column. */
+@media (max-width: 900px) {
+  .rp-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .rp-rail {
+    position: static;
+    max-height: none;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+}
+
 /* The walk — layer two, the code. */
 .rp-walk {
   list-style: none;

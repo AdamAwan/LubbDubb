@@ -91,59 +91,151 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
   const standing = packStanding(payload);
 
   return (
-    <div className="rp">
-      <Masthead {...props} />
-      <Share
-        sharing={payload.sharing}
-        headSha={pack.headSha}
-        onShare={props.onShare}
-        onUnshare={props.onUnshare}
-        refused={props.shareRefusal}
-        onRefused={props.onShareRefused}
+    <div className="rp rp-wrap">
+      <Contents
+        numbered={numbered}
+        openIdea={props.openIdea}
+        onOpenIdea={props.onOpenIdea}
+        marks={laid}
+        wrong={wrong}
       />
-      {standing !== 'checked' && (
-        <Unchecked standing={standing} onAsk={props.onAsk} refused={props.askRefusal} onRefused={props.onAskRefused} />
-      )}
-      {wrong.length > 0 && <Gate wrong={wrong} />}
-      <IdeasRule numbered={numbered} openIdea={props.openIdea} onOpenIdea={props.onOpenIdea} />
-      <div className="rp-ideas">
-        {numbered.ideas.map((entry) => (
-          <IdeaRow
-            key={entry.idea.id}
-            entry={entry}
-            marks={laid.get(entry.idea.id) ?? { read: false, attention: null, seen: false }}
-            entries={props.entries}
-            open={ideaOpen(props.openIdea, entry.idea.id)}
-            onOpen={(open) => {
-              if (open) logUsage('review-pack.expand');
-              props.onOpenIdea(open ? entry.idea.id : null);
-            }}
-            onRead={(read) => props.onRead(entry.idea.id, read)}
-            onAttention={(attention) => props.onAttention(entry.idea.id, attention)}
-            wrong={wrong}
+      <div className="rp-main">
+        <Masthead {...props} />
+        <Share
+          sharing={payload.sharing}
+          headSha={pack.headSha}
+          onShare={props.onShare}
+          onUnshare={props.onUnshare}
+          refused={props.shareRefusal}
+          onRefused={props.onShareRefused}
+        />
+        {standing !== 'checked' && (
+          <Unchecked
+            standing={standing}
+            onAsk={props.onAsk}
+            refused={props.askRefusal}
+            onRefused={props.onAskRefused}
           />
-        ))}
-      </div>
-      {wrong.length > 0 && (
-        <>
-          <div className="rp-rule">
-            <span>{wrong.length === 1 ? 'The one problem' : `The ${wrong.length} problems`}</span>
-          </div>
-          {wrong.map((item, i) => (
-            <Finding
-              key={`${item.idea.id}:${item.claimNumber}`}
-              item={item}
-              index={i + 1}
-              refUrls={props.refUrls}
-              seen={(laid.get(item.idea.id) ?? { seen: false }).seen}
-              onSeen={(seen) => props.onSeen(item.idea.id, seen)}
+        )}
+        {wrong.length > 0 && <Gate wrong={wrong} />}
+        <IdeasRule numbered={numbered} openIdea={props.openIdea} onOpenIdea={props.onOpenIdea} />
+        <div className="rp-ideas">
+          {numbered.ideas.map((entry) => (
+            <IdeaRow
+              key={entry.idea.id}
+              entry={entry}
+              marks={laid.get(entry.idea.id) ?? { read: false, attention: null, seen: false }}
+              entries={props.entries}
+              open={ideaOpen(props.openIdea, entry.idea.id)}
+              onOpen={(open) => {
+                if (open) logUsage('review-pack.expand');
+                props.onOpenIdea(open ? entry.idea.id : null);
+              }}
+              onRead={(read) => props.onRead(entry.idea.id, read)}
+              onAttention={(attention) => props.onAttention(entry.idea.id, attention)}
+              wrong={wrong}
             />
           ))}
-        </>
-      )}
-      <SpendTheTime numbered={numbered} estimatedMinutes={pack.estimatedMinutes} />
-      <Colophon payload={payload} />
+        </div>
+        {wrong.length > 0 && (
+          <>
+            <div className="rp-rule">
+              <span>{wrong.length === 1 ? 'The one problem' : `The ${wrong.length} problems`}</span>
+            </div>
+            {wrong.map((item, i) => (
+              <Finding
+                key={`${item.idea.id}:${item.claimNumber}`}
+                item={item}
+                index={i + 1}
+                refUrls={props.refUrls}
+                seen={(laid.get(item.idea.id) ?? { seen: false }).seen}
+                onSeen={(seen) => props.onSeen(item.idea.id, seen)}
+              />
+            ))}
+          </>
+        )}
+        <SpendTheTime numbered={numbered} estimatedMinutes={pack.estimatedMinutes} />
+        <Colophon payload={payload} />
+      </div>
     </div>
+  );
+}
+
+/**
+ * The contents rail: every idea, and the stops of the one that is open.
+ *
+ * A pack is the longest read in the cockpit, and since it became a page rather
+ * than a modal there is a column to hold the map of it. It draws each stop's
+ * [weight](../view/reviewPack.js) — a `key` stop marked, a `minor` one dimmed — so
+ * it says where the time goes before the reader has scrolled to find out, and it
+ * flags the idea carrying a false claim, which is the one thing that must survive
+ * a reader who opens nothing.
+ *
+ * **Only the open idea's stops.** Every other idea is collapsed, so its steps are
+ * not on the page to jump to; clicking an idea here opens it, which is a `Place`
+ * change like every other way in.
+ * → docs/spec/31-review-packs.md#the-contents-rail
+ */
+function Contents({
+  numbered,
+  openIdea,
+  onOpenIdea,
+  marks,
+  wrong,
+}: {
+  numbered: ReturnType<typeof numberIdeas>;
+  openIdea: string | null;
+  onOpenIdea: (id: string | null) => void;
+  marks: Map<string, IdeaMarks>;
+  wrong: FalseClaim[];
+}): JSX.Element {
+  return (
+    <nav className="rp-rail" aria-label="Contents">
+      {numbered.ideas.map(({ idea, number }) => {
+        const open = ideaOpen(openIdea, idea.id);
+        const flags = ideaFlags(idea);
+        return (
+          <div className="rp-c-grp" key={idea.id}>
+            <a
+              className={`rp-c-idea ${open ? 'rp-c-on' : ''}`}
+              href={`#rp-i${number}`}
+              onClick={() => {
+                if (!open) onOpenIdea(idea.id);
+              }}
+            >
+              <span className="rp-c-n">{pad(number)}</span>
+              <span>{idea.title}</span>
+              {flags.falseClaims > 0 && <span className="rp-flag">!</span>}
+              {(marks.get(idea.id)?.read ?? false) && <span className="rp-c-read">✓</span>}
+            </a>
+            {open && (
+              <ol>
+                {idea.anchors.map((anchor, i) => (
+                  <li key={i} className={`rp-c-${anchorWeight(anchor)}`}>
+                    <a href={`#rp-s${number}-${i + 1}`}>
+                      <span className="rp-c-n">
+                        {pad(number)}.{i + 1}
+                      </span>
+                      <span>{anchor.range.path.split('/').pop() ?? anchor.range.path}</span>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        );
+      })}
+      {wrong.length > 0 && (
+        <div className="rp-c-grp">
+          <a className="rp-c-idea rp-c-bad" href="#rp-finding-1">
+            <span className="rp-c-n">!</span>
+            <span>
+              {wrong.length} false {wrong.length === 1 ? 'claim' : 'claims'}
+            </span>
+          </a>
+        </div>
+      )}
+    </nav>
   );
 }
 
@@ -427,7 +519,7 @@ function IdeaRow({
   const attention = marks.attention ?? idea.attention;
   const raised = idea.claims.filter((c) => c.verdict === 'false' || c.provenance.kind === 'disputed');
   return (
-    <details className={`rp-idea ${marks.read ? 'rp-read' : ''}`} open={open}>
+    <details className={`rp-idea ${marks.read ? 'rp-read' : ''}`} id={`rp-i${number}`} open={open}>
       <summary
         onClick={(e) => {
           e.preventDefault();
@@ -620,6 +712,7 @@ function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: numb
   return (
     <li
       className={`rp-step rp-w-${weight} ${region ? 'rp-dashed' : ''} ${anchor.mark !== null ? `rp-mark-${anchor.mark}` : ''}`}
+      id={`rp-s${ideaNumber}-${index}`}
     >
       <div className="rp-step-head">
         <span className="rp-step-n">
