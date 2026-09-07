@@ -929,6 +929,7 @@ export interface PlanPart {
   title: string;
   scope: string;
   touches: string[];
+  atoms?: string[];
   rationale: string | null;
   acceptance: string | null;
   acceptanceMet: string[];
@@ -951,6 +952,26 @@ export interface PlanPart {
 
 export type PlanPartBlocker = 'collision' | 'declined';
 
+export interface PlanAtomRejection {
+  route: string;
+  because: string;
+}
+
+export interface PlanAtom {
+  id: string;
+  planId: string;
+  slug: string;
+  seq: number;
+  title: string;
+  intent: string;
+  touches: string[];
+  acceptance: string | null;
+  dependsOn: string[];
+  rejected: PlanAtomRejection[];
+}
+
+export type PlanAtomInput = Omit<PlanAtom, 'id' | 'planId'>;
+
 export type PlanPartInput = Pick<
   PlanPart,
   | 'slug'
@@ -958,6 +979,7 @@ export type PlanPartInput = Pick<
   | 'title'
   | 'scope'
   | 'touches'
+  | 'atoms'
   | 'dependsOn'
   | 'rationale'
   | 'acceptance'

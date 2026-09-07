@@ -87,6 +87,7 @@ import type {
   ObstacleStanding,
   Plan,
   PlanAmendmentAuthor,
+  PlanAtom,
   PlanCaveatAnswer,
   PlanPart,
   FeatureSequence,
@@ -335,6 +336,7 @@ export interface CockpitState {
   localRun: LocalRunView | null;
   localRunTargets: LocalRunTargetView[];
   planParts: PlanPartView[];
+  planAtoms: PlanAtom[];
   planCaveatAnswers: PlanCaveatAnswer[];
   validationChecks: ValidationCheck[];
   validationResources: ValidationResourceView[];
@@ -762,6 +764,8 @@ export type {
   ObstacleState,
   Plan,
   PlanAmendmentAuthor,
+  PlanAtom,
+  PlanAtomRejection,
   PlanCaveat,
   PlanCaveatAnswer,
   PlanEvidence,

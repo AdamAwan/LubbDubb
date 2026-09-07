@@ -524,10 +524,17 @@ export function buildStateSections(
 
   const plansSection = (): Pick<
     CockpitState,
-    'plans' | 'planParts' | 'planCaveatAnswers' | 'validationChecks' | 'validationResources' | 'goalWatches'
+    | 'plans'
+    | 'planParts'
+    | 'planAtoms'
+    | 'planCaveatAnswers'
+    | 'validationChecks'
+    | 'validationResources'
+    | 'goalWatches'
   > => ({
     plans: wirePlans,
     planParts: wirePlanParts,
+    planAtoms: store.listAllPlanAtoms(),
     planCaveatAnswers: store.listAllPlanCaveatAnswers(),
     validationChecks,
     validationResources: wireValidationResources,

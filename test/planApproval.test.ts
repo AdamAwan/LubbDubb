@@ -157,6 +157,7 @@ test('refusing a plan withdraws the asks behind the steps it retires', () => {
     doc: {
       version: 1,
       evidence: [],
+      atoms: [],
       reason: 'A person has to flip it before anything can verify it.',
       parts: [
         {
@@ -167,8 +168,9 @@ test('refusing a plan withdraws the asks behind the steps it retires', () => {
           expectedKind: 'human',
           acceptance: 'The flag reads on.',
           touches: [],
+          atoms: [],
         },
-        { slug: 'code', title: 'Read the flag', scope: 'src/', touches: [], dependsOn: ['flip'] },
+        { slug: 'code', title: 'Read the flag', scope: 'src/', touches: [], atoms: [], dependsOn: ['flip'] },
       ],
     },
     originRef: 'issue:12',
@@ -632,6 +634,7 @@ function partRow(slug: string, seq: number): PlanPart {
     title: `The ${slug} part`,
     scope: `src/${slug}/`,
     touches: [],
+    atoms: [],
     size: null,
     acceptanceMet: [],
     expectedKind: null,
