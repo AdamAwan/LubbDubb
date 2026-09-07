@@ -6893,7 +6893,13 @@ one right now, handed back, and amended out from under a reading.
 
 **The demo carries one review pack, and it is a whole one.** PR #413 has a written and checked pack
 ([31](31-review-packs.md)), reached from the pull request page's masthead control the way a real one
-is. It is the fixture that has to be complete rather than representative, because the pack page is
+is. **The pack marks in the fixtures say what `demoApi.getReviewPack` answers**, because the mark is
+the only thing on the overview, the goal page and the feature board that leads anybody to the pack:
+`#413` wears `current` and no other fixture wears a mark that claims a pack. `#409` wears `writing`,
+and that arm answers `writing` for it — a mark on a pull request whose page then offers to _ask_ for
+a pack sends every visitor who follows one to a control that refuses, which is the demo teaching that
+the feature is broken. `stale` and `unplaced` go unshown rather than faked; each needs a second pack
+to be true of, and the one pack this demo carries is whole on purpose. It is the fixture that has to be complete rather than representative, because the pack page is
 the longest read in the cockpit and every reading on it is a different judgement: the gate over one
 false claim with its finding and its counter-example, the checker's order and its cues, all four
 attention labels, a `witnessed` note and a `disputed` claim — both citing entries the pull request's
