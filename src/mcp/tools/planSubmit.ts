@@ -2,7 +2,9 @@ import { validatePlanDocument } from '../../plans/planDocument.js';
 import { ingestPlanDocument } from '../../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
 import type { Task } from '../../types.js';
-import { PLAN_DOCUMENT_SCHEMA } from '../planDocumentSchema.js';
+import { z } from 'zod';
+import { PLAN_DOCUMENT_SHAPE } from '../planDocumentSchema.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -27,7 +29,7 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
     'independently reviewable parts. Work that is one pull request is one part — there is no separate ' +
     'shape for it. Validated immediately: on rejection you get the reason back and can fix and resubmit ' +
     'in this same turn. Replaces writing .lubbdubb/plan.json.',
-  inputSchema: PLAN_DOCUMENT_SCHEMA,
+  inputSchema: toolSchema(z.object(PLAN_DOCUMENT_SHAPE)),
   handler: async (args) => {
     const planner = plannerIssue(task);
     if (!planner.ok) return toolError(planner.error);

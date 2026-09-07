@@ -1,7 +1,9 @@
 import { originIssueNumber, issueOrigin } from '../../plans/planning.js';
 import { proposePlanAmendment } from '../../plans/planAmendment.js';
 import { currentPlanSummary } from '../../plans/parts.js';
-import { PLAN_DOCUMENT_SCHEMA } from '../planDocumentSchema.js';
+import { z } from 'zod';
+import { PLAN_DOCUMENT_SHAPE } from '../planDocumentSchema.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -19,20 +21,18 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
     'a part you cannot finish is an escalation, and one that turns out not to need building is ' +
     'conclude_part with a determination. Validated immediately: on rejection you get the reason back and can ' +
     'fix and resubmit in this same turn.',
-  inputSchema: {
-    ...PLAN_DOCUMENT_SCHEMA,
-    properties: {
-      note: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      note: z
+        .string()
+        .describe(
           'Why the plan must change, in a few sentences. This is the whole of what the operator reads beside ' +
-          'the diff, so say what you found and where — a correction with no reason on it is one they cannot ' +
-          'answer.',
-      },
-      ...((PLAN_DOCUMENT_SCHEMA.properties ?? {}) as Record<string, unknown>),
-    },
-    required: ['note', ...((PLAN_DOCUMENT_SCHEMA.required ?? []) as string[])],
-  },
+            'the diff, so say what you found and where — a correction with no reason on it is one they cannot ' +
+            'answer.',
+        ),
+      ...PLAN_DOCUMENT_SHAPE,
+    }),
+  ),
   handler: (args) => {
     const issue = originIssueNumber(task.originRef);
     if (issue === null) {

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { toolSchema } from '../schema.js';
 import { toolJson } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -8,14 +10,13 @@ export const requestPermission: ToolFactory = ({ deps, agent, task }) => ({
     'Harness-internal. You do not call this — Claude Code invokes it through --permission-prompt-tool ' +
     'when one of your tool calls is not covered by the operator allow-list, to ask the operator to ' +
     'allow or deny it. It blocks until they decide and returns the verdict.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      tool_name: { type: 'string', description: 'The tool the permission is for.' },
-      input: { type: 'object', description: 'The tool input awaiting approval.' },
-      tool_use_id: { type: 'string', description: 'Claude Code’s id for this tool use.' },
-    },
-  },
+  inputSchema: toolSchema(
+    z.object({
+      tool_name: z.string().describe('The tool the permission is for.').optional(),
+      input: z.record(z.unknown()).describe('The tool input awaiting approval.').optional(),
+      tool_use_id: z.string().describe('Claude Code’s id for this tool use.').optional(),
+    }),
+  ),
   handler: async (args) => {
     if (!deps.permissions) {
       return toolJson({ behavior: 'deny', message: 'The permission backstop is disabled.' });

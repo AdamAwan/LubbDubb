@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { applyIssueWatch } from '../issueWatch.js';
+import { toolSchema } from './schema.js';
 import { applyProfilePin } from '../intake/profilePin.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { formatAnswers } from '../escalation/questionnaire.js';
@@ -52,7 +54,7 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
     'working on and what it has said about it, what is queued behind them and why each row is held, how much ' +
     'the account has spent and how much of its rate-limit window is gone, and how many failures and unanswered ' +
     'questions have piled up. Call this first for anything about the fleet as a whole.',
-  inputSchema: { type: 'object', properties: {} },
+  inputSchema: toolSchema(z.object({})),
   handler: () => {
     const control = deps.runtimeControl.snapshot();
     const live = deps.store.listAgentsByStatus('running', 'waiting');
@@ -113,27 +115,25 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
     'whether to run a cycle right now. Lowering the cap never stops a running agent — it stops the next ' +
     'dispatch — and pausing does the same. Both last until they are changed again or the harness restarts; ' +
     "neither is written to the operator's config.",
-  inputSchema: {
-    type: 'object',
-    properties: {
-      cap: {
-        type: 'number',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      cap: z
+        .number()
+        .describe(
           'The most agents that may run at once. A non-negative whole number; 0 stops the next dispatch ' +
-          'without pausing. Omit to leave it alone.',
-      },
-      paused: {
-        type: 'boolean',
-        description: 'true stops all dispatch, false resumes it. Omit to leave it alone.',
-      },
-      pulse: {
-        type: 'boolean',
-        description:
+            'without pausing. Omit to leave it alone.',
+        )
+        .optional(),
+      paused: z.boolean().describe('true stops all dispatch, false resumes it. Omit to leave it alone.').optional(),
+      pulse: z
+        .boolean()
+        .describe(
           'Run a cycle now rather than waiting for the next heartbeat. A cycle reads the world, decides, and ' +
-          'may start agents — so this is the one argument here that can put work on the fleet.',
-      },
-    },
-  },
+            'may start agents — so this is the one argument here that can put work on the fleet.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const patch: { cap?: number; paused?: boolean } = {};
     if (args.cap !== undefined) {
@@ -174,7 +174,7 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
     'Everything the harness is waiting on a person for: questions agents have parked on, tool calls blocked ' +
     'awaiting permission, acts proposed for approval, work only a person can do, and runs orphaned by a crash. ' +
     'Each row says what kind it is and what settles it. Call this to find out whether anything is stuck.',
-  inputSchema: { type: 'object', properties: {} },
+  inputSchema: toolSchema(z.object({})),
   handler: () => {
     const open = deps.store.listOpenEscalations();
     return toolJson({
@@ -239,27 +239,24 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
     '`response` (or `answers`, one per question, when attention_read showed a questionnaire) — it is typed ' +
     'straight into the agent, which carries on from it. For a blocked tool call, give `permission` instead. ' +
     'Proposals and crashed runs are not settled here; attention_read says so per row.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string', description: 'The escalation id, from attention_read.' },
-      response: { type: 'string', description: 'Free-text answer to a question. Read by the agent verbatim.' },
-      answers: {
-        type: 'array',
-        items: { type: ['string', 'null'] },
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      id: z.string().describe('The escalation id, from attention_read.'),
+      response: z.string().describe('Free-text answer to a question. Read by the agent verbatim.').optional(),
+      answers: z
+        .array(z.string().nullable())
+        .describe(
           'One answer per question, in the order attention_read gave them. Use null for a question you are ' +
-          'not answering. Only for an item that carries `questions`.',
-      },
-      permission: {
-        type: 'string',
-        enum: ['allow', 'deny'],
-        description: 'The verdict on a blocked tool call. Only for an item of kind "permission".',
-      },
-      note: { type: 'string', description: 'Optional reason, shown with a denial.' },
-    },
-    required: ['id'],
-  },
+            'not answering. Only for an item that carries `questions`.',
+        )
+        .optional(),
+      permission: z
+        .enum(['allow', 'deny'])
+        .describe('The verdict on a blocked tool call. Only for an item of kind "permission".')
+        .optional(),
+      note: z.string().describe('Optional reason, shown with a denial.').optional(),
+    }),
+  ),
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
@@ -363,17 +360,15 @@ export const agentRead: DesktopToolFactory = (deps) => ({
     'Look at one agent: what it was dispatched for, what it has said about its own progress, which files it ' +
     'has written, and the tail of its output. Call this when fleet_status shows something waiting, stalled or ' +
     'expensive and the question is what it is actually doing.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      agentId: { type: 'string', description: 'The agent id, from fleet_status.' },
-      chars: {
-        type: 'number',
-        description: `How much of the end of the transcript to return. Defaults to ${TRANSCRIPT_TAIL}.`,
-      },
-    },
-    required: ['agentId'],
-  },
+  inputSchema: toolSchema(
+    z.object({
+      agentId: z.string().describe('The agent id, from fleet_status.'),
+      chars: z
+        .number()
+        .describe(`How much of the end of the transcript to return. Defaults to ${TRANSCRIPT_TAIL}.`)
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const id = typeof args.agentId === 'string' ? args.agentId.trim() : '';
     if (!id) return toolError('agentId required — take it from fleet_status.');
@@ -404,33 +399,30 @@ export const queueControl: DesktopToolFactory = (deps) => ({
     'Steer the "Up next" queue: pin origins to the front in the order you give them, or cancel a queued job ' +
     'before it runs. Pinning only re-orders — it never un-holds a row that is held by a cap, a cooldown, an ' +
     'unapproved plan or a missing watch tag, and those are named in fleet_status as the reason.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      order: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      order: z
+        .array(z.string())
+        .describe(
           'Origins (e.g. "issue:284:plan"), highest priority first, from fleet_status. This REPLACES every ' +
-          'standing pin; send an empty array to clear them all and go back to the natural order.',
-      },
-      cancelJob: {
-        type: 'string',
-        description: 'The id of a queued job to drop. Only works while it is still queued.',
-      },
-      origin: {
-        type: 'string',
-        description: 'The origin to price, e.g. "issue:284:plan", from fleet_status. Only with `profile`.',
-      },
-      profile: {
-        type: 'string',
-        description:
+            'standing pin; send an empty array to clear them all and go back to the natural order.',
+        )
+        .optional(),
+      cancelJob: z.string().describe('The id of a queued job to drop. Only works while it is still queued.').optional(),
+      origin: z
+        .string()
+        .describe('The origin to price, e.g. "issue:284:plan", from fleet_status. Only with `profile`.')
+        .optional(),
+      profile: z
+        .string()
+        .describe(
           'The model profile the next dispatch on `origin` runs on, by name, or "" to clear the override. ' +
-          'This prices one queued row and says nothing about when it runs — a row held by a cap, a cooldown ' +
-          "or an unapproved plan is still held. To pin a whole goal's work, that is goal_control.",
-      },
-    },
-  },
+            'This prices one queued row and says nothing about when it runs — a row held by a cap, a cooldown ' +
+            "or an unapproved plan is still held. To pin a whole goal's work, that is goal_control.",
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const hasOrder = args.order !== undefined;
     const cancel = typeof args.cancelJob === 'string' ? args.cancelJob.trim() : '';
@@ -499,32 +491,33 @@ export const goalControl: DesktopToolFactory = (deps) => ({
     'watch tag on the ticket (and every ticket beneath it) or takes it off — that is what opts work in and ' +
     "out. `priority` is the harness's own mark and only re-orders its queue. Neither starts or stops an agent " +
     'that is already running.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      watched: {
-        type: 'boolean',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      watched: z
+        .boolean()
+        .describe(
           'true tags the ticket so the harness picks it up; false takes the tag off so nothing further is ' +
-          'dispatched for it. Cascades to every ticket under a container.',
-      },
-      priority: {
-        type: 'boolean',
-        description:
+            'dispatched for it. Cascades to every ticket under a container.',
+        )
+        .optional(),
+      priority: z
+        .boolean()
+        .describe(
           'true ranks everything dispatched under this goal ahead of the natural order until it is cleared; ' +
-          'false clears the mark.',
-      },
-      profile: {
-        type: 'string',
-        description:
+            'false clears the mark.',
+        )
+        .optional(),
+      profile: z
+        .string()
+        .describe(
           'The model profile this goal\'s work runs on, by name, or "" to clear the pin. This is the answer ' +
-          "the appraiser's profile question is waiting for, and giving it settles that question whichever " +
-          'name you pick — including keeping the one the goal already had.',
-      },
-    },
-    required: ['issue'],
-  },
+            "the appraiser's profile question is waiting for, and giving it settles that question whichever " +
+            'name you pick — including keeping the one the goal already had.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -616,24 +609,19 @@ export const humanTaskSettle: DesktopToolFactory = (deps) => ({
     'Settle a human task — a unit of work only a person can do, from attention_read. `done` records that it ' +
     'has actually been done; `declined` records a refusal and takes a required `note`, which is what a ' +
     'replan reads. Not for questions an agent parked on: those are escalation_answer.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string', description: 'The human task id, from attention_read (a `hum_…` row).' },
-      status: {
-        type: 'string',
-        enum: ['done', 'declined'],
-        description: 'Whether the work was done or refused.',
-      },
-      note: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      id: z.string().describe('The human task id, from attention_read (a `hum_…` row).'),
+      status: z.enum(['done', 'declined']).describe('Whether the work was done or refused.'),
+      note: z
+        .string()
+        .describe(
           'What was done, or why it was refused. Required on `declined`, and on a close-out whose goal has ' +
-          'outstanding validation checks.',
-      },
-    },
-    required: ['id', 'status'],
-  },
+            'outstanding validation checks.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');

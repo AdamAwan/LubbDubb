@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { describeLocalRun } from '../../localRun/describe.js';
+import { toolSchema } from '../schema.js';
 import { localValidationFixOriginParts, localValidationOriginParts } from '../../localValidation/origin.js';
 import { toolError, toolJson } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -12,7 +14,7 @@ export const localRunRead: ToolFactory = ({ deps, task }) => ({
     'than guessing, and read it again rather than remembering — a bring-up takes minutes and this is the only ' +
     'thing that says where it has got to. It reports and nothing else: the environment belongs to the ' +
     'operator, and you cannot start, stop or restart it from here.',
-  inputSchema: { type: 'object', properties: {} },
+  inputSchema: toolSchema(z.object({})),
   handler: () => {
     if (localValidationOriginParts(task.originRef) === null && localValidationFixOriginParts(task.originRef) === null)
       return toolError(

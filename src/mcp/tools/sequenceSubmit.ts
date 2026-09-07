@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { featureSequenceSubmitOrigin, validateSequenceSubmission } from '../../sequence/sequence.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -12,47 +14,37 @@ export const sequenceSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     'a wrong edge is a story that never starts with nothing going red; a short order with most stories in the ' +
     'first wave is usually the honest one, and an empty order saying they are independent is a real answer. ' +
     'Nothing is held until a person accepts what you submit, and nothing is written to the tracker.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      order: {
-        type: 'array',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      order: z
+        .array(
+          z.object({
+            issue: z.number().describe('The story that waits.'),
+            waitsOn: z.array(z.number()).describe('The stories it waits on — all under this same Feature.'),
+            why: z
+              .string()
+              .describe('One line on why this edge — what the first produces that the second would otherwise invent.'),
+          }),
+        )
+        .describe(
           'One entry per story that waits on another. A story you do not list waits on nothing and starts ' +
-          'immediately, so an empty list is how you say these stories are independent.',
-        items: {
-          type: 'object',
-          properties: {
-            issue: { type: 'number', description: 'The story that waits.' },
-            waitsOn: {
-              type: 'array',
-              items: { type: 'number' },
-              description: 'The stories it waits on — all under this same Feature.',
-            },
-            why: {
-              type: 'string',
-              description:
-                'One line on why this edge — what the first produces that the second would otherwise invent.',
-            },
-          },
-          required: ['issue', 'waitsOn', 'why'],
-        },
-      },
-      reason: {
-        type: 'string',
-        description:
+            'immediately, so an empty list is how you say these stories are independent.',
+        ),
+      reason: z
+        .string()
+        .describe(
           'Why this order, in your own voice: what you took the shape of this Feature to be, and what the ' +
-          'ordering turns on. Required — an order with no stated reason is one nobody can agree or disagree with.',
-      },
-      unsure: {
-        type: 'string',
-        description:
+            'ordering turns on. Required — an order with no stated reason is one nobody can agree or disagree with.',
+        ),
+      unsure: z
+        .string()
+        .describe(
           'The edge you would most like argued with, and what would change your mind. Somebody is about to be ' +
-          'asked to accept this, and an order with no stated doubt is one they cannot usefully disagree with.',
-      },
-    },
-    required: ['order', 'reason'],
-  },
+            'asked to accept this, and an order with no stated doubt is one they cannot usefully disagree with.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const target = featureSequenceSubmitOrigin(task.originRef);
     if (!target.ok) return toolError(target.error);

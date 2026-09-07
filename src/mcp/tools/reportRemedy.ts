@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   CAUSES_BY_KIND,
   CAUSE_COPY,
@@ -7,6 +8,7 @@ import {
   validateRemedy,
 } from '../../remedies/remedies.js';
 import { toolError } from '../protocol.js';
+import { enumOf, toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -34,29 +36,19 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
       'agent hitting the same wall will find it.\n\n' +
       'This schedules nothing, closes nothing and is posted nowhere. It does not say your work is ' +
       'finished — nothing here replaces pushing the fix.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        cause: {
-          type: 'string',
-          enum: [...causes],
-          description: causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. '),
-        },
-        guard: {
-          type: 'string',
-          enum: [...GUARD_ORDER],
-          description: GUARD_ORDER.map((g) => `${g}: ${GUARD_COPY[g].blurb}`).join('. '),
-        },
-        summary: {
-          type: 'string',
-          description:
+    inputSchema: toolSchema(
+      z.object({
+        cause: enumOf(causes).describe(causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. ')),
+        guard: enumOf(GUARD_ORDER).describe(GUARD_ORDER.map((g) => `${g}: ${GUARD_COPY[g].blurb}`).join('. ')),
+        summary: z
+          .string()
+          .describe(
             'One line: what was wrong, and what fixed it. Specific enough that the next agent handed ' +
-            'this same check reads it and knows where to look — name the file, the assertion or the ' +
-            'rule, not "a test was failing".',
-        },
-      },
-      required: ['cause', 'guard', 'summary'],
-    },
+              'this same check reads it and knows where to look — name the file, the assertion or the ' +
+              'rule, not "a test was failing".',
+          ),
+      }),
+    ),
     handler: (args) => {
       if (!scope.ok) return toolError(scope.error);
       const parsed = validateRemedy(scope.kind, args);

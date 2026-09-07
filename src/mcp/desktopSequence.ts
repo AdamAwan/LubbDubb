@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { desktopIssueRef } from '../validation/desktop.js';
+import { toolSchema } from './schema.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
 import { sequenceableFeatures, validateSequenceSubmission } from '../sequence/sequence.js';
 import { watchLabelFor } from '../watchLabels.js';
@@ -14,13 +16,11 @@ const sequenceRead: DesktopToolFactory = (deps) => ({
     'sequencer said so, and whether anybody has accepted it. Pass the Feature number, or the number of any ' +
     'story under it — a story resolves to its parent, because an order is a statement about a Feature. Call ' +
     'this before sequence_amend: an amendment replaces the whole order, so you need to see what stands.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The Feature, or any story under it, e.g. 500.' },
-    },
-    required: ['issue'],
-  },
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The Feature, or any story under it, e.g. 500.'),
+    }),
+  ),
   handler: (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -55,34 +55,29 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
     '**accepted**, so it holds work immediately: a story you put behind another will not start until that one ' +
     'has pushed a branch. Only write one the operator has agreed to. An empty order is how you say the ' +
     'stories are independent, and it releases everything the previous order held.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The Feature, or any story under it, e.g. 500.' },
-      order: {
-        type: 'array',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The Feature, or any story under it, e.g. 500.'),
+      order: z
+        .array(
+          z.object({
+            issue: z.number().describe('The story that waits.'),
+            waitsOn: z.array(z.number()).describe('The stories it waits on.'),
+            why: z.string().describe('One line on why this edge — what the first produces.'),
+          }),
+        )
+        .describe(
           'One entry per story that waits on another. A story you do not list waits on nothing and starts ' +
-          'immediately, so an empty list releases the whole order.',
-        items: {
-          type: 'object',
-          properties: {
-            issue: { type: 'number', description: 'The story that waits.' },
-            waitsOn: { type: 'array', items: { type: 'number' }, description: 'The stories it waits on.' },
-            why: { type: 'string', description: 'One line on why this edge — what the first produces.' },
-          },
-          required: ['issue', 'waitsOn', 'why'],
-        },
-      },
-      reason: {
-        type: 'string',
-        description:
+            'immediately, so an empty list releases the whole order.',
+        ),
+      reason: z
+        .string()
+        .describe(
           'Why this order, in a few sentences — the whole of what the next person to read the Feature gets. ' +
-          'This is the half a drag-to-reorder would have lost, which is why there is no drag.',
-      },
-    },
-    required: ['issue', 'order', 'reason'],
-  },
+            'This is the half a drag-to-reorder would have lost, which is why there is no drag.',
+        ),
+    }),
+  ),
   handler: (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);

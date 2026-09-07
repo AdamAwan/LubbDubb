@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { toolError } from '../protocol.js';
+import { toolSchema } from '../schema.js';
 import type { AgentAskQuestion } from '../../types.js';
 import type { ToolFactory } from './context.js';
 
@@ -33,50 +35,41 @@ export const escalate: ToolFactory = ({ deps, agent, ok }) => ({
     'options, which the cockpit renders as one-click answers. Several things to settle go in ' +
     '`questions` as one ask, answered together — do not park three times, and do not bury three ' +
     "questions in `detail`. Returns immediately — the human's reply arrives as your next message.",
-  inputSchema: {
-    type: 'object',
-    properties: {
-      question: { type: 'string', description: 'One line: what you need decided.' },
-      kind: {
-        type: 'string',
-        enum: ['approve', 'choose', 'clarify', 'review'],
-        description: 'What sort of decision this is. Drives how the cockpit files it.',
-      },
-      options: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Concrete answers the human can pick with one click.',
-      },
-      detail: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      question: z.string().describe('One line: what you need decided.'),
+      kind: z
+        .enum(['approve', 'choose', 'clarify', 'review'])
+        .describe('What sort of decision this is. Drives how the cockpit files it.')
+        .optional(),
+      options: z.array(z.string()).describe('Concrete answers the human can pick with one click.').optional(),
+      detail: z
+        .string()
+        .describe(
           'Optional background the human needs to decide. Markdown — the cockpit renders it, so ' +
-          'use headings and lists for structure and a fenced code block for errors or output.',
-      },
-      questions: {
-        type: 'array',
-        maxItems: MAX_QUESTIONS,
-        description:
+            'use headings and lists for structure and a fenced code block for errors or output.',
+        )
+        .optional(),
+      questions: z
+        .array(
+          z.object({
+            question: z.string().describe('What this one asks.'),
+            detail: z.string().describe('Background for this question alone. Markdown.').optional(),
+            options: z
+              .array(z.string())
+              .describe('Concrete answers; picking one fills this question’s box, still editable.')
+              .optional(),
+          }),
+        )
+        .max(MAX_QUESTIONS)
+        .describe(
           'Use this when you need several things settled at once, instead of writing them all ' +
-          'into `detail`. Each entry gets its own options and its own answer box, and the human ' +
-          'answers them together. Keep `question` as the headline that says what this is about.',
-        items: {
-          type: 'object',
-          properties: {
-            question: { type: 'string', description: 'What this one asks.' },
-            detail: { type: 'string', description: 'Background for this question alone. Markdown.' },
-            options: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Concrete answers; picking one fills this question’s box, still editable.',
-            },
-          },
-          required: ['question'],
-        },
-      },
-    },
-    required: ['question'],
-  },
+            'into `detail`. Each entry gets its own options and its own answer box, and the human ' +
+            'answers them together. Keep `question` as the headline that says what this is about.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const question = typeof args.question === 'string' ? args.question.trim() : '';
     if (!question) return toolError('escalate requires a non-empty question.');

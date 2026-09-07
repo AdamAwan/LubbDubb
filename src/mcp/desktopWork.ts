@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { submitBrief } from '../jobs/brief.js';
+import { enumOf, toolSchema } from './schema.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
@@ -21,32 +23,31 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
     'filed as a watched ticket and goes through the same planning funnel as any other issue — it is not coded ' +
     'straight off this prompt, and the harness decides when to work it. A `desk` brief queues directly for an ' +
     'agent that reads and writes rather than one that changes code.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      prompt: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      prompt: z
+        .string()
+        .describe(
           "What is wanted, in the operator's own words. This is the ticket body or the agent's whole brief, so " +
-          'write what somebody picking it up cold would need.',
-      },
-      title: { type: 'string', description: "Optional. Defaults to the prompt's first line." },
-      kind: {
-        type: 'string',
-        enum: ['code', 'desk'],
-        description:
+            'write what somebody picking it up cold would need.',
+        ),
+      title: z.string().describe("Optional. Defaults to the prompt's first line.").optional(),
+      kind: z
+        .enum(['code', 'desk'])
+        .describe(
           '"code" is work on the repository, which is filed as a ticket where a tracker is configured. "desk" ' +
-          'is reading, research or writing — it never touches a branch. Defaults to "code".',
-      },
-      branch: {
-        type: 'string',
-        description:
+            'is reading, research or writing — it never touches a branch. Defaults to "code".',
+        )
+        .optional(),
+      branch: z
+        .string()
+        .describe(
           'Only meaningful for a code brief that queues directly (no tracker configured); ignored otherwise. ' +
-          'Refused if a live task already holds it.',
-      },
-    },
-    required: ['prompt'],
-  },
+            'Refused if a live task already holds it.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : '';
     if (!prompt) return toolError('prompt required — say what the work actually is.');
@@ -90,22 +91,17 @@ export const agentControl: DesktopToolFactory = (deps) => ({
     'Act on one running agent: type an answer into it, interrupt it, mark it finished, stop it, buy it more ' +
     'time before a stall park settles, or take it out of a usage-limit park. Read it first with agent_read — ' +
     'these act on a live process, and stopping one loses whatever it had not written down.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      agentId: { type: 'string', description: 'The agent id, from fleet_status or agent_read.' },
-      action: {
-        type: 'string',
-        enum: Object.keys(AGENT_ACTIONS),
-        description:
-          '"respond" types `text` into the session. "interrupt" sends Ctrl-C. "complete" records the work as ' +
+  inputSchema: toolSchema(
+    z.object({
+      agentId: z.string().describe('The agent id, from fleet_status or agent_read.'),
+      action: enumOf(Object.keys(AGENT_ACTIONS)).describe(
+        '"respond" types `text` into the session. "interrupt" sends Ctrl-C. "complete" records the work as ' +
           'finished. "kill" stops it and reaps its process subtree. "extend_stall" buys time on a stall park. ' +
           '"resume" re-opens a session parked on a usage limit.',
-      },
-      text: { type: 'string', description: 'Required for "respond": what the agent reads.' },
-    },
-    required: ['agentId', 'action'],
-  },
+      ),
+      text: z.string().describe('Required for "respond": what the agent reads.').optional(),
+    }),
+  ),
   handler: (args) => {
     const id = typeof args.agentId === 'string' ? args.agentId.trim() : '';
     if (!id) return toolError('agentId required — take it from fleet_status.');

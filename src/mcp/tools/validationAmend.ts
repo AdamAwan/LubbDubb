@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
+import { toolSchema } from '../schema.js';
 import { validationCheckAmendments, validationResourceInputs } from '../../validation/checkDocument.js';
 import { amendmentNote, validateAmendment, validationAmendIssue, withdrawalReason } from '../../validation/amend.js';
 import { withdrawResourceAsks } from '../../validation/ask.js';
@@ -22,91 +24,83 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     'check, and adding one sends a person out to redo work that is done. One run of the thing is one check: ' +
     'if what you are adding would be run in the same sitting as a check that already exists, widen that ' +
     'check instead of adding a second one beside it.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      note: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      note: z
+        .string()
+        .describe(
           'Why the plan is changing, in a sentence. This is the whole of what an operator sees when a check ' +
-          'they read yesterday says something else today, so write what changed and why — not "updated".',
-      },
-      checks: {
-        type: 'array',
-        description:
-          'Checks to add or amend. An id this goal already has is merged onto that check; a new id is added ' +
-          'and gets the next free letter. Re-use the exact id when you are amending — it is the merge key.',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key.' },
-            title: { type: 'string', description: 'One line, the headline.' },
-            do: {
-              type: 'string',
-              description:
+            'they read yesterday says something else today, so write what changed and why — not "updated".',
+        ),
+      checks: z
+        .array(
+          z.object({
+            id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
+            title: z.string().describe('One line, the headline.'),
+            do: z
+              .string()
+              .describe(
                 'The procedure a person follows, in markdown: the commands, the URL, the clicks. Concrete ' +
-                'steps, written for somebody who has not read the plan.',
-            },
-            expect: {
-              type: 'string',
-              description:
+                  'steps, written for somebody who has not read the plan.',
+              ),
+            expect: z
+              .string()
+              .describe(
                 'What they would see, and where — the row, the log line, the ref that is gone, the screen. ' +
-                'A check that cannot say this is not a check.',
-            },
-            uses: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Names of declared resources this check needs. Names, never paths.',
-            },
-            covers: { type: 'array', items: { type: 'string' }, description: 'Part slugs this check exercises.' },
-            fleetCandidate: {
-              type: 'boolean',
-              description:
+                  'A check that cannot say this is not a check.',
+              ),
+            uses: z
+              .array(z.string())
+              .describe('Names of declared resources this check needs. Names, never paths.')
+              .optional(),
+            covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
+            fleetCandidate: z
+              .boolean()
+              .describe(
                 'Your nomination that an agent could run this rather than a person. A suggestion for whoever ' +
-                'decides — it dispatches nothing, and you cannot know what logins this deployment has.',
-            },
-            why: { type: 'string', description: 'Why an agent could run it. Kept only with the nomination.' },
-          },
-          required: ['id', 'title', 'do', 'expect'],
-        },
-      },
-      withdraw: {
-        type: 'array',
-        description:
+                  'decides — it dispatches nothing, and you cannot know what logins this deployment has.',
+              )
+              .optional(),
+            why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
+          }),
+        )
+        .describe(
+          'Checks to add or amend. An id this goal already has is merged onto that check; a new id is added ' +
+            'and gets the next free letter. Re-use the exact id when you are amending — it is the merge key.',
+        )
+        .optional(),
+      withdraw: z
+        .array(
+          z.object({
+            id: z.string(),
+            reason: z.string().describe('Why this is no longer worth checking.'),
+          }),
+        )
+        .describe(
           'Checks that should no longer be asked for, each with a reason. Withdrawing keeps the check on the ' +
-          'record, greyed, with your reason on it — it does not delete it. Withdraw a check the goal no longer ' +
-          'needs; do not withdraw one you could not get to pass.',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            reason: { type: 'string', description: 'Why this is no longer worth checking.' },
-          },
-          required: ['id', 'reason'],
-        },
-      },
-      resources: {
-        type: 'array',
-        description:
+            'record, greyed, with your reason on it — it does not delete it. Withdraw a check the goal no longer ' +
+            'needs; do not withdraw one you could not get to pass.',
+        )
+        .optional(),
+      resources: z
+        .array(
+          z.object({
+            name: z.string().describe('A file name, not a path.'),
+            kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
+            note: z.string().optional(),
+            provided: z.boolean().describe('False is "I need this and cannot produce it".').optional(),
+          }),
+        )
+        .describe(
           'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
-          'dump of real data. Merged by name; nothing here removes one. Not the place for a login, an account ' +
-          'or an environment — what a check needs to be runnable goes in its "do", where the person running it ' +
-          'reads it. Set "provided": false for a file you cannot produce yourself, and the harness asks a ' +
-          'person to put it on disk once the goal is delivered.',
-        items: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'A file name, not a path.' },
-            kind: { type: 'string', enum: ['fixture', 'access', 'reference', 'data'] },
-            note: { type: 'string' },
-            provided: { type: 'boolean', description: 'False is "I need this and cannot produce it".' },
-          },
-          required: ['name'],
-        },
-      },
-    },
-    required: ['note'],
-  },
+            'dump of real data. Merged by name; nothing here removes one. Not the place for a login, an account ' +
+            'or an environment — what a check needs to be runnable goes in its "do", where the person running it ' +
+            'reads it. Set "provided": false for a file you cannot produce yourself, and the harness asks a ' +
+            'person to put it on disk once the goal is delivered.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const goal = validationAmendIssue(task.originRef);
     if (!goal.ok) return toolError(goal.error);

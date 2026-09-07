@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
+import { toolSchema } from '../schema.js';
 import { prTitleFields, renderPrTitle } from '../../prTitle.js';
 import { openPrFailure, resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../prWorkItemDesk.js';
@@ -26,35 +28,34 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     "agent's work: the branch and base come from your own origin, never from an argument. If this " +
     'tool reports it is unavailable, open the pull request yourself against the branch and base named ' +
     'in your prompt.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      summary: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      summary: z
+        .string()
+        .describe(
           'What the change does, in a few words — it becomes the title. Not a sentence and not a ' +
-          'restatement of the issue: "sync cursor table", not "This PR adds a table for sync cursors".',
-      },
-      type: {
-        type: 'string',
-        description: 'Optional conventional-commit type: feat, fix, refactor, docs, test, chore. Omit it if none fits.',
-      },
-      scope: {
-        type: 'string',
-        description: 'Optional module the change lands in, e.g. "store". Omit it if the change is broad.',
-      },
-      body: {
-        type: 'string',
-        description:
+            'restatement of the issue: "sync cursor table", not "This PR adds a table for sync cursors".',
+        ),
+      type: z
+        .string()
+        .describe('Optional conventional-commit type: feat, fix, refactor, docs, test, chore. Omit it if none fits.')
+        .optional(),
+      scope: z
+        .string()
+        .describe('Optional module the change lands in, e.g. "store". Omit it if the change is broad.')
+        .optional(),
+      body: z
+        .string()
+        .describe(
           'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
-          'which ticket it belongs to. Write it as a bullet list: at most five bullets, why the change ' +
-          'is needed first and what it does after, one line each. No headings, no prose paragraphs — a ' +
-          'reviewer reads this before the diff, not instead of it. ' +
-          prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
-      },
-    },
-    required: ['summary'],
-  },
+            'which ticket it belongs to. Write it as a bullet list: at most five bullets, why the change ' +
+            'is needed first and what it does after, one line each. No headings, no prose paragraphs — a ' +
+            'reviewer reads this before the diff, not instead of it. ' +
+            prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const wiring = deps.openPr;
     if (!wiring) {

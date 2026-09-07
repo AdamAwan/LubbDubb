@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { normaliseNote } from '../progress.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -13,19 +15,17 @@ export const noteProgress: ToolFactory = ({ deps, agent, ok }) => ({
     'It is optional and it costs you nothing to skip: nothing infers that you are stuck from a ' +
     'gap between notes, so do not call it to prove you are alive. It asks nothing and changes ' +
     'nothing about your task — if you need a decision, use escalate instead.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      note: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      note: z
+        .string()
+        .describe(
           'One line, present tense, in the words you would use to a colleague: "reading how the ' +
-          'dispatcher ranks candidates", "running the full suite after the rename". Say what you ' +
-          'are doing, not that you are doing well.',
-      },
-    },
-    required: ['note'],
-  },
+            'dispatcher ranks candidates", "running the full suite after the rename". Say what you ' +
+            'are doing, not that you are doing well.',
+        ),
+    }),
+  ),
   handler: (args) => {
     const parsed = normaliseNote(args.note);
     if (!parsed.ok) return toolError(parsed.error);

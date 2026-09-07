@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { originIssueNumber } from '../../plans/planning.js';
+import { toolSchema } from '../schema.js';
 import { splitTargetPr } from '../../prSplit.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -16,36 +18,30 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
     'unrelated refactor are three. Answer `coherent` and nothing else happens and nothing asks again. ' +
     'Answer `split` and name the concepts, then propose the plan that separates them with plan_correct — ' +
     'an operator decides, and neither the pull request nor the agent on it is stopped meanwhile.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      verdict: {
-        type: 'string',
-        enum: ['split', 'coherent'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      verdict: z
+        .enum(['split', 'coherent'])
+        .describe(
           '`coherent` if the diff is one concept, however wide. `split` if it holds work that should have ' +
-          'been separate pull requests.',
-      },
-      concepts: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
+            'been separate pull requests.',
+        ),
+      concepts: z
+        .array(z.string())
+        .describe(
           'On `split`, the concepts you found — one short name each, at least two, in the order they would ' +
-          'have to land. Each one is a part of the plan you are about to propose. Omit on `coherent`.',
-      },
-      reason: {
-        type: 'string',
-        description:
+            'have to land. Each one is a part of the plan you are about to propose. Omit on `coherent`.',
+        )
+        .optional(),
+      reason: z
+        .string()
+        .describe(
           'What you saw in the diff that decided it, in a few sentences. On `coherent` this is the whole ' +
-          'record of why a wide pull request was left alone, so “it is all related” is not a reason.',
-      },
-      files: {
-        type: 'number',
-        description: 'How many files the diff changes, as you counted them on the branch.',
-      },
-    },
-    required: ['verdict', 'reason', 'files'],
-  },
+            'record of why a wide pull request was left alone, so “it is all related” is not a reason.',
+        ),
+      files: z.number().describe('How many files the diff changes, as you counted them on the branch.'),
+    }),
+  ),
   handler: (args) => {
     const prNumber = splitTargetPr(task.originRef);
     const issueNumber = originIssueNumber(task.originRef);

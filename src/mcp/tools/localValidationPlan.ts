@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { toolError } from '../protocol.js';
+import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -9,19 +11,17 @@ export const localValidationPlan: ToolFactory = ({ deps, task, ok }) => ({
     "up — a bring-up takes minutes and this is what that wait is worth spending on. It lands on the goal's " +
     'page the moment you send it, so the operator can see what you are about to do while it is still happening. ' +
     'One plan per validation: send it once, then run it.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      plan: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      plan: z
+        .string()
+        .describe(
           'The plan, in markdown. Cover what changed and nothing else — the diff on this branch, not the whole ' +
-          'product. For each step say what you are checking, what you will do, and what a pass looks like, ' +
-          'specifically enough that somebody else could run it and get the same answer.',
-      },
-    },
-    required: ['plan'],
-  },
+            'product. For each step say what you are checking, what you will do, and what a pass looks like, ' +
+            'specifically enough that somebody else could run it and get the same answer.',
+        ),
+    }),
+  ),
   handler: (args) => {
     const desk = deps.localValidations?.();
     if (!desk)

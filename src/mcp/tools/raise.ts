@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { extractKeys, gateKeys } from '../../obstacles/keys.js';
+import { toolSchema } from '../schema.js';
 import { buildObstacleWorld, reportedChecks } from '../../obstacles/world.js';
 import { lookupFor, ownBreakage, validateRaisedObstacle } from '../../obstacles/intake.js';
 import { corroborationGoal } from '../../knowledge/knowledge.js';
@@ -26,59 +28,60 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       'Not the place for: what you are doing right now (note_progress), a note to the other agents on your ' +
       'own goal (scratch_append), or something you need answered before you can continue (escalate — this ' +
       'parks nobody and is not a way to wait).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        what: {
-          type: 'string',
-          description:
+    inputSchema: toolSchema(
+      z.object({
+        what: z
+          .string()
+          .describe(
             'One line, in your own words, saying what you hit. State the thing, not what to do about it. ' +
-            'Write it for whoever reads it next month rather than for whoever is reading your own task: the ' +
-            'harness knows your goal from your credential and takes any mention of it back out.',
-        },
-        why_not_mine: {
-          type: 'string',
-          description:
+              'Write it for whoever reads it next month rather than for whoever is reading your own task: the ' +
+              'harness knows your goal from your credential and takes any mention of it back out.',
+          ),
+        why_not_mine: z
+          .string()
+          .describe(
             'Why this is not your own change doing — and for something you are simply writing down, what you ' +
-            'actually saw that makes it true: the command, the error, the file. Required, and nothing ' +
-            'validates it: writing it down is what makes you check before you answer, and it is what an ' +
-            'operator reads when the routing turns out wrong.',
-        },
-        fix_makes_it_go_away: {
-          type: 'boolean',
-          description:
+              'actually saw that makes it true: the command, the error, the file. Required, and nothing ' +
+              'validates it: writing it down is what makes you check before you answer, and it is what an ' +
+              'operator reads when the routing turns out wrong.',
+          ),
+        fix_makes_it_go_away: z
+          .boolean()
+          .describe(
             'True if a fix would end it — a red check, a wedged runner, a bug nobody is on. False if it is ' +
-            'something true of this repository that a fix would not change, which ends by being written down ' +
-            'rather than by being fixed. It is the only classification asked of you, and it is the only one ' +
-            'you are in a position to make.',
-        },
-        keys: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
+              'something true of this repository that a fix would not change, which ends by being written down ' +
+              'rather than by being fixed. It is the only classification asked of you, and it is the only one ' +
+              'you are in a position to make.',
+          )
+          .optional(),
+        keys: z
+          .array(z.string())
+          .describe(
             'Optional. What identifies it, as "check:<name>", "test:<file> > <name>", "path:<file>", ' +
-            '"signature:<first line of the error>" or "cmd:<command>". Leave it out and the harness reads ' +
-            'them out of what you wrote and the dispatch you are on. Anything that names nothing real is ' +
-            'dropped and your report is kept — nothing here is ever refused for a key.',
-        },
-        blocks_me: {
-          type: 'boolean',
-          description:
+              '"signature:<first line of the error>" or "cmd:<command>". Leave it out and the harness reads ' +
+              'them out of what you wrote and the dispatch you are on. Anything that names nothing real is ' +
+              'dropped and your report is kept — nothing here is ever refused for a key.',
+          )
+          .optional(),
+        blocks_me: z
+          .boolean()
+          .describe(
             'True only if this stops you finishing the task you were dispatched for — the base will not ' +
-            'build, the thing you must change is behind it. Not "it is annoying" and not "it made this ' +
-            'slower": say true and you will be told to conclude `blocked`, which parks your goal until the ' +
-            'obstacle clears rather than failing it. Everything else, carry on and work around it.',
-        },
-        until: {
-          type: 'number',
-          description:
+              'build, the thing you must change is behind it. Not "it is annoying" and not "it made this ' +
+              'slower": say true and you will be told to conclude `blocked`, which parks your goal until the ' +
+              'obstacle clears rather than failing it. Everything else, carry on and work around it.',
+          )
+          .optional(),
+        until: z
+          .number()
+          .describe(
             'Only if what you saw will STOP being true: how many hours you expect it to last. A check timing ' +
-            'out all afternoon, a registry refusing installs. A backstop and never the mechanism — what ends ' +
-            'it is the world clearing it or somebody fixing it.',
-        },
-      },
-      required: ['what', 'why_not_mine'],
-    },
+              'out all afternoon, a registry refusing installs. A backstop and never the mechanism — what ends ' +
+              'it is the world clearing it or somebody fixing it.',
+          )
+          .optional(),
+      }),
+    ),
     handler: (args) => {
       const raised = validateRaisedObstacle(args, goalRef);
       if (!raised.ok) return toolError(`Not raised: ${raised.error}`);

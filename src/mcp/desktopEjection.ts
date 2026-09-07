@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { originIssueNumber } from '../plans/planning.js';
+import { toolSchema } from './schema.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { Ejection } from '../types.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
@@ -67,13 +69,12 @@ const ejectionRead: DesktopToolFactory = (deps) => ({
     'Read a piece of work an operator has taken off the fleet — why they stopped the agent, what the agent had ' +
     'been sent to do, the tail of its transcript, and how long the hold stands. Call this first, before you ' +
     'touch the branch: the operator ejected for a reason and it is the whole brief.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 412.' },
-      ejection: { type: 'string', description: 'Optional. The ejection id, where a goal has more than one held.' },
-    },
-  },
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 412.').optional(),
+      ejection: z.string().describe('Optional. The ejection id, where a goal has more than one held.').optional(),
+    }),
+  ),
   handler: (args) => {
     const found = resolve(deps, args);
     if (!found.ok) return toolError(found.error);
@@ -107,15 +108,13 @@ const ejectionNote: DesktopToolFactory = (deps) => ({
     'Say in one line what is being done with an ejected piece of work right now. It is what the fleet view ' +
     'shows beside the held slot, so everybody else can tell a hold somebody is working from a hold somebody ' +
     'forgot. Worth a call after a commit and on a change of direction; it changes nothing about the hold.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 412.' },
-      ejection: { type: 'string', description: 'Optional. The ejection id, where a goal has more than one held.' },
-      note: { type: 'string', description: 'One line, in the present tense — "reverting the store extraction".' },
-    },
-    required: ['note'],
-  },
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 412.').optional(),
+      ejection: z.string().describe('Optional. The ejection id, where a goal has more than one held.').optional(),
+      note: z.string().describe('One line, in the present tense — "reverting the store extraction".'),
+    }),
+  ),
   handler: (args) => {
     const found = resolve(deps, args);
     if (!found.ok) return toolError(found.error);
@@ -144,28 +143,26 @@ const ejectionSettle: DesktopToolFactory = (deps) => ({
     'Give an ejected piece of work back to the fleet. Every ejection ends here: until it does, the goal is not ' +
     'staffed and its worktree is out of the pool. Ask the operator which of the three it is — the answer is ' +
     'theirs, not yours.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 412.' },
-      ejection: { type: 'string', description: 'Optional. The ejection id, where a goal has more than one held.' },
-      outcome: {
-        type: 'string',
-        enum: ['handed_back', 'requeued', 'delivered'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 412.').optional(),
+      ejection: z.string().describe('Optional. The ejection id, where a goal has more than one held.').optional(),
+      outcome: z
+        .enum(['handed_back', 'requeued', 'delivered'])
+        .describe(
           '"handed_back" is "never mind, the agent was right" — the fleet picks the work up again from scratch. ' +
-          '"requeued" is "I fixed the direction, you finish" and needs a note saying what you changed. ' +
-          '"delivered" is "it is a pull request now".',
-      },
-      note: {
-        type: 'string',
-        description:
+            '"requeued" is "I fixed the direction, you finish" and needs a note saying what you changed. ' +
+            '"delivered" is "it is a pull request now".',
+        ),
+      note: z
+        .string()
+        .describe(
           'Required for "requeued": the preamble the fresh agent reads. Optional otherwise, and kept as the ' +
-          'record of what happened.',
-      },
-    },
-    required: ['outcome'],
-  },
+            'record of what happened.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const found = resolve(deps, args);
     if (!found.ok) return toolError(found.error);
