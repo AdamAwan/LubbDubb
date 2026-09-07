@@ -14,6 +14,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { atomList, atomsForPr } from '../src/reviewPacks/atoms.js';
 import { renderReviewPackCompanion } from '../src/reviewPacks/companion.js';
 import { ideaAtom } from '../src/reviewPacks/derive.js';
+import { PLUMBING_IDEA_ID } from '../src/reviewPacks/hunks.js';
 import { parseDiffHunks } from '../src/reviewPacks/hunks.js';
 import { packOrigin } from '../src/reviewPacks/origins.js';
 import { assemblePack, type Commission } from '../src/reviewPacks/submission.js';
@@ -29,6 +30,8 @@ import { findTask } from './support/tasks.js';
 
 const { ReviewPackPage } = await import('../web/src/components/ReviewPackPage.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
+const { ideaAtom: webIdeaAtom } = await import('../web/src/view/reviewPack.js');
+const { demoApi } = await import('../web/src/demo/demoBackend.js');
 
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 
@@ -383,5 +386,83 @@ test('a pack with no atoms behind it draws nothing at all about them', () => {
   for (const html of [renderCompanion(bare), renderPage(bare)]) {
     assert.doesNotMatch(html, /class="rp-atom/, 'no atom row is drawn, so the page is the page it was');
     assert.doesNotMatch(html, /no atom —/);
+  }
+});
+
+test('`plumbing` never reads as work the plan did not declare', () => {
+  const withAtoms = pack([
+    idea({ id: 'idea_a', atom: 'catalog-module' }),
+    idea({ id: PLUMBING_IDEA_ID }),
+    idea({ id: 'idea_c' }),
+  ]);
+  const [named, plumbing, undeclared] = withAtoms.ideas as [ReviewIdea, ReviewIdea, ReviewIdea];
+  assert.deepEqual(ideaAtom(withAtoms, plumbing), { kind: 'none' }, 'a lockfile is not undeclared work');
+  assert.deepEqual(ideaAtom(withAtoms, undeclared), { kind: 'undeclared' }, 'an ordinary idea still is');
+  assert.deepEqual(ideaAtom(withAtoms, named), { kind: 'declared', slug: 'catalog-module' });
+  for (const i of withAtoms.ideas) assert.deepEqual(ideaAtom(withAtoms, i), webIdeaAtom(withAtoms, i));
+
+  for (const html of [renderCompanion(withAtoms), renderPage(withAtoms)]) {
+    assert.equal(
+      (html.match(/class="rp-atom rp-atom-none"/g) ?? []).length,
+      1,
+      'the finding is drawn once, on the idea that earned it',
+    );
+  }
+});
+
+test('the demo serves a review pack, and it is the one whose part declares atoms', async () => {
+  const reading = await demoApi.getReviewPack(413);
+  assert.equal(reading.kind, 'pack', 'PR #413 has a pack a visitor can open');
+  if (reading.kind !== 'pack') return;
+  const { pack: demoPack, marks } = reading.payload;
+
+  const carried = ['enqueue-validates', 'drop-route-parsers'];
+  assert.deepEqual(
+    demoPack.ideas.filter((i) => i.atom !== null).map((i) => i.atom),
+    carried,
+    'every atom an idea names is one the plan part behind #413 carries',
+  );
+  assert.equal(
+    demoPack.ideas.filter((i) => ideaAtom(demoPack, i).kind === 'undeclared').length,
+    1,
+    'exactly one idea is work the plan did not declare — the finding the demo exists to show',
+  );
+  assert.equal(
+    ideaAtom(demoPack, demoPack.ideas.find((i) => i.id === PLUMBING_IDEA_ID)!).kind,
+    'none',
+    'and the plumbing idea is not counted as a second one',
+  );
+
+  assert.deepEqual(
+    [...new Set(demoPack.ideas.map((i) => i.attention))].sort(),
+    ['decide', 'read', 'skim', 'split'],
+    'every attention label a checker can write is on the one pack the demo has to teach them with',
+  );
+  assert.deepEqual(
+    [...demoPack.order].sort(),
+    demoPack.ideas.map((i) => i.id).sort(),
+    'the checker ordered every idea, so the page draws numbers that mean something',
+  );
+  const wrong = demoPack.ideas.flatMap((i) => i.claims).filter((c) => c.verdict === 'false');
+  assert.equal(wrong.length, 1, 'one false claim, so the gate draws');
+  assert.ok(wrong[0]!.finding?.counter, 'and it carries the finding and the counter-example the gate leads to');
+  assert.ok(
+    demoPack.ideas.some((i) => i.anchors.some((a) => a.kind === 'region')),
+    'a region anchor, so the demo shows a file the diff does not touch',
+  );
+
+  assert.equal((await demoApi.getReviewPack(414)).kind, 'none', 'no other pull request has one');
+  assert.equal(marks.length, 0, 'nobody has marked it yet');
+
+  const marked = await demoApi.markReviewIdeaRead(413, 'idea_routes', true);
+  assert.equal(marked.marks.length, 1, 'a demo interaction commits');
+  assert.equal(marked.marks[0]!.read, true);
+
+  const cited = new Set((await demoApi.getScratchpad('pr:413')).entries.map((e) => e.id));
+  for (const i of demoPack.ideas) {
+    for (const c of i.claims) {
+      if (c.provenance.kind === 'inferred') continue;
+      assert.ok(cited.has(c.provenance.entryId), `the pad holds ${c.provenance.entryId}, so it renders verbatim`);
+    }
   }
 });

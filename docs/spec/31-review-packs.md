@@ -261,11 +261,22 @@ What _is_ refused is an `atom` naming a slug the part does not carry. That is a 
 finding, and the refusal names every slug the idea could have used. On a pull request with no atoms
 at all, naming one is refused saying so.
 
+**`plumbing` is exempt from the reading**, and this is not a special case so much as the same rule
+read correctly. The reserved idea owns the hunks that carry nothing to review — a rename, a
+lockfile, a formatting sweep ([Coverage](#coverage)) — which is exactly the work no planner would
+ever declare an atom for. Read as undeclared, it would put the pack's most valuable sentence on its
+least valuable idea, on **every** pack that has atoms, which is how a finding stops being read at
+all. So `ideaAtom` answers `none` for it in both copies, and the sentence stays spendable.
+
 **Both renderings draw it under the cue**, where the checker's own gap already sits: the slug where
 the idea names one, and where it does not — on a pack that has atoms behind it — the sentence saying
 so, drawn in the amber a dispute is drawn in rather than the red spent only on a claim the tree
 contradicts. **A pack with no atoms behind it draws nothing at all**, so its page is the page it
 was.
+
+**The demo carries one**, on PR #413 — the one open fixture pull request whose plan part declares
+atoms — so the atom, the finding and the exemption are all things a visitor to the Pages build can
+see rather than read about ([17](17-cockpit.md#demo-mode)).
 
 It goes there and not into a table, because **the page has no table to key on the atom**. The page is
 the ideas with their walks under them and a contents rail beside them ([The page](#the-page)); the

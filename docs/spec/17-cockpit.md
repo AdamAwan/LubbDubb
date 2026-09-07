@@ -6891,6 +6891,27 @@ plan, so the fold that lists what an amendment dropped would never draw at all. 
 carries every marker for _who_ ran a check: by hand, by the fleet, from a desktop session, claimed by
 one right now, handed back, and amended out from under a reading.
 
+**The demo carries one review pack, and it is a whole one.** PR #413 has a written and checked pack
+([31](31-review-packs.md)), reached from the pull request page's masthead control the way a real one
+is. It is the fixture that has to be complete rather than representative, because the pack page is
+the longest read in the cockpit and every reading on it is a different judgement: the gate over one
+false claim with its finding and its counter-example, the checker's order and its cues, all four
+attention labels, a `witnessed` note and a `disputed` claim — both citing entries the pull request's
+own pad actually holds, so the verbatim rendering renders something — a `region` anchor on a file
+the diff does not touch, and the atoms. Two ideas name the atoms their part carries, **one names
+none** — the finding that the work went somewhere the plan did not declare — and the `plumbing` idea
+names none either without being drawn as one
+([31](31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding)). A demo that showed the atom
+but never the gap would teach a visitor the field is a label rather than a reading.
+
+The marks commit like every other demo interaction: marking an idea read, seeing a finding and
+overriding an attention label all write to a fixture world held beside the pack, never into it,
+which is the rule the real one keeps ([31](31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack)).
+What stays refused is **asking for a pack** and **sharing one** — there is no fleet to write one and
+no pool to publish into, and each refusal says which. The operator's calibration reading is counted
+off that same pack rather than invented, because a reading that contradicted the pack a visitor can
+open would be the one thing worse than no reading.
+
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
 composer does — which is the honest demo of the feature, since what a schedule _does_ is queue a job and
