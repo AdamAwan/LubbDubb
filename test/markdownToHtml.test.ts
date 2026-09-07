@@ -65,3 +65,19 @@ test('a signed HTML body re-sent gains no second footer and does not hang', () =
   assert.equal(signOff(markdownToHtml(once), 'html'), markdownToHtml(once));
   assert.match(markdownToHtml(once), /<!-- lubbdubb:signoff -->/);
 });
+
+test('an attribute-breaking link and unknown markup cannot escape their context', () => {
+  const html = markdownToHtml(
+    [
+      '[x](https://example.com/"onmouseover="alert(1))',
+      '',
+      '<script>alert(1)</script>',
+      '',
+      '<img src=x onerror=y>',
+    ].join('\n'),
+  );
+  assert.match(html, /<a href="https:\/\/example.com\/&quot;onmouseover=&quot;alert\(1">x<\/a>/);
+  assert.match(html, /<p>&lt;script&gt;alert\(1\)&lt;\/script&gt;<\/p>/);
+  assert.match(html, /<p>&lt;img src=x onerror=y&gt;<\/p>/);
+  assert.doesNotMatch(html, /<script|<img/);
+});

@@ -328,7 +328,10 @@ The converter covers the dialect the harness actually writes — paragraphs, `**
 code spans and fences, bullet and ordered lists including one level of nesting, headings, block
 quotes, horizontal rules and inline links — escaping `&`, `<` and `>` in text so a code span
 carrying markup cannot inject any. Two shapes pass through verbatim: an HTML comment line, which is
-how the `<!-- lubbdubb:* -->` markers survive, and any other line that is already HTML. A
+how the `<!-- lubbdubb:* -->` markers survive, and a line opening with one of the tags the
+converter itself emits, so a body read back from a provider and re-sent converts to itself. Any
+_other_ line opening with `<` is escaped and drawn as text, and a link's href is attribute-escaped:
+the bodies carry agent-written prose, so markup arriving in one is content, never markup. A
 `<details>` block is _not_ one of those: Azure's sanitiser drops the disclosure element and would
 take the whole write-up with it, so the summary becomes a bold line and the body is left open
 beneath it.

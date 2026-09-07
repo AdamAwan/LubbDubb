@@ -1,6 +1,25 @@
 // → docs/spec/15-integrations.md
 
-const HTML_COMMENT = /^<!--.*-->$/;
+const EMITTED_TAGS = new Set([
+  'p',
+  'br',
+  'hr',
+  'ul',
+  'ol',
+  'li',
+  'strong',
+  'em',
+  'code',
+  'pre',
+  'blockquote',
+  'a',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+]);
 
 export function markdownToHtml(body: string): string {
   const out: string[] = [];
@@ -13,7 +32,7 @@ export function markdownToHtml(body: string): string {
       i += 1;
       continue;
     }
-    if (HTML_COMMENT.test(trimmed)) {
+    if (isHtmlComment(trimmed)) {
       out.push(trimmed);
       i += 1;
       continue;
@@ -66,21 +85,39 @@ export function markdownToHtml(body: string): string {
       out.push(`<blockquote><p>${quoted.map(inline).join('<br>')}</p></blockquote>`);
       continue;
     }
-    if (trimmed.startsWith('<')) {
+    if (isEmittedHtml(trimmed)) {
       out.push(trimmed);
+      i += 1;
+      continue;
+    }
+    if (trimmed.startsWith('<')) {
+      out.push(`<p>${inline(trimmed)}</p>`);
       i += 1;
       continue;
     }
     const paragraph: string[] = [];
     while (i < lines.length) {
       const at = lines[i] as string;
-      if (at.trim() === '' || isItem(at) || at.trim().startsWith('<') || at.trim().startsWith('```')) break;
+      if (at.trim() === '' || isItem(at) || isHtml(at.trim()) || at.trim().startsWith('```')) break;
       paragraph.push(at.trim());
       i += 1;
     }
     out.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
   }
   return out.join('\n');
+}
+
+function isHtmlComment(line: string): boolean {
+  return line.startsWith('<!--') && line.endsWith('-->') && !line.slice(4, -3).includes('--');
+}
+
+function isHtml(line: string): boolean {
+  return isHtmlComment(line) || line.startsWith('<');
+}
+
+function isEmittedHtml(line: string): boolean {
+  const tag = /^<\/?([a-zA-Z][a-zA-Z0-9]*)\s*\/?>/.exec(line);
+  return tag !== null && EMITTED_TAGS.has((tag[1] as string).toLowerCase());
 }
 
 function isItem(line: string): boolean {
@@ -138,7 +175,7 @@ function emphasis(text: string): string {
     .split(/(\[[^\]]+\]\((?:https?:|#)[^)\s]*\))/)
     .map((part) => {
       const link = /^\[([^\]]+)\]\(((?:https?:|#)[^)\s]*)\)$/.exec(part);
-      return link ? `<a href="${link[2] as string}">${style(link[1] as string)}</a>` : style(part);
+      return link ? `<a href="${escapeAttribute(link[2] as string)}">${style(link[1] as string)}</a>` : style(part);
     })
     .join('');
 }
@@ -148,6 +185,10 @@ function style(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[\s(])_([^_]+)_(?=$|[\s.,;:)])/g, '$1<em>$2</em>')
     .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+}
+
+function escapeAttribute(url: string): string {
+  return escapeHtml(url).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function escapeHtml(text: string): string {
