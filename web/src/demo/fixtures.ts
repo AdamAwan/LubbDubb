@@ -253,7 +253,6 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['CI failing', '1 unresolved comment'] },
           attention: { status: 'harness', reasons: ['an agent is working this branch'] },
-          pack: 'current',
           review: {
             status: 'findings',
             addressed: false,
@@ -297,7 +296,6 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: false, reasons: [] },
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
-          pack: 'stale',
           review: {
             status: 'clear',
             addressed: false,
@@ -399,6 +397,11 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: false, reasons: [] },
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+          // The mark is what leads a visitor to the pack, so it goes on the one pull
+          // request `demoApi.getReviewPack` answers with a pack — and `current`,
+          // because its head is the head that pack was written against.
+          // → docs/spec/17-cockpit.md#demo-mode
+          pack: 'current',
           review: {
             status: 'skipped',
             addressed: false,

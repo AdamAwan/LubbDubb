@@ -2038,6 +2038,15 @@ function getServer(): DemoServer {
 
 const DEMO_PACK_HEAD = 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27';
 
+/**
+ * The pull request whose fixture wears the `writing` pack mark. The mark is
+ * `packStandingOf`'s reading of no pack plus an author running, so the reading this
+ * arm gives has to say the same thing — a mark whose pull request page then offers to
+ * ask for a pack teaches a visitor the mark means nothing.
+ * → docs/spec/17-cockpit.md#demo-mode
+ */
+const DEMO_PACK_WRITING_PR = 409;
+
 const DEMO_PAD_AT = new Date(Date.now() - 5 * 3_600_000).toISOString();
 
 /**
@@ -4298,7 +4307,7 @@ export const demoApi = {
               sharing: { available: false, share: null },
             },
           }
-        : { kind: 'none', writing: false },
+        : { kind: 'none', writing: prNumber === DEMO_PACK_WRITING_PR },
     ),
   requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
   shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
