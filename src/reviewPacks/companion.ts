@@ -17,7 +17,10 @@ import {
   ideaFlags,
   numberIdeas,
   packFacts,
+  plainSummary,
   shortSha,
+  splitBody,
+  testScenarios,
   type FalseClaim,
 } from './derive.js';
 
@@ -37,7 +40,7 @@ export function renderReviewPackCompanion(record: ReviewPackRecord): string {
       (pack.witnessed ? '' : ` <span class="rp-unwitnessed">nobody witnessed this change</span>`) +
       `</div>`,
     `<h1>${esc(pack.headline)}</h1>`,
-    `<div class="rp-plain">${markdown(pack.summary)}</div>`,
+    `<div class="rp-plain">${markdown(plainSummary(pack.summary))}</div>`,
     `<div class="rp-facts">${facts_(facts, pack.estimatedMinutes)}</div>`,
     `<p class="rp-provenance">A rendering of the pack written against <code>${esc(pack.headSha)}</code> on ` +
       `${esc(record.writtenAt)}. It is a copy: it does not follow the pull request, it takes no input, and ` +
@@ -165,7 +168,8 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
     `</summary>` +
     `<div class="rp-panel">` +
     (raised.length > 0
-      ? `<div class="rp-raised">${raised.map((c) => claimLine(c, findingIndex(wrong, idea, c))).join('')}</div>`
+      ? `<div class="rp-raised${raised.some((c) => c.verdict === 'false') ? ' rp-raised-false' : ''}">` +
+        `${raised.map((c) => claimLine(c, findingIndex(wrong, idea, c))).join('')}</div>`
       : '') +
     `<ol class="rp-walk">${idea.anchors.map((a, i) => step(a, i + 1, number)).join('')}</ol>` +
     (idea.anchors.length === 0 ? `<p class="rp-gap">This idea has no walk — the author gave it no anchors.</p>` : '') +
@@ -200,10 +204,11 @@ function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
   const region = anchor.kind === 'region';
   const weight = anchorWeight(anchor);
   const counts = diffCounts(anchor.code);
-  const tag = region
-    ? `<span class="rp-tag rp-tag-region">not in this PR</span>`
-    : `<span class="rp-tag rp-tag-diff">changed ${counts.added > 0 ? `+${counts.added}` : ''} ${counts.removed > 0 ? `−${counts.removed}` : ''}</span>`;
-  const quiet = weight === 'minor' ? `<span class="rp-tag">mechanical</span>` : '';
+  const meta = region
+    ? 'unchanged'
+    : [counts.added > 0 ? `+${counts.added}` : '', counts.removed > 0 ? `−${counts.removed}` : '']
+        .filter((part) => part !== '')
+        .join(' ') + (weight === 'minor' ? ' · mechanical' : '');
   const mark =
     anchor.mark === 'key'
       ? `<span class="rp-tag rp-tag-key">the important bit</span>`
@@ -212,19 +217,31 @@ function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
         : anchor.mark === 'disputed'
           ? `<span class="rp-tag rp-tag-disputed">witness disagrees</span>`
           : '';
+  const scenarios = testScenarios(anchor.range.path, anchor.code);
+  const code = codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path);
+  const folded = (body: string): string =>
+    `<details class="rp-minor-code"><summary>show the ${anchor.code.length} ` +
+    `${anchor.code.length === 1 ? 'line' : 'lines'}</summary>${body}</details>`;
   const note = anchor.note;
   return (
     `<li class="rp-step rp-w-${weight}${region ? ' rp-dashed' : ''}${anchor.mark !== null ? ` rp-mark-${anchor.mark}` : ''}" ` +
     `id="rp-s${ideaNumber}-${index}">` +
     `<div class="rp-step-head"><span class="rp-step-n">${pad(ideaNumber)}.${index}</span>` +
-    `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}${quiet}</div>` +
+    `<span class="rp-path">${rangeLabel(anchor.range)}</span>${mark}` +
+    `<span class="rp-step-meta">${esc(meta)}</span></div>` +
     `<p class="rp-gist">${esc(anchor.gist)}</p>` +
-    (weight === 'minor'
-      ? `<details class="rp-minor-code"><summary>show the ${anchor.code.length} ` +
-        `${anchor.code.length === 1 ? 'line' : 'lines'}</summary>` +
-        codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
-        `</details>`
-      : codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path)) +
+    (region
+      ? `<p class="rp-region-note">This file is not in the pull request. The author is showing it to you on ` +
+        `purpose — either the change cannot be judged without it, or it is the file you would expect to have ` +
+        `changed and deliberately did not.</p>`
+      : '') +
+    (scenarios.length > 0
+      ? `<div class="rp-scenarios"><p class="rp-scenarios-head">The ${scenarios.length} ` +
+        `${scenarios.length === 1 ? 'case' : 'cases'} it covers</p>` +
+        `<ul>${scenarios.map((name) => `<li>${esc(name)}</li>`).join('')}</ul>${folded(code)}</div>`
+      : weight === 'minor'
+        ? folded(code)
+        : code) +
     (note === null
       ? ''
       : `<details class="rp-why"${anchor.mark === 'false' || anchor.mark === 'disputed' ? ' open' : ''}>` +
@@ -298,11 +315,14 @@ function claimLine(claim: ReviewClaim, findingAt: number | null): string {
     (claim.verdict === null
       ? `<span class="rp-v rp-v-none">Unchecked</span>`
       : `<span class="rp-v rp-v-${claim.verdict === 'cant_tell' ? 'un' : claim.verdict}">${VERDICT_LABEL[claim.verdict]}</span>`) +
-    `<span class="rp-claim-body"><span class="rp-prov rp-prov-${claim.provenance.kind}">${claim.provenance.kind}</span> ` +
-    esc(claim.text) +
-    (claim.evidence !== null ? ` <span class="rp-evidence">${esc(claim.evidence)}</span>` : '') +
-    (claim.verdict === 'cant_tell' ? ` <strong>You decide.</strong>` : '') +
+    `<span class="rp-claim-body"><span class="rp-claim-text">${esc(claim.text)}</span>` +
+    (claim.provenance.kind === 'disputed' ? ` <span class="rp-tag rp-tag-disputed">witness disagrees</span>` : '') +
+    (claim.verdict === 'cant_tell' ? ` <strong class="rp-claim-yours">You decide.</strong>` : '') +
     (findingAt !== null ? ` <a href="#rp-finding-${findingAt}">Read the finding</a>` : '') +
+    (claim.evidence !== null
+      ? `<details class="rp-evidence"><summary>how it was checked</summary>` +
+        `<div class="rp-evidence-body">${esc(claim.evidence)}</div></details>`
+      : '') +
     (cited !== null
       ? `<blockquote class="rp-entry"><span class="rp-gap">cites pad entry <code>${esc(cited)}</code>, ` +
         `which stayed on the fleet that wrote it — a shared pack carries the document and nothing else.</span></blockquote>`
@@ -334,15 +354,18 @@ function finding(item: FalseClaim, index: number): string {
           found.counter.range.path,
         )
       : '');
+  const split = found === null ? { lead: '', rest: '' } : splitBody(found.body);
   return (
     `<section class="rp-finding" id="rp-finding-${index}">` +
     `<h3>${esc(found?.headline ?? item.claim.text)}</h3>` +
-    `<p class="rp-finding-where">Idea ${pad(item.number)}, claim ${item.claimNumber}: “${esc(item.claim.text)}”` +
-    (item.claim.evidence !== null ? ` <span class="rp-evidence">${esc(item.claim.evidence)}</span>` : '') +
-    `</p>` +
+    `<p class="rp-finding-where">Idea ${pad(item.number)}, claim ${item.claimNumber}: “${esc(item.claim.text)}”</p>` +
     (found === null
       ? `<p class="rp-gap">The claim is marked false but carries no finding — the document is missing one.</p>`
-      : `<div class="rp-pair">${pair}</div><div class="rp-finding-body">${markdown(found.body)}</div>`) +
+      : `<div class="rp-finding-lead">${markdown(split.lead)}</div><div class="rp-pair">${pair}</div>` +
+        (split.rest === ''
+          ? ''
+          : `<details class="rp-finding-more"><summary>the rest of the finding</summary>` +
+            `<div class="rp-finding-body">${markdown(split.rest)}</div></details>`)) +
     `</section>`
   );
 }
@@ -492,16 +515,23 @@ a { color: var(--rp-accent); }
 .rp-att-skim { color: var(--rp-dim); }
 .rp-att-split { color: var(--rp-accent); border-color: var(--rp-accent); }
 .rp-panel { padding-top: .75rem; }
+.rp-raised { border: 1px solid var(--rp-warn); border-radius: 4px; padding: .5rem .6rem; margin-bottom: .6rem; }
+.rp-raised-false { border-color: var(--rp-bad); }
 .rp-walk { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--rp-line); }
 .rp-step { padding: .5rem 0 .5rem 1rem; }
 .rp-step-head { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
 .rp-step-n { color: var(--rp-dim); font-variant-numeric: tabular-nums; }
 .rp-tag { font-size: .72rem; color: var(--rp-dim); border: 1px solid var(--rp-line); border-radius: 3px; padding: 0 .35rem; }
-.rp-tag-region { border-style: dashed; }
 .rp-tag-key { color: var(--rp-accent); border-color: var(--rp-accent); }
 .rp-tag-false { color: var(--rp-bad); border-color: var(--rp-bad); }
 .rp-tag-disputed { color: var(--rp-warn); border-color: var(--rp-warn); }
 .rp-gist { margin: .35rem 0; }
+.rp-step-meta { margin-left: auto; color: var(--rp-dim); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.rp-region-note { margin: 0 0 .4rem; color: var(--rp-dim); font-size: .85rem; max-width: 78ch; }
+.rp-scenarios ul { margin: 0 0 .4rem; padding-left: 1.1rem; }
+.rp-scenarios li { margin-bottom: .15rem; }
+.rp-scenarios-head { margin: 0 0 .25rem; color: var(--rp-dim); font-size: .75rem; text-transform: uppercase;
+  letter-spacing: .04em; }
 .rp-code { border: 1px solid var(--rp-line); border-radius: 4px; background: var(--rp-code-bg); overflow: hidden; }
 .rp-code.rp-dashed { border-style: dashed; }
 .rp-code-cap { display: flex; justify-content: space-between; gap: 1rem; padding: .25rem .5rem;
@@ -537,11 +567,18 @@ a { color: var(--rp-accent); }
 .rp-v-true { color: var(--rp-ok); border-color: var(--rp-ok); }
 .rp-v-false { color: var(--rp-bad); border-color: var(--rp-bad); }
 .rp-v-un, .rp-v-none { color: var(--rp-dim); }
-.rp-prov { color: var(--rp-dim); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
-.rp-evidence { color: var(--rp-dim); }
+.rp-claim-body { flex: 1; }
+.rp-claim-yours { color: var(--rp-warn); }
+.rp-evidence { margin-top: .2rem; }
+.rp-evidence > summary { cursor: pointer; color: var(--rp-dim); font-size: .78rem; }
+.rp-evidence-body { margin-top: .25rem; padding-left: .6rem; border-left: 1px solid var(--rp-line);
+  color: var(--rp-dim); font-size: .85rem; }
 .rp-entry { margin: .35rem 0 .35rem .5rem; padding-left: .6rem; border-left: 2px solid var(--rp-line); }
 .rp-finding { border: 2px solid var(--rp-bad); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;
   background: var(--rp-panel); }
+.rp-finding-lead { margin: 0 0 .6rem; }
+.rp-finding-lead p { margin: 0; }
+.rp-finding-more > summary { cursor: pointer; color: var(--rp-dim); font-size: .78rem; }
 .rp-pair { display: grid; gap: .5rem; }
 .rp-order li { margin-bottom: .35rem; }
 .rp-order-cue { color: var(--rp-dim); }

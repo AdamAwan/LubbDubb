@@ -330,6 +330,7 @@ body {
 .rp-claims-head,
 .rp-covered-head,
 .rp-code-cap,
+.rp-scenarios-head,
 .rv-detail dt,
 .species-odd dt,
 .species-table thead th,
@@ -376,6 +377,7 @@ body {
 .tickets-thead,
 .cfg-railhead,
 .rp-code-cap,
+.rp-scenarios-head,
 .rv-detail dt,
 .species-odd dt,
 .species-table thead th,
@@ -9296,12 +9298,18 @@ select:disabled {
 .rp-panel {
   padding: 4px 6px 16px 2px;
 }
+/* The claims an open idea leads with. Amber while a claim is only disputed or
+   undecided; red is spent on a claim the tree contradicts, and on nothing else. */
 .rp-raised {
-  border: 1px solid var(--red-line);
-  background: var(--red-fill);
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
   border-radius: var(--r-sm);
   padding: 8px 10px;
   margin: 4px 0 10px;
+}
+.rp-raised-false {
+  border-color: var(--red-line);
+  background: var(--red-fill);
 }
 .rp-marks {
   display: flex;
@@ -9357,6 +9365,16 @@ select:disabled {
 }
 .rp-c-idea.rp-c-bad {
   color: var(--red);
+}
+/* Where the reader actually is, from the scroll — a rail that only says where you
+   could go is one you lose your place in the moment you scroll.
+   → docs/spec/31-review-packs.md#the-contents-rail */
+.rp-c-here {
+  background: var(--veil);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.rp-rail li.rp-c-here a {
+  color: var(--text);
 }
 .rp-c-read {
   margin-left: auto;
@@ -9437,6 +9455,38 @@ select:disabled {
   font-weight: 400;
 }
 .rp-dashed > .rp-step-head .rp-path {
+  color: var(--muted);
+}
+/* What is merely true of a hunk — the lines it moved, that it is mechanical — is
+   quiet text beside the path. Only what asks something of the reader is a badge.
+   → docs/spec/31-review-packs.md#the-page */
+.rp-step-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* A region says in words what it is: "not in this PR" beside a caption reading
+   "should this have changed? no" is a puzzle the colophon answers ten screens on. */
+.rp-region-note {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 78ch;
+}
+/* A new test file is a wall of code that answers one question — what does it
+   cover — so the page answers it, and keeps the code a fold away. */
+.rp-scenarios ul {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  font-size: 12.5px;
+}
+.rp-scenarios li {
+  margin-bottom: 2px;
+}
+.rp-scenarios-head {
+  margin: 0 0 4px;
   color: var(--muted);
 }
 .rp-gist {
@@ -9608,9 +9658,38 @@ select:disabled {
 }
 .rp-claim-body {
   min-width: 0;
+  flex: 1;
 }
-.rp-evidence {
+.rp-claim-text {
+  margin-right: 6px;
+}
+.rp-claim-yours {
+  color: var(--amber);
+}
+/* The checker's working, not its answer: a paragraph of paths and greps under a
+   claim a reader is scanning. Folded, so the line stays a sentence.
+   → docs/spec/31-review-packs.md#claims */
+.rp-evidence,
+.rp-entry-fold {
+  margin-top: 3px;
+}
+.rp-evidence > summary,
+.rp-entry-fold > summary {
+  cursor: pointer;
   color: var(--muted);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+.rp-evidence > summary:hover,
+.rp-entry-fold > summary:hover {
+  color: var(--blue);
+}
+.rp-evidence-body {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
 }
 .rp-entry {
   margin: 6px 0 0;
@@ -9664,6 +9743,28 @@ select:disabled {
   margin: 0 0 10px;
   color: var(--muted);
   font-size: 12.5px;
+}
+/* The first paragraph is the finding; the rest is the argument for it. A reader
+   who takes the first sentence has taken the finding.
+   → docs/spec/31-review-packs.md#the-page */
+.rp-finding-lead {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.rp-finding-lead p {
+  margin: 0;
+}
+.rp-finding-more {
+  margin-top: 4px;
+}
+.rp-finding-more > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+.rp-finding-more > summary:hover {
+  color: var(--blue);
 }
 .rp-pair {
   display: grid;

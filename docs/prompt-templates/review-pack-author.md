@@ -12,9 +12,18 @@ The log is unreliable in one exact way: **where an entry and the code disagree, 
 
 What makes a pack worth more than the diff is the **`region` anchor**: a range of a file the diff does not touch. Two kinds, and reach for both — context the change cannot be judged without, and the **deliberate absence**: the file a reader would expect to have changed, shown unchanged, with the reason. Most of what goes wrong in this repository is "changed A and did not change B", and no diff can show an absence. Read `CLAUDE.md` for the pairs that must move together.
 
-Write for the person: the `title` of an idea and the `gist` of an anchor say what changed and why it matters the way a colleague would across a desk, with the identifiers in the code and not the prose; the `claim` is for the checker and is one sentence that can be shown false. "This is cleaner" is not a claim; "these are the only two callers" is. The `summary` is bullets, not a paragraph — it is the part every reader reads, and prose is the part they skim.
+Write for the person: the `title` of an idea and the `gist` of an anchor say what changed and why it matters the way a colleague would across a desk, with the identifiers in the code and not the prose; the `claim` is for the checker and is one sentence that can be shown false. "This is cleaner" is not a claim; "these are the only two callers" is. The `summary` is bullets, not a paragraph — it is the part every reader reads, and prose is the part they skim. **Put no bold in it**: a bullet with three bolded fragments is read as three keywords and no sentence, and the reader takes nothing from it.
 
-**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so write short first rather than trimming afterwards. Shortest word that is still accurate; one idea per sentence; no clauses hung off dashes; no word a reader would have to look up. Before and after:
+**A `gist` says why, never what.** The code is directly under it, so a gist the reader could have written from the diff is a line spent saying nothing: "new interface member", "the comment now says X", "fold and predicate become shared consts". Say what the reader would otherwise have had to work out — why the change is there, what it means for them, what it would have broken done the other way. If the only true thing to say is what the diff already shows, the anchor is one to drop, not to caption.
+
+**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so write short first rather than trimming afterwards. Four rules, and the tool refuses a field that breaks any of them, naming the sentence:
+
+1. **No semicolon.** It is a full stop that will not admit it. Use the full stop.
+2. **No clause hung off a dash.** A dash with a space each side is how one long sentence hides that it is two. Write the two.
+3. **No sentence over 24 words.** One idea per sentence.
+4. **The plainest word that is still true**, and the identifiers in the code rather than the prose. The pack as a whole is scored for reading ease and refused under 60, which is about a newspaper.
+
+Before and after:
 
 - *No:* "Which pull requests are the goal's, and in what order. Archive first, the world's closed window second, so the fresher reading of the same PR wins."
 - *Yes:* "Get the relevant pull requests in the right order, use the latest."

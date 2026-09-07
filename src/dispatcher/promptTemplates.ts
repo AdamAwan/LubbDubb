@@ -682,11 +682,24 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'matters the way a colleague would across a desk, with the identifiers in the code and not the prose; ' +
       'the `claim` is for the checker and is one sentence that can be shown false. "This is cleaner" is not a ' +
       'claim; "these are the only two callers" is. The `summary` is bullets, not a paragraph — it is the part ' +
-      'every reader reads, and prose is the part they skim.\n\n' +
+      'every reader reads, and prose is the part they skim. **Put no bold in it**: a bullet with three bolded ' +
+      'fragments is read as three keywords and no sentence, and the reader takes nothing from it.\n\n' +
+      '**A `gist` says why, never what.** The code is directly under it, so a gist the reader could have ' +
+      'written from the diff is a line spent saying nothing: "new interface member", "the comment now says X", ' +
+      '"fold and predicate become shared consts". Say what the reader would otherwise have had to work out — ' +
+      'why the change is there, what it means for them, what it would have broken done the other way. If the ' +
+      'only true thing to say is what the diff already shows, the anchor is one to drop, not to caption.\n\n' +
       '**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ' +
       'ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so ' +
-      'write short first rather than trimming afterwards. Shortest word that is still accurate; one idea per ' +
-      'sentence; no clauses hung off dashes; no word a reader would have to look up. Before and after:\n\n' +
+      'write short first rather than trimming afterwards. Four rules, and the tool refuses a field that breaks ' +
+      'any of them, naming the sentence:\n\n' +
+      '1. **No semicolon.** It is a full stop that will not admit it. Use the full stop.\n' +
+      '2. **No clause hung off a dash.** A dash with a space each side is how one long sentence hides that it ' +
+      'is two. Write the two.\n' +
+      '3. **No sentence over 24 words.** One idea per sentence.\n' +
+      '4. **The plainest word that is still true**, and the identifiers in the code rather than the prose. The ' +
+      'pack as a whole is scored for reading ease and refused under 60, which is about a newspaper.\n\n' +
+      'Before and after:\n\n' +
       "- *No:* \"Which pull requests are the goal's, and in what order. Archive first, the world's closed " +
       'window second, so the fresher reading of the same PR wins."\n' +
       '- *Yes:* "Get the relevant pull requests in the right order, use the latest."\n\n' +
@@ -728,6 +741,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'one plain line, the consequence worked out — a table where numbers make it concrete — how serious it ' +
       'is, and whose call it is. Name the step of the walk it is about, and where the contradicting code is ' +
       'somewhere the walk never stopped, point at it by path and lines so the reader sees both halves.\n\n' +
+      "The finding's **first paragraph is the whole of it** in plain words — what is wrong, and what it costs. " +
+      'Everything after that paragraph is the argument for it, and both renderings fold the argument away, so ' +
+      'a reader who reads only the opening must still have the finding. Do not open with the setup and arrive ' +
+      'at the point in the third paragraph.\n\n' +
+      'Everything you write is held to the same four rules as the author, and refused the same way: **no ' +
+      'semicolon**, **no clause hung off a dash**, **no sentence over 24 words**, and the plainest word that is ' +
+      'still true — the finding and the cues are scored for reading ease as a whole and refused under 60.\n\n' +
       'Then, for each idea, say how hard to look: `read` — it needs reading; `decide` — it turns on a judgement ' +
       'only the reviewer can make; `skim` — safe to pass over; `split` — unrelated to the rest of the pull ' +
       'request and could be its own. One line under it says why — the `cue`, capped at 70 characters, in the ' +

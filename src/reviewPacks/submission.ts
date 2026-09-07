@@ -12,6 +12,7 @@ import type {
   ScratchEntry,
 } from '../types.js';
 import { coverageRefusal, ownsTestHunk, PLUMBING_IDEA_ID, testsOnlyIdea, type DiffHunk } from './hunks.js';
+import { plainnessRefusal, readingEaseRefusal } from './plainness.js';
 
 // → docs/spec/31-review-packs.md
 
@@ -42,6 +43,7 @@ export function assemblePack(
   const headline = line(args.headline);
   if (headline === null) return refuse('headline is required — one plain sentence saying what the change does.');
   if (headline.length > LIMITS.headline) return refuse(overLimit('headline', LIMITS.headline, headline));
+  const prose: [string, string][] = [['headline', headline]];
   const summary = text(args.summary);
   if (summary === null)
     return refuse(
@@ -50,6 +52,7 @@ export function assemblePack(
     );
   const long = summary.split('\n').find((l) => l.trim().length > LIMITS.summaryBullet);
   if (long !== undefined) return refuse(overLimit('a summary bullet', LIMITS.summaryBullet, long.trim()));
+  for (const bullet of summary.split('\n').filter((l) => l.trim() !== '')) prose.push(['a summary bullet', bullet]);
   const estimatedMinutes = args.estimatedMinutes;
   if (typeof estimatedMinutes !== 'number' || !Number.isFinite(estimatedMinutes) || estimatedMinutes < 0) {
     return refuse('estimatedMinutes must be a number — how long you expect the read to take.');
@@ -85,6 +88,7 @@ export function assemblePack(
     const title = line(raw.title);
     if (title === null) return refuse(`${at}.title is required — the same thing said across a desk, for the person.`);
     if (title.length > LIMITS.title) return refuse(overLimit(`${at}.title`, LIMITS.title, title));
+    prose.push([`${at}.claim`, claim], [`${at}.title`, title]);
     if (!Array.isArray(raw.anchors) || raw.anchors.length === 0) {
       return refuse(
         `${at}.anchors must be a non-empty list — an idea is a claim plus a walk, and this one has no walk.`,
@@ -95,6 +99,8 @@ export function assemblePack(
     for (const [j, rawAnchor] of (raw.anchors as unknown[]).entries()) {
       const anchor = readAnchor(commission, rawAnchor, `${at}.anchors[${j}]`, entryIds, entryAt);
       if (!anchor.ok) return refuse(anchor.error);
+      prose.push([`${at}.anchors[${j}].gist`, anchor.anchor.gist]);
+      if (anchor.anchor.caption !== null) prose.push([`${at}.anchors[${j}].caption`, anchor.anchor.caption]);
       anchors.push(anchor.anchor);
       if (anchor.hunkId !== null) hunkIds.push(anchor.hunkId);
     }
@@ -115,6 +121,7 @@ export function assemblePack(
       if (scenario.length > LIMITS.coverage) {
         return refuse(overLimit(`${at}.coverage[${j}]`, LIMITS.coverage, scenario));
       }
+      prose.push([`${at}.coverage[${j}]`, scenario]);
       coverage.push(scenario);
     }
     const dup = hunkIds.find((h, k) => hunkIds.indexOf(h) !== k);
@@ -138,6 +145,9 @@ export function assemblePack(
   const coverage = coverageRefusal(commission.hunks, owned);
   if (coverage !== null) return refuse(coverage);
 
+  const plain = plainRefusal(prose);
+  if (plain !== null) return refuse(plain);
+
   return {
     ok: true,
     pack: {
@@ -153,6 +163,22 @@ export function assemblePack(
       fake,
     },
   };
+}
+
+/**
+ * Every prose field the reader is shown, held against the plainness rules, then
+ * the whole of it against the reading-ease floor.
+ *
+ * The per-field pass runs first because its refusal names one sentence to fix;
+ * the score is the backstop for a register no per-field rule catches.
+ * → docs/spec/31-review-packs.md#say-it-in-plainer-words
+ */
+export function plainRefusal(prose: readonly [string, string][]): string | null {
+  for (const [at, value] of prose) {
+    const refusal = plainnessRefusal(at, value);
+    if (refusal !== null) return refusal;
+  }
+  return readingEaseRefusal(prose.map(([, value]) => value));
 }
 
 const AUTHOR_MARKS: readonly ReviewAnchorMark[] = ['key', 'disputed'];

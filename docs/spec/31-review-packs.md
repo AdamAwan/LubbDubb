@@ -235,6 +235,46 @@ the one example that does more than any adjective:
 >
 > _Yes:_ "Get the relevant pull requests in the right order, use the latest."
 
+### Say it in plainer words
+
+_Built._ `src/reviewPacks/plainness.ts`, called from both submit tools through `plainRefusal`.
+
+A cap makes writing short. It does nothing about the **register** — a field can be sixty characters
+and still read like a legal notice, and that is the failure a reader actually reports: "so much of it
+tells me nothing". So the same enforcement the cap gets, plainness gets: four rules, checked when the
+pack is submitted, refused with the exact sentence that broke one.
+
+| Rule                         | Why it is a rule and not advice                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| no semicolon                 | it is a full stop that will not admit it, and it is how two ideas get one line          |
+| no clause hung off a dash    | a dash with a space each side is how a long sentence hides that it is two               |
+| no sentence over **24** words | one idea per sentence, and the count is what makes an author choose which idea         |
+| reading ease at least **60** | the backstop for the register itself, which no per-field rule catches                   |
+
+The first three are per-field and their refusal quotes the sentence, so the fix is obvious. The
+fourth is one Flesch reading-ease score over **every prose field the reader is shown unfolded**,
+because each sentence can pass all three rules and every word still be one the reader has to look up.
+60 is about a newspaper. Its refusal names the three sentences that cost the score most, since a
+score alone is a number nobody can act on.
+
+**Code is never counted.** Backticked spans, fenced blocks, table rows and any word that looks like an
+identifier — a path, a flag, a version, something with an internal capital — are dropped from both the
+sentence count and the syllable count. A gist that names the method it is about would otherwise be
+refused for doing the right thing.
+
+**Both agents are held to it**, on the same code path: the author's headline, summary, titles, claims,
+gists, captions and coverage; the checker's cues, finding headlines and finding bodies. Two fields are
+exempt and deliberately so — a witness `note` is testimony and is [rendered verbatim](#provenance),
+and a claim's `evidence` is a machine transcript of greps that is folded on the page. Neither is the
+author's voice, and rewriting either to score better would be the retelling this whole design exists
+to prevent.
+
+The trade is stated rather than hidden: **a rule this blunt refuses some good writing.** A caption
+reading "the template — edit this one" is fine English and is refused. That is accepted, because the
+failure it prevents is the one the reader hits on every pack and the one it causes costs an author one
+rewrite. If packs start failing to land on the score rather than the three rules, the floor is the
+number to move, not the rule to drop.
+
 ### An anchor
 
 An anchor is a place in the tree the walk stops at, with one line saying why it stops there. Two
@@ -299,7 +339,7 @@ So each stop is weighed, **from the code and never from a field**:
 | Weight   | What                                                                   | Drawn                            |
 | -------- | ---------------------------------------------------------------------- | -------------------------------- |
 | `key`    | the author's own `mark`, which nothing here second-guesses             | ruled in the accent, in the rail |
-| `minor`  | a hunk whose changed lines are all imports, or two short changed lines | dimmed, tagged, code folded      |
+| `minor`  | a hunk whose changed lines are all imports or all comments, or two short changed lines | dimmed, quiet, code folded |
 | `normal` | everything else                                                        | as it always was                 |
 
 Three things the rule gets right on purpose. **A region is never `minor`** — it is in the pack because
@@ -307,6 +347,12 @@ somebody decided the change could not be judged without it. **The author's `key`
 rule**, including a one-line hunk. And **few lines is not little to read**: one changed line can be a
 thousand characters of prompt or doc string, so the line count and the characters in them are both
 counted, and either one over the bar makes the stop ordinary.
+
+**A hunk that changed only comments is `minor` however long it is.** A reworded `<summary>`, a doc
+line that follows the code it describes — there is no decision in it for the reader, and a walk that
+gives four rewritten comment lines the weight of the branch they describe is a walk whose emphasis
+means nothing. **Prose files are exempt**: in Markdown a `#` line is the text, not a comment about it,
+so a doc change stays ordinary and only code files are read this way.
 
 **Derived rather than authored, and the trade is stated rather than hidden.** A `weight` on the anchor
 would be more accurate — the author knows which forty lines are hairy and which are boilerplate, and no
@@ -381,7 +427,7 @@ two callers" is.
 | `text`       | the sentence                                                                                                                                                                                               |
 | `provenance` | where it came from ([Provenance](#provenance))                                                                                                                                                             |
 | `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has                                                                                                                                  |
-| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has                                                                                                                 |
+| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has. **Folded on both pages**: it is the working, not the answer, and it runs to a paragraph of paths and greps    |
 | `finding`    | on a `false` claim and on nothing else: what is wrong and what follows ([What a false claim does](#what-a-false-claim-does)); null until it has, and null on every claim that held or could not be decided |
 
 ### Provenance
@@ -400,6 +446,12 @@ The provenance is a discriminated union rather than a label beside an optional i
 claim without an entry to show is a shape the type refuses rather than a row the page draws with a
 blank beside it. The pack stores the id and never a copy of the entry: a copy is the retelling the
 verbatim rendering exists to prevent.
+
+**`inferred` is drawn as nothing.** It is the provenance most claims have, and a label on every line
+is a label the eye stops reading — so the page marks only the two that mean something: a witness
+quoted, and a witness contradicted. The entry a `witnessed` claim cites is folded under it; a
+`disputed` one says so on the line, because a witness the code contradicts is a finding in its own
+right.
 
 `witnessed` claims cite the entry and the cockpit renders it unedited next to the claim. That is what
 stops the author quietly improving a note in the retelling — not a fourth agent checking the third,
@@ -802,10 +854,14 @@ words: the sentences on it say what changed and what could go wrong the way a co
 the identifiers live in the code blocks, not the prose. Top to bottom:
 
 1. **Masthead.** A kicker naming the pull request and its head; a `headline` that says what the
-   change does in one plain sentence; a `summary` as a short bulleted list in the same register, the
-   words that matter most in bold — never a paragraph, since the opening is the part every reader
-   reads and prose is the part they skim; and a facts line — ideas, files, changes and whether every one is
+   change does in one plain sentence; a `summary` as a short bulleted list in the same register —
+   never a paragraph, since the opening is the part every reader reads and prose is the part they
+   skim; and a facts line — ideas, files, changes and whether every one is
    owned, the claim counts by verdict, and an `estimatedMinutes`. Both prose fields are the author's.
+   **The author's emphasis is flattened before the bullets are drawn** (`plainSummary`): a bullet
+   with three bolded fragments in it is read as three keywords and no sentence, and the reader takes
+   nothing from the one part of the page they are certain to read. The prompt asks for no bold; the
+   flattening is what makes that true of the packs already written.
 2. **The gate.** A red band, first thing after the masthead and above the ideas, with the count of
    false claims and one sentence saying what is wrong and which idea it touches, linking to the
    finding below. Absent when nothing is false. This is the surface that honours
@@ -817,25 +873,42 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
    carry the reading order the checker chose, which is why they are numbers.
 4. **The walk.** Opening an idea shows the anchors as steps down a rule, each numbered with its
    idea's — `01.3`, never `3`, because step numbers restart per idea and a bare one says nothing
-   about where in the page the reader is. Each step is the path and line, a tag — _changed +n −m_,
-   _not in this PR_ drawn dashed, _the important bit_, _mechanical_, _claim is false_, _witness
-   disagrees_ — the gist in one sentence, the code block with its `caption` and diff lines coloured,
-   and beneath it the folded reasoning: one fold per note, each stamped _witness · hh:mm_ or _added
-   afterwards_. A `minor` step is drawn quiet and its code is folded
+   about where in the page the reader is. Each step is the path and line, then **only the badges that
+   ask the reader for something** — _the important bit_, _claim is false_, _witness disagrees_ — the
+   gist in one sentence, the code block with its `caption` and diff lines coloured, and beneath it the
+   folded reasoning: one fold per note, each stamped _witness · hh:mm_ or _added afterwards_. What is
+   merely true of the hunk — _+n −m_, _unchanged_, _mechanical_ — is **quiet text beside the path and
+   never a badge**: a page where everything is badged has no emphasis left to spend, and the reader
+   reads the shouting instead of the change. A `minor` step is drawn quiet and its code is folded
    ([How hard to look](#how-hard-to-look-at-one-stop)); a `key` one is ruled in the accent. A fold with a false or disputed claim behind it
-   is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
-   The diff marker is a **column of its own** and never the first character of the code
-   ([The code block](#the-code-block)).
+   is open by default. The diff marker is a **column of its own** and never the first character of the
+   code ([The code block](#the-code-block)).
+
+   **A `region` says in words what it is**, in a line under its gist: this file is not in the pull
+   request, and the author is showing it on purpose. The dashed border and a tag reading _not in this
+   PR_ are a code the reader has to have learnt, and the colophon that teaches it is ten screens
+   below — so beside a caption reading "should this have changed? no" the whole stop is a puzzle. The
+   sentence costs a line and needs nothing learnt.
+
+   **A test file is drawn as the cases it covers.** Where a stop's code declares two or more test
+   names (`testScenarios`), the page lists them as sentences and folds the code: a 278-line new test
+   file answers exactly one question a reviewer has — what does it cover — and a wall of `using`
+   lines answers it nowhere. The names are the code's own, humanised; the code stays a fold away, all
+   of it, because the document [carries its code](#the-document-carries-its-code).
 5. **Covered by.** Under the walk and above the claims, the idea's `coverage` as bare bullets — the
    scenarios its tests cover, named and not explained. Absent where the list is empty. It sits here
    rather than in a section of its own for [the reason tests are never an idea](#tests-are-never-an-idea).
 6. **The claims.** Under the walk, "What the author claims · checked by a second agent": one line per
-   claim with its verdict as a chip, its evidence in the sentence, and a `cant_tell` ending with
-   "You decide."
-7. **The finding.** After the ideas, a boxed section per false claim: a plain headline, the two
-   pieces of code that disagree shown together with captions, the consequence worked out — a table
-   where numbers make it concrete — and a closing paragraph that says how serious it is and whose
-   call it is. Written by the checker from its evidence; the page's most important prose.
+   claim with its verdict as a chip and a `cant_tell` ending with "You decide." **The evidence is
+   folded** under a _how it was checked_ disclosure and the cited pad entry under one of its own, so
+   the line stays a sentence a reader can scan ([Claims](#claims), [Provenance](#provenance)).
+7. **The finding.** After the ideas, a boxed section per false claim: a plain headline, **the first
+   paragraph of the body drawn straight under it** — what is wrong and what it costs — then the two
+   pieces of code that disagree shown together with captions, and the rest of the body folded behind
+   _the rest of the finding_: the consequence worked out, the table where numbers make it concrete,
+   whose call it is. Written by the checker from its evidence; the page's most important prose, which
+   is exactly why its first paragraph is made to carry it. The prompt says as much, so a checker that
+   opens with the setup is the pack to fix, not the fold.
 8. **Where to spend the time.** A numbered list, one entry per idea, in the order the checker says to
    read them, each with the reason. This is `attention` made actionable.
 9. **The colophon.** Folded: how the pack was made, what the dashed boxes mean, and what is fake if
@@ -956,6 +1029,14 @@ cockpit collapses all but one, so a collapsed idea's stops are not on the page t
 lists only the open idea's; clicking an idea there opens it, which is a `Place` change like every
 other way in. The cockpit's also carries what a reader who opens nothing must still see: the idea
 holding a false claim, and the way to the finding.
+
+**The cockpit's rail follows the scroll.** The stop the reader is at is marked, and the rail scrolls
+itself to keep that mark in view. A map that only says where you could go is one you lose your place
+in the moment you scroll: click an entry, read for eighty lines, and the rail still points at where
+you clicked — so the next click is a guess. What is drawn is derived from the scroll and nothing else,
+and it moves **only the rail's own scroller**, never the window: `scrollIntoView` walks up to the page
+and would fight the reader for the scroll they are doing. The companion has no such mark, because it
+runs no script; its rail lists every stop instead, which is the map a static page can be.
 
 The rail is the cockpit's only because the pack became a **page**: inside the modal it was, there was
 no column to spare for it. Below the width where the rail would leave the page too narrow to read, it

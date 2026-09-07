@@ -42,7 +42,7 @@ function checkedPack(): ReviewPack {
     prNumber: 7,
     headSha: HEAD,
     headline: 'The module imports y.',
-    summary: 'Two files change; **the import is the point**.',
+    summary: 'Two files change. **The import is the point**.',
     estimatedMinutes: 4,
     order: ['idea_b', 'idea_a'],
     witnessed: true,
@@ -114,7 +114,7 @@ function checkedPack(): ReviewPack {
             evidence: 'src/unchanged.ts:2 still reads old.',
             finding: {
               headline: 'The deleted constant is still read.',
-              body: 'The build breaks. **Blocking; the author’s call.**',
+              body: 'The build breaks. **Blocking. The author’s call.**',
               step: 1,
               counter: {
                 range: { path: 'src/unchanged.ts', start: 2, end: 2 },
@@ -293,7 +293,8 @@ test('the page draws the masthead, then the gate, then the ideas — and the pul
   assert.match(html, /href="#rp-finding-1"/);
   assert.match(html, /<a[^>]*href="https:\/\/example\.test\/pull\/7"[^>]*>PR 7<\/a>/);
   assert.match(html, /The module imports y\./);
-  assert.match(html, /<strong>the import is the point<\/strong>/);
+  assert.match(html, /Two files change\. The import is the point\./);
+  assert.doesNotMatch(html, /<strong>the import is the point<\/strong>/, 'the author’s bold is flattened');
   assert.match(html, /~4 min/);
 });
 
@@ -314,12 +315,12 @@ test('no gate when nothing is false, and the collapsed row still carries the fla
   assert.match(html, /the surviving reader/);
   assert.match(html, /class="rp-hl-keyword">const<\/span> two = old;/);
   assert.match(html, /step 1 — src\/b\.ts:9/);
-  assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/);
+  assert.match(html, /<strong>Blocking\. The author’s call\.<\/strong>/);
 });
 
 test('opening an idea shows the walk, the marks, the claims and the false claim at the top', () => {
   const html = render(payload(), 'idea_b');
-  const raised = html.indexOf('class="rp-raised"');
+  const raised = html.indexOf('class="rp-raised ');
   const walk = html.indexOf('class="rp-walk"');
   assert.ok(raised >= 0 && walk > raised, 'the false claim is shown at the top of the idea, before its walk');
   assert.match(html, /claim is false/);
@@ -335,7 +336,7 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
 
   const other = render(payload(), 'idea_a');
   assert.match(other, /rp-step [^"]*rp-dashed/, 'a region is drawn dashed');
-  assert.match(other, /not in this PR/);
+  assert.match(other, /This file is not in the pull request/);
   assert.match(other, /the important bit/);
   assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
   assert.match(other, /class="rp-hl-keyword">import<\/span> y <span class="rp-hl-keyword">from<\/span>/);
@@ -344,7 +345,7 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /witness · /);
   assert.match(other, /added afterwards/);
   assert.match(other, /Can’t tell/);
-  assert.match(other, /<strong> You decide\.<\/strong>/);
+  assert.match(other, /<strong class="rp-claim-yours"> You decide\.<\/strong>/);
   assert.match(other, /cites pad entry <code>scr_1<\/code> — the pads have not loaded/);
   assert.match(other, /class="tag t-red tag-fill" title="the checker&#x27;s label">Read</);
 });
@@ -374,7 +375,7 @@ test('a mechanical stop is drawn quiet with its code folded, and a step carries 
   const html = render({ ...payload(), pack }, 'idea_a');
   assert.match(html, /rp-step rp-w-minor/, 'the import block is drawn quiet');
   assert.match(html, /rp-w-normal/, 'the stop beside it is drawn as it always was');
-  assert.match(html, />mechanical</);
+  assert.match(html, /class="rp-step-meta">\+2 · mechanical</, 'the counts and the weight are quiet text');
   assert.match(html, /show the 2\s*lines/);
   assert.match(html, /b\.js/);
   assert.match(html, /class="rp-step-n">02\.1</);
@@ -429,6 +430,37 @@ test('an idea lists the scenarios its tests cover, between the walk and the clai
   assert.ok(walk < covered && covered < claims, 'the scenarios sit under the code and above the claims');
 
   assert.doesNotMatch(render(payload(), 'idea_a'), /Covered by/);
+});
+
+test('the checker’s working is folded, so a claim reads as one sentence', () => {
+  const html = render(payload(), 'idea_a');
+  assert.match(html, /<span class="rp-claim-text">Nothing else imports y\.<\/span>/);
+  assert.match(html, /<details class="rp-evidence"><summary>how it was checked<\/summary>/);
+  assert.match(html, /<div class="rp-evidence-body">grep found one importer\.<\/div>/);
+  assert.doesNotMatch(html, />inferred</, 'the provenance every claim has is drawn as nothing');
+});
+
+test('a new test file is drawn as the cases it covers, with the code a fold away', () => {
+  const pack = checkedPack();
+  pack.ideas[0]!.anchors = [
+    {
+      kind: 'hunk',
+      range: { path: 'Tests/LocalDb.Tests/FirstBindTests.cs', start: 1, end: 40 },
+      code: [
+        '+        public async Task FirstBind_RaisesWorkflowResolve()',
+        '+        public async Task Unmatch_KeepsTheOldGuard()',
+      ],
+      gist: 'Drives the consumer over a real log.',
+      note: null,
+      caption: 'the parity test',
+      mark: null,
+    },
+  ];
+  const html = render(payload({ pack }), 'idea_a');
+  assert.match(html, /The 2 cases it covers/);
+  assert.match(html, /<li>First bind raises workflow resolve<\/li>/);
+  assert.match(html, /<li>Unmatch keeps the old guard<\/li>/);
+  assert.match(html, /show the 2\s*lines/, 'the code is behind a fold, not dropped');
 });
 
 test('an unchecked pack says so and offers the ask; a pack being checked says that instead', () => {

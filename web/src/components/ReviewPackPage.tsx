@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import type {
   ReviewAnchor,
   ReviewAttention,
@@ -32,7 +32,10 @@ import {
   packCurrency,
   packFacts,
   packStanding,
+  plainSummary,
   shortSha,
+  splitBody,
+  testScenarios,
   type FalseClaim,
   type IdeaMarks,
   type NumberedIdea,
@@ -174,6 +177,10 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
  * **Only the open idea's stops.** Every other idea is collapsed, so its steps are
  * not on the page to jump to; clicking an idea here opens it, which is a `Place`
  * change like every other way in.
+ *
+ * **It follows the scroll.** The stop the reader is actually at is marked and kept
+ * in view, so the map answers "where am I" and not only "where could I go" — a rail
+ * that never moves is one a reader loses their place in the moment they scroll.
  * → docs/spec/31-review-packs.md#the-contents-rail
  */
 function Contents({
@@ -189,6 +196,12 @@ function Contents({
   marks: Map<string, IdeaMarks>;
   wrong: FalseClaim[];
 }): JSX.Element {
+  const stops: string[] = [];
+  for (const { idea, number } of numbered.ideas) {
+    stops.push(`rp-i${number}`);
+    if (ideaOpen(openIdea, idea.id)) idea.anchors.forEach((_, i) => stops.push(`rp-s${number}-${i + 1}`));
+  }
+  const here = useHere(stops.join(' '));
   return (
     <nav className="rp-rail" aria-label="Contents">
       {numbered.ideas.map(({ idea, number }) => {
@@ -197,7 +210,8 @@ function Contents({
         return (
           <div className="rp-c-grp" key={idea.id}>
             <a
-              className={`rp-c-idea ${open ? 'rp-c-on' : ''}`}
+              className={`rp-c-idea ${open ? 'rp-c-on' : ''} ${here === `rp-i${number}` ? 'rp-c-here' : ''}`}
+              ref={here === `rp-i${number}` ? keepInView : null}
               href={`#rp-i${number}`}
               onClick={() => {
                 if (!open) onOpenIdea(idea.id);
@@ -211,8 +225,11 @@ function Contents({
             {open && (
               <ol>
                 {idea.anchors.map((anchor, i) => (
-                  <li key={i} className={`rp-c-${anchorWeight(anchor)}`}>
-                    <a href={`#rp-s${number}-${i + 1}`}>
+                  <li
+                    key={i}
+                    className={`rp-c-${anchorWeight(anchor)} ${here === `rp-s${number}-${i + 1}` ? 'rp-c-here' : ''}`}
+                  >
+                    <a ref={here === `rp-s${number}-${i + 1}` ? keepInView : null} href={`#rp-s${number}-${i + 1}`}>
                       <span className="rp-c-n">
                         {pad(number)}.{i + 1}
                       </span>
@@ -239,6 +256,50 @@ function Contents({
   );
 }
 
+/**
+ * Which stop the reader is at, from the scroll.
+ *
+ * `ids` is one space-joined string rather than an array so the effect's dependency
+ * is the list itself and not a new array on every render.
+ */
+function useHere(ids: string): string | null {
+  const [here, setHere] = useState<string | null>(null);
+  useEffect(() => {
+    const read = (): void => {
+      let at: string | null = null;
+      for (const id of ids.split(' ')) {
+        const el = document.getElementById(id);
+        if (el !== null && el.getBoundingClientRect().top <= HERE_LINE) at = id;
+      }
+      setHere(at);
+    };
+    read();
+    window.addEventListener('scroll', read, { passive: true });
+    window.addEventListener('resize', read);
+    return () => {
+      window.removeEventListener('scroll', read);
+      window.removeEventListener('resize', read);
+    };
+  }, [ids]);
+  return here;
+}
+
+const HERE_LINE = 140;
+
+/**
+ * Scrolls the rail — and only the rail — so the marked stop is on it. Never
+ * `scrollIntoView`, which walks up to the window and moves the page the reader
+ * is scrolling.
+ */
+function keepInView(el: HTMLElement | null): void {
+  const rail = el?.closest('.rp-rail');
+  if (el === null || !(rail instanceof HTMLElement)) return;
+  const stop = el.getBoundingClientRect();
+  const view = rail.getBoundingClientRect();
+  if (stop.top < view.top) rail.scrollTop -= view.top - stop.top;
+  else if (stop.bottom > view.bottom) rail.scrollTop += stop.bottom - view.bottom;
+}
+
 function Masthead({ payload, onAsk, askRefusal, onAskRefused }: ReviewPackPageProps): JSX.Element {
   const { pack } = payload;
   const facts = packFacts(pack);
@@ -262,7 +323,7 @@ function Masthead({ payload, onAsk, askRefusal, onAskRefused }: ReviewPackPagePr
         )}
       </div>
       <h1>{pack.headline}</h1>
-      <div className="rp-plain">{renderMarkdown(pack.summary)}</div>
+      <div className="rp-plain">{renderMarkdown(plainSummary(pack.summary))}</div>
       <div className="rp-facts">
         <span>
           <b>{facts.ideas}</b> {facts.ideas === 1 ? 'idea' : 'ideas'}
@@ -562,7 +623,7 @@ function IdeaRow({
       {open && (
         <div className="rp-panel">
           {raised.length > 0 && (
-            <div className="rp-raised">
+            <div className={`rp-raised ${raised.some((c) => c.verdict === 'false') ? 'rp-raised-false' : ''}`}>
               {raised.map((claim) => (
                 <ClaimLine
                   key={idea.claims.indexOf(claim)}
@@ -649,12 +710,6 @@ const ATTENTION_TONE: Record<ReviewAttention, TagTone> = {
   split: 'blue',
 };
 
-const PROVENANCE_TONE: Record<ReviewClaim['provenance']['kind'], TagTone | undefined> = {
-  witnessed: 'blue',
-  disputed: 'amber',
-  inferred: undefined,
-};
-
 function AttentionChip({
   attention,
   overridden,
@@ -704,11 +759,27 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
+/**
+ * One stop of the walk.
+ *
+ * The head carries the path and, of the badges, only the ones that ask something of
+ * the reader — the important bit, a false claim, a witness disagreeing. What is
+ * merely true of the hunk (how many lines it moved, that it is mechanical) is quiet
+ * text: a page where everything is badged is a page with no emphasis left to spend.
+ * A `region` says in words what it is, because "not in this PR" beside a caption
+ * reading "should this have changed? no" is a puzzle the colophon answers ten
+ * screens down.
+ * → docs/spec/31-review-packs.md#the-page
+ */
 function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: number; ideaNumber: number }): JSX.Element {
   const region = anchor.kind === 'region';
   const counts = diffCounts(anchor.code);
   const disputedOrFalse = anchor.mark === 'false' || anchor.mark === 'disputed';
   const weight = anchorWeight(anchor);
+  const scenarios = testScenarios(anchor.range.path, anchor.code);
+  const code = (
+    <CodeBlock code={anchor.code} caption={anchor.caption} dashed={region} diff={!region} path={anchor.range.path} />
+  );
   return (
     <li
       className={`rp-step rp-w-${weight} ${region ? 'rp-dashed' : ''} ${anchor.mark !== null ? `rp-mark-${anchor.mark}` : ''}`}
@@ -719,19 +790,11 @@ function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: numb
           {pad(ideaNumber)}.{index}
         </span>
         <span className="rp-path">{rangeLabel(anchor.range)}</span>
-        {region ? (
-          <Tag dashed>not in this PR</Tag>
-        ) : (
-          <Tag tone="blue">
-            changed {counts.added > 0 && `+${counts.added}`} {counts.removed > 0 && `−${counts.removed}`}
-          </Tag>
-        )}
         {anchor.mark === 'key' && (
           <Tag tone="accent" fill>
             the important bit
           </Tag>
         )}
-        {weight === 'minor' && <Tag>mechanical</Tag>}
         {anchor.mark === 'false' && (
           <Tag tone="red" fill>
             claim is false
@@ -742,29 +805,46 @@ function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: numb
             witness disagrees
           </Tag>
         )}
+        <span className="rp-step-meta">
+          {region
+            ? 'unchanged'
+            : `${counts.added > 0 ? `+${counts.added}` : ''}${counts.added > 0 && counts.removed > 0 ? ' ' : ''}${counts.removed > 0 ? `−${counts.removed}` : ''}`}
+          {weight === 'minor' && !region && ' · mechanical'}
+        </span>
       </div>
       <p className="rp-gist">{anchor.gist}</p>
-      {weight === 'minor' ? (
+      {region && (
+        <p className="rp-region-note">
+          This file is not in the pull request. The author is showing it to you on purpose — either the change cannot be
+          judged without it, or it is the file you would expect to have changed and deliberately did not.
+        </p>
+      )}
+      {scenarios.length > 0 ? (
+        <div className="rp-scenarios">
+          <p className="rp-scenarios-head">
+            The {scenarios.length} {scenarios.length === 1 ? 'case' : 'cases'} it covers
+          </p>
+          <ul>
+            {scenarios.map((name, i) => (
+              <li key={i}>{name}</li>
+            ))}
+          </ul>
+          <details className="rp-minor-code">
+            <summary>
+              show the {anchor.code.length} {anchor.code.length === 1 ? 'line' : 'lines'}
+            </summary>
+            {code}
+          </details>
+        </div>
+      ) : weight === 'minor' ? (
         <details className="rp-minor-code">
           <summary>
             show the {anchor.code.length} {anchor.code.length === 1 ? 'line' : 'lines'}
           </summary>
-          <CodeBlock
-            code={anchor.code}
-            caption={anchor.caption}
-            dashed={region}
-            diff={!region}
-            path={anchor.range.path}
-          />
+          {code}
         </details>
       ) : (
-        <CodeBlock
-          code={anchor.code}
-          caption={anchor.caption}
-          dashed={region}
-          diff={!region}
-          path={anchor.range.path}
-        />
+        code
       )}
       {anchor.note !== null && (
         <details className="rp-why" open={disputedOrFalse}>
@@ -871,6 +951,17 @@ function VerdictChip({ verdict }: { verdict: ReviewVerdict | null }): JSX.Elemen
   );
 }
 
+/**
+ * One claim: the sentence, its verdict, and nothing else on the line.
+ *
+ * The checker's `evidence` is what it ran and read to settle the claim — often a
+ * paragraph of paths and greps. It is the working, not the answer, so it is folded:
+ * a reader scanning verdicts reads sentences, and a reader who doubts one opens it.
+ * `inferred` is the provenance most claims have and it is drawn as nothing, so the
+ * two that mean something — a witness quoted, a witness contradicted — are the ones
+ * that catch the eye.
+ * → docs/spec/31-review-packs.md#claims
+ */
 function ClaimLine({
   claim,
   entries,
@@ -886,43 +977,54 @@ function ClaimLine({
     <div className={`rp-claim ${claim.verdict === 'false' ? 'rp-claim-false' : ''}`}>
       <VerdictChip verdict={claim.verdict} />
       <span className="rp-claim-body">
-        <Tag tone={PROVENANCE_TONE[claim.provenance.kind]}>{claim.provenance.kind}</Tag> {claim.text}
-        {claim.evidence !== null && <span className="rp-evidence"> {claim.evidence}</span>}
-        {claim.verdict === 'cant_tell' && <strong> You decide.</strong>}
+        <span className="rp-claim-text">{claim.text}</span>
+        {claim.provenance.kind === 'disputed' && <Tag tone="amber">witness disagrees</Tag>}
+        {claim.verdict === 'cant_tell' && <strong className="rp-claim-yours"> You decide.</strong>}
         {findingIndex !== null && (
           <>
             {' '}
             <a href={`#rp-finding-${findingIndex}`}>Read the finding</a>
           </>
         )}
+        {claim.evidence !== null && (
+          <details className="rp-evidence">
+            <summary>how it was checked</summary>
+            <div className="rp-evidence-body">{claim.evidence}</div>
+          </details>
+        )}
         {cited !== null && (
-          <blockquote className="rp-entry">
-            {entry !== null ? (
-              <>
-                <span className="rp-stamp">
-                  {entry.authorOriginRef} · {clock(entry.createdAt)}
+          <details className="rp-entry-fold">
+            <summary>
+              {claim.provenance.kind === 'disputed' ? 'the note it contradicts' : 'what the witness wrote'}
+            </summary>
+            <blockquote className="rp-entry">
+              {entry !== null ? (
+                <>
+                  <span className="rp-stamp">
+                    {entry.authorOriginRef} · {clock(entry.createdAt)}
+                  </span>
+                  <div>{entry.note}</div>
+                  {entry.decision && (
+                    <div className="rp-entry-fork">
+                      <b>chose</b> {entry.decision.chose} <b>because</b> {entry.decision.because}
+                      {entry.decision.rejected.length > 0 && (
+                        <>
+                          {' '}
+                          <b>rejected</b>{' '}
+                          {entry.decision.rejected.map((r) => `${r.alternative} — ${r.because}`).join('; ')}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span className="rp-gap">
+                  cites pad entry <code>{cited}</code>
+                  {entries === null ? ' — the pads have not loaded' : ', which is not on either pad'}
                 </span>
-                <div>{entry.note}</div>
-                {entry.decision && (
-                  <div className="rp-entry-fork">
-                    <b>chose</b> {entry.decision.chose} <b>because</b> {entry.decision.because}
-                    {entry.decision.rejected.length > 0 && (
-                      <>
-                        {' '}
-                        <b>rejected</b>{' '}
-                        {entry.decision.rejected.map((r) => `${r.alternative} — ${r.because}`).join('; ')}
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <span className="rp-gap">
-                cites pad entry <code>{cited}</code>
-                {entries === null ? ' — the pads have not loaded' : ', which is not on either pad'}
-              </span>
-            )}
-          </blockquote>
+              )}
+            </blockquote>
+          </details>
         )}
       </span>
     </div>
@@ -943,6 +1045,7 @@ function Finding({
   onSeen: (seen: boolean) => Promise<void>;
 }): JSX.Element {
   const finding: ReviewFinding | null = item.claim.finding;
+  const split = finding === null ? { lead: '', rest: '' } : splitBody(finding.body);
   const step = finding?.step ?? null;
   const marked = step !== null ? (item.idea.anchors[step - 1] ?? null) : null;
   return (
@@ -950,12 +1053,12 @@ function Finding({
       <h3>{finding?.headline ?? item.claim.text}</h3>
       <p className="rp-finding-where">
         Idea {pad(item.number)}, claim {item.claimNumber}: “{item.claim.text}”
-        {item.claim.evidence !== null && <span className="rp-evidence"> {item.claim.evidence}</span>}
       </p>
       {finding === null ? (
         <p className="rp-gap">The claim is marked false but carries no finding — the document is missing one.</p>
       ) : (
         <>
+          <div className="rp-finding-lead">{renderMarkdown(split.lead, refUrls)}</div>
           <div className="rp-pair">
             {marked !== null ? (
               <CodeBlock
@@ -978,7 +1081,12 @@ function Finding({
               />
             )}
           </div>
-          <div className="rp-finding-body">{renderMarkdown(finding.body, refUrls)}</div>
+          {split.rest !== '' && (
+            <details className="rp-finding-more">
+              <summary>the rest of the finding</summary>
+              <div className="rp-finding-body">{renderMarkdown(split.rest, refUrls)}</div>
+            </details>
+          )}
         </>
       )}
       {/*
@@ -996,9 +1104,7 @@ function Finding({
           {seen ? 'Taken — undo' : 'I have taken this'}
         </AsyncButton>
         <span className="rp-finding-seen-note">
-          {seen
-            ? 'Marked as read. Nothing here blocks a merge; this only records that somebody saw it.'
-            : 'Nothing here blocks a merge. Marking it is how the harness can tell a finding that was read from one that was not.'}
+          Nothing here blocks a merge. This only records that somebody read it.
         </span>
       </div>
     </section>
