@@ -1,7 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
-import { planNarrative, planPartInputs } from './planDocument.js';
+import { planAtomInputs, planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import { watchCheckInputs } from '../validation/watchDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
@@ -44,6 +44,7 @@ export function ingestPlanDocument(
   store.recordPlanRevision(plan.id, { narrative, parts: declared });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   withdrawPartAsks(store, retire, AMENDED_PART_RESOLUTION);
+  store.upsertPlanAtoms(plan.id, planAtomInputs(doc));
   const written = store.upsertPlanParts(plan.id, declared);
   const issueNumber = planIssueNumber(originRef);
   for (const part of written.filter(partIsHuman)) {

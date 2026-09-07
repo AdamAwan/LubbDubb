@@ -4,6 +4,7 @@ import type {
   GoalWatch,
   CaveatAnswerInput,
   IssueSpend,
+  PlanAtom,
   PlanCaveatAnswer,
   Plan,
   PlanDiff,
@@ -40,6 +41,7 @@ import { logUsage } from '../cockpit/usage.js';
 export function PlanModal({
   plan,
   parts,
+  atoms,
   checks,
   caveatAnswers,
   watches,
@@ -64,6 +66,7 @@ export function PlanModal({
 }: {
   plan: Plan;
   parts: PlanPartView[];
+  atoms: PlanAtom[];
   checks: ValidationCheck[];
   caveatAnswers: PlanCaveatAnswer[];
   watches: GoalWatch[];
@@ -99,6 +102,7 @@ export function PlanModal({
   const sections = useRef<Record<string, HTMLElement | null>>({});
 
   const live = parts.filter((p) => p.status !== 'retired');
+  const byAtom = new Map(atoms.map((a) => [a.slug, a]));
   const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
   const liveChecks = checks.filter((c) => c.supersededReason === null);
   const settledChecks = liveChecks.filter((c) => c.state === 'passed' || c.state === 'waived').length;
@@ -292,6 +296,7 @@ export function PlanModal({
                       )}
                       <PartBlock
                         part={part}
+                        atoms={(part.atoms ?? []).flatMap((slug) => byAtom.get(slug) ?? [])}
                         seq={idx + 1}
                         queue={queued.get(originOf(part.slug))}
                         focused={part.slug === focused}
@@ -619,6 +624,7 @@ function teaser(body: string): string {
 
 function PartBlock({
   part,
+  atoms,
   seq,
   queue,
   focused,
@@ -628,6 +634,7 @@ function PartBlock({
   defaultProfile,
 }: {
   part: PlanPartView;
+  atoms: PlanAtom[];
   seq: number;
   queue: QueueItem | undefined;
   focused: boolean;
@@ -705,6 +712,7 @@ function PartBlock({
             {part.scope}
           </div>
         )}
+        {atoms.length > 0 && <Atoms atoms={atoms} />}
         {part.outsideScope.length > 0 && (
           <div className="pm-drift">
             <b>wrote outside its scope</b>
@@ -738,6 +746,50 @@ function PartBlock({
         */}
         <div className="pm-stack">{stackLine(part)}</div>
       </div>
+    </div>
+  );
+}
+
+function Atoms({ atoms }: { atoms: PlanAtom[] }) {
+  return (
+    <div className="pm-atoms">
+      <span className="pm-section-label">
+        {atoms.length} atom{atoms.length === 1 ? '' : 's'} — each one could land and be rolled back on its own
+      </span>
+      {atoms.map((atom) => (
+        <div className="pm-atom" key={atom.slug}>
+          <div className="pm-atom-head">
+            <span className="pm-atom-title">{atom.title}</span>
+            <Tag lower>{atom.slug}</Tag>
+            {atom.dependsOn.length > 0 && <span className="muted small">after {quoteList(atom.dependsOn)}</span>}
+          </div>
+          <div className="pm-atom-intent">{atom.intent}</div>
+          {atom.acceptance !== null && (
+            <div className="pm-field">
+              <b>done when</b>
+              {atom.acceptance}
+            </div>
+          )}
+          {atom.touches.length > 0 && (
+            <div className="pm-atom-paths">
+              {atom.touches.map((path) => (
+                <code key={path}>{path}</code>
+              ))}
+            </div>
+          )}
+          {/* A route the planner weighed and did not take. Drawn as what it is —
+              a reason from before the code existed — rather than as a claim about
+              what the code now does. */}
+          {atom.rejected.map((r) => (
+            <div className="pm-atom-not" key={r.route}>
+              <b>not</b>
+              <span>
+                {r.route} <i>{r.because}</i>
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

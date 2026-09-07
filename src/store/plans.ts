@@ -3,6 +3,9 @@ import { nanoid } from 'nanoid';
 import { liveParts, partSettled } from '../plans/parts.js';
 import type {
   PartOutcomeKind,
+  PlanAtom,
+  PlanAtomInput,
+  PlanAtomRejection,
   PartSize,
   Plan,
   PlanEvidence,
@@ -35,8 +38,14 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     document: 'TEXT',
     discussing: 'INTEGER NOT NULL DEFAULT 0',
   },
+  plan_atoms: {
+    touches: 'TEXT',
+    acceptance: 'TEXT',
+    rejected: 'TEXT',
+  },
   plan_parts: {
     touches: 'TEXT',
+    atoms: 'TEXT',
     rationale: 'TEXT',
     acceptance: 'TEXT',
     acceptance_met: 'TEXT',
@@ -271,6 +280,7 @@ export class PlanStore {
         title: input.title,
         scope: input.scope,
         touches: input.touches,
+        atoms: input.atoms ?? prev?.atoms,
         rationale: input.rationale,
         acceptance: input.acceptance,
         acceptanceMet: prev?.acceptanceMet ?? [],
@@ -293,16 +303,16 @@ export class PlanStore {
       return part;
     });
     const stmt = this.ctx.db.prepare(
-      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
+      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, atoms, rationale, acceptance,
          acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
          blocked_by, task_id, created_at, updated_at)
-       VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @rationale, @acceptance,
+       VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @atoms, @rationale, @acceptance,
          @acceptanceMet, @size, @expectedKind, @profile,
          @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
          @blockedBy, @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
-         touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
+         touches=excluded.touches, atoms=excluded.atoms, rationale=excluded.rationale, acceptance=excluded.acceptance,
          size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
          depends_on=excluded.depends_on, status=excluded.status,
          blocked_reason=excluded.blocked_reason, blocked_by=excluded.blocked_by,
@@ -314,6 +324,7 @@ export class PlanStore {
           ...p,
           dependsOn: JSON.stringify(p.dependsOn),
           touches: JSON.stringify(p.touches),
+          atoms: p.atoms === undefined ? null : JSON.stringify(p.atoms),
           acceptanceMet: JSON.stringify(p.acceptanceMet),
         });
     });
@@ -326,6 +337,45 @@ export class PlanStore {
       .prepare(`SELECT * FROM plan_parts WHERE plan_id=? ORDER BY seq ASC, slug ASC`)
       .all(planId) as PlanPartRow[];
     return rows.map(rowToPlanPart);
+  }
+
+  upsertPlanAtoms(planId: string, atoms: PlanAtomInput[]): PlanAtom[] {
+    const ts = this.ctx.now();
+    const rows: PlanAtom[] = atoms.map((atom) => ({ id: `${planId}:${atom.slug}`, planId, ...atom }));
+    const stmt = this.ctx.db.prepare(
+      `INSERT INTO plan_atoms (id, plan_id, slug, seq, title, intent, touches, acceptance, depends_on, rejected,
+         created_at, updated_at)
+       VALUES (@id, @planId, @slug, @seq, @title, @intent, @touches, @acceptance, @dependsOn, @rejected, @at, @at)
+       ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, intent=excluded.intent,
+         touches=excluded.touches, acceptance=excluded.acceptance, depends_on=excluded.depends_on,
+         rejected=excluded.rejected, updated_at=excluded.updated_at`,
+    );
+    const write = this.ctx.db.transaction((all: PlanAtom[]) => {
+      const keep = all.map((a) => a.slug);
+      const holes = keep.map(() => '?').join(',');
+      this.ctx.db
+        .prepare(
+          keep.length === 0
+            ? `DELETE FROM plan_atoms WHERE plan_id=?`
+            : `DELETE FROM plan_atoms WHERE plan_id=? AND slug NOT IN (${holes})`,
+        )
+        .run(planId, ...keep);
+      for (const atom of all)
+        stmt.run({
+          ...atom,
+          touches: JSON.stringify(atom.touches),
+          dependsOn: JSON.stringify(atom.dependsOn),
+          rejected: JSON.stringify(atom.rejected),
+          at: ts,
+        });
+    });
+    write(rows);
+    return rows;
+  }
+
+  listAllPlanAtoms(): PlanAtom[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM plan_atoms ORDER BY plan_id ASC, seq ASC`).all() as PlanAtomRow[];
+    return rows.map(rowToPlanAtom);
   }
 
   listAllPlanParts(): PlanPart[] {
@@ -549,6 +599,7 @@ interface PlanPartRow {
   title: string;
   scope: string;
   touches: string | null | undefined;
+  atoms: string | null | undefined;
   rationale: string | null | undefined;
   acceptance: string | null | undefined;
   acceptance_met: string | null | undefined;
@@ -600,6 +651,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     title: r.title,
     scope: r.scope,
     touches: parseStringArray(r.touches),
+    atoms: r.atoms === null || r.atoms === undefined ? undefined : parseStringArray(r.atoms),
     rationale: r.rationale ?? null,
     acceptance: r.acceptance ?? null,
     acceptanceMet: parseStringArray(r.acceptance_met),
@@ -619,6 +671,50 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+interface PlanAtomRow {
+  id: string;
+  plan_id: string;
+  slug: string;
+  seq: number;
+  title: string;
+  intent: string;
+  touches: string | null | undefined;
+  acceptance: string | null | undefined;
+  depends_on: string;
+  rejected: string | null | undefined;
+}
+
+function rowToPlanAtom(r: PlanAtomRow): PlanAtom {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    slug: r.slug,
+    seq: r.seq,
+    title: r.title,
+    intent: r.intent,
+    touches: parseStringArray(r.touches),
+    acceptance: r.acceptance ?? null,
+    dependsOn: parseStringArray(r.depends_on),
+    rejected: parseRejected(r.rejected),
+  };
+}
+
+function parseRejected(raw: string | null | undefined): PlanAtomRejection[] {
+  if (raw === null || raw === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry): PlanAtomRejection[] => {
+      if (typeof entry !== 'object' || entry === null) return [];
+      const { route, because } = entry as Record<string, unknown>;
+      if (typeof route !== 'string' || typeof because !== 'string') return [];
+      return [{ route, because }];
+    });
+  } catch {
+    return [];
+  }
 }
 
 function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
@@ -762,6 +858,7 @@ function parseRevisionParts(raw: string): PlanPartInput[] {
           title: text('title') ?? bag.slug,
           scope: text('scope') ?? '',
           touches: parseStringArray(JSON.stringify(bag.touches ?? [])),
+          atoms: Array.isArray(bag.atoms) ? parseStringArray(JSON.stringify(bag.atoms)) : undefined,
           dependsOn: parseStringArray(JSON.stringify(bag.dependsOn ?? [])),
           rationale: text('rationale'),
           acceptance: text('acceptance'),

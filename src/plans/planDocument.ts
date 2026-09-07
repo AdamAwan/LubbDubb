@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ValidationSchema } from '../validation/checkDocument.js';
 import { WatchSchema } from '../validation/watchDocument.js';
-import type { PlanNarrative, PlanPartInput } from '../types.js';
+import type { PlanAtomInput, PlanNarrative, PlanPartInput } from '../types.js';
 
 // → docs/spec/08-planning.md
 
@@ -23,6 +23,29 @@ const EvidenceSchema = z.object({
   note: z.string().min(1).optional(),
 });
 
+const MAX_REJECTED = 8;
+
+const RejectedSchema = z.object({
+  route: z.string().min(1),
+  because: z.string().min(1),
+});
+
+const AtomSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+  title: z.string().min(1),
+  intent: z.string().min(1),
+  touches: z.array(z.string().min(1)).max(MAX_TOUCHES).default([]),
+  acceptance: z.string().min(1).optional(),
+  dependsOn: z.array(z.string().min(1)).default([]),
+  rejected: z
+    .array(RejectedSchema)
+    .default([])
+    .transform((list) => (list.length > MAX_REJECTED ? list.slice(0, MAX_REJECTED) : list)),
+});
+
 const PartSchema = z.object({
   slug: z
     .string()
@@ -31,6 +54,7 @@ const PartSchema = z.object({
   title: z.string().min(1),
   scope: z.string().min(1),
   touches: z.array(z.string().min(1)).max(MAX_TOUCHES).default([]),
+  atoms: z.array(z.string().min(1)).default([]),
   size: z.enum(['s', 'm', 'l']).optional(),
   dependsOn: z.array(z.string().min(1)).default([]),
   rationale: z.string().min(1).optional(),
@@ -59,6 +83,7 @@ const PlanDocumentSchema = z
       .min(1)
       .transform((s) => (s.length > MAX_PLAN_DOCUMENT_CHARS ? s.slice(0, MAX_PLAN_DOCUMENT_CHARS) : s))
       .optional(),
+    atoms: z.array(AtomSchema).default([]),
     parts: z.array(PartSchema).default([]),
     validation: ValidationSchema.optional(),
     watch: WatchSchema.optional(),
@@ -100,7 +125,110 @@ const PlanDocumentSchema = z
         message: `dependency cycle: ${cycle.join(' -> ')}`,
       });
     }
+    refineAtoms(doc, ctx);
   });
+
+function refineAtoms(doc: { atoms: AtomInput[]; parts: { slug: string; atoms: string[] }[] }, ctx: z.RefinementCtx) {
+  const refuse = (message: string, path: 'atoms' | 'parts' = 'atoms'): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  };
+  const known = new Set<string>();
+  for (const atom of doc.atoms) {
+    if (known.has(atom.slug)) refuse(`duplicate atom "${atom.slug}"`);
+    known.add(atom.slug);
+  }
+  for (const atom of doc.atoms) {
+    for (const dep of atom.dependsOn) {
+      if (dep === atom.slug) refuse(`atom "${atom.slug}" depends on itself`);
+      else if (!known.has(dep)) refuse(`atom "${atom.slug}" depends on unknown atom "${dep}"`);
+    }
+  }
+
+  const carriers = new Map<string, string[]>();
+  for (const part of doc.parts) {
+    for (const slug of part.atoms) {
+      if (!known.has(slug)) {
+        refuse(`part "${part.slug}" carries unknown atom "${slug}"`, 'parts');
+        continue;
+      }
+      carriers.set(slug, [...(carriers.get(slug) ?? []), part.slug]);
+    }
+  }
+  for (const atom of doc.atoms) {
+    const holders = carriers.get(atom.slug) ?? [];
+    if (holders.length === 0) {
+      refuse(`atom "${atom.slug}" is carried by no part — nobody is scheduled to do it`);
+    } else if (holders.length > 1) {
+      refuse(
+        `atom "${atom.slug}" is carried by ${holders.map((s) => `"${s}"`).join(' and ')} — one atom, one part`,
+        'parts',
+      );
+    }
+  }
+
+  const partOf = new Map<string, string>(
+    [...carriers].flatMap(([slug, holders]) => (holders.length === 1 ? [[slug, holders[0]] as [string, string]] : [])),
+  );
+  const induced = inducedPartCycle(doc.atoms, partOf);
+  if (induced) {
+    refuse(
+      `atom "${induced.atom}" depends on "${induced.dep}", which puts parts "${induced.from}" and "${induced.to}" ` +
+        `in a cycle: ${induced.path.join(' -> ')}`,
+      'parts',
+    );
+  }
+}
+
+interface InducedCycle {
+  atom: string;
+  dep: string;
+  from: string;
+  to: string;
+  path: string[];
+}
+
+function inducedPartCycle(atoms: AtomInput[], partOf: Map<string, string>): InducedCycle | null {
+  const edges = new Map<string, { to: string; atom: string; dep: string }[]>();
+  for (const atom of atoms) {
+    const from = partOf.get(atom.slug);
+    if (from === undefined) continue;
+    for (const dep of atom.dependsOn) {
+      const to = partOf.get(dep);
+      if (to === undefined || to === from) continue;
+      edges.set(from, [...(edges.get(from) ?? []), { to, atom: atom.slug, dep }]);
+    }
+  }
+  const settled = new Set<string>();
+  const onPath = new Set<string>();
+  const path: string[] = [];
+  const walk = (part: string): InducedCycle | null => {
+    if (settled.has(part)) return null;
+    onPath.add(part);
+    path.push(part);
+    for (const edge of edges.get(part) ?? []) {
+      if (onPath.has(edge.to)) {
+        return {
+          atom: edge.atom,
+          dep: edge.dep,
+          from: part,
+          to: edge.to,
+          path: [...path.slice(path.indexOf(edge.to)), edge.to],
+        };
+      }
+      const found = walk(edge.to);
+      if (found) return found;
+    }
+    onPath.delete(part);
+    path.pop();
+    settled.add(part);
+    return null;
+  };
+  for (const start of edges.keys()) {
+    const found = walk(start);
+    if (found) return found;
+  }
+  return null;
+}
 
 function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): string[] | null {
   const deps = new Map(parts.map((p) => [p.slug, p.dependsOn]));
@@ -127,6 +255,8 @@ function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): st
   }
   return null;
 }
+
+type AtomInput = z.infer<typeof AtomSchema>;
 
 export type PlanDocument = z.infer<typeof PlanDocumentSchema>;
 
@@ -156,7 +286,8 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     seq: index + 1,
     title: part.title,
     scope: part.scope,
-    touches: part.touches,
+    touches: part.touches.length > 0 ? part.touches : atomTouches(doc, part.atoms),
+    atoms: part.atoms,
     dependsOn: part.dependsOn,
     rationale: part.rationale ?? null,
     acceptance: part.acceptance ?? null,
@@ -164,6 +295,25 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     expectedKind: part.expectedKind ?? null,
     profile: part.profile ?? null,
   }));
+}
+
+export function planAtomInputs(doc: PlanDocument): PlanAtomInput[] {
+  return doc.atoms.map((atom, index) => ({
+    slug: atom.slug,
+    seq: index + 1,
+    title: atom.title,
+    intent: atom.intent,
+    touches: atom.touches,
+    acceptance: atom.acceptance ?? null,
+    dependsOn: atom.dependsOn,
+    rejected: atom.rejected,
+  }));
+}
+
+function atomTouches(doc: PlanDocument, slugs: string[]): string[] {
+  const carried = new Set(slugs);
+  const paths = new Set(doc.atoms.filter((a) => carried.has(a.slug)).flatMap((a) => a.touches));
+  return [...paths].slice(0, MAX_TOUCHES);
 }
 
 export function planNarrative(doc: PlanDocument): PlanNarrative {

@@ -2782,8 +2782,6 @@ select:disabled {
   }
 }
 
-
-
 /* -- Parts ---------------------------------------------------------------- */
 /* Where a part wrote outside its declaration, and where a held part says why.
    Loud on purpose: both are the plan disagreeing with reality, which is the one
@@ -2817,6 +2815,61 @@ select:disabled {
   gap: 4px;
   margin-left: auto;
 }
+/* The atoms a part carries — the pieces of it that could each have landed alone.
+   Read-only here: the planner declared them and the grouping is the part's, so the
+   sheet states them rather than offering a verb. Set in from the part's left edge,
+   because they are what the part is made of rather than more fields on it. */
+.pm-atoms {
+  margin-top: 7px;
+  padding-left: 9px;
+  border-left: 1px solid var(--border);
+}
+.pm-atom {
+  margin-top: 6px;
+}
+.pm-atom-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.pm-atom-title {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.pm-atom-intent {
+  font-size: 12px;
+  margin-top: 2px;
+}
+.pm-atom-paths {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+.pm-atom-paths code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.pm-atom-not {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pm-atom-not b {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.pm-atom-not i {
+  font-style: normal;
+  color: var(--muted);
+}
+
 /* The acceptance criteria — what this part is judged done by. Read-only: the sheet
    states them, it does not settle them. */
 .pm-accept {

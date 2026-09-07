@@ -528,6 +528,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   title       TEXT NOT NULL,
   scope       TEXT NOT NULL,          -- files/areas this part owns, for the prompt
   touches     TEXT,                   -- JSON array of paths: the same claim, checkable against what was written
+  atoms       TEXT,                   -- JSON array of plan_atoms slugs this part carries; null = the plan predates atoms
   rationale   TEXT,                   -- why this is its own PR
   acceptance  TEXT,                   -- what makes this part done
   acceptance_met TEXT,                -- JSON array of the criteria a reviewer has confirmed
@@ -544,6 +545,28 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   blocked_reason TEXT,                -- why, while status is blocked; cleared with it
   blocked_by  TEXT,                   -- collision | declined: which of the two blockers, for readers that must tell them apart
   task_id     TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  UNIQUE (plan_id, slug)
+);
+
+-- The atoms of a plan: the smallest pieces of it that could land, be reviewed and
+-- be rolled back on their own. Flat, and the grouping into parts lives on
+-- plan_parts.atoms rather than here, so an atom keeps its slug across a regroup.
+-- A plan written before atoms existed has no rows here and reads exactly as it
+-- did — nothing is backfilled, because one atom per part would put a declaration
+-- in front of a reviewer that no planner ever wrote.
+CREATE TABLE IF NOT EXISTS plan_atoms (
+  id          TEXT PRIMARY KEY,       -- "<plan_id>:<atom slug>"
+  plan_id     TEXT NOT NULL,
+  slug        TEXT NOT NULL,
+  seq         INTEGER NOT NULL,       -- document order
+  title       TEXT NOT NULL,
+  intent      TEXT NOT NULL,          -- why this piece exists, in the planner's words
+  touches     TEXT,                   -- JSON array of paths
+  acceptance  TEXT,                   -- what makes this atom done; null = unstated
+  depends_on  TEXT NOT NULL,          -- JSON array of sibling atom slugs
+  rejected    TEXT,                   -- JSON array of {route, because}: the routes this atom did not take
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   UNIQUE (plan_id, slug)
@@ -1879,6 +1902,7 @@ CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
+CREATE INDEX IF NOT EXISTS idx_plan_atoms_plan ON plan_atoms(plan_id);
 CREATE INDEX IF NOT EXISTS idx_validation_checks_goal ON validation_checks(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);

@@ -59,6 +59,84 @@ line in a document, and after the fact it is an amendment, a restarted part, and
 somebody has already read. Rule `pr-split` ([05](05-dispatcher.md)) is the late half of the same pair,
 for the seam that is only visible once the code exists.
 
+## Atoms — the pieces a part is made of
+
+**An atom is the smallest piece of a change that could land, be reviewed and be rolled back on its
+own without breaking the tree.** Not the smallest piece imaginable: the smallest _independently
+revertable_ one. A plan declares atoms as a flat top-level list, and each part names the slugs it
+carries — so the atoms are what the work _is_, and the parts are where the merge boundaries were
+drawn through it.
+
+Flat rather than nested inside their part, because regrouping is the operator's act and it has to be
+cheap: nested, moving an atom between parts is a document rewrite that carries its prose with it;
+flat, it is one string moving between two arrays, and an atom's slug survives the move. That is what
+will later let a commit and a review-pack idea both name the same atom.
+
+**The criterion is revertability, never size, and this is the whole risk in the feature.** Asked for
+the smallest possible pieces a model returns `add the type` / `add the field` / `add the test` —
+fourteen slices that must all land together, which is more ceremony for no decision anyone can
+actually make. `atomNote` (`src/plans/atoms.ts`) is **appended** to the planner's rendered prompt
+beside `budgetNote`, never interpolated as a placeholder, for the reason
+[05](05-dispatcher.md#prompt-templates) gives: `loadPromptTemplates` rejects only _unknown_
+placeholders, so a new `{atoms}` token would be dropped in silence by exactly the deployments that
+customised most. It gives the test as a question to answer per atom — could this land on its own, be
+reviewed on its own, and be rolled back on its own without breaking the tree? — and says plainly that
+a plan is not better for having more atoms in it. **Nothing counts them**: no refusal reads the atom
+count, for the same reason no refusal reads the part count, and a count check would put size back as
+the criterion by the back door.
+
+`rejected` is the field per atom worth the most and the one nothing else can recover: `alternatives`
+is why this approach for the whole plan, `rejected` is why _this piece_ is written this way. Both
+stay.
+
+**Everything about atoms is a reading.** No atom is dispatched for, no branch is cut from one, and
+nothing about them blocks a merge. `plan_parts`, `PlanReconciler`, `partBase`, `dependencySatisfied`,
+branches and dispatch are untouched by them: a part is still a part.
+
+### An atomless plan is today's plan, on every arm
+
+A plan that declares no atoms behaves exactly as it did before they existed — the sheet draws its
+parts as it drew them, the part prompt says nothing extra, and nothing downstream reads a missing
+list. That is not politeness to old rows: a human-authored pull request, a replan of a live plan and
+a deployment mid-upgrade all pass through the same code, and each of them has to keep working.
+`plan_atoms` is empty and `plan_parts.atoms` is null for every plan written before this, and null is
+the right answer for them — [14](14-persistence.md#atoms) says why nothing is backfilled.
+
+### What the schema refuses
+
+Beside the checks on parts above, `PlanDocumentSchema`'s refinement adds:
+
+- **Every atom is carried by exactly one part.** An atom no part names is work nobody is scheduled to
+  do; an atom two parts name is two agents on one piece. Both are refused, naming the atom — and the
+  double names both parts. A part naming an atom the document does not declare is refused the same
+  way.
+- **The part graph induced by atom dependencies has no cycle.** Atom dependencies are resolved to the
+  parts that carry them, and a cycle in _that_ graph is refused naming both atoms **and** both parts.
+  This is the refusal that must be loud: a grouping that induces a cycle is a part held `pending`
+  forever with nothing red — the failure mode [33](33-story-sequencing.md#fail-open) exists to avoid
+  one layer up. A dependency between two atoms _inside_ one part is not a cycle and is not refused:
+  it is inside the merge boundary, which is what grouping them was for.
+- An atom slug is unique within the document, matches the same kebab-case pattern as a part's, and
+  may not depend on itself or on an atom the document does not declare.
+
+**`part.touches` derives as the union of its atoms' `touches` when the part states none**, so the
+field keeps the meaning it had and `scopeDrift` keeps working unchanged. A part that states its own
+`touches` keeps them: the part's claim is the one drift is measured against.
+
+### What is built, and what is not
+
+Built: the atoms in the document and the store, the refusals above, `atomNote`, and the plan sheet
+drawing a part's atoms **read-only** — the title, the intent, the paths, the acceptance, the routes
+the planner rejected. Nothing on that surface is a control.
+
+Not built yet, and named here so the shape is not reinvented: _regrouping_ (an operator surface off
+the plan panel writing an amended document through the existing `awaiting_approval` amendment route —
+there is deliberately no second write path into `plan_parts`); _one commit per atom_ from the part
+agent, which would grow `partDeclarationNote`; and _the review pack keyed on the atom_
+([31](31-review-packs.md)), where an idea would carry the atom it corresponds to and an idea the
+atoms do not cover is a finding rather than an error. Until those land, `partDeclarationNote` says
+nothing about atoms and a pack derives its ideas exactly as it does today.
+
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.
@@ -223,7 +301,20 @@ that cannot point at what already does the thing is not sure enough to say this.
   "reason": "<one sentence: why this shape>",
   "diagnosis": "<what is actually wrong>",
   "approach": "<what is going to be done about it>",
-  "parts": [{ "slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [] }],
+  "atoms": [
+    {
+      "slug": "catalog-module",
+      "title": "...",
+      "intent": "<why this piece exists>",
+      "touches": ["src/store/plans.ts"],
+      "acceptance": "...",
+      "dependsOn": [],
+      "rejected": [{ "route": "<what was not done>", "because": "<why not>" }]
+    }
+  ],
+  "parts": [
+    { "slug": "schema", "title": "...", "scope": "src/store/...", "atoms": ["catalog-module"], "dependsOn": [] }
+  ],
   "validation": { "resources": [], "checks": [] }
 }
 ```
@@ -250,6 +341,10 @@ is a plan with one part`), because the deployments most likely to submit a partl
   walk is depth-first over **every** edge, not down a single chain: while arity was capped at one a
   chain walk _was_ the whole graph, but the moment a part may name several a cycle reachable only
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
+
+- `atoms` is optional and defaults to empty, and each part's `atoms` likewise. The refusals over them
+  are in [Atoms](#atoms--the-pieces-a-part-is-made-of) above; an atom's `slug`, `title` and `intent`
+  are non-empty, `touches` is capped like a part's, and `rejected` is capped at eight entries.
 
 `validation` is the executable form of the `verification` narrative below — how anyone checks the
 _goal_ was met, as steps rather than as a paragraph. Optional, read whatever the plan's size, and owned

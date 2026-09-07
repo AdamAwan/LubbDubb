@@ -123,6 +123,8 @@ import type {
   PetReset,
   PetSpecies,
   Plan,
+  PlanAtom,
+  PlanAtomInput,
   PlanPart,
   PlanPartInput,
   PullRequest,
@@ -629,6 +631,12 @@ export class Store {
   }
   listAllPlanParts(): PlanPart[] {
     return this.plans.listAllPlanParts();
+  }
+  upsertPlanAtoms(planId: string, atoms: PlanAtomInput[]): PlanAtom[] {
+    return this.plans.upsertPlanAtoms(planId, atoms);
+  }
+  listAllPlanAtoms(): PlanAtom[] {
+    return this.plans.listAllPlanAtoms();
   }
   updatePlanPart(id: string, patch: Parameters<PlanStore['updatePlanPart']>[1]): PlanPart | null {
     return this.plans.updatePlanPart(id, patch);

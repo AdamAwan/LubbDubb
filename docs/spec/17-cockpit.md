@@ -5835,6 +5835,15 @@ approve a plan to record a judgement about work that has not been done
 wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
 exists to surface.
 
+**A part's atoms draw under it, read-only.** Where the planner declared them
+([08](08-planning.md#atoms--the-pieces-a-part-is-made-of)), each atom shows its title, its intent,
+what it would touch, what it is done when, and the routes the planner rejected and why — the last of
+these drawn as what it is, a reason from before any code existed, rather than as a claim about what
+the code now does. There is no control in the block: the grouping is the operator's act but
+_regrouping_ is not built, so offering half of it here would be a surface that looks editable and is
+not. A part with no atoms draws exactly what it drew before, which is every part of every plan
+written before atoms existed.
+
 **A part in review carries a restart**, beside its PR chip: a two-step `ConfirmButton` that closes the
 pull request, drops the branch and puts the part back to `ready`
 ([08](08-planning.md#restarting-a-part)). Offered only on `in_review`, which is exactly the state that

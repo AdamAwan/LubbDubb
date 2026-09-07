@@ -91,6 +91,7 @@ export type {
   ViewerAssignment,
   AcceptanceCriterion,
   Plan,
+  PlanAtom,
   PlanCaveat,
   PlanCaveatAnswer,
   CaveatAnswerInput,

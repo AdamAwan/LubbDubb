@@ -118,6 +118,7 @@ type PartSeed = Omit<
   | 'outcomeRef'
   | 'outcomeSummary'
   | 'touches'
+  | 'atoms'
   | 'acceptanceMet'
   | 'size'
 > &
@@ -130,6 +131,7 @@ function demoPart(seed: PartSeed): PlanPartView {
   const part: PlanPart = {
     expectedKind: null,
     touches: [],
+    atoms: [],
     acceptanceMet: [],
     size: null,
     outcomeKind: null,
@@ -1388,9 +1390,41 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     planCaveatAnswers: [],
+    planAtoms: [
+      {
+        id: 'plan-390:catalog-module',
+        planId: 'plan-390',
+        slug: 'catalog-module',
+        seq: 1,
+        title: 'A catalog module that names every job type',
+        intent: 'One place a payload schema can be looked up from, so the enqueue path has something to ask.',
+        touches: ['packages/jobs/src/catalog.ts'],
+        acceptance: 'Every job type resolves to a schema, and an unknown one throws by name.',
+        dependsOn: [],
+        rejected: [
+          {
+            route: 'Keep the schemas where they are and export a lookup map from each module.',
+            because: 'The map and the modules can disagree, and nothing would notice which one the enqueue read.',
+          },
+        ],
+      },
+      {
+        id: 'plan-390:move-schemas',
+        planId: 'plan-390',
+        slug: 'move-schemas',
+        seq: 2,
+        title: 'Move the existing schemas into the catalog',
+        intent: 'The move is behaviour-free: everything still imports them from where it did.',
+        touches: ['packages/jobs/src/'],
+        acceptance: 'No caller changed, and the old paths still re-export.',
+        dependsOn: ['catalog-module'],
+        rejected: [],
+      },
+    ],
     planParts: [
       demoPart({
         id: 'plan-390:schemas',
+        atoms: ['catalog-module', 'move-schemas'],
         planId: 'plan-390',
         slug: 'schemas',
         seq: 1,
@@ -2893,6 +2927,7 @@ export function demoPlanHistory(planId: string): PlanHistory {
     title: over.slug,
     scope: '',
     touches: [],
+    atoms: [],
     dependsOn: [],
     rationale: null,
     acceptance: null,
