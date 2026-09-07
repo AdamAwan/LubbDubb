@@ -4,6 +4,7 @@ import type {
   SetupPayload,
   TaskSummary,
   AgentFlag,
+  EjectionView,
   OrphanedWork,
   Escalation,
   Proposal,
@@ -37,6 +38,7 @@ export interface CockpitView {
   crashed: OrphanedWork[];
   live: Agent[];
   deskRuns: DeskRun[];
+  ejected: EjectionView[];
   readying: ReadyingAction[];
   upNext: QueueItem[];
   past: Agent[];
@@ -222,6 +224,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     crashed,
     live,
     deskRuns: buildDeskRuns(state),
+    ejected: (state.ejections ?? []).filter((e) => e.settledAt === null),
     readying: state.readying,
     upNext: buildUpNext(state, live),
     past,

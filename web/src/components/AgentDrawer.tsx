@@ -7,6 +7,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
 import { Modal } from './Modal.js';
+import { EjectModal } from './Ejection.js';
 import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { Button } from './button.js';
@@ -29,6 +30,7 @@ export function AgentDrawer({
   onClose,
   onRespond,
   onKill,
+  onEject,
   onComplete,
   onInterrupt,
   onResume,
@@ -44,11 +46,13 @@ export function AgentDrawer({
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
+  onEject?: (reason: string) => Promise<unknown>;
   onComplete: () => Promise<unknown> | unknown;
   onInterrupt: () => Promise<unknown> | unknown;
   onResume: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
+  const [ejecting, setEjecting] = useState(false);
   const [files, setFiles] = useState<AgentFile[]>([]);
   const [liveIsWhole, setLiveIsWhole] = useState(true);
   const [text, setText] = useState('');
@@ -141,6 +145,13 @@ export function AgentDrawer({
               pendingLabel="Finishing…"
               onConfirm={onComplete}
             />
+          )}
+          {/* Drawn between the two that cost nothing and the one that throws the
+              conversation away, in the order of what each costs. */}
+          {isLive && onEject !== undefined && (
+            <Button onClick={() => setEjecting(true)} title="Stop this agent and hold its work for you">
+              Eject…
+            </Button>
           )}
           {agent.status !== 'done' && (
             <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
@@ -244,6 +255,14 @@ export function AgentDrawer({
             Send
           </SubmitButton>
         </form>
+      )}
+      {ejecting && onEject !== undefined && (
+        <EjectModal
+          agentId={agent.id}
+          title={task ? task.title : agent.id}
+          onEject={onEject}
+          onClose={() => setEjecting(false)}
+        />
       )}
     </Modal>
   );

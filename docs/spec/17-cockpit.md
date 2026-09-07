@@ -3028,13 +3028,19 @@ entry leaving with nobody having pressed anything — is visible in the Pages bu
 
 ### Work a person took off the fleet
 
-When [35](35-ejection.md#in-the-cockpit) is built, the Fleet card gains one more kind of row: a slot an
-operator **ejected** an agent out of and is now holding themselves, drawn as a peer of the running
-agents rather than tucked into a detail panel. It is the only bench obligation that is `yours` while
-consuming a slot, and the card is where that second half has to be said — a slot spoken for is part of
-the answer to "what is the harness doing", which is the question this card exists for. The row carries
-the goal, the branch, the liveness line the ejection's own heartbeat feeds, and the time left before
-the harness takes the work back.
+The Fleet card carries one more kind of row: a slot an operator **ejected** an agent out of and is now
+holding themselves, drawn as a peer of the running agents rather than tucked into a detail panel. A
+slot spoken for is part of the answer to "what is the harness doing", which is the question this card
+exists for. The row carries the goal, the branch, the liveness line the ejection's own heartbeat feeds
+(or `never contacted`, which is its own state), and the time left before the harness takes the work
+back; its controls are the deep link into the operator's own Claude Code — rooted at the **worktree**,
+not `repoRoot` — and the three ways of handing it back.
+
+It wears the desk run's **violet**, because both rows are a person at a keyboard rather than a
+dispatch, and the two are told apart by fill and stroke: the desk run's lamp is hollow and its edge
+dashed because it takes no slot, and the ejection's lamp is filled and its edge solid because it takes
+one. Neither is a link to a transcript, so neither row is a button.
+→ [35](35-ejection.md#in-the-cockpit)
 
 ### The queue rides the Fleet card
 

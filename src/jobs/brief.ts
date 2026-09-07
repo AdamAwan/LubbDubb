@@ -68,6 +68,13 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   }
 
   if (kind === 'code' && branch) {
+    const ejected = store.ejectionOnBranch(branch);
+    if (ejected)
+      return {
+        ok: false,
+        reason: 'branch_busy',
+        error: `branch ${branch} is held by an ejection (${ejected.id}) — an operator has it at their own keyboard`,
+      };
     const held = store.findActiveTaskByBranch(branch);
     if (held)
       return {

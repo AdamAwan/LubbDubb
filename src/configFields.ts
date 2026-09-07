@@ -434,6 +434,24 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a claimed validation check is held before it is offered again.',
   },
   {
+    path: 'ejection.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Whether an operator can take a running agent’s work into their own Claude Code. Off, no Eject is offered and the route refuses; a hold already standing is still honoured and settleable.',
+  },
+  {
+    path: 'ejection.expiryHours',
+    type: 'number',
+    access: 'plain',
+    why: 'How long an ejection holds its goal and its worktree slot before the harness takes the work back and says so. 0 means no expiry, which is the operator accepting the wedge a hold nobody settles can cause.',
+  },
+  {
+    path: 'ejection.contactGraceMinutes',
+    type: 'number',
+    access: 'advanced',
+    why: 'How long an ejection nobody has contacted the harness about reads as a fresh hold before its card says so and re-offers the link.',
+  },
+  {
     path: 'review.enabled',
     type: 'boolean',
     access: 'plain',

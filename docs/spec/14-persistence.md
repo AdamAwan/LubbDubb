@@ -726,11 +726,11 @@ transitions, because a check has exactly one current reading and everything the 
 is cleared in the write rather than by a caller who has to remember. Refuses a superseded check.
 `linkValidationResourceTask(originRef, name, humanTaskId)`. The store API keys both tables on `originRef` rather than on `planId` (see [Rebuilding a table whose key changed](#rebuilding-a-table-whose-key-changed)); any method taking a plan id silently returns an empty result rather than throwing. → [20](20-validation.md)
 
-A second kind of claim joins these when [35](35-ejection.md#the-claim) is built, in its own table and
-its own module rather than as columns here: an ejection holds a whole **origin** rather than one check,
-outlives the desktop session that took it, and is released only by an explicit settle or its expiry.
-Sharing the validation claim's storage would put two holds with opposite release rules behind one set
-of columns.
+A second kind of claim sits beside these, in its own table and its own module rather than as columns
+here (`ejections`, `src/store/ejections.ts`): an ejection holds a whole **origin** rather than one
+check, outlives the desktop session that took it, and is released only by an explicit settle or its
+expiry. Sharing the validation claim's storage would put two holds with opposite release rules behind
+one set of columns. → [35](35-ejection.md#the-claim)
 
 ### Why a plan's verdicts are kept
 

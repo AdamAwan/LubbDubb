@@ -48,6 +48,7 @@ import type {
   ConclusionAuthor,
   Decision,
   DeliveryAuthor,
+  Ejection,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   ErrorLogEntry,
@@ -287,6 +288,7 @@ interface StackLandingView {
 }
 
 interface CockpitConfig {
+  ejectionEnabled: boolean;
   heartbeatIntervalMs: number;
   maxConcurrentAgents: number;
   watchLabel: string;
@@ -348,6 +350,7 @@ export interface CockpitState {
   schedules: JobSchedule[];
   agents: Agent[];
   endedAgents: number;
+  ejections: EjectionView[];
   readying: ReadyingAction[];
   parkedOnLimit: string[];
   stallParks: StallPark[];
@@ -369,6 +372,11 @@ export interface CockpitState {
   runOutcomes: RunTally;
   refUrls: Record<string, string>;
   dispatchRules: Record<string, DispatchRule>;
+}
+
+export interface EjectionView extends Ejection {
+  expiresAt: string | null;
+  neverContacted: boolean;
 }
 
 export interface GoalReachView {
@@ -723,6 +731,8 @@ export type {
   AgentFlag,
   BugFiling,
   Decision,
+  Ejection,
+  EjectionOutcome,
   EnvironmentGate,
   EnvironmentGateRelease,
   EnvironmentHealthReading,

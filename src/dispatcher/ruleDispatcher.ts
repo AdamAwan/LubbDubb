@@ -245,6 +245,7 @@ export class RuleDispatcher implements Dispatcher {
       ctx.tasks.filter((t) => isActive(t) && t.originRef).map((t) => t.originRef as string),
     );
     for (const job of ctx.standingJobs ?? []) if (job.originRef) activeOrigins.add(job.originRef);
+    for (const held of ctx.ejections ?? []) activeOrigins.add(held.originRef);
     const candidates: Candidate[] = [];
     const now = ctx.world.takenAt;
 

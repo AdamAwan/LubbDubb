@@ -2,6 +2,7 @@ import type { AgentManager } from '../agents/agentManager.js';
 import type { AgentModels } from '../agents/modelPolicy.js';
 import type { PermissionDesk } from '../agents/permissionDesk.js';
 import type { RecoveryDesk } from '../agents/recoveryDesk.js';
+import type { EjectionDesk } from '../ejection/desk.js';
 import type { Config } from '../config.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -41,6 +42,7 @@ export interface DesktopToolDeps {
   profileNames(): string[];
   permissions(): PermissionDesk;
   recovery(): RecoveryDesk;
+  ejections(): EjectionDesk;
   connector: IssueWatchContext['sink'] & {
     canPlaceWorkItem(): boolean;
     setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;

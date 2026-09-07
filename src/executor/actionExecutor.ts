@@ -140,7 +140,20 @@ export class ActionExecutor {
               record('skipped', `Skipped: work for ${origin} is already in flight.`);
               break;
             }
+            if (origin && store.liveEjectionForOrigin(origin)) {
+              record('skipped', `Skipped: an operator holds ${origin} at their own keyboard.`);
+              break;
+            }
             if (action.type === 'dispatch_code_agent') {
+              const ejected = store.ejectionOnBranch(action.branch);
+              if (ejected) {
+                record(
+                  'deferred',
+                  `Deferred: branch ${action.branch} is held by an ejection (${ejected.id}); an operator has its ` +
+                    'worktree at their own keyboard. Will retry when they hand it back.',
+                );
+                break;
+              }
               const held = store.findActiveTaskByBranch(action.branch);
               if (held) {
                 record(
@@ -333,6 +346,16 @@ export class ActionExecutor {
           }
 
           case 'update_pr_branch': {
+            const ejected = store.ejectionOnBranch(action.branch);
+            if (ejected) {
+              record(
+                'deferred',
+                `Deferred: branch ${action.branch} is held by an ejection (${ejected.id}); merging ` +
+                  `${action.base} in under an operator's own checkout would move it beneath them. ` +
+                  'Will retry when they hand it back.',
+              );
+              break;
+            }
             const staffed = store.findActiveTaskByBranch(action.branch);
             if (staffed) {
               record(

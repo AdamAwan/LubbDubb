@@ -9,6 +9,10 @@ export function discussPrompt(issueNumber: number): string {
   return `/lubbdubb discuss ${issueNumber}`;
 }
 
+export function ejectPrompt(issueNumber: number): string {
+  return `/lubbdubb eject ${issueNumber}`;
+}
+
 export function localRunPrompt(issueNumber: number): string {
   return `/lubbdubb run ${issueNumber}`;
 }

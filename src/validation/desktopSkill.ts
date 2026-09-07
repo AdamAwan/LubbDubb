@@ -6,12 +6,12 @@ import type { ErrorRecorder } from '../errorLog.js';
 
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
+description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, take over a piece of work an operator has pulled off the fleet, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — to pick up work taken off the fleet: "/lubbdubb eject 412" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
 ---
 
 # LubbDubb at your keyboard
 
-Seven jobs, told apart by the argument. \`fleet\` — or anything about the harness
+Eight jobs, told apart by the argument. \`fleet\` — or anything about the harness
 rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
 \`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
 \`clarify 284\` — or "why won't it pick up 284" — is
@@ -19,8 +19,9 @@ rather than about one goal — is [watching and steering it](#watch-and-steer-th
 \`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`order 500\` —
 or anything about which of a feature’s stories goes first — is
 [the order the stories go in](#discuss-the-order-the-stories-go-in), \`run 284\` is
-[getting it up on this machine](#run-it-locally), and anything else is
-[a validation check](#run-a-validation-check).
+[getting it up on this machine](#run-it-locally), \`eject 412\` is
+[work an operator has taken off the fleet](#take-over-an-ejected-run), and
+anything else is [a validation check](#run-a-validation-check).
 
 A question asked in plain words — "what happened on 284", "did we ever ship the
 export fix", "is 284 on hallway" — is the goal one whether or not the word
@@ -384,6 +385,58 @@ say anything about whether the goal works.
 in the clone the harness cuts its agents' worktrees from: a branch checked out
 here is one it can no longer hand to an agent, and a server you start yourself is
 one nothing can stop from the cockpit.
+
+## Take over an ejected run
+
+An operator was watching an agent, decided it was going the wrong way, and
+**ejected** it: the agent was stopped, and its goal and its worktree are held for
+them rather than handed straight back to the fleet. This session is open in that
+worktree, on that branch, with the agent's uncommitted work in front of you. The
+hold expires — it is not indefinite — and until it is settled nothing else in the
+harness will touch this goal or this directory.
+
+1. **Read it first.** \`ejection_read\` with the goal number. It comes back with
+   the operator's own reason for stopping it, the brief the agent was given, its
+   last reported progress, the tail of its transcript, and how long the hold has
+   left. The reason is the brief: they stopped it for something specific, and
+   guessing at what is the one way to repeat it.
+2. **Say what you found, then wait.** Tell them what the agent had actually done
+   — read the diff on the branch, not just the transcript — and where you think it
+   went wrong against their reason. Then **follow their lead**. You were not
+   dispatched; a session that reads the brief and carries on delivering has
+   reproduced the thing they ejected.
+3. **Say what you are doing, as you go.** \`ejection_note\` with one line, after a
+   commit or on a change of direction. It draws on the held slot in the fleet view,
+   which is how everybody else tells a hold somebody is working from one somebody
+   forgot.
+4. **Give it back.** \`ejection_settle\`, once you are both done. This is the part
+   that actually matters and the part that gets forgotten.
+
+### The three ways back
+
+Ask which one it is. The answer is the operator's:
+
+| | They are saying | What it does |
+| --- | --- | --- |
+| \`handed_back\` | "never mind, the agent was right" | Releases the hold and writes nothing else. The rule proposes the work again next pulse, reading the branch as it now stands. |
+| \`requeued\` | "I fixed the direction, you finish" | Queues a job carrying your \`note\` — required, and it is the preamble the fresh agent reads. |
+| \`delivered\` | "it's a pull request now" | Releases the hold; the pull-request rules take the next decision. |
+
+### What not to do
+
+- **Do not settle it on your own judgement.** Which of the three it is is a
+  decision about the work, and the operator is the one holding it.
+- **Do not leave it held.** A hold nobody settles keeps the goal shut until it
+  expires, and an expiry is the harness taking the work back from underneath
+  somebody — into a branch whose state nobody described. If the conversation is
+  ending, ask which arm before it does.
+- **Do not switch this checkout to another branch.** It is a worktree the harness
+  is holding out of its own pool. Leaving it on something else is how the operator
+  comes back to a directory that is not what they ejected.
+- **\`claude --resume\` is the other door**, not a replacement for this one. It
+  reopens the ejected agent's own conversation, and \`ejection_read\` gives you the
+  command where the runtime kept one. Either way the hold is still the hold, and
+  it still has to be settled.
 
 ## Run a validation check
 

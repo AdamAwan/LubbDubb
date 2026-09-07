@@ -1,5 +1,6 @@
 import type {
   GoalWatchDeclaration,
+  EjectionOutcome,
   FilingTargetProbe,
   InsightsWindow,
   IssueFiled,
@@ -62,6 +63,8 @@ export interface CockpitActions {
   respondAgent(agentId: string, text: string): Promise<void>;
   resumeAgent(agentId: string): Promise<void>;
   extendStall(agentId: string): Promise<void>;
+  ejectAgent(agentId: string, reason: string): Promise<void>;
+  settleEjection(id: string, outcome: EjectionOutcome, note?: string): Promise<void>;
 
   answerEscalation(id: string, text: string): Promise<void>;
   answerQuestions(id: string, answers: (string | null)[]): Promise<void>;

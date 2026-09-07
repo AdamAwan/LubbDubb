@@ -22,6 +22,7 @@ import type { StateSection } from '../wire.js';
 import type { Store } from '../store/store.js';
 import type {
   CockpitState,
+  EjectionView,
   GoalReachView,
   GoalWatchView,
   LocalRunRefFacts,
@@ -42,6 +43,7 @@ import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
 import { applyThreadReopens } from '../prThreads.js';
+import { expiresAt } from '../ejection/policy.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
@@ -115,6 +117,8 @@ export function buildStateSnapshot(system: System, opts?: SnapshotOpts): Cockpit
   return buildStateSections(system, ALL_SECTIONS, opts) as CockpitState;
 }
 
+const EJECTION_ROWS = 40;
+
 export function buildStateSections(
   system: System,
   want: ReadonlySet<StateSection>,
@@ -138,6 +142,14 @@ export function buildStateSections(
   const flags = store.listAllFlags();
   const attachments = store.listAllAttachments();
   const humanTasks = store.listHumanTasks();
+  const ejectionViews = (): EjectionView[] =>
+    store.listEjections(EJECTION_ROWS).map((row) => ({
+      ...row,
+      expiresAt: expiresAt(row.ejectedAt, config.ejection),
+      neverContacted:
+        row.lastSeenAt === null &&
+        Date.now() - Date.parse(row.ejectedAt) >= config.ejection.contactGraceMinutes * 60_000,
+    }));
   const allHumanTasks = store.listAllHumanTasks();
   const proposals = store.listProposals();
   const bugFilings = store.listBugFilings();
@@ -405,6 +417,7 @@ export function buildStateSections(
       profiles: orderedProfiles(config.agentModels),
       defaultProfile: config.agentModels?.default ?? null,
       desktopFolder: config.repoRoot,
+      ejectionEnabled: config.ejection.enabled,
       localRunConfigured: config.localRun.instruction.trim() !== '',
       localValidationBrowserConfigured: config.localValidation.browser !== null,
       localRunStopConfigured: config.localRun.stopInstruction.trim() !== '',
@@ -525,6 +538,7 @@ export function buildStateSections(
     | 'tasks'
     | 'agents'
     | 'endedAgents'
+    | 'ejections'
     | 'readying'
     | 'parkedOnLimit'
     | 'stallParks'
@@ -539,6 +553,7 @@ export function buildStateSections(
     tasks: history().tasks,
     agents: history().agents,
     endedAgents: history().ended,
+    ejections: ejectionViews(),
     readying: readying.list(),
     parkedOnLimit: fleet.limitedAgentIds(),
     stallParks: fleet.stallDeadlines(),

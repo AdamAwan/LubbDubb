@@ -7,6 +7,7 @@ import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.j
 import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
 import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
+import { DEFAULT_EJECTION, type EjectionPolicy } from './ejection/policy.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
 import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from './localValidation/policy.js';
@@ -60,6 +61,7 @@ export interface Config {
   pets: PetPolicy;
   selfUpdate: SelfUpdatePolicy;
   validation: ValidationPolicy;
+  ejection: EjectionPolicy;
   review: PrReviewPolicy;
   localRun: LocalRunPolicy;
   localValidation: LocalValidationPolicy;
@@ -180,6 +182,7 @@ const DEFAULTS: Config = {
     snoozeMs: 30 * 60 * 1000,
   },
   validation: DEFAULT_VALIDATION,
+  ejection: DEFAULT_EJECTION,
   review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
   localValidation: DEFAULT_LOCAL_VALIDATION,
@@ -397,6 +400,7 @@ export const DEEP_MERGED_BLOCKS = [
   'runway',
   'selfUpdate',
   'validation',
+  'ejection',
   'review',
   'localRun',
   'localValidation',
