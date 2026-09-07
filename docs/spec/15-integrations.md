@@ -315,6 +315,27 @@ provider but one speaks, so only the exception declares anything. The exception 
 to one arrives as its own punctuation. Azure's **pull request** threads render Markdown, which is why
 the flag rides on the integration rather than on the provider family — one provider, two answers.
 
+**Every body is written in Markdown, and converted at the door.** Nothing upstream of the composite
+connector knows which provider a comment is bound for: the plan status comment, the appraisal
+question, an arrival notice and a filed ticket's description are all one rendering, in Markdown.
+`CompositeConnector.signed` is the single seam that knows the answer, so it runs
+`markdownToHtml` (`src/sink/markdownToHtml.ts`) over the body for an `html` provider before the
+sign-off is appended. Converting anywhere else means every new comment author has to remember to,
+and the failure is silent in the only place it matters: the comment posts, and reads as a wall of
+asterisks and hyphens on the operator's board.
+
+The converter covers the dialect the harness actually writes — paragraphs, `**bold**`, `_italic_`,
+code spans and fences, bullet and ordered lists including one level of nesting, headings, block
+quotes, horizontal rules and inline links — escaping `&`, `<` and `>` in text so a code span
+carrying markup cannot inject any. Two shapes pass through verbatim: an HTML comment line, which is
+how the `<!-- lubbdubb:* -->` markers survive, and a line opening with one of the tags the
+converter itself emits, so a body read back from a provider and re-sent converts to itself. Any
+_other_ line opening with `<` is escaped and drawn as text, and a link's href is attribute-escaped:
+the bodies carry agent-written prose, so markup arriving in one is content, never markup. A
+`<details>` block is _not_ one of those: Azure's sanitiser drops the disclosure element and would
+take the whole write-up with it, so the summary becomes a bold line and the body is left open
+beneath it.
+
 ### Idempotence, and why the ending is hashed
 
 The footer carries a `<!-- lubbdubb:signoff -->` marker — invisible in both flavours, since a
