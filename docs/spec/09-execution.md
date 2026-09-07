@@ -1291,7 +1291,13 @@ along with the task row it settles.
 
 - **`runGit(repoRoot, args)`** — the one place `cwd: repoRoot` lives.
 - **`fetchRemote(repoRoot)`** — `git fetch --prune origin`. `--prune` so a deleted remote branch stops
-  reading as present.
+  reading as present. **Serialised per `repoRoot`** through `runSerial` (`serialQueue.ts`): several
+  components share the one clone and each refreshes on its own schedule, and git updates a
+  remote-tracking ref as a compare-and-swap against the value it read when the fetch began. Two
+  overlapping fetches therefore make the second fail the whole fetch with `cannot lock ref … is at X
+  but expected Y` — on a ref the first has already moved to the right place. The queue chains
+  callers rather than sharing one in-flight fetch, so every caller still gets a fetch that started
+  after it asked; a failing fetch rejects its own caller only and the next in line still runs.
 - **`resolveCommit(repoRoot, ref)`** — resolves to a **SHA**, trying `refs/remotes/origin/<ref>`, then
   `refs/heads/<ref>`, then `<ref>^{commit}`. **`origin/` wins over the local ref**: the harness's clone
   never checks the integration branch out, so its `refs/heads/main` is frozen at clone time while the

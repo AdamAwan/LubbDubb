@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { runSerial } from './serialQueue.js';
 
 // → docs/spec/09-execution.md
 
@@ -9,8 +10,10 @@ export function runGit(repoRoot: string, args: string[]): Promise<{ stdout: stri
   return exec('git', args, { cwd: repoRoot });
 }
 
-export async function fetchRemote(repoRoot: string): Promise<void> {
-  await runGit(repoRoot, ['fetch', '--prune', 'origin']);
+export function fetchRemote(repoRoot: string): Promise<void> {
+  return runSerial(`fetch:${repoRoot}`, async () => {
+    await runGit(repoRoot, ['fetch', '--prune', 'origin']);
+  });
 }
 
 export async function resolveCommit(repoRoot: string, ref: string): Promise<string | null> {
