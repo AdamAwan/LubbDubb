@@ -9,8 +9,9 @@ import { issueForPr } from '../prIssue.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import { goalOriginFor, padOriginFor } from '../scratch/pad.js';
 import type { Store } from '../store/store.js';
-import type { Agent, PullRequest, ReviewPackRecord, ReviewRange, ScratchEntry, Task } from '../types.js';
+import type { Agent, PlanAtom, PullRequest, ReviewPackRecord, ReviewRange, ScratchEntry, Task } from '../types.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
+import { atomList, atomsForPr } from './atoms.js';
 import { parseDiffHunks, type DiffHunk } from './hunks.js';
 import { checkOrigin, packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from './origins.js';
 import { assemblePack, type Commission } from './submission.js';
@@ -132,6 +133,10 @@ export class ReviewPackAuthor extends EventEmitter {
     return this.deps.store.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber) ?? null;
   }
 
+  private atoms(prNumber: number): PlanAtom[] {
+    return atomsForPr(prNumber, this.deps.store.listAllPlanParts(), this.deps.store.listAllPlanAtoms());
+  }
+
   private baseOf(prNumber: number): string {
     return this.openPr(prNumber)?.baseBranch ?? this.deps.defaultBranch;
   }
@@ -168,6 +173,7 @@ export class ReviewPackAuthor extends EventEmitter {
         prNumber,
         headSha,
         hunks: parseDiffHunks(diff),
+        atoms: this.atoms(prNumber).map((a) => a.slug),
         entries,
         readRegion: (range) => readRegion(cwd, range),
       },
@@ -189,7 +195,7 @@ export class ReviewPackAuthor extends EventEmitter {
       task = store.createTask({
         kind: 'code',
         title: `Review pack for PR #${pr.number}`,
-        prompt: this.prompt(pr, headSha, hunks, pads),
+        prompt: this.prompt(pr, headSha, hunks, pads, this.atoms(pr.number)),
         branch: key,
         originRef,
         originTitle: pr.title,
@@ -216,6 +222,7 @@ export class ReviewPackAuthor extends EventEmitter {
     headSha: string,
     hunks: DiffHunk[],
     pads: { goal: string | null; own: string; entries: ScratchEntry[] },
+    atoms: readonly PlanAtom[],
   ): string {
     const base = pr.baseBranch ?? this.deps.defaultBranch;
     const rendered = this.deps.prompts.render('review-pack-author', {
@@ -225,7 +232,9 @@ export class ReviewPackAuthor extends EventEmitter {
       base,
       headSha,
     });
-    return [rendered, hunkList(hunks, base, headSha), witnessLog(pr, pads), SUBMISSION_NOTE].join('\n\n');
+    return [rendered, hunkList(hunks, base, headSha), witnessLog(pr, pads), atomList(atoms), SUBMISSION_NOTE]
+      .filter((section) => section !== '')
+      .join('\n\n');
   }
 }
 

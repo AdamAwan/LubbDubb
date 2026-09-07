@@ -20,6 +20,7 @@ export interface Commission {
   prNumber: number;
   headSha: string;
   hunks: readonly DiffHunk[];
+  atoms: readonly string[];
   entries: readonly ScratchEntry[];
   readRegion(range: ReviewRange): string[] | null;
 }
@@ -89,6 +90,8 @@ export function assemblePack(
     if (title === null) return refuse(`${at}.title is required — the same thing said across a desk, for the person.`);
     if (title.length > LIMITS.title) return refuse(overLimit(`${at}.title`, LIMITS.title, title));
     prose.push([`${at}.claim`, claim], [`${at}.title`, title]);
+    const atom = readAtom(commission, raw.atom, at);
+    if (!atom.ok) return refuse(atom.error);
     if (!Array.isArray(raw.anchors) || raw.anchors.length === 0) {
       return refuse(
         `${at}.anchors must be a non-empty list — an idea is a claim plus a walk, and this one has no walk.`,
@@ -139,7 +142,7 @@ export function assemblePack(
       );
     }
     owned.set(id, hunkIds);
-    ideas.push({ id, claim, title, cue: null, anchors, claims, coverage, attention: null });
+    ideas.push({ id, claim, title, atom: atom.atom, cue: null, anchors, claims, coverage, attention: null });
   }
 
   const coverage = coverageRefusal(commission.hunks, owned);
@@ -179,6 +182,32 @@ export function plainRefusal(prose: readonly [string, string][]): string | null 
     if (refusal !== null) return refusal;
   }
   return readingEaseRefusal(prose.map(([, value]) => value));
+}
+
+/**
+ * The atom an idea names, held against the ones the part behind this pull request
+ * carries. A slug the part does not carry is a typo and is refused; `null` — no atom
+ * fits — is accepted without complaint, because an idea the atoms do not cover is a
+ * finding and refusing it would teach the author to relabel it under the nearest one.
+ * → docs/spec/31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding
+ */
+function readAtom(
+  commission: Commission,
+  raw: unknown,
+  at: string,
+): { ok: true; atom: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, atom: null };
+  const slug = line(raw);
+  if (slug === null) return { ok: false, error: `${at}.atom must be an atom's slug, or be left out.` };
+  if (commission.atoms.includes(slug)) return { ok: true, atom: slug };
+  return {
+    ok: false,
+    error:
+      commission.atoms.length === 0
+        ? `${at}.atom names "${slug}", and no atoms were declared for this pull request. Leave it out.`
+        : `${at}.atom names "${slug}", which is not one of this pull request's atoms. They are: ` +
+          `${commission.atoms.join(', ')}. Use one of those, or leave it out to say no atom fits.`,
+  };
 }
 
 const AUTHOR_MARKS: readonly ReviewAnchorMark[] = ['key', 'disputed'];

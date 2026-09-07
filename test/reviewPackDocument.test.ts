@@ -109,6 +109,7 @@ function fullPack(headSha: string): ReviewPack {
       id: 'idea_7f3k2',
       claim: 'The pack is one document in one table, keyed on pull request and head.',
       title: 'The pack lives in one row and nothing looks inside it',
+      atom: null,
       cue: 'Read: the shape every later stage renders.',
       anchors,
       claims,
@@ -118,6 +119,7 @@ function fullPack(headSha: string): ReviewPack {
       id: 'idea_q9m1z',
       claim: 'The spec section is rewritten to describe the tables as built.',
       title: 'The spec says what was built',
+      atom: null,
       cue: null,
       anchors: [
         {
@@ -137,6 +139,7 @@ function fullPack(headSha: string): ReviewPack {
       id: 'plumbing',
       claim: 'These hunks are semantically empty.',
       title: 'Formatting only',
+      atom: null,
       cue: 'Skim: a lockfile.',
       anchors: [],
       claims: [],
