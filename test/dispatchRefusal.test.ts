@@ -21,6 +21,15 @@ class RefusingWorktrees extends FakeWorktreeManager {
 
   override ensure(branch: string, base?: string): Promise<string> {
     if (!this.refusing) return super.ensure(branch, base);
+    return this.refuse(branch);
+  }
+
+  override ensureReadOnly(key: string, of: string): Promise<string> {
+    if (!this.refusing) return super.ensureReadOnly(key, of);
+    return this.refuse(key);
+  }
+
+  private refuse(branch: string): Promise<string> {
     return Promise.reject(
       new Error(
         `Cannot lease a worktree for ${branch}: it is already checked out at D:\\_git\\${branch}, which is not a ` +
@@ -84,16 +93,16 @@ test('a dispatch refused on every pulse reaches the operator, and one bad pulse 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   failPlanningOpen(system.store, 901);
 
-  await pulseTo(system, 'issue:901', 1);
+  await pulseTo(system, 'issue:901:assess', 1);
   assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 0, 'nothing started on that branch');
   assert.equal(system.store.listErrors().length, 0, 'the refusal is not recorded as a failure, and never was');
-  assert.equal(await refusalRow(system, 'issue:901'), undefined, 'one refusal raises nothing');
+  assert.equal(await refusalRow(system, 'issue:901:assess'), undefined, 'one refusal raises nothing');
 
-  await pulseTo(system, 'issue:901', 2);
-  assert.equal(await refusalRow(system, 'issue:901'), undefined, 'two refusals still raise nothing');
+  await pulseTo(system, 'issue:901:assess', 2);
+  assert.equal(await refusalRow(system, 'issue:901:assess'), undefined, 'two refusals still raise nothing');
 
-  await pulseTo(system, 'issue:901', 3);
-  const row = await refusalRow(system, 'issue:901');
+  await pulseTo(system, 'issue:901:assess', 3);
+  const row = await refusalRow(system, 'issue:901:assess');
   assert.ok(row, 'a dispatch refused on three pulses running is something that needs you');
   assert.equal(row.kind, 'dispatch');
   assert.equal(row.group, 'yours', 'nothing is leased, and the fix is outside the harness');
@@ -112,14 +121,14 @@ test('the refusal row clears itself the moment a dispatch for that origin gets t
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   failPlanningOpen(system.store, 902);
 
-  await pulseTo(system, 'issue:902', 3);
-  assert.ok(await refusalRow(system, 'issue:902'), 'the refusal is up');
+  await pulseTo(system, 'issue:902:assess', 3);
+  assert.ok(await refusalRow(system, 'issue:902:assess'), 'the refusal is up');
 
   worktrees.relent();
-  for (let i = 0; i < 30 && !dispatched(system, 'issue:902'); i += 1) await system.harness.runCycle('manual');
-  assert.ok(dispatched(system, 'issue:902'), 'the dispatch for that origin went through');
+  for (let i = 0; i < 30 && !dispatched(system, 'issue:902:assess'); i += 1) await system.harness.runCycle('manual');
+  assert.ok(dispatched(system, 'issue:902:assess'), 'the dispatch for that origin went through');
   assert.equal(
-    await refusalRow(system, 'issue:902'),
+    await refusalRow(system, 'issue:902:assess'),
     undefined,
     'a refusal that has cleared stops being an ask on the very next snapshot',
   );

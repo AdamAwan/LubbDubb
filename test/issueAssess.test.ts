@@ -243,6 +243,14 @@ test('anything live under the issue stands the assessor down', async () => {
   }
 });
 
+test('a running assessor keeps standing pickup down, cycle after cycle', async () => {
+  const { actions } = await assessor().decide(
+    ctx({ tasks: [task(), task({ id: 't2', originRef: 'issue:12:assess', status: 'running' })] }),
+  );
+
+  assert.deepEqual(origins(actions), [], 'the suppression is the assessment in flight, not the pulse that proposed it');
+});
+
 test('a plan that still schedules something owns the issue', async () => {
   for (const status of ['planning', 'active', 'awaiting_approval'] as const) {
     const { actions } = await assessor().decide(ctx({ plans: [plan(status)], planParts: [part()] }));

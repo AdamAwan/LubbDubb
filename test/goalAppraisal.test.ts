@@ -191,6 +191,17 @@ test('anything live under the issue stands the appraisal down', async () => {
   }
 });
 
+test('a running appraiser keeps standing the planner and pickup down, cycle after cycle', async () => {
+  const { actions } = await new RuleDispatcher().decide(
+    ctx({
+      recentDecisions: [],
+      tasks: [task({ originRef: 'issue:12:appraisal', branch: 'appraisal/issue/12', status: 'running' })],
+    }),
+  );
+
+  assert.deepEqual(origins(actions), [], 'the suppression is the appraisal in flight, not the pulse that proposed it');
+});
+
 test('the watch gate applies — an untagged issue is never appraised', async () => {
   const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
 
