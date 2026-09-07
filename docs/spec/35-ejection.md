@@ -266,11 +266,22 @@ branch, who holds it, the liveness line and the time remaining:
 
 ```
 #412 rebuild the ingest queue
-you · last seen 3m ago · reverting the store extraction · expires 7h 12m
+you · last seen 3m ago · reverting the store extraction · expires in 7h 12m
 ```
 
 Its controls are the deep link and the three settle arms. Its tone is the operator's, not the fleet's —
 the whole point of the row is that the thing in this slot is a person.
+
+**The time remaining is read as a deadline, not as an age.** `relTime` clamps anything in the future
+to `0s ago`, so the hold with seven hours left said the harness was about to take it back — on every
+ejection, from the moment it was made. It draws `timeLeft` (`web/src/components/util.tsx`), which
+words the span and says `any moment` once it is up; the stall park's own sentence on the same card
+had the same bug and the same fix.
+
+**It is the widest row the Fleet card draws, and the card is sized for it.** Its state word is
+`taken off the fleet` and its action is two controls where every other row's is one, so both the
+state and the action rails are widened on the Fleet card itself rather than on the tokens every card
+shares ([17](17-cockpit.md#the-overview)).
 
 It wears the desk run's **violet** — both are a person at a keyboard rather than a dispatch — and the
 two are told apart by fill and stroke rather than by a fourth colour: the desk run's lamp is hollow and

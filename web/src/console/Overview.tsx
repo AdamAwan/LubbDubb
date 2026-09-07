@@ -20,7 +20,7 @@ import {
   type GoalTrack,
 } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { elapsed, fmtUsd, relTime } from '../components/util.js';
+import { elapsed, fmtUsd, relTime, timeLeft } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -71,7 +71,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const rail = [...out, ...queueRows];
 
   return (
-    <section className="cn-card cn-span2">
+    <section className="cn-card cn-span2 cn-fleet">
       <h3>
         Fleet{' '}
         <i className="cn-n">
@@ -269,7 +269,7 @@ function agentState(agent: Agent, view: CockpitView): Pick<PanelRowModel, 'why' 
       whyTone: 'hold',
       why:
         'It stopped without saying so. The harness records it done by itself ' +
-        `${relTime(stallExpiry, view.now)} unless it speaks again.`,
+        `${timeLeft(stallExpiry, view.now)} unless it speaks again.`,
     };
   }
   if (agent.status === 'waiting') {
@@ -380,14 +380,14 @@ function ejectedRow(held: EjectionView, view: CockpitView, actions: CockpitActio
       { label: 'who', value: 'you' },
       { label: 'line', value: held.lastNote ?? seen, alarm: held.neverContacted },
       ...(held.branch === null ? [] : [{ label: 'branch', value: held.branch }]),
-      { label: 'expires', value: held.expiresAt === null ? 'never' : relTime(held.expiresAt, view.now) },
+      { label: 'expires', value: held.expiresAt === null ? 'never' : timeLeft(held.expiresAt, view.now) },
     ],
     whyLabel: 'taken off the fleet',
     whyTone: 'quiet',
     why:
       `You stopped the agent on this because: "${held.reason}" Its goal and its worktree are held for you — ` +
       'nothing will staff the work or touch the directory until you hand it back' +
-      (held.expiresAt === null ? '.' : `, and the harness takes it back ${relTime(held.expiresAt, view.now)}.`) +
+      (held.expiresAt === null ? '.' : `, and the harness takes it back ${timeLeft(held.expiresAt, view.now)}.`) +
       (held.neverContacted
         ? ' Nothing has contacted the harness about this hold at all, so the link may never have opened — the ' +
           'button below re-offers it.'

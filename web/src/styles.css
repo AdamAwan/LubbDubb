@@ -539,6 +539,13 @@ body {
      It only became visible when `a.btn` arrived: an anchor *does* inherit, so the
      two sat in one row two fonts and two heights apart. */
   font-family: inherit;
+  /* A control names one act, so it is one line whatever room it is given. In a
+     slot too narrow for it the label wrapped instead — `Open in Claude Code` came
+     apart into a four-line stack the height of three rows, drawn over the row
+     beside it. Wrapped, the control is unreadable *and* the row it sits in is
+     wrong; unwrapped, it overruns its slot, which is a rail measured too small
+     and says so. */
+  white-space: nowrap;
 }
 .btn:hover {
   border-color: var(--blue);

@@ -2614,6 +2614,26 @@ a.cn-tgl {
   width: var(--cn-w-ci);
   height: 22px;
 }
+/* The Fleet card's two widest rows are the ejected slot's, and both overran the
+   rail's own measures: its state word is `taken off the fleet`, where the token
+   was measured for `at a keyboard`, and its action is *two* controls — the deep
+   link into the operator's own Claude Code and the hand-back — where every other
+   action on the card is one button. The slot being `overflow: visible`, neither
+   clipped: the chip painted over the control beside it and the link wrapped its
+   label into a four-line stack on top of the row.
+
+   The card's rather than the token's, for the reason `.cn-read-marks` gives: no
+   other card draws an ejected row, and widening the two globally would open a
+   gutter on every card that carries a word or a control for slots that do not
+   need the room. → `ejectedRow`, `EjectionControls` */
+.cn-fleet .cn-rows {
+  --cn-w-state: 156px;
+  /* The link and the hand-back side by side, at their own text: `Open in Claude
+     Code ↗` with its chat glyph, the 6px slot gap, and `Hand back…`. Measured
+     off the rendered controls, not estimated — at 268px the pair overran by one
+     pixel, which is a slot overrun like any other. */
+  --cn-w-act: 276px;
+}
 /* A track in a slot of its own is one bar, not a wrapping list. The goal row's
    own rule lets it wrap to keep it off the title beside it; on the rail the
    column already does that, and wrapping turns one reading into a stack of them.

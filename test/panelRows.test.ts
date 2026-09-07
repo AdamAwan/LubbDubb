@@ -332,7 +332,9 @@ test('the fleet card’s rows are a budget the agents spend first', () => {
 
   const fleet = (n: number): { drawn: number; queue: number; room: number } => {
     const v = view({ agents: Array.from({ length: n }, (_, i) => ({ ...live[0]!, id: `a${i}` })) });
-    const out = v.live.length + v.readying.length + v.deskRuns.length;
+    // An ejected slot spends a row like any other: it is held, and the queue gets
+    // what is left. → `Fleet`
+    const out = v.live.length + v.readying.length + v.deskRuns.length + v.ejected.length;
     const html = render(v);
     return { drawn: rows(html), queue: queuedRows(html), room: Math.max(0, 7 - out) };
   };
