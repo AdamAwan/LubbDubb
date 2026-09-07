@@ -95,7 +95,7 @@ export function falseClaims(pack: ReviewPack): FalseClaim[] {
   return out;
 }
 
-export type IdeaAtom = { kind: 'declared'; slug: string } | { kind: 'undeclared' } | { kind: 'none' };
+type IdeaAtom = { kind: 'declared'; slug: string } | { kind: 'undeclared' } | { kind: 'none' };
 
 /**
  * The atom an idea corresponds to, and what its absence means.

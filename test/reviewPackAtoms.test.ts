@@ -19,7 +19,7 @@ import { packOrigin } from '../src/reviewPacks/origins.js';
 import { assemblePack, type Commission } from '../src/reviewPacks/submission.js';
 import { buildApp } from '../src/server/app.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem } from '../src/system.js';
 import type { PlanAtom, PlanPart, ReviewIdea, ReviewPack } from '../src/types.js';
 import type { ReviewPackPayload } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
