@@ -605,6 +605,15 @@ it, or three buttons collapse into one rubber stamp. Like the profile gate it is
 the write — a proposal answered by three buttons that all 400 is the dead end this cockpit's rules
 exist to prevent.
 
+**The proposal is named, never numbered.** A bare `#34076` on the button and in the sentence above it
+asks an operator to accept a parent they cannot recognise, and a work item number is the one thing
+about a Feature nobody remembers. Both surfaces resolve the title through `proposedParentTitle`
+(`web/src/view/orphanGoal.ts`), which reads `world.parentCandidates` first and `world.issues` second —
+the candidate list is the half that actually carries a Feature on Azure, and the issue list is what has it where the appraiser proposed something outside that list. Where
+neither knows the item the wording falls back to `work item #<n>`, because a title the browser does not
+have is not one to invent. The select lists its options the same way, title first with the number in
+parentheses behind it.
+
 **The parent question's three answers are `ParentPicker`, one component and two placements.** The
 goal page states the same gap louder and offers the same write
 ([a goal with no parent Feature](#a-goal-with-no-parent-feature)), and two copies of three buttons is

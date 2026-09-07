@@ -9,6 +9,7 @@ import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { ParentPicker } from '../components/ParentPicker.js';
+import { proposedParentTitle } from '../view/orphanGoal.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
@@ -346,7 +347,7 @@ function ParentAsk({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const container = proposed === null ? undefined : view.state.world.issues.find((i) => i.number === proposed);
+  const containerTitle = proposedParentTitle(view.state, proposed);
   return (
     <>
       {proposed === null ? (
@@ -356,7 +357,7 @@ function ParentAsk({
       ) : (
         <p>
           <strong>This goal rolls up to nothing.</strong> The appraisal suggests{' '}
-          {container ? `“${container.title}”` : `work item #${proposed}`}.
+          {containerTitle === null ? `work item #${proposed}` : `“${containerTitle}”`}.
           <span className="cn-refs">
             <Ref to={`issue:${proposed}`} title="Open the suggested parent and check it before you accept it" />
           </span>
