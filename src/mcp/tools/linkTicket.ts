@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { parseItemRef } from '../findings.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -13,33 +15,35 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     'covers it, pass its `ref` instead and that one is linked rather than a second filed. Only for a ' +
     'filing job: if you were not dispatched to file something, this is not your tool. Calling it is ' +
     'what completes the filing — until you do, the operator sees a filing whose item never appeared.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      title: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      title: z
+        .string()
+        .describe(
           'The title of the item to file: one line naming the problem, for someone who was not ' +
-          'there. Pass this with `body`, or pass `ref` instead if you found an item that already ' +
-          'covers this.',
-      },
-      body: {
-        type: 'string',
-        description:
+            'there. Pass this with `body`, or pass `ref` instead if you found an item that already ' +
+            'covers this.',
+        )
+        .optional(),
+      body: z
+        .string()
+        .describe(
           'The body of the item to file, as Markdown. It goes into the tracker exactly as written — ' +
-          'no harness wrapping, no summarising — so say what is wrong, where, and which parts you ' +
-          'confirmed against the repository.',
-      },
-      ref: {
-        type: 'string',
-        description:
+            'no harness wrapping, no summarising — so say what is wrong, where, and which parts you ' +
+            'confirmed against the repository.',
+        )
+        .optional(),
+      ref: z
+        .string()
+        .describe(
           'The **existing** item this duplicates, in the ref shape used everywhere else: ' +
-          '"issue:314" for a GitHub issue or an Azure DevOps work item. Pass this instead of ' +
-          'title/body when you decided not to file a second. A bare number is not accepted — say ' +
-          'which.',
-      },
-    },
-  },
+            '"issue:314" for a GitHub issue or an Azure DevOps work item. Pass this instead of ' +
+            'title/body when you decided not to file a second. A bare number is not accepted — say ' +
+            'which.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
     const title = typeof args.title === 'string' ? args.title.trim() : '';

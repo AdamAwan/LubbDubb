@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   GOAL_APPRAISAL_VERDICT_HELP,
   GOAL_APPRAISAL_VERDICTS,
@@ -6,6 +7,7 @@ import {
 } from '../goalAppraisal.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
+import { enumOf, toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -56,68 +58,64 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
               ` rather than picking the nearest.)`
             : '')
         : ''),
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          enum: [...GOAL_APPRAISAL_VERDICTS],
-          description: GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
-        },
-        summary: {
-          type: 'string',
-          description:
+    inputSchema: toolSchema(
+      z.object({
+        status: enumOf(GOAL_APPRAISAL_VERDICTS).describe(
+          GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
+        ),
+        summary: z
+          .string()
+          .describe(
             'For "unclear": why you could not start, in a sentence or two addressed to the person who ' +
-            'wrote the ticket — the specific gap, not "it is vague". For "workable": one sentence ' +
-            'saying what you understood the goal to be, so a wrong reading is visible before an agent ' +
-            'acts on it.',
-        },
-        missing: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
+              'wrote the ticket — the specific gap, not "it is vague". For "workable": one sentence ' +
+              'saying what you understood the goal to be, so a wrong reading is visible before an agent ' +
+              'acts on it.',
+          ),
+        missing: z
+          .array(z.string())
+          .describe(
             'Required with "unclear", ignored with "workable": one entry per thing the ticket has to say ' +
-            'before an agent could start, each phrased as the question the author has to answer — ' +
-            '"What should happen when the export is empty?", "Attach the mockup for the settings page", ' +
-            '"A sample row of the CSV you expect". It is rendered on the ticket as the checklist they ' +
-            'work through, so keep it to what actually blocks a start.',
-        },
+              'before an agent could start, each phrased as the question the author has to answer — ' +
+              '"What should happen when the export is empty?", "Attach the mockup for the settings page", ' +
+              '"A sample row of the CSV you expect". It is rendered on the ticket as the checklist they ' +
+              'work through, so keep it to what actually blocks a start.',
+          )
+          .optional(),
         ...(names.length > 0
           ? {
-              profile: {
-                type: 'string',
-                enum: names,
-                description:
+              profile: enumOf(names)
+                .describe(
                   'Which model profile this issue\'s work should run on. Required with "workable"; ' +
-                  'ignored with "unclear", since a goal nobody can start from has no work to size. ' +
-                  profiles.map((p) => `${p.name}: ${p.description}`).join('. '),
-              },
+                    'ignored with "unclear", since a goal nobody can start from has no work to size. ' +
+                    profiles.map((p) => `${p.name}: ${p.description}`).join('. '),
+                )
+                .optional(),
             }
           : {}),
-        parent: {
-          type: 'integer',
-          description:
+        parent: z
+          .number()
+          .int()
+          .describe(
             'The number of the container work item this issue should hang off, if it has none and you can ' +
-            'say which. The open containers the harness can see are listed under "Related tracker items" ' +
-            'in your prompt, and you are not limited to them — a board is narrowed by tag and assignee, so ' +
-            'the right one may not be listed. Omit it entirely if the item already belongs to something, ' +
-            'or if none of them fit.',
-        },
+              'say which. The open containers the harness can see are listed under "Related tracker items" ' +
+              'in your prompt, and you are not limited to them — a board is narrowed by tag and assignee, so ' +
+              'the right one may not be listed. Omit it entirely if the item already belongs to something, ' +
+              'or if none of them fit.',
+          )
+          .optional(),
         ...(areas.paths.length > 0
           ? {
-              area_path: {
-                type: 'string',
-                enum: [...areas.paths],
-                description:
+              area_path: enumOf(areas.paths)
+                .describe(
                   'The area path this issue should be filed under, if it is still on the project root. ' +
-                  'This is what puts it on a team board, so an item left unfiled is invisible to whoever ' +
-                  'plans the backlog. Choose from the list; omit it if none of them is right.',
-              },
+                    'This is what puts it on a team board, so an item left unfiled is invisible to whoever ' +
+                    'plans the backlog. Choose from the list; omit it if none of them is right.',
+                )
+                .optional(),
             }
           : {}),
-      },
-      required: ['status', 'summary'],
-    },
+      }),
+    ),
     handler: (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);

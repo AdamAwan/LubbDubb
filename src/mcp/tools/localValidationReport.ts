@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { validateLocalValidationReport } from '../../localValidation/report.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -13,64 +15,55 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
     'it never came up, or the steps needed something this deployment has not got, say "blocked" and what ' +
     'stopped you — that is a right answer and it records no reading. A "failed" report puts an agent on the ' +
     'branch to fix what you list, so list it precisely.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      result: {
-        type: 'string',
-        enum: ['passed', 'failed', 'blocked'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      result: z
+        .enum(['passed', 'failed', 'blocked'])
+        .describe(
           '"passed" — you ran the plan against the application and it did what it should. "failed" — you ran ' +
-          'it and it did not; needs at least one finding. "blocked" — you could not run it, and nothing is ' +
-          'recorded about whether the change works.',
-      },
-      summary: {
-        type: 'string',
-        description:
+            'it and it did not; needs at least one finding. "blocked" — you could not run it, and nothing is ' +
+            'recorded about whether the change works.',
+        ),
+      summary: z
+        .string()
+        .describe(
           'What you did and what you saw, in a few sentences. This is what the operator reads instead of ' +
-          'running the plan themselves, so say what actually happened rather than that it passed.',
-      },
-      findings: {
-        type: 'array',
-        description:
-          'What is wrong, one entry each. Required for "failed". These are handed verbatim to the agent that ' +
-          'fixes them, so a finding that does not say what you did and what happened instead is one nobody ' +
-          'can act on.',
-        items: {
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'One line naming the problem.' },
-            detail: {
-              type: 'string',
-              description: 'What you did, what you expected, and what happened instead.',
-            },
-            severity: {
-              type: 'string',
-              enum: ['blocker', 'defect', 'nit'],
-              description:
+            'running the plan themselves, so say what actually happened rather than that it passed.',
+        ),
+      findings: z
+        .array(
+          z.object({
+            title: z.string().describe('One line naming the problem.'),
+            detail: z.string().describe('What you did, what you expected, and what happened instead.'),
+            severity: z
+              .enum(['blocker', 'defect', 'nit'])
+              .describe(
                 '"blocker" — the change does not work. "defect" — it works but something is wrong. "nit" — ' +
-                'worth saying, not worth blocking on. All three reach the fix agent; this decides what a ' +
-                'person reads first.',
-            },
-            url: { type: 'string', description: 'The page you found it on, if there was one.' },
-            screenshot: {
-              type: 'string',
-              description:
+                  'worth saying, not worth blocking on. All three reach the fix agent; this decides what a ' +
+                  'person reads first.',
+              ),
+            url: z.string().describe('The page you found it on, if there was one.').optional(),
+            screenshot: z
+              .string()
+              .describe(
                 'The file name of a screenshot you saved in the directory you were given — the name alone, ' +
-                'not a path. It is drawn beside the finding.',
-            },
-          },
-          required: ['title', 'detail', 'severity'],
-        },
-      },
-      visited: {
-        type: 'array',
-        description: 'The pages you opened, so somebody can go and look at the same ones.',
-        items: { type: 'string' },
-      },
-    },
-    required: ['result', 'summary'],
-  },
+                  'not a path. It is drawn beside the finding.',
+              )
+              .optional(),
+          }),
+        )
+        .describe(
+          'What is wrong, one entry each. Required for "failed". These are handed verbatim to the agent that ' +
+            'fixes them, so a finding that does not say what you did and what happened instead is one nobody ' +
+            'can act on.',
+        )
+        .optional(),
+      visited: z
+        .array(z.string())
+        .describe('The pages you opened, so somebody can go and look at the same ones.')
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const desk = deps.localValidations?.();
     if (!desk) return toolError('Local validation is not wired on this deployment, so there is nowhere to report to.');

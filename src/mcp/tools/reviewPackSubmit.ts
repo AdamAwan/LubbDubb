@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { toolError } from '../protocol.js';
+import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -23,129 +25,108 @@ export const reviewPackSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     'owns: no verdicts, no attention labels, no cues, no reading order. **Every prose field is capped** — say ' +
     'it in as few words as you can, in the plainest ones you know, and the refusal names the field and the ' +
     'count. The refusal names the field.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      headline: {
-        type: 'string',
-        description: 'What the change does, in one plain sentence — for the masthead. At most 100 characters.',
-      },
-      summary: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      headline: z
+        .string()
+        .describe('What the change does, in one plain sentence — for the masthead. At most 100 characters.'),
+      summary: z
+        .string()
+        .describe(
           'A short bulleted list in the same register — `- ` per line, the words that matter most in **bold**, ' +
-          'and nothing that is not needed to decide whether to read on. Markdown. Not a paragraph. Each bullet ' +
-          'at most 100 characters.',
-      },
-      estimatedMinutes: { type: 'number', description: 'How long you expect the read to take.' },
-      fake: {
-        type: 'string',
-        description: 'The colophon\'s "what is invented" sentence. Leave it out: a real pack states "nothing".',
-      },
-      ideas: {
-        type: 'array',
-        description: 'The ideas, in the order you would tell them. At least one.',
-        items: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              description:
+            'and nothing that is not needed to decide whether to read on. Markdown. Not a paragraph. Each bullet ' +
+            'at most 100 characters.',
+        ),
+      estimatedMinutes: z.number().describe('How long you expect the read to take.'),
+      fake: z
+        .string()
+        .describe('The colophon\'s "what is invented" sentence. Leave it out: a real pack states "nothing".')
+        .optional(),
+      ideas: z
+        .array(
+          z.object({
+            id: z
+              .string()
+              .describe(
                 'Leave out — ids are minted. The one value you may give is "plumbing", for the idea that owns the ' +
-                'hunks carrying nothing to review.',
-            },
-            claim: {
-              type: 'string',
-              description:
+                  'hunks carrying nothing to review.',
+              )
+              .optional(),
+            claim: z
+              .string()
+              .describe(
                 'One falsifiable sentence stating what this idea does — for the checker. At most 120 characters.',
-            },
-            title: {
-              type: 'string',
-              description: 'The same thing said across a desk, no identifiers — for the person. At most 60 characters.',
-            },
-            atom: {
-              type: 'string',
-              description:
+              ),
+            title: z
+              .string()
+              .describe('The same thing said across a desk, no identifiers — for the person. At most 60 characters.'),
+            atom: z
+              .string()
+              .describe(
                 'The slug of the atom this idea corresponds to, from the list in your prompt. Leave it out where ' +
-                'no atom fits — that is the right answer and nothing is refused for it; it says the work went ' +
-                'somewhere the plan did not declare. A slug that is not in the list is refused.',
-            },
-            anchors: {
-              type: 'array',
-              description: 'The walk, in reasoning order. At least one.',
-              items: {
-                type: 'object',
-                properties: {
-                  kind: { type: 'string', enum: ['hunk', 'region'] },
-                  hunk: { type: 'string', description: 'kind=hunk: the hunk id from your prompt, e.g. "h3".' },
-                  path: { type: 'string', description: 'kind=region: the file, relative to the checkout root.' },
-                  start: { type: 'integer', description: 'kind=region: first line, 1-based.' },
-                  end: { type: 'integer', description: 'kind=region: last line, inclusive.' },
-                  gist: {
-                    type: 'string',
-                    description: 'One line, always shown: why the walk stops here. At most 90 characters.',
-                  },
-                  note: {
-                    type: 'object',
-                    description:
+                  'no atom fits — that is the right answer and nothing is refused for it; it says the work went ' +
+                  'somewhere the plan did not declare. A slug that is not in the list is refused.',
+              )
+              .optional(),
+            anchors: z
+              .array(
+                z.object({
+                  kind: z.enum(['hunk', 'region']),
+                  hunk: z.string().describe('kind=hunk: the hunk id from your prompt, e.g. "h3".').optional(),
+                  path: z.string().describe('kind=region: the file, relative to the checkout root.').optional(),
+                  start: z.number().int().describe('kind=region: first line, 1-based.').optional(),
+                  end: z.number().int().describe('kind=region: last line, inclusive.').optional(),
+                  gist: z.string().describe('One line, always shown: why the walk stops here. At most 90 characters.'),
+                  note: z
+                    .object({
+                      by: z.enum(['witness', 'author']),
+                      entryId: z.string().optional(),
+                      text: z.string(),
+                    })
+                    .describe(
                       'The reasoning, folded away. {by: "witness", entryId: "scr_…", text} quotes the log; ' +
-                      '{by: "author", text} is yours.',
-                    properties: {
-                      by: { type: 'string', enum: ['witness', 'author'] },
-                      entryId: { type: 'string' },
-                      text: { type: 'string' },
-                    },
-                    required: ['by', 'text'],
-                  },
-                  caption: {
-                    type: 'string',
-                    description:
+                        '{by: "author", text} is yours.',
+                    )
+                    .optional(),
+                  caption: z
+                    .string()
+                    .describe(
                       'The one-line label on the code block: "new function", "unchanged, shown because you need ' +
-                      'it", "should this have changed? no". At most 40 characters.',
-                  },
-                  mark: {
-                    type: 'string',
-                    enum: ['key', 'disputed'],
-                    description: 'key: the stop the idea turns on. disputed: where the witness and the code disagree.',
-                  },
-                },
-                required: ['kind', 'gist'],
-              },
-            },
-            coverage: {
-              type: 'array',
-              description:
+                        'it", "should this have changed? no". At most 40 characters.',
+                    )
+                    .optional(),
+                  mark: z
+                    .enum(['key', 'disputed'])
+                    .describe('key: the stop the idea turns on. disputed: where the witness and the code disagree.')
+                    .optional(),
+                }),
+              )
+              .describe('The walk, in reasoning order. At least one.'),
+            coverage: z
+              .array(z.string())
+              .describe(
                 'The scenarios the tests cover, one short line each — "an unwitnessed pull request still renders", ' +
-                'not a paragraph about the test. Required on the idea that owns the test hunks; the reader wants ' +
-                'assurance the cases were thought of, and nothing more. Each at most 60 characters.',
-              items: { type: 'string' },
-            },
-            claims: {
-              type: 'array',
-              description: 'The checkable statements this idea rests on. May be empty.',
-              items: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string', description: 'One sentence that can be shown false.' },
-                  provenance: {
-                    type: 'object',
-                    properties: {
-                      kind: { type: 'string', enum: ['witnessed', 'inferred', 'disputed'] },
-                      entryId: { type: 'string', description: 'The scr_… entry, required on witnessed and disputed.' },
-                    },
-                    required: ['kind'],
-                  },
-                },
-                required: ['text', 'provenance'],
-              },
-            },
-          },
-          required: ['claim', 'title', 'anchors'],
-        },
-      },
-    },
-    required: ['headline', 'summary', 'estimatedMinutes', 'ideas'],
-  },
+                  'not a paragraph about the test. Required on the idea that owns the test hunks; the reader wants ' +
+                  'assurance the cases were thought of, and nothing more. Each at most 60 characters.',
+              )
+              .optional(),
+            claims: z
+              .array(
+                z.object({
+                  text: z.string().describe('One sentence that can be shown false.'),
+                  provenance: z.object({
+                    kind: z.enum(['witnessed', 'inferred', 'disputed']),
+                    entryId: z.string().describe('The scr_… entry, required on witnessed and disputed.').optional(),
+                  }),
+                }),
+              )
+              .describe('The checkable statements this idea rests on. May be empty.')
+              .optional(),
+          }),
+        )
+        .describe('The ideas, in the order you would tell them. At least one.'),
+    }),
+  ),
   handler: async (args) => {
     const desk = deps.reviewPacks;
     if (!desk) {

@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
+import { toolSchema } from './schema.js';
 import { proposedCaveats, type CaveatAnswerInput } from '../plans/planCaveats.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
@@ -32,11 +34,7 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
     'Read one proposed act in full before deciding it: which kind it is, what accepting it would actually do, ' +
     'the act itself, and any caveats that must be acknowledged first. Call this before proposal_decide — two ' +
     'of the five kinds publish something that cannot be taken back, and the id alone does not say which.',
-  inputSchema: {
-    type: 'object',
-    properties: { id: { type: 'string', description: 'The proposal id, from attention_read.' } },
-    required: ['id'],
-  },
+  inputSchema: toolSchema(z.object({ id: z.string().describe('The proposal id, from attention_read.') })),
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
@@ -70,48 +68,43 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
     'but for a merge it merges the pull request and for a reply it posts the comment, and neither can be ' +
     'undone. "reject" performs nothing. A plan also has two verdicts about the ticket rather than about the ' +
     'plan: "close_ticket" and "hold_ticket". Read it with proposal_read first.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string', description: 'The proposal id, from attention_read or proposal_read.' },
-      verdict: {
-        type: 'string',
-        enum: ['accept', 'reject', 'close_ticket', 'hold_ticket'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      id: z.string().describe('The proposal id, from attention_read or proposal_read.'),
+      verdict: z
+        .enum(['accept', 'reject', 'close_ticket', 'hold_ticket'])
+        .describe(
           '"accept" performs the act. "reject" refuses it — for a plan that sends the goal back to a planner. ' +
-          '"close_ticket" closes the ticket with your note posted on it as the reason; "hold_ticket" takes the ' +
-          'watch tag off so nothing works it. The last two are for a plan only, and are for when the *ticket* ' +
-          'is the problem rather than the plan.',
-      },
-      note: {
-        type: 'string',
-        description: 'The reason, recorded with the verdict. Required for "close_ticket" — it is posted on the ticket.',
-      },
-      acknowledged: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
+            '"close_ticket" closes the ticket with your note posted on it as the reason; "hold_ticket" takes the ' +
+            'watch tag off so nothing works it. The last two are for a plan only, and are for when the *ticket* ' +
+            'is the problem rather than the plan.',
+        ),
+      note: z
+        .string()
+        .describe('The reason, recorded with the verdict. Required for "close_ticket" — it is posted on the ticket.')
+        .optional(),
+      acknowledged: z
+        .array(z.string())
+        .describe(
           'Caveat ids from proposal_read, for a plan that raises them. A plan is not released until every one ' +
-          'is named. Acknowledge them because the operator has read them, not to clear the gate.',
-      },
-      answers: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: 'The caveat id being answered.' },
-            answer: { type: 'string', description: "The operator's words, verbatim." },
-          },
-          required: ['id', 'answer'],
-        },
-        description:
+            'is named. Acknowledge them because the operator has read them, not to clear the gate.',
+        )
+        .optional(),
+      answers: z
+        .array(
+          z.object({
+            id: z.string().describe('The caveat id being answered.'),
+            answer: z.string().describe("The operator's words, verbatim."),
+          }),
+        )
+        .describe(
           'What the operator said back about a caveat — the option they picked between two the planner offered, ' +
-          'or the question they still have. Optional, and never a substitute for acknowledging: an answer is ' +
-          'appended to the plan for the agents that work it, and does not send the plan back for a replan.',
-      },
-    },
-    required: ['id', 'verdict'],
-  },
+            'or the question they still have. Optional, and never a substitute for acknowledging: an answer is ' +
+            'appended to the plan for the agents that work it, and does not send the plan back for a replan.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
@@ -201,19 +194,17 @@ export const recoveryDecide: DesktopToolFactory = (deps) => ({
     'session and worktree, "requeue" throws the run away and puts the work back for a fresh agent, "remove" ' +
     'drops it entirely. Orphaned runs hold the harness back from queueing new work, so an inbox with one in ' +
     'it is a fleet doing less than it could.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      taskId: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      taskId: z
+        .string()
+        .describe(
           'The task id from attention_read — the task, not the agent: the unit of recovery is the work, and an ' +
-          'agent is one thing that may or may not have been attached to it.',
-      },
-      verdict: { type: 'string', enum: ['restore', 'requeue', 'remove'] },
-    },
-    required: ['taskId', 'verdict'],
-  },
+            'agent is one thing that may or may not have been attached to it.',
+        ),
+      verdict: z.enum(['restore', 'requeue', 'remove']),
+    }),
+  ),
   handler: (args) => {
     const taskId = typeof args.taskId === 'string' ? args.taskId.trim() : '';
     if (!taskId) return toolError('taskId required — take it from attention_read.');

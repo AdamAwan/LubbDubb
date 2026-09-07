@@ -788,6 +788,36 @@ Three things carry the split:
 tool. Neither is a property any behavioural test can fail on — a tool that re-derived the caller by
 hand works, right up until it works for the wrong agent.
 
+### The advertised schema is derived, never written
+
+A tool declares its arguments **once, as a Zod schema**, and `inputSchema` is derived from it by
+`toolSchema` (`src/mcp/schema.ts`). No tool writes a JSON Schema literal, on either channel.
+
+The rule exists because the two used to be separate declarations of one shape, and nothing kept them
+in step. `validation_report` is the case that showed it: `src/validation/report.ts` validates the call
+with a `.strict()` Zod object, and `src/mcp/tools/validationReport.ts` advertised a hand-written
+schema with no `additionalProperties` and no `minLength`. `tools/list` told an agent that an extra
+field was acceptable and that an empty note was a string; the handler then refused both. The drift is
+invisible from either file — each is correct on its own — and it reads to the agent as a tool that
+rejects what it just asked for. Deriving one from the other makes that shape impossible to write.
+
+Two things follow from the derivation and are load-bearing:
+
+- **Strictness is read off the schema, not declared beside it.** `zod-to-json-schema` renders
+  `.strict()` and the default strip mode identically, so `toolSchema` inspects the schema's own
+  `unknownKeys` and emits `additionalProperties: false` only where the validator genuinely rejects
+  unknown keys. A hand-maintained "is this one strict" flag would be the second copy again, one layer
+  down.
+- **A runtime-built enum goes through `enumOf`.** `z.enum` needs a non-empty tuple and a list like
+  `CAUSES_BY_KIND[kind]` or `Object.keys(AGENT_ACTIONS)` is `readonly T[]`, so the cast lives in one
+  place rather than at each call site.
+
+What this does **not** yet do is collapse every tool's advertised schema onto the domain validator
+behind it. `validation_report` and the plan document (`PLAN_DOCUMENT_SHAPE`, shared by `plan_submit`,
+`plan_correct` and the desktop channel's `plan_amend`) are one declaration each; elsewhere the
+validator carries transforms and refinements that make its input shape different from what the tool
+advertises, and those remain two objects that happen to agree.
+
 ## Transport
 
 A **Unix domain socket** (named pipe on Windows), never a TCP port — the cockpit's HTTP surface is

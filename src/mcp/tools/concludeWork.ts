@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { BLOCKED_STATUS, CONCLUSION_STATUSES, CONCLUSION_VERDICT_HELP, validateConclusion } from '../conclusion.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
@@ -16,31 +18,28 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
     'issue will come back round with your note in front of the next agent. Say "blocked", naming the ' +
     'obstacle you raised, if you could not finish because of something that is not this goal at all — the ' +
     'goal parks until that clears rather than coming back round for the next agent to hit the same wall.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      status: {
-        type: 'string',
-        enum: [...CONCLUSION_STATUSES],
-        description: CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
-      },
-      obstacle: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      status: z
+        .enum(CONCLUSION_STATUSES)
+        .describe(CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. ')),
+      obstacle: z
+        .string()
+        .describe(
           'Required for blocked, ignored otherwise: the id of the obstacle that stopped you, as raise ' +
-          'answered it. The goal is parked while that obstacle stands and comes back on its own when it ' +
-          'clears — so this is what makes blocked a park rather than a dead end.',
-      },
-      note: {
-        type: 'string',
-        description:
+            'answered it. The goal is parked while that obstacle stands and comes back on its own when it ' +
+            'clears — so this is what makes blocked a park rather than a dead end.',
+        )
+        .optional(),
+      note: z
+        .string()
+        .describe(
           'What you delivered, or what is still outstanding and why. An operator decides what happens ' +
-          'to the ticket from this alone, and for more_work the next agent reads it as their starting ' +
-          'point — so be specific about what is left, not about what you did.',
-      },
-    },
-    required: ['status', 'note'],
-  },
+            'to the ticket from this alone, and for more_work the next agent reads it as their starting ' +
+            'point — so be specific about what is left, not about what you did.',
+        ),
+    }),
+  ),
   handler: (args) => {
     const parsed = validateConclusion(args);
     if (!parsed.ok) return toolError(`Conclusion rejected: ${parsed.error}`);

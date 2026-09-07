@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { PART_OUTCOME_KIND_HELP, PART_OUTCOME_KINDS, validatePartConclusion } from '../partOutcome.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
@@ -14,30 +16,27 @@ export const concludePart: ToolFactory = ({ deps, agent, ok }) => ({
     'work, or the premise was wrong). Without it a part like that stays open forever and holds the ' +
     'whole plan, and its issue, open with it. This says nothing about the other parts or about ' +
     'whether the issue as a whole is finished.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      kind: {
-        type: 'string',
-        enum: [...PART_OUTCOME_KINDS],
-        description: PART_OUTCOME_KINDS.map((k) => `${k}: ${PART_OUTCOME_KIND_HELP[k]}`).join('. '),
-      },
-      summary: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      kind: z
+        .enum(PART_OUTCOME_KINDS)
+        .describe(PART_OUTCOME_KINDS.map((k) => `${k}: ${PART_OUTCOME_KIND_HELP[k]}`).join('. ')),
+      summary: z
+        .string()
+        .describe(
           'What you produced or found. An operator reads this to decide what the plan achieved, and ' +
-          'for a determination it is the entire record of why no code was written — so give the ' +
-          'evidence, not just the conclusion.',
-      },
-      evidenceRef: {
-        type: 'string',
-        description:
+            'for a determination it is the entire record of why no code was written — so give the ' +
+            'evidence, not just the conclusion.',
+        ),
+      evidenceRef: z
+        .string()
+        .describe(
           'Optional: "flag:<id>" for an artifact you surfaced, or "finding:<id>" for something you ' +
-          'reported with report_finding. Omit it if you have neither.',
-      },
-    },
-    required: ['kind', 'summary'],
-  },
+            'reported with report_finding. Omit it if you have neither.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const parsed = validatePartConclusion(args);
     if (!parsed.ok) return toolError(`Part conclusion rejected: ${parsed.error}`);

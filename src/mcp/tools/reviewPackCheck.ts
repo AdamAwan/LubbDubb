@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { toolError } from '../protocol.js';
+import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -16,88 +18,73 @@ export const reviewPackCheck: ToolFactory = ({ deps, agent, task, ok }) => ({
     'contradicting code is not on the walk a `counter` range the harness reads off the tree. Finish with ' +
     '`order`: every idea id once, in the order to read them. Every idea and every claim must be answered; the ' +
     'refusal names the field. Nothing else in the pack can be changed from here.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      ideas: {
-        type: 'array',
-        description: 'One entry per idea you were handed, by id.',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: 'The idea id from your prompt (e.g. "idea_ab12cd34", or "plumbing").' },
-            attention: {
-              type: 'string',
-              enum: ['read', 'decide', 'skim', 'split'],
-              description:
+  inputSchema: toolSchema(
+    z.object({
+      ideas: z
+        .array(
+          z.object({
+            id: z.string().describe('The idea id from your prompt (e.g. "idea_ab12cd34", or "plumbing").'),
+            attention: z
+              .enum(['read', 'decide', 'skim', 'split'])
+              .describe(
                 'How hard to look. read: needs reading. decide: a judgement call for the reviewer. skim: safe to ' +
-                'pass over. split: unrelated to the rest of the pull request and could be its own.',
-            },
-            cue: {
-              type: 'string',
-              description:
+                  'pass over. split: unrelated to the rest of the pull request and could be its own.',
+              ),
+            cue: z
+              .string()
+              .describe(
                 'One short line: why this label, and where the risk is. At most 70 characters — plainest words, ' +
-                'one idea, no clauses hung off dashes.',
-            },
-            claims: {
-              type: 'array',
-              description: 'One entry per claim under this idea, by number. Every claim must be answered.',
-              items: {
-                type: 'object',
-                properties: {
-                  claim: { type: 'integer', description: 'The claim number from your prompt, 1-based.' },
-                  verdict: { type: 'string', enum: ['true', 'false', 'cant_tell'] },
-                  evidence: {
-                    type: 'string',
-                    description:
+                  'one idea, no clauses hung off dashes.',
+              ),
+            claims: z
+              .array(
+                z.object({
+                  claim: z.number().int().describe('The claim number from your prompt, 1-based.'),
+                  verdict: z.enum(['true', 'false', 'cant_tell']),
+                  evidence: z
+                    .string()
+                    .describe(
                       'What you did to decide — the search, the test, the file you read — or why it cannot be decided here.',
-                  },
-                  finding: {
-                    type: 'object',
-                    description: 'Required on a false claim, forbidden otherwise.',
-                    properties: {
-                      headline: { type: 'string', description: 'One plain line saying what is wrong.' },
-                      body: {
-                        type: 'string',
-                        description:
+                    ),
+                  finding: z
+                    .object({
+                      headline: z.string().describe('One plain line saying what is wrong.'),
+                      body: z
+                        .string()
+                        .describe(
                           'The consequence worked out — a table where numbers make it concrete — how serious it is, ' +
-                          'and whose call it is. Markdown.',
-                      },
-                      step: {
-                        type: 'integer',
-                        description:
+                            'and whose call it is. Markdown.',
+                        ),
+                      step: z
+                        .number()
+                        .int()
+                        .describe(
                           'The step of the walk the claim is about, 1-based as your prompt numbers them. Leave out if none fits.',
-                      },
-                      counter: {
-                        type: 'object',
-                        description: 'The code that contradicts the claim, where it is not already on the walk.',
-                        properties: {
-                          path: { type: 'string', description: 'Relative to the checkout root.' },
-                          start: { type: 'integer', description: 'First line, 1-based.' },
-                          end: { type: 'integer', description: 'Last line, inclusive.' },
-                          caption: { type: 'string', description: 'One line on the block: what it is.' },
-                        },
-                        required: ['path', 'start', 'end', 'caption'],
-                      },
-                    },
-                    required: ['headline', 'body'],
-                  },
-                },
-                required: ['claim', 'verdict', 'evidence'],
-              },
-            },
-          },
-          required: ['id', 'attention', 'cue', 'claims'],
-        },
-      },
-      order: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Every idea id exactly once, in the order to read them — where to spend the time first.',
-      },
-    },
-    required: ['ideas', 'order'],
-  },
+                        )
+                        .optional(),
+                      counter: z
+                        .object({
+                          path: z.string().describe('Relative to the checkout root.'),
+                          start: z.number().int().describe('First line, 1-based.'),
+                          end: z.number().int().describe('Last line, inclusive.'),
+                          caption: z.string().describe('One line on the block: what it is.'),
+                        })
+                        .describe('The code that contradicts the claim, where it is not already on the walk.')
+                        .optional(),
+                    })
+                    .describe('Required on a false claim, forbidden otherwise.')
+                    .optional(),
+                }),
+              )
+              .describe('One entry per claim under this idea, by number. Every claim must be answered.'),
+          }),
+        )
+        .describe('One entry per idea you were handed, by id.'),
+      order: z
+        .array(z.string())
+        .describe('Every idea id exactly once, in the order to read them — where to spend the time first.'),
+    }),
+  ),
   handler: async (args) => {
     const desk = deps.reviewPackChecker;
     if (!desk) {

@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { overruleShortfall } from '../delivery/overrule.js';
+import { toolSchema } from './schema.js';
 import { goalFingerprint } from '../intake/appraisal.js';
 import { settlePlacement } from '../intake/placementSettle.js';
 import { MAX_INSTRUCTION, withdrawGoalInstruction, writeGoalInstruction } from '../goalInstructions.js';
@@ -18,40 +20,40 @@ export const goalGate: DesktopToolFactory = (deps) => ({
     'of the next agent; `environmentGate` says a delivered goal is not waiting on a deployment, which is what ' +
     'opens its validation and close-out rows. Read the hold in fleet_status or goal_read first — each names ' +
     'itself as a queue reason.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      appraisal: {
-        type: 'string',
-        enum: ['workable', 'unclear', 'clear'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      appraisal: z
+        .enum(['workable', 'unclear', 'clear'])
+        .describe(
           '"workable" releases a goal an appraiser called unclear; "unclear" stops one without editing the ' +
-          'ticket; "clear" deletes the verdict, so the next cycle appraises it again.',
-      },
-      summary: {
-        type: 'string',
-        description: 'Why, for an appraisal verdict. Optional — the record says the operator decided either way.',
-      },
-      overrule: {
-        type: 'string',
-        description:
+            'ticket; "clear" deletes the verdict, so the next cycle appraises it again.',
+        )
+        .optional(),
+      summary: z
+        .string()
+        .describe('Why, for an appraisal verdict. Optional — the record says the operator decided either way.')
+        .optional(),
+      overrule: z
+        .string()
+        .describe(
           'Why the standing shortfall is wrong, in your own words. Refused where no shortfall stands — with ' +
-          'nothing standing there is no verdict to be wrong.',
-      },
-      environmentGate: {
-        type: 'boolean',
-        description:
+            'nothing standing there is no verdict to be wrong.',
+        )
+        .optional(),
+      environmentGate: z
+        .boolean()
+        .describe(
           'true says this goal is not waiting on an environment, so its bench rows open now; false puts it ' +
-          'back to waiting. A release needs `note`.',
-      },
-      note: {
-        type: 'string',
-        description: 'Required with `environmentGate: true` — it is the only account of why this goal stopped waiting.',
-      },
-    },
-    required: ['issue'],
-  },
+            'back to waiting. A release needs `note`.',
+        )
+        .optional(),
+      note: z
+        .string()
+        .describe('Required with `environmentGate: true` — it is the only account of why this goal stopped waiting.')
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -138,25 +140,27 @@ export const goalPlacement: DesktopToolFactory = (deps) => ({
     'classification node. Send the field with no value to say the goal wants no such thing — that settles the ' +
     'question without writing anything. Only Azure DevOps has either; on a tracker without them this refuses ' +
     'rather than pretending. Neither answer starts, stops or re-orders any work.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      parent: {
-        type: ['number', 'null'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      parent: z
+        .number()
+        .nullable()
+        .describe(
           'The container to hang this item off, e.g. 240. null answers "no container" — the question is ' +
-          'settled and the tracker is untouched.',
-      },
-      areaPath: {
-        type: ['string', 'null'],
-        description:
+            'settled and the tracker is untouched.',
+        )
+        .optional(),
+      areaPath: z
+        .string()
+        .nullable()
+        .describe(
           'The classification node to move it to. null (or "") answers "leave it where it is" and settles the ' +
-          'question.',
-      },
-    },
-    required: ['issue'],
-  },
+            'question.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -211,18 +215,16 @@ export const goalInstruct: DesktopToolFactory = (deps) => ({
     'and a finished plan goes back to a planner. Use it when the thing built is not the thing you wanted and ' +
     'the ticket does not say why. `withdraw` takes one back by id — which stops the words standing, but does ' +
     'not un-retract the delivery or re-finish the plan.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      text: {
-        type: 'string',
-        description: `What you want done, in your own words. At most ${MAX_INSTRUCTION} characters.`,
-      },
-      withdraw: { type: 'string', description: 'The id of a standing instruction to take back, from goal_read.' },
-    },
-    required: ['issue'],
-  },
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      text: z
+        .string()
+        .describe(`What you want done, in your own words. At most ${MAX_INSTRUCTION} characters.`)
+        .optional(),
+      withdraw: z.string().describe('The id of a standing instruction to take back, from goal_read.').optional(),
+    }),
+  ),
   handler: async (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);

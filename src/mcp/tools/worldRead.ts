@@ -1,7 +1,9 @@
 import type { Store } from '../../store/store.js';
 import type { Task } from '../../types.js';
 import { liveParts } from '../../plans/parts.js';
+import { z } from 'zod';
 import { toolError } from '../protocol.js';
+import { toolSchema } from '../schema.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../worldRead.js';
 import type { ToolFactory } from './context.js';
 
@@ -15,24 +17,19 @@ export const worldRead: ToolFactory = ({ deps, task, ok }) => ({
     'explains why you were dispatched), it works whichever provider is configured, and it ' +
     'costs no API call. Pass the ref you were given in `_status.origin`, or any other item ' +
     "the harness is tracking. Omit `ref` to read your own origin's item.",
-  inputSchema: {
-    type: 'object',
-    properties: {
-      kind: {
-        type: 'string',
-        enum: [...WORLD_READ_KINDS],
-        description: 'Which kind of world item to read.',
-      },
-      ref: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      kind: z.enum(WORLD_READ_KINDS).describe('Which kind of world item to read.'),
+      ref: z
+        .string()
+        .describe(
           'The item, in the ref shape used everywhere else: "pr:42", "issue:12". ' +
-          'An origin ref with a suffix ("pr:42:ci", "issue:12:part:schema") names the same item, ' +
-          'and a bare number works too. Defaults to your own origin.',
-      },
-    },
-    required: ['kind'],
-  },
+            'An origin ref with a suffix ("pr:42:ci", "issue:12:part:schema") names the same item, ' +
+            'and a bare number works too. Defaults to your own origin.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const read = readWorld(deps.store, task, args);
     return read.ok ? ok(read.payload) : toolError(read.error);

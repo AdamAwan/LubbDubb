@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { reviewTargetPr } from '../../review/prReview.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { PrReviewVerdict } from '../../types.js';
 import type { ToolFactory } from './context.js';
@@ -14,31 +16,26 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
     'do not push, and do not open anything. You are reviewed once, so a finding you leave out is a ' +
     'finding nobody hears — and a list of nits padded around one real defect is how the real one gets ' +
     'skimmed past.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      verdict: {
-        type: 'string',
-        enum: ['clear', 'findings'],
-        description:
-          'clear: nothing here needs raising before this merges. findings: something does, and it is listed.',
-      },
-      summary: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      verdict: z
+        .enum(['clear', 'findings'])
+        .describe('clear: nothing here needs raising before this merges. findings: something does, and it is listed.'),
+      summary: z
+        .string()
+        .describe(
           'One sentence saying what this change does, as you understood it from the diff. It is what makes ' +
-          'a wrong reading visible: a summary that does not match the ticket is itself the finding.',
-      },
-      findings: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
+            'a wrong reading visible: a summary that does not match the ticket is itself the finding.',
+        ),
+      findings: z
+        .array(z.string())
+        .describe(
           'What you found, one entry each, most serious first. Each says where it is and what breaks — a ' +
-          'file and a concrete failure, not "consider refactoring". Omit on a "clear" verdict.',
-      },
-    },
-    required: ['verdict', 'summary'],
-  },
+            'file and a concrete failure, not "consider refactoring". Omit on a "clear" verdict.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const prNumber = reviewTargetPr(task.originRef, 'review');
     if (prNumber === null) {

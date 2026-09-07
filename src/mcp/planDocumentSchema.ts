@@ -1,233 +1,217 @@
+import { z } from 'zod';
+
 // → docs/spec/11-mcp-tools.md
 
-export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  properties: {
-    diagnosis: {
-      type: 'string',
-      description:
-        'What is actually wrong, in the code — the root cause you found, not a restatement of the ' +
+export const PLAN_DOCUMENT_SHAPE = {
+  diagnosis: z
+    .string()
+    .describe(
+      'What is actually wrong, in the code — the root cause you found, not a restatement of the ' +
         'issue. A quick overview, not the argument: markdown bullets, one plain-English point each, four ' +
         'or five at most, and no file paths or line numbers — name the code in words and put the citations ' +
         'in "evidence", which is drawn beside this. The full reasoning goes in "document". Omit only when ' +
         'the work is not a defect and there is nothing to diagnose.',
-    },
-    approach: {
-      type: 'string',
-      description:
-        'What you are going to do about it, as two or three markdown bullets — one plain-English point ' +
+    )
+    .optional(),
+  approach: z
+    .string()
+    .describe(
+      'What you are going to do about it, as two or three markdown bullets — one plain-English point ' +
         'per move you are making, and no file paths. This is the summary the operator approves on, so ' +
         'write the fix, not the shape of the pull requests.',
-    },
-    reason: { type: 'string', description: 'Why this shape — one or two sentences. Not the fix; the split.' },
-    risks: {
-      type: 'string',
-      description:
-        'What could go wrong with this split — one or two short sentences, or a couple of brief bullets. ' +
+    )
+    .optional(),
+  reason: z.string().describe('Why this shape — one or two sentences. Not the fix; the split.'),
+  risks: z
+    .string()
+    .describe(
+      'What could go wrong with this split — one or two short sentences, or a couple of brief bullets. ' +
         'It is drawn as a tick box the operator must read before they may approve, so keep it to what ' +
         'would change a mind.',
-    },
-    outOfScope: { type: 'string', description: 'What you deliberately left out, and why.' },
-    alternatives: {
-      type: 'string',
-      description:
-        'What you considered and rejected, and why each was rejected. Name real options you weighed, ' +
+    )
+    .optional(),
+  outOfScope: z.string().describe('What you deliberately left out, and why.').optional(),
+  alternatives: z
+    .string()
+    .describe(
+      'What you considered and rejected, and why each was rejected. Name real options you weighed, ' +
         'not strawmen — this is the field an operator reads to decide whether you looked around before ' +
         'you chose. An approach with no alternatives is one nobody can disagree with usefully.',
-    },
-    openQuestions: {
-      type: 'string',
-      description:
-        'What you are least sure about: the assumption you would most like argued with, and what would ' +
+    )
+    .optional(),
+  openQuestions: z
+    .string()
+    .describe(
+      'What you are least sure about: the assumption you would most like argued with, and what would ' +
         'change your mind. This is the agenda if the operator opens a discussion, so be specific about ' +
         'the decision rather than modest about the plan. One or two short sentences — it is drawn as a ' +
         'tick box on the approval card, and the write-up is where the long version belongs.',
-    },
-    verification: {
-      type: 'string',
-      description:
-        'How anyone will know the whole thing worked, once every part has landed, as markdown bullets — ' +
+    )
+    .optional(),
+  verification: z
+    .string()
+    .describe(
+      'How anyone will know the whole thing worked, once every part has landed, as markdown bullets — ' +
         'one plain-English point per thing that has to be true, and no file paths. Not per part — that is ' +
         '"acceptance" — and not the test suite unless the test suite genuinely settles it.',
-    },
-    evidence: {
-      type: 'array',
-      description:
-        'Where in the code the diagnosis comes from. Cite the places you actually read; a root cause with ' +
+    )
+    .optional(),
+  evidence: z
+    .array(
+      z.object({
+        path: z.string().describe('Repository-relative path.'),
+        line: z.number().describe('Optional. Omit when the claim is about the file.').optional(),
+        note: z.string().describe('What the reader is meant to see there.').optional(),
+      }),
+    )
+    .describe(
+      'Where in the code the diagnosis comes from. Cite the places you actually read; a root cause with ' +
         'no citation cannot be checked, and a reader who cannot check it has to take it on trust.',
-      items: {
-        type: 'object',
-        properties: {
-          path: { type: 'string', description: 'Repository-relative path.' },
-          line: { type: 'number', description: 'Optional. Omit when the claim is about the file.' },
-          note: { type: 'string', description: 'What the reader is meant to see there.' },
-        },
-        required: ['path'],
-      },
-    },
-    document: {
-      type: 'string',
-      description:
-        'The full write-up in markdown — the version a human reads before approving. The fields above are ' +
+    )
+    .optional(),
+  document: z
+    .string()
+    .describe(
+      'The full write-up in markdown — the version a human reads before approving. The fields above are ' +
         'the summary; this is the argument. Do not repeat them: cover how you got to the diagnosis, what ' +
         'the code actually looked like, and what a reviewer of the finished work should check.',
-    },
-    parts: {
-      type: 'array',
-      description: 'The parts, in order. At least one is required — one part is a plan, not a special case.',
-      items: {
-        type: 'object',
-        properties: {
-          slug: {
-            type: 'string',
-            description: 'Stable lowercase kebab-case id. Keep it identical across a replan.',
-          },
-          title: { type: 'string' },
-          scope: { type: 'string', description: 'The files or areas this part owns, in a sentence.' },
-          touches: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              'The same ownership claim as repository paths — a directory or a file per entry. What this ' +
+    )
+    .optional(),
+  parts: z
+    .array(
+      z.object({
+        slug: z.string().describe('Stable lowercase kebab-case id. Keep it identical across a replan.'),
+        title: z.string(),
+        scope: z.string().describe('The files or areas this part owns, in a sentence.'),
+        touches: z
+          .array(z.string())
+          .describe(
+            'The same ownership claim as repository paths — a directory or a file per entry. What this ' +
               'part is allowed to write. Declare it even when "scope" already says so in prose: this is ' +
               'the form that gets compared to what the part actually wrote.',
-          },
-          size: {
-            type: 'string',
-            enum: ['s', 'm', 'l'],
-            description:
-              'How big this part is to *review*, not how long it takes. Three parts is not a cost; three ' +
+          )
+          .optional(),
+        size: z
+          .enum(['s', 'm', 'l'])
+          .describe(
+            'How big this part is to *review*, not how long it takes. Three parts is not a cost; three ' +
               'large ones is, and that is the thing an operator is agreeing to.',
-          },
-          dependsOn: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              'Sibling slugs this part needs first. One means it stacks on that part and starts once ' +
+          )
+          .optional(),
+        dependsOn: z
+          .array(z.string())
+          .describe(
+            'Sibling slugs this part needs first. One means it stacks on that part and starts once ' +
               'that part has pushed. Several means the lanes rejoin: it starts only once all of them ' +
               'have merged, and is cut from the integration branch.',
-          },
-          rationale: { type: 'string', description: 'Why this is its own PR rather than folded into a sibling.' },
-          acceptance: { type: 'string', description: 'What makes this part done.' },
-        },
-        required: ['slug', 'title', 'scope'],
-      },
-    },
-    validation: {
-      type: 'object',
-      description:
-        'How anyone checks the goal was met, as steps rather than as a paragraph — "verification" is the ' +
+          )
+          .optional(),
+        rationale: z.string().describe('Why this is its own PR rather than folded into a sibling.').optional(),
+        acceptance: z.string().describe('What makes this part done.').optional(),
+      }),
+    )
+    .describe('The parts, in order. At least one is required — one part is a plan, not a special case.'),
+  validation: z
+    .object({
+      resources: z
+        .array(
+          z.object({
+            name: z.string().describe('A file name, not a path.'),
+            kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
+            note: z.string().describe('What it is, and what a check does with it.').optional(),
+            provided: z.boolean().describe('False is "I need this and cannot produce it".').optional(),
+          }),
+        )
+        .describe(
+          'Things a check needs that are not in the repository: a seeded fixture, a reference screenshot, ' +
+            'an account. Name them; never write paths. "provided": false says you need something you cannot ' +
+            'produce, and files an ask for it.',
+        )
+        .optional(),
+      checks: z
+        .array(
+          z.object({
+            id: z.string().describe('Stable lowercase kebab-case id, and the merge key on a replan.'),
+            title: z.string().describe('One line, the headline.'),
+            do: z.string().describe('The procedure, in markdown, for somebody who has not read your plan.'),
+            expect: z.string().describe('What a pass looks like. A check that cannot say this is not a check.'),
+            uses: z
+              .array(z.string())
+              .describe('Names of resources declared above that this check needs. Names, never paths.')
+              .optional(),
+            covers: z
+              .array(z.string())
+              .describe(
+                'Part slugs this check exercises, so the sheet can show which parts nothing checks. ' +
+                  'Validation is per goal, so a check spanning several parts is normal.',
+              )
+              .optional(),
+            fleetCandidate: z
+              .boolean()
+              .describe(
+                'Your nomination that an agent could run this rather than a person. A suggestion for ' +
+                  'whoever decides — it dispatches nothing.',
+              )
+              .optional(),
+            why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
+          }),
+        )
+        .describe(
+          'The checks themselves. Who runs each one is not yours to say — the fleet has no browser, no ' +
+            'interactive login and no account on whatever environment this deployment tests against, and you ' +
+            'cannot know that from the repository. A check carrying an "actor" is refused.',
+        )
+        .optional(),
+    })
+    .describe(
+      'How anyone checks the goal was met, as steps rather than as a paragraph — "verification" is the ' +
         'sentence, this is the procedure. Declare it whenever there is something a person or an agent could ' +
         'actually run against the delivered goal, whatever its size: a one-part plan needs validating as much ' +
         'as a decomposed one.',
-      properties: {
-        resources: {
-          type: 'array',
-          description:
-            'Things a check needs that are not in the repository: a seeded fixture, a reference screenshot, ' +
-            'an account. Name them; never write paths. "provided": false says you need something you cannot ' +
-            'produce, and files an ask for it.',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: 'A file name, not a path.' },
-              kind: { type: 'string', enum: ['fixture', 'access', 'reference', 'data'] },
-              note: { type: 'string', description: 'What it is, and what a check does with it.' },
-              provided: { type: 'boolean', description: 'False is "I need this and cannot produce it".' },
-            },
-            required: ['name'],
-          },
-        },
-        checks: {
-          type: 'array',
-          description:
-            'The checks themselves. Who runs each one is not yours to say — the fleet has no browser, no ' +
-            'interactive login and no account on whatever environment this deployment tests against, and you ' +
-            'cannot know that from the repository. A check carrying an "actor" is refused.',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key on a replan.' },
-              title: { type: 'string', description: 'One line, the headline.' },
-              do: {
-                type: 'string',
-                description: 'The procedure, in markdown, for somebody who has not read your plan.',
-              },
-              expect: {
-                type: 'string',
-                description: 'What a pass looks like. A check that cannot say this is not a check.',
-              },
-              uses: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Names of resources declared above that this check needs. Names, never paths.',
-              },
-              covers: {
-                type: 'array',
-                items: { type: 'string' },
-                description:
-                  'Part slugs this check exercises, so the sheet can show which parts nothing checks. ' +
-                  'Validation is per goal, so a check spanning several parts is normal.',
-              },
-              fleetCandidate: {
-                type: 'boolean',
-                description:
-                  'Your nomination that an agent could run this rather than a person. A suggestion for ' +
-                  'whoever decides — it dispatches nothing.',
-              },
-              why: { type: 'string', description: 'Why an agent could run it. Kept only with the nomination.' },
-            },
-            required: ['id', 'title', 'do', 'expect'],
-          },
-        },
-      },
-    },
-    watch: {
-      type: 'object',
-      description:
-        'What a running system would have to show, once this is deployed, for the work to have done what it ' +
+    )
+    .optional(),
+  watch: z
+    .object({
+      signals: z
+        .array(
+          z.object({
+            id: z.string().describe('Stable lowercase kebab-case id, and the merge key on a replan.'),
+            title: z.string().describe('One line, the headline.'),
+            query: z
+              .string()
+              .describe(
+                "The query itself, in whatever language this deployment's telemetry answers. It is handed to " +
+                  "the operator's command as a value, never pasted into a shell.",
+              ),
+            presence: z
+              .string()
+              .describe(
+                'A second query whose only job is to prove the code path is running at all. Required, and it ' +
+                  'is the whole design: a query naming an operation that does not exist returns zero rows, and ' +
+                  'zero rows is indistinguishable from a healthy release. Without this the harness would report ' +
+                  'your fix verified on the strength of a typo.',
+              ),
+            tolerate: z
+              .number()
+              .describe('The count this must not exceed. Almost always 0 — the thing should not be happening.')
+              .optional(),
+            why: z.string().describe('Why this is the right question to ask after it ships.').optional(),
+          }),
+        )
+        .describe(
+          'Things that should not be happening: exceptions, failures, retries, a log line only written when ' +
+            'something has gone wrong.',
+        )
+        .optional(),
+    })
+    .describe(
+      'What a running system would have to show, once this is deployed, for the work to have done what it ' +
         'claimed. The layer above "validation": that asks whether the goal was met, this asks whether the thing ' +
         'is behaving now that it is there. Declare it when there is something running you could observe — and ' +
         'for a defect it is knowable now, because the bug report is the signal: "job X keeps timing out" is ' +
         'its own post-deploy check. Declaring nothing is a legitimate answer for a refactor, a docs change or a ' +
         'build fix, and is not the same as declaring everything is fine. Each query is run once against the ' +
         'environment the moment you submit, and you get told what it answered.',
-      properties: {
-        signals: {
-          type: 'array',
-          description:
-            'Things that should not be happening: exceptions, failures, retries, a log line only written when ' +
-            'something has gone wrong.',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key on a replan.' },
-              title: { type: 'string', description: 'One line, the headline.' },
-              query: {
-                type: 'string',
-                description:
-                  "The query itself, in whatever language this deployment's telemetry answers. It is handed to " +
-                  "the operator's command as a value, never pasted into a shell.",
-              },
-              presence: {
-                type: 'string',
-                description:
-                  'A second query whose only job is to prove the code path is running at all. Required, and it ' +
-                  'is the whole design: a query naming an operation that does not exist returns zero rows, and ' +
-                  'zero rows is indistinguishable from a healthy release. Without this the harness would report ' +
-                  'your fix verified on the strength of a typo.',
-              },
-              tolerate: {
-                type: 'number',
-                description: 'The count this must not exceed. Almost always 0 — the thing should not be happening.',
-              },
-              why: { type: 'string', description: 'Why this is the right question to ask after it ships.' },
-            },
-            required: ['id', 'title', 'query', 'presence'],
-          },
-        },
-      },
-    },
-  },
-  required: ['parts', 'reason'],
+    )
+    .optional(),
 };

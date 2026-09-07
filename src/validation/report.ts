@@ -21,16 +21,26 @@ export function validationReportTarget(
   };
 }
 
-const ReportSchema = z
+export const ReportSchema = z
   .object({
-    result: z.enum(['passed', 'failed', 'handback'], {
-      required_error: 'result must be "passed", "failed" or "handback"',
-      invalid_type_error: 'result must be "passed", "failed" or "handback"',
-    }),
+    result: z
+      .enum(['passed', 'failed', 'handback'], {
+        required_error: 'result must be "passed", "failed" or "handback"',
+        invalid_type_error: 'result must be "passed", "failed" or "handback"',
+      })
+      .describe(
+        '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
+          'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded and ' +
+          'a person gets it back.',
+      ),
     note: z
       .string({ required_error: 'note is required — say what you saw', invalid_type_error: 'note is required' })
       .trim()
-      .min(1, 'note is required — say what you saw'),
+      .min(1, 'note is required — say what you saw')
+      .describe(
+        'What you actually saw, or what stopped you. This is the whole of what an operator reads later ' +
+          'instead of running the check again, so "passed" is not a note.',
+      ),
   })
   .strict('a report declares only "result" and "note" — which check is decided by what you were dispatched to run');
 

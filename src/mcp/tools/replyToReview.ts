@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { replyOrigin } from '../../dispatcher/reviewThreads.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -19,36 +21,36 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
     'The harness may put your reply to the operator before it goes out — that is their setting, not ' +
     'a fault, and the call tells you which happened. Either way your work here is done when you have ' +
     'called this; nothing is waiting on you afterwards.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      body: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      body: z
+        .string()
+        .describe(
           'The reply, as the reviewer will read it. Answer what they asked and nothing else: what ' +
-          'you changed, or why you are keeping the current approach. Do not restate their comment ' +
-          'back to them, and do not thank them for it at length.',
-      },
-      thread: {
-        type: 'string',
-        description:
+            'you changed, or why you are keeping the current approach. Do not restate their comment ' +
+            'back to them, and do not thank them for it at length.',
+        ),
+      thread: z
+        .string()
+        .describe(
           'The id of the review thread you are answering — the "thread <id>" beside each comment in ' +
-          'your prompt. Omit it only for a reply to the pull request itself rather than to a thread; ' +
-          'an omitted id means nobody reading the thread sees your answer in it.',
-      },
-      resolved: {
-        type: 'boolean',
-        description:
+            'your prompt. Omit it only for a reply to the pull request itself rather than to a thread; ' +
+            'an omitted id means nobody reading the thread sees your answer in it.',
+        )
+        .optional(),
+      resolved: z
+        .boolean()
+        .describe(
           'True if this thread is now dealt with — you made the change the reviewer asked for, or ' +
-          'answered a question that needed no change — and the harness should mark it resolved. ' +
-          'False (the default) leaves it open for the reviewer, which is what you want where you are ' +
-          'defending an approach they may still disagree with, or where your answer raises something ' +
-          'for them to decide. You cannot resolve a thread yourself: the reply goes out as the ' +
-          'harness, so this flag is the only way one gets closed.',
-      },
-    },
-    required: ['body'],
-  },
+            'answered a question that needed no change — and the harness should mark it resolved. ' +
+            'False (the default) leaves it open for the reviewer, which is what you want where you are ' +
+            'defending an approach they may still disagree with, or where your answer raises something ' +
+            'for them to decide. You cannot resolve a thread yourself: the reply goes out as the ' +
+            'harness, so this flag is the only way one gets closed.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const scope = replyOrigin(task.originRef);
     if (!scope.ok) return toolError(scope.error);

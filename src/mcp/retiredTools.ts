@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { RETIRED_TOOL_NAMES, retiredToolMessage } from './names.js';
+import { toolSchema } from './schema.js';
 import { toolError, type McpTool } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -8,7 +10,7 @@ export function retiredTools(): McpTool[] {
     name,
     hidden: true,
     description: retiredToolMessage(name),
-    inputSchema: { type: 'object', properties: {} },
+    inputSchema: toolSchema(z.object({})),
     handler: () => toolError(retiredToolMessage(name)),
   }));
 }

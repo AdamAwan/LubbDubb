@@ -1,8 +1,10 @@
 import { issueOrigin } from '../../plans/planning.js';
+import { toolSchema } from '../schema.js';
 import {
   amendedReportReason,
   amendedSinceRunBegan,
   handbackReason,
+  ReportSchema,
   validateReport,
   validationReportTarget,
 } from '../../validation/report.js';
@@ -19,26 +21,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     'precisely because those had already happened. If you could not run it — no login, no browser, no access ' +
     'to the environment — say "handback" and why: that records no result and gives the check back to the ' +
     'operator, and it is the right answer rather than a last resort.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      result: {
-        type: 'string',
-        enum: ['passed', 'failed', 'handback'],
-        description:
-          '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
-          'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded and ' +
-          'a person gets it back.',
-      },
-      note: {
-        type: 'string',
-        description:
-          'What you actually saw, or what stopped you. This is the whole of what an operator reads later ' +
-          'instead of running the check again, so "passed" is not a note.',
-      },
-    },
-    required: ['result', 'note'],
-  },
+  inputSchema: toolSchema(ReportSchema),
   handler: (args) => {
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);

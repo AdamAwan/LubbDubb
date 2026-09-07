@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { normalisePadDecision, normalisePadNote } from '../../scratch/pad.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -16,45 +18,30 @@ export const scratchAppend: ToolFactory = ({ deps, agent, ok }) => ({
     'own task (use report_finding). Add a `decision` when the entry records a fork — a moment the ' +
     'change could reasonably have gone another way — with what you chose, why, and the alternatives ' +
     'you rejected; an entry without one is an ordinary note.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      note: { type: 'string', description: 'What you learned, tried, or decided, in plain words.' },
-      topic: {
-        type: 'string',
-        description: 'Optional short tag for scanning, e.g. "store", "ci", "the merge gate".',
-      },
-      decision: {
-        type: 'object',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      note: z.string().describe('What you learned, tried, or decided, in plain words.'),
+      topic: z.string().describe('Optional short tag for scanning, e.g. "store", "ci", "the merge gate".').optional(),
+      decision: z
+        .object({
+          chose: z.string().describe('What the change does here, in one line.'),
+          because: z.string().describe('Why, in one line.'),
+          rejected: z
+            .array(z.object({ alternative: z.string(), because: z.string() }))
+            .describe('The alternatives not taken, each with its reason. May be empty.')
+            .optional(),
+          paths: z
+            .array(z.string())
+            .describe('The files this fork touches, where you can say. May be empty.')
+            .optional(),
+        })
+        .describe(
           'Present only on a fork. One line each: what you chose here and why, the alternatives you ' +
-          'rejected with the reason for each, and the files the fork touches where you can say.',
-        properties: {
-          chose: { type: 'string', description: 'What the change does here, in one line.' },
-          because: { type: 'string', description: 'Why, in one line.' },
-          rejected: {
-            type: 'array',
-            description: 'The alternatives not taken, each with its reason. May be empty.',
-            items: {
-              type: 'object',
-              properties: {
-                alternative: { type: 'string' },
-                because: { type: 'string' },
-              },
-              required: ['alternative', 'because'],
-            },
-          },
-          paths: {
-            type: 'array',
-            description: 'The files this fork touches, where you can say. May be empty.',
-            items: { type: 'string' },
-          },
-        },
-        required: ['chose', 'because'],
-      },
-    },
-    required: ['note'],
-  },
+            'rejected with the reason for each, and the files the fork touches where you can say.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const parsed = normalisePadNote(args.note, args.topic);
     if (!parsed.ok) return toolError(`Note rejected: ${parsed.error}`);

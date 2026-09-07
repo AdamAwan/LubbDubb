@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
@@ -35,7 +36,8 @@ import { agentControl, jobCreate } from './desktopWork.js';
 import { goalGate, goalInstruct, goalPlacement } from './desktopGoal.js';
 import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
-import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
+import { PLAN_DOCUMENT_SHAPE } from './planDocumentSchema.js';
+import { toolSchema } from './schema.js';
 import { toolError, toolJson, type McpTool, type ToolCallResult } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -61,19 +63,18 @@ const validationRead: DesktopToolFactory = (deps) => ({
     "Read a goal's validation plan: the checks somebody has to actually carry out before the goal can be " +
     'called done, what each one asks for, and what has already been recorded about it. Call this first — with ' +
     'a check letter to get the full procedure for one, or without to see the whole list.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      check: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      check: z
+        .string()
+        .describe(
           'Optional. A letter like "C", or a check id. Given, the reply carries that check\'s full procedure ' +
-          'rather than a one-line summary.',
-      },
-    },
-    required: ['issue'],
-  },
+            'rather than a one-line summary.',
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -109,20 +110,19 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
     'procedure out, and report against it when you are done. Only one check can be claimed at a time across ' +
     'the whole harness — that is deliberate: there is one working copy, and two things running checks in it ' +
     'is the thing this prevents. Claiming also stops the fleet dispatching an agent for the same check.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: { type: 'number', description: 'The goal number, e.g. 284.' },
-      check: { type: 'string', description: 'A letter like "C", or a check id.' },
-      as: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number, e.g. 284.'),
+      check: z.string().describe('A letter like "C", or a check id.'),
+      as: z
+        .string()
+        .describe(
           'Optional label for the claim, shown in the cockpit so the operator can see what is holding a check. ' +
-          "Defaults to this session's own label.",
-      },
-    },
-    required: ['issue', 'check'],
-  },
+            "Defaults to this session's own label.",
+        )
+        .optional(),
+    }),
+  ),
   handler: (args) => {
     const ref = desktopCheckRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -187,25 +187,22 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     'them this check, which exists precisely because those had already happened. If you could not run it, say ' +
     '"handback" and why — that records no result and gives the check back, and it is the right answer rather ' +
     'than a last resort.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      result: {
-        type: 'string',
-        enum: ['passed', 'failed', 'handback'],
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      result: z
+        .enum(['passed', 'failed', 'handback'])
+        .describe(
           '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
-          'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded.',
-      },
-      note: {
-        type: 'string',
-        description:
+            'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded.',
+        ),
+      note: z
+        .string()
+        .describe(
           'What you actually saw, or what stopped you. This is the whole of what somebody reads later instead ' +
-          'of running the check again, so "passed" is not a note.',
-      },
-    },
-    required: ['result', 'note'],
-  },
+            'of running the check again, so "passed" is not a note.',
+        ),
+    }),
+  ),
   handler: (args) => {
     const held = session.held;
     if (!held) {
@@ -294,11 +291,7 @@ const planRead: DesktopToolFactory = (deps) => ({
     'what it deliberately left out, what it is least sure about, and the validation checks it declared. Call ' +
     'this first when you are asked to discuss a plan — everything you need to argue with is in here, and the ' +
     'repository is open beside you to check it against.',
-  inputSchema: {
-    type: 'object',
-    properties: { issue: { type: 'number', description: 'The goal number, e.g. 284.' } },
-    required: ['issue'],
-  },
+  inputSchema: toolSchema(z.object({ issue: z.number().describe('The goal number, e.g. 284.') })),
   handler: (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -357,22 +350,21 @@ const planAmend: DesktopToolFactory = (deps) => ({
     'resubmit in the same turn. This schedules nothing and stops nothing. On a plan still awaiting approval ' +
     'it replaces the plan the operator is about to answer for; on one already running it records a proposed ' +
     'change for them to accept — pass "note" saying why, and the plan keeps running either way until they do.',
-  inputSchema: {
-    ...PLAN_DOCUMENT_SCHEMA,
-    properties: {
-      issue: { type: 'number', description: 'The goal number whose plan you are amending, e.g. 284.' },
-      note: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The goal number whose plan you are amending, e.g. 284.'),
+      note: z
+        .string()
+        .describe(
           'Why the plan must change, in a few sentences. **Required on a plan that is already running**, ' +
-          'where it is the whole of what the operator reads beside the diff — a change to a plan agents are ' +
-          'working with no reason on it is one they cannot answer. Ignored on a plan still awaiting approval, ' +
-          'which they read whole anyway.',
-      },
-      ...((PLAN_DOCUMENT_SCHEMA.properties ?? {}) as Record<string, unknown>),
-    },
-    required: ['issue', ...((PLAN_DOCUMENT_SCHEMA.required ?? []) as string[])],
-  },
+            'where it is the whole of what the operator reads beside the diff — a change to a plan agents are ' +
+            'working with no reason on it is one they cannot answer. Ignored on a plan still awaiting approval, ' +
+            'which they read whole anyway.',
+        )
+        .optional(),
+      ...PLAN_DOCUMENT_SHAPE,
+    }),
+  ),
   handler: async (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
@@ -469,24 +461,25 @@ const localRun: DesktopToolFactory = (deps) => ({
     'there. Given a message instead, it is typed into the session holding the environment — to run a ' +
     'migration, restart a service, or pick something up. Call it when somebody wants to look at a goal, ' +
     'or when a validation check cannot be carried out until the application is up.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      issue: {
-        type: 'number',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      issue: z
+        .number()
+        .describe(
           'Optional. The goal to start, e.g. 284 — **this stops whatever is running now**. Left out, ' +
-          'nothing is started and the reply is just the state of the environment.',
-      },
-      message: {
-        type: 'string',
-        description:
+            'nothing is started and the reply is just the state of the environment.',
+        )
+        .optional(),
+      message: z
+        .string()
+        .describe(
           'Optional. Text for the session holding the running environment, e.g. "run the database ' +
-          'migrations". Refused while nothing is running, while it is starting or stopping, or while ' +
-          'the session is mid-turn. Not combined with `issue`.',
-      },
-    },
-  },
+            'migrations". Refused while nothing is running, while it is starting or stopping, or while ' +
+            'the session is mid-turn. Not combined with `issue`.',
+        )
+        .optional(),
+    }),
+  ),
   handler: async (args) => {
     const runner = deps.localRun();
     const watch = deps.localRunWatch();
@@ -519,11 +512,7 @@ const goalRead: DesktopToolFactory = (deps) => ({
     'readings, which environments the work has reached, the retrospective if one was written, and the notes ' +
     "agents left each other. Call this before answering anything about a goal's history or its state — the " +
     'repository shows what the code says now, and this is the only account of how it got there.',
-  inputSchema: {
-    type: 'object',
-    properties: { issue: { type: 'number', description: 'The goal number, e.g. 284.' } },
-    required: ['issue'],
-  },
+  inputSchema: toolSchema(z.object({ issue: z.number().describe('The goal number, e.g. 284.') })),
   handler: (args) => {
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);

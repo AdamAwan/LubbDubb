@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { validateRetrospective } from '../../retro/retro.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -17,19 +19,17 @@ export const retroSubmit: ToolFactory = ({ deps, agent, ok }) => ({
     'passing — goes through `raise` rather than here: one call, and the harness works out what kind of ' +
     'thing it is. Something true only of this goal belongs in the scratchpad, where it dies with the ' +
     'goal, correctly.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      summary: {
-        type: 'string',
-        description:
+  inputSchema: toolSchema(
+    z.object({
+      summary: z
+        .string()
+        .describe(
           'One or two sentences: what was delivered, and the one thing about this run worth knowing. ' +
-          'This is what an operator sees before deciding to open the document.',
-      },
-      document: { type: 'string', description: 'The write-up itself, in markdown.' },
-    },
-    required: ['summary', 'document'],
-  },
+            'This is what an operator sees before deciding to open the document.',
+        ),
+      document: z.string().describe('The write-up itself, in markdown.'),
+    }),
+  ),
   handler: (args) => {
     const parsed = validateRetrospective(args);
     if (!parsed.ok) return toolError(`Retrospective rejected: ${parsed.error}`);
