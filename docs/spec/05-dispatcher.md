@@ -254,6 +254,11 @@ requeue retires the task and files a job, whose own origin is `job:<id>` — so 
 the rule that produced the original sees nothing in flight and staffs the same work twice (#249). The
 job's side of it is [13](13-jobs-and-tickets.md#standing-in-for-another-origin).
 
+A third source joins those two when [35](35-ejection.md#holding-the-origin) is built: the origin of
+every live **ejection**, where an operator has taken a running agent's work into their own Claude Code
+and the harness is holding the issue for them. It folds in here for the reason the standing jobs do —
+a hold that every rule has to remember to honour is one a future rule will not.
+
 **Two rules may act on a retained run; the rest say so themselves.** `ctx.world.issues` is the live
 tracker unioned with the runs it has forgotten (#234 — see
 [03](03-world-model.md#what-is-in-the-dispatchers-world-and-what-puts-it-there)), and

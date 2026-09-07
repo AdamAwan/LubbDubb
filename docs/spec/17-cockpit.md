@@ -3026,6 +3026,16 @@ since stopped honouring it.
 The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
 entry leaving with nobody having pressed anything — is visible in the Pages build.
 
+### Work a person took off the fleet
+
+When [35](35-ejection.md#in-the-cockpit) is built, the Fleet card gains one more kind of row: a slot an
+operator **ejected** an agent out of and is now holding themselves, drawn as a peer of the running
+agents rather than tucked into a detail panel. It is the only bench obligation that is `yours` while
+consuming a slot, and the card is where that second half has to be said — a slot spoken for is part of
+the answer to "what is the harness doing", which is the question this card exists for. The row carries
+the goal, the branch, the liveness line the ejection's own heartbeat feeds, and the time left before
+the harness takes the work back.
+
 ### The queue rides the Fleet card
 
 **Up next is not a card. It is a band on the Fleet card**, because it is the same list one stage

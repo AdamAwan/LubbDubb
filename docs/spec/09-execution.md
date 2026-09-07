@@ -923,6 +923,11 @@ checked on every hand-out. Getting it wrong puts two agents in one directory on 
 which is worse than anything `fileOverlap` reports — `sameWorktree` at least assumes they agree on
 the branch.
 
+A third holder joins them when [35](35-ejection.md#holding-the-slot) is built: an **ejection**, where
+the lease is re-pointed from the killed agent to the operator who now has the directory. That one is
+the awkward case, because leases live in memory and an ejection outlives a restart — so the claim row
+is what re-takes the lease at boot, and a slot whose holder is a person must never be evictable.
+
 A slot is **held** while either is true, and the two arms cover windows the other cannot:
 
 - **This run leased it**, and `remove` has not released it. A task is settled the moment its agent
