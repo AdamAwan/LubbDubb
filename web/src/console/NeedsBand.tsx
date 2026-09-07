@@ -5,6 +5,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import type { HumanTask, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
@@ -15,6 +16,7 @@ import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
 import { refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
+import { discussPrompt } from '../cockpit/desktopLink.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
 import { Button } from '../components/button.js';
 
@@ -140,6 +142,11 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           >
             Override → workable
           </AsyncButton>
+          <DesktopLink
+            folder={view.state.config.desktopFolder}
+            prompt={discussPrompt(issue.number)}
+            explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
+          />
         </div>
       </>
     );

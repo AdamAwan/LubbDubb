@@ -640,7 +640,11 @@ in the band**, never reworded and never clamped, because it is the only account 
 and its `missing` list is drawn under it as the same checklist the ticket comment carries.
 Its verdict is one button — `Override → workable`, through `setIssueAppraisal`, the call the tickets tab
 already used — because the hold's other two exits are not buttons: it expires when the goal's own text
-changes, and it is cleared in the tracker.
+changes, and it is cleared in the tracker. Beside it sits the same `DesktopLink` every other ask that
+wants a conversation carries ([links](#links)), on `discussPrompt(issue.number)`: the exit the band
+recommends in prose — answering the `missing` questions on the ticket — is work, and an ask that names
+that exit without offering the one surface that can do it leaves overriding as the only affordance on
+the card. It changes nothing by itself, which is why it is a link rather than a verdict.
 
 An **unwatched** item is never intake, whatever a stale verdict says: nothing appraises a goal nobody opted
 in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
