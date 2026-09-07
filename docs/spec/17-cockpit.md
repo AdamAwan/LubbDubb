@@ -5813,6 +5813,13 @@ from. It is the cockpit's only drawing.
   fill: a fill dark enough to read on is a fill too dark to tell apart.
 - Clicking a node scrolls to that part's card and marks it, which is what makes the map a way _in_
   rather than a second place the same facts are stated.
+- **Every fill and stroke the map draws is stated in `.pm-*` rules of its own.** SVG inherits none of
+  the document's colours: a shape with no rule for its class takes the UA default, which is a black
+  fill on a `<rect>` and on a closed `<path>` — so a missing rule does not render an unstyled map,
+  it renders black slabs with the lettering invisible inside them, and the drawing that carries the
+  split's whole argument carries nothing. The classes are drawn from the same token family as the
+  rest of the sheet ([tokens](#tokens)): a node's ground is `--panel-2` on a `--border` stroke, its
+  status stripe the hue of its tone, edges and arrowheads `--border`.
 
 ### The parts
 
