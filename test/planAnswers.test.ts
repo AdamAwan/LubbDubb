@@ -23,6 +23,7 @@ const answers = (over: Partial<Parameters<typeof PlanAnswers>[0]> = {}): string 
       approveLabel: 'Approve — start 2 agents now',
       outstanding: [],
       acknowledged: [],
+      answers: [],
       desktopFolder: '/home/you/shop',
       discussExplain: 'so the plan is talked through.',
       onDecide: () => undefined,
@@ -54,11 +55,11 @@ test('Approve is held while a caveat is unticked, and says how many', () => {
   assert.ok(approve.includes('One box left to tick'), 'the button does not say what is holding it');
 });
 
-test('Approve carries no note, because releasePlan takes none', () => {
+test('Approve carries no note of its own — only the ticks and what was written beside them', () => {
   const accept = /onDecide\(proposalId, 'accept'[^)]*\)/.exec(
     readFileSync(new URL('../web/src/components/PlanAnswers.tsx', import.meta.url), 'utf8'),
   )?.[0];
-  assert.equal(accept, "onDecide(proposalId, 'accept', undefined, acknowledged)");
+  assert.equal(accept, "onDecide(proposalId, 'accept', undefined, acknowledged, answers)");
 });
 
 test('the Claude Code hand-off is dropped where no goal number resolves the plan', () => {

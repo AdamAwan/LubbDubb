@@ -592,6 +592,21 @@ CREATE TABLE IF NOT EXISTS plan_amendments (
   decided_at  TEXT
 );
 
+-- What an operator wrote back when they ticked a plan's caveats. A caveat is
+-- acknowledged by a tick; the answer is the optional words beside it — a choice
+-- made between the two the planner offered, or a question left for whoever picks
+-- the work up. Approving with words is still an approval: these rows are written
+-- at the accept and never send the plan back for a replan.
+CREATE TABLE IF NOT EXISTS plan_caveat_answers (
+  id          TEXT PRIMARY KEY,
+  plan_id     TEXT NOT NULL,
+  caveat_id   TEXT NOT NULL,          -- the caveat as the proposal declared it
+  label       TEXT NOT NULL,          -- what the operator was answering, kept beside the answer
+  answer      TEXT NOT NULL,
+  at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plan_caveat_answers_plan ON plan_caveat_answers (plan_id);
+
 CREATE TABLE IF NOT EXISTS agent_transcripts (
   agent_id   TEXT NOT NULL,
   seq        INTEGER NOT NULL,

@@ -4,7 +4,12 @@ import type { ActionExecutor } from '../executor/actionExecutor.js';
 import type { PlanCaveat, Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
 import { declinePlanAmendment } from '../plans/planAmendment.js';
-import { proposedCaveats, unacknowledgedCaveats } from '../plans/planCaveats.js';
+import {
+  answeredCaveats,
+  proposedCaveats,
+  unacknowledgedCaveats,
+  type CaveatAnswerInput,
+} from '../plans/planCaveats.js';
 import { backOutOfPlan, type BackOutContext, type BackOutVerdict } from '../plans/planBackOut.js';
 import { readProposedAct } from './proposals.js';
 
@@ -32,14 +37,17 @@ export class ProposalDesk {
     id: string,
     note?: string,
     acknowledged: readonly string[] = [],
+    answers: readonly CaveatAnswerInput[] = [],
   ): Promise<DecideResult | UnacknowledgedCaveats | null> {
     const standing = this.store.getProposal(id);
+    const raised = standing ? proposedCaveats(standing) : [];
     if (standing && standing.status === 'pending') {
-      const unacknowledged = unacknowledgedCaveats(proposedCaveats(standing), acknowledged);
+      const unacknowledged = unacknowledgedCaveats(raised, acknowledged);
       if (unacknowledged.length > 0) return { unacknowledged };
     }
     const proposal = this.store.decideProposal(id, 'accepted', note?.trim() || null, 'human');
     if (!proposal) return null;
+    this.recordAnswers(proposal, raised, answers);
     this.closeEscalation(proposal, `Accepted${proposal.note ? `: ${proposal.note}` : '.'}`);
     const run = await this.executor.runAuthorized(proposal);
     return { proposal, outcome: run.outcome === 'executed' ? 'performed' : 'failed', detail: run.detail };
@@ -83,6 +91,14 @@ export class ProposalDesk {
       detail,
     });
     return { proposal, outcome: 'none', detail };
+  }
+
+  private recordAnswers(proposal: Proposal, raised: PlanCaveat[], answers: readonly CaveatAnswerInput[]): void {
+    const kept = answeredCaveats(raised, answers);
+    if (kept.length === 0) return;
+    const read = readProposedAct(proposal);
+    if (!read.ok || read.act.kind !== 'plan') return;
+    this.store.recordPlanCaveatAnswers(read.act.planId, kept);
   }
 
   private settlePlan(proposal: Proposal): string {

@@ -87,6 +87,7 @@ import type {
   ObstacleStanding,
   Plan,
   PlanAmendmentAuthor,
+  PlanCaveatAnswer,
   PlanPart,
   FeatureSequence,
   FeatureSummary,
@@ -334,6 +335,7 @@ export interface CockpitState {
   localRun: LocalRunView | null;
   localRunTargets: LocalRunTargetView[];
   planParts: PlanPartView[];
+  planCaveatAnswers: PlanCaveatAnswer[];
   validationChecks: ValidationCheck[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
@@ -761,6 +763,7 @@ export type {
   Plan,
   PlanAmendmentAuthor,
   PlanCaveat,
+  PlanCaveatAnswer,
   PlanEvidence,
   PlanNarrative,
   PlanPart,
@@ -895,6 +898,7 @@ export type {
 export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
+export type { CaveatAnswerInput } from './plans/planCaveats.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
 export type { SupplyState } from './supply/runway.js';
 export type { PlanningPolicy } from './plans/planning.js';

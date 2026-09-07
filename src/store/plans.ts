@@ -9,6 +9,7 @@ import type {
   PlanAmendment,
   PlanAmendmentAuthor,
   PlanAmendmentStatus,
+  PlanCaveatAnswer,
   PlanNarrative,
   PlanPart,
   PlanPartBlocker,
@@ -141,6 +142,34 @@ export class PlanStore {
       .prepare(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
       .all(planId) as PlanRevisionRow[];
     return rows.map(rowToRevision);
+  }
+
+  recordPlanCaveatAnswers(
+    planId: string,
+    answers: readonly { caveatId: string; label: string; answer: string }[],
+  ): PlanCaveatAnswer[] {
+    const at = this.ctx.now();
+    const written = answers.map((a) => ({ id: `pca_${nanoid(10)}`, planId, ...a, at }));
+    const insert = this.ctx.db.prepare(
+      `INSERT INTO plan_caveat_answers (id, plan_id, caveat_id, label, answer, at)
+       VALUES (@id, @planId, @caveatId, @label, @answer, @at)`,
+    );
+    for (const row of written) insert.run(row);
+    return written;
+  }
+
+  listPlanCaveatAnswers(planId: string): PlanCaveatAnswer[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM plan_caveat_answers WHERE plan_id=? ORDER BY at ASC, id ASC`)
+      .all(planId) as PlanCaveatAnswerRow[];
+    return rows.map(rowToCaveatAnswer);
+  }
+
+  listAllPlanCaveatAnswers(): PlanCaveatAnswer[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM plan_caveat_answers ORDER BY at ASC, id ASC`)
+      .all() as PlanCaveatAnswerRow[];
+    return rows.map(rowToCaveatAnswer);
   }
 
   recordPlanAmendment(input: {
@@ -503,6 +532,15 @@ interface PlanAmendmentRow {
   decided_at: string | null;
 }
 
+interface PlanCaveatAnswerRow {
+  id: string;
+  plan_id: string;
+  caveat_id: string;
+  label: string;
+  answer: string;
+  at: string;
+}
+
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -646,6 +684,17 @@ function rowToAmendment(r: PlanAmendmentRow): PlanAmendment {
     resolution: r.resolution,
     createdAt: r.created_at,
     decidedAt: r.decided_at,
+  };
+}
+
+function rowToCaveatAnswer(r: PlanCaveatAnswerRow): PlanCaveatAnswer {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    caveatId: r.caveat_id,
+    label: r.label,
+    answer: r.answer,
+    at: r.at,
   };
 }
 

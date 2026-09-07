@@ -760,6 +760,15 @@ export interface PlanCaveat {
   detail: string | null;
 }
 
+export interface PlanCaveatAnswer {
+  id: string;
+  planId: string;
+  caveatId: string;
+  label: string;
+  answer: string;
+  at: string;
+}
+
 export interface PlanNarrative {
   reason: string | null;
   diagnosis: string | null;

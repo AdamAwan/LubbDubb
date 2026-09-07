@@ -1731,6 +1731,19 @@ select:disabled {
    this is a precondition on a verdict, not a fault — the plan may be perfectly
    right and still say something its approver has to have read. Every colour is a
    token, so it follows the theme (docs/spec/17-cockpit.md#tokens). */
+/* The operator's own words on a released plan, drawn with the caveats they answer
+   rather than in the write-up: they are the newest thing said about this work, and
+   the write-up is the planner's. */
+.pm-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pm-answer {
+  border-left: 2px solid var(--accent-line);
+  padding-left: 8px;
+}
+
 .caveat-ack {
   margin-top: 10px;
   padding: 8px 10px;
@@ -1755,18 +1768,41 @@ select:disabled {
    is the wall of prose this replaced. */
 .caveat-ack-item {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 5px;
   font-size: 13px;
-  cursor: pointer;
 }
 .caveat-ack-item + .caveat-ack-item {
   border-top: 1px solid var(--amber-line);
   padding-top: 6px;
 }
-.caveat-ack-item input {
+.caveat-ack-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.caveat-ack-tick input {
   margin-top: 3px;
   flex: none;
+}
+/* The words beside the tick. Quiet until it has something in it or has the cursor:
+   most caveats are ticked and nothing more, and a row of empty boxes shouting for
+   an answer is a card that reads as four questions rather than four readings. */
+.caveat-ack-answer {
+  margin-left: 22px;
+  max-width: 72ch;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  background: transparent;
+  border: 1px dashed var(--amber-line);
+  border-radius: var(--r-sm);
+  color: var(--text);
+}
+.caveat-ack-answer:focus,
+.caveat-ack-answer:not(:placeholder-shown) {
+  border-style: solid;
+  background: var(--well);
 }
 /* Ticked reads as done rather than as gone: the sentence stays legible, because an
    operator re-reading the card before they click must still be able to see what

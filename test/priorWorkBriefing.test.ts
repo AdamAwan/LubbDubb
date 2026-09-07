@@ -16,6 +16,7 @@ import { findTask } from './support/tasks.js';
 function bare(): PriorWorkInput {
   return {
     plan: null,
+    caveatAnswers: [],
     parts: [],
     appraisal: null,
     conclusion: null,

@@ -127,6 +127,7 @@ import type {
   PlanPartInput,
   PullRequest,
   PlanAmendment,
+  PlanCaveatAnswer,
   PlanRevision,
   FeatureSequence,
   FeatureSummary,
@@ -643,6 +644,18 @@ export class Store {
   }
   listPlanRevisions(planId: string): PlanRevision[] {
     return this.plans.listPlanRevisions(planId);
+  }
+  recordPlanCaveatAnswers(
+    planId: string,
+    answers: Parameters<PlanStore['recordPlanCaveatAnswers']>[1],
+  ): PlanCaveatAnswer[] {
+    return this.plans.recordPlanCaveatAnswers(planId, answers);
+  }
+  listPlanCaveatAnswers(planId: string): PlanCaveatAnswer[] {
+    return this.plans.listPlanCaveatAnswers(planId);
+  }
+  listAllPlanCaveatAnswers(): PlanCaveatAnswer[] {
+    return this.plans.listAllPlanCaveatAnswers();
   }
   recordPlanAmendment(input: Parameters<PlanStore['recordPlanAmendment']>[0]): PlanAmendment {
     return this.plans.recordPlanAmendment(input);

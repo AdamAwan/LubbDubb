@@ -8,6 +8,7 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Plan,
+  PlanCaveatAnswer,
   PlanPart,
   ScratchEntry,
 } from '../types.js';
@@ -26,6 +27,7 @@ const MAX_NEIGHBOUR_PATHS = 4;
 
 export interface PriorWorkInput {
   plan: Plan | null;
+  caveatAnswers: PlanCaveatAnswer[];
   parts: PlanPart[];
   appraisal: IssueAppraisal | null;
   conclusion: IssueConclusion | null;
@@ -41,6 +43,7 @@ export function priorWorkBriefing(input: PriorWorkInput): string {
   const sections = [
     padSection(input.entries),
     planSection(input.plan),
+    answersSection(input.caveatAnswers),
     partsSection(input.forPart ? [] : input.parts),
     verdictSection(input),
     filesSection(input.files),
@@ -92,6 +95,20 @@ function planSection(plan: Plan | null): string {
   }
   if (lines.length === 0) return '';
   return ['### Why this work is shaped the way it is', '', ...lines].join('\n');
+}
+
+function answersSection(answers: PlanCaveatAnswer[]): string {
+  if (answers.length === 0) return '';
+  const lines = answers.map((a) => `- **${a.label}** — ${a.answer}`);
+  return [
+    '### What the operator said when they approved this plan',
+    '',
+    'They ticked what the plan raised and wrote this beside it. It is a decision or a question about the ' +
+      'work you are doing, from the person who released it — later than the plan, and where the two disagree ' +
+      'this is the one that was said last.',
+    '',
+    ...lines,
+  ].join('\n');
 }
 
 function partsSection(parts: PlanPart[]): string {

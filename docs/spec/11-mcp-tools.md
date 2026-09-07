@@ -994,7 +994,12 @@ a plan, so `proposal_read` exists beside `proposal_decide` and answers exactly t
 both tools' descriptions say it, and so does every reply. **The caveat gate is not bypassed**: a plan
 that raises caveats is refused until the verdict names each id, and the refusal is a JSON reply
 carrying the unticked ones rather than an error, because the caller did nothing wrong and the next
-step is exact.
+step is exact. `answers` rides beside `acknowledged`, one `{id, answer}` per caveat the operator
+said something about: the choice they made or the question they still have, kept on the plan for the
+agents that work it and never a replan ([08](08-planning.md#a-tick-can-carry-words)). It does not
+satisfy the gate — an answered caveat still needs its id in `acknowledged` — and a session that puts
+the caveats to an operator in their own words should pass back what they said as well as that they
+read it.
 
 **`agent_control` is the one place this channel touches a live process.** Each verb is
 `AgentManager`'s own, reached as the cockpit's button reaches it — `respond` through `respond`, which

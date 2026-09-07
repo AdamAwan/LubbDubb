@@ -491,6 +491,12 @@ prompt.
   therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
   part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
+- **What the operator answered at the approval** rides beside the planner's own prose, as its own
+  section under the plan's. It is what they wrote next to a caveat's tick box when they released the
+  plan ([08](08-planning.md#a-tick-can-carry-words)) — a choice made between two the planner named, or a
+  question left open — and it is later than everything else in the briefing, so where it and the plan
+  disagree the section says which was said last. Answered caveats only: an untouched box leaves no row,
+  and a plan released without a word says nothing here.
 - **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
   be a stale second reading of something the agent can ask about properly.
 - **Files this goal has been edited in** (issue #354) is the one section that is stored _fields_ rather

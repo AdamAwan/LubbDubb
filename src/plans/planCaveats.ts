@@ -49,6 +49,8 @@ export function caveatNotice(caveats: PlanCaveat[]): string {
   return (
     `\n\nBefore you decide:\n\n${lines.join('\n')}\n\n` +
     `Approving is held until each of these is acknowledged — tick them on the card, or send them with the accept. ` +
+    `A tick can carry words: pick between the options one of these offers, or leave the question you still have. ` +
+    `They are appended to the plan for whoever works it, and do not send the plan back for a replan. ` +
     `Rejecting, holding and closing the ticket are not gated: this is about releasing work, not about saying no.`
   );
 }
@@ -56,6 +58,26 @@ export function caveatNotice(caveats: PlanCaveat[]): string {
 export function unacknowledgedCaveats(caveats: PlanCaveat[], acknowledged: readonly string[]): PlanCaveat[] {
   const ticked = new Set(acknowledged);
   return caveats.filter((c) => !ticked.has(c.id));
+}
+
+export interface CaveatAnswerInput {
+  id: string;
+  answer: string;
+}
+
+export function answeredCaveats(
+  caveats: PlanCaveat[],
+  answers: readonly CaveatAnswerInput[],
+): { caveatId: string; label: string; answer: string }[] {
+  const raised = new Map(caveats.map((c) => [c.id, c]));
+  const kept: { caveatId: string; label: string; answer: string }[] = [];
+  for (const { id, answer } of answers) {
+    const caveat = raised.get(id);
+    const words = answer.trim();
+    if (!caveat || words === '') continue;
+    kept.push({ caveatId: caveat.id, label: caveat.label, answer: words });
+  }
+  return kept;
 }
 
 export function proposedCaveats(proposal: Proposal): PlanCaveat[] {
