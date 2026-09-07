@@ -17,6 +17,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     escalations: () => system.escalations,
     permissions: () => system.permissions,
     recovery: () => system.recovery,
+    ejections: () => system.ejections,
     agents: () => system.agents,
     filing: () => system.filing,
     briefConfig: () => system.config,

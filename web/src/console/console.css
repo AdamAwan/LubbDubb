@@ -2931,6 +2931,13 @@ button.cn-grow {
   background: transparent;
   border: 1.5px solid var(--cn-violet);
 }
+/* A person holding work they took off the fleet. The desk run's violet, because
+   both rows are a person at a keyboard rather than a dispatch — and filled where
+   the desk run's is hollow, because this one is holding a worktree slot while the
+   desk run takes none. */
+.cn-lamp.cn-eject-lamp {
+  background: var(--cn-violet);
+}
 /* The harness readying an action, and the same grammar the desk run wears, for the
    same reason: this is in flight and it is not an agent. Hollow where an agent's
    lamp is filled — there is no process to report a status — and its own tint,
@@ -2964,6 +2971,14 @@ button.cn-grow {
 .cn-row.cn-desk {
   cursor: default;
   border-left: 2px dashed var(--cn-violet);
+  padding-left: 11px;
+}
+/* Solid, where the desk run beside it is dashed: this row is holding a slot, and a
+   dashed edge everywhere else on this card means "takes nothing". Same violet — it
+   is still a person and still not a dispatch. */
+.cn-row.cn-ejected {
+  cursor: default;
+  border-left: 2px solid var(--cn-violet);
   padding-left: 11px;
 }
 /* Dotted for the lamp's reason: nothing has been dispatched for this row, and
@@ -3796,7 +3811,8 @@ button.cn-grow {
 /* A desk run keeps its violet wherever it is drawn: the hollow lamp, the dashed
    edge and this word are one signal — nothing dispatched this row — and a state
    chip in the neutral grey would be the only part of it that stopped saying so. */
-.cn-desk .cn-why-chip {
+.cn-desk .cn-why-chip,
+.cn-ejected .cn-why-chip {
   --tone: var(--cn-violet);
   --tone-line: var(--cn-violet-line);
   --tone-fill: var(--cn-violet-fill);

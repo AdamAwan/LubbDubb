@@ -96,6 +96,11 @@ export function App() {
           onClose={() => status.actions.select(null)}
           onRespond={(text) => status.actions.respondAgent(openAgent.id, text)}
           onKill={() => status.actions.killAgent(openAgent.id)}
+          onEject={
+            state.config.ejectionEnabled === false
+              ? undefined
+              : (reason) => status.actions.ejectAgent(openAgent.id, reason)
+          }
           onComplete={() => status.actions.completeAgent(openAgent.id)}
           onInterrupt={() => status.actions.interruptAgent(openAgent.id)}
           onResume={() => status.actions.resumeAgent(openAgent.id)}

@@ -30,6 +30,7 @@ export interface PanelRowModel {
   action?: ReactNode;
   spent?: boolean;
   desk?: boolean;
+  ejected?: boolean;
   readying?: boolean;
   queued?: boolean;
   live?: boolean;
@@ -369,6 +370,7 @@ function rowClass(row: PanelRowModel, base: string): string {
     base,
     row.spent === true ? 'cn-spent' : '',
     row.desk === true ? 'cn-desk' : '',
+    row.ejected === true ? 'cn-ejected' : '',
     row.readying === true ? 'cn-readying' : '',
     row.queued === true ? 'cn-queued' : '',
     row.live === true ? 'cn-live' : '',

@@ -1,6 +1,8 @@
 import type {
   AppState,
   BugFiling,
+  Ejection,
+  EjectionOutcome,
   GoalWatchDeclaration,
   BuildReading,
   InsightsWindow,
@@ -400,6 +402,10 @@ const realApi = {
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
   resumeAgent: (id: string) => post(`/api/agents/${id}/resume`),
   extendStall: (id: string) => post<{ ok: true; expiresAt: string }>(`/api/agents/${id}/extend-stall`),
+  ejectAgent: (id: string, reason: string) =>
+    post<{ ok: true; ejection: Ejection }>(`/api/agents/${id}/eject`, { reason }),
+  settleEjection: (id: string, outcome: EjectionOutcome, note?: string) =>
+    post<{ ok: true; ejection: Ejection; jobId: string | null }>(`/api/ejections/${id}/settle`, { outcome, note }),
 };
 
 class ReconnectingWs {

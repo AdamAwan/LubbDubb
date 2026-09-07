@@ -68,6 +68,7 @@ import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
+import { EjectionDesk } from './ejection/desk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { ReadyingBoard } from './executor/readying.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
@@ -112,6 +113,7 @@ export interface System {
   permissions: PermissionDesk;
   areaPaths: AreaPathDirectory;
   recovery: RecoveryDesk;
+  ejections: EjectionDesk;
   executor: ActionExecutor;
   readying: ReadyingBoard;
   dispatcher: Dispatcher;
@@ -193,9 +195,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       config.worktreeRoot,
       {
         get size() {
-          return defaultPoolSize(runtimeControl.cap);
+          // Grown by the ejections, not shared with them: a held slot the cap did not
+          // account for is a dispatch refused for want of a directory, forever.
+          return defaultPoolSize(runtimeControl.cap) + store.liveEjections().length;
         },
-        held: (branch) => store.findActiveTaskByBranch(branch) !== null,
+        held: (branch) => store.findActiveTaskByBranch(branch) !== null || store.ejectionOnBranch(branch) !== null,
       },
       config.localRunRoot,
       errors,
@@ -328,6 +332,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations: () => escalations,
     permissions: () => permissions,
     recovery: () => recovery,
+    ejections: () => ejections,
     agents: () => agents,
     filing: () => filing,
     briefConfig: () => config,
@@ -416,6 +421,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     resumable: agentSetup.resumable,
     bootedAt: opts.bootedAt,
     errors,
+  });
+
+  const ejections = new EjectionDesk({
+    store,
+    agents: () => agents,
+    policy: () => config.ejection,
+    now,
   });
 
   const landings = new StackLandingDesk(store, escalations, errors);
@@ -691,6 +703,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     landings,
     recovery,
+    ejections,
     escalations,
     fleet: agents,
     obstacleVoice,
@@ -847,6 +860,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     permissions,
     areaPaths,
     recovery,
+    ejections,
     executor,
     readying,
     dispatcher,

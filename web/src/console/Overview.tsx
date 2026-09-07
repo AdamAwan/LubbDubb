@@ -1,7 +1,16 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, OpenPullRequest, QueueItem, ReadyingAction, ReadyingStep, SupplyState } from '../types.js';
+import type {
+  Agent,
+  EjectionView,
+  Issue,
+  OpenPullRequest,
+  QueueItem,
+  ReadyingAction,
+  ReadyingStep,
+  SupplyState,
+} from '../types.js';
 import {
   buildGoalPage,
   buildGoalTrack,
@@ -18,6 +27,7 @@ import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { EjectionControls } from '../components/Ejection.js';
 import { CiMark, CiSlot } from '../components/CiMark.js';
 import { CommentsMark } from '../components/CommentsMark.js';
 import { PackMark } from '../components/PackMark.js';
@@ -43,6 +53,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
   const desk = view.deskRuns;
+  const ejected = view.ejected;
   const readying = view.readying;
   const queued = view.upNext;
   const asking = queued.filter((item) => item.status === 'unapproved').length;
@@ -52,9 +63,10 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
     ...view.live.map((agent) => agentRow(agent, view, actions)),
     ...readying.map((action) => readyingRow(action, view)),
     ...desk.map((run) => deskRow(run, view)),
+    ...ejected.map((held) => ejectedRow(held, view, actions)),
     ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
   ];
-  const room = Math.max(0, FLEET_ROWS - (view.live.length + readying.length + desk.length));
+  const room = Math.max(0, FLEET_ROWS - (view.live.length + readying.length + desk.length + ejected.length));
   const queueRows = queued.slice(0, room).map((item) => queueRow(item, view, actions));
   const rail = [...out, ...queueRows];
 
@@ -68,6 +80,9 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
               they take no slot, so "out" would be the wrong word. */}
           {readying.length > 0 && ` · ${readying.length} being readied`}
           {desk.length > 0 && ` · ${desk.length} at a keyboard`}
+          {/* Counted apart from "out": nobody dispatched these and no agent is on
+              them, but unlike a desk run each is holding a slot. */}
+          {ejected.length > 0 && ` · ${ejected.length} taken off the fleet`}
         </i>
         <button
           type="button"
@@ -79,7 +94,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {endedTotal} shift{endedTotal === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
       </h3>
-      {view.live.length === 0 && desk.length === 0 && readying.length === 0 && (
+      {view.live.length === 0 && desk.length === 0 && readying.length === 0 && ejected.length === 0 && (
         <p className="cn-empty">Nobody is out.</p>
       )}
       {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
@@ -346,6 +361,45 @@ function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
       `${relTime(run.claimedAt, view.now)}, at their own keyboard. It takes no fleet slot, and it ends ` +
       'when the reading lands, when the session closes, or when the claim ages out.',
     desk: true,
+  };
+}
+
+function ejectedRow(held: EjectionView, view: CockpitView, actions: CockpitActions): PanelRowModel {
+  const seen =
+    held.lastSeenAt === null
+      ? held.neverContacted
+        ? 'never contacted'
+        : 'just ejected'
+      : `last seen ${relTime(held.lastSeenAt, view.now)}`;
+  return {
+    key: held.id,
+    lamp: <i className="cn-lamp cn-eject-lamp" />,
+    title: refLabel(held.originRef),
+    refs: <Ref to={held.originRef} />,
+    facts: [
+      { label: 'who', value: 'you' },
+      { label: 'line', value: held.lastNote ?? seen, alarm: held.neverContacted },
+      ...(held.branch === null ? [] : [{ label: 'branch', value: held.branch }]),
+      { label: 'expires', value: held.expiresAt === null ? 'never' : relTime(held.expiresAt, view.now) },
+    ],
+    whyLabel: 'taken off the fleet',
+    whyTone: 'quiet',
+    why:
+      `You stopped the agent on this because: "${held.reason}" Its goal and its worktree are held for you — ` +
+      'nothing will staff the work or touch the directory until you hand it back' +
+      (held.expiresAt === null ? '.' : `, and the harness takes it back ${relTime(held.expiresAt, view.now)}.`) +
+      (held.neverContacted
+        ? ' Nothing has contacted the harness about this hold at all, so the link may never have opened — the ' +
+          'button below re-offers it.'
+        : '') +
+      // The deep link starts a fresh session; this is the agent's own conversation,
+      // and it only resolves from the worktree, which is why the path goes with it.
+      (held.sessionId === null
+        ? ''
+        : ` To pick up the agent's own conversation instead: \`claude --resume ${held.sessionId}\`, run in ` +
+          `${held.worktreePath ?? 'the worktree'}.`),
+    action: <EjectionControls held={held} actions={actions} />,
+    ejected: true,
   };
 }
 

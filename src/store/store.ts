@@ -9,6 +9,7 @@ import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PauseStore } from './pauses.js';
+import { EjectionStore, EJECTION_COLUMNS } from './ejections.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { RemedyStore } from './remedies.js';
@@ -70,6 +71,7 @@ import type {
   AgentFlagInput,
   AgentUsage,
   Decision,
+  Ejection,
   EnvironmentReachStatus,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
@@ -194,6 +196,7 @@ export class Store {
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
   private readonly pauses: PauseStore;
+  private readonly ejections: EjectionStore;
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly remedies: RemedyStore;
   private readonly mcpCalls: McpCallStore;
@@ -270,6 +273,7 @@ export class Store {
       REVIEW_PACK_COLUMNS,
       OBSTACLE_COLUMNS,
       SEQUENCE_COLUMNS,
+      EJECTION_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -300,6 +304,7 @@ export class Store {
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.pauses = new PauseStore(ctx);
+    this.ejections = new EjectionStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.pool = new PoolStore(ctx);
     this.remedies = new RemedyStore(ctx);
@@ -477,6 +482,31 @@ export class Store {
   }
   listGoalPauses(): GoalPause[] {
     return this.pauses.listGoalPauses();
+  }
+
+  recordEjection(...args: Parameters<EjectionStore['recordEjection']>): Ejection {
+    return this.ejections.recordEjection(...args);
+  }
+  getEjection(id: string): Ejection | null {
+    return this.ejections.getEjection(id);
+  }
+  listEjections(limit?: number): Ejection[] {
+    return this.ejections.listEjections(limit);
+  }
+  liveEjections(): Ejection[] {
+    return this.ejections.liveEjections();
+  }
+  liveEjectionForOrigin(originRef: string): Ejection | null {
+    return this.ejections.liveEjectionForOrigin(originRef);
+  }
+  ejectionOnBranch(branch: string): Ejection | null {
+    return this.ejections.ejectionOnBranch(branch);
+  }
+  noteEjection(id: string, note: string | null): void {
+    this.ejections.noteEjection(id, note);
+  }
+  settleEjection(...args: Parameters<EjectionStore['settleEjection']>): Ejection | null {
+    return this.ejections.settleEjection(...args);
   }
 
   recordRemedy(input: RemedyInput): Remedy {

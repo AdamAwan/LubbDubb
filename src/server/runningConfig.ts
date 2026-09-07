@@ -102,6 +102,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'featureBoard',
       'planning',
       'validation',
+      'ejection',
       'review',
       'spendBurn',
       'runway',

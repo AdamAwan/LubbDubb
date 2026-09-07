@@ -27,6 +27,7 @@ import type {
   LocalRun,
   LocalValidation,
   ValidationCheck,
+  Ejection,
   WorldEvent,
   WorldSnapshot,
 } from '../types.js';
@@ -52,6 +53,7 @@ export interface DispatchContext {
   openEscalations: Escalation[];
   queuedJobs: Job[];
   standingJobs?: Job[];
+  ejections?: Ejection[];
   plans?: Plan[];
   planParts?: PlanPart[];
   planAmendments?: PlanAmendment[];

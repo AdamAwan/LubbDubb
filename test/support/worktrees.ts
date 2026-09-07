@@ -10,7 +10,16 @@ export function pinnedPool(
   const worktrees = new WorktreeManager(
     config.repoRoot,
     config.worktreeRoot,
-    { size, held: (branch) => system !== null && system.store.findActiveTaskByBranch(branch) !== null },
+    {
+      // Mirrors the composition root: a slot is held by a live task on the branch or
+      // by an ejection holding it, and the bound grows with the ejections.
+      get size() {
+        return size + (system?.store.liveEjections().length ?? 0);
+      },
+      held: (branch) =>
+        system !== null &&
+        (system.store.findActiveTaskByBranch(branch) !== null || system.store.ejectionOnBranch(branch) !== null),
+    },
     config.localRunRoot,
   );
   return {

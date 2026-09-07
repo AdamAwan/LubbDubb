@@ -1,4 +1,5 @@
 import { allGoalReach } from '../environments/reach.js';
+import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
@@ -638,6 +639,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   recovery_decide: recoveryDecide,
   job_create: jobCreate,
   agent_control: agentControl,
+  ...DESKTOP_EJECTION_TOOLS,
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,

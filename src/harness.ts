@@ -98,6 +98,7 @@ interface HarnessDeps {
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   obstacleEndings?: { run(world: WorldSnapshot): void };
   pool?: PoolDesk;
+  ejections?: { sweepExpiries(): unknown[] };
   escalations?: { tidyDeadAgents(): unknown[] };
   freshReads?: { drain(): string[] };
 }
@@ -252,6 +253,7 @@ export class Harness extends EventEmitter {
           detail: error,
         });
       this.deps.fleet?.completeExpiredStalls();
+      this.deps.ejections?.sweepExpiries();
       const tasks = store.listTasks();
       store.foldReviewWaits(
         world.pullRequests
@@ -269,6 +271,7 @@ export class Harness extends EventEmitter {
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
       const standingJobs = store.listStandingJobs();
+      const ejections = store.liveEjections();
       const plans = store.listPlans();
       const planParts = store.listAllPlanParts();
       const conclusions = store.listIssueConclusions();
@@ -343,6 +346,7 @@ export class Harness extends EventEmitter {
         openEscalations,
         queuedJobs,
         standingJobs,
+        ejections,
         plans,
         planParts,
         planAmendments: store.listPendingPlanAmendments(),

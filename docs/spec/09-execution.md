@@ -923,6 +923,14 @@ checked on every hand-out. Getting it wrong puts two agents in one directory on 
 which is worse than anything `fileOverlap` reports — `sameWorktree` at least assumes they agree on
 the branch.
 
+A third holder joins them: an **ejection**, where an operator has the directory and the agent that
+leased it is dead. That one could not be a lease, because leases live in memory and an ejection
+outlives a restart — after one, a slot held by a lease alone reads as free and a hand-over wipes it
+with `git clean -ffdx`. So the hold is the `held` predicate's second arm rather than a lease:
+`system.ts` answers it from `Store.ejectionOnBranch`, which is a row, and the pool's `size` grows by
+the live ejections so a slot a person is sitting in is never one the cap counted on.
+→ [35](35-ejection.md#holding-the-slot)
+
 A slot is **held** while either is true, and the two arms cover windows the other cannot:
 
 - **This run leased it**, and `remove` has not released it. A task is settled the moment its agent

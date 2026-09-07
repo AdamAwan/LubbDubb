@@ -3561,6 +3561,20 @@ select:disabled {
   margin: 0 0 12px;
   padding: 8px 10px 8px 26px;
 }
+/* The three ways an ejection ends, each drawn as its button plus the sentence that
+   says what pressing it does. A row apiece rather than a button bar: which arm this
+   is is a decision about the work, and the words are the decision. */
+.eject-arms {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.eject-arm {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
 .rb-text {
   font-size: 13px;
   line-height: 1.5;

@@ -1,6 +1,8 @@
 import type {
   AgentFilesPayload,
   AllowanceInsights,
+  Ejection,
+  EjectionOutcome,
   GoalAgentsPayload,
   AgentTranscript,
   ConfigChange,
@@ -1448,6 +1450,55 @@ class DemoServer {
       this.dirty();
     }
     return { ok: true };
+  }
+
+  async ejectAgent(id: string, reason: string): Promise<{ ok: true; ejection: Ejection }> {
+    const agent = this.state.agents.find((a) => a.id === id);
+    const task = agent ? this.state.tasks.find((t) => t.id === agent.taskId) : undefined;
+    const ejection: Ejection = {
+      id: `ejc_${id}`,
+      originRef: task?.originRef ?? 'issue:0',
+      branch: task?.branch ?? null,
+      worktreePath: agent?.cwd ?? null,
+      agentId: id,
+      taskId: agent?.taskId ?? '',
+      sessionId: agent?.sessionId ?? null,
+      reason,
+      ejectedAt: new Date().toISOString(),
+      lastSeenAt: null,
+      lastNote: null,
+      settledAt: null,
+      outcome: null,
+      settleNote: null,
+    };
+    if (agent) {
+      agent.status = 'killed';
+      agent.endedAt = ejection.ejectedAt;
+      if (task && isLiveTask(task)) task.status = 'interrupted';
+    }
+    this.state.ejections = [
+      { ...ejection, expiresAt: new Date(Date.now() + 8 * 3_600_000).toISOString(), neverContacted: false },
+      ...this.state.ejections,
+    ];
+    this.addDecision('no_op', 'executed', `ejected ${id}: ${reason}`);
+    this.dirty();
+    return { ok: true, ejection };
+  }
+
+  async settleEjection(
+    id: string,
+    outcome: EjectionOutcome,
+    note?: string,
+  ): Promise<{ ok: true; ejection: Ejection; jobId: string | null }> {
+    const held = this.state.ejections.find((e) => e.id === id);
+    if (held) {
+      held.settledAt = new Date().toISOString();
+      held.outcome = outcome;
+      held.settleNote = note ?? null;
+      this.addDecision('no_op', 'executed', `${held.originRef} handed back as ${outcome}`);
+      this.dirty();
+    }
+    return { ok: true, ejection: held!, jobId: null };
   }
 
   async extendStall(id: string): Promise<{ ok: true; expiresAt: string }> {
@@ -4097,6 +4148,9 @@ export const demoApi = {
   interruptAgent: (id: string) => getServer().interruptAgent(id),
   resumeAgent: (id: string) => getServer().resumeAgent(id),
   extendStall: (id: string) => getServer().extendStall(id),
+  ejectAgent: (id: string, reason: string) => getServer().ejectAgent(id, reason),
+  settleEjection: (id: string, outcome: EjectionOutcome, note?: string) =>
+    getServer().settleEjection(id, outcome, note),
 };
 
 export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
