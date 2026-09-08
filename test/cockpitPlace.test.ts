@@ -53,6 +53,8 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights' }),
     at({ tab: 'insights', insightsView: 'causes', insightsWindow: '24h' }),
     at({ tab: 'insights', insightsWindow: 'all' }),
+    at({ tab: 'insights', insightsScope: 'pool' }),
+    at({ tab: 'insights', insightsScope: 'pool', insightsView: 'throughput', poolProject: 'acme-api' }),
     at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
     at({ tab: 'features' }),
     at({ tab: 'features', featureCard: 812 }),
@@ -293,4 +295,33 @@ test('a hand-edited fold list drops a section that does not exist', () => {
   const place = readPlace('?goal=issue:142&open=ticket,nonesuch&shut=signals,nonesuch');
   assert.deepEqual(place.goalOpen, ['ticket']);
   assert.deepEqual(place.goalShut, ['signals']);
+});
+
+/* The pool is a scope rather than a tab, and six of the ten readings are ones a
+   fleet only holds about itself. → docs/spec/17-cockpit.md#just-me-or-the-pool */
+test('the pool scope carries only the tabs the pool can answer', () => {
+  for (const view of ['economics', 'causes', 'throughput', 'usage']) {
+    const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
+    assert.equal(place.insightsScope, 'pool');
+    assert.equal(place.insightsView, view);
+  }
+  for (const view of ['allowance', 'reliability', 'trend', 'mcp', 'review']) {
+    const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
+    assert.equal(place.insightsScope, 'pool');
+    assert.equal(place.insightsView, 'economics', `${view} is not a pool reading and must not be representable`);
+  }
+});
+
+test('a link to the retired Pool tab lands on the pool scope', () => {
+  const place = readPlace('?tab=insights&view=pool');
+  assert.equal(place.insightsScope, 'pool');
+  assert.equal(place.insightsView, 'economics');
+});
+
+/* Work mix asked Economics' own question of the same payload, so it is two
+   sections of that tab. → docs/spec/17-cockpit.md#one-tab-one-question */
+test('a link to the retired Work mix tab lands on Economics', () => {
+  const place = readPlace('?tab=insights&view=mix');
+  assert.equal(place.insightsView, 'economics');
+  assert.equal(place.insightsScope, 'mine');
 });

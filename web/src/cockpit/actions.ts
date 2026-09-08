@@ -46,11 +46,13 @@ export type InsightsView =
   | 'throughput'
   | 'causes'
   | 'trend'
-  | 'mix'
   | 'mcp'
   | 'review'
-  | 'usage'
-  | 'pool';
+  | 'usage';
+
+/* Whose numbers a reading is over. Every tab answers for this fleet; four of them
+   the pool can answer too. → docs/spec/17-cockpit.md#just-me-or-the-pool */
+export type InsightsScope = 'mine' | 'pool';
 
 export interface CockpitActions {
   refresh(): Promise<void>;
@@ -100,6 +102,7 @@ export interface CockpitActions {
   openConfig(where: { configTab?: ConfigTab; configGroup?: string | null }): void;
   openInsights(where: {
     insightsView?: InsightsView;
+    insightsScope?: InsightsScope;
     insightsWindow?: InsightsWindow;
     poolProject?: string | null;
   }): void;

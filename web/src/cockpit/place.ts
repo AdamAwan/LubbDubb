@@ -1,4 +1,4 @@
-import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from './actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from './actions.js';
 import { GOAL_SECTIONS } from '../view/goalPage.js';
 import type {
   InsightsWindow,
@@ -31,6 +31,7 @@ export interface Place {
   configTab: ConfigTab;
   configGroup: string | null;
   insightsView: InsightsView;
+  insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
   collapsed: number[];
@@ -68,12 +69,14 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'throughput',
   'causes',
   'trend',
-  'mix',
   'mcp',
   'review',
   'usage',
-  'pool',
 ];
+const INSIGHTS_SCOPES: readonly InsightsScope[] = ['mine', 'pool'];
+/* The tabs the pool can answer. The rest are readings only a fleet holds about
+   itself. → docs/spec/17-cockpit.md#just-me-or-the-pool */
+export const POOL_VIEWS: readonly InsightsView[] = ['economics', 'causes', 'throughput', 'usage'];
 const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['session', '6h', '24h', '7d', '30d', 'all'];
 const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
 
@@ -97,6 +100,7 @@ export const NOWHERE: Place = {
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
+  insightsScope: 'mine',
   poolProject: null,
   insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
@@ -182,7 +186,7 @@ export function readPlace(search: string): Place {
     obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     configGroup: param(query, 'keys'),
-    insightsView: INSIGHTS_VIEWS.find((v) => v === param(query, 'view')) ?? 'economics',
+    ...readInsights(param(query, 'view'), param(query, 'scope')),
     poolProject: param(query, 'project') ?? null,
     insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
@@ -197,6 +201,22 @@ export function readPlace(search: string): Place {
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
   };
+}
+
+/* `view=pool` was a tab of its own before the pool became a scope, so a saved
+   link naming it lands on the scope with the tab the old one opened on. */
+function readInsights(
+  view: string | null,
+  scope: string | null,
+): { insightsView: InsightsView; insightsScope: InsightsScope } {
+  if (view === 'pool') return { insightsView: 'economics', insightsScope: 'pool' };
+  /* `mix` asked Economics' own question of the same payload, so its two tables are
+     sections of that tab now and a link naming it lands there. */
+  if (view === 'mix') return { insightsView: 'economics', insightsScope: 'mine' };
+  const chosen = INSIGHTS_VIEWS.find((v) => v === view) ?? 'economics';
+  const where = INSIGHTS_SCOPES.find((s) => s === scope) ?? 'mine';
+  if (where === 'pool' && !POOL_VIEWS.includes(chosen)) return { insightsView: 'economics', insightsScope: 'pool' };
+  return { insightsView: chosen, insightsScope: where };
 }
 
 function readTracking(
@@ -301,6 +321,7 @@ export function placeQuery(place: Place): string {
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
+  if (place.insightsScope !== 'mine') query.set('scope', place.insightsScope);
   if (place.poolProject !== null) query.set('project', place.poolProject);
   if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
   if (place.collapsed.length > 0) {

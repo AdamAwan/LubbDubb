@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { OperatorRow, SurfaceRow, UsagePayload } from '../types.js';
 import { fmtDuration } from './insightsFormat.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -14,17 +15,26 @@ export function UsageTab({ payload }: { payload: UsagePayload }): JSX.Element {
       <p className="sp-sub">What you reached in and did</p>
       <Ledger rows={insights.acts} kind="act" />
 
-      {/* The rate is half of every parked figure above, and a reader deciding to
-          act on the product is entitled to both: on a quiet week the cost of a
-          wait is small for reasons that have nothing to do with the ask. */}
       <p className="ug-rate">
-        Parked cost is priced at this fleet&rsquo;s own burn over this window —{' '}
-        <b>${insights.fleetRateUsdPerHour.toFixed(2)}/hour</b>. It is what the fleet did <i>not</i> do while it waited,
-        and it moves with the rate as much as with the wait.
+        Parked cost is priced at <b>${insights.fleetRateUsdPerHour.toFixed(2)}/hour</b>, this fleet&rsquo;s own burn.
       </p>
 
-      <p className="sp-sub">What you looked at, and what it means that you didn&rsquo;t</p>
+      <p className="sp-sub">What you looked at</p>
       <Reach reach={reach} />
+
+      <MethodNote>
+        {/* The rate is half of every parked figure above, and a reader deciding to
+            act on the product is entitled to both: on a quiet week the cost of a
+            wait is small for reasons that have nothing to do with the ask. */}
+        <p>
+          <b>Parked cost is what the fleet did not do while it waited.</b> It is priced at the fleet&rsquo;s burn over
+          this window, so it moves with the rate as much as with the wait.
+        </p>
+        <p>
+          <b>Whether a thing was read is not observable here</b> and no figure above pretends otherwise — what answers
+          that is an ask settled without the surface it is about ever having been opened.
+        </p>
+      </MethodNote>
     </div>
   );
 }
@@ -94,9 +104,7 @@ function Reach({ reach }: { reach: { rows: SurfaceRow[]; total: number; places: 
       </ul>
       <p className="ug-rate">
         Drawn over <b>{reach.total}</b> recorded{reach.total === 1 ? ' act' : ' acts'} across <b>{reach.places}</b>{' '}
-        {reach.places === 1 ? 'surface' : 'surfaces'}. Whether a thing was <i>read</i> is not observable here and no
-        figure above pretends otherwise — what answers that is an ask above settled without the surface it is about ever
-        having been opened.
+        {reach.places === 1 ? 'surface' : 'surfaces'}.
       </p>
     </>
   );

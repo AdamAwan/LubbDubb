@@ -159,6 +159,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           <PoolStatus now={view.now} />
           <InsightsPage
             view={view.insightsView}
+            scope={view.insightsScope}
             window={view.insightsWindow}
             poolProject={view.poolProject}
             actions={actions}

@@ -6,7 +6,7 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
-import { homeTab, type Place } from './place.js';
+import { homeTab, POOL_VIEWS, type Place } from './place.js';
 import { logUsage, notePlace, placeReach } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
@@ -239,7 +239,16 @@ export function useCockpit(): CockpitStatus {
       retireObstacle: (id) => then(api.retireObstacle(id)),
       writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
-      openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
+      openInsights: (where) =>
+        go((current) => {
+          const next = { tab: 'insights' as const, goal: null, ...where };
+          /* A tab only a fleet holds about itself cannot survive a move to the
+             pool, so the scope move carries the reading back to Economics rather
+             than drawing a refusal where a tab used to be. */
+          const view = next.insightsView ?? current.insightsView;
+          const scope = next.insightsScope ?? current.insightsScope;
+          return scope === 'pool' && !POOL_VIEWS.includes(view) ? { ...next, insightsView: 'economics' } : next;
+        }),
       selectGoal: (ref) =>
         go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
       selectPr: (prNumber) =>
@@ -387,6 +396,7 @@ export function useCockpit(): CockpitStatus {
       viewingObstacle: place.obstacle,
       obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,
+      insightsScope: place.insightsScope,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
       selectedGoal: place.goal,

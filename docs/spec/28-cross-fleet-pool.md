@@ -801,10 +801,24 @@ is a reading about what this fleet publishes and reads, on the tab that answers 
 costing and reaching.
 
 **The shared insights page** reads the pulled documents live. It is not a committed artefact and there
-is no generated file, so there is nothing for two fleets to conflict on. It opens per project, draws
-the cross-fleet `byCause` and `byPhase` rollups, and draws `byCheck` only within a project.
+is no generated file, so there is nothing for two fleets to conflict on. It opens per project and draws
+`byCheck` only within a project.
 
-Where the page is, which project it is narrowed to and which window it is over all go on `Place`
+**It is not a tab of its own.** The pool is a **scope** on the Insights page —
+[Just me or the pool](17-cockpit.md#just-me-or-the-pool) — because every rollup it carries is the
+cross-fleet half of a reading that already has a tab. `byPhase` and the two caveat counts are Economics,
+`byCause` is Causes, `byThroughput` is Throughput and `byUsage` is Usage; those four tabs are what the
+scope offers, and the six the pool cannot answer are withheld rather than drawn empty. A tab that
+answered "the whole fleet's phase split" beside a tab that answered "this fleet's phase split" was two
+names for one question, and the one an operator wanted was decided by which tab they were on.
+
+**The window bar is replaced rather than obeyed** under the pool scope. The digest's bucket is a UTC day
+and its retention is ninety of them, so the page's five spans are not a question anybody asks of it —
+the project picker takes the bar's place, and the resolution line says how many fleets and how many UTC
+days are behind the reading.
+
+Where the page is, whose numbers it is over, which project it is narrowed to and which window it is over
+all go on `Place`
 (`web/src/cockpit/place.ts`), never a `useState` — a surface held outside the query string is one the
 back button steps over ([17](17-cockpit.md#the-address-bar)). Every colour it draws is a custom property
 on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on it is drawn with

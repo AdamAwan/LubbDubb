@@ -23,7 +23,7 @@ import { buildGoalPage, goalOfOrigin } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
-import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from '../cockpit/actions.js';
 import type { FeaturePrFilter, FeatureSort } from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
@@ -98,6 +98,7 @@ export interface CockpitView {
   viewingObstacle: string | null;
   obstacleEnded: boolean;
   insightsView: InsightsView;
+  insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
 }
@@ -151,6 +152,7 @@ interface ViewInputs {
   viewingObstacle?: string | null;
   obstacleEnded?: boolean;
   insightsView: InsightsView;
+  insightsScope?: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject?: string | null;
   selectedGoal: string | null;
@@ -242,6 +244,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     consolePanel: input.consolePanel,
     tab: input.tab,
     insightsView: input.insightsView,
+    insightsScope: input.insightsScope ?? 'mine',
     insightsWindow: input.insightsWindow,
     poolProject: input.poolProject ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),

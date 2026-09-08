@@ -4955,8 +4955,34 @@ select:disabled {
   margin-top: 10px;
   padding: 9px 12px 12px;
 }
-.sp-method .sp-sub {
-  margin-top: 2px;
+/* Folded shut. Every tab carried a wall of method prose under its figures, and
+   read end to end once it is never read again — so the caveats stay one click
+   from the numbers they qualify rather than three screens of them.
+   → docs/spec/17-cockpit.md#the-method-note-is-folded */
+.sp-method > summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--muted);
+  list-style: none;
+}
+.sp-method > summary::-webkit-details-marker {
+  display: none;
+}
+.sp-method > summary::before {
+  content: '▸ ';
+  color: var(--grey);
+}
+.sp-method[open] > summary::before {
+  content: '▾ ';
+}
+.sp-method > summary:hover {
+  color: var(--text);
+}
+.sp-method[open] > summary {
+  margin-bottom: 7px;
 }
 .sp-method p {
   margin: 0 0 7px;
@@ -8321,14 +8347,14 @@ select:disabled {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* The page's heading is the question the tab answers, so it carries a sentence
+   rather than a word — it gets the room a title gets and nothing sits beside it.
+   → docs/spec/17-cockpit.md#one-tab-one-question */
 .insights-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 600;
-}
-.insights-note {
-  font-size: 12px;
-  color: var(--muted);
+  letter-spacing: -0.01em;
 }
 .insights-gap {
   flex: 1 1 auto;

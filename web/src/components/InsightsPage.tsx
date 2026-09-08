@@ -13,7 +13,7 @@ import type {
   SpendInsights,
   SpendTrend,
 } from '../types.js';
-import type { CockpitActions, InsightsView } from '../cockpit/actions.js';
+import type { CockpitActions, InsightsScope, InsightsView } from '../cockpit/actions.js';
 import { api } from '../api.js';
 import { Downloads, toCsv } from './Downloads.js';
 import { AllowanceTab } from './AllowanceTab.js';
@@ -22,32 +22,55 @@ import { ReliabilityTab, reliabilityCsv } from './ReliabilityTab.js';
 import { ThroughputTab, throughputCsv } from './ThroughputTab.js';
 import { CausesTab } from './CausesTab.js';
 import { SpendTrendTab } from './SpendTrendTab.js';
-import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
-import { PoolTab } from './PoolTab.js';
+import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
 import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
 import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
+import { POOL_VIEWS } from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
 
-const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
-  { id: 'economics', label: 'Economics', note: 'what it cost, what it landed, what leaked' },
-  { id: 'allowance', label: 'Allowance', note: 'what the account has left, and what spent it' },
-  { id: 'reliability', label: 'Reliability', note: 'did it finish, and did it go green' },
-  { id: 'throughput', label: 'Throughput', note: 'how much came out — PRs, reviews, issues' },
-  { id: 'causes', label: 'Causes', note: 'what keeps sending the fleet back' },
-  { id: 'trend', label: 'Trend', note: 'whether what you changed is working' },
-  { id: 'mix', label: 'Work mix', note: 'why this kind of work costs what it does' },
-  { id: 'mcp', label: 'MCP', note: 'which tools the fleet reaches for, and which it never does' },
-  { id: 'review', label: 'Review', note: 'what the review packs say about the agents that write them' },
+/* One tab, one question — and the question is the page's heading, so a reader
+   arrives at an answer rather than at a category. Every table under it is framed
+   as part of that answer; a table that answers a different question is on a
+   different tab. → docs/spec/17-cockpit.md#one-tab-one-question */
+const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?: string }[] = [
+  {
+    id: 'economics',
+    label: 'Economics',
+    asks: 'Is the fleet worth what it costs?',
+    poolAsks: 'Where does the pool\u2019s money go?',
+  },
+  { id: 'allowance', label: 'Allowance', asks: 'What has the account got left?' },
+  { id: 'reliability', label: 'Reliability', asks: 'Did it finish, and did it go green?' },
+  {
+    id: 'throughput',
+    label: 'Throughput',
+    asks: 'How much came out?',
+    poolAsks: 'How much came out, across every fleet?',
+  },
+  {
+    id: 'causes',
+    label: 'Causes',
+    asks: 'What keeps sending the fleet back?',
+    poolAsks: 'What keeps sending fleets back?',
+  },
+  { id: 'trend', label: 'Trend', asks: 'Is what I changed working?' },
+  { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
+  { id: 'review', label: 'Review', asks: 'What do the packs say about the agents that write them?' },
   {
     id: 'usage',
     label: 'Usage',
-    note: 'what the harness asked of you, what it cost to wait, and what you never opened',
+    asks: 'What did the harness ask of you, and what did you never open?',
+    poolAsks: 'What do people do with their fleets?',
   },
-  { id: 'pool', label: 'Pool', note: 'what the whole pool spent, across fleets' },
+];
+
+const SCOPES: readonly { key: InsightsScope; label: string; note: string }[] = [
+  { key: 'mine', label: 'Just me', note: 'this fleet' },
+  { key: 'pool', label: 'The pool', note: 'every fleet publishing a digest' },
 ];
 
 const WINDOWS: readonly { key: InsightsWindow; label: string }[] = [
@@ -65,11 +88,13 @@ const PENDING = { state: 'loading', data: null } as const;
 
 export function InsightsPage({
   view,
+  scope,
   window: chosen,
   poolProject,
   actions,
 }: {
   view: InsightsView;
+  scope: InsightsScope;
   window: InsightsWindow;
   poolProject: string | null;
   actions: CockpitActions;
@@ -93,6 +118,7 @@ export function InsightsPage({
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (scope !== 'mine') return;
     let live = true;
     setSpend(PENDING);
     setReliability(PENDING);
@@ -123,10 +149,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [chosen]);
+  }, [chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'trend' || trendFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'trend' || trendFetchedFor.current === chosen) return;
     trendFetchedFor.current = chosen;
     let live = true;
     setTrend(PENDING);
@@ -137,10 +163,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'throughput' || throughputFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'throughput' || throughputFetchedFor.current === chosen) return;
     throughputFetchedFor.current = chosen;
     let live = true;
     setThroughput(PENDING);
@@ -151,10 +177,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'mcp' || mcpFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'mcp' || mcpFetchedFor.current === chosen) return;
     mcpFetchedFor.current = chosen;
     let live = true;
     setMcp(PENDING);
@@ -165,10 +191,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'allowance' || allowanceFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'allowance' || allowanceFetchedFor.current === chosen) return;
     allowanceFetchedFor.current = chosen;
     let live = true;
     setAllowance(PENDING);
@@ -179,10 +205,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'review' || calibrationFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'review' || calibrationFetchedFor.current === chosen) return;
     calibrationFetchedFor.current = chosen;
     let live = true;
     setCalibration(PENDING);
@@ -193,10 +219,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'usage' || usageFetchedFor.current === chosen) return;
+    if (scope !== 'mine' || view !== 'usage' || usageFetchedFor.current === chosen) return;
     usageFetchedFor.current = chosen;
     let live = true;
     setUsage(PENDING);
@@ -207,10 +233,10 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, chosen]);
+  }, [view, chosen, scope]);
 
   useEffect(() => {
-    if (view !== 'pool' || poolFetchedFor.current === poolProject) return;
+    if (scope !== 'pool' || poolFetchedFor.current === poolProject) return;
     poolFetchedFor.current = poolProject;
     let live = true;
     setPool(PENDING);
@@ -221,62 +247,93 @@ export function InsightsPage({
     return () => {
       live = false;
     };
-  }, [view, poolProject]);
+  }, [scope, poolProject]);
 
   useEffect(() => {
-    if (view === 'pool') logUsage('pool.view');
-  }, [view]);
+    if (scope === 'pool') logUsage('pool.view');
+  }, [scope]);
 
-  const note = TABS.find((t) => t.id === view)?.note ?? '';
+  const tab = TABS.find((t) => t.id === view);
+  const asks = (scope === 'pool' ? (tab?.poolAsks ?? tab?.asks) : tab?.asks) ?? 'Insights';
   const resolved = spend.data?.window ?? reliability.data?.window ?? null;
+  const tabs = scope === 'pool' ? TABS.filter((t) => POOL_VIEWS.includes(t.id)) : TABS;
 
   return (
     <div className="insights" ref={page}>
       <div className="insights-head">
-        <h2>Insights</h2>
-        <span className="insights-note">{note}</span>
+        {/* The question, as the heading. A reader arrives with one, and a page
+            titled for its category makes them work out which page holds it. */}
+        <h2>{asks}</h2>
         <span className="insights-gap" />
-        <Exports
-          view={view}
-          spend={spend.data}
-          reliability={reliability.data}
-          remedies={remedies}
-          trend={trend.data}
-          mcp={mcp.data}
-          throughput={throughput.data}
-          usage={usage.data}
-          page={page}
-        />
+        {scope === 'mine' && (
+          <Exports
+            view={view}
+            spend={spend.data}
+            reliability={reliability.data}
+            remedies={remedies}
+            trend={trend.data}
+            mcp={mcp.data}
+            throughput={throughput.data}
+            usage={usage.data}
+            page={page}
+          />
+        )}
       </div>
 
       <div className="insights-bar">
-        <Label dense>Window</Label>
-        <div className="insights-win" role="group" aria-label="Window">
-          {WINDOWS.map((w) => (
+        <Label dense>Whose</Label>
+        <div className="insights-win" role="group" aria-label="Whose numbers">
+          {SCOPES.map((s) => (
             <button
-              key={w.key}
+              key={s.key}
               type="button"
-              aria-pressed={w.key === chosen}
-              className={w.key === chosen ? 'on' : ''}
+              aria-pressed={s.key === scope}
+              className={s.key === scope ? 'on' : ''}
+              title={s.note}
               onClick={() => {
                 logUsage('insights.filter');
-                actions.openInsights({ insightsWindow: w.key });
+                actions.openInsights({ insightsScope: s.key });
               }}
             >
-              {windowButtonLabel(w, chosen, resolved)}
+              {s.label}
             </button>
           ))}
         </div>
-        {/* The resolution, said out loud. A reader counting bars to work out what
-            one of them covers is a reader who will get it wrong on the window
-            whose bucket count is not its span in days. */}
-        <span className="insights-meta">{resolved === null ? 'reading…' : resolved.bucketLabel}</span>
+        {scope === 'pool' ? (
+          <PoolBar payload={pool.data} project={poolProject} actions={actions} />
+        ) : (
+          <>
+            <Label dense>Window</Label>
+            <div className="insights-win" role="group" aria-label="Window">
+              {WINDOWS.map((w) => (
+                <button
+                  key={w.key}
+                  type="button"
+                  aria-pressed={w.key === chosen}
+                  className={w.key === chosen ? 'on' : ''}
+                  onClick={() => {
+                    logUsage('insights.filter');
+                    actions.openInsights({ insightsWindow: w.key });
+                  }}
+                >
+                  {windowButtonLabel(w, chosen, resolved)}
+                </button>
+              ))}
+            </div>
+            {/* The resolution, said out loud. A reader counting bars to work out what
+                one of them covers is a reader who will get it wrong on the window
+                whose bucket count is not its span in days. */}
+            <span className="insights-meta">{resolved === null ? 'reading…' : resolved.bucketLabel}</span>
+          </>
+        )}
       </div>
 
-      {resolved?.session && <SessionNote session={resolved.session} window={resolved} now={Date.now()} />}
+      {scope === 'mine' && resolved?.session && (
+        <SessionNote session={resolved.session} window={resolved} now={Date.now()} />
+      )}
 
       <div className="insights-tabs" role="tablist" aria-label="Insights">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -297,6 +354,7 @@ export function InsightsPage({
       <div className="insights-body">
         <Body
           view={view}
+          scope={scope}
           spend={spend}
           reliability={reliability}
           remedies={remedies}
@@ -307,12 +365,63 @@ export function InsightsPage({
           calibration={calibration}
           usage={usage}
           pool={pool}
-          poolProject={poolProject}
-          actions={actions}
           windowLabel={resolved?.label ?? 'this window'}
         />
       </div>
     </div>
+  );
+}
+
+function PoolBar({
+  payload,
+  project,
+  actions,
+}: {
+  payload: PoolInsightsPayload | null;
+  project: string | null;
+  actions: CockpitActions;
+}): JSX.Element {
+  const rollup = payload?.rollup ?? null;
+  return (
+    <>
+      <Label dense>Project</Label>
+      <div className="insights-win" role="group" aria-label="Project">
+        <button
+          type="button"
+          aria-pressed={project === null}
+          className={project === null ? 'on' : ''}
+          onClick={() => {
+            logUsage('pool.filter');
+            actions.openInsights({ poolProject: null });
+          }}
+        >
+          All
+        </button>
+        {(payload?.projects ?? []).map((name) => (
+          <button
+            key={name}
+            type="button"
+            aria-pressed={name === project}
+            className={name === project ? 'on' : ''}
+            onClick={() => {
+              logUsage('pool.filter');
+              actions.openInsights({ poolProject: name });
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      {/* The pool ignores the window bar: the digest's bucket is a UTC day and its
+          retention is ninety of them. → docs/spec/28-cross-fleet-pool.md */}
+      <span className="insights-meta">
+        {rollup === null
+          ? 'reading…'
+          : `${rollup.fleets.length} fleet${rollup.fleets.length === 1 ? '' : 's'} · ${
+              rollup.days.length === 0 ? 'nothing published yet' : `${rollup.days.length} UTC days`
+            }`}
+      </span>
+    </>
   );
 }
 
@@ -336,34 +445,29 @@ function SessionNote({
   if (session.kind === 'unreported')
     return (
       <p className="insights-anchor is-loose">
-        <b>The last five hours</b>, not the account&apos;s five-hour window — no agent on this deployment has ever
-        reported one. API-key auth carries no windows at all, and a stream agent has to take a turn before the first
-        reading arrives. The split below is over {stamp(view.since, now)} to now.
+        <b>The last five hours</b>, not the account&apos;s window — no agent here has ever reported one.{' '}
+        <span className="dim">{stamp(view.since, now)} to now.</span>
       </p>
     );
   if (session.kind === 'stale')
     return (
       <p className="insights-anchor is-loose">
-        <b>The last five hours</b>, not the account&apos;s five-hour window. The newest reading — taken{' '}
-        {stamp(session.capturedAt, now)} — names a reset at {stamp(session.resetsAt, now)}, which this harness cannot
-        anchor to: the window has turned over since an agent last took a turn, and nothing observed where the new one
-        began. The split below is over {stamp(view.since, now)} to now.
+        <b>The last five hours</b>, not the account&apos;s window — the newest reading names a reset at{' '}
+        {stamp(session.resetsAt, now)}, which this harness cannot anchor to.{' '}
+        <span className="dim">{stamp(view.since, now)} to now.</span>
       </p>
     );
   return (
     <p className="insights-anchor">
-      <b>The account&apos;s five-hour window</b>, opened {stamp(session.startsAt, now)} and resetting{' '}
+      <b>The account&apos;s five-hour window</b>, opened {stamp(session.startsAt, now)}, resets{' '}
       {stamp(session.resetsAt, now)}.
       {session.usedPercentage === null ? null : (
         <>
           {' '}
-          The account reported it <b>{Math.round(session.usedPercentage)}% spent</b> as of{' '}
-          {stamp(session.capturedAt, now)}.
+          <b>{Math.round(session.usedPercentage)}% spent</b> as of {stamp(session.capturedAt, now)}.
         </>
       )}{' '}
-      What the limit meters is not published and this harness cannot see it — the split below is <b>cost</b>, which is
-      the only dated per-run measure it holds. The two move together; they are not the same quantity, and the shares
-      below are the honest half of the pair.
+      <span className="dim">The split below is cost, which is not what the limit meters.</span>
     </p>
   );
 }
@@ -382,6 +486,7 @@ function stamp(iso: string | null, now: number): string {
 
 function Body({
   view,
+  scope,
   spend,
   reliability,
   remedies,
@@ -392,11 +497,10 @@ function Body({
   calibration,
   usage,
   pool,
-  poolProject,
-  actions,
   windowLabel,
 }: {
   view: InsightsView;
+  scope: InsightsScope;
   spend: Fetched<SpendInsights>;
   reliability: Fetched<ReliabilityInsights>;
   remedies: RemedyInsights | null;
@@ -407,14 +511,21 @@ function Body({
   calibration: Fetched<ReviewCalibration>;
   usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
-  poolProject: string | null;
-  actions: CockpitActions;
   windowLabel: string;
 }): JSX.Element {
-  if (view === 'economics' || view === 'mix') {
+  if (scope === 'pool') {
+    if (pool.state === 'loading') return <p className="empty">Reading the pool…</p>;
+    if (pool.data === null) return <p className="empty">Could not read the pool.</p>;
+    if (view === 'causes') return <PoolCauses payload={pool.data} />;
+    if (view === 'throughput') return <PoolThroughput payload={pool.data} />;
+    if (view === 'usage') return <PoolUsage payload={pool.data} />;
+    return <PoolEconomics payload={pool.data} />;
+  }
+
+  if (view === 'economics') {
     if (spend.state === 'loading') return <p className="empty">Reading the meter…</p>;
     if (spend.data === null) return <p className="empty">Could not read the spend log.</p>;
-    return view === 'economics' ? <EconomicsTab insights={spend.data} /> : <WorkMixTab insights={spend.data} />;
+    return <EconomicsTab insights={spend.data} />;
   }
 
   if (view === 'reliability' || view === 'causes') {
@@ -453,12 +564,6 @@ function Body({
     if (usage.state === 'loading') return <p className="empty">Reading what was asked of you…</p>;
     if (usage.data === null) return <p className="empty">Could not read the operator ledger.</p>;
     return <UsageTab payload={usage.data} />;
-  }
-
-  if (view === 'pool') {
-    if (pool.state === 'loading') return <p className="empty">Reading the pool…</p>;
-    if (pool.data === null) return <p className="empty">Could not read the pool.</p>;
-    return <PoolTab payload={pool.data} project={poolProject} actions={actions} />;
   }
 
   if (trend.state === 'loading') return <p className="empty">Reading eight windows…</p>;
@@ -556,7 +661,7 @@ function Exports({
       />
     );
   }
-  const spendTab = view === 'economics' || view === 'mix' || view === 'trend';
+  const spendTab = view === 'economics' || view === 'trend';
   if (spendTab && spend !== null) {
     return (
       <Downloads
