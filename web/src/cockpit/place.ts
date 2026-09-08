@@ -65,6 +65,7 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'economics',
   'allowance',
   'reliability',
+  'throughput',
   'causes',
   'trend',
   'mix',

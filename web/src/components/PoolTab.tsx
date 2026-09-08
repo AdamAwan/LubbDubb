@@ -84,6 +84,7 @@ export function PoolTab({
             <Section title="By check" note="comparable here because it is one pipeline" rows={rollup.byCheck} />
           )}
           <Usage rows={rollup.byUsage} publishing={rollup.fleets.length} />
+          <Shipped rows={rollup.byThroughput} publishing={rollup.fleets.length} />
           <div className="pool-caveats">
             <Caveat
               label="Returns that filed no account"
@@ -151,6 +152,52 @@ function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number
         <p className="empty">
           Nothing in this section yet. Only acts the cockpit witnesses on the click are here — an act a table already
           records is swept by this fleet’s own operator ledger instead.
+        </p>
+      ) : (
+        <table className="pool-table">
+          <thead>
+            <tr>
+              <th>What</th>
+              <th className="num">Times</th>
+              <th className="num">Fleets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <td>{row.label}</td>
+                <td className="num">{row.count}</td>
+                <td className="num">
+                  {row.fleets} of {publishing}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/* The pool's half of the Throughput tab. What appears here is what each fleet
+   declared its own: a slice its provider filtered to that operator. An unfiltered
+   slice is the repository's, reported by every fleet watching it, and is withheld —
+   so a row's Fleets column is how many fleets could vouch for it, not how many
+   published at all. → docs/spec/28-cross-fleet-pool.md */
+function Shipped({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
+  return (
+    <section className="pool-section">
+      <h3>What the fleets shipped</h3>
+      <p className="pool-note">
+        the output each fleet could vouch for as its own — the slices its provider filtered to that operator. A slice
+        that arrived unfiltered is a fact about the <em>repository</em>, which every fleet watching it also reports, so
+        it is withheld here and stays on that fleet’s own Throughput tab. <b>Fleets</b> is therefore how many fleets
+        could vouch for a row, not how many published; a measure missing entirely is one no fleet could.
+      </p>
+      {rows.length === 0 ? (
+        <p className="empty">
+          Nothing in this section yet. No fleet has published output it could vouch for as its own — a fleet whose world
+          arrives unfiltered contributes only the replies it sent.
         </p>
       ) : (
         <table className="pool-table">

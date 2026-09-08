@@ -180,6 +180,13 @@ export interface WorldEvent {
 
 export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
+export interface PrReplySent {
+  prNumber: number;
+  threadId: string;
+  commentRef: string;
+  sentAt: string;
+}
+
 export interface ErrorLogEntry {
   id: string;
   source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
@@ -1566,6 +1573,11 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unaccounted: PoolDigestRow[];
   unmeasured: PoolDigestRow[];
   byUsage: PoolDigestRow[];
+  byThroughput: PoolDigestRow[];
+  /* Which of `byThroughput`'s measures this fleet's world was scoped tightly enough
+     for the pool to sum. Published by the fleet that knows, never guessed by a
+     reader. → docs/spec/28-cross-fleet-pool.md */
+  poolableThroughput: string[];
   byFault: PoolDigestRow[];
 }
 

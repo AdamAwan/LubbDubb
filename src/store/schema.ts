@@ -1575,7 +1575,7 @@ CREATE TABLE IF NOT EXISTS pool_digest_rows (
   fleet_id TEXT NOT NULL,
   project  TEXT NOT NULL,
   day      TEXT NOT NULL,            -- a UTC day, YYYY-MM-DD. Never local midnight.
-  section  TEXT NOT NULL,            -- phase | cause | check | unaccounted | unmeasured
+  section  TEXT NOT NULL,            -- phase | cause | check | unaccounted | unmeasured | usage | throughput
   key      TEXT NOT NULL,            -- the section's own key; empty for the two totals
   count    INTEGER NOT NULL,         -- runs, or accounts, or dispatches — the section says which
   cost_usd REAL,                     -- null where a window measured nothing; never 0.00 for it

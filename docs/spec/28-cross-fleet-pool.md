@@ -352,15 +352,16 @@ publish from rows the fleet already holds, so the envelope carries it and nothin
 
 Every dimension is a closed vocabulary that already exists, and none of them is a provider identifier.
 
-| Section       | Keyed by                                     | Measures                                |
-| ------------- | -------------------------------------------- | --------------------------------------- |
-| `byPhase`     | `SpendPhase` (`src/spendInsights.ts`)        | costUsd, runs                           |
-| `byCause`     | `RemedyKind` × `RemedyCause` × `RemedyGuard` | accounts, costUsd                       |
-| `byCheck`     | the check's own name                         | accounts, costUsd                       |
-| `unaccounted` | —                                            | return dispatches that filed no account |
-| `unmeasured`  | —                                            | runs that reported no usage at all      |
-| `byUsage`     | `UsageSubject` × `UsageVerb`                 | times a person did it (no cost)         |
-| `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
+| Section        | Keyed by                                          | Measures                                |
+| -------------- | ------------------------------------------------- | --------------------------------------- |
+| `byPhase`      | `SpendPhase` (`src/spendInsights.ts`)             | costUsd, runs                           |
+| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`      | accounts, costUsd                       |
+| `byCheck`      | the check's own name                              | accounts, costUsd                       |
+| `unaccounted`  | —                                                 | return dispatches that filed no account |
+| `unmeasured`   | —                                                 | runs that reported no usage at all      |
+| `byUsage`      | `UsageSubject` × `UsageVerb`                      | times a person did it (no cost)         |
+| `byThroughput` | `ThroughputMeasure` (`src/throughputInsights.ts`) | times it happened (no cost)             |
+| `byFault`      | `ErrorLogEntry['source']`                         | faults recorded (no cost)               |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns
@@ -447,17 +448,102 @@ year-over-year reading is not available. On the `git` transport the older rows d
 history, and that is deliberately **not** part of the contract — a service has no such history, and a
 promise that rested on one substrate would be one the interface could not keep.
 
+### The throughput section
+
+What each fleet's work produced, keyed by `ThroughputMeasure` and counted per UTC day like everything
+else here — pull requests opened, merged and abandoned, approvals, review comments, replies sent,
+issues opened and closed. It is a move of what exists and not a new measurement: the fold behind the
+fleet's own Throughput tab ([18](18-observability.md#the-throughput-breakdown)) reads the same
+`world_events` rows and the same `pr_replies_sent` record, and this arm folds them per day instead of
+per window.
+
+**It carries no cost**, for `byFault`'s reason exactly: no measure here has a dollar figure anywhere in
+the harness, and deriving one for the pool would be an invention. What the work cost is `byPhase`, one
+section up.
+
+#### Only a slice a fleet had to itself may cross
+
+This is the section's sharp edge, and it is `byCheck`'s problem with the sign
+reversed. `byCheck` is comparable **within** a project and not between, because a check
+name is a provider's. Throughput is comparable only where the fleet's world was
+**already narrowed to its operator** — because an unnarrowed slice is a fact about the
+**repository**, and every fleet watching that repository reports it. Four fleets on one
+project would see the same merge four times, and their sum is not four times the work.
+It renders perfectly: a project that looks four times as productive as the one with a
+single operator, with nothing red.
+
+**But most fleets are narrowed, and their counts are their own.** `ownWorkOnly` defaults
+to **on** ([02](02-configuration.md#ownworkonly)), and with a `userId` to filter to, both
+source-control providers fetch only pull requests that operator authored or is assigned
+— `pulls.filter(p => p.authorLogin === prAuthor || p.assigneeLogins.includes(prAuthor))`
+on GitHub, the same shape on Azure. Those rows are that fleet's alone and **do** sum.
+Withholding them would have thrown away the reading this section exists for.
+
+The exception is **GitHub issues**, and it is invisible unless you go and look:
+`GitHubIssuesIntegration.snapshot` calls `listOpenIssues()` and filters only pull
+requests out of the result. The ownership label annotates an issue — it is what
+`labelsAddedByViewer` reads for pickup — and it never scopes the sweep. So a GitHub
+fleet's `issue-opened` and `issue-closed` count **every issue in the repository**, and
+two fleets on one repository report the same ones. Azure's work-item sweep passes
+`assignedTo`, so there the issue rows _are_ scoped.
+
+| Slice         | Scoped to the operator when                                      |
+| ------------- | ---------------------------------------------------------------- |
+| Pull requests | `ownWorkOnly` and a `userId` — GitHub and Azure alike            |
+| Issues        | `ownWorkOnly` and a `userId`, **Azure only** — GitHub sweeps all |
+| Replies sent  | always: `pr_replies_sent` is this harness's own record           |
+
+**So the fleet declares, and the pool believes only the declaration.** `worldScope`
+(`src/integrations/registry.ts`) answers what narrowed this deployment's world, from a
+table stated beside the provider factories, and `buildDigestDocument` turns it into
+`poolableThroughput` on the document — the measures this fleet publishes as its own.
+The publisher is the only party that knows: a reader cannot tell from the rows whether
+the fleet that wrote them was filtered.
+
+**The cut is at the mirror, not at the fold.** `digestSections` (`src/store/pool.ts`)
+stores the declared keys and drops the rest, so a later reader that forgot the rule
+cannot reach a summable table of the undeclared ones — the stance `byCheck` takes with
+two sections rather than one flag. The whole section is still in the **document**,
+because a person opening one fleet's `digest.md` is reading one fleet, where every
+measure is sound and no double count can arise; the companion's table says under itself
+which of its rows crossed and points at `poolableThroughput`.
+
+**A declaration is checked before it is believed.** `readMeasures` keeps only keys this
+build knows as a `ThroughputMeasure`, and an absent field — a fleet from before this
+section — declares nothing, so none of its throughput sums. Silence is the safe answer
+in both directions.
+
+**The residual overlap is bounded, and stated rather than solved.** Two operators who
+both run fleets and share one pull request — one authored it, the other is assigned —
+each see it, so a merge can be counted twice. That needs both of them to have a fleet
+_and_ to be on the same pull request, and it over-counts by one rather than by the
+number of watchers. The alternative is publishing pull-request numbers so the pool could
+deduplicate, which is identifying data this arm has never carried: every dimension here
+is [a closed vocabulary that already exists](#the-keys), and none of them names a thing
+in somebody's repository.
+
+**`Fleets` on a pooled row is how many fleets could vouch for it**, not how many
+published — a fleet whose world arrives unfiltered contributes to `reply-sent` and
+nothing else. The cockpit's section says so, because a row reading "3 of 9" otherwise
+looks like six fleets that did no work.
+
+**Adding it did not move `POOL_SCHEMA_VERSION`.** The section is additive and both
+readers answer empty for a field that is absent, so a fleet on the older build reads a
+newer document and sees a digest without throughput rather than one it must refuse. A
+version bump is for a change that would make an older reader _wrong_, and this one makes
+it only less informed.
+
 ### The faults section
 
-Five of the six sections above measure the **work** or the person doing it, and every one of them sums
-across fleets into the
-shared insights page. `byFault` measures the **harness**: what the fleet's own error log
+Six of the seven sections above measure the **work** or the person doing it, and all but the throughput
+rows the [previous section](#only-a-slice-a-fleet-had-to-itself-may-cross) withholds sum across fleets
+into the shared insights page. `byFault` measures the **harness**: what the fleet's own error log
 ([18](18-observability.md)) recorded, keyed by `ErrorLogEntry['source']` — `cycle`, `provider`, `agent`,
 `server`, `boot` — and counted per UTC day like everything else here.
 
 **It goes into the file and no further.** Nothing mirrors it, nothing aggregates it, and nothing at any
-far end reads it back: `digestSections` in `src/store/pool.ts` names the six sections the mirror stores
-and this is deliberately not among them. A fault is this harness failing on this operator's machine —
+far end reads it back: `digestSections` in `src/store/pool.ts` names the sections the mirror stores and
+this is deliberately not among them. A fault is this harness failing on this operator's machine —
 comparable to nothing on anybody else's, and answering no question a company page asks. What it is for
 is a person opening the fleet's own `digest.md` in the pool repository and seeing what has been going
 wrong, which is the one place the harness's faults are readable without a cockpit in front of you.

@@ -27,6 +27,7 @@ import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
+import type { ThroughputInsights } from './throughputInsights.js';
 import type { ReviewCalibration } from './reviewPacks/calibration.js';
 import type { RemedyInsights } from './remedyInsights.js';
 import type { AllowanceInsights } from './allowanceInsights.js';
@@ -689,6 +690,10 @@ export interface ReliabilityPayload {
   remedies: RemedyInsights;
 }
 
+export interface ThroughputPayload {
+  insights: ThroughputInsights;
+}
+
 export interface PromptsPayload {
   dir: string | null;
   templates: PromptTemplateDescription[];
@@ -849,6 +854,15 @@ export type {
   RunRepeat,
   RunTally,
 } from './reliabilityInsights.js';
+export type {
+  ThroughputBucket,
+  ThroughputConversation,
+  ThroughputInsights,
+  ThroughputLanding,
+  ThroughputMeasure,
+  ThroughputSubject,
+  ThroughputTotal,
+} from './throughputInsights.js';
 export type {
   ReviewCalibration,
   ReviewOverridePair,

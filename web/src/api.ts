@@ -48,6 +48,7 @@ import type {
   ReviewPackSharing,
   ScratchpadPayload,
   ReliabilityPayload,
+  ThroughputPayload,
   SpendPayload,
   SpendTrendPayload,
   WorkRootsPayload,
@@ -202,6 +203,8 @@ const realApi = {
     authFetch(`/api/allowance?window=${window}`).then((r) => json<AllowancePayload>(r)),
   getReliability: (window: InsightsWindow) =>
     authFetch(`/api/reliability?window=${window}`).then((r) => json<ReliabilityPayload>(r)),
+  getThroughput: (window: InsightsWindow) =>
+    authFetch(`/api/throughput?window=${window}`).then((r) => json<ThroughputPayload>(r)),
   getMcpUsage: (window: InsightsWindow) =>
     authFetch(`/api/mcp/usage?window=${window}`).then((r) => json<McpUsagePayload>(r)),
   getUsage: (window: InsightsWindow) => authFetch(`/api/usage?window=${window}`).then((r) => json<UsagePayload>(r)),

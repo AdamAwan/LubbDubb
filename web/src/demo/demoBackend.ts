@@ -51,6 +51,8 @@ import type {
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
+  ThroughputInsights,
+  ThroughputMeasure,
   ReviewAttention,
   ReviewCalibration,
   ReviewMark,
@@ -2740,6 +2742,127 @@ const DEMO_CI_DAYS: [number, number][] = [
   [2, 2],
 ];
 
+const THROUGHPUT_MEASURE_ORDER: readonly ThroughputMeasure[] = [
+  'issue-opened',
+  'pr-opened',
+  'pr-merged',
+  'pr-closed',
+  'pr-approved',
+  'review-received',
+  'reply-sent',
+  'issue-closed',
+];
+
+const THROUGHPUT_COPY: Record<ThroughputMeasure, { label: string; blurb: string; ours: boolean }> = {
+  'issue-opened': {
+    label: 'Issues opened',
+    blurb: 'Entered the watched set — filed by the fleet or by a person',
+    ours: false,
+  },
+  'issue-closed': { label: 'Issues closed', blurb: 'Left the watched set closed', ours: false },
+  'pr-opened': { label: 'PRs opened', blurb: 'First seen open by the world model', ours: false },
+  'pr-merged': { label: 'PRs merged', blurb: 'Landed on their base branch', ours: false },
+  'pr-closed': { label: 'PRs abandoned', blurb: 'Closed without merging', ours: false },
+  'pr-approved': { label: 'Approvals', blurb: 'A pull request first read as approved', ours: false },
+  'review-received': { label: 'Review comments', blurb: 'Unresolved comments the world model first saw', ours: false },
+  'reply-sent': {
+    label: 'Replies sent',
+    blurb: 'Review replies that left through the sink — the fleet\u2019s own',
+    ours: true,
+  },
+};
+
+const DEMO_THROUGHPUT_DAYS: [number, number, number, number, number][] = [
+  [2, 1, 0, 3, 2],
+  [3, 2, 0, 6, 4],
+  [1, 1, 1, 2, 2],
+  [4, 3, 0, 9, 7],
+  [2, 2, 0, 5, 4],
+  [0, 1, 0, 1, 1],
+  [3, 2, 1, 7, 5],
+  [5, 4, 0, 11, 9],
+  [2, 3, 0, 4, 4],
+  [1, 1, 0, 2, 1],
+  [4, 3, 1, 8, 6],
+  [2, 2, 0, 5, 3],
+  [3, 4, 0, 6, 5],
+  [4, 2, 0, 9, 6],
+];
+
+const DEMO_THROUGHPUT_BUSIEST: {
+  ref: string;
+  prNumber: number;
+  opened: boolean;
+  merged: boolean;
+  closed: boolean;
+  commentsReceived: number;
+  repliesSent: number;
+  toMergeHours: number | null;
+  hoursAgo: number;
+}[] = [
+  {
+    ref: 'pr:414',
+    prNumber: 414,
+    opened: true,
+    merged: false,
+    closed: false,
+    commentsReceived: 11,
+    repliesSent: 8,
+    toMergeHours: null,
+    hoursAgo: 1,
+  },
+  {
+    ref: 'pr:409',
+    prNumber: 409,
+    opened: true,
+    merged: true,
+    closed: false,
+    commentsReceived: 9,
+    repliesSent: 9,
+    toMergeHours: 6.5,
+    hoursAgo: 8,
+  },
+  {
+    ref: 'pr:402',
+    prNumber: 402,
+    opened: true,
+    merged: true,
+    closed: false,
+    commentsReceived: 6,
+    repliesSent: 5,
+    toMergeHours: 21,
+    hoursAgo: 26,
+  },
+  {
+    ref: 'pr:397',
+    prNumber: 397,
+    opened: false,
+    merged: false,
+    closed: true,
+    commentsReceived: 4,
+    repliesSent: 2,
+    toMergeHours: null,
+    hoursAgo: 40,
+  },
+  {
+    ref: 'pr:388',
+    prNumber: 388,
+    opened: true,
+    merged: true,
+    closed: false,
+    commentsReceived: 3,
+    repliesSent: 3,
+    toMergeHours: 3.2,
+    hoursAgo: 61,
+  },
+];
+
+const DEMO_THROUGHPUT_ISSUES: Record<'issue-opened' | 'issue-closed' | 'pr-approved', number> = {
+  'issue-opened': 21,
+  'issue-closed': 17,
+  'pr-approved': 24,
+};
+
 const DEMO_FLAKY: CiSubject[] = [
   { ref: 'pr:414', prNumber: 414, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true, costUsd: 1.9 },
   { ref: 'pr:413', prNumber: 413, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false, costUsd: 1.1 },
@@ -3727,6 +3850,78 @@ function buildDemoReliability(): ReliabilityInsights {
   };
 }
 
+function buildDemoThroughput(): ThroughputInsights {
+  const now = Date.now();
+  const day = 24 * 3_600_000;
+  const start = now - DEMO_THROUGHPUT_DAYS.length * day;
+  const sum = (at: 0 | 1 | 2 | 3 | 4): number => DEMO_THROUGHPUT_DAYS.reduce((a, row) => a + row[at], 0);
+  const opened = sum(0);
+  const merged = sum(1);
+  const abandoned = sum(2);
+  const received = sum(3);
+  const replied = sum(4);
+  const spanMs = DEMO_THROUGHPUT_DAYS.length * day;
+  const counts: Record<ThroughputMeasure, number> = {
+    'issue-opened': DEMO_THROUGHPUT_ISSUES['issue-opened'],
+    'issue-closed': DEMO_THROUGHPUT_ISSUES['issue-closed'],
+    'pr-opened': opened,
+    'pr-merged': merged,
+    'pr-closed': abandoned,
+    'pr-approved': DEMO_THROUGHPUT_ISSUES['pr-approved'],
+    'review-received': received,
+    'reply-sent': replied,
+  };
+  const toMerge = DEMO_THROUGHPUT_BUSIEST.map((s) => s.toMergeHours).filter((h): h is number => h !== null);
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    window: demoWindow(now, DEMO_THROUGHPUT_DAYS.length),
+    spanMs,
+    totals: THROUGHPUT_MEASURE_ORDER.map((measure) => ({
+      measure,
+      label: THROUGHPUT_COPY[measure].label,
+      blurb: THROUGHPUT_COPY[measure].blurb,
+      ours: THROUGHPUT_COPY[measure].ours,
+      count: counts[measure],
+      perDay: (counts[measure] * day) / spanMs,
+    })),
+    landing: {
+      opened,
+      settled: merged + abandoned,
+      merged,
+      abandoned,
+      mergeRate: merged / (merged + abandoned),
+      paired: toMerge.length,
+      medianToMergeMs: 6.5 * 3_600_000,
+      slowestToMergeMs: Math.max(...toMerge) * 3_600_000,
+    },
+    conversation: {
+      received,
+      replied,
+      replyRate: replied / received,
+      prsCommented: DEMO_THROUGHPUT_BUSIEST.length,
+    },
+    busiest: DEMO_THROUGHPUT_BUSIEST.map(({ toMergeHours, hoursAgo, ...row }) => ({
+      ...row,
+      toMergeMs: toMergeHours === null ? null : toMergeHours * 3_600_000,
+      lastAt: new Date(now - hoursAgo * 3_600_000).toISOString(),
+    })),
+    prsTouched: DEMO_THROUGHPUT_BUSIEST.length + 6,
+    timeline: {
+      bucketMs: day,
+      startsAt: new Date(start).toISOString(),
+      buckets: DEMO_THROUGHPUT_DAYS.map(([o, m, c, comments, replies], i) => ({
+        startsAt: new Date(start + i * day).toISOString(),
+        opened: o,
+        merged: m,
+        closed: c,
+        comments,
+        replies,
+      })),
+    },
+  };
+}
+
 function demoWindow(now: number, days: number): InsightsWindowView {
   const dayMs = 24 * 60 * 60 * 1000;
   return {
@@ -4321,6 +4516,7 @@ export const demoApi = {
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
   getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),
+  getThroughput: () => Promise.resolve({ insights: buildDemoThroughput() }),
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
   getUsage: () => Promise.resolve(buildDemoUsage()),
   logUsageEvents: () => Promise.resolve(),
@@ -4369,6 +4565,7 @@ export const demoApi = {
         },
         unmeasured: { key: '', label: 'Unmeasured runs', count: 0, costUsd: null, fleets: 0, dailyMeanCostUsd: null },
         byUsage: [],
+        byThroughput: [],
       },
       projects: [],
       fleets: [],

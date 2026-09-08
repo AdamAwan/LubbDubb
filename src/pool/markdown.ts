@@ -1,5 +1,6 @@
 import { PHASE_ORDER, type SpendPhase } from '../spendInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
+import { throughputMeasureLabel } from '../throughputInsights.js';
 import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 
@@ -95,6 +96,20 @@ const SECTIONS: readonly DigestSection[] = [
       'waiving a check — are swept by the operator ledger in this fleet’s own console and are deliberately not ' +
       'here: `src/usage/events.ts` says which are which. A quiet row is a control nobody reached, never a fleet ' +
       'nobody worked._',
+  },
+  {
+    rows: (d) => d.byThroughput,
+    title: 'What came out',
+    column: 'Measure',
+    label: (key) => throughputMeasureLabel(key),
+    counts: 'Times',
+    costed: false,
+    caveat:
+      '_Counted from this fleet’s activity feed, and true of this fleet whatever its world was scoped ' +
+      'to. What crosses into the pool’s summed tables is narrower: a slice the provider did not filter ' +
+      'to this operator is a fact about the **repository**, which every fleet watching it also reports, ' +
+      'so summing it would count watchers rather than work. `poolableThroughput` in `digest.json` names ' +
+      'the rows this fleet published as its own._',
   },
   {
     rows: (d) => d.byFault,

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isThroughputMeasure } from '../throughputInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDocument } from '../types.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -75,9 +76,21 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     unaccounted: readRows(raw.unaccounted),
     unmeasured: readRows(raw.unmeasured),
     byUsage: readRows(raw.byUsage),
+    byThroughput: readRows(raw.byThroughput),
+    poolableThroughput: readMeasures(raw.poolableThroughput),
     byFault: readRows(raw.byFault),
   };
   return { ok: true, document };
+}
+
+/* Another fleet's claim about what may be summed, checked against this build's own
+   vocabulary before it is believed — a key this build does not know is dropped
+   rather than mirrored under a name nothing can label. An absent field is a fleet
+   from before the section: nothing of its throughput sums, which is the safe answer.
+   → docs/spec/28-cross-fleet-pool.md */
+function readMeasures(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((key): key is string => typeof key === 'string' && isThroughputMeasure(key));
 }
 
 function readRows(raw: unknown): PoolDigestDocument['byPhase'] {

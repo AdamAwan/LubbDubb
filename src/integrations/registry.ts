@@ -81,6 +81,36 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
   },
 };
 
+/* Whether a provider's slice arrives filtered to `userId`, per capability. It is a
+   fact about the query each integration issues and nothing else can answer it: both
+   source-control providers filter pull requests by author-or-assignee, Azure filters
+   work items by `assignedTo`, and **GitHub's issue sweep is `listOpenIssues()` — the
+   whole repository, always**, because the ownership label annotates an issue rather
+   than scoping the sweep. The pool reads this to decide which of a fleet's throughput
+   measures are its own to publish, so a wrong entry here is a silent over-count on a
+   shared project. → docs/spec/15-integrations.md, docs/spec/28-cross-fleet-pool.md */
+export const VIEWER_SCOPED: Record<WorldCapability, Record<string, boolean>> = {
+  sourceControl: { fake: false, github: true, azure: true },
+  issues: { fake: false, github: false, azure: true },
+};
+
+export interface WorldScope {
+  pullRequests: boolean;
+  issues: boolean;
+}
+
+export function worldScope(selection: IntegrationSelection, ctx: IntegrationContext): WorldScope {
+  const filtered = filterToViewer(ctx) !== undefined;
+  return {
+    pullRequests: filtered && (VIEWER_SCOPED.sourceControl[selection.sourceControl] ?? false),
+    issues: filtered && (VIEWER_SCOPED.issues[selection.issues] ?? false),
+  };
+}
+
+/* The provider names each capability can build. Exported so the scoping table above
+   can be asserted complete against it: the two must not drift. */
+export const INTEGRATION_PROVIDERS: Record<WorldCapability, Record<string, unknown>> = REGISTRY;
+
 const CAPABILITIES = Object.keys(REGISTRY) as WorldCapability[];
 
 function filterToViewer(ctx: IntegrationContext): string | undefined {

@@ -5009,6 +5009,60 @@ select:disabled {
   --rl-red: var(--red);
 }
 
+/* ============================ throughput ============================
+
+   The Throughput tab, which is the spend panel's chrome over counts rather than
+   money. One palette, keyed by the *measure* rather than by a chart, because the
+   same colour has to mean "merged" in the timeline, in its key and in the totals
+   table — three components that would otherwise each pick their own.
+
+   The pairs are deliberate: what comes in is the cool half of a hue and what goes
+   out is the warm one, so a bar chart of the conversation reads as two directions
+   rather than two categories. Abandoned is grey for the reliability panel's
+   reason — a pull request somebody closed is a decision, not a fault. */
+
+.tp {
+  display: grid;
+  gap: 4px;
+  --tp-issue-opened: var(--violet);
+  --tp-issue-closed: color-mix(in srgb, var(--violet) 55%, var(--green));
+  --tp-pr-opened: var(--blue);
+  --tp-pr-merged: var(--green);
+  --tp-pr-closed: var(--grey);
+  --tp-pr-approved: var(--accent);
+  --tp-review-received: var(--amber);
+  --tp-reply-sent: color-mix(in srgb, var(--amber) 45%, var(--blue));
+}
+
+/* The key under a graph. The swatches are the graph's own variables, so a theme
+   change moves both together and there is no second palette to keep in step. */
+.tp-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 4px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tp-key .sw {
+  margin-left: 8px;
+}
+.tp-key .sw:first-child {
+  margin-left: 0;
+}
+/* The one row in the totals table the harness can vouch for as its own. Said
+   beside the name rather than in a column, because it is true of one row and a
+   column of blanks would read as a measurement that failed. */
+.tp-ours {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--border-lo);
+  border-radius: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
 /* The completion bar inside a phase row. Narrower than the spend panel's goal
    bar and always full width, because this one is a *ratio* and not a share of
    the fleet — a phase with three runs and a phase with three hundred are both

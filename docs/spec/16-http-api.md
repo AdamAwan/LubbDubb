@@ -37,6 +37,7 @@ is about.
 | `routes/readings.ts`        | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                                                                                             |
 | `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
+| `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                                                                                            |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))                                                                                    |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
@@ -1338,6 +1339,22 @@ different stretches ([18](18-observability.md#the-window)).
 
 Fetched on open for `/api/spend`'s reason and at the same cost: it walks every agent the harness has
 ever run, plus the window's `pr_ci` transitions.
+
+### `GET /api/throughput`
+
+How much came out over the window: pull requests opened, merged and abandoned, review comments in and
+replies out, issues opened and closed — with the merge rate, the time from opening to merge, and the
+busiest pull requests. Returns `{ insights }`; see
+[18](18-observability.md#the-throughput-breakdown) for what each measure is counted from and why the
+reading holds no money at all.
+
+**Takes the same `?window=`.** It reads `world_events` of the kinds `THROUGHPUT_EVENT_KINDS` names
+and the `pr_replies_sent` rows written since the same instant — the kinds the fold has a measure for
+are declared beside the fold rather than in this handler, so a new `WorldEventKind` is counted or
+deliberately not, and never dropped by a `SELECT` nobody revisits.
+
+Fetched on the Throughput tab's **first visit for a given window**: nothing else on the page needs it,
+and unlike `/api/spend` it walks no agents.
 
 The window is resolved in the handler rather than inside the fold, so the `since` a row is selected by
 and the `since` it is bucketed into are one value: a store read wider than the buckets drops rows

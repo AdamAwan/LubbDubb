@@ -1,3 +1,4 @@
+import type { PrReplySent } from '../types.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
@@ -17,4 +18,23 @@ export class PrReplyStore {
     }[];
     return new Set(rows.map((r) => r.comment_ref));
   }
+
+  listPrRepliesSentSince(since: string): PrReplySent[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM pr_replies_sent WHERE sent_at > ? ORDER BY sent_at ASC`)
+      .all(since) as PrReplyRow[];
+    return rows.map((row) => ({
+      prNumber: row.pr_number,
+      threadId: row.thread_id,
+      commentRef: row.comment_ref,
+      sentAt: row.sent_at,
+    }));
+  }
+}
+
+interface PrReplyRow {
+  pr_number: number;
+  thread_id: string;
+  comment_ref: string;
+  sent_at: string;
 }
