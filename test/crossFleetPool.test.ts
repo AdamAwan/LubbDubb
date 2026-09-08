@@ -91,7 +91,7 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
     Object.keys(document)
       .filter((k) => Array.isArray((document as unknown as Record<string, unknown>)[k]))
       .sort(),
-    ['byCause', 'byCheck', 'byFault', 'byPhase', 'byUsage', 'unaccounted', 'unmeasured'],
+    ['byCause', 'byCheck', 'byFault', 'byPhase', 'byThroughput', 'byUsage', 'unaccounted', 'unmeasured'],
   );
   assert.equal(utcDay(NOW), '2026-08-24');
   assert.equal(POOL_RETENTION_DAYS, 90, 'a stated constant, never a config key');
