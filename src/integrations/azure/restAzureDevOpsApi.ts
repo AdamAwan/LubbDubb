@@ -18,6 +18,7 @@ import type {
   AzureDevOpsApi,
 } from './azureDevOpsApi.js';
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
+import { parseTags } from './workItems.js';
 import { AzureEtagCache } from './conditionalRequests.js';
 
 // → docs/spec/15-integrations.md
@@ -258,9 +259,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return `${this.projectUrl}/_apis/git/repositories/${encodeURIComponent(this.repository)}`;
   }
 
-  private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(url: string, init: RequestInit = {}, opts: { conditional?: boolean } = {}): Promise<T> {
     const method = init.method ?? 'GET';
-    const cached = method === 'GET' ? this.etags.get(url) : undefined;
+    const conditional = opts.conditional !== false;
+    const cached = method === 'GET' && conditional ? this.etags.get(url) : undefined;
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -314,7 +316,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       try {
         const parsed = JSON.parse(body) as T;
         const etag = res.headers.get('etag');
-        if (method === 'GET' && res.status === 200 && etag) this.etags.set(url, etag, body);
+        if (method === 'GET' && conditional && res.status === 200 && etag) this.etags.set(url, etag, body);
         return parsed;
       } catch {
         throw new Error(
@@ -771,19 +773,28 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {
     const wi = await this.request<{ fields?: Record<string, unknown> }>(
       this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}?fields=System.Tags`),
+      {},
+      { conditional: false },
     );
-    const current = String(wi.fields?.['System.Tags'] ?? '')
-      .split(';')
-      .map((t) => t.trim())
-      .filter((t) => t !== '');
-    const tags = new Set(current);
-    if (present) tags.add(tag);
-    else tags.delete(tag);
-    await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json-patch+json' },
-      body: JSON.stringify([{ op: 'add', path: '/fields/System.Tags', value: [...tags].join('; ') }]),
-    });
+    const current = parseTags(String(wi?.fields?.['System.Tags'] ?? ''));
+    const kept = current.filter((t) => !sameTag(t, tag));
+    const tags = present ? [...kept, tag] : kept;
+    const updated = await this.request<{ fields?: Record<string, unknown> }>(
+      this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`),
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify([{ op: 'add', path: '/fields/System.Tags', value: tags.join('; ') }]),
+      },
+    );
+    const fields = updated?.fields;
+    if (fields === undefined || fields === null) return;
+    const after = parseTags(String(fields['System.Tags'] ?? ''));
+    if (after.some((t) => sameTag(t, tag)) === present) return;
+    throw new Error(
+      `Azure DevOps accepted the tag write on #${id} but the item still reads ` +
+        `[${after.join('; ')}] — "${tag}" was ${present ? 'not added' : 'not removed'}`,
+    );
   }
 
   async createPull(input: {
@@ -883,4 +894,8 @@ function chunkIds(ids: number[], size: number): number[][] {
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
   return chunks;
+}
+
+function sameTag(a: string, b: string): boolean {
+  return a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0;
 }
