@@ -1044,6 +1044,9 @@ export class Store {
   ): Proposal | null {
     return this.escalations.decideProposal(id, status, note, decidedBy);
   }
+  withdrawProposal(id: string, note: string): Proposal | null {
+    return this.escalations.withdrawProposal(id, note);
+  }
   getProposal(id: string): Proposal | null {
     return this.escalations.getProposal(id);
   }
@@ -1557,6 +1560,9 @@ export class Store {
   }
   mergedPrs(): ReadonlySet<number> {
     return this.graph.mergedPrs();
+  }
+  settledPrs(): ReadonlyMap<number, 'merged' | 'closed'> {
+    return this.graph.settledPrs();
   }
   createWorkItemFiling(input: Parameters<GraphStore['createWorkItemFiling']>[0]): WorkItemFiling | null {
     return this.graph.createWorkItemFiling(input);

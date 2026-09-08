@@ -132,6 +132,14 @@ export class EscalationStore {
     return existing;
   }
 
+  withdrawProposal(id: string, note: string): Proposal | null {
+    const res = this.ctx.db
+      .prepare(`UPDATE proposals SET status='withdrawn', note=?, decided_at=? WHERE id=? AND status='pending'`)
+      .run(note, this.ctx.now(), id);
+    if (res.changes === 0) return null;
+    return this.getProposal(id);
+  }
+
   getProposal(id: string): Proposal | null {
     const row = this.ctx.db.prepare(`SELECT * FROM proposals WHERE id=?`).get(id) as ProposalRow | undefined;
     return row ? rowToProposal(row) : null;

@@ -466,6 +466,40 @@ operator on it, that assignment turns it straight back into `you`
 ([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)) — a review a colleague
 asked for is the operator's to answer, and never the fleet's.
 
+## A merge ask outlives its pull request
+
+A merge is asked twice over: an `approve_change` escalation, and a pending `merge` proposal filed
+under `pr:<n>:merge`. Nothing but an operator has ever settled either. So a pull request that merges
+while the ask is standing — in the provider's own UI, by a colleague, or by the harness on the cycle
+the card went up — leaves both rows behind, and the card is the one in the inbox that **cannot be
+answered**: accepting it runs `mergePr` against a merged pull request, the sink refuses, and the
+failure raises *another* `approve_change` saying the merge failed. The inbox refills with an ask for
+work that is already done, and every arm of it renders correctly.
+
+`EscalationInbox.tidySettledMerges` closes that loop on the pulse, beside `tidyDeadAgents` and in the
+same register: mechanical bookkeeping through no proposal. `settledMergeAsks`
+(`src/proposals/settledMerges.ts`) is the predicate, pure and unit-tested. For each pull request the
+world has settled it collects the pending merge proposals under it and the **open merge asks** — an
+`approve_change` whose context carries both a `prNumber` and a `method`, which is exactly the ask and
+its merge-failed re-raise, and neither a `review_reply` (no `method`), a permission request nor a
+stopped stack landing (no `prNumber`). The proposals are withdrawn, the escalations answered
+`PR #12 merged; there is nothing left to approve.`
+
+**The reading is the work graph's, not the world's.** `closedPullRequests` is a `closedPrWindowMs`
+window ([#landing-a-stack](#landing-a-stack) says why that is not a record), so a merge that happened
+while the harness was down has already left it and the card would stand for ever — precisely the case
+this exists for. `Store.settledPrs()` reads the `work_nodes` terminal rows, which are upsert-only, so
+the sweep runs **below `graph.record`** in the cycle, against a graph that has already folded this
+world.
+
+**Withdrawn, never rejected.** A rejection is a standing refusal: `proposalHold` reads it back as
+_you rejected it_, `prAttentionStatus` gives the pull request `settled`, and rule `pr-merge-ready`
+stops proposing until a world event expires it — so a pull request the graph called merged from
+absence alone (a stale source, a partial read) would never be offered again. `withdrawn` is the
+fourth `ProposalStatus`, holds nothing, and leaves a pull request that comes back proposed afresh on
+the next cycle. It is not a verdict anybody gave, which is why the operator-response insight drops
+withdrawn rows rather than counting them as an ask nobody answered.
+
 ## Reaping a merged branch
 
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
@@ -1572,4 +1606,6 @@ GitHub or Azure UI is therefore the ordinary way to tell the harness a comment i
 harness's own reply is the fallback for a thread nobody resolved.
 
 Independently of all that, rule `pr-merge-ready` evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
-`merge_pr`, which claims no headroom and is always written as a proposal for you.
+`merge_pr`, which claims no headroom and is always written as a proposal for you — and is withdrawn
+again if the pull request merges before you answer it
+([#a-merge-ask-outlives-its-pull-request](#a-merge-ask-outlives-its-pull-request)).

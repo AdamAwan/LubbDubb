@@ -974,6 +974,13 @@ handed origins and digests only, `retrospectives`' rule, and for its reason.
 `listWorkSubtree(rootRef)` (one recursive CTE bounded to the requested root, `UNION` rather than
 `UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat).
 
+`mergedPrs()` and `settledPrs()` read the terminal PR rows — the first as a set of merged numbers, the
+second as a map of merged **and** closed. Both exist because the table is upsert-only and the world's
+closed-PR list is a window: a merge that scrolled out of `closedPrWindowMs`, or happened while the
+harness was down, is still here. Their readers are the stack-landing settlement
+([07](07-pull-requests.md#landing-a-stack)) and the merge-ask sweep
+([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)).
+
 `listWorkNodes` exists for the unrecorded-work detector, whose verdict is per-node but whose evidence
 beside it is what ran underneath — rebuilding the table from roots plus a subtree each is N+1 queries
 for something one `SELECT` answers. Note what it is deliberately **not** wired into: the recorder still
@@ -1065,6 +1072,12 @@ to `open`, `terminal: false`, titled with its own ref, on every pulse thereafter
 
 `createEscalation`, `answerEscalation(id, response)`, `dismissEscalation(id, context)`,
 `getEscalation`, `listEscalations`, `listOpenEscalations`.
+
+Proposals are settled by `decideProposal(id, status, note, decidedBy)` — a compare-and-set on
+`status='pending'`, so a second decider changes nothing — and by `withdrawProposal(id, note)`, the
+same compare-and-set for a proposal the world settled rather than a person
+([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). A withdrawal records no
+`decided_by`: nobody decided it.
 
 `listEscalations` is newest first, tied on `rowid` like the proposal, decision and world-event reads.
 Several escalations in one millisecond are ordinary — one pulse answering a plan and a shortfall — and

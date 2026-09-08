@@ -530,6 +530,10 @@ flowchart TD
    off "Needs you" on this pulse rather than never
    ([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)). It settles inbox rows,
    decides no dispatch, and writes nothing over a clean inbox.
+   `escalations.tidySettledMerges()` runs beside it and in the same register, for the other card
+   nobody can answer: a merge ask whose pull request has already merged
+   ([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). It reads the work graph, so its
+   position is below `graph.record` above and above the escalation read below.
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on

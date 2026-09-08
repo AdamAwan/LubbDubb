@@ -15,6 +15,9 @@ import { WITNESS_INSTRUCTION } from '../src/scratch/pad.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { gitRepo } from './support/gitRepo.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { settledMergeAsks } from '../src/proposals/settledMerges.js';
+import type { Escalation, Proposal } from '../src/types.js';
 
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -252,6 +255,123 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   assert.equal(system.store.listProposals().length, 1);
   assert.equal(sink.merges.length, 0);
   system.store.close();
+});
+
+test('a merge that lands while the ask is standing withdraws it, and the card clears', async () => {
+  const sink = countingSink();
+  const system = buildSystem(testConfig(), {
+    backend: new FakePtyBackend(),
+    sink,
+    worktrees: new FakeWorktreeManager(),
+  });
+  mergeReadyPr(system, 7);
+
+  await system.harness.runCycle('manual');
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.ref, 'pr:7:merge');
+  const cardId = proposal!.escalationId!;
+  assert.equal(system.store.getEscalation(cardId)!.status, 'open');
+
+  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
+  await system.harness.runCycle('manual');
+
+  const settled = system.store.getProposal(proposal!.id)!;
+  assert.equal(settled.status, 'withdrawn', 'the ask is withdrawn, not rejected — a rejection would stand');
+  assert.equal(settled.decidedBy, null, 'nobody decided it');
+  const card = system.store.getEscalation(cardId)!;
+  assert.equal(card.status, 'answered');
+  assert.match(card.response!, /PR #7 merged/);
+  assert.equal(system.store.listOpenEscalations().length, 0, 'nothing is left on "Needs you"');
+  assert.equal(sink.merges.length, 0, 'and nothing is merged a second time');
+
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listProposals().length, 1, 'a merged PR is not proposed again');
+  assert.equal(system.store.listOpenEscalations().length, 0);
+  system.store.close();
+});
+
+test('a merge that failed because the PR was already merged stops re-asking', async () => {
+  const sink = countingSink(true);
+  const system = buildSystem(testConfig(), {
+    backend: new FakePtyBackend(),
+    sink,
+    worktrees: new FakeWorktreeManager(),
+  });
+  mergeReadyPr(system, 7);
+  await system.harness.runCycle('manual');
+  const [proposal] = system.store.listProposals();
+
+  const accepted = await system.proposals.accept(proposal!.id);
+  assert.ok(accepted && 'outcome' in accepted && accepted.outcome === 'failed');
+  const raised = system.store.listOpenEscalations().filter((e) => e.context.autoMergeFailed === true);
+  assert.equal(raised.length, 1, 'the failed merge re-escalates');
+
+  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
+  await system.harness.runCycle('manual');
+
+  assert.equal(system.store.getEscalation(raised[0]!.id)!.status, 'answered');
+  assert.equal(system.store.listOpenEscalations().length, 0);
+  system.store.close();
+});
+
+test('settledMergeAsks takes only the merge asks, and only for a settled PR', () => {
+  const proposal = (id: string, ref: string, over: Partial<Proposal> = {}): Proposal => ({
+    id,
+    kind: 'merge',
+    ref,
+    status: 'pending',
+    action: { type: 'no_op', reason: 'test' } as unknown as Proposal['action'],
+    note: null,
+    decidedBy: null,
+    decidedAt: null,
+    escalationId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  });
+  const escalation = (id: string, over: Partial<Escalation>): Escalation => ({
+    id,
+    type: 'approve_change',
+    status: 'open',
+    prompt: 'merge?',
+    context: {},
+    agentId: null,
+    taskId: null,
+    response: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    answeredAt: null,
+    ...over,
+  });
+
+  const asks = settledMergeAsks({
+    proposals: [
+      proposal('p_merged', 'pr:7:merge'),
+      proposal('p_closed', 'pr:8:merge'),
+      proposal('p_open', 'pr:9:merge'),
+      proposal('p_decided', 'pr:7:merge', { id: 'p_decided', status: 'rejected' }),
+      proposal('p_reply', 'pr:7:comment:c1', { kind: 'reply_draft' }),
+    ],
+    openEscalations: [
+      escalation('e_ask', { context: { prNumber: 7, method: 'squash' } }),
+      escalation('e_failed', { context: { prNumber: 7, method: 'squash', autoMergeFailed: true } }),
+      escalation('e_reply', { type: 'review_reply', context: { prNumber: 7, draft: 'hi' } }),
+      escalation('e_landing', { context: { stackRef: 'issue:3', rungs: [7, 8], stackLandingStopped: true } }),
+      escalation('e_open_pr', { context: { prNumber: 9, method: 'squash' } }),
+    ],
+    settledPrs: new Map([
+      [7, 'merged' as const],
+      [8, 'closed' as const],
+    ]),
+  });
+
+  assert.deepEqual(
+    asks.map((a) => ({ pr: a.prNumber, proposals: a.proposalIds, escalations: a.escalationIds })),
+    [
+      { pr: 7, proposals: ['p_merged'], escalations: ['e_ask', 'e_failed'] },
+      { pr: 8, proposals: ['p_closed'], escalations: [] },
+    ],
+  );
+  assert.match(asks[0]!.verdict, /PR #7 merged/);
+  assert.match(asks[1]!.verdict, /closed without merging/);
 });
 
 test('a rejection stands while nothing happens to the PR, and stops standing when something does', async () => {
