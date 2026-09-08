@@ -179,22 +179,26 @@ function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number
   );
 }
 
-/* The pool's half of the Throughput tab, and deliberately the small half. A fleet's
-   own digest.md carries all eight measures; only what a fleet did *itself* is summed
-   here, because the rest are facts about a repository that every fleet watching it
-   reports. → docs/spec/28-cross-fleet-pool.md */
+/* The pool's half of the Throughput tab. What appears here is what each fleet
+   declared its own: a slice its provider filtered to that operator. An unfiltered
+   slice is the repository's, reported by every fleet watching it, and is withheld —
+   so a row's Fleets column is how many fleets could vouch for it, not how many
+   published at all. → docs/spec/28-cross-fleet-pool.md */
 function Shipped({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
   return (
     <section className="pool-section">
-      <h3>What the fleets did themselves</h3>
+      <h3>What the fleets shipped</h3>
       <p className="pool-note">
-        the throughput measures a fleet can vouch for as its own, so they sum. The rest of a fleet’s output — pull
-        requests opened and merged, review it drew, issues closed — is a fact about its <em>repository</em>, which every
-        fleet watching that repository reports: summed here it would count watchers rather than work, so it stays on
-        each fleet’s own Throughput tab and in its <code>digest.md</code>.
+        the output each fleet could vouch for as its own — the slices its provider filtered to that operator. A slice
+        that arrived unfiltered is a fact about the <em>repository</em>, which every fleet watching it also reports, so
+        it is withheld here and stays on that fleet’s own Throughput tab. <b>Fleets</b> is therefore how many fleets
+        could vouch for a row, not how many published; a measure missing entirely is one no fleet could.
       </p>
       {rows.length === 0 ? (
-        <p className="empty">Nothing in this section yet — no fleet has recorded a reply it sent.</p>
+        <p className="empty">
+          Nothing in this section yet. No fleet has published output it could vouch for as its own — a fleet whose world
+          arrives unfiltered contributes only the replies it sent.
+        </p>
       ) : (
         <table className="pool-table">
           <thead>

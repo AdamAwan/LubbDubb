@@ -930,10 +930,11 @@ The window is applied **once**, at the door of the fold, and everything under it
 produces. Its per-day rates divide by the window's own span — and by `now` minus the oldest row it
 holds when the window is `all`, which has no span of its own.
 
-**The pool carries the same measures per UTC day**, folded by the digest arm rather than re-measured,
-and mirrors only the row a fleet can vouch for as its own — a pull request is a fact about a
-repository, so every fleet watching one reports it and a sum counts watchers.
-→ [28](28-cross-fleet-pool.md#the-throughput-section)
+**The pool carries the same measures per UTC day**, folded by the digest arm rather than re-measured.
+What it may _sum_ is narrower than what it carries: a slice the provider filtered to this operator is
+this fleet's alone, and an unfiltered one — GitHub's issue sweep, or any fleet with `ownWorkOnly` off —
+is the repository's, which every fleet watching it also reports.
+→ [28](28-cross-fleet-pool.md#the-throughput-section), [15](15-integrations.md#what-a-snapshot-is-scoped-to)
 
 ## Causes: why the fleet came back
 

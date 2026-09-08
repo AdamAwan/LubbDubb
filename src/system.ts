@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
-import { buildIntegrations, buildPoolTransport } from './integrations/registry.js';
+import { buildIntegrations, buildPoolTransport, worldScope } from './integrations/registry.js';
 import { PoolDesk } from './pool/poolDesk.js';
 import type { PoolTransport } from './pool/transport.js';
 import { harnessVersion } from './pool/harnessVersion.js';
@@ -661,6 +661,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           closedPrWindowMs: config.closedPrWindowMs,
+          worldScope: worldScope(config.integrations, { store, config, now, errors }),
           errors,
         });
 

@@ -23,6 +23,8 @@ import { buildSystem } from '../src/system.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
 
+const SCOPED = { pullRequests: true, issues: true };
+
 const NOW = '2026-08-24T12:00:00.000Z';
 
 function store(now = NOW): Store {
@@ -45,6 +47,7 @@ function envelopeDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     ...over,
   };
 }
@@ -85,13 +88,24 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
   assert.equal(document.kind, 'digest');
   assert.deepEqual(
     Object.keys(document)
       .filter((k) => Array.isArray((document as unknown as Record<string, unknown>)[k]))
       .sort(),
-    ['byCause', 'byCheck', 'byFault', 'byPhase', 'byThroughput', 'byUsage', 'unaccounted', 'unmeasured'],
+    [
+      'byCause',
+      'byCheck',
+      'byFault',
+      'byPhase',
+      'byThroughput',
+      'byUsage',
+      'poolableThroughput',
+      'unaccounted',
+      'unmeasured',
+    ],
   );
   assert.equal(utcDay(NOW), '2026-08-24');
   assert.equal(POOL_RETENTION_DAYS, 90, 'a stated constant, never a config key');
@@ -112,6 +126,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 5, costUsd: null, partial: false }],
   });
   const s = store();
@@ -151,6 +166,7 @@ test('the digest counts faults by source per day, and carries no cost for one', 
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
 
   assert.deepEqual(
@@ -164,8 +180,13 @@ test('the digest counts faults by source per day, and carries no cost for one', 
 
   s.clearErrors();
   assert.deepEqual(
-    buildDigestDocument(s, { fleetId: 'alice@acme-api', project: 'acme-api', harnessVersion: '0.1.0', now: NOW })
-      .byFault,
+    buildDigestDocument(s, {
+      fleetId: 'alice@acme-api',
+      project: 'acme-api',
+      harnessVersion: '0.1.0',
+      now: NOW,
+      scope: SCOPED,
+    }).byFault,
     [],
   );
 });
@@ -186,6 +207,7 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 40, costUsd: null, partial: false }],
   });
 
@@ -207,6 +229,7 @@ function desk(s: Store, transport: FakePoolTransport, now = () => NOW): PoolDesk
     now,
     digestIntervalMs: 60 * 60 * 1000,
     closedPrWindowMs: 6 * 60 * 60 * 1000,
+    worldScope: SCOPED,
   });
 }
 
@@ -241,6 +264,7 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
     now: () => NOW,
     digestIntervalMs: 60 * 60 * 1000,
     closedPrWindowMs: 6 * 60 * 60 * 1000,
+    worldScope: SCOPED,
     errors: { record: (e: { message: string }) => void errors.push(e.message) } as never,
   });
 

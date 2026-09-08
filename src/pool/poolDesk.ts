@@ -1,4 +1,5 @@
 import type { ErrorRecorder } from '../errorLog.js';
+import type { WorldScope } from '../integrations/registry.js';
 import { packSecretRefusal } from '../reviewPacks/secrets.js';
 import type { Store } from '../store/store.js';
 import type { PoolClockDocument, PoolClockKind, PoolPackDocument, ReviewPackShare } from '../types.js';
@@ -23,6 +24,7 @@ export class PoolDesk {
       now: () => string;
       digestIntervalMs: number;
       closedPrWindowMs: number;
+      worldScope: WorldScope;
       errors?: ErrorRecorder;
     },
   ) {}
@@ -229,6 +231,7 @@ export class PoolDesk {
       project: this.deps.project,
       harnessVersion: this.deps.harnessVersion,
       now,
+      scope: this.deps.worldScope,
     };
     return buildDigestDocument(this.deps.store, context);
   }

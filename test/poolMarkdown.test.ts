@@ -27,6 +27,7 @@ function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     byFault: [],
     ...over,
   };

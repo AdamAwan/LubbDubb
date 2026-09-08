@@ -5,8 +5,12 @@ import { foldPoolDigest } from '../src/pool/aggregate.js';
 import { buildDigestDocument } from '../src/pool/digestArm.js';
 import { POOL_SCHEMA_VERSION, parsePoolDocument } from '../src/pool/document.js';
 import { renderPoolMarkdown } from '../src/pool/markdown.js';
-import { POOLED_THROUGHPUT_MEASURES, throughputMeasureLabel } from '../src/throughputInsights.js';
+import { poolableThroughputMeasures, throughputMeasureLabel } from '../src/throughputInsights.js';
 import type { PoolDigestDocument } from '../src/types.js';
+import { INTEGRATION_PROVIDERS, VIEWER_SCOPED, worldScope } from '../src/integrations/registry.js';
+import { loadConfig, type Config } from '../src/config.js';
+
+const SCOPED = { pullRequests: true, issues: true };
 
 const NOW = '2026-08-24T12:00:00.000Z';
 
@@ -25,6 +29,7 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     byFault: [],
     ...over,
   };
@@ -49,6 +54,7 @@ test('the digest carries every measure, keyed by measure and bucketed by UTC day
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
 
   assert.deepEqual(
@@ -74,6 +80,7 @@ test('a throughput row carries no cost, and a document from a build without the 
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
   assert.ok(document.byThroughput.every((r) => r.costUsd === null));
 
@@ -84,16 +91,36 @@ test('a throughput row carries no cost, and a document from a build without the 
   assert.deepEqual(parsed.ok && parsed.document.byThroughput, []);
 });
 
-test('only what a fleet did itself reaches the mirror — the repository’s facts stay in the document', () => {
+test('what may be summed is what the publishing fleet declared, and it declares what scoped it', () => {
+  assert.deepEqual(
+    [...poolableThroughputMeasures({ pullRequests: false, issues: false })],
+    ['reply-sent'],
+    'an unfiltered world publishes only the record the fleet keeps itself',
+  );
+  assert.deepEqual(
+    [...poolableThroughputMeasures({ pullRequests: true, issues: false })],
+    ['pr-opened', 'pr-merged', 'pr-closed', 'pr-approved', 'review-received', 'reply-sent'],
+    'the GitHub default: pull requests are filtered to the operator, issues are the whole repository',
+  );
+  assert.equal(
+    poolableThroughputMeasures({ pullRequests: true, issues: true }).length,
+    8,
+    'a world filtered on both axes is this fleet’s alone, and all of it sums',
+  );
+});
+
+test('a measure the publisher did not declare is dropped at the mirror, not at the fold', () => {
   const store = new Store(':memory:', () => NOW);
   store.replacePoolFleetDigest(
     'alice@acme-api',
     'acme-api',
     digestDoc({
       fleetId: 'alice@acme-api',
+      // A GitHub fleet: its pull requests were filtered to it, its issues were not.
+      poolableThroughput: ['pr-merged', 'reply-sent'],
       byThroughput: [
         { day: '2026-08-23', key: 'pr-merged', count: 9, costUsd: null, partial: false },
-        { day: '2026-08-23', key: 'review-received', count: 30, costUsd: null, partial: false },
+        { day: '2026-08-23', key: 'issue-closed', count: 30, costUsd: null, partial: false },
         { day: '2026-08-23', key: 'reply-sent', count: 22, costUsd: null, partial: false },
       ],
     }),
@@ -101,16 +128,17 @@ test('only what a fleet did itself reaches the mirror — the repository’s fac
 
   const rollup = foldPoolDigest(store.listPoolDigestRows('acme-api'), { project: 'acme-api', since: null });
   assert.deepEqual(
-    rollup.byThroughput.map((r) => r.key),
-    ['reply-sent'],
-    'the merges and the review the world did are a property of the repository and never sum',
+    rollup.byThroughput.map((r) => [r.key, r.count]).sort(),
+    [
+      ['pr-merged', 9],
+      ['reply-sent', 22],
+    ],
+    'the issues every fleet on this repository also saw never reach a summable table',
   );
-  assert.equal(rollup.byThroughput[0]?.count, 22);
-  assert.equal(rollup.byThroughput[0]?.label, throughputMeasureLabel('reply-sent'));
-  assert.deepEqual([...POOLED_THROUGHPUT_MEASURES], ['reply-sent'], 'the poolable set is the `ours` flag, not a list');
+  assert.equal(rollup.byThroughput.find((r) => r.key === 'pr-merged')?.label, throughputMeasureLabel('pr-merged'));
 });
 
-test('four fleets on one project do not multiply one repository’s merges', () => {
+test('four fleets that could not scope their world do not multiply one repository’s merges', () => {
   const store = new Store(':memory:', () => NOW);
   for (const id of ['a', 'b', 'c', 'd']) {
     store.replacePoolFleetDigest(
@@ -118,6 +146,9 @@ test('four fleets on one project do not multiply one repository’s merges', () 
       'acme-api',
       digestDoc({
         fleetId: `${id}@acme-api`,
+        // `ownWorkOnly` off: this fleet's world is the whole repository, so it
+        // declares only its own record as summable.
+        poolableThroughput: ['reply-sent'],
         byThroughput: [
           // Every fleet watching the repository saw the same twelve merges.
           { day: '2026-08-23', key: 'pr-merged', count: 12, costUsd: null, partial: false },
@@ -149,6 +180,52 @@ test('the fleet’s own companion carries every measure, and says which of them 
   assert.match(text, /What came out/);
   assert.match(text, /PRs merged/, 'the whole section is readable for one fleet, where no double count can arise');
   assert.match(text, /Replies sent/);
-  assert.match(text, /counts watchers, not work/, 'the caveat says why the rest does not cross');
+  assert.match(text, /count watchers rather than work/, 'the caveat says why the rest does not cross');
+  assert.match(text, /poolableThroughput/, 'and names the field that says which rows this fleet published');
   assert.ok(!/\| Cost \|/.test(text.split('What came out')[1]?.split('##')[0] ?? ''), 'no cost column on this section');
+});
+
+test('every provider the registry can build declares whether its slice is filtered to the operator', () => {
+  // The scoping table is read to decide what a fleet may publish as its own, so a
+  // provider added without an entry would silently default to "unfiltered" — safe,
+  // but it would drop that fleet's output from the pool with nothing red. This is
+  // the assertion that makes adding one a deliberate act.
+  for (const capability of ['sourceControl', 'issues'] as const) {
+    for (const provider of Object.keys(INTEGRATION_PROVIDERS[capability])) {
+      assert.equal(
+        typeof VIEWER_SCOPED[capability][provider],
+        'boolean',
+        `${capability}/${provider} does not say whether its slice is filtered to the operator`,
+      );
+    }
+  }
+});
+
+test('the scope follows ownWorkOnly, and GitHub issues are never this fleet’s alone', () => {
+  const ctx = (over: Partial<Config>) => ({
+    store: new Store(':memory:', () => NOW),
+    config: loadConfig({ userId: 'alice', ownWorkOnly: true, ...over }),
+    now: () => NOW,
+  });
+
+  assert.deepEqual(
+    worldScope({ sourceControl: 'github', issues: 'github', pool: 'fake' }, ctx({})),
+    { pullRequests: true, issues: false },
+    'GitHub sweeps every open issue in the repository however the fleet is configured',
+  );
+  assert.deepEqual(
+    worldScope({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }, ctx({})),
+    { pullRequests: true, issues: true },
+    'Azure filters work items by assignee as well as pull requests by author',
+  );
+  assert.deepEqual(
+    worldScope({ sourceControl: 'github', issues: 'github', pool: 'fake' }, ctx({ ownWorkOnly: false })),
+    { pullRequests: false, issues: false },
+    'ownWorkOnly off is a fleet watching the whole repository: none of it is its own',
+  );
+  assert.deepEqual(
+    worldScope({ sourceControl: 'github', issues: 'github', pool: 'fake' }, ctx({ userId: undefined })),
+    { pullRequests: false, issues: false },
+    'ownWorkOnly with nobody to filter to is not a filter',
+  );
 });

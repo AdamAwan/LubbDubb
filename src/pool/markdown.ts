@@ -105,10 +105,11 @@ const SECTIONS: readonly DigestSection[] = [
     counts: 'Times',
     costed: false,
     caveat:
-      '_Counted from this fleet’s activity feed. Every row but **Replies sent** is a fact about the ' +
-      '**repository** rather than about this fleet — a pull request another person merged is in these ' +
-      'numbers too — so only Replies sent crosses into the pool’s own tables: summing the rest over ' +
-      'several fleets watching one repository counts watchers, not work._',
+      '_Counted from this fleet’s activity feed, and true of this fleet whatever its world was scoped ' +
+      'to. What crosses into the pool’s summed tables is narrower: a slice the provider did not filter ' +
+      'to this operator is a fact about the **repository**, which every fleet watching it also reports, ' +
+      'so summing it would count watchers rather than work. `poolableThroughput` in `digest.json` names ' +
+      'the rows this fleet published as its own._',
   },
   {
     rows: (d) => d.byFault,

@@ -82,14 +82,42 @@ export function throughputMeasureLabel(key: string): string {
   return MEASURE_COPY[key as ThroughputMeasure]?.label ?? key;
 }
 
-/* The measures the pool may sum. `ours` is the same declaration the totals table
-   marks a row with, doing a second job: a measure the world model observed is a
-   property of the *repository*, and every fleet watching that repository reports
-   it, so a sum across fleets grows with the number of watchers rather than with
-   the work. Only what a fleet did itself crosses. → docs/spec/28 */
-export const POOLED_THROUGHPUT_MEASURES: readonly ThroughputMeasure[] = MEASURE_ORDER.filter(
-  (measure) => MEASURE_COPY[measure].ours,
-);
+/* Where each measure's rows come from, which is what decides whether the pool may
+   sum them: a slice the provider filtered to this operator is the fleet's alone,
+   and an unfiltered one is the repository's, reported by every fleet watching it.
+   Which slices were filtered is a property of the *deployment*, not of this module
+   — `worldScope` answers it — so this map states the source and nothing more.
+   → docs/spec/28-cross-fleet-pool.md#only-a-slice-a-fleet-had-to-itself-may-cross */
+type ThroughputSource = 'pull-request' | 'issue' | 'fleet';
+
+const SOURCE_OF: Record<ThroughputMeasure, ThroughputSource> = {
+  'issue-opened': 'issue',
+  'issue-closed': 'issue',
+  'pr-opened': 'pull-request',
+  'pr-merged': 'pull-request',
+  'pr-closed': 'pull-request',
+  'pr-approved': 'pull-request',
+  'review-received': 'pull-request',
+  'reply-sent': 'fleet',
+};
+
+/* The measures a fleet may publish as its own, given what its world was scoped by.
+   `fleet` always crosses: `pr_replies_sent` is this harness's own record of what
+   left through its sink, which no other fleet holds. */
+export function poolableThroughputMeasures(scope: {
+  pullRequests: boolean;
+  issues: boolean;
+}): readonly ThroughputMeasure[] {
+  return MEASURE_ORDER.filter((measure) => {
+    const source = SOURCE_OF[measure];
+    if (source === 'fleet') return true;
+    return source === 'pull-request' ? scope.pullRequests : scope.issues;
+  });
+}
+
+export function isThroughputMeasure(key: string): key is ThroughputMeasure {
+  return key in SOURCE_OF;
+}
 
 export interface ThroughputTotal {
   measure: ThroughputMeasure;

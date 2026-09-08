@@ -1574,6 +1574,10 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unmeasured: PoolDigestRow[];
   byUsage: PoolDigestRow[];
   byThroughput: PoolDigestRow[];
+  /* Which of `byThroughput`'s measures this fleet's world was scoped tightly enough
+     for the pool to sum. Published by the fleet that knows, never guessed by a
+     reader. → docs/spec/28-cross-fleet-pool.md */
+  poolableThroughput: string[];
   byFault: PoolDigestRow[];
 }
 

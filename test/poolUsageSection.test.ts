@@ -8,6 +8,8 @@ import { renderPoolMarkdown } from '../src/pool/markdown.js';
 import { USAGE_COPY } from '../src/usage/events.js';
 import type { PoolDigestDocument } from '../src/types.js';
 
+const SCOPED = { pullRequests: true, issues: true };
+
 const NOW = '2026-08-24T12:00:00.000Z';
 
 function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
@@ -25,6 +27,7 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
     unmeasured: [],
     byUsage: [],
     byThroughput: [],
+    poolableThroughput: ['reply-sent'],
     byFault: [],
     ...over,
   };
@@ -42,6 +45,7 @@ test('the usage section is keyed on subject and verb, bucketed by UTC day, and t
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
 
   assert.deepEqual(
@@ -66,6 +70,7 @@ test('a usage row carries no cost, and a document from a build without the secti
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
   assert.deepEqual(
     document.byUsage.map((r) => r.costUsd),
@@ -148,6 +153,7 @@ test('a pair the registry does not have is dropped rather than published', () =>
     project: 'acme-api',
     harnessVersion: '0.1.0',
     now: NOW,
+    scope: SCOPED,
   });
   assert.deepEqual(
     document.byUsage.map((r) => r.key),

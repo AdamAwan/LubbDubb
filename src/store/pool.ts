@@ -1,4 +1,3 @@
-import { POOLED_THROUGHPUT_MEASURES } from '../throughputInsights.js';
 import type { PoolDigestDocument, PoolDigestRow, PoolClockKind, PoolFleetReading, PoolPublication } from '../types.js';
 import type { StoreContext } from './context.js';
 
@@ -159,6 +158,7 @@ interface PublicationRow {
 }
 
 function digestSections(document: PoolDigestDocument): [PoolDigestSection, readonly PoolDigestRow[]][] {
+  const poolable = new Set(document.poolableThroughput);
   return [
     ['phase', document.byPhase],
     ['cause', document.byCause],
@@ -166,13 +166,13 @@ function digestSections(document: PoolDigestDocument): [PoolDigestSection, reado
     ['unaccounted', document.unaccounted],
     ['unmeasured', document.unmeasured],
     ['usage', document.byUsage],
-    // Only the measures a fleet can vouch for as its own reach the mirror. The rest
-    // are the repository's, and every fleet watching it reports them -- summed, they
-    // count watchers rather than work. Cutting here rather than in the fold makes a
-    // reader that forgot the filter unreachable, which is what `byCheck` does with
-    // its project argument. -> docs/spec/28-cross-fleet-pool.md
-    ['throughput', document.byThroughput.filter((row) => POOLABLE.has(row.key))],
+    // Only the measures the publishing fleet declared its own reach the mirror: a
+    // slice its provider did not filter to it is the repository's, seen by every
+    // fleet watching that repository, and summed it would count watchers rather than
+    // work. The declaration is the publisher's because only it knows what scoped its
+    // world. Cutting here rather than in the fold makes a reader that forgot the rule
+    // unreachable, which is what `byCheck` does with its project argument.
+    // -> docs/spec/28-cross-fleet-pool.md
+    ['throughput', document.byThroughput.filter((row) => poolable.has(row.key))],
   ];
 }
-
-const POOLABLE: ReadonlySet<string> = new Set(POOLED_THROUGHPUT_MEASURES);

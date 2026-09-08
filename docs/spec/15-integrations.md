@@ -31,6 +31,33 @@ interface ActionSink {
 Every outbound method **throws** on failure; `SendResult` carries `ok` and an optional provider-side
 `ref` (a comment id or URL, a merge SHA) for the audit log.
 
+## What a snapshot is scoped to
+
+`ownWorkOnly` with a `userId` narrows what a provider fetches, but **not every slice, and
+not the same way on both providers**. It is not visible at the call site — a sweep that
+returns the whole repository looks exactly like one that returns this operator's share —
+so `VIEWER_SCOPED` in `src/integrations/registry.ts` states it once, beside the factories
+that pass the filter in.
+
+| Provider | Pull requests                                                  | Issues / work items                                         |
+| -------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| `github` | filtered: author **or** assignee is `userId`                   | **not filtered** — `listOpenIssues()`, the whole repository |
+| `azure`  | filtered: author **or** reviewer is `userId`                   | filtered: `assignedTo` is `userId`                          |
+| `fake`   | not filtered — the scripted world is whatever a test put in it | not filtered                                                |
+
+**GitHub's issue sweep being unfiltered is the surprising one.** The ownership label
+looks like a scope and is not: it is read _per issue_ into `labelsAddedByViewer`, which
+is what gates pickup ([06](06-issue-pickup.md)), while the sweep itself fetches every
+open issue so the harness can see one before anybody labels it.
+
+The [cross-fleet pool](28-cross-fleet-pool.md#only-a-slice-a-fleet-had-to-itself-may-cross)
+reads this to decide which of a fleet's throughput counts are its own to publish, so a
+wrong entry is a silent over-count on a shared project — a project with four operators
+reporting its merges four times, rendering perfectly. `test/poolThroughputSection.test.ts`
+asserts every provider the registry can build has an entry, because a new provider
+without one defaults to _unfiltered_: safe, but it drops that fleet's output from the
+pool with nothing red.
+
 ## Capabilities and providers
 
 | Capability      | Owns                | Providers registered      |
