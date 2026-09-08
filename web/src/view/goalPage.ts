@@ -355,10 +355,17 @@ function environmentStage(page: GoalPageView): GoalStage {
   }
   const partial = envs.find((e) => e.status === 'partial');
   if (partial !== undefined) {
-    return { ...base, reading: `${partial.environment} ${partial.landed}/${partial.total}`, tone: 'amber', done };
+    return { ...base, reading: `${partial.environment} ${reachCount(partial)}`, tone: 'amber', done };
   }
   if (envs.some((e) => e.status === 'unknown')) return { ...base, reading: 'not known', tone: 'grey', done: null };
   return { ...base, reading: 'not shipped', tone: 'grey', done };
+}
+
+export function reachCount(env: GoalEnvironmentReach): string {
+  const count = `${env.landed}/${env.total}`;
+  if (env.unplaced === 0) return count;
+  const merges = env.unplaced === 1 ? 'merge' : 'merges';
+  return `${count} · ${env.unplaced} ${merges} not on the integration branch`;
 }
 
 function watchFold(page: GoalPageView, environment: string): { said: string } | null {

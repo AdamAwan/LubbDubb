@@ -77,7 +77,8 @@ same silence in the same direction, on exactly the goals big enough to have been
 ([14](14-persistence.md#repairing-a-mis-attributed-goal-ref)).
 
 A merged pull request whose provider reported no merge commit produces **no landing at all**, rather
-than a row pointing at nothing.
+than a row pointing at nothing. Nor does one that merged somewhere other than the integration branch
+— → [What counts as a landing](#what-counts-as-a-landing).
 
 ## The probe
 
@@ -151,6 +152,69 @@ Windows the code alone could not tell a typo'd probe from a commit that had not 
 tie-breaker was whether the command had complained on stderr. An environment naming its own commit
 has nothing to say no _about_: either it answered or it did not, and whether a landing is in it is a
 question for the clone. The platform-dependent clause simply has nothing to be about any more.
+
+### What counts as a landing
+
+**A landing is a merge onto the integration branch, not a merge.** When a plan stacks its parts —
+part 2's pull request based on part 1's branch — the stacked pull request's squash commit lands on
+part 1's _topic branch_, and part 1's own merge later carries all of it down to the integration
+branch in one squash. The stacked merge commit therefore sits on a branch that is deleted, is an
+ancestor of nothing, and can never be found in any environment.
+
+Recorded as a landing it is a permanent `absent` in the goal's denominator, and that is the quietest
+failure this subsystem has: the goal reads `partial landed:1 total:3` in every environment for ever,
+`newArrivals` never writes an arrival because it only ever reads `reached`, and every gate the
+arrival opens — the validation checks, the close-out — is held with nothing red anywhere. Measured
+against one live deployment, eight of sixty-one landing rows were merge commits on no remote branch,
+across six goals, three of which held four `unrun` validation checks between them behind an arrival
+that could never happen.
+
+Two cuts, because neither is enough alone:
+
+- **`baseBranch`.** `unrecordedLandings` skips a merged pull request whose `baseBranch` is defined
+  and is not `defaultBranch`; `unattributedMerges` skips a graph node with a `baseRef`, which the
+  work graph fills with `pr:<n>` for exactly this shape. That is the cheap cut and it needs no
+  clone, but it answers only about pull requests the harness saw while they were open.
+- **The clone.** `baseBranch` is absent on a pull request first seen after it merged, and a stacked
+  node whose base was never observed has no `baseRef` either. So the desk reconciles: for every
+  landing it has not yet placed it asks `git.contains(shas, [defaultBranch])`, and reads the
+  [three-valued](#the-three-verdicts) answer as it is read everywhere else — `true` is on the
+  integration branch, `null` is the clone unable to say and is asked again next pulse, and `false`
+  is a commit the clone holds that the integration branch does not reach: it never landed on its own.
+
+**The verdict is marked, never deleted.** `goal_landings` is keyed on `pr_number` and `landedPrs()`
+is what stops the sweep re-adding a row, so a delete would flap on every pulse. It is an additive
+`on_integration` column, and a null means _not yet asked_ rather than _no_ — which is why it needs no
+backfill and heals the rows already written on the first pulse after this ships. A landing marked
+`no` is dropped from the goal's `total`, is never probed for again, and is counted on the row as
+`unplaced` so the cockpit can say what the fraction is missing rather than draw a number nobody can
+account for.
+
+The behaviour this changes, deliberately: a goal whose work all merges onto a long-lived feature
+branch reads `absent` with `total: 0` until that branch's own pull request merges. That is a fraction
+of nothing rather than a permanent false `partial`, and the second is the reading that holds gates.
+
+### When a held goal is going nowhere
+
+`src/environments/stuck.ts`. A goal that is **delivered**, unshortfalled, holds an open `validate` or
+`close_out` gate, and has a landing an environment has read `absent` for more than six probe
+intervals is stuck by definition — either the work never went anywhere or something in front of it
+did not run, and both are a person's to answer. It goes through `errors.record` and rides in
+`attention_read` as a `heldGoals` row, because a held validation check is work waiting on somebody.
+
+It is the signal that would have caught all six goals above, and it catches a genuinely skipped
+deployment too. Deliberately **not** a Needs-you rail row, for the reason the hold itself is not one:
+every delivered goal is held for as long as a deploy takes, and a rail carrying all of them buries
+the asks somebody can answer.
+
+The desk holds which pairs it has already reported **in memory** rather than in a table, so a restart
+says each one once more. That is the cheap end of the trade on purpose: a row per report is a log,
+and a repeated line in the error feed after a restart is a great deal quieter than the silence this
+replaces.
+
+**Not implemented, and worth doing:** an environment whose head is _newer_ than the merge makes
+`absent` mean broken rather than pending, which would sharpen this from a timeout into a fact. The
+probe reports a commit, so the comparison is available; nothing does it yet.
 
 ## Is the environment well?
 
@@ -536,10 +600,16 @@ forever.
 `src/environments/environmentDesk.ts`, run from the pulse beside the other bookkeeping and not in the
 dispatcher — it staffs nothing, decides no dispatch, and no rule reads what it writes.
 
-Six passes: attribute the merges nothing has attributed yet, ask each environment whether it is well
-([above](#is-the-environment-well)), ask each environment where it is, record the goals that have just
-arrived, say so on their tickets, and run the post-deploy watch's own window pass
-([29](29-post-deploy-watch.md#the-window)).
+Eight passes: attribute the merges nothing has attributed yet, ask each environment whether it is well
+([above](#is-the-environment-well)), place the landings the clone has not placed yet
+([above](#what-counts-as-a-landing)), ask each environment where it is, record the goals that have just
+arrived, report the delivered goals held behind an environment that is going nowhere
+([above](#when-a-held-goal-is-going-nowhere)), say so on their tickets, and run the post-deploy
+watch's own window pass ([29](29-post-deploy-watch.md#the-window)).
+
+The placing pass runs **above** the probe, because a landing it marks as not on the integration branch
+is one the probe must not ask about: asked, it writes an `absent` that nothing can ever turn into a
+`reached`, which is the reading this whole section exists to stop.
 
 The fifth is **held here rather than run beside this desk**, and its position is the invariant rather
 than a preference: a watch window opens on an arrival the third pass records, so above that pass it
@@ -624,7 +694,8 @@ could not answer, or a merge whose commit nobody caught. So:
 | none confirmed, something unresolved                           | `unknown` |
 | none confirmed, and everything owed is unmerged or answered no | `absent`  |
 
-`total` counts the goal's landings **plus** its merges the sweep could not attribute
+`total` counts the goal's landings the clone has **not** placed off the integration branch
+([above](#what-counts-as-a-landing)) **plus** its merges the sweep could not attribute
 (`unattributedMerges`) **plus** the plan parts it still owes a merge (`partsOwed`). The middle term is
 read from the work graph rather than the world for the reason above: a world-only count would report
 every goal fully accounted for the moment its merges aged out of the closed window.
@@ -652,7 +723,9 @@ it.
 The goal page draws an **Environments** card under the pull requests, one row per configured
 environment, with the count on every row that is not whole: `0/3` and `2/3` are the difference
 between work that has not started moving and work that is halfway there, and the word alone says
-neither. Each row's sentence says **work**, not merges — the count includes a plan's unmerged parts,
+neither. Where the goal has landings the clone placed off the integration branch, the row says how
+many — `1/3 · 2 merges not on the integration branch` — because a denominator that quietly shrank is
+a number nobody can account for, and the merges are real work whose commits went somewhere else. Each row's sentence says **work**, not merges — the count includes a plan's unmerged parts,
 so a row reading `some of this goal's merges are here` beside `1/4` would be a sentence disagreeing
 with the number next to it. The tones are ones the cockpit already defines — `partial` takes the _attention_ tone rather
 than a success one, because half a feature in production is the state most likely to want somebody.
@@ -727,13 +800,13 @@ Stated so a later change does not discover them as bugs:
 
 Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
 
-| Table                       | One row per               | Written                                                          |
-| --------------------------- | ------------------------- | ---------------------------------------------------------------- |
-| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact                          |
-| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves            |
-| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                 |
-| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                   |
-| `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one |
+| Table                       | One row per               | Written                                                                    |
+| --------------------------- | ------------------------- | -------------------------------------------------------------------------- |
+| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact; `on_integration` updated in place |
+| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves                      |
+| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                           |
+| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                             |
+| `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one           |
 
 `goal_landings` is keyed on the pull request for `branch_reaps`' reason — a branch name is reusable,
 and a goal can land more than once.

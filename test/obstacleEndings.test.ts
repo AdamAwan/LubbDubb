@@ -127,7 +127,7 @@ test('every condition on a row has to be met, not any of them', () => {
 
 test('the owner landing is read off the landing sweep', () => {
   const owned = obstacle({ state: 'owned', ownerRef: 'issue:841' });
-  const landing = { prNumber: 7, goalRef: 'issue:841', sha: 'abc', recordedAt: NOW };
+  const landing = { prNumber: 7, goalRef: 'issue:841', sha: 'abc', recordedAt: NOW, onIntegration: null };
   assert.equal(ownerLanded(owned, [landing]), true);
   assert.equal(ownerLanded(owned, [{ ...landing, goalRef: 'issue:842' }]), false);
   assert.equal(ownerLanded(obstacle(), [landing]), false, 'a row nothing owns has no owner to land');

@@ -16,6 +16,7 @@ import { validateEnvironments, type EnvironmentConfig } from '../src/environment
 import { unattributedMerges, unrecordedLandings } from '../src/environments/landings.js';
 import { allGoalReach, goalReach } from '../src/environments/reach.js';
 import { environmentGateHold, openedGoals } from '../src/environments/arrival.js';
+import { stuckGoals } from '../src/environments/stuck.js';
 import { EnvironmentDesk } from '../src/environments/environmentDesk.js';
 import { GitCliObserver } from '../src/git/gitObserver.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -98,7 +99,7 @@ function fourPartGoal(): WorkNode[] {
 }
 
 function landing(over: Partial<GoalLanding> & { prNumber: number; sha: string }): GoalLanding {
-  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', ...over };
+  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: null, ...over };
 }
 
 function reading(over: Partial<EnvironmentReading> & { sha: string; environment: string }): EnvironmentReading {
@@ -109,6 +110,7 @@ test('a merged pull request is attributed to its goal through the work graph', (
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [mergedPr({ number: 1 })] }),
     nodes: twoPartGoal(),
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }]);
@@ -118,6 +120,7 @@ test('a merge already recorded is not swept up again', () => {
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [mergedPr({ number: 1 })] }),
     nodes: twoPartGoal(),
+    integrationBranch: 'main',
     landed: new Set([1]),
   });
   assert.deepEqual(found, [], 'the closed window re-offers a merge for hours; the recorded set is what stops it');
@@ -127,6 +130,7 @@ test('a merged pull request with no merge commit is left alone rather than recor
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [pr({ number: 1, merged: true, state: 'merged' })] }),
     nodes: twoPartGoal(),
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, [], 'a provider that reports no merge SHA must not produce a landing pointing at nothing');
@@ -136,6 +140,7 @@ test('an unmerged closed pull request is never a landing', () => {
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [pr({ number: 1, state: 'closed', mergeCommitSha: 'sha1' })] }),
     nodes: twoPartGoal(),
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, [], 'abandoned work went nowhere, whatever trial merge the provider computed');
@@ -148,6 +153,7 @@ test('a merge the graph has not folded yet falls back to the world’s own issue
       closedPullRequests: [mergedPr({ number: 1, branch: 'issue/12' })],
     }),
     nodes: [],
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }]);
@@ -157,9 +163,48 @@ test('a merged pull request belonging to no goal is skipped, not attributed to a
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [mergedPr({ number: 9, branch: 'chore/tidy' })] }),
     nodes: [node({ ref: 'pr:9', kind: 'pr', status: 'merged', terminal: true })],
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, []);
+});
+
+test('a merge onto another pull request’s branch is not a landing', () => {
+  const found = unrecordedLandings({
+    world: world({
+      closedPullRequests: [
+        mergedPr({ number: 1, baseBranch: 'main' }),
+        mergedPr({ number: 2, baseBranch: 'issue/12/part-1' }),
+      ],
+    }),
+    nodes: twoPartGoal(),
+    integrationBranch: 'main',
+    landed: new Set(),
+  });
+  assert.deepEqual(
+    found,
+    [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }],
+    'a stacked squash lands on a branch that is deleted and is an ancestor of nothing',
+  );
+});
+
+test('a merge whose provider reported no base branch is still a landing', () => {
+  const found = unrecordedLandings({
+    world: world({ closedPullRequests: [mergedPr({ number: 1 })] }),
+    nodes: twoPartGoal(),
+    integrationBranch: 'main',
+    landed: new Set(),
+  });
+  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }], 'the clone reconciles what it cannot');
+});
+
+test('a stacked merge is not counted as unattributed either', () => {
+  const stacked = [
+    node({ ref: 'issue:12', kind: 'issue' }),
+    node({ ref: 'pr:1', kind: 'pr', parentRef: 'issue:12', status: 'merged', terminal: true }),
+    node({ ref: 'pr:2', kind: 'pr', parentRef: 'issue:12', baseRef: 'pr:1', status: 'merged', terminal: true }),
+  ];
+  assert.equal(unattributedMerges('issue:12', stacked, new Set()), 1, 'only the stack base can inflate the total');
 });
 
 test('merges the sweep could not attribute are counted from the graph, not the closed window', () => {
@@ -172,6 +217,7 @@ test('a part’s merge is attributed to the goal, not to the part it hung off', 
   const found = unrecordedLandings({
     world: world({ closedPullRequests: [mergedPr({ number: 1 }), mergedPr({ number: 2 })] }),
     nodes: plannedGoal(),
+    integrationBranch: 'main',
     landed: new Set(),
   });
   assert.deepEqual(found, [
@@ -194,6 +240,72 @@ const ENVS: EnvironmentConfig[] = [
   { name: 'staging', at: 'unused' },
   { name: 'prod', at: 'unused' },
 ];
+
+test('a landing the clone placed off the integration branch leaves the goal’s total', () => {
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings: [
+      landing({ prNumber: 1, sha: 'a', onIntegration: true }),
+      landing({ prNumber: 2, sha: 'b', onIntegration: false }),
+    ],
+    readings: [reading({ sha: 'a', environment: 'staging' })],
+    environments: ENVS,
+    unattributed: 0,
+    outstanding: 0,
+  });
+  assert.equal(rows[0]?.status, 'reached');
+  assert.equal(rows[0]?.total, 1);
+  assert.equal(rows[0]?.unplaced, 1, 'the card says what it could not place rather than reading partial forever');
+});
+
+const GATED: EnvironmentConfig[] = [{ name: 'staging', at: 'unused', arrival: { opens: ['validate'] } }];
+
+test('a delivered goal held behind an environment its work never reached is reported, not held quietly', () => {
+  const stuck = stuckGoals({
+    delivered: ['issue:12'],
+    shortfalled: new Set(),
+    environments: GATED,
+    arrivals: [],
+    releases: [],
+    landings: [landing({ prNumber: 1, sha: 'a' })],
+    readings: [reading({ sha: 'a', environment: 'staging', status: 'absent', observedAt: '2026-01-02T00:00:00.000Z' })],
+    probeIntervalMs: 60_000,
+    now: Date.parse('2026-01-03T00:00:00.000Z'),
+  });
+  assert.equal(stuck.length, 1);
+  assert.equal(stuck[0]?.goalRef, 'issue:12');
+  assert.equal(stuck[0]?.absent, 1);
+});
+
+test('a reading that has not sat long enough, and a goal already arrived, are not stuck', () => {
+  const args = {
+    delivered: ['issue:12'],
+    shortfalled: new Set<string>(),
+    environments: GATED,
+    releases: [],
+    landings: [landing({ prNumber: 1, sha: 'a' })],
+    readings: [reading({ sha: 'a', environment: 'staging', status: 'absent', observedAt: '2026-01-02T00:00:00.000Z' })],
+    probeIntervalMs: 60_000,
+  };
+  assert.deepEqual(stuckGoals({ ...args, arrivals: [], now: Date.parse('2026-01-02T00:01:00.000Z') }), []);
+  assert.deepEqual(
+    stuckGoals({
+      ...args,
+      arrivals: [
+        {
+          goalRef: 'issue:12',
+          environment: 'staging',
+          arrivedAt: '2026-01-02T00:00:00.000Z',
+          announcedAt: null,
+          watchedAt: null,
+        },
+      ],
+      now: Date.parse('2026-01-03T00:00:00.000Z'),
+    }),
+    [],
+    'nothing is held, so nothing is stuck',
+  );
+});
 
 function reachOf(over: {
   landings: GoalLanding[];
@@ -607,6 +719,41 @@ test('a merge is recorded against its goal and answered from where the environme
   assert.equal(rows.find((r) => r.environment === 'prod')?.status, 'absent');
 });
 
+test('a stacked pull request’s squash is not a landing, and the goal still arrives', async () => {
+  const { prober, git } = twoEnvironments(true, false);
+  const system = build(TWO_ENVS, prober, git);
+  system.connector.inject({ kind: 'new_issue', number: 7, title: 'the goal' });
+  system.connector.inject({ kind: 'new_pr', number: 7, title: 'PR 7', branch: 'issue/7' });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 8,
+    title: 'PR 8',
+    branch: 'issue/7/second',
+    baseBranch: 'issue/7',
+  });
+
+  await system.harness.runCycle();
+  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
+  system.connector.inject({ kind: 'pr_closed', prNumber: 8, merged: true });
+  await system.harness.runCycle();
+
+  assert.deepEqual(
+    system.store.listGoalLandings().map((l) => l.prNumber),
+    [7],
+    'the stacked squash sits on a branch that is deleted and is an ancestor of nothing',
+  );
+  const staging = buildStateSnapshot(system)
+    .environmentReach.find((g) => g.goalRef === 'issue:7')
+    ?.environments.find((e) => e.environment === 'staging');
+  assert.equal(staging?.total, 1);
+  assert.equal(staging?.status, 'reached');
+  assert.deepEqual(
+    system.store.listGoalArrivals().map((a) => `${a.goalRef} ${a.environment}`),
+    ['issue:7 staging'],
+    'the arrival fires rather than the goal reading partial 1/2 for ever',
+  );
+});
+
 test('an environment is asked where it is once a pulse, not once a landing', async () => {
   const { prober, git } = twoEnvironments(false, false);
   const system = build(TWO_ENVS, prober, git);
@@ -700,6 +847,7 @@ function announcingDesk(environments: EnvironmentConfig[], now: () => number) {
     prober: new FakeEnvironmentProber(),
     git: new FakeGitObserver(),
     sink,
+    integrationBranch: 'main',
     probeIntervalMs: 60_000,
     now,
   });
@@ -767,6 +915,7 @@ function establishedDeployment(environments: EnvironmentConfig[], now: number) {
       prober: new FakeEnvironmentProber(),
       git: new FakeGitObserver(),
       sink,
+      integrationBranch: 'main',
       probeIntervalMs: 60_000,
       now: () => now,
     });
@@ -935,6 +1084,7 @@ test('a part’s merge lands under the goal, arrives as the goal, and opens the 
     prober: new FakeEnvironmentProber({ testUk: ['head-testUk'] }),
     git: new FakeGitObserver().setContains('head-testUk', 'sha1', true).setContains('head-testUk', 'sha2', true),
     sink,
+    integrationBranch: 'main',
     probeIntervalMs: 60_000,
   });
 
@@ -1047,6 +1197,7 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
     prober,
     git,
     sink,
+    integrationBranch: 'main',
     probeIntervalMs: 60_000,
     now: () => now,
   });

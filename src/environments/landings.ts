@@ -14,6 +14,7 @@ interface LandingSweepInput {
   world: WorldSnapshot;
   nodes: WorkNode[];
   landed: ReadonlySet<number>;
+  integrationBranch: string;
 }
 
 export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] {
@@ -22,6 +23,7 @@ export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] 
   for (const pr of mergedPulls(input.world)) {
     if (input.landed.has(pr.number)) continue;
     if (pr.mergeCommitSha === undefined || pr.mergeCommitSha === '') continue;
+    if (pr.baseBranch !== undefined && pr.baseBranch !== input.integrationBranch) continue;
     const goalRef = goals.get(pr.number) ?? issueRefFor(pr, input.world);
     if (goalRef === null) continue;
     out.push({ prNumber: pr.number, goalRef, sha: pr.mergeCommitSha });
@@ -36,6 +38,7 @@ export function unattributedMerges(goalRef: string, nodes: WorkNode[], landed: R
     if (node.kind !== 'pr' || node.status !== 'merged') continue;
     const number = prNumberOf(node.ref);
     if (number === null || goals.get(number) !== goalRef) continue;
+    if (node.baseRef !== null) continue;
     if (!landed.has(number)) n += 1;
   }
   return n;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { applyIssueWatch } from '../issueWatch.js';
+import { stuckGoals } from '../environments/stuck.js';
 import { toolSchema } from './schema.js';
 import { applyProfilePin } from '../intake/profilePin.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
@@ -172,7 +173,8 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
 export const attentionRead: DesktopToolFactory = (deps) => ({
   description:
     'Everything the harness is waiting on a person for: questions agents have parked on, tool calls blocked ' +
-    'awaiting permission, acts proposed for approval, work only a person can do, and runs orphaned by a crash. ' +
+    'awaiting permission, acts proposed for approval, work only a person can do, runs orphaned by a crash, and ' +
+    'delivered goals held behind an environment their work has not reached. ' +
     'Each row says what kind it is and what settles it. Call this to find out whether anything is stuck.',
   inputSchema: toolSchema(z.object({})),
   handler: () => {
@@ -223,8 +225,30 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
           died: o.died,
           waitingReason: o.waitingReason,
         })),
+      heldGoals: stuckGoals({
+        delivered: deps.store.listDeliveries().map((d) => d.originRef),
+        shortfalled: new Set(deps.store.listShortfalls().map((sf) => sf.originRef)),
+        environments: deps.environments,
+        arrivals: deps.store.listGoalArrivals(),
+        releases: deps.store.listEnvironmentGateReleases(),
+        landings: deps.store.listGoalLandings(),
+        readings: deps.store.listEnvironmentReach(),
+        probeIntervalMs: deps.briefConfig().environmentProbeIntervalMs,
+        now: Date.parse(deps.now()),
+      }).map((s) => ({
+        goalRef: s.goalRef,
+        environment: s.environment,
+        hold: s.hold,
+        merges: s.absent,
+        since: s.since,
+        settledBy:
+          "a deployment that carries this work to the environment, or the cockpit — the goal page's " +
+          '"not waiting on an environment" release, for work that is never going to arrive there',
+      })),
       next:
-        'Answer only the rows whose `settledBy` names this channel. A human task is work, not a question: it ' +
+        'Answer only the rows whose `settledBy` names this channel. A held goal is neither: it is a delivery ' +
+        'whose validation checks and close-out are withheld because the harness cannot see its work anywhere, ' +
+        'and it is here because that wait is otherwise silent. A human task is work, not a question: it ' +
         'settles when somebody has actually done it or refused it, never as an answer typed at an agent. The ' +
         'two kinds that name the cockpit are decisions with consequences a session cannot see — an act about ' +
         'to be published, a run about to be restored or thrown away. Say what is waiting and let the operator ' +
