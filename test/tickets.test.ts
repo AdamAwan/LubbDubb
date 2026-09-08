@@ -81,6 +81,7 @@ test('the backfill anchor is frozen, and the high-water mark only moves forward'
 test('the sweep asks from the anchor first and from its own mark after', async () => {
   const store = new Store(':memory:');
   const asked: string[] = [];
+  const changedAt = new Date().toISOString();
   const sweep = new TicketSweep({
     store,
     backfillMs: MONTH_MS,
@@ -88,7 +89,7 @@ test('the sweep asks from the anchor first and from its own mark after', async (
       tracksTicketHistory: true,
       async listTicketHistory(since) {
         asked.push(since);
-        return [item({ number: 7, changedAt: '2026-08-09T00:00:00.000Z' })];
+        return [item({ number: 7, changedAt })];
       },
     },
   });
@@ -104,7 +105,7 @@ test('the sweep asks from the anchor first and from its own mark after', async (
   );
 
   await sweep.run();
-  assert.equal(asked[1], '2026-08-09T00:00:00.000Z', 'the next reads from what was actually taken in');
+  assert.equal(asked[1], changedAt, 'the next reads from what was actually taken in');
   store.close();
 });
 

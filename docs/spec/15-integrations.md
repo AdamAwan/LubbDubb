@@ -570,7 +570,17 @@ Behaviour worth knowing:
   `lastMergeSourceCommit` from the last snapshot, so a `merge_pr` only works on a PR seen in a prior
   cycle.
 - **Work-item tags map onto `Issue.labels`**, so the provider-agnostic pickup and priority gates work
-  unchanged. `System.Tags` writes are read-modify-write.
+  unchanged. `System.Tags` writes are read-modify-write, and all three parts of that are load-bearing.
+  The **read is unconditional** — it is the only GET on the client that opts out of the ETag cache,
+  because a validated read hands the write a tag list from before the last write and the harness then
+  writes the stale list back. The **modify matches case-insensitively**: Azure tags are matched
+  case-insensitively and stored under the casing of whichever tag definition the project already
+  holds, so a tag the harness wrote as `lubbdubb-watch` can come back as `LubbDubb-Watch`, and an
+  exact-match removal drops nothing while the PATCH still returns 200. And the **write is verified**
+  against the tags on the item Azure returns: a tag write that Azure accepts without applying throws,
+  because the alternative is the quietest failure the harness has — dropping a watch tag reports
+  success, the cockpit patches its own copy of the labels, the item leaves the tag-narrowed world
+  query, and the tag is still on the work item in Azure with nothing red anywhere.
 - **`System.State` is preserved on `Issue.workItemState`** (while `Issue.state` collapses to
   open/closed), which is what drives the two state-based dispatcher knobs. `System.WorkItemType`
   rides alongside on `Issue.issueType` and drives the container gate.
