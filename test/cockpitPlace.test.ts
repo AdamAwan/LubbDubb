@@ -305,7 +305,7 @@ test('the pool scope carries only the tabs the pool can answer', () => {
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, view);
   }
-  for (const view of ['allowance', 'reliability', 'trend', 'mix', 'mcp', 'review']) {
+  for (const view of ['allowance', 'reliability', 'trend', 'mcp', 'review']) {
     const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, 'economics', `${view} is not a pool reading and must not be representable`);
@@ -316,4 +316,12 @@ test('a link to the retired Pool tab lands on the pool scope', () => {
   const place = readPlace('?tab=insights&view=pool');
   assert.equal(place.insightsScope, 'pool');
   assert.equal(place.insightsView, 'economics');
+});
+
+/* Work mix asked Economics' own question of the same payload, so it is two
+   sections of that tab. → docs/spec/17-cockpit.md#one-tab-one-question */
+test('a link to the retired Work mix tab lands on Economics', () => {
+  const place = readPlace('?tab=insights&view=mix');
+  assert.equal(place.insightsView, 'economics');
+  assert.equal(place.insightsScope, 'mine');
 });

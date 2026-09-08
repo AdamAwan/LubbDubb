@@ -8347,14 +8347,14 @@ select:disabled {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* The page's heading is the question the tab answers, so it carries a sentence
+   rather than a word — it gets the room a title gets and nothing sits beside it.
+   → docs/spec/17-cockpit.md#one-tab-one-question */
 .insights-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 600;
-}
-.insights-note {
-  font-size: 12px;
-  color: var(--muted);
+  letter-spacing: -0.01em;
 }
 .insights-gap {
   flex: 1 1 auto;

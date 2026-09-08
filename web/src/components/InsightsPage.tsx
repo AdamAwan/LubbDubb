@@ -22,7 +22,6 @@ import { ReliabilityTab, reliabilityCsv } from './ReliabilityTab.js';
 import { ThroughputTab, throughputCsv } from './ThroughputTab.js';
 import { CausesTab } from './CausesTab.js';
 import { SpendTrendTab } from './SpendTrendTab.js';
-import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
@@ -33,17 +32,40 @@ import { POOL_VIEWS } from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
 
-const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
-  { id: 'economics', label: 'Economics', note: 'cost against what landed' },
-  { id: 'allowance', label: 'Allowance', note: 'what the account has left' },
-  { id: 'reliability', label: 'Reliability', note: 'did it finish, did it go green' },
-  { id: 'throughput', label: 'Throughput', note: 'what came out' },
-  { id: 'causes', label: 'Causes', note: 'what sends the fleet back' },
-  { id: 'trend', label: 'Trend', note: 'eight windows, side by side' },
-  { id: 'mix', label: 'Work mix', note: 'cost by kind of work' },
-  { id: 'mcp', label: 'MCP', note: 'which tools get reached for' },
-  { id: 'review', label: 'Review', note: 'what the review packs say' },
-  { id: 'usage', label: 'Usage', note: 'what the harness asked of you' },
+/* One tab, one question — and the question is the page's heading, so a reader
+   arrives at an answer rather than at a category. Every table under it is framed
+   as part of that answer; a table that answers a different question is on a
+   different tab. → docs/spec/17-cockpit.md#one-tab-one-question */
+const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?: string }[] = [
+  {
+    id: 'economics',
+    label: 'Economics',
+    asks: 'Is the fleet worth what it costs?',
+    poolAsks: 'Where does the pool\u2019s money go?',
+  },
+  { id: 'allowance', label: 'Allowance', asks: 'What has the account got left?' },
+  { id: 'reliability', label: 'Reliability', asks: 'Did it finish, and did it go green?' },
+  {
+    id: 'throughput',
+    label: 'Throughput',
+    asks: 'How much came out?',
+    poolAsks: 'How much came out, across every fleet?',
+  },
+  {
+    id: 'causes',
+    label: 'Causes',
+    asks: 'What keeps sending the fleet back?',
+    poolAsks: 'What keeps sending fleets back?',
+  },
+  { id: 'trend', label: 'Trend', asks: 'Is what I changed working?' },
+  { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
+  { id: 'review', label: 'Review', asks: 'What do the packs say about the agents that write them?' },
+  {
+    id: 'usage',
+    label: 'Usage',
+    asks: 'What did the harness ask of you, and what did you never open?',
+    poolAsks: 'What do people do with their fleets?',
+  },
 ];
 
 const SCOPES: readonly { key: InsightsScope; label: string; note: string }[] = [
@@ -231,15 +253,17 @@ export function InsightsPage({
     if (scope === 'pool') logUsage('pool.view');
   }, [scope]);
 
-  const note = TABS.find((t) => t.id === view)?.note ?? '';
+  const tab = TABS.find((t) => t.id === view);
+  const asks = (scope === 'pool' ? (tab?.poolAsks ?? tab?.asks) : tab?.asks) ?? 'Insights';
   const resolved = spend.data?.window ?? reliability.data?.window ?? null;
   const tabs = scope === 'pool' ? TABS.filter((t) => POOL_VIEWS.includes(t.id)) : TABS;
 
   return (
     <div className="insights" ref={page}>
       <div className="insights-head">
-        <h2>Insights</h2>
-        <span className="insights-note">{note}</span>
+        {/* The question, as the heading. A reader arrives with one, and a page
+            titled for its category makes them work out which page holds it. */}
+        <h2>{asks}</h2>
         <span className="insights-gap" />
         {scope === 'mine' && (
           <Exports
@@ -498,10 +522,10 @@ function Body({
     return <PoolEconomics payload={pool.data} />;
   }
 
-  if (view === 'economics' || view === 'mix') {
+  if (view === 'economics') {
     if (spend.state === 'loading') return <p className="empty">Reading the meter…</p>;
     if (spend.data === null) return <p className="empty">Could not read the spend log.</p>;
-    return view === 'economics' ? <EconomicsTab insights={spend.data} /> : <WorkMixTab insights={spend.data} />;
+    return <EconomicsTab insights={spend.data} />;
   }
 
   if (view === 'reliability' || view === 'causes') {
@@ -637,7 +661,7 @@ function Exports({
       />
     );
   }
-  const spendTab = view === 'economics' || view === 'mix' || view === 'trend';
+  const spendTab = view === 'economics' || view === 'trend';
   if (spendTab && spend !== null) {
     return (
       <Downloads

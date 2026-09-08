@@ -46,7 +46,6 @@ export type InsightsView =
   | 'throughput'
   | 'causes'
   | 'trend'
-  | 'mix'
   | 'mcp'
   | 'review'
   | 'usage';

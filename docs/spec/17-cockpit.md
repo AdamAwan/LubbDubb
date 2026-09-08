@@ -5076,9 +5076,10 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, one scope, ten readings of it.**
+**One page, one window, one scope, nine readings of it.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
+  the two cuts of the same total that were the Work mix tab — by kind of work and by failing check —
   the goals and the costliest runs.
 - **Allowance** — what has the account got left, and what spent it? The percentage over time with the
   agent runs beneath it, the apportionment, the weekly burn-down and allowance per landed change. See
@@ -5089,7 +5090,6 @@ shape of a wrong seam.
   out, issues opened and closed. See [below](#throughput).
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
 - **Trend** — is what I changed working? The eight-period cohort view.
-- **Work mix** — why does _this kind_ of work cost what it does? By task type, and by failing check.
 - **MCP** — which tools the fleet reaches for, and which it never does. The odd one out, and
   deliberately: every other tab is a reading about work the harness did, and this is a reading about a
   **channel**. See [below](#mcp).
@@ -5103,6 +5103,30 @@ shape of a wrong seam.
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
 and the trend's.
+
+### One tab, one question
+
+**A tab is a question, and the question is the page's heading.** Not the word `Insights` with the
+question demoted to grey text beside it — the heading a reader lands on _is_ `Is the fleet worth what
+it costs?`, and every table under it is framed as part of that answer.
+
+This is the rule that decides what a tab is. A reader arrives at this page with a question already
+formed — the [usage chip](#the-usage-chip) said the five hours are nearly spent, a `burn` row said an
+agent is running hot — and a strip of category names makes them work out for themselves which category
+holds their question. A strip of questions does not.
+
+It is also the test for whether two tabs should be one. **Work mix was a tab and is now two sections of
+Economics**, because it asked Economics' own question — is this worth what it costs — of Economics' own
+payload, cut a third way. `getSpend` was already fetched; the tab added no reading, only a place the
+answer could hide. A table that answers a _different_ question stays on a different tab, which is why
+Causes is not folded into Reliability: `did it go green` and `what sends it back` are two questions a
+reader asks separately, even though one fetch answers both.
+
+The questions the pool answers are its own — `Where does the pool's money go?` rather than `Is the fleet
+worth what it costs?` — so a tab carries a second phrasing for the scope, and the heading changes with
+the scope as well as with the tab.
+
+`?view=mix` still resolves, to Economics, for the reason `?view=pool` does.
 
 ### Just me, or the pool
 

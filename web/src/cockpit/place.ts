@@ -69,7 +69,6 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'throughput',
   'causes',
   'trend',
-  'mix',
   'mcp',
   'review',
   'usage',
@@ -211,6 +210,9 @@ function readInsights(
   scope: string | null,
 ): { insightsView: InsightsView; insightsScope: InsightsScope } {
   if (view === 'pool') return { insightsView: 'economics', insightsScope: 'pool' };
+  /* `mix` asked Economics' own question of the same payload, so its two tables are
+     sections of that tab now and a link naming it lands there. */
+  if (view === 'mix') return { insightsView: 'economics', insightsScope: 'mine' };
   const chosen = INSIGHTS_VIEWS.find((v) => v === view) ?? 'economics';
   const where = INSIGHTS_SCOPES.find((s) => s === scope) ?? 'mine';
   if (where === 'pool' && !POOL_VIEWS.includes(chosen)) return { insightsView: 'economics', insightsScope: 'pool' };
