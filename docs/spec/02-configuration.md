@@ -676,6 +676,11 @@ escalates, so the symptom is an audit row and a board that does not move.
 Both transitions need a provider that can write the state back (Azure). GitHub issues carry no
 `workItemState`, so all three keys are a no-op there.
 
+The walk has a fourth hop, and it is configured elsewhere because it is not the dispatcher's: an
+environment's `arrival.workItemState` ([24](24-environments.md#workitemstate)) moves the item on again
+when the goal's whole work is confirmed deployed there — `In Review → Worthy` the pulse the harness
+sees it land on hallway.
+
 ### Feature policies
 
 | Key                                   | Type                                       | Default                                | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |

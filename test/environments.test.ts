@@ -23,7 +23,7 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { Store } from '../src/store/store.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { gitRepo } from './support/gitRepo.js';
-import type { ActionSink, IssueCommentInput, SendResult } from '../src/sink/actionSink.js';
+import type { ActionSink, IssueCommentInput, SendResult, WorkItemStateInput } from '../src/sink/actionSink.js';
 import type {
   EnvironmentReading,
   GoalArrival,
@@ -623,6 +623,8 @@ test('an arrival that cannot mean what it says is refused at load', () => {
   assert.throws(() => validateEnvironments(env({ opens: ['deploy'] })), /not an obligation/);
   assert.throws(() => validateEnvironments(env({})), /declares nothing/);
   assert.throws(() => validateEnvironments(env({ comment: 'yes' })), /true or false/);
+  assert.throws(() => validateEnvironments(env({ workItemState: '  ' })), /non-empty tracker state/);
+  assert.doesNotThrow(() => validateEnvironments(env({ workItemState: 'Worthy' })));
   assert.doesNotThrow(() => validateEnvironments(env({ opens: ['validate', 'close_out'], comment: true })));
   assert.doesNotThrow(() => validateEnvironments(env({ comment: true })));
 });
@@ -833,10 +835,15 @@ test('half a goal in an environment has not arrived in it', async () => {
 function announcingDesk(environments: EnvironmentConfig[], now: () => number) {
   const store = new Store(':memory:');
   const comments: IssueCommentInput[] = [];
+  const moves: WorkItemStateInput[] = [];
   const sink = {
     async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
       comments.push(input);
       return { ok: true, ref: `comment_${comments.length}` };
+    },
+    async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
+      moves.push(input);
+      return { ok: true, ref: `state_${moves.length}` };
     },
   } as unknown as ActionSink;
   const desk = new EnvironmentDesk({
@@ -851,7 +858,7 @@ function announcingDesk(environments: EnvironmentConfig[], now: () => number) {
     probeIntervalMs: 60_000,
     now,
   });
-  return { store, desk, comments };
+  return { store, desk, comments, moves };
 }
 
 const TESTUK: EnvironmentConfig[] = [{ name: 'testUk', at: 'unused', arrival: { comment: true } }];
@@ -961,6 +968,45 @@ test('a name with no history still speaks for work that lands after it', async (
     [99],
     'the work that landed inside the window is announced; the history it was added on top of is not',
   );
+});
+
+const HALLWAY: EnvironmentConfig[] = [{ name: 'hallway', at: 'unused', arrival: { workItemState: 'Worthy' } }];
+
+test('an arrival the harness watched happen moves the work item on, once', async () => {
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
+  store.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-20T11:59:30.000Z' });
+
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.deepEqual(moves, [{ number: 12, state: 'Worthy' }], 'the arrival is a moment, so the board moves once');
+  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+});
+
+test('an arrival the harness merely discovered moves nothing', async () => {
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
+  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-13T09:00:00.000Z' });
+
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.deepEqual(moves, [], 'naming the state later does not re-file a year of shipped work');
+  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+});
+
+test('a work item the provider refuses to move is left for the next pulse', async () => {
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, desk } = announcingDesk(HALLWAY, () => now);
+  store.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-20T11:59:30.000Z' });
+  const sink = (desk as unknown as { deps: { sink: { setWorkItemState: () => Promise<never> } } }).deps.sink;
+  sink.setWorkItemState = () => Promise.reject(new Error('transition not allowed'));
+
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.equal(store.listGoalArrivals()[0]?.announcedAt, null, 'unstamped, so the move is retried rather than lost');
 });
 
 test('an environment that asks for no comment stamps its arrivals silently', async () => {

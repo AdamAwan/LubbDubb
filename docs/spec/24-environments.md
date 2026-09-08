@@ -388,6 +388,7 @@ The decision is pure and lives with the other three categories in `web/src/cockp
       "health": "./scripts/health.sh",
       "arrival": { "opens": ["validate", "close_out"], "comment": true },
     },
+    { "name": "hallway", "at": "./scripts/deployed-sha.sh hallway", "arrival": { "workItemState": "Worthy" } },
     { "name": "liveUk", "at": "./scripts/deployed-sha.sh uk", "arrival": { "comment": true } },
     { "name": "liveEu", "at": "./scripts/deployed-sha.sh eu", "arrival": { "comment": true } },
     { "name": "liveUs", "at": "git rev-parse origin/production" },
@@ -413,9 +414,11 @@ because each failure is otherwise silent in the same direction:
 - an empty **`health`**, which answers nothing — an environment whose health row reads `unknown`
   forever looks exactly like one whose credentials expired, and left out entirely is the honest way to
   say the question is not asked here;
-- an `arrival` that **opens nothing and says nothing**, or one naming an obligation the harness does
-  not file. An `"opens": []` reads as a gate and gates nothing, which is the shape most likely to be
-  written by somebody who meant one and left it for later.
+- an `arrival` that **opens nothing, says nothing and moves nothing**, or one naming an obligation the
+  harness does not file. An `"opens": []` reads as a gate and gates nothing, which is the shape most
+  likely to be written by somebody who meant one and left it for later;
+- an empty **`arrival.workItemState`**, which names no column. A blank state word would be written to
+  the tracker and refused there, one arrival at a time, on the deployment that meant a real one.
 
 `name` is the display label _and_ the key every reading and arrival is stored against, so renaming an
 environment discards what was known about it rather than migrating it. What re-learning it does is
@@ -447,8 +450,8 @@ say a goal is in testUk on every pulse from now until the heat death; only a row
 got there, which is what keeps the ticket to one comment rather than one every five minutes, and what
 lets the signal read as something that happened.
 
-`arrival` on an environment declares what its arrival does. Both fields are optional and an `arrival`
-declaring neither is refused.
+`arrival` on an environment declares what its arrival does. Every field is optional and an `arrival`
+declaring none of them is refused.
 
 ### `opens`
 
@@ -499,10 +502,31 @@ state and is edited ([06](06-issue-pickup.md)); this is a thing that happened at
 comments are the timeline a reader wants from "where did this get to", and an edited comment would
 silently rewrite the record of the last environment each time.
 
-Nothing else is written to the tracker. A label and a work-item state move were both considered and
-are **not** implemented: a label is a second representation of a fact the harness already holds and
-that the goal page already draws, and a state move is Azure-only, so a deployment reading it as "the
-mark" would find GitHub silently doing nothing.
+### `workItemState`
+
+```jsonc
+{ "name": "hallway", "at": "…", "arrival": { "workItemState": "Worthy" } }
+```
+
+The state the goal's work item is moved to when it arrives here — the last hop of the walk the three
+pickup keys start ([02](02-configuration.md#the-in-progress-state)): `Ready → Doing → In Review` under
+the dispatcher's rules, then `→ Worthy` under this one, when the work is actually somewhere a person
+can look at it. Without it the board's last honest column is "In Review", which stops moving the
+moment the pull request merges and says nothing about whether the thing shipped.
+
+It is the arrival's business rather than a dispatcher rule's because the dispatcher does not read
+arrivals: the fact is written here, once, by the desk that recorded it, on the same guard and the same
+stamp as the comment (below). One environment's arrival is one state move — two environments naming
+the same state is idempotent from the tracker's side, and two naming different ones is a board that
+follows whichever arrives second, which is what "the item is here now" means.
+
+**A provider that cannot write states leaves the arrival unstamped**, the failure on the error log,
+and the move retried on the next pulse — the same shape as a failed comment. GitHub issues carry no
+`workItemState`, so naming one on a GitHub deployment is an error every pulse rather than a quiet
+no-op: the key was written deliberately and the board it names is not moving.
+
+A label is still **not** written: it is a second representation of a fact the harness already holds
+and that the goal page already draws.
 
 ### Announcing an arrival
 
@@ -547,8 +571,12 @@ The behaviour that falls out is the one switching `comment` on already had: a na
 catches the deployment's past up **silently**, stamping as it goes, and speaks for the next goal that
 arrives after it.
 
-The stamp goes down **after** the write, so a failed comment leaves the arrival for the next pulse
-rather than marking it said.
+The guard is the announce pass's, not the comment's: an `arrival.workItemState` rides the same two
+tests, so adding one to an environment that has been probing for a month moves the next goal to arrive
+rather than re-filing every ticket the deployment has ever shipped.
+
+The stamp goes down **after** both writes, so a failed comment or a refused state move leaves the
+arrival for the next pulse rather than marking it said.
 
 ### Lifting the hold
 
