@@ -669,6 +669,22 @@ rather than stranded. Listing it as well is still honoured, and still has the ha
 lifts its own delivery park and is re-picked. A state the harness wrote is not a human saying
 anything, which is why the fold stops short of that one call site.
 
+Two shapes of these three keys are **refused at load**, because each is a board that silently never
+moves:
+
+- **A transition state named with `issuePickupStates` empty.** Both rules are gated on a non-empty
+  pickup list, so `issueInProgressState` or `issueInReviewState` alone is a deployment that has
+  written down the walk it wants and gets none of it — the items sit in whatever state they were
+  filed in, picked up and worked, with nothing red.
+- **`issueInReviewState` listed in `issuePickupStates`.** The in-review rule fires on any item in a
+  pickup state with an open pull request, and unlike the in-progress rule it has no "already there"
+  arm — an item parked in a state that is also a pickup state is written back to that same state on
+  every pulse, one provider write per item per pulse, for as long as its pull request is open.
+
+The in-progress state is the deliberate exception, and is why the second refusal names only the other
+one: it is folded into the pickup set on purpose ([above](#the-in-progress-state)), and its rule
+refuses an item already in it.
+
 A process template may forbid a direct transition — "Ready" straight to "Doing" is legal on most, but
 not on all. A refused write is recorded as a `rejected` decision and the harness moves on; nothing
 escalates, so the symptom is an audit row and a board that does not move.
