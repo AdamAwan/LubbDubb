@@ -44,7 +44,7 @@ export function announceableArrivals(input: {
   landings: readonly { goalRef: string; recordedAt: string }[];
   probeIntervalMs: number;
   now: number;
-}): { arrival: GoalArrival; comment: boolean }[] {
+}): { arrival: GoalArrival; comment: boolean; workItemState: string | null }[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
   const floor = input.now - input.probeIntervalMs * ANNOUNCE_WINDOW_INTERVALS;
   const startedAsking = new Map<string, number>();
@@ -61,16 +61,20 @@ export function announceableArrivals(input: {
     const held = landedAt.get(l.goalRef);
     if (held === undefined || at > held) landedAt.set(l.goalRef, at);
   }
-  const out: { arrival: GoalArrival; comment: boolean }[] = [];
+  const out: { arrival: GoalArrival; comment: boolean; workItemState: string | null }[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
     const environment = byName.get(arrival.environment);
-    const wanted = environment?.arrival?.comment === true;
     const seen = Date.parse(arrival.arrivedAt);
     const fresh = Number.isFinite(seen) && seen >= floor;
     const established = (startedAsking.get(arrival.environment) ?? input.now) < floor;
     const justLanded = (landedAt.get(arrival.goalRef) ?? -Infinity) >= floor;
-    out.push({ arrival, comment: wanted && fresh && (established || justLanded) });
+    const watched = fresh && (established || justLanded);
+    out.push({
+      arrival,
+      comment: watched && environment?.arrival?.comment === true,
+      workItemState: watched ? (environment?.arrival?.workItemState ?? null) : null,
+    });
   }
   return out;
 }

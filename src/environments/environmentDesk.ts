@@ -207,7 +207,7 @@ export class EnvironmentDesk {
   private async announce(): Promise<void> {
     const { store, errors } = this.deps;
     const landings = store.listGoalLandings();
-    for (const { arrival, comment } of announceableArrivals({
+    for (const { arrival, comment, workItemState } of announceableArrivals({
       arrivals: store.listGoalArrivals(),
       environments: this.deps.environments,
       readings: store.listEnvironmentReach(),
@@ -231,6 +231,19 @@ export class EnvironmentDesk {
           errors?.record({
             source: 'cycle',
             message: `commenting on ${arrival.goalRef} reaching ${arrival.environment} failed: ${(err as Error).message}`,
+          });
+          continue;
+        }
+      }
+      if (workItemState !== null && number !== null) {
+        try {
+          await this.deps.sink.setWorkItemState({ number, state: workItemState });
+        } catch (err) {
+          errors?.record({
+            source: 'cycle',
+            message:
+              `moving ${arrival.goalRef} to "${workItemState}" on reaching ${arrival.environment} failed: ` +
+              `${(err as Error).message}`,
           });
           continue;
         }

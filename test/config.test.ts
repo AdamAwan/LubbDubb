@@ -593,3 +593,24 @@ test('every block the config form edits per leaf is deep-merged', () => {
     'a block the form offers per-leaf edits over must be deep-merged, or a save of one leaf drops the rest',
   );
 });
+
+test('a work-item walk that can never take a step is refused at load', () => {
+  assert.throws(
+    () => loadConfig({ issueInReviewState: 'In Review' }),
+    /issuePickupStates is empty/,
+    'the rule that would move it is gated on the pickup list, so the board never moves',
+  );
+  assert.throws(() => loadConfig({ issueInProgressState: 'Doing' }), /issuePickupStates is empty/);
+  assert.throws(
+    () => loadConfig({ issuePickupStates: ['New'], issueInReviewState: 'New' }),
+    /also in issuePickupStates/,
+    'an item parked there is written the same state on every pulse',
+  );
+  assert.doesNotThrow(() =>
+    loadConfig({ issuePickupStates: ['New'], issueInProgressState: 'Doing', issueInReviewState: 'In Review' }),
+  );
+  assert.doesNotThrow(
+    () => loadConfig({ issuePickupStates: ['New', 'Doing'], issueInProgressState: 'Doing' }),
+    'listing the in-progress state is redundant, not wrong',
+  );
+});

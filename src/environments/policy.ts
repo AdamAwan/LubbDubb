@@ -23,6 +23,7 @@ const ENVIRONMENT_GATES: readonly EnvironmentGate[] = ['validate', 'close_out'];
 interface EnvironmentArrival {
   opens?: EnvironmentGate[];
   comment?: boolean;
+  workItemState?: string;
 }
 
 export function validateEnvironments(environments: EnvironmentConfig[]): void {
@@ -65,6 +66,14 @@ function validateArrival(arrival: EnvironmentArrival | undefined, where: string)
     throw new Error(`${where}: "arrival" must be an object — {"opens": [...], "comment": true}.`);
   if (arrival.comment !== undefined && typeof arrival.comment !== 'boolean')
     throw new Error(`${where}: "arrival.comment" must be true or false.`);
+  if (
+    arrival.workItemState !== undefined &&
+    (typeof arrival.workItemState !== 'string' || arrival.workItemState.trim() === '')
+  )
+    throw new Error(
+      `${where}: "arrival.workItemState" must be a non-empty tracker state — the column a work item moves to ` +
+        'when its goal arrives here — or be left out.',
+    );
   if (arrival.opens !== undefined) {
     if (!Array.isArray(arrival.opens))
       throw new Error(`${where}: "arrival.opens" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
@@ -80,10 +89,10 @@ function validateArrival(arrival: EnvironmentArrival | undefined, where: string)
             `"arrival.opens" names ${ENVIRONMENT_GATES.join(' / ')}.`,
         );
   }
-  if (arrival.opens === undefined && arrival.comment !== true)
+  if (arrival.opens === undefined && arrival.comment !== true && arrival.workItemState === undefined)
     throw new Error(
-      `${where}: "arrival" declares nothing. Name what arriving here opens, or set "comment": true — or drop it, ` +
-        'and the environment is observed and nothing more.',
+      `${where}: "arrival" declares nothing. Name what arriving here opens, set "comment": true, or name the ` +
+        '"workItemState" a work item moves to — or drop it, and the environment is observed and nothing more.',
     );
 }
 

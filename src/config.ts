@@ -381,6 +381,30 @@ function validateReview(merged: Config): void {
   }
 }
 
+function validateWorkItemStates(merged: Config): void {
+  const pickup = merged.issuePickupStates ?? [];
+  const named = [
+    ['issueInProgressState', merged.issueInProgressState],
+    ['issueInReviewState', merged.issueInReviewState],
+  ].filter(([, state]) => state !== undefined && state !== '');
+  if (named.length > 0 && pickup.length === 0) {
+    throw new Error(
+      `Refusing to start: ${named.map(([key]) => key).join(' and ')} ${named.length > 1 ? 'name states' : 'names a state'} ` +
+        'to move work items to, but issuePickupStates is empty — the rules that move them are off, so the board ' +
+        'never leaves the state its items are filed in. Name the states work starts in (e.g. ["New"]), or drop ' +
+        'the transition keys.',
+    );
+  }
+  const inReview = merged.issueInReviewState;
+  if (inReview !== undefined && pickup.includes(inReview)) {
+    throw new Error(
+      `Refusing to start: issueInReviewState is "${inReview}", which is also in issuePickupStates. An item parked ` +
+        'there still reads as pickup-eligible, so the harness writes that same state to the tracker on every ' +
+        'pulse for as long as its pull request is open. Take it out of issuePickupStates.',
+    );
+  }
+}
+
 function validateAgentMode(merged: Config): void {
   const mode: string = merged.agentMode;
   if (mode === 'stream' || mode === 'raw') return;
@@ -510,6 +534,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   validateRunwayPolicy(merged.runway);
 
   validateEnvironments(merged.environments);
+
+  validateWorkItemStates(merged);
 
   if (merged.host !== '127.0.0.1' && merged.host !== 'localhost' && merged.host !== '::1' && !merged.auth.enabled) {
     throw new Error(

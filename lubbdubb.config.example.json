@@ -138,8 +138,11 @@
   "// issueDefaultPriority": "Weight for an issue carrying no matching priority label. Default 2.",
   "issueDefaultPriority": 2,
 
-  "// issuePickupStates": "Dispatcher-level, state-based pickup gate. When non-empty, only issues whose provider-native workflow state is listed are picked up (e.g. ['Ready','Doing'] for Azure). Meaningful only for providers with a richer state model than open/closed (Azure work items); GitHub issues are unaffected. Unset/empty = no state gate.",
-  "issuePickupStates": ["Ready", "Doing"],
+  "// issuePickupStates": "Dispatcher-level, state-based pickup gate. When non-empty, only issues whose provider-native workflow state is listed are picked up (e.g. ['New','Ready'] for Azure). Name the states work STARTS in, not the ones the harness moves items to — issueInProgressState is folded in for you, and listing issueInReviewState here is refused at load. Meaningful only for providers with a richer state model than open/closed (Azure work items); GitHub issues are unaffected. Unset/empty = no state gate.",
+  "issuePickupStates": ["Ready"],
+
+  "// issueInProgressState": "The state a work item is moved to once an agent is actually working it (e.g. 'Doing'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Do NOT also list it in issuePickupStates: it is folded in for you, so an item the harness put there stays pickup-eligible. Unset = the item sits in its pickup state while the fleet works it.",
+  "issueInProgressState": "Doing",
 
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
