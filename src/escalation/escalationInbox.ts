@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { AgentStatus, Escalation, EscalationContext, EscalationType } from '../types.js';
+import { settledMergeAsks } from '../proposals/settledMerges.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -100,6 +101,36 @@ export class EscalationInbox extends EventEmitter {
       dismissed.push(updated);
     }
     return dismissed;
+  }
+
+  /**
+   * Settle every merge ask whose pull request has already left the open set, and
+   * withdraw the proposal under it. Run once per pulse, and idempotent.
+   *
+   * → docs/spec/07-pull-requests.md#a-merge-ask-outlives-its-pull-request
+   *
+   * @public reached through `HarnessDeps.escalations`, a structural seam.
+   */
+  tidySettledMerges(): Escalation[] {
+    const settled = settledMergeAsks({
+      proposals: this.store.listProposals(),
+      openEscalations: this.store.listOpenEscalations(),
+      settledPrs: this.store.settledPrs(),
+    });
+    const answered: Escalation[] = [];
+    for (const ask of settled) {
+      for (const proposalId of ask.proposalIds) {
+        if (!this.store.withdrawProposal(proposalId, ask.verdict)) continue;
+        this.store.recordDecision({
+          cycleId: 'pr-lifecycle',
+          action: { type: 'no_op', reason: 'withdraw a merge proposal its pull request settled' },
+          outcome: 'executed',
+          detail: `Withdrew merge proposal ${proposalId}: ${ask.verdict}`,
+        });
+      }
+      for (const id of ask.escalationIds) answered.push(this.settleResolved(id, ask.verdict));
+    }
+    return answered;
   }
 
   /**

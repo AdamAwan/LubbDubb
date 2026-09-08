@@ -662,7 +662,7 @@ CREATE TABLE IF NOT EXISTS proposals (
   id            TEXT PRIMARY KEY,
   kind          TEXT NOT NULL,      -- reply_draft | merge
   ref           TEXT NOT NULL,      -- "pr:42:merge" — the act's subject, what the gate keys on
-  status        TEXT NOT NULL,      -- pending | accepted | rejected
+  status        TEXT NOT NULL,      -- pending | accepted | rejected | withdrawn
   action        TEXT NOT NULL,      -- JSON: the validated action, run verbatim on accept
   note          TEXT,
   decided_by    TEXT,               -- human | stack_landing (| auto_send, historical)

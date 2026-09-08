@@ -203,7 +203,7 @@ function askSpecs(input: OperatorInput): RowSpec[] {
       subject: 'plan',
       label: 'Plan approval',
       blurb: 'A decomposition held off the fleet until somebody released it',
-      data: input.proposals.filter((p) => p.kind === 'plan').map(fromProposal),
+      data: input.proposals.filter((p) => p.kind === 'plan' && p.status !== 'withdrawn').map(fromProposal),
       declinable: true,
       countsOffers: true,
       parks: true,

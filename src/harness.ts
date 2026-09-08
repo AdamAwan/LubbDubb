@@ -99,7 +99,7 @@ interface HarnessDeps {
   obstacleEndings?: { run(world: WorldSnapshot): void };
   pool?: PoolDesk;
   ejections?: { sweepExpiries(): unknown[] };
-  escalations?: { tidyDeadAgents(): unknown[] };
+  escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
   freshReads?: { drain(): string[] };
 }
 
@@ -268,6 +268,7 @@ export class Harness extends EventEmitter {
       const agents = store.listAgents();
       this.deps.burn?.run({ agents, tasks });
       this.deps.escalations?.tidyDeadAgents();
+      this.deps.escalations?.tidySettledMerges();
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
       const standingJobs = store.listStandingJobs();

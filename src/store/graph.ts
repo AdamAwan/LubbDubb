@@ -97,6 +97,18 @@ export class GraphStore {
     return out;
   }
 
+  settledPrs(): ReadonlyMap<number, 'merged' | 'closed'> {
+    const rows = this.ctx.db
+      .prepare(`SELECT ref, status FROM work_nodes WHERE kind = 'pr' AND status IN ('merged', 'closed')`)
+      .all() as { ref: string; status: string }[];
+    const out = new Map<number, 'merged' | 'closed'>();
+    for (const row of rows) {
+      const n = Number(row.ref.slice('pr:'.length));
+      if (Number.isInteger(n)) out.set(n, row.status === 'merged' ? 'merged' : 'closed');
+    }
+    return out;
+  }
+
   createWorkItemFiling(input: { targetRef: string }): WorkItemFiling | null {
     const ts = this.ctx.now();
     const row: WorkItemFiling = {

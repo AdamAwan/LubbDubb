@@ -1099,7 +1099,7 @@ export interface Escalation {
 
 export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment';
 
-type ProposalStatus = 'pending' | 'accepted' | 'rejected';
+type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
 export interface Proposal {
   id: string;
