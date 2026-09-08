@@ -180,6 +180,13 @@ export interface WorldEvent {
 
 export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
+export interface PrReplySent {
+  prNumber: number;
+  threadId: string;
+  commentRef: string;
+  sentAt: string;
+}
+
 export interface ErrorLogEntry {
   id: string;
   source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';

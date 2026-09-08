@@ -43,6 +43,7 @@ export type InsightsView =
   | 'economics'
   | 'allowance'
   | 'reliability'
+  | 'throughput'
   | 'causes'
   | 'trend'
   | 'mix'

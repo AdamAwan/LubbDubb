@@ -184,6 +184,7 @@ import type {
   ObstacleStanding,
   ObstacleWriteUp,
   ObstacleWriteUpOutcome,
+  PrReplySent,
   WorldEvent,
   WorldEventInput,
   WorldEventKind,
@@ -1474,6 +1475,9 @@ export class Store {
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {
     return this.prReplies.prReplyRefs(prNumber);
+  }
+  listPrRepliesSentSince(since: string): PrReplySent[] {
+    return this.prReplies.listPrRepliesSentSince(since);
   }
 
   archiveClosedPrs(prs: readonly PullRequest[]): void {

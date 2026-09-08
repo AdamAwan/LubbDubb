@@ -18,9 +18,10 @@ Cost is asked two ways off that one record: **when** it was spent (the rolling a
 **what it was spent on** (per goal). The second is derived rather than stored — see
 [Per-goal spend](#per-goal-spend).
 
-Two operator readings are folded out of those records rather than kept beside them: the
-[spend breakdown](#the-spend-breakdown), which asks where the money went, and the
-[reliability breakdown](#the-reliability-breakdown), which asks what it bought. Neither has a table.
+Three operator readings are folded out of those records rather than kept beside them: the
+[spend breakdown](#the-spend-breakdown), which asks where the money went, the
+[reliability breakdown](#the-reliability-breakdown), which asks what it bought, and the
+[throughput breakdown](#the-throughput-breakdown), which asks how much came out. None has a table.
 
 All of that is retrospective. The [burn watch](#the-burn-watch) is the one cost reading taken while
 the money is still being spent — it acts on nothing and files a visible obligation to go and look.
@@ -851,6 +852,83 @@ already durable, already dated, and pruned by nothing.
 **oldest first**, unlike its two neighbours in `WorldStore`, because the fold pairs each failing with
 the _next_ passing. A descending read pairs every red with the green that preceded it and reports the
 flakiest pipeline in the repository as recovering instantly.
+
+## The throughput breakdown
+
+The spend breakdown asks where the money went and the reliability breakdown asks whether the runs it
+bought worked. Neither answers the question an operator asks first about a fortnight: **how much came
+out** — how many pull requests opened and merged, how much review the fleet drew and answered, how
+many issues opened and closed. `buildThroughputInsights` (`src/throughputInsights.ts`) is that
+reading, served by `GET /api/throughput` ([16](16-http-api.md#the-fetched-routes)) and drawn by the
+Insights page's Throughput tab ([17](17-cockpit.md#throughput)).
+
+**It is a fold and adds no measurement.** Every count comes from
+[the activity feed](#the-activity-feed) — the `world_events` rows `diffWorlds` already writes — plus
+`pr_replies_sent`, the record [07](07-pull-requests.md#attribution-is-a-record-never-an-identity)
+keeps of the replies that actually left through the sink. Those rows were already durable, already dated and pruned by
+nothing, and the only fold that had ever asked them a question read `pr_ci` alone; this reading is the
+rest of the feed being asked one rather than scrolled.
+
+### The vocabulary is a measure, and the kinds are declared once
+
+`ThroughputMeasure` is eight named measures, and `THROUGHPUT_EVENT_KINDS` is the list the route hands
+`listWorldEventsOfKindsSince`. **The two are one declaration in one module**, so a `WorldEventKind`
+added to the feed is either given a measure or deliberately not counted — rather than silently
+excluded by a `SELECT` in a route that nobody thinks to revisit. `pr_mergeable` and `issue_linked`
+are the two the fold deliberately holds no measure for: neither says anything came out.
+
+### Counts, never money
+
+The reading holds no dollars at all, and that is the point. `landed` already lives on the spend
+payload beside the total it is a ratio of ([the spend breakdown](#the-spend-breakdown)), and a second
+count of merges here with a cost column beside it would be a second opinion about a figure already
+measured — the failure this repo keeps writing paragraphs about. What a fortnight of work cost is one
+tab over; what it produced is this one.
+
+### The merge rate's denominator is what settled
+
+`mergeRate` is `merged / (merged + abandoned)` over the window — **not** merges over openings. The two
+are different populations: a window that opens mid-flight sees merges of pull requests opened before
+it, so a rate over openings can exceed one, and one that closes mid-flight sees openings that have
+not settled yet, so the same rate reads as failure. This is the reliability breakdown's stance about
+`settled` exactly, and `opened` is shipped beside the rate rather than under it.
+
+### Time to merge is paired inside the window, and says how many pairs it had
+
+`medianToMergeMs` pairs each `pr_opened` with the **next** `pr_merged` for the same ref, which is the
+CI fold's technique and depends on the same ordering: `listWorldEventsOfKindsSince` returns oldest
+first, and a descending read would pair every opening with a merge that preceded it. A pull request
+opened before the window contributes its merge and no span, so `paired` is shipped — a median over
+two pairs and a median over two hundred are not the same claim, and the panel states which it drew.
+
+### One row is the fleet's, and the rest are the world's
+
+`reply-sent` is read from `pr_replies_sent`: one row per reply that actually left through the sink,
+which is the only measure here the harness can vouch for as its own. **Every other row counts what
+the world did, whoever did it** — a person's pull request, a person's review comment and a person's
+closed issue are all in these totals, because `world_events` records the repository rather than the
+fleet. The tab says so under the figures, and the totals table marks the one row that is different.
+Splitting the rest by author would need an attribution the feed does not carry, and inventing one
+here — guessing from a branch name, from `config.userId` — is the identity-versus-record mistake
+[07](07-pull-requests.md#attribution-is-a-record-never-an-identity) exists to prevent.
+
+**`replyRate` is replies over comments, and is not a handled rate.** The fleet answers a great deal of
+review by pushing a commit rather than by replying, so a rate below one is not a backlog: what has
+been _dealt with_ is `PrComment.handled`, which rule `pr-review-comment` reads and this reading does
+not touch.
+
+### An opening is an appearance
+
+`pr_opened` and `issue_opened` fire when an object first appears in the world model, which is not
+always when it was created: one that enters the watched set later — relabelled, or the watch widened —
+reads as opened on the cycle that first saw it. The baseline rule spares the common case (a fresh
+store records the baseline and no diff, so a first cycle is not a flood), and the panel states the
+rest.
+
+**Derived, never stored,** and **fetched, never polled**, for the spend breakdown's reasons exactly.
+The window is applied **once**, at the door of the fold, and everything under it reads the list that
+produces. Its per-day rates divide by the window's own span — and by `now` minus the oldest row it
+holds when the window is `all`, which has no span of its own.
 
 ## Causes: why the fleet came back
 

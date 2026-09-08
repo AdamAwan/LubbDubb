@@ -5075,7 +5075,7 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, nine readings of it — eight of them windowed.**
+**One page, one window, ten readings of it — nine of them windowed.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
@@ -5084,6 +5084,8 @@ shape of a wrong seam.
   [below](#allowance).
 - **Reliability** — did it finish, and did it go green? Outcomes, the CI timeline, the reddest pull
   requests, the phase health and the repeats.
+- **Throughput** — how much came out? Pull requests opened, merged and abandoned, review in and replies
+  out, issues opened and closed. See [below](#throughput).
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
 - **Trend** — is what I changed working? The eight-period cohort view.
 - **Work mix** — why does _this kind_ of work cost what it does? By task type, and by failing check.
@@ -5348,6 +5350,35 @@ _verdict_ and carries the alarm vocabulary. Grey is doing real work in it: a kil
 
 A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes —
 **not yet is not perfect**.
+
+### Throughput
+
+Spend's and Reliability's third sibling, built as one for the same reason: the same chrome, the same
+tiles, the same tables. Five tiles, two timelines side by side, the busiest pull requests and one
+totals table.
+
+**It draws counts and never money.** Economics is one tab away and already prices the same fortnight;
+a cost column here would be a second answer to a question already answered
+([18](18-observability.md#counts-never-money)).
+
+The two timelines are shaped differently on purpose. What **settled** is stacked — merged and
+abandoned are two ends of one population and their sum is the bar — while **opened** rides over it as
+a line, because it is a different population and stacking it would make the bar a total of nothing.
+The conversation graph stacks comments in and replies out, and its colours are the cool and warm
+halves of one hue, so it reads as two directions rather than two categories.
+
+The measure **colours** live in the stylesheet as `--tp-<measure>`, keyed by the measure rather than
+by a chart: the same colour has to mean "merged" in the timeline, in its key and in the totals table,
+and three components each picking their own is how a legend stops matching the bars.
+
+The totals table marks the one row the harness can vouch for as its own — replies it sent — beside the
+name rather than in a column, because a column of blanks reads as a measurement that failed. The
+method note under the first graph carries the three things a reader will otherwise assume wrongly:
+that an opening is an appearance, that the merge rate is over what settled, and that every other row
+counts what the world did, whoever did it ([18](18-observability.md#the-throughput-breakdown)).
+
+A window in which the world did nothing this harness could see gets a sentence rather than a table of
+zeroes, for Reliability's reason.
 
 ### Causes
 

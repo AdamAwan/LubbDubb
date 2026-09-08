@@ -8,7 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { ReliabilityPayload, SpendPayload, SpendTrendPayload } from '../src/wire.js';
+import type { ReliabilityPayload, SpendPayload, SpendTrendPayload, ThroughputPayload } from '../src/wire.js';
 
 function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-window-'));
@@ -27,14 +27,14 @@ function build(): System {
   );
 }
 
-const ROUTES = ['/api/spend', '/api/reliability', '/api/spend/trend'] as const;
+const ROUTES = ['/api/spend', '/api/reliability', '/api/throughput', '/api/spend/trend'] as const;
 
 test('all three insight routes take the same window, and say which they answered for', async () => {
   const { app } = await buildApp(build());
   for (const url of ROUTES) {
     const res = await app.inject({ method: 'GET', url: `${url}?window=24h` });
     assert.equal(res.statusCode, 200, url);
-    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const body = res.json() as SpendPayload | ReliabilityPayload | ThroughputPayload | SpendTrendPayload;
     const window = 'trend' in body ? body.trend.window : body.insights.window;
     assert.equal(window.key, '24h', url);
     assert.equal(window.bucketLabel, '1h buckets', url);
@@ -48,7 +48,7 @@ test('the window defaults to the one the page opens on', async () => {
   for (const url of ROUTES) {
     const res = await app.inject({ method: 'GET', url });
     assert.equal(res.statusCode, 200, url);
-    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const body = res.json() as SpendPayload | ReliabilityPayload | ThroughputPayload | SpendTrendPayload;
     const window = 'trend' in body ? body.trend.window : body.insights.window;
     assert.equal(window.key, '7d', url);
   }
@@ -100,7 +100,7 @@ test('the session window is anchored off the store\u2019s own reading, on every 
   for (const url of ROUTES) {
     const res = await app.inject({ method: 'GET', url: `${url}?window=session` });
     assert.equal(res.statusCode, 200, url);
-    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const body = res.json() as SpendPayload | ReliabilityPayload | ThroughputPayload | SpendTrendPayload;
     const window = 'trend' in body ? body.trend.window : body.insights.window;
     assert.equal(window.key, 'session', url);
     assert.equal(window.label, '5h session', url);
@@ -124,7 +124,7 @@ test('a deployment that has never reported a window still answers, and says it i
   for (const url of ROUTES) {
     const res = await app.inject({ method: 'GET', url: `${url}?window=session` });
     assert.equal(res.statusCode, 200, url);
-    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const body = res.json() as SpendPayload | ReliabilityPayload | ThroughputPayload | SpendTrendPayload;
     const window = 'trend' in body ? body.trend.window : body.insights.window;
     assert.equal(window.session?.kind, 'unreported', url);
     assert.equal(window.label, 'Last 5h', url);
