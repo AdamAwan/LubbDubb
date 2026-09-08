@@ -1573,6 +1573,7 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unaccounted: PoolDigestRow[];
   unmeasured: PoolDigestRow[];
   byUsage: PoolDigestRow[];
+  byThroughput: PoolDigestRow[];
   byFault: PoolDigestRow[];
 }
 

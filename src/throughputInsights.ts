@@ -74,6 +74,23 @@ const MEASURE_COPY: Record<ThroughputMeasure, { label: string; blurb: string; ou
   },
 };
 
+export function throughputMeasureOf(kind: WorldEventKind): ThroughputMeasure | null {
+  return MEASURE_OF_KIND[kind] ?? null;
+}
+
+export function throughputMeasureLabel(key: string): string {
+  return MEASURE_COPY[key as ThroughputMeasure]?.label ?? key;
+}
+
+/* The measures the pool may sum. `ours` is the same declaration the totals table
+   marks a row with, doing a second job: a measure the world model observed is a
+   property of the *repository*, and every fleet watching that repository reports
+   it, so a sum across fleets grows with the number of watchers rather than with
+   the work. Only what a fleet did itself crosses. → docs/spec/28 */
+export const POOLED_THROUGHPUT_MEASURES: readonly ThroughputMeasure[] = MEASURE_ORDER.filter(
+  (measure) => MEASURE_COPY[measure].ours,
+);
+
 export interface ThroughputTotal {
   measure: ThroughputMeasure;
   label: string;

@@ -360,6 +360,7 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `unaccounted` | —                                            | return dispatches that filed no account |
 | `unmeasured`  | —                                            | runs that reported no usage at all      |
 | `byUsage`     | `UsageSubject` × `UsageVerb`                 | times a person did it (no cost)         |
+| `byThroughput`| `ThroughputMeasure` (`src/throughputInsights.ts`) | times it happened (no cost)        |
 | `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
@@ -447,17 +448,62 @@ year-over-year reading is not available. On the `git` transport the older rows d
 history, and that is deliberately **not** part of the contract — a service has no such history, and a
 promise that rested on one substrate would be one the interface could not keep.
 
+### The throughput section
+
+What each fleet's work produced, keyed by `ThroughputMeasure` and counted per UTC day like everything
+else here — pull requests opened, merged and abandoned, approvals, review comments, replies sent,
+issues opened and closed. It is a move of what exists and not a new measurement: the fold behind the
+fleet's own Throughput tab ([18](18-observability.md#the-throughput-breakdown)) reads the same
+`world_events` rows and the same `pr_replies_sent` record, and this arm folds them per day instead of
+per window.
+
+**It carries no cost**, for `byFault`'s reason exactly: no measure here has a dollar figure anywhere in
+the harness, and deriving one for the pool would be an invention. What the work cost is `byPhase`, one
+section up.
+
+#### Only what a fleet did itself may cross
+
+This is the section's sharp edge, and it is `byCheck`'s problem with the sign reversed. `byCheck` is
+comparable **within** a project and not between, because a check name is a provider's. Throughput is
+comparable **between** projects and not within — because **a pull request is a fact about a
+repository, and every fleet watching that repository reports it**. Four engineers' fleets on one
+project see the same merge four times, and their sum is not four times the work. It renders perfectly:
+a project that looks four times as productive as the one with a single operator, with nothing red.
+
+Scoping to a project — `byCheck`'s fix — makes it *worse* here, because one project is exactly where
+the double count lives. And no dedupe is available that is not an invention: the rows carry a count per
+day per measure, not the pull request numbers behind it, and adding those would be identifying data
+this arm has never carried.
+
+So **only the measures a fleet can vouch for as its own are mirrored**: today that is `reply-sent`,
+read from `pr_replies_sent` — one row per reply that actually left through this fleet's sink, which no
+other fleet also reports. The split is not a second list: it is `MEASURE_COPY[m].ours`, the same flag
+the fleet's own totals table marks a row with, doing a second job.
+
+**The cut is at the mirror, not at the fold.** `digestSections` (`src/store/pool.ts`) stores the
+poolable keys and drops the rest, so a later reader that forgot the rule cannot reach a summable table
+of them — the stance `byCheck` takes with two sections rather than one flag. The whole section is still
+in the **document**, because a person opening one fleet's `digest.md` is reading one fleet, where every
+measure is sound and the double count cannot arise; the companion's table says under itself which of
+its rows crosses and why.
+
+**Adding it did not move `POOL_SCHEMA_VERSION`.** The section is additive and `readRows` answers `[]`
+for a field that is absent, so a fleet on the older build reads a newer document and sees a digest
+without throughput rather than a document it must refuse. A version bump is for a change that would
+make an older reader *wrong*, and this one makes it only less informed.
+
 ### The faults section
 
-Five of the six sections above measure the **work** or the person doing it, and every one of them sums
+Six of the seven sections above measure the **work** or the person doing it, and all but the throughput
+rows the [previous section](#only-what-a-fleet-did-itself-may-cross) withholds sum
 across fleets into the
 shared insights page. `byFault` measures the **harness**: what the fleet's own error log
 ([18](18-observability.md)) recorded, keyed by `ErrorLogEntry['source']` — `cycle`, `provider`, `agent`,
 `server`, `boot` — and counted per UTC day like everything else here.
 
 **It goes into the file and no further.** Nothing mirrors it, nothing aggregates it, and nothing at any
-far end reads it back: `digestSections` in `src/store/pool.ts` names the six sections the mirror stores
-and this is deliberately not among them. A fault is this harness failing on this operator's machine —
+far end reads it back: `digestSections` in `src/store/pool.ts` names the sections the mirror stores and
+this is deliberately not among them. A fault is this harness failing on this operator's machine —
 comparable to nothing on anybody else's, and answering no question a company page asks. What it is for
 is a person opening the fleet's own `digest.md` in the pool repository and seeing what has been going
 wrong, which is the one place the harness's faults are readable without a cockpit in front of you.

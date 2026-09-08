@@ -44,6 +44,7 @@ function envelopeDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument
     unaccounted: [],
     unmeasured: [],
     byUsage: [],
+    byThroughput: [],
     ...over,
   };
 }
@@ -110,6 +111,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     unaccounted: [],
     unmeasured: [],
     byUsage: [],
+    byThroughput: [],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 5, costUsd: null, partial: false }],
   });
   const s = store();
@@ -183,6 +185,7 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
     unaccounted: [],
     unmeasured: [],
     byUsage: [],
+    byThroughput: [],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 40, costUsd: null, partial: false }],
   });
 

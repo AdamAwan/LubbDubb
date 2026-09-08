@@ -1,3 +1,4 @@
+import { POOLED_THROUGHPUT_MEASURES } from '../throughputInsights.js';
 import type { PoolDigestDocument, PoolDigestRow, PoolClockKind, PoolFleetReading, PoolPublication } from '../types.js';
 import type { StoreContext } from './context.js';
 
@@ -117,7 +118,7 @@ export class PoolStore {
   }
 }
 
-type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage';
+type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage' | 'throughput';
 
 export interface PoolDigestMirrorRow {
   fleetId: string;
@@ -165,5 +166,13 @@ function digestSections(document: PoolDigestDocument): [PoolDigestSection, reado
     ['unaccounted', document.unaccounted],
     ['unmeasured', document.unmeasured],
     ['usage', document.byUsage],
+    // Only the measures a fleet can vouch for as its own reach the mirror. The rest
+    // are the repository's, and every fleet watching it reports them -- summed, they
+    // count watchers rather than work. Cutting here rather than in the fold makes a
+    // reader that forgot the filter unreachable, which is what `byCheck` does with
+    // its project argument. -> docs/spec/28-cross-fleet-pool.md
+    ['throughput', document.byThroughput.filter((row) => POOLABLE.has(row.key))],
   ];
 }
+
+const POOLABLE: ReadonlySet<string> = new Set(POOLED_THROUGHPUT_MEASURES);

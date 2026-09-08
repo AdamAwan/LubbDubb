@@ -26,6 +26,7 @@ function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
     unaccounted: [],
     unmeasured: [],
     byUsage: [],
+    byThroughput: [],
     byFault: [],
     ...over,
   };

@@ -84,6 +84,7 @@ export function PoolTab({
             <Section title="By check" note="comparable here because it is one pipeline" rows={rollup.byCheck} />
           )}
           <Usage rows={rollup.byUsage} publishing={rollup.fleets.length} />
+          <Shipped rows={rollup.byThroughput} publishing={rollup.fleets.length} />
           <div className="pool-caveats">
             <Caveat
               label="Returns that filed no account"
@@ -152,6 +153,48 @@ function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number
           Nothing in this section yet. Only acts the cockpit witnesses on the click are here — an act a table already
           records is swept by this fleet’s own operator ledger instead.
         </p>
+      ) : (
+        <table className="pool-table">
+          <thead>
+            <tr>
+              <th>What</th>
+              <th className="num">Times</th>
+              <th className="num">Fleets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <td>{row.label}</td>
+                <td className="num">{row.count}</td>
+                <td className="num">
+                  {row.fleets} of {publishing}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/* The pool's half of the Throughput tab, and deliberately the small half. A fleet's
+   own digest.md carries all eight measures; only what a fleet did *itself* is summed
+   here, because the rest are facts about a repository that every fleet watching it
+   reports. → docs/spec/28-cross-fleet-pool.md */
+function Shipped({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
+  return (
+    <section className="pool-section">
+      <h3>What the fleets did themselves</h3>
+      <p className="pool-note">
+        the throughput measures a fleet can vouch for as its own, so they sum. The rest of a fleet’s output — pull
+        requests opened and merged, review it drew, issues closed — is a fact about its <em>repository</em>, which every
+        fleet watching that repository reports: summed here it would count watchers rather than work, so it stays on
+        each fleet’s own Throughput tab and in its <code>digest.md</code>.
+      </p>
+      {rows.length === 0 ? (
+        <p className="empty">Nothing in this section yet — no fleet has recorded a reply it sent.</p>
       ) : (
         <table className="pool-table">
           <thead>

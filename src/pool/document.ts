@@ -75,6 +75,7 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     unaccounted: readRows(raw.unaccounted),
     unmeasured: readRows(raw.unmeasured),
     byUsage: readRows(raw.byUsage),
+    byThroughput: readRows(raw.byThroughput),
     byFault: readRows(raw.byFault),
   };
   return { ok: true, document };
