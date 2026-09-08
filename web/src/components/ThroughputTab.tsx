@@ -12,6 +12,7 @@ import { fmtDuration, fmtRate, PLOT } from './insightsFormat.js';
 import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
 import { Label } from './label.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -406,8 +407,7 @@ function Totals({
 
 function Method({ insights }: { insights: ThroughputInsights }): JSX.Element {
   return (
-    <div className="sp-method sp-well">
-      <p className="sp-sub">What these numbers are</p>
+    <MethodNote>
       <p>
         Counts, never money — what the fleet <i>spent</i> producing this is the Economics tab, and a second opinion
         about it here would be one more figure to reconcile. <b>Opened</b> means the pull request first appeared in this
@@ -419,6 +419,6 @@ function Method({ insights }: { insights: ThroughputInsights }): JSX.Element {
         from the record of replies that left through the sink, and every other row counts what the world did, whoever
         did it.
       </p>
-    </div>
+    </MethodNote>
   );
 }

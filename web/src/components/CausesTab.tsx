@@ -5,6 +5,7 @@ import { fmtShare, share } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { Tag } from './tag.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -133,17 +134,23 @@ function GuardSplit({ remedies }: { remedies: RemedyInsights }): JSX.Element {
           is not a red — one agent can answer four at once — so the two numbers on
           this panel that look subtractable are not. */}
       <p className="sp-note">
-        {remedies.accounts} account{remedies.accounts === 1 ? '' : 's'} of what went wrong, {fmtUsd(remedies.costUsd)}{' '}
-        between them.{' '}
+        {remedies.accounts} account{remedies.accounts === 1 ? '' : 's'}, {fmtUsd(remedies.costUsd)} between them
         {remedies.unaccounted > 0
-          ? `${remedies.unaccounted} further dispatch${remedies.unaccounted === 1 ? '' : 'es'} answered a red or a ` +
-            'review and filed nothing, so every share above is a share of what was reported rather than of what ' +
-            'happened. '
-          : 'Every dispatch that answered a red or a review filed one. '}
-        An account is one agent&rsquo;s reckoning of one return, not one red &mdash; a run that settled four reds at
-        once files one, so this never sums to the verdict counts above. Money is the filing agent&rsquo;s spend inside
-        the window, divided evenly where it filed more than one.
+          ? ` · ${remedies.unaccounted} further dispatch${remedies.unaccounted === 1 ? '' : 'es'} filed nothing`
+          : ''}
       </p>
+      <MethodNote>
+        <p>
+          <b>An account is one agent&rsquo;s reckoning of one return, not one red.</b> A run that settled four reds at
+          once files one, so this never sums to the verdict counts above.
+        </p>
+        <p>
+          <b>Money is the filing agent&rsquo;s spend inside the window</b>, divided evenly where it filed more than one.
+          {remedies.unaccounted > 0
+            ? ' Every share here is a share of what was reported rather than of what happened.'
+            : ''}
+        </p>
+      </MethodNote>
     </>
   );
 }
@@ -223,8 +230,8 @@ function Lately({ remedies }: { remedies: RemedyInsights }): JSX.Element {
         </div>
       ))}
       <p className="sp-note">
-        The {remedies.recent.length} most recent of {remedies.accounts}, newest first. Each is one agent&rsquo;s account
-        of its own run &mdash; testimony, not a reading the harness took.
+        The {remedies.recent.length} most recent of {remedies.accounts} &mdash; testimony, not a reading the harness
+        took.
       </p>
     </div>
   );

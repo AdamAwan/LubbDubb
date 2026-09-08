@@ -1,103 +1,119 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import type { PoolFleetReading, PoolInsightsPayload, PoolRollupRow } from '../types.js';
-import type { CockpitActions } from '../cockpit/actions.js';
 import { fmtUsd, relTime } from './util.js';
-import { HeadRow } from './panel.js';
-import { Label } from './label.js';
-import { logUsage } from '../cockpit/usage.js';
+import { MethodNote } from './insightsMethod.js';
 
-// → docs/spec/17-cockpit.md
+// → docs/spec/17-cockpit.md#just-me-or-the-pool, docs/spec/28-cross-fleet-pool.md#in-the-cockpit
 
-export function PoolTab({
-  payload,
-  project,
-  actions,
-}: {
-  payload: PoolInsightsPayload;
-  project: string | null;
-  actions: CockpitActions;
-}): JSX.Element {
+/* The pool's half of four tabs. Each is the same reading as the fleet's own tab,
+   over every fleet that publishes a digest — so it is drawn under that tab
+   rather than beside it. */
+
+export function PoolEconomics({ payload }: { payload: PoolInsightsPayload }): JSX.Element {
   const { rollup } = payload;
   return (
+    <Pool payload={payload}>
+      <Section title="By phase" note="the whole bill, partitioned — the phases are the total" rows={rollup.byPhase} />
+      {rollup.byCheck === null ? (
+        <p className="pool-refusal">
+          Per-check costs need a project. Check names are a provider’s own, so summing them across projects understates
+          every check.
+        </p>
+      ) : (
+        <Section title="By check" note="one pipeline, so these compare" rows={rollup.byCheck} />
+      )}
+      <div className="pool-caveats">
+        <Caveat label="Returns that filed no account" row={rollup.unaccounted} />
+        <Caveat label="Runs that measured nothing" row={rollup.unmeasured} />
+      </div>
+      <MethodNote>
+        <p>
+          <b>Every share is a share of what is left</b> after the returns that filed no account. A run that measured
+          nothing is real work with no dollars behind it — a PTY fleet is not a cheap fleet.
+        </p>
+        <p>
+          <b>Per-check costs are shown only inside a project.</b> Check names are a provider’s own, so three fleets on
+          one problem produce three keys — summed across projects that reads as no check costing much, which is wrong
+          and looks fine.
+        </p>
+      </MethodNote>
+    </Pool>
+  );
+}
+
+export function PoolCauses({ payload }: { payload: PoolInsightsPayload }): JSX.Element {
+  return (
+    <Pool payload={payload}>
+      <Section
+        title="What keeps sending fleets back"
+        note="cause and guard, in closed vocabularies"
+        rows={payload.rollup.byCause}
+      />
+    </Pool>
+  );
+}
+
+export function PoolUsage({ payload }: { payload: PoolInsightsPayload }): JSX.Element {
+  const { rollup } = payload;
+  return (
+    <Pool payload={payload}>
+      <Counted
+        title="What a person did"
+        note="subject and verb, in vocabularies the harness owns"
+        rows={rollup.byUsage}
+        publishing={rollup.fleets.length}
+        empty="Nothing yet. Only acts the cockpit witnesses on the click are here."
+      />
+      <MethodNote>
+        <p>
+          <b>These rows compare across providers</b> because the vocabularies are the harness’s own. <b>Times</b> is how
+          often it happened; <b>Fleets</b> is how many people did it at all. An act a table already records is swept by
+          each fleet’s own operator ledger instead.
+        </p>
+      </MethodNote>
+    </Pool>
+  );
+}
+
+/* What appears here is what each fleet declared its own: a slice its provider
+   filtered to that operator. → docs/spec/28-cross-fleet-pool.md */
+export function PoolThroughput({ payload }: { payload: PoolInsightsPayload }): JSX.Element {
+  const { rollup } = payload;
+  return (
+    <Pool payload={payload}>
+      <Counted
+        title="What the fleets shipped"
+        note="the output each fleet could vouch for as its own"
+        rows={rollup.byThroughput}
+        publishing={rollup.fleets.length}
+        empty="Nothing yet. No fleet has published output it could vouch for as its own."
+      />
+      <MethodNote>
+        <p>
+          <b>Only vouched output crosses.</b> A slice that arrived unfiltered is a fact about the <em>repository</em>,
+          which every fleet watching it also reports, so it is withheld here and stays on that fleet’s own Throughput
+          tab.
+        </p>
+        <p>
+          <b>Fleets</b> is therefore how many fleets could vouch for a row, not how many published; a measure missing
+          entirely is one no fleet could.
+        </p>
+      </MethodNote>
+    </Pool>
+  );
+}
+
+function Pool({ payload, children }: { payload: PoolInsightsPayload; children: ReactNode }): JSX.Element {
+  return (
     <div className="pool">
-      <HeadRow className="pool-bar">
-        <Label dense>Project</Label>
-        <div className="insights-win" role="group" aria-label="Project">
-          <button
-            type="button"
-            aria-pressed={project === null}
-            className={project === null ? 'on' : ''}
-            onClick={() => {
-              logUsage('pool.filter');
-              actions.openInsights({ insightsView: 'pool', poolProject: null });
-            }}
-          >
-            All
-          </button>
-          {payload.projects.map((name) => (
-            <button
-              key={name}
-              type="button"
-              aria-pressed={name === project}
-              className={name === project ? 'on' : ''}
-              onClick={() => {
-                logUsage('pool.filter');
-                actions.openInsights({ insightsView: 'pool', poolProject: name });
-              }}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        <span className="insights-meta">
-          {rollup.fleets.length} fleet{rollup.fleets.length === 1 ? '' : 's'} ·{' '}
-          {rollup.days.length === 0 ? 'nothing published yet' : `${rollup.days.length} UTC days`}
-        </span>
-      </HeadRow>
-
       <Fleets fleets={payload.fleets} />
-
-      {rollup.days.length === 0 ? (
+      {payload.rollup.days.length === 0 ? (
         <p className="empty">
           No fleet has published a digest to this pool yet. That is not the same as a pool nobody can reach — the
           Knowledge page says when this fleet last polled.
         </p>
       ) : (
-        <>
-          <Section
-            title="By phase"
-            note="the fleet's whole bill, partitioned. There is no separate total — the phases are one."
-            rows={rollup.byPhase}
-          />
-          <Section
-            title="What keeps sending fleets back"
-            note="cause and guard, in closed vocabularies"
-            rows={rollup.byCause}
-          />
-          {rollup.byCheck === null ? (
-            <p className="pool-refusal">
-              Per-check costs are shown only inside a project. Check names are a provider’s own, so three fleets on one
-              problem produce three keys — summed across projects that reads as no check costing much, which is wrong
-              and looks fine. Pick a project above.
-            </p>
-          ) : (
-            <Section title="By check" note="comparable here because it is one pipeline" rows={rollup.byCheck} />
-          )}
-          <Usage rows={rollup.byUsage} publishing={rollup.fleets.length} />
-          <Shipped rows={rollup.byThroughput} publishing={rollup.fleets.length} />
-          <div className="pool-caveats">
-            <Caveat
-              label="Returns that filed no account"
-              row={rollup.unaccounted}
-              note="every share above is a share of what is left after these"
-            />
-            <Caveat
-              label="Runs that measured nothing"
-              row={rollup.unmeasured}
-              note="real work with no dollars behind it — a PTY fleet is not a cheap fleet"
-            />
-          </div>
-        </>
+        children
       )}
     </div>
   );
@@ -140,19 +156,25 @@ function Section({ title, note, rows }: { title: string; note: string; rows: Poo
   );
 }
 
-function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
+function Counted({
+  title,
+  note,
+  rows,
+  publishing,
+  empty,
+}: {
+  title: string;
+  note: string;
+  rows: PoolRollupRow[];
+  publishing: number;
+  empty: string;
+}): JSX.Element {
   return (
     <section className="pool-section">
-      <h3>What a person did</h3>
-      <p className="pool-note">
-        subject and verb, in vocabularies the harness owns — so these rows compare across providers. Times is how often
-        it happened; Fleets is how many people did it at all.
-      </p>
+      <h3>{title}</h3>
+      <p className="pool-note">{note}</p>
       {rows.length === 0 ? (
-        <p className="empty">
-          Nothing in this section yet. Only acts the cockpit witnesses on the click are here — an act a table already
-          records is swept by this fleet’s own operator ledger instead.
-        </p>
+        <p className="empty">{empty}</p>
       ) : (
         <table className="pool-table">
           <thead>
@@ -179,60 +201,11 @@ function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number
   );
 }
 
-/* The pool's half of the Throughput tab. What appears here is what each fleet
-   declared its own: a slice its provider filtered to that operator. An unfiltered
-   slice is the repository's, reported by every fleet watching it, and is withheld —
-   so a row's Fleets column is how many fleets could vouch for it, not how many
-   published at all. → docs/spec/28-cross-fleet-pool.md */
-function Shipped({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
-  return (
-    <section className="pool-section">
-      <h3>What the fleets shipped</h3>
-      <p className="pool-note">
-        the output each fleet could vouch for as its own — the slices its provider filtered to that operator. A slice
-        that arrived unfiltered is a fact about the <em>repository</em>, which every fleet watching it also reports, so
-        it is withheld here and stays on that fleet’s own Throughput tab. <b>Fleets</b> is therefore how many fleets
-        could vouch for a row, not how many published; a measure missing entirely is one no fleet could.
-      </p>
-      {rows.length === 0 ? (
-        <p className="empty">
-          Nothing in this section yet. No fleet has published output it could vouch for as its own — a fleet whose world
-          arrives unfiltered contributes only the replies it sent.
-        </p>
-      ) : (
-        <table className="pool-table">
-          <thead>
-            <tr>
-              <th>What</th>
-              <th className="num">Times</th>
-              <th className="num">Fleets</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key}>
-                <td>{row.label}</td>
-                <td className="num">{row.count}</td>
-                <td className="num">
-                  {row.fleets} of {publishing}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
-
-function Caveat({ label, row, note }: { label: string; row: PoolRollupRow; note: string }): JSX.Element {
+function Caveat({ label, row }: { label: string; row: PoolRollupRow }): JSX.Element {
   return (
     <div className="pool-caveat">
       <span className="pool-caveat-n">{row.count}</span>
-      <div>
-        <strong>{label}</strong>
-        <p className="pool-note">{note}</p>
-      </div>
+      <strong>{label}</strong>
     </div>
   );
 }

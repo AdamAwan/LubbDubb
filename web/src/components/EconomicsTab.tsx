@@ -5,6 +5,7 @@ import { fmtShare, localPhaseCostUsd, share, PLOT } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { toCsv } from './Downloads.js';
 import { Label } from './label.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -560,8 +561,7 @@ function Runs({ runs, rankedFrom }: { runs: readonly SpendRun[]; rankedFrom: num
 function Method({ insights }: { insights: SpendInsights }): JSX.Element {
   const { totals } = insights;
   return (
-    <div className="sp-method sp-well">
-      <p className="sp-sub">What these numbers are</p>
+    <MethodNote>
       <p>
         <b>Cost is the provider&apos;s own figure and cache discounts are already in it.</b> Each run&apos;s dollars
         come from Claude Code&apos;s <span className="mono">total_cost_usd</span>, which prices a cache read at a
@@ -601,6 +601,6 @@ function Method({ insights }: { insights: SpendInsights }): JSX.Element {
       <p className="dim">
         Everything above is all-time except the two windows and the graph. Read {relTime(insights.generatedAt)}.
       </p>
-    </div>
+    </MethodNote>
   );
 }

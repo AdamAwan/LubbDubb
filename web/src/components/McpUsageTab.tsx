@@ -14,6 +14,7 @@ import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { Label } from './label.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -531,8 +532,7 @@ function ChannelSplit({ channels }: { channels: readonly McpChannelUsage[] }): J
 
 function Method({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
   return (
-    <div className="sp-method">
-      <p className="sp-sub">What these numbers are</p>
+    <MethodNote well={false}>
       <p>
         A <b>call</b> is one <span className="mono">tools/call</span> that reached a tool body, counted at the server
         rather than in a transcript — so a call an agent made and abandoned still counts, and a tool an agent talked
@@ -558,6 +558,6 @@ function Method({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
           </span>
         )}
       </p>
-    </div>
+    </MethodNote>
   );
 }

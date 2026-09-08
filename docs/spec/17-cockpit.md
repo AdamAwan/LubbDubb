@@ -474,6 +474,7 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
+| `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                     |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -5075,7 +5076,7 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, ten readings of it — nine of them windowed.**
+**One page, one window, one scope, ten readings of it.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
@@ -5099,15 +5100,54 @@ shape of a wrong seam.
   **never shown to the checker**, because a label that has learned to agree with its reader has stopped
   being evidence. Fetched on the tab's first visit for a window, like Trend and MCP: it folds every pack
   against every mark.
-- **Pool** — what the whole [cross-fleet pool](28-cross-fleet-pool.md) spent, across fleets. The one tab
-  that ignores the window bar, and it has to: the digest's bucket is a UTC day and its retention is
-  ninety of them, so the page's five spans are not a question anybody asks of it. What it takes instead
-  is a **project**, on `Place` as `poolProject` — because `byCheck` is comparable only inside one
-  pipeline, and the tab draws the reason rather than an empty table when it is not narrowed.
-
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
 and the trend's.
+
+### Just me, or the pool
+
+**Whose numbers a reading is over is a control, not a tab.** `insightsScope` on `Place`, `mine` or
+`pool`, drawn as the first control on the bar — above the tabs, beside the window, because it is page
+state in exactly the way the window is: switching tabs keeps it.
+
+The [cross-fleet pool](28-cross-fleet-pool.md) was an eleventh tab, and that was the wrong seam for the
+reason the three panels were: every rollup it carries is the cross-fleet half of a question that already
+has a tab. `byPhase` is Economics, `byCause` is Causes, `byThroughput` is Throughput, `byUsage` is
+Usage. Two tabs answering "the phase split" — one for this fleet, one for every fleet — leave the
+operator's question decided by which tab they happened to be on, and the comparison between the two
+answers, which is the only reason the pool exists, taken by reading one and remembering the other.
+
+`POOL_VIEWS` (`web/src/cockpit/place.ts`) is the four the pool can answer, and it is the one list. The
+other six are readings a fleet only holds about **itself** — an account allowance, a run log, a tool
+channel, a review pack — and under the pool scope they are **withheld from the tab strip** rather than
+drawn as a refusal where a tab used to be. A scope move from one of them lands on Economics, and so does
+a hand-edited link naming one: `readInsights` narrows the pair on the way in, so `?scope=pool&view=mcp`
+is not a representable place. `?view=pool` still resolves — to the scope, on Economics — because the
+tab was a link somebody could have sent.
+
+**Under the pool scope the window bar is replaced, not obeyed.** The digest's bucket is a UTC day with
+ninety days' retention, so the page's five spans are not a question anybody asks of it. The project
+picker takes the bar's place — `poolProject` on `Place`, because `byCheck` is comparable only inside one
+pipeline and the tab draws the reason rather than an empty table when it is not narrowed — and the
+resolution line beside it says how many fleets and how many UTC days are behind what is drawn. The
+`5h session` anchor line goes with the window bar for the same reason.
+
+The per-window fetches are gated on the scope, so the pool scope asks the server for the pool and
+nothing else, and moving back re-reads the fleet's own window from scratch.
+
+### The method note is folded
+
+Every tab grew a `What these numbers are` block, and the pool tab grew a paragraph under each of its
+tables. They are worth having — a rate over four settled runs and a cost per red that is per verdict
+rather than per fix are both things a reader gets wrong without them — and they are worth having
+**once**. Read end to end on the first visit, a wall of method prose under the figures is never read
+again, and on every visit after it is the thing between the reader and the next table.
+
+So it is a `<details>` (`web/src/components/insightsMethod.tsx`), summarised `How this is counted`,
+folded shut. One click from the numbers it qualifies, and one line tall until then. The figure-side
+prose above it is cut to the shortest thing that is still true — the denominators and the units — and
+everything that was a caveat about *how* a number was arrived at moved inside the fold rather than
+being deleted, because the note is the only written account of the method a reader on the page has.
 
 ### The page is bounded, because a reading is not
 
@@ -5163,7 +5203,8 @@ rendered correctly and simply did not move.
 
 One control, **above the tabs rather than inside one**, because it is page state: switching tabs keeps
 the window, and every reading under it obeys the same one. That is the whole argument for the five
-sharing a surface.
+sharing a surface. It is drawn under the fleet's own scope only — see
+[Just me, or the pool](#just-me-or-the-pool).
 
 Six windows — `5h session`, `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by
 `resolveWindow` (`src/insightsWindow.ts`) and shipped back on every payload

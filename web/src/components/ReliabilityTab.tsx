@@ -14,6 +14,7 @@ import { causeRows } from './CausesTab.js';
 import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
 import { Label } from './label.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -452,8 +453,7 @@ function Repeats({
 function Method({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   const { runs, ci } = insights;
   return (
-    <div className="sp-method sp-well">
-      <p className="sp-sub">What these numbers are</p>
+    <MethodNote>
       <p>
         <b>
           Every figure here is {insights.window.label === 'All time' ? 'all-time' : `the last ${insights.window.label}`}
@@ -493,6 +493,6 @@ function Method({ insights }: { insights: ReliabilityInsights }): JSX.Element {
         </p>
       )}
       <p className="dim">Read {relTime(insights.generatedAt)}.</p>
-    </div>
+    </MethodNote>
   );
 }

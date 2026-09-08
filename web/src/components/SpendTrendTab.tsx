@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { SpendPhase, SpendTrend, SpendTrendComparison, SpendTrendPhaseShift, SpendTrendBucket } from '../types.js';
 import { fmtTokens, fmtUsd } from './util.js';
 import { Label } from './label.js';
+import { MethodNote } from './insightsMethod.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -545,8 +546,7 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
 
 function Method({ trend }: { trend: SpendTrend }): JSX.Element {
   return (
-    <div className="sp-method sp-well">
-      <p className="sp-sub">What these numbers are</p>
+    <MethodNote>
       <p>
         <b>The unit is a goal that closed, never a run.</b> Every per-run rate is gameable for nothing — split the same
         work across twice as many smaller agents and input-per-run halves while the bill does not move. A closed goal
@@ -569,6 +569,6 @@ function Method({ trend }: { trend: SpendTrend }): JSX.Element {
         {trend.periods} {periodWord(trend)}s, ending with the one still in progress. Goals with no recorded spend are in
         no figure here.
       </p>
-    </div>
+    </MethodNote>
   );
 }
