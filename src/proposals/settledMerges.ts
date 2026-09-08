@@ -2,7 +2,7 @@ import type { Escalation, Proposal, PrState } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#a-merge-ask-outlives-its-pull-request
 
-export interface SettledMergeAsk {
+interface SettledMergeAsk {
   prNumber: number;
   state: Exclude<PrState, 'open'>;
   verdict: string;
