@@ -706,10 +706,11 @@ CREATE TABLE IF NOT EXISTS branch_reaps (
 -- stays inside the closed-PR window. Keyed on the pull request, for branch_reaps'
 -- reason -- a branch name is reusable, and a goal can land more than once.
 CREATE TABLE IF NOT EXISTS goal_landings (
-  pr_number   INTEGER PRIMARY KEY,
-  goal_ref    TEXT NOT NULL,      -- issue:<n>
-  sha         TEXT NOT NULL,
-  recorded_at TEXT NOT NULL
+  pr_number      INTEGER PRIMARY KEY,
+  goal_ref       TEXT NOT NULL,      -- issue:<n>
+  sha            TEXT NOT NULL,
+  recorded_at    TEXT NOT NULL,
+  on_integration TEXT                -- yes | no | NULL, meaning not yet asked
 );
 
 -- What an environment probe said about one landed commit (see EnvironmentStore).

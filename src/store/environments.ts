@@ -16,6 +16,7 @@ import type { ColumnMigrations } from './migrate.js';
 
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
   goal_arrivals: { watched_at: 'TEXT' },
+  goal_landings: { on_integration: 'TEXT' },
 };
 
 export function repairPartRefGoals(db: Database.Database): void {
@@ -52,7 +53,19 @@ export class EnvironmentStore {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM goal_landings ORDER BY recorded_at ASC, pr_number ASC`)
       .all() as LandingRow[];
-    return rows.map((r) => ({ prNumber: r.pr_number, goalRef: r.goal_ref, sha: r.sha, recordedAt: r.recorded_at }));
+    return rows.map((r) => ({
+      prNumber: r.pr_number,
+      goalRef: r.goal_ref,
+      sha: r.sha,
+      recordedAt: r.recorded_at,
+      onIntegration: r.on_integration === null ? null : r.on_integration === 'yes',
+    }));
+  }
+
+  markLandingIntegration(prNumber: number, onIntegration: boolean): void {
+    this.ctx.db
+      .prepare(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`)
+      .run(onIntegration ? 'yes' : 'no', prNumber);
   }
 
   landedPrs(): ReadonlySet<number> {
@@ -189,6 +202,7 @@ interface LandingRow {
   goal_ref: string;
   sha: string;
   recorded_at: string;
+  on_integration: string | null;
 }
 
 interface ArrivalRow {

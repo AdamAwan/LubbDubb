@@ -567,6 +567,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
     sink: opts.sink ?? connector,
+    integrationBranch: config.defaultBranch,
     probeIntervalMs: config.environmentProbeIntervalMs,
     healthIntervalMs: config.environmentHealthIntervalMs,
     watch: new WatchDesk({

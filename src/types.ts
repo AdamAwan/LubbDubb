@@ -1272,6 +1272,7 @@ export interface GoalLanding {
   goalRef: string;
   sha: string;
   recordedAt: string;
+  onIntegration: boolean | null;
 }
 
 export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
@@ -1305,6 +1306,7 @@ export interface GoalEnvironmentReach {
   status: GoalReachStatus;
   landed: number;
   total: number;
+  unplaced: number;
   at: string | null;
   opens: EnvironmentGate[];
 }

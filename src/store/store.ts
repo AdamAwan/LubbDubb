@@ -1089,6 +1089,9 @@ export class Store {
   listGoalLandings(): GoalLanding[] {
     return this.environments.listGoalLandings();
   }
+  markLandingIntegration(prNumber: number, onIntegration: boolean): void {
+    this.environments.markLandingIntegration(prNumber, onIntegration);
+  }
   landedPrs(): ReadonlySet<number> {
     return this.environments.landedPrs();
   }

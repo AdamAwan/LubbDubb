@@ -3,7 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalSection, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { buildGoalStrip, goalSectionsOpen, GOAL_SECTIONS } from '../view/goalPage.js';
+import { buildGoalStrip, goalSectionsOpen, reachCount, GOAL_SECTIONS } from '../view/goalPage.js';
 import type {
   Agent,
   EnvironmentGate,
@@ -1252,11 +1252,7 @@ function Environments({
                     {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
                   </span>
                 </span>
-                {env.status !== 'reached' && (
-                  <i className="cn-n">
-                    {env.landed}/{env.total}
-                  </i>
-                )}
+                {(env.status !== 'reached' || env.unplaced > 0) && <i className="cn-n">{reachCount(env)}</i>}
                 <Tag tone={REACH_TONE[env.status]} fill={REACH_TONE[env.status] !== undefined}>
                   {env.status}
                 </Tag>

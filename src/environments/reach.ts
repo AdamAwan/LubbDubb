@@ -15,7 +15,9 @@ interface GoalReachInput {
 }
 
 export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
-  const landings = input.landings.filter((l) => l.goalRef === input.goalRef);
+  const mine = input.landings.filter((l) => l.goalRef === input.goalRef);
+  const landings = mine.filter((l) => l.onIntegration !== false);
+  const unplaced = mine.length - landings.length;
   const total = landings.length + input.unattributed + input.outstanding;
   return input.environments.map(({ name: environment, arrival }) => {
     const verdicts = readingsFor(input.readings, environment);
@@ -35,6 +37,7 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
       status: rollUpReach({ total, reached, unresolved }),
       landed: reached,
       total,
+      unplaced,
       at: reached === total && total > 0 ? latest : null,
       opens: arrival?.opens ?? [],
     };
