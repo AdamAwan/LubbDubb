@@ -63,6 +63,7 @@ import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { RemoteRunDesk } from './remoteValidation/run.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
+import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runner.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
@@ -171,6 +172,7 @@ interface BuildOptions {
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
   tenants?: TenantKeeper;
+  remoteRunner?: RemoteRunner;
   errorMirror?: (entry: ErrorLogEntry) => void;
   ingressSecrets?: IngressSecrets;
   configFile?: string;
@@ -612,6 +614,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     environments: config.environments,
     observer: environmentObserver,
     queries: stateQueries,
+    runner: opts.remoteRunner ?? new CommandRemoteRunner(config.repoRoot, config.remoteValidation.runTimeoutMs),
     probeIntervalMs: config.environmentProbeIntervalMs,
     errors,
   });

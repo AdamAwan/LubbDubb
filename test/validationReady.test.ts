@@ -67,6 +67,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     revision: null,
     amendedAt: null,
     amendNote: null,
+    area: null,
     createdAt: '2026-08-11T09:00:00.000Z',
     updatedAt: '2026-08-11T09:00:00.000Z',
     ...over,

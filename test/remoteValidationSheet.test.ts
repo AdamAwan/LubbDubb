@@ -8,6 +8,7 @@ import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
+import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
@@ -103,6 +104,7 @@ function bench(
     environments,
     observer: env,
     queries: new StateQueryDesk({ store, environments, reader: stateReader }),
+    runner: new FakeRemoteRunner(),
     probeIntervalMs: PROBE_MS,
     now,
   });
@@ -408,6 +410,7 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
           throw new Error('the reader blew up');
         },
       } as unknown as StateQueryDesk,
+      runner: new FakeRemoteRunner(),
       probeIntervalMs: PROBE_MS,
       errors: { record: (e: { message: string }) => logged.push(e.message) } as never,
       now: () => NOW,
@@ -468,6 +471,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
         environments: [ACCEPTANCE],
         observer: observer(),
         queries: new StateQueryDesk({ store, environments: [ACCEPTANCE], reader: reader() }),
+        runner: new FakeRemoteRunner(),
         probeIntervalMs: PROBE_MS,
         now: () => NOW + PROBE_MS * 10,
       });

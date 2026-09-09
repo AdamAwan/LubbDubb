@@ -58,6 +58,7 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       selected: true,
       blockedReason: unpermitted('check', permits, environment.name),
       awaitingApproval: false,
+      matched: null,
       run: null,
     });
   }
@@ -75,6 +76,7 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       selected: true,
       blockedReason: unpermittedReason ?? (approved ? null : unapproved(environment.name)),
       awaitingApproval: unpermittedReason === null && !approved,
+      matched: null,
       run: 'state',
     });
   }
@@ -100,6 +102,7 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
             : unapproved(environment.name)
           : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
       awaitingApproval: unpermittedReason === null && observable && !approved,
+      matched: null,
       run: 'watch',
     });
   }

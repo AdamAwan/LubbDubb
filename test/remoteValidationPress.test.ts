@@ -5,6 +5,7 @@ import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { RemoteRunDesk } from '../src/remoteValidation/run.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
+import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
@@ -102,6 +103,7 @@ function bench(
     environments,
     observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader }),
+    runner: new FakeRemoteRunner(),
     probeIntervalMs: 60_000,
     now: opts.now ?? (() => NOW),
   });
@@ -144,6 +146,7 @@ function seed(store: Store, environment = 'acceptance', opts: { approve?: boolea
       selected: true,
       blockedReason: null,
       awaitingApproval: false,
+      matched: null,
     },
     {
       rowId: `state:${QUERY.id}`,
@@ -154,6 +157,7 @@ function seed(store: Store, environment = 'acceptance', opts: { approve?: boolea
       selected: true,
       blockedReason: null,
       awaitingApproval: false,
+      matched: null,
     },
   ]);
 }

@@ -18,11 +18,17 @@
 > commit ([The pin](#the-pin-asks-whether-the-work-is-still-there)), the **lock** on
 > `(environment, tenant)` enforced in SQL ([Uniqueness](#uniqueness-is-environment-tenant-enforced-in-sql)),
 > the **run row** with the commits every reading through it straddled, and the **tenant** in its three
-> shapes with its `reseed` command and the age drawn at the gate ([Tenants](#tenants)).
+> shapes with its `reseed` command and the age drawn at the gate ([Tenants](#tenants)); and — as of
+> the runner seam — the **`RemoteRunner` seam** with its scripted fake
+> ([Seams](#seams-and-why-the-fake-comes-first)), the **pre-flight** that asks the deployed runner
+> which selectors it offers before an operator consents to anything
+> ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)), and
+> `validation_checks.area`, the selector a `check` row is verified against
+> ([Migrations](#migrations)).
 >
-> **Everything else is still a design**: no browser runner, no pre-flight, no artefacts, no dispatch
-> rule, no `remote_validation_report` and no `spec` reading. Nothing browser-shaped runs, so a
-> `check` row is blocked or manual, and with no agent in this build a press runs the sheet's
+> **Everything else is still a design**: no dispatch rule, no `remote_validation_report`, no fold of a
+> report into readings and no `spec` reading. A run is still nobody's to carry out, so a `check` row
+> is blocked or manual, and with no agent in this build a press runs the sheet's
 > confirmed **deterministic** rows synchronously under the pin. A path is written in italics
 > until the thing it names exists, and a section that is still a description rather than an account
 > says so where it starts. The behaviour is settled — it is
@@ -222,8 +228,9 @@ merged like every other part ([08](08-planning.md)).
 
 A part declares the area it covers in an optional `coverage` field on the plan document
 (`src/plans/planDocument.ts`), stored on `plan_parts.coverage` (`src/store/plans.ts`) and carried back
-on `PlanPart.coverage`. It is the string the sheet's selectors are later resolved against — that
-resolution, and `validation_checks.area` on the other side of it, are not built. Everything else about
+on `PlanPart.coverage`. It is the string the sheet's selectors are resolved against —
+`validation_checks.area` is the other side of it, and the pre-flight is what puts the two to a
+runner. Everything else about
 it is an ordinary part: it produces code, it has per-part `acceptance`, it merges, and
 `partDeclarationNote` (`src/plans/parts.ts`) shows the building agent the area it was asked to cover.
 → [08](08-planning.md#the-seven-narrative-fields)
@@ -363,13 +370,25 @@ What runs at assembly, without asking:
   the operator arrives at a sheet with those readings already on it. That is a better-informed press
   than an empty one, and it keeps the gate from becoming the bottleneck that makes people
   rubber-stamp it.
-- **A pre-flight** — _not yet built, and nothing is asked of a runner until it is_. Ask the deployed runner, through `validate.browser.listSelectors`, which selectors
-  it actually offers, and compare against what the sheet's `check` rows name. A selector is a
-  compatibility surface between a harness-held check and a runner config in a repository that moves,
-  and a mismatch is one of this design's own `blocked` causes — so it belongs **before** the consent,
-  not afterwards as a blocked row that wasted the press. The listing is also the honest source of the
-  **matched** count the [consistency check](#the-runner-contract) compares against, which is better
-  than deriving it from the post-run report.
+- **A pre-flight.** **Built**, in `src/remoteValidation/preflight.ts`, over the `RemoteRunner` seam.
+  Ask the deployed runner, through `validate.browser.listSelectors`, which selectors it actually
+  offers, and compare against what the sheet's `check` rows name in `validation_checks.area`. A
+  selector is a compatibility surface between a harness-held check and a runner config in a
+  repository that moves, and a mismatch is one of this design's own `blocked` causes — so it belongs
+  **before** the consent, not afterwards as a blocked row that wasted the press. The listing is also
+  the honest source of the **matched** count the [consistency check](#the-runner-contract) compares
+  against, which is better than deriving it from the post-run report: derived the other way, a
+  selector that matched nothing reads as a clean pass. It is written onto `remote_sheet_rows.matched`
+  and read from nowhere else.
+
+  Two rows the pre-flight leaves exactly as they are, and both matter. One another cause has already
+  blocked keeps the reason it has — a kind this environment does not permit is not a mismatch. And a
+  check that **names no area** is a person's, exactly as every check is today: the pre-flight asks a
+  runner about areas, and a check declaring none was never a question for it. Where the listing
+  itself could not answer — a non-zero exit, a kill, nothing printed — every `check` row that names
+  an area is `blocked` with that reason and **nothing else on the sheet is touched**: `blocked`
+  resolves per row and never per run, so the `state`, `signal` and `measure` readings that landed
+  beside it stand.
 
 Everything else waits for the press. The bench obligation is _this is ready to run — review it and go_,
 and four things happen there:
@@ -831,10 +850,11 @@ passes: assemble the sheets for arrivals nothing has assembled yet, run the appr
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
 
-**Three of the four are built.** The one that is not is the pre-flight, which has nothing yet to do
-because nothing browser-shaped runs. What runs is the assembly, the approved `state`, `signal` and
-`measure` rows on a sheet it has just assembled, and — through `RemoteRunDesk`
-([The press](#the-press)) rather than the pulse — the same rows again under a press's pin. The sweep's
+**All four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
+approved `state`, `signal` and `measure` rows on a sheet it has just assembled, and — through
+`RemoteRunDesk` ([The press](#the-press)) rather than the pulse — the same rows again under a
+press's pin. The pre-flight runs on the **assembly** pass only and inside its cap: it is a process
+spawn per sheet, and a sheet already assembled is never re-listed. The sweep's
 arm has no dispatched run to find until the browser half lands an agent, which is why an operator's
 own `.../cancel` is the settle path this build has. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
 which is why the desk's position above it is load-bearing rather than tidy.
@@ -1018,11 +1038,15 @@ environment moves. A reading with no commit beside it is a reading of a product 
   any of them takes is added to — which is what `remote_readings`' `started_sha` and `ended_sha`
   already are: a column on a table that was new **one release ago**, additive, guarded by
   `PRAGMA table_info`, and invisible without the entry on every database from before it existed.
-- **`validation_checks.area`** is a column on an **existing** table and needs an additive `ALTER
-TABLE`, guarded by `PRAGMA table_info` and declared in that module's `ColumnMigrations`. `CREATE
-TABLE IF NOT EXISTS` never alters an existing table, so without the entry the column is invisible on
-  every database from before it existed — every check unautomatable, every sheet all-manual, and
-  nothing red.
+- **`validation_checks.area`** is a column on an **existing** table and is **built**: declared in
+  `VALIDATION_COLUMNS` (`src/store/validation.ts`), with its `ALTER TABLE` guarded by `PRAGMA
+table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alters an existing
+  table, so without the entry the column would be invisible on every database from before it existed
+  — every check unautomatable, every sheet all-manual, and nothing red. **How an author declares an
+  area is not built**; the column is, and a null area is a check a person carries out.
+  `remote_sheet_rows.matched` is the same case one table over, declared in
+  `REMOTE_VALIDATION_COLUMNS` — a column on a table that was new one release ago, which is exactly
+  what that entry exists for.
 - **`plan_parts.coverage`** is the same case one table over, and is **built**: declared in
   `PLAN_COLUMNS` (`src/store/plans.ts`), with its `ALTER TABLE` guarded by `PRAGMA table_info` like
   every other entry there.
@@ -1055,7 +1079,7 @@ succeeds.
 | ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------- |
 | `EnvironmentProber` (existing)                        | `CommandEnvironmentProber` · `FakeEnvironmentProber`     | `at`, for the pin                             |
 | `EnvironmentObserver` (existing)                      | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows    |
-| `RemoteRunner` (_src/remoteValidation/runner.ts_)     | `CommandRemoteRunner` · `FakeRemoteRunner`               | `runner`, `listSelectors`, `publishArtefacts` |
+| `RemoteRunner` (`src/remoteValidation/runner.ts`)     | `CommandRemoteRunner` · `FakeRemoteRunner` — **built**   | `runner`, `listSelectors`, `publishArtefacts` |
 | `StateReader` (`src/remoteValidation/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                   |
 | `TenantKeeper` (`src/remoteValidation/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                      |
 
@@ -1064,9 +1088,10 @@ Three rules hold them honest:
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with the fakes injected and
   `dbPath: ':memory:'` ([19](19-development.md)). The three new seams are new `opts` keys —
   `remoteRunner`, `stateReader`, `tenants` — beside `backend`, `streamSpawner`, `sink`, `gitObserver`,
-  `worktrees` and `errorMirror`. `stateReader` and `tenants` are built; `remoteRunner` lands with its
-  caller. **A test that configures a `validate` block and injects no `tenants` is the same hazard
-  `stateReader`'s absence is**, and it is in `CLAUDE.md` for the same reason.
+  `worktrees` and `errorMirror`. All three are built, each defaulting to its command implementation. **A test that configures a `validate` block and injects no `tenants` is the same hazard
+  `stateReader`'s absence is**, and a test that configures a `validate.browser` block and injects no
+  `remoteRunner` drives a browser against somebody's acceptance environment; both are in `CLAUDE.md`
+  for that reason.
   **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the observer uses**
   — the id echo in `lubbdubbWatchId`, the rows-never-counts refusal and `presence`'s zero-means-unknown
   are one implementation. A second parser would pass `knip` (it is used) and pass its own tests, and
@@ -1209,6 +1234,22 @@ the cockpit, nor a committed project layer**; the reseed runs the environment's 
 and waiving is **not** a route here — the retire path is
 `POST /api/issues/:number/validation/:checkId/waive`, its reason is required, a waived check counts as
 clear at close-out and a **deferred** one does not.
+
+The runner seam and the pre-flight are built and their tests are in
+`test/remoteValidationRunner.test.ts`: the parameters of a run reach a spawn as **environment only**
+and the command is the committed one verbatim, asserted value by value; `remoteValidation.runTimeoutMs`
+is the kill for a **runner** invocation while the listing and the publish keep the ordinary
+30-second one, asserted as a pair, and a kill **answers nothing** rather than answering emptily; the
+exit code is never read for a run; all three methods drive the fake and **no process is spawned**,
+asserted on the fake's own record; the **matched** count on a row comes from the listing; a check
+whose area the listing does not offer is `blocked` **before** a press with nothing written on the
+check — no reading, no `WorldEvent`, nothing in `watch_readings`; a listing that could not answer
+blocks the check rows and leaves the sheet's other readings standing; a check naming no area is a
+person's and no command is spawned about it; the pre-flight runs on the assembly pass only and
+inside the cap of five, and a throw goes through `errors.record`; `buildSystem` takes `remoteRunner`
+and defaults to the command implementation, and an environment with no `validate.browser` block
+declares no command for it to run; and a database written before `validation_checks.area` gains it
+on boot with **no backfill** over it.
 
 The rest, when it is built:
 

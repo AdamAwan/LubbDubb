@@ -77,6 +77,7 @@ function demoCheck(
     deferUntil: null,
     supersededReason: null,
     revision: null,
+    area: null,
     amendedAt: null,
     amendNote: null,
     ...seed,
@@ -1067,6 +1068,7 @@ export function buildDemoState(): DemoSeed {
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
+            matched: null,
             reading: null,
           },
           {
@@ -1080,6 +1082,7 @@ export function buildDemoState(): DemoSeed {
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
+            matched: null,
             reading: {
               goalRef: 'issue:390',
               environment: 'staging',
@@ -1106,6 +1109,7 @@ export function buildDemoState(): DemoSeed {
             blockedReason:
               'this query is waiting for an operator to read it and accept it against staging. Consent to a place is not transferable, so an approval written on another environment does not carry here.',
             awaitingApproval: true,
+            matched: null,
             reading: null,
           },
         ],

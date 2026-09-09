@@ -7,8 +7,11 @@ import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
+import { preflightRows } from './preflight.js';
+import type { RemoteRunner } from './runner.js';
 import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
+import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -17,9 +20,12 @@ interface RemoteValidationDeskDeps {
   environments: readonly EnvironmentConfig[];
   observer: EnvironmentObserver;
   queries: StateQueryDesk;
+  runner: RemoteRunner;
   probeIntervalMs: number;
   errors?: ErrorRecorder;
   now?: () => number;
+  /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
+  env?: TenantEnvironment;
 }
 
 /**
@@ -120,7 +126,55 @@ export class RemoteValidationDesk {
       environment.name,
       rows.map(({ run: _run, ...row }) => row),
     );
+    await this.preflight(environment, goalRef, rows);
     for (const row of rows) await this.read(environment, goalRef, row);
+  }
+
+  /**
+   * Ask the deployed runner which selectors it actually offers, and read that listing against what
+   * this sheet's `check` rows name. It runs on the **assembly** pass only and inside its cap: it is
+   * a process spawn per sheet, which is why the cap is five rather than the watch's twenty.
+   *
+   * It is here rather than after a press because a mismatch is one of this design's own `blocked`
+   * causes — a check whose selector nobody can find is a check that needs rewording, and telling an
+   * operator that at the gate is the difference between an amendment and a wasted press.
+   */
+  private async preflight(
+    environment: EnvironmentConfig,
+    goalRef: string,
+    rows: readonly SheetRowPlan[],
+  ): Promise<void> {
+    const command = environment.validate?.browser?.listSelectors;
+    if (command === undefined) return;
+    const asks = rows.filter((row) => row.kind === 'check' && row.blockedReason === null);
+    if (asks.length === 0) return;
+    const checks = this.deps.store.listValidationChecks(goalRef);
+    if (!checks.some((check) => check.area !== null && asks.some((row) => row.sourceId === check.id))) return;
+    try {
+      const listing = await this.deps.runner.listSelectors({
+        environment: environment.name,
+        command,
+        profile: environment.validate?.browser?.profile ?? null,
+        tenant: resolveTenant({
+          environment,
+          stamped: this.deps.store.listRemoteTenants(),
+          now: this.now(),
+          env: this.deps.env,
+        }).value,
+        selectors: [],
+        reportDir: null,
+      });
+      this.deps.store.recordRemotePreflight(
+        goalRef,
+        environment.name,
+        preflightRows({ environment: environment.name, rows: asks, checks, listing }),
+      );
+    } catch (err) {
+      this.deps.errors?.record({
+        source: 'cycle',
+        message: `the pre-flight for ${goalRef} on ${environment.name} failed: ${(err as Error).message}`,
+      });
+    }
   }
 
   /**

@@ -902,6 +902,7 @@ CREATE TABLE IF NOT EXISTS remote_sheet_rows (
   selected          INTEGER NOT NULL DEFAULT 1,
   blocked_reason    TEXT,
   awaiting_approval INTEGER NOT NULL DEFAULT 0,
+  matched           INTEGER,         -- tests the pre-flight's listing attributes to this row's area
   updated_at        TEXT NOT NULL,
   PRIMARY KEY (goal_ref, environment, row_id)
 );
@@ -1309,6 +1310,8 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   revision    TEXT,                   -- JSON: the wording an amendment replaced, and the reading it withdrew
   amended_at  TEXT,                   -- when an amendment last changed it; cleared by the next reading
   amend_note  TEXT,                   -- why it changed, in the amender's words
+  area        TEXT,                   -- the selector a runner offers for this check; NULL is "no
+                                      -- area declared", which is a check a person carries out
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (origin_ref, id)
