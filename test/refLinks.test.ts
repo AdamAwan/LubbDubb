@@ -271,6 +271,37 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
   assert.match(rule('.ref-arm.ref-arm'), /border-left-style: dashed/, 'and the joint says the arm leaves');
 });
 
+test('a pair drawn in a group narrower than it wants gives way from its number, never from its arm', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const rule = (selector: string): string => {
+    const at = css.indexOf(`\n${selector} {`);
+    assert.notEqual(at, -1, `${selector} must still be a rule in styles.css`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+
+  assert.match(rule('.ref-arm.ref-arm'), /flex: none/, 'the door to the provider is not what a clip takes');
+  const token = rule('.ref-pair.ref-pair > .ref-goal.ref-goal');
+  assert.match(rule('.ref-pair.ref-pair'), /min-width: 0/, 'and the pair can shrink at all');
+  assert.match(token, /min-width: 0/);
+  assert.match(token, /text-overflow: ellipsis/, 'so what a narrow column costs is a digit');
+
+  const console_ = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const slot = console_.indexOf('\n.cn-frow .cn-refs {');
+  assert.notEqual(slot, -1);
+  assert.match(
+    console_.slice(slot, console_.indexOf('}', slot)),
+    /min-width: min-content/,
+    'the rail is a ceiling a narrow card takes back, so the group needs a floor its arms fit in',
+  );
+
+  const width = /--cn-w-refs: (\d+)px/.exec(console_);
+  assert.notEqual(width, null, 'the refs rail must still declare a width');
+  assert.ok(
+    Number(width?.[1]) >= 176,
+    'the rail is sized for two four-digit pairs — the rack and the fleet card both draw two arms',
+  );
+});
+
 test('the references slot is a column, drawn on rows that have nothing to put in it', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
   const at = css.indexOf('\n.cn-refs {');

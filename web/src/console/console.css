@@ -2513,8 +2513,16 @@ a.cn-tgl {
      them is gone. At 108px the pair did not fit, and the group being `flex-end`
      the overflow went *left*, painting over the reading slot beside it: the row's
      `agent on it` chip read as `ag`. A ceiling, so a narrow card still takes it
-     back. */
-  --cn-w-refs: 152px;
+     back.
+
+     152px was measured before a reference grew its second door: two references
+     each carrying an arm come to ~150px at three digits and overrun it at four,
+     which the fleet card and the rack both draw — so what an operator saw was the
+     right-hand arm sliced by the column's edge. Sized for two four-digit pairs.
+     Three references still overrun it (the fleet's `OnWhat` draws a job's origin,
+     the work it stands in for and that work's goal), and the pair now ellipses its
+     number rather than losing its arm. */
+  --cn-w-refs: 176px;
   /* The row's quantities, where they sit beside the subject rather than under it.
      A width, because on that cut the track is between two pinned things and the
      subject's `1fr` takes back anything it gives — so a row with nothing to report
@@ -2909,10 +2917,20 @@ button.cn-grow {
 
    Clipped either way: content wider than its column overflows past the card rather
    than wrapping, and a reference cut off at the edge is better than one painted on
-   top of the mark beside it. */
+   top of the mark beside it. What that clip must never take is a reference's *arm*
+   — the door to the tracker, and the last thing on the line — so the pair shrinks
+   from its number instead (`.ref-pair` in `styles.css`) and this only ever cuts
+   into space. */
 .cn-frow .cn-refs {
   justify-content: flex-start;
-  min-width: 0;
+  /* The floor is the group's *arms*, and it is content-derived rather than a
+     number: the pair's token shrinks to nothing before the arm gives up a pixel,
+     so `min-content` here is one arm per reference plus the gaps between them —
+     around 60px, small enough that the rail still gives the subject almost
+     everything, and the one width at which no reference can lose a door. At `0`
+     a card narrow enough (a phone, a split pane) squeezed the rail below two
+     arms and clipped the second one off entirely. */
+  min-width: min-content;
   overflow: hidden;
   border-left-color: var(--cn-line);
 }
