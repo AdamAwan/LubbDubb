@@ -457,7 +457,7 @@ test('with approval on, a one-part plan is put to the operator like any other', 
   assert.equal(proposal!.ref, 'issue:12:plan');
   const esc = system.store.getEscalation(proposal!.escalationId!)!;
   assert.match(esc.prompt, /1 part/);
-  assert.match(esc.prompt, /Reject and the plan goes back to a planner/);
+  assert.match(esc.prompt, /Reject — the plan goes back to a planner/);
   assert.doesNotMatch(esc.prompt, /single pull request/);
   assert.equal(system.store.listTasks().length, 0, 'nothing is worked before the acceptance step');
 

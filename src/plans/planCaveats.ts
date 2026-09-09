@@ -46,12 +46,15 @@ export function planCaveats(
 export function caveatNotice(caveats: PlanCaveat[]): string {
   if (caveats.length === 0) return '';
   const lines = caveats.map((c) => `- ${c.label}${c.detail ? `\n\n  ${c.detail.replace(/\n/g, '\n  ')}` : ''}`);
+  const howTo = [
+    `- Tick each one on the card, or send them with the accept.`,
+    `- A tick can carry words — pick between the options one of these offers, or leave the question you still have.`,
+    `- Words you leave are appended to the plan for whoever works it. They do not send it back for a replan.`,
+    `- Rejecting, holding and closing the ticket are not gated: this is about releasing work, not about saying no.`,
+  ];
   return (
     `\n\nBefore you decide:\n\n${lines.join('\n')}\n\n` +
-    `Approving is held until each of these is acknowledged — tick them on the card, or send them with the accept. ` +
-    `A tick can carry words: pick between the options one of these offers, or leave the question you still have. ` +
-    `They are appended to the plan for whoever works it, and do not send the plan back for a replan. ` +
-    `Rejecting, holding and closing the ticket are not gated: this is about releasing work, not about saying no.`
+    `Approving is held until each of these is acknowledged:\n\n${howTo.join('\n')}`
   );
 }
 

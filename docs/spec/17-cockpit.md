@@ -837,7 +837,10 @@ bullets under a `Before you decide:` line, appended to the rendered ask rather t
 it — the planner's own uncertainty, an unclaimed pull request on the branch, parts already blocked. It
 is the one part of the ask that is about _this_ decision and appears nowhere else, so `splitCaution`
 keeps it while the rest goes — **unless the same caveats are drawn as tick boxes**, and then the
-paragraph is the checklist restated and the card drops it too.
+caution is the checklist restated and the card drops it too. Its closing instructions are bullets
+rather than a paragraph, as is `planApprovalNote` above it: on the surfaces that do _not_ draw the tick
+boxes, that block is the whole of what the operator is told
+([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)).
 
 A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-tone-fill`, `--cn-tone-bg`,
 `--cn-tone-line`, `--cn-tone-ink` — set by one `.cn-t-*` class and inherited by everything inside. Five
