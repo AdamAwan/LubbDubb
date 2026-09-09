@@ -6,7 +6,18 @@ import { liveChecks } from '../validation/verdict.js';
 // → docs/spec/36-remote-validation.md
 
 /** What the desk executes for a row, once nothing has blocked it. `null` is a row a person runs. */
-type SheetRowRun = 'state' | 'watch' | null;
+export type SheetRowRun = 'state' | 'watch' | null;
+
+/**
+ * What a stored row is executed by, read back off its own id. The press re-runs a confirmed row
+ * through the same two readers the assembly used, rather than a second reader free to disagree
+ * with them about what a row of that kind is.
+ */
+export function rowRun(rowId: string): SheetRowRun {
+  if (rowId.startsWith('state:')) return 'state';
+  if (rowId.startsWith('watch:')) return 'watch';
+  return null;
+}
 
 export interface SheetRowPlan extends Omit<RemoteSheetRow, 'goalRef' | 'environment'> {
   run: SheetRowRun;

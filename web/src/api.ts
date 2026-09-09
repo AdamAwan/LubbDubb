@@ -329,6 +329,18 @@ const realApi = {
       { accept },
     );
   },
+  selectRemoteRow: (issueNumber: number, environment: string, rowId: string, selected: boolean) =>
+    post<{ ok: true }>(
+      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/rows/` +
+        `${encodeURIComponent(rowId)}`,
+      { selected },
+    ),
+  pressRemoteSheet: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/run`),
+  cancelRemoteRun: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/cancel`),
+  reseedRemoteTenant: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/reseed`),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch-proposals/${encodeURIComponent(checkId)}`, { accept }),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) =>

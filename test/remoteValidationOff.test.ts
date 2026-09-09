@@ -9,6 +9,9 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
+import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
+import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { stateDeclareNote } from '../src/plans/planning.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
@@ -43,6 +46,9 @@ const ON: EnvironmentConfig = {
 
 const OFF: EnvironmentConfig = { name: 'acceptance', at: 'echo unused' };
 
+const LANDED = 'aaaaaaa1111111111111111111111111111111aa';
+const DEPLOYED = 'bbbbbbb2222222222222222222222222222222bb';
+
 function reader(): FakeStateReader {
   return new FakeStateReader({
     [`${QUERY.id}:presence`]: JSON.stringify([watchRow(QUERY.id, { id: 1 })]),
@@ -50,7 +56,12 @@ function reader(): FakeStateReader {
   });
 }
 
-function build(environments: EnvironmentConfig[], stateReader: FakeStateReader): System {
+function build(
+  environments: EnvironmentConfig[],
+  stateReader: FakeStateReader,
+  keeper: FakeTenantKeeper = new FakeTenantKeeper(),
+  prober: FakeEnvironmentProber = new FakeEnvironmentProber(),
+): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-remote-off-'));
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
@@ -68,6 +79,9 @@ function build(environments: EnvironmentConfig[], stateReader: FakeStateReader):
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     stateReader,
+    tenants: keeper,
+    environmentProber: prober,
+    gitObserver: new FakeGitObserver().setContains(DEPLOYED, LANDED, true),
     projectConfigFile: join(dir, 'absent.json'),
     environmentObserver: new FakeEnvironmentObserver(),
     errorMirror: () => {},
@@ -126,7 +140,8 @@ function cardRows(state: Record<string, unknown>): number | null {
 
 test('a deployment that configured nothing takes the build inert', async () => {
   const asked = reader();
-  const system = build([OFF], asked);
+  const keeper = new FakeTenantKeeper();
+  const system = build([OFF], asked, keeper);
   try {
     seed(system);
     await system.harness.runCycle('manual');
@@ -137,6 +152,18 @@ test('a deployment that configured nothing takes the build inert', async () => {
     assert.deepEqual(system.store.listRemoteReadings(), [], 'no reading');
     assert.equal(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'no arrival stamped');
     assert.deepEqual(asked.asked, [], 'no command is spawned');
+    assert.deepEqual(keeper.asked, [], 'no tenant command either — and none is ever invented');
+    assert.deepEqual(system.store.listRemoteRuns(), [], 'no run');
+    assert.deepEqual(system.store.listRemoteTenants(), [], 'no tenant stamped');
+
+    // The press, the cancel and the tenant control are all inert here: nothing to press, and the
+    // refusal is a returned value rather than a throw.
+    const pressed = await system.remoteRuns.press('issue:12', 'acceptance');
+    assert.equal(pressed.ok, false, 'a press on an environment with no validate block is refused');
+    assert.equal(system.remoteRuns.cancel('acceptance', null), null);
+    assert.equal((await system.remoteRuns.prepareTenant('acceptance')).ok, false);
+    assert.deepEqual(system.store.listRemoteRuns(), [], 'and still no run row');
+    assert.deepEqual(keeper.asked, [], 'and still no tenant command');
 
     const bench = system.store.listHumanTasksOfKind('validate');
     assert.equal(bench.length, 1, 'the validate row is filed as it always was');
@@ -155,7 +182,8 @@ test('a deployment that configured nothing takes the build inert', async () => {
 
 test('and one environment declaring permits: ["state"] with a state.run turns all of it on', async () => {
   const asked = reader();
-  const system = build([ON], asked);
+  const keeper = new FakeTenantKeeper();
+  const system = build([ON], asked, keeper, new FakeEnvironmentProber({ acceptance: [DEPLOYED] }));
   try {
     seed(system);
     await system.harness.runCycle('manual');
@@ -191,6 +219,25 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
     assert.equal(cardRows(state), 2, 'and the goal page draws the card the sheet earns');
 
     assert.match(stateDeclareNote(system.config.environments), /state_declare/);
+
+    // And the press is reachable on the same run: it opens a run row, pins it to the commit the
+    // environment stands at now, and re-reads the confirmed row through it.
+    system.store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+    const pressed = await system.remoteRuns.press('issue:12', 'acceptance');
+    assert.equal(pressed.ok, true);
+    assert.equal(system.store.listRemoteRuns().length, 1);
+    assert.equal(system.store.listRemoteRuns()[0]?.startedSha, DEPLOYED);
+    assert.equal(
+      system.store.listRemoteReadings().filter((r) => r.runId !== null).length,
+      1,
+      'the approved row is re-read under the run',
+    );
+    assert.equal(
+      system.store.listRemoteRuns()[0]?.tenant,
+      '',
+      'this environment declares no tenant, and none is made up',
+    );
+    assert.deepEqual(keeper.asked, [], 'and a press never provisions or reseeds one');
   } finally {
     system.store.close();
   }

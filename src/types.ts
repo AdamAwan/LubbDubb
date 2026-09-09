@@ -1455,7 +1455,57 @@ export interface RemoteReading {
   rows: number | null;
   value: number | null;
   detail: string | null;
+  /** The commits the run this reading came through straddled. Both null on one taken at assembly. */
+  startedSha: string | null;
+  endedSha: string | null;
   readAt: string;
+}
+
+export type RemoteRunStatus = 'running' | 'ended' | 'abandoned';
+
+/**
+ * One press. Kept after it ends, `local_validations`' rule: a run abandoned because the environment
+ * went back past the goal's work is the case an operator actually hits, and its reason has to be
+ * readable afterwards.
+ *
+ * `tenant` is the *key* the lock is enforced on and never a `tenantEnv`'s value — see
+ * 36-remote-validation.md#tenants.
+ */
+export interface RemoteRun {
+  id: string;
+  goalRef: string;
+  environment: string;
+  tenant: string;
+  status: RemoteRunStatus;
+  startedSha: string | null;
+  endedSha: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  note: string | null;
+}
+
+/** When an environment's tenant was last provisioned and last reseeded. */
+export interface RemoteTenant {
+  environment: string;
+  tenant: string;
+  ensuredAt: string | null;
+  reseededAt: string | null;
+}
+
+/**
+ * What the lock, the sheet and the gate know about an environment's tenant. It carries the name a
+ * surface may draw and **never** a `tenantEnv`'s value, which goes into the spawn env and nowhere
+ * else. `stale` is a qualifier on a reading and never a fourth outcome.
+ */
+export interface TenantStanding {
+  /** The lock's key, and what a surface draws. Null where no shape supplied one. */
+  tenant: string | null;
+  reseededAt: string | null;
+  ageMs: number | null;
+  freshnessMs: number | null;
+  stale: boolean;
+  /** Why there is no tenant, naming the command or the variable that would provide one. */
+  blockedReason: string | null;
 }
 
 /** One operator's "I have read this, and it is safe *here*" — see 36-remote-validation.md. */

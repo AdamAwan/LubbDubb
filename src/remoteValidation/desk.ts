@@ -7,7 +7,7 @@ import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
-import { sheetRows, type SheetRowPlan } from './sheet.js';
+import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 
 // → docs/spec/36-remote-validation.md
@@ -130,10 +130,7 @@ export class RemoteValidationDesk {
    */
   private async read(environment: EnvironmentConfig, goalRef: string, row: SheetRowPlan): Promise<void> {
     if (row.blockedReason !== null || row.run === null) return;
-    const reading =
-      row.run === 'state'
-        ? await this.readState(environment, goalRef, row.sourceId)
-        : await this.readWatch(environment, goalRef, row.sourceId);
+    const reading = await this.readRow(environment, goalRef, row.run, row.sourceId);
     if (reading === null) return;
     if (reading.outcome === 'blocked') {
       this.deps.store.blockRemoteSheetRow(
@@ -153,7 +150,27 @@ export class RemoteValidationDesk {
       rows: reading.rows,
       value: reading.value,
       detail: reading.detail,
+      startedSha: null,
+      endedSha: null,
     });
+  }
+
+  /**
+   * One row's reading, taken through the same two readers the assembly used. The press re-runs a
+   * confirmed row through this rather than a second reader, which would be free to disagree with
+   * the assembly about what a row of that kind is.
+   *
+   * @public the seam `RemoteRunDesk` re-reads a confirmed row through
+   */
+  async readRow(
+    environment: EnvironmentConfig,
+    goalRef: string,
+    run: Exclude<SheetRowRun, null>,
+    sourceId: string,
+  ): Promise<RowReading | null> {
+    return run === 'state'
+      ? this.readState(environment, goalRef, sourceId)
+      : this.readWatch(environment, goalRef, sourceId);
   }
 
   private async readState(
@@ -221,7 +238,8 @@ export class RemoteValidationDesk {
   }
 }
 
-interface RowReading {
+/** @public what a re-read row came back as, before anything is written down about it */
+export interface RowReading {
   outcome: RemoteRowOutcome;
   rows: number | null;
   value: number | null;

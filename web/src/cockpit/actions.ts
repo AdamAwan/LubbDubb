@@ -146,6 +146,10 @@ export interface CockpitActions {
   /** Which environment's validation sheet the goal page is showing — a place, never a useState. */
   openRemoteSheet(environment: string | null): void;
   ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<void>;
+  selectRemoteRow(issueNumber: number, environment: string, rowId: string, selected: boolean): Promise<void>;
+  pressRemoteSheet(issueNumber: number, environment: string): Promise<void>;
+  cancelRemoteRun(issueNumber: number, environment: string): Promise<void>;
+  reseedRemoteTenant(issueNumber: number, environment: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
   setUpNextProfile(origin: string, profile: string | null): Promise<void>;
 

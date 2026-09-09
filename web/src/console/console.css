@@ -2014,6 +2014,27 @@ a.cn-qbody {
 .cn-sig-row.editing {
   background: var(--cn-panel-2);
 }
+/* A row taken out of the next press. Dimmed rather than hidden: a row an operator
+   deselected is a decision they must be able to see and take back.
+   → docs/spec/36-remote-validation.md#the-cockpit */
+.cn-sig-row.dropped .cn-sig-body {
+  opacity: 0.55;
+}
+.cn-sig-row.dropped .cn-sig-stripe {
+  background: var(--cn-inert);
+}
+/* The gate: the tenant, its age, the last run, and the press. Above the rows,
+   because it is what an operator reads at the moment they decide to run. */
+.cn-sheet-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 13px 10px 10px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line-soft);
+}
 .cn-sig-body,
 .cn-sig-form {
   min-width: 0;

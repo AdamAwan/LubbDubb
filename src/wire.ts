@@ -103,6 +103,7 @@ import type {
   ReviewAttention,
   ReviewMark,
   RemoteReading,
+  RemoteRun,
   RemoteSheet,
   RemoteSheetRow,
   ReviewPackRecord,
@@ -110,6 +111,7 @@ import type {
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
+  TenantStanding,
   StackLanding,
   GoalWatch,
   GoalWatchKind,
@@ -401,6 +403,22 @@ export interface GoalReachView {
  */
 export interface RemoteSheetView extends RemoteSheet {
   rows: RemoteSheetRowView[];
+  /** The latest run against this environment, live or ended. Null before anything was ever pressed. */
+  run: RemoteRunView | null;
+  /** Which tenant this sheet is put to, how old it is, and why there is none. */
+  tenant: RemoteTenantView;
+}
+
+export type RemoteRunView = RemoteRun;
+
+/**
+ * What the gate draws about a tenant. It carries the name a surface may draw — a literal `tenant`,
+ * or the *variable's* own name where the shape is `tenantEnv` — and never a `tenantEnv`'s value,
+ * which goes into the spawn env and nowhere else.
+ */
+export interface RemoteTenantView extends TenantStanding {
+  /** Whether the environment declares an `ensureTenant` or a `reseed` for the gate's own control. */
+  reseedable: boolean;
 }
 
 export interface RemoteSheetRowView extends RemoteSheetRow {
@@ -822,6 +840,7 @@ export type {
   ReviewMark,
   ReviewNote,
   RemoteReading,
+  RemoteRun,
   RemoteRowKind,
   RemoteRowOutcome,
   RemoteSheet,
@@ -839,6 +858,7 @@ export type {
   StackLanding,
   StallPark,
   TaskSummary,
+  TenantStanding,
   ValidationCheck,
   ValidationCheckState,
   ValidationResource,

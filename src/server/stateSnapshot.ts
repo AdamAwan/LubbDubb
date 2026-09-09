@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { System } from '../system.js';
 import type { Config } from '../config.js';
+import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
   EnvironmentHealthReading,
   Issue,
@@ -774,12 +775,30 @@ function buildRemoteSheets(store: System['store'], environments: EnvironmentConf
   const newest = new Map<string, RemoteReading>();
   for (const r of store.listRemoteReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
   const rows = store.listRemoteSheetRows();
-  return sheets.map((sheet) => ({
-    ...sheet,
-    rows: rows
-      .filter((row) => row.goalRef === sheet.goalRef && row.environment === sheet.environment)
-      .map((row) => ({ ...row, reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null })),
-  }));
+  const runs = store.listRemoteRuns();
+  const tenants = store.listRemoteTenants();
+  const now = Date.now();
+  return sheets.map((sheet) => {
+    const environment = environments.find((e) => e.name === sheet.environment);
+    const validate = environment?.validate;
+    // The `tenantEnv` value is never folded in: the standing carries the *variable's* name, and the
+    // value it holds reaches the spawn env and nowhere else. → 36-remote-validation.md#tenants
+    const standing =
+      environment === undefined
+        ? { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null }
+        : resolveTenant({ environment, stamped: tenants, now }).standing;
+    return {
+      ...sheet,
+      rows: rows
+        .filter((row) => row.goalRef === sheet.goalRef && row.environment === sheet.environment)
+        .map((row) => ({ ...row, reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null })),
+      run: runs.filter((r) => r.goalRef === sheet.goalRef && r.environment === sheet.environment).at(-1) ?? null,
+      tenant: {
+        ...standing,
+        reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
+      },
+    };
+  });
 }
 
 function localRunView(

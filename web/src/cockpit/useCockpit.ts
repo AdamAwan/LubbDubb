@@ -282,6 +282,11 @@ export function useCockpit(): CockpitStatus {
       openRemoteSheet: (environment) => go({ sheetEnvironment: environment }),
       ruleRemoteQuery: (issueNumber, environment, rowId, accept) =>
         then(api.ruleRemoteQuery(issueNumber, environment, rowId, accept)),
+      selectRemoteRow: (issueNumber, environment, rowId, selected) =>
+        then(api.selectRemoteRow(issueNumber, environment, rowId, selected)),
+      pressRemoteSheet: (issueNumber, environment) => then(api.pressRemoteSheet(issueNumber, environment)),
+      cancelRemoteRun: (issueNumber, environment) => then(api.cancelRemoteRun(issueNumber, environment)),
+      reseedRemoteTenant: (issueNumber, environment) => then(api.reseedRemoteTenant(issueNumber, environment)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
