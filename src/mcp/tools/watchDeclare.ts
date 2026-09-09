@@ -37,7 +37,9 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
               .string()
               .describe(
                 "The query, in your telemetry's own language. It reaches the shell as a variable's value " +
-                  'and is never interpolated into a command.',
+                  'and is never interpolated into a command. It returns **one row per occurrence** and the ' +
+                  'harness counts the rows: do not aggregate it. A query ending in a count answers one row ' +
+                  'whatever the number is, which reads as one occurrence for ever, and is refused.',
               ),
             presence: z
               .string()
@@ -45,15 +47,23 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
                 'A second query whose only job is to prove the code path is running at all. Required: a ' +
                   'query naming an operation that does not exist answers zero rows, and zero rows looks ' +
                   'exactly like a healthy release — so without one your fix would be reported verified on ' +
-                  'the strength of a typo.',
+                  'the strength of a typo. It returns rows too, and must not aggregate: a count can never ' +
+                  'answer zero, so an aggregated presence query proves nothing and is refused.',
               ),
-            tolerate: z.number().describe('The count it must not exceed. Defaults to zero.').optional(),
+            tolerate: z
+              .number()
+              .describe(
+                'How many rows the query may answer before this reads as a regression. The harness counts ' +
+                  'them; your query returns the occurrences. Defaults to zero.',
+              )
+              .optional(),
             why: z.string().describe('Why this is the signal that matters.').optional(),
           }),
         )
         .describe(
           'Things that should not be happening: an exception, a failure, a retry, a log line only written ' +
-            'when something has gone wrong. Counted, against a tolerance that is almost always zero.',
+            'when something has gone wrong. Each query returns the matching rows themselves; the harness ' +
+            'counts them, against a tolerance that is almost always zero.',
         )
         .optional(),
       measures: z

@@ -93,6 +93,11 @@ export function watchNote(environments: readonly { name: string; watch?: { schem
       'reading "job X keeps timing out in proc Y" contains its own post-deploy check, and that check can be ' +
       'written, and proven to fire, before a line of the fix exists.',
     '',
+    'A signal query returns **one row per occurrence** and the harness counts the rows against `tolerate` — ' +
+      'so do not aggregate it. `| count` or a bare `| summarize` answers one row whatever the number is, ' +
+      'which reads as exactly one occurrence on every reading for ever; both queries are refused at ' +
+      'submission. Return the matching rows and let `tolerate` say how many are allowed.',
+    '',
     'Every signal needs a `presence` query: a second query whose only job is to prove the code path runs at ' +
       'all. A query naming an operation that does not exist answers zero rows, zero rows looks exactly like a ' +
       'healthy release, and that is the direction that reads as success — so without one the harness would ' +
@@ -126,9 +131,12 @@ export function watchDeclareNote(environments: readonly { name: string; watch?: 
       'party that knows the message template, the operation name and the property you wrote — a planner ' +
       'could not have guessed them, and nothing downstream can recover them.',
     '',
-    'Two kinds. A **signal** counts something that should not be happening, and needs a `presence` query ' +
+    'Two kinds. A **signal** returns one row per occurrence of something that should not be happening, and ' +
+      'the harness counts the rows against `tolerate` — do not aggregate the query: `| count` answers one ' +
+      'row whatever the number is, and is refused. It needs a `presence` query ' +
       'beside it whose only job is to prove the code path runs at all — without one, a query naming an ' +
-      'operation that does not exist answers zero rows, which looks exactly like a healthy release. A ' +
+      'operation that does not exist answers zero rows, which looks exactly like a healthy release; a ' +
+      'presence query must not aggregate either, since a count can never answer zero. A ' +
       '**measure** asks for one number and declares either a threshold or `noWorseThan: "baseline"`, which ' +
       'is the right shape for an optimisation: the same query is run the moment the operator accepts it, ' +
       'and that reading is what your work has to beat.',
