@@ -82,3 +82,31 @@ test('a tag write that Azure accepts but does not apply is an error, not a silen
     'the operator must hear that the tag survived',
   );
 });
+
+test('clearing the last tag removes the field rather than writing it empty', async () => {
+  let stored = 'lubbdubb-watch';
+  const { api, seen } = apiOn(
+    () => stored,
+    () => {
+      stored = '';
+    },
+  );
+
+  await api.setWorkItemTag(7, 'lubbdubb-watch', false);
+
+  const patches = seen.filter((e) => e.method === 'PATCH');
+  assert.equal(patches.length, 1);
+  assert.deepEqual(JSON.parse(patches[0]?.body ?? '[]'), [{ op: 'remove', path: '/fields/System.Tags' }]);
+});
+
+test('a tag already in the state asked for is not written again', async () => {
+  const { api, seen } = apiOn(
+    () => 'LubbDubb-Watch; keep',
+    () => assert.fail('an item already carrying the tag must not be re-tagged'),
+  );
+
+  await api.setWorkItemTag(7, 'lubbdubb-watch', true);
+  await api.setWorkItemTag(7, 'gone', false);
+
+  assert.equal(seen.filter((e) => e.method === 'PATCH').length, 0);
+});
