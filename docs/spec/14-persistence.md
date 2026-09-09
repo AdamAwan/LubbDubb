@@ -90,6 +90,21 @@ invisible on databases created by an older build. `ensureColumns` (`src/store/mi
 gap with additive, idempotent `ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe
 to run on every boot.
 
+### A partial index predicate is not idempotent
+
+`CREATE UNIQUE INDEX IF NOT EXISTS` is idempotent about the index **existing** and says nothing about
+what it covers: an index already there keeps the predicate it was made with, whatever the schema now
+says. So a **partial** index whose `WHERE` clause changes must be `DROP INDEX IF EXISTS`ed by name in
+`SCHEMA`, before the new one is declared. Dropped and re-created it is, and the drop is idempotent
+too.
+
+The failure is the quietest kind, because the index is a lock: every database from before the change
+goes on enforcing the old predicate, which lets through exactly the clash the index exists to refuse —
+and every database made after it refuses correctly, so a test on a fresh store passes. Widening the
+statuses `remote_runs`' `(environment, tenant)` lock covers is the case that showed it
+([36](36-remote-validation.md#a-runs-status-vocabulary)); a status is a column **value** and needed no
+`ALTER TABLE`, and the index over it is schema.
+
 **The entries are declared by the module that owns the table**, as an exported `ColumnMigrations`
 the composition root applies — so "did this table's new column get an entry?" is a question you can
 answer without leaving the file you added the column's reader to. Current entries:

@@ -44,6 +44,11 @@ const extraTools = {
     .object({ id: z.string().min(1), as: z.enum(['validation', 'fix']) })
     .nullable()
     .default(null),
+  /** The open run row this dispatch claims — the conditional flip is the store's, not the caller's. */
+  remoteRun: z
+    .object({ id: z.string().min(1) })
+    .nullable()
+    .default(null),
 };
 
 const ActionSchema = z.discriminatedUnion('type', [

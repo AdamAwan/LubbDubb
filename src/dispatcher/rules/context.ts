@@ -25,6 +25,7 @@ import type {
   PrReviewRoute,
   PrSplitVerdict,
   PullRequest,
+  RemoteRunBrief,
   TaskSummary,
   ValidationCheck,
 } from '../../types.js';
@@ -86,6 +87,8 @@ export interface StageContext {
   stateDeclareNote: string;
   validationRoot: string;
   liveLocalRun: LocalRun | null;
+  /** Every live run row, with what the agent must read already rendered. → 36-remote-validation.md */
+  remoteRuns: readonly RemoteRunBrief[];
   localValidations: LocalValidation[];
   localValidation: LocalValidationPolicy;
   validationClaimMinutes: number;

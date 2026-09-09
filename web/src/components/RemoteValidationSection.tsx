@@ -85,7 +85,7 @@ export function RemoteValidationSection({
  * here because this is where they can act on it — reseed first, then press.
  */
 function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetControls }): JSX.Element {
-  const live = sheet.run !== null && sheet.run.status === 'running';
+  const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
   const selected = sheet.rows.filter((r) => r.selected).length;
   return (
     <div className="cn-sheet-gate">
@@ -144,7 +144,8 @@ function ageOf(tenant: RemoteTenantView): string {
 }
 
 function RunLine({ run }: { run: RemoteRunView }): JSX.Element {
-  if (run.status === 'running') return <Tag tone="violet">running</Tag>;
+  if (run.status === 'pending') return <Tag tone="violet">waiting for an agent</Tag>;
+  if (run.status === 'dispatched') return <Tag tone="violet">running</Tag>;
   if (run.status === 'abandoned')
     return <span className="cn-sig-read unknown">The last press ran nothing — {run.note ?? 'it was called off.'}</span>;
   return (

@@ -30,6 +30,7 @@ import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
 import { validationAmend } from './tools/validationAmend.js';
 import { validationReport } from './tools/validationReport.js';
+import { remoteValidationReport } from './tools/remoteValidationReport.js';
 import { localValidationPlan } from './tools/localValidationPlan.js';
 import { localRunRead } from './tools/localRunRead.js';
 import { localValidationReport } from './tools/localValidationReport.js';
@@ -62,6 +63,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   reply_to_review: replyToReview,
   validation_amend: validationAmend,
   validation_report: validationReport,
+  remote_validation_report: remoteValidationReport,
   local_validation_plan: localValidationPlan,
   local_run_read: localRunRead,
   local_validation_report: localValidationReport,

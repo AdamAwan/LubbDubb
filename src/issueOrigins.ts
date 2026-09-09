@@ -10,7 +10,7 @@ const WORK_SUFFIX_PREFIXES = ['part:', 'validate-local-fix:'];
 
 const EVIDENCE_SUFFIXES = ['assess', 'retro'];
 
-const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:', 'validate-local:'];
+const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:', 'validate-local:', 'validate-remote:'];
 
 export function issueOriginRole(issueNumber: number, originRef: string | null): IssueOriginRole | null {
   const root = `issue:${issueNumber}`;

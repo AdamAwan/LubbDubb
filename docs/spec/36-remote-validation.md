@@ -24,14 +24,21 @@
 > which selectors it offers before an operator consents to anything
 > ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)), and
 > `validation_checks.area`, the selector a `check` row is verified against
-> ([Migrations](#migrations)).
+> ([Migrations](#migrations)); and — as of the dispatch — **rule `remote-validation`**
+> (`src/dispatcher/rules/remoteValidation.ts`) with its origin, its lease and its read-only checkout
+> pinned to the deployed commit ([The dispatch](#the-dispatch--rule-remote-validation)), the
+> **`remote-validation` prompt** with everything the agent must read appended to it
+> ([The prompts](#the-prompts)), and the **`remote_validation_report` tool**
+> (`src/mcp/tools/remoteValidationReport.ts`) with its narrow origin fence
+> (`src/remoteValidation/origin.ts`) and no field an agent could state an outcome in
+> ([The report tool](#the-report-tool)).
 >
-> **Everything else is still a design**: no dispatch rule, no `remote_validation_report`, no fold of a
-> report into readings and no `spec` reading. A run is still nobody's to carry out, so a `check` row
-> is blocked or manual, and with no agent in this build a press runs the sheet's
-> confirmed **deterministic** rows synchronously under the pin. A path is written in italics
-> until the thing it names exists, and a section that is still a description rather than an account
-> says so where it starts. The behaviour is settled — it is
+> **Everything else is still a design**: the fold of a report into row outcomes, and the `spec`
+> reading it writes on a check ([What a spec reading is worth](#what-a-spec-reading-is-worth)). So a
+> run is carried out and settled, and what its report *says* is not read yet: the run row records
+> where the report and the artefacts landed, and a `check` row's own reading is still a person's. A
+> path is written in italics until the thing it names exists, and a section that is still a
+> description rather than an account says so where it starts. The behaviour is settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
 > staged order it gets built in is [`docs/plans/36-remote-validation.md`](../plans/36-remote-validation.md),
 > deleted by the change that finishes the last stage.
@@ -76,8 +83,8 @@ surface, no prompt note and no spawned command — and that is inherited rather 
 `environments` is already the off switch for everything in [24](24-environments.md) and
 [29](29-post-deploy-watch.md), and this hangs off the arrival that subsystem records.
 
-There are four gates, and the point of naming them together is that a later change must not add a
-fifth surface that misses one:
+There are five gates, and the point of naming them together is that a later change must not add a
+sixth surface that misses one:
 
 | Gate                                    | Off means                                                                                                                                                                           |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -85,6 +92,7 @@ fifth surface that misses one:
 | An environment with no `validate` block | No sheet is assembled for its arrivals, and **the arrival is left unstamped** — see [the desk](#the-desk).                                                                          |
 | No `validate.state` anywhere            | `state_declare` is not named to any agent and refuses a caller by name. → [The prompts](#the-prompts)                                                                               |
 | No `validate.browser` anywhere          | The test-part bar is not appended, so a planner cannot declare a part nobody can build. → [Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal) |
+| No `validate` block anywhere            | Rule `remote-validation` is drawn **inert** in the rule book rather than live-and-never-firing, on a `RuleConditions` flag. → [The dispatch](#the-dispatch--rule-remote-validation) |
 
 **Nothing here is drawn empty rather than absent.** A card of question marks on a deployment that
 configured nothing is a feature announcing itself as broken, which is the rule the environments card
@@ -409,13 +417,22 @@ The tenant's age is drawn at the gate too, which is where an operator can act on
 **Built.** `POST /api/issues/:number/remote-validation/:environment/run`, in
 `src/server/routes/remoteValidation.ts`, over `RemoteRunDesk` (`src/remoteValidation/run.ts`).
 In order: refuse **409** if a run is already live for this `(environment, tenant)`, naming it; refuse
-**400** if nothing is selected; take the pin; open the run row; broadcast; **run a cycle**.
+**400** if nothing is selected; take the pin; open the run row `pending`; broadcast; **run a cycle**.
 
-With no browser in this build, what a press runs is the sheet's confirmed **deterministic** rows —
-the approved `state`, `signal` and `measure` ones — synchronously, through the **same**
-`RemoteValidationDesk.readRow` the assembly used. A second reader would be free to disagree with the
-assembly about what a row of that kind is. That is what makes the run row, the lock and the pin real
-rather than scaffolding waiting for the browser half's agent.
+What a press runs itself is the sheet's confirmed **deterministic** rows — the approved `state`,
+`signal` and `measure` ones — synchronously, through the **same** `RemoteValidationDesk.readRow` the
+assembly used. A second reader would be free to disagree with the assembly about what a row of that
+kind is. They stay the press's own rather than the agent's for their own reason and not for want of
+one: they are read-only, consented and cheap, where the agent exists for the browser half — minutes,
+a worktree and an install.
+
+**The run it opens is the one the rule dispatches for.** Where a confirmed `check` row names an area
+and the environment declares a `runner`, the press leaves the row `pending` and the cycle it runs is
+what puts the agent on it. Where none does — no browser block, no area, every `check` row blocked —
+there is nothing for an agent to carry out, so the press settles the run `ended` on the spot, which is
+exactly the behaviour the deterministic half had before the agent existed. The two arms read one
+predicate, `runnableSelectors`, for the reason
+[the dispatch](#the-dispatch--rule-remote-validation) states.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
@@ -448,8 +465,8 @@ started, and it says why in the sheet's own words.
 
 **Built.** `beginRemoteRun` (`src/store/remoteValidation.ts`) has `beginLocalRun`'s shape: the mutual
 exclusion is a conditional insert **inside the transaction**, with a partial unique index on
-`(environment, tenant) WHERE status = 'running'` behind it — never a check the caller is trusted to
-make first.
+`(environment, tenant) WHERE status IN ('pending', 'dispatched')` behind it — both live statuses,
+[for their reason](#a-runs-status-vocabulary) — never a check the caller is trusted to make first.
 
 Keying on the environment alone is the failure worth naming: two operators validating one environment
 against two tenants would overwrite each other's readings — a silent wrong answer rather than a
@@ -638,7 +655,7 @@ the other half of keeping a suite honest.
 
 ## The dispatch — rule `remote-validation`
 
-A run is carried out by a dispatched agent, _src/dispatcher/rules/remoteValidation.ts_, a
+**Built.** A run is carried out by a dispatched agent, `src/dispatcher/rules/remoteValidation.ts`, a
 `DISPATCH_PIPELINE` entry and a `STAGES` module like any other rule
 ([05](05-dispatcher.md#the-rule-book)). An inline `raw.push` of a `dispatch_*` action would bypass
 both the headroom cut and the Up next queue.
@@ -666,9 +683,16 @@ report landed. **It states no outcome** — → [The report tool](#the-report-to
   walks away from.
 - **No cooldown budget and no escalation.** A run row is one press rather than a standing signal: it
   is re-proposed each pulse until it dispatches, the operator calls it off, or the pin goes bad. One
-  agent per run is the store's `WHERE status = 'pending'` on the dispatched flip, which is what makes
-  it true across a restart.
-- **Nothing is dispatched for a sheet nobody pressed.** The rule reads run rows, never sheets.
+  agent per run is the store's `WHERE status = 'pending'` on the dispatched flip
+  ([the vocabulary](#a-runs-status-vocabulary)), which is what makes it true across a restart. The
+  flip is `Store.claimRemoteRun`, applied by the action executor beside `markLocalValidationDispatched`
+  and nowhere else — a conditional `UPDATE` inside the transaction, never a check the rule is trusted
+  to make first.
+- **Nothing is dispatched for a sheet nobody pressed.** The rule reads run rows, never sheets — and
+  nothing is dispatched for a run with no confirmed `check` row naming an area, which is a run the
+  press already finished. `runnableSelectors` (`src/remoteValidation/briefing.ts`) is the one place
+  that rule is written, read by the press and by the brief: a second copy would either strand a run
+  waiting for an agent nothing will dispatch, or settle one with the agent's half still owed.
 - **It carries an `enabled` predicate** on a `RuleConditions` flag — true only where some environment
   declares a `validate` block — beside `review` and `sequencer`. A rule with no run rows to read
   would already produce nothing, so this buys one thing and it is worth having: the rule book draws
@@ -690,17 +714,49 @@ sheet's press stays absent for good.
 ### The lens boundary
 
 `src/environments/` is a lens and nothing under `src/dispatcher/` may import it, asserted structurally
-([05](05-dispatcher.md)). _src/remoteValidation/_ sits on the same side of that line as far as the
+([05](05-dispatcher.md)). `src/remoteValidation/` sits on the same side of that line as far as the
 dispatcher is concerned: **the rule reads the run rows out of the store and imports nothing from
 either directory.** Everything the agent must know reaches it as a rendered string on the prompt, the
 arrangement [29](29-post-deploy-watch.md#who-writes-it-and-when) already makes for the watch's notes.
 
+**Built**, as `RemoteRunBrief`: one per live run, carrying the origin, the lease key, the deployed
+commit, how many rows are confirmed and the whole appended briefing as a string. `remoteRunBriefs`
+(`src/remoteValidation/briefing.ts`) folds them, `src/system.ts` threads the folding through the
+harness, and they arrive on `DispatchContext.remoteRuns` — `testPartNote`'s arrangement exactly. What
+the rule sees is a run row and a string.
+
+### A run's status vocabulary
+
+`RemoteRunStatus` is **`pending | dispatched | ended | abandoned`**, and it is a column value, so it
+needs no migration — `toRemoteRun` narrows it and folds anything it does not recognise to
+`abandoned`, which is the safe direction: a run this build cannot name is a run nothing will ever
+report against.
+
+| Status       | Means                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| `pending`    | The press opened it and no agent has claimed it. **Live.**                                            |
+| `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                      |
+| `ended`      | Settled with a report recorded against it.                                                           |
+| `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or a handback.   |
+
+The pair is what the design needs and one status could not carry. `pending` is a run the rule may
+claim and `dispatched` is one it may not, which is the whole of one-agent-per-run across a restart —
+and **both are live**, so the `(environment, tenant)` lock holds over both: the partial unique index
+is `WHERE status IN ('pending', 'dispatched')`, and a second press against one tenant while an agent
+is out is the 409 it always was. Every reader was moved with the vocabulary, and each was a way for
+the change to go quiet: `liveRemoteRun` and `endRemoteRun`'s guard read the pair rather than one name,
+the index was **dropped by name and re-declared** — `CREATE UNIQUE INDEX IF NOT EXISTS` never
+re-predicates an index that already exists, so a database from before this would have kept enforcing
+the old `WHERE status = 'running'` and let two runs open — and the cockpit's gate draws a `pending`
+run as waiting for an agent rather than as no run at all.
+
 ### The report tool
 
-`remote_validation_report`, _src/mcp/tools/remoteValidationReport.ts_, named in `MCP_TOOL_NAMES` and
-built in `buildTools`, classified `point-of-use` and named **only in the `remote-validation` prompt's
-own tool section** ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)). An addendum entry would
-advertise it to every planner and part agent in the fleet.
+**Built.** `remote_validation_report`, `src/mcp/tools/remoteValidationReport.ts`, named in
+`MCP_TOOL_NAMES` and built in `buildTools`, classified `point-of-use` and named **only in the
+`remote-validation` prompt's own tool section**
+([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)). An addendum entry would advertise it to
+every planner and part agent in the fleet.
 
 **It has no field an agent could state an outcome in.** It takes where the report landed, where the
 artefacts were published, and nothing else:
@@ -711,21 +767,27 @@ artefacts were published, and nothing else:
 | `artefacts`  | The URL the publish command printed, if it ran.                               |
 | `handback`   | A reason, **instead of** a report: the run could not be carried out at all.   |
 
-The harness parses that file and folds every row's outcome out of it. That is what keeps
-[the runner contract](#the-report-is-the-only-source-of-row-outcomes) true rather than aspirational: a
-tool with a `result` field is a tool through which a model's opinion becomes a reading, and the model
-in this loop has every reason to believe the goal works and no way to have watched a spec run.
+The call **records where the report and the artefacts landed on the run row and settles the run** —
+`remote_runs.report_path` and `remote_runs.artefacts`, with the status going to `ended`. Parsing that
+file and folding every row's outcome out of it is the half that is still a design.
+
+That split is what keeps [the runner contract](#the-report-is-the-only-source-of-row-outcomes) true
+rather than aspirational: a tool with a `result` field is a tool through which a model's opinion
+becomes a reading, and the model in this loop has every reason to believe the goal works and no way to
+have watched a spec run. The three fields are asserted on the **derived** `inputSchema` rather than on
+the handler ([11](11-mcp-tools.md#the-advertised-schema-is-derived-never-written)), because what an
+agent can say is what it was advertised, and an extra key is rejected rather than ignored.
 
 A `handback` writes **no readings**, leaves every row exactly as it was, and carries the agent's reason
 to the operator — `validation_report`'s third answer, for its reason: an agent that could not reach
 the environment has learned nothing about the goal, and with only pass and fail available its options
 are a lie and silence.
 
-**The origin fence is the narrow kind.** `remoteValidationOriginParts` parses `:validate-remote:`
-alone, so which run a report concerns is settled **before** the report rather than by it, and every
-other caller — the agent that just built the thing most of all — is refused **by name**. The
-`validation-failed` agent this run may go on to produce is refused structurally, by the parse, exactly
-as it is refused `validation_report`.
+**The origin fence is the narrow kind.** `remoteValidationOriginParts`
+(`src/remoteValidation/origin.ts`) parses `:validate-remote:` alone, so which run a report concerns is
+settled **before** the report rather than by it, and every other caller — the agent that just built
+the thing most of all — is refused **by name**. The `validation-failed` agent this run may go on to
+produce is refused structurally, by the parse, exactly as it is refused `validation_report`.
 
 `state_declare` is the second tool and is **built** — `src/mcp/tools/stateDeclare.ts`, in
 `MCP_TOOL_NAMES` and `buildTools`, classified `point-of-use`. Its fence is the **wide** kind,
@@ -747,8 +809,9 @@ against a claimed check, which is the right door for a person's own run.
 
 ### The prompts
 
-A new `PromptId`, **`remote-validation`**, in the registry in `src/dispatcher/promptTemplates.ts`, with
-a copy of its body under _docs/prompt-templates/remote-validation.md_.
+**Built.** A new `PromptId`, **`remote-validation`**, in the registry in
+`src/dispatcher/promptTemplates.ts`, with a copy of its body under
+[`docs/prompt-templates/remote-validation.md`](../prompt-templates/remote-validation.md).
 
 **Everything the agent must read is appended to the rendered prompt, never interpolated**
 ([05](05-dispatcher.md#prompt-templates)): the environment's name and its profile alias, the declared
@@ -757,6 +820,9 @@ the deployed commit, and the rules of the run — that the report is the only th
 anything, that it must not edit the suite, and that a handback is a right answer. Templates are
 operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
 that never learned a new `{token}` silently drops it, on exactly the deployments that customised most.
+The appending is `briefing` in `src/remoteValidation/briefing.ts`, computed with the brief and never
+imported into `src/dispatcher/`. A `tenantEnv`'s **value** never reaches it: what the briefing carries
+is `resolveTenant(...).standing.tenant`, which for that shape is the **variable's own name**.
 
 **A `PromptId` is never deleted** — it is marked `retired: true`. Removing one turns every deployment
 that overrode it into a harness that will not boot.
@@ -850,13 +916,14 @@ passes: assemble the sheets for arrivals nothing has assembled yet, run the appr
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
 
-**All four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
+**Three of the four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
 approved `state`, `signal` and `measure` rows on a sheet it has just assembled, and — through
 `RemoteRunDesk` ([The press](#the-press)) rather than the pulse — the same rows again under a
 press's pin. The pre-flight runs on the **assembly** pass only and inside its cap: it is a process
-spawn per sheet, and a sheet already assembled is never re-listed. The sweep's
-arm has no dispatched run to find until the browser half lands an agent, which is why an operator's
-own `.../cancel` is the settle path this build has. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
+spawn per sheet, and a sheet already assembled is never re-listed. **The sweep's arm is the one thing
+here still owed**: now that a run can be `dispatched`, an agent that crashed, was killed or spent its
+stall park leaves one nobody will report against, and until that arm lands an operator's own
+`.../cancel` is the settle path — which is why that route is required rather than a convenience. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
 which is why the desk's position above it is load-bearing rather than tidy.
 
 **It returns immediately where no environment declares a `validate` block**, which is the steady
@@ -1015,7 +1082,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                               |
 | `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                                                                                                                  |
-| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it                                                              |
+| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path` and `artefacts` written by the dispatch flip and the report |
 | `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, and `started_sha` / `ended_sha` carry the commits the run that took it straddled |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                 |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                          |
@@ -1037,7 +1104,11 @@ environment moves. A reading with no commit beside it is a reading of a product 
   `REMOTE_VALIDATION_COLUMNS` (`src/store/remoteValidation.ts`), and the entry is what the next column
   any of them takes is added to — which is what `remote_readings`' `started_sha` and `ended_sha`
   already are: a column on a table that was new **one release ago**, additive, guarded by
-  `PRAGMA table_info`, and invisible without the entry on every database from before it existed.
+  `PRAGMA table_info`, and invisible without the entry on every database from before it existed. So
+  are `remote_runs`' `task_id`, `report_path` and `artefacts`. A run's **status** is not one of them:
+  it is a column *value*, and the vocabulary widening needed no migration
+  ([the vocabulary](#a-runs-status-vocabulary)) — what it did need was the partial unique index
+  dropped by name and re-declared, because `IF NOT EXISTS` never re-predicates one that is there.
 - **`validation_checks.area`** is a column on an **existing** table and is **built**: declared in
   `VALIDATION_COLUMNS` (`src/store/validation.ts`), with its `ALTER TABLE` guarded by `PRAGMA
 table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alters an existing
@@ -1103,7 +1174,8 @@ Three rules hold them honest:
   to discover.
 - **A test that dispatches the run agent must inject `worktrees`.** `config.repoRoot` defaults to
   `process.cwd()`, so without `FakeWorktreeManager` the test leases a slot in your own checkout
-  ([19](19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)).
+  ([19](19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)) — which is
+  `CLAUDE.md`'s standing rule for **any** test that dispatches a code agent, and this is one.
 
 **Extending a seam means adding to the interface _and_ its scripted fake in the same change.** All
 provider and command I/O is behind these; the tests touch no network and spawn no process.
@@ -1251,6 +1323,30 @@ and defaults to the command implementation, and an environment with no `validate
 declares no command for it to run; and a database written before `validation_checks.area` gains it
 on boot with **no backfill** over it.
 
+The dispatch, the origin, the prompt and the report tool are built and their tests are in
+`test/remoteValidationDispatch.test.ts`, with `test/remoteValidationOff.test.ts` extended a third
+time: the rule's **position in `DISPATCH_PIPELINE` asserted by index** with both neighbours named,
+immediately below `validate-check` and above `validation-failed`; an open run dispatching one code
+agent at `issue:<n>:validate-remote:<runId>`, leased at `validate-remote/issue/<n>/<runId>`,
+**read-only and pinned to the deployed sha**, with `FakeWorktreeManager` injected; a **capped** run
+queued as `waiting` rather than vanishing, which is what routing through the candidate list buys; an
+assembled sheet nobody pressed dispatching nothing; the rule drawn **inert** where no environment
+declares a `validate` block rather than live-and-never-firing; **one agent per run across a restart**,
+asserted on the store's own conditional flip over a rebuilt store on the same database, with a second
+claim changing no row; no cooldown budget and no escalation, asserted over a decision history past any
+attempt cap; `issueOriginRole` answering **`evidence` and not `unrecognised`** for the origin; the
+origin fence refusing the whole-issue, part, `validate:`, `validate-failure:` and `validate-local:`
+origins **by name** and the run's own agent refused `validation_report`; every appended token — the
+runner and publish commands, the profile alias, the selectors, the tenant, the deployed commit, the
+report and artefact directories and the rules of the run — asserted **under an operator override that
+declares no tokens at all**; a `tenantEnv`'s value reaching neither the prompt nor the brief while its
+variable's name does; the report tool's **derived `inputSchema`** carrying exactly `reportPath`,
+`artefacts` and `handback` with an extra key rejected, and the name absent from
+`MCP_PROTOCOL_ADDENDUM` and `DESKTOP_TOOL_NAMES`; a report recording both locations on the run row and
+settling it, readably afterwards; a **handback** settling it with the agent's reason, writing no
+readings and leaving every sheet row and every check exactly as it was; and a withdrawn name answered
+from `RETIRED_TOOL_NAMES` rather than as an unknown method.
+
 The rest, when it is built:
 
 - a selector matching **zero** tests is `blocked`, never `passed`; and one where fewer ran than matched
@@ -1262,13 +1358,6 @@ The rest, when it is built:
 - a `spec` reading lands on an `unrun` check and on one whose last reading was a `spec`, and **does
   not** land on one an operator, an agent or a desktop session settled — asserted in both directions;
 - a `blocked` row writes nothing on the check at all;
-- the run agent is refused `validation_report`, and every other agent is refused
-  `remote_validation_report` **by name**;
-- the report tool accepts no outcome — asserted on the advertised schema, which is derived rather than
-  written ([11](11-mcp-tools.md#the-advertised-schema-is-derived-never-written));
-- the rule's position in `DISPATCH_PIPELINE`, its origin's classification as **evidence** in
-  `src/issueOrigins.ts`, and that nothing under `src/dispatcher/` imports _src/remoteValidation/_ or
-  `src/environments/` — asserted structurally with the existing lens assertions;
 - every project-supplied command reaches its **fake** and no process is spawned, asserted by a fake
   that records what it was asked for.
 

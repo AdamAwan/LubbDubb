@@ -950,14 +950,18 @@ class DemoServer {
         startedAt: now,
         endedAt: now,
         note: null,
+        taskId: null,
+        reportPath: null,
+        artefacts: null,
       };
+      const run = sheet.run;
       for (const row of sheet.rows) {
         if (!row.selected || row.blockedReason !== null || row.rowId.startsWith('check:')) continue;
         row.reading = {
           goalRef: sheet.goalRef,
           environment,
           rowId: row.rowId,
-          runId: sheet.run.id,
+          runId: run.id,
           outcome: 'passed',
           rows: 0,
           value: null,
@@ -974,7 +978,7 @@ class DemoServer {
 
   cancelRemoteRun(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const sheet = this.remoteSheet(issueNumber, environment);
-    if (sheet?.run != null && sheet.run.status === 'running') {
+    if (sheet?.run != null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched')) {
       sheet.run.status = 'abandoned';
       sheet.run.note = 'an operator called this run off from the sheet.';
       sheet.run.endedAt = new Date().toISOString();

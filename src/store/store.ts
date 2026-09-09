@@ -1285,9 +1285,21 @@ export class Store {
   }
   endRemoteRun(
     id: string,
-    result: { status: 'ended' | 'abandoned'; endedSha?: string | null; note?: string | null },
+    result: {
+      status: 'ended' | 'abandoned';
+      endedSha?: string | null;
+      note?: string | null;
+      reportPath?: string | null;
+      artefacts?: string | null;
+    },
   ): RemoteRun | null {
     return this.remoteValidation.endRemoteRun(id, result);
+  }
+  claimRemoteRun(id: string, taskId: string): RemoteRun | null {
+    return this.remoteValidation.claimRemoteRun(id, taskId);
+  }
+  getRemoteRun(id: string): RemoteRun | null {
+    return this.remoteValidation.getRemoteRun(id);
   }
   attributeRemoteReadings(runId: string, endedSha: string | null): void {
     this.remoteValidation.attributeRemoteReadings(runId, endedSha);

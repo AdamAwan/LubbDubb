@@ -35,7 +35,7 @@ import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { RemoteValidationDesk } from './remoteValidation/desk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, PullRequest, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './prThreads.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
@@ -88,6 +88,7 @@ interface HarnessDeps {
   tickets?: { run(): Promise<void> };
   localRun?: { noteAlive(): void };
   localValidations?: { sweep(): void };
+  remoteRuns?: () => RemoteRunBrief[];
   updates?: { run(): Promise<void> };
   recovery?: { pendingCount(): number };
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
@@ -358,6 +359,7 @@ export class Harness extends EventEmitter {
         validationChecks: store.listAllValidationChecks(),
         localRun: store.liveLocalRun(),
         localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
+        remoteRuns: this.deps.remoteRuns?.() ?? [],
         conclusions,
         deliveries,
         deliverySignals,
