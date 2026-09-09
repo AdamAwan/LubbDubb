@@ -1,4 +1,5 @@
 import type {
+  RemoteSheetView,
   AgentFilesPayload,
   AllowanceInsights,
   Ejection,
@@ -911,11 +912,90 @@ class DemoServer {
           rows: 0,
           value: null,
           detail: null,
+          startedSha: null,
+          endedSha: null,
           readAt: new Date().toISOString(),
         };
       this.dirty();
     }
     return Promise.resolve({ ok: true });
+  }
+
+  selectRemoteRow(issueNumber: number, environment: string, rowId: string, selected: boolean): Promise<{ ok: true }> {
+    const row = this.remoteSheet(issueNumber, environment)?.rows.find((r) => r.rowId === rowId);
+    if (row !== undefined) {
+      row.selected = selected;
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  /*
+   * The press, in the demo: it re-reads the confirmed rows and records the commits the run
+   * straddled. → docs/spec/36-remote-validation.md#the-press
+   */
+  pressRemoteSheet(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet !== undefined) {
+      const now = new Date().toISOString();
+      const sha = sheet.run?.startedSha ?? 'c0ffee1';
+      sheet.run = {
+        id: `run-${String(issueNumber)}-${environment}-${now}`,
+        goalRef: sheet.goalRef,
+        environment,
+        tenant: sheet.tenant.tenant ?? '',
+        status: 'ended',
+        startedSha: sha,
+        endedSha: sha,
+        startedAt: now,
+        endedAt: now,
+        note: null,
+      };
+      for (const row of sheet.rows) {
+        if (!row.selected || row.blockedReason !== null || row.rowId.startsWith('check:')) continue;
+        row.reading = {
+          goalRef: sheet.goalRef,
+          environment,
+          rowId: row.rowId,
+          runId: sheet.run.id,
+          outcome: 'passed',
+          rows: 0,
+          value: null,
+          detail: null,
+          startedSha: sha,
+          endedSha: sha,
+          readAt: now,
+        };
+      }
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  cancelRemoteRun(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet?.run != null && sheet.run.status === 'running') {
+      sheet.run.status = 'abandoned';
+      sheet.run.note = 'an operator called this run off from the sheet.';
+      sheet.run.endedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  reseedRemoteTenant(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet !== undefined && sheet.tenant.tenant !== null) {
+      sheet.tenant = { ...sheet.tenant, reseededAt: new Date().toISOString(), ageMs: 0, stale: false };
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  private remoteSheet(issueNumber: number, environment: string): RemoteSheetView | undefined {
+    return (this.state.remoteSheets ?? []).find(
+      (s) => s.goalRef === `issue:${String(issueNumber)}` && s.environment === environment,
+    );
   }
 
   async ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<{ ok: true }> {
@@ -4712,6 +4792,13 @@ export const demoApi = {
   replan: (planId: string) => getServer().replan(planId),
   ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) =>
     getServer().ruleRemoteQuery(issueNumber, environment, rowId, accept),
+  selectRemoteRow: (issueNumber: number, environment: string, rowId: string, selected: boolean) =>
+    getServer().selectRemoteRow(issueNumber, environment, rowId, selected),
+  pressRemoteSheet: (issueNumber: number, environment: string) =>
+    getServer().pressRemoteSheet(issueNumber, environment),
+  cancelRemoteRun: (issueNumber: number, environment: string) => getServer().cancelRemoteRun(issueNumber, environment),
+  reseedRemoteTenant: (issueNumber: number, environment: string) =>
+    getServer().reseedRemoteTenant(issueNumber, environment),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     getServer().ruleWatchProposal(issueNumber, checkId, accept),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),

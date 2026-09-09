@@ -152,6 +152,8 @@ import type {
   Task,
   StateQuery,
   RemoteReading,
+  RemoteRun,
+  RemoteTenant,
   RemoteSheet,
   RemoteSheetRow,
   StateQueryApproval,
@@ -1267,6 +1269,36 @@ export class Store {
   }
   listRemoteReadings(): RemoteReading[] {
     return this.remoteValidation.listRemoteReadings();
+  }
+  beginRemoteRun(input: { goalRef: string; environment: string; tenant: string; startedSha: string | null }): {
+    run: RemoteRun | null;
+    live: RemoteRun | null;
+  } {
+    return this.remoteValidation.beginRemoteRun(input);
+  }
+  endRemoteRun(
+    id: string,
+    result: { status: 'ended' | 'abandoned'; endedSha?: string | null; note?: string | null },
+  ): RemoteRun | null {
+    return this.remoteValidation.endRemoteRun(id, result);
+  }
+  attributeRemoteReadings(runId: string, endedSha: string | null): void {
+    this.remoteValidation.attributeRemoteReadings(runId, endedSha);
+  }
+  liveRemoteRun(environment: string, tenant: string): RemoteRun | null {
+    return this.remoteValidation.liveRemoteRun(environment, tenant);
+  }
+  listRemoteRuns(): RemoteRun[] {
+    return this.remoteValidation.listRemoteRuns();
+  }
+  setRemoteSheetRowSelected(goalRef: string, environment: string, rowId: string, selected: boolean): boolean {
+    return this.remoteValidation.setRemoteSheetRowSelected(goalRef, environment, rowId, selected);
+  }
+  stampRemoteTenant(input: { environment: string; tenant: string; ensured?: boolean; reseeded?: boolean }): void {
+    this.remoteValidation.stampRemoteTenant(input);
+  }
+  listRemoteTenants(): RemoteTenant[] {
+    return this.remoteValidation.listRemoteTenants();
   }
 
   beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {

@@ -11,13 +11,19 @@
 > ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal)); and —
 > as of the sheet an arrival assembles — **the sheet itself** ([The sheet](#the-sheet)), the **desk**
 > that assembles one off an arrival and runs its approved deterministic rows
-> ([The desk](#the-desk)), the three sheet tables and `goal_arrivals.sheeted_at`
+> ([The desk](#the-desk)), the sheet tables and `goal_arrivals.sheeted_at`
 > ([Persistence](#persistence)), the minimal bench line, and the **cockpit card** that draws a sheet
-> ([The cockpit](#the-cockpit)).
+> ([The cockpit](#the-cockpit)); and — as of the press — **the press itself**
+> ([The press](#the-press)), the **pin** that asks whether the goal's work is still in the deployed
+> commit ([The pin](#the-pin-asks-whether-the-work-is-still-there)), the **lock** on
+> `(environment, tenant)` enforced in SQL ([Uniqueness](#uniqueness-is-environment-tenant-enforced-in-sql)),
+> the **run row** with the commits every reading through it straddled, and the **tenant** in its three
+> shapes with its `reseed` command and the age drawn at the gate ([Tenants](#tenants)).
 >
-> **Everything else is still a design**: no press, no pin, no run row, no tenant, no browser runner,
-> no pre-flight, no artefacts, no dispatch rule, no `remote_validation_report` and no `spec` reading.
-> Nothing browser-shaped runs, so a `check` row is blocked or manual. A path is written in italics
+> **Everything else is still a design**: no browser runner, no pre-flight, no artefacts, no dispatch
+> rule, no `remote_validation_report` and no `spec` reading. Nothing browser-shaped runs, so a
+> `check` row is blocked or manual, and with no agent in this build a press runs the sheet's
+> confirmed **deterministic** rows synchronously under the pin. A path is written in italics
 > until the thing it names exists, and a section that is still a description rather than an account
 > says so where it starts. The behaviour is settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
@@ -79,7 +85,7 @@ configured nothing is a feature announcing itself as broken, which is the rule t
 and the signals card are both already built to.
 
 **One thing does happen on every deployment, and it is the only one**: the tables are created and the
-three columns are added on the boot that takes the build. All ten are inert, none is backfilled, and
+columns are added on the boot that takes the build. All of them are inert, none is backfilled, and
 a database that never sees a `validate` block never has a row written to any of them.
 → [Migrations](#migrations)
 
@@ -381,16 +387,23 @@ The tenant's age is drawn at the gate too, which is where an operator can act on
 
 ## The press
 
-`POST /api/issues/:number/remote-validation/:environment/run`, in `src/server/routes/remoteValidation.ts`.
+**Built.** `POST /api/issues/:number/remote-validation/:environment/run`, in
+`src/server/routes/remoteValidation.ts`, over `RemoteRunDesk` (`src/remoteValidation/run.ts`).
 In order: refuse **409** if a run is already live for this `(environment, tenant)`, naming it; refuse
 **400** if nothing is selected; take the pin; open the run row; broadcast; **run a cycle**.
+
+With no browser in this build, what a press runs is the sheet's confirmed **deterministic** rows —
+the approved `state`, `signal` and `measure` ones — synchronously, through the **same**
+`RemoteValidationDesk.readRow` the assembly used. A second reader would be free to disagree with the
+assembly about what a row of that kind is. That is what makes the run row, the lock and the pin real
+rather than scaffolding waiting for the browser half's agent.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
 
 ### The pin asks whether the work is still there
 
-Before a run opens, the harness asks the question the design actually cares about: **is this goal's
+**Built.** Before a run opens, the harness asks the question the design actually cares about: **is this goal's
 work still in the deployed commit?** Not _is the sha the one the sheet was assembled against_.
 
 `GitObserver.contains(landingShas, [deployedSha])` answers it, three-valued
@@ -414,8 +427,10 @@ started, and it says why in the sheet's own words.
 
 ### Uniqueness is `(environment, tenant)`, enforced in SQL
 
-`beginRemoteRun` has `beginLocalRun`'s shape: the mutual exclusion is a conditional insert **inside
-the transaction**, never a check the caller is trusted to make first.
+**Built.** `beginRemoteRun` (`src/store/remoteValidation.ts`) has `beginLocalRun`'s shape: the mutual
+exclusion is a conditional insert **inside the transaction**, with a partial unique index on
+`(environment, tenant) WHERE status = 'running'` behind it — never a check the caller is trusted to
+make first.
 
 Keying on the environment alone is the failure worth naming: two operators validating one environment
 against two tenants would overwrite each other's readings — a silent wrong answer rather than a
@@ -519,6 +534,10 @@ consumer.
 
 ## Tenants
 
+**Built**, in `src/remoteValidation/tenants.ts` — `TenantKeeper`, `CommandTenantKeeper`, its scripted
+fake in `src/remoteValidation/fakeTenantKeeper.ts`, and the pure `resolveTenant` the press, the gate
+and the cockpit all read.
+
 **The harness never generates or infers a tenant identifier.** Environments commonly run reapers that
 hard-delete tenants matching a name pattern past a short age; a harness-invented name survives about
 an hour, and its disappearance presents as mysterious mass failure. The rule costs nothing in the easy
@@ -527,13 +546,20 @@ case and is the whole ballgame in the hard one.
 A project supplies one of three shapes, and the schema does not force the awkward one on a project
 that has the easy one:
 
-| Shape          | When                                                                                                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tenant`       | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                      |
-| `tenantEnv`    | The name of an env var carrying a per-operator value. Config names the variable; the harness reads it into the spawn env and nowhere else.                                                                               |
-| `ensureTenant` | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. |
+| Shape          | When                                                                                                                                                                                                                                                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant`       | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                                                                                                                                     |
+| `tenantEnv`    | The name of an env var carrying a per-operator value. Config names the variable; the harness reads it into the spawn env and nowhere else — the **lock and every surface carry the variable's own name**, `$VALIDATION_TENANT`, never what it holds. A variable nobody set blocks the press, naming it.                                 |
+| `ensureTenant` | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. It **prints the tenant it provisioned**, and that name — the project's own — is what is stamped and locked on. |
 
-An environment that supplies none of the three permits no row kind that needs one, and says so.
+An environment that supplies none of the three permits no row kind that needs one, and says so. A
+deterministic row needs none, so such an environment presses on the **empty key** — the absence,
+rather than a name the harness made up.
+
+The two operator acts on a tenant are one route,
+`POST /api/issues/:number/remote-validation/:environment/reseed`: where the environment provisions on
+demand it runs `ensureTenant` first, and where it declares a `reseed` it runs that, stamping
+`remote_tenants` with whatever the project's own command named. Neither ever runs per arrival.
 
 ### Persistent tenants drift, and drift looks exactly like a real failure
 
@@ -544,13 +570,15 @@ assuming seeded fixture data fails for reasons unrelated to the deployment, and 
 not the code's fault is worse than no row**.
 
 So the environment declares a **`reseed` command**, the harness records when the tenant was last
-reseeded (_remote_tenants_), and **the tenant's age is shown at the gate** — which is exactly where an
+reseeded (`remote_tenants`), and **the tenant's age is shown at the gate** — which is exactly where an
 operator can act on it: reseed first, then press.
 
 **Staleness is a qualifier on the reading, never a fourth outcome.** A fourth state multiplies against
 every row kind and every environment and needs teaching to every consumer of a reading, where _failed,
 against a tenant 19 days old, beyond the declared 7-day window_ tells the reader everything without
-touching the state machine.
+touching the state machine. `stalenessNote` is the one place that sentence is written, appended to a
+reading's own detail; the vocabulary stays `passed | failed | blocked`, asserted on the vocabulary
+itself rather than on one row.
 
 ## One environment has several names
 
@@ -803,10 +831,12 @@ passes: assemble the sheets for arrivals nothing has assembled yet, run the appr
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
 
-**Two of the four are built**, and the two that are not are the two with nothing yet to do: there is
-no pre-flight because nothing browser-shaped runs, and no run to sweep because there is no press. What
-runs is the assembly, and the approved `state`, `signal` and `measure` rows on a sheet it has just
-assembled. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
+**Three of the four are built.** The one that is not is the pre-flight, which has nothing yet to do
+because nothing browser-shaped runs. What runs is the assembly, the approved `state`, `signal` and
+`measure` rows on a sheet it has just assembled, and — through `RemoteRunDesk`
+([The press](#the-press)) rather than the pulse — the same rows again under a press's pin. The sweep's
+arm has no dispatched run to find until the browser half lands an agent, which is why an operator's
+own `.../cancel` is the settle path this build has. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
 which is why the desk's position above it is load-bearing rather than tidy.
 
 **It returns immediately where no environment declares a `validate` block**, which is the steady
@@ -933,20 +963,20 @@ silent:
 ## Routes
 
 `src/server/routes/remoteValidation.ts`, a module and a `ROUTE_MODULES` entry — `app.ts` stays wiring
-only ([16](16-http-api.md#shape)). The module exists and carries the query routes; the press, the
-cancel and the row and reseed controls land with the sheet they act on. Every handler is wrapped in `checked(schemas, handler)` and handed
+only ([16](16-http-api.md#shape)). **All seven are built**, in that one module: a second module for
+the press would put two representations of one surface in two places. Every handler is wrapped in `checked(schemas, handler)` and handed
 `{params, body, req, reply}` already parsed; **a refusal is a returned value and a 400, never a
 throw**.
 
-| Route                                                                      | Does                                                                                                       |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `POST /api/issues/:number/remote-validation/:environment/run`              | Press go. The only route here that runs a cycle.                                                           |
-| `POST /api/issues/:number/remote-validation/:environment/cancel`           | Settle an open run `abandoned`.                                                                            |
-| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`      | `{selected}` — deselect a row, or take it back.                                                            |
-| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId` | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval. |
-| `POST /api/issues/:number/remote-validation/:environment/watch-queries/:queryId` | **built.** The same consent for a **live watch check**, which is how the second key on one is written. |
-| `POST /api/issues/:number/remote-validation/:environment/reseed`           | Invoke the environment's `reseed`, and stamp the tenant.                                                   |
-| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`. |
+| Route                                                                            | Does                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/issues/:number/remote-validation/:environment/run`                    | **built.** Press go. The only route here that runs a cycle.                                                                                    |
+| `POST /api/issues/:number/remote-validation/:environment/cancel`                 | **built.** Settle an open run `abandoned`.                                                                                                     |
+| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`            | **built.** `{selected}` — deselect a row, or take it back.                                                                                     |
+| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId`       | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval.                                     |
+| `POST /api/issues/:number/remote-validation/:environment/watch-queries/:queryId` | **built.** The same consent for a **live watch check**, which is how the second key on one is written.                                         |
+| `POST /api/issues/:number/remote-validation/:environment/reseed`                 | **built.** Invoke the environment's `ensureTenant` where it provisions on demand and its `reseed` where it declares one, and stamp the tenant. |
+| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                        | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`.                                     |
 
 **Waiving is not here.** A check the product has moved past is waived through
 `POST /api/issues/:number/validation/:checkId/waive` ([20](20-validation.md#routes)), which already
@@ -961,15 +991,15 @@ and delegated to from `src/store/store.ts` under the same method names
 ([14](14-persistence.md#shape)). `src/store/` stays the only directory that touches SQLite and the
 writes are synchronous, which is what keeps the harness logic race-free.
 
-| Table                    | One row per                   | Written                                                                                                |
-| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one |
-| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                   |
-| `remote_runs`            | one press                     | conditional insert, unique on `(environment, tenant)` while live                                       |
-| `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, which is every reading until the press lands |
-| `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is |
-| `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                          |
-| `remote_tenants`         | `(environment, tenant)`       | `OR REPLACE` — when it was last reseeded                                                               |
+| Table                    | One row per                   | Written                                                                                                                                                                                                |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                               |
+| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                                                                                                                  |
+| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it                                                              |
+| `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, and `started_sha` / `ended_sha` carry the commits the run that took it straddled |
+| `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                 |
+| `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                          |
+| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                               |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the
 environment went back past the goal's work is the case an operator actually hits, and its reason has
@@ -983,10 +1013,11 @@ environment moves. A reading with no commit beside it is a reading of a product 
 
 - **Every one of the seven tables declares a `ColumnMigrations` block, empty or not.** A table being
   new **once** does not keep it exempt, which is exactly what `local_runs`' usage columns and
-  `validation_checks`' band cost ([14](14-persistence.md#migrations)). The two that exist —
-  `remote_state_queries` and `remote_query_approvals` — declare theirs empty, in
+  `validation_checks`' band cost ([14](14-persistence.md#migrations)). All seven are declared in
   `REMOTE_VALIDATION_COLUMNS` (`src/store/remoteValidation.ts`), and the entry is what the next column
-  either of them takes will be added to.
+  any of them takes is added to — which is what `remote_readings`' `started_sha` and `ended_sha`
+  already are: a column on a table that was new **one release ago**, additive, guarded by
+  `PRAGMA table_info`, and invisible without the entry on every database from before it existed.
 - **`validation_checks.area`** is a column on an **existing** table and needs an additive `ALTER
 TABLE`, guarded by `PRAGMA table_info` and declared in that module's `ColumnMigrations`. `CREATE
 TABLE IF NOT EXISTS` never alters an existing table, so without the entry the column is invisible on
@@ -1026,14 +1057,16 @@ succeeds.
 | `EnvironmentObserver` (existing)                      | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows    |
 | `RemoteRunner` (_src/remoteValidation/runner.ts_)     | `CommandRemoteRunner` · `FakeRemoteRunner`               | `runner`, `listSelectors`, `publishArtefacts` |
 | `StateReader` (`src/remoteValidation/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                   |
-| `TenantKeeper` (_src/remoteValidation/tenants.ts_)    | `CommandTenantKeeper` · `FakeTenantKeeper`               | `ensureTenant`, `reseed`                      |
+| `TenantKeeper` (`src/remoteValidation/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                      |
 
 Three rules hold them honest:
 
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with the fakes injected and
   `dbPath: ':memory:'` ([19](19-development.md)). The three new seams are new `opts` keys —
   `remoteRunner`, `stateReader`, `tenants` — beside `backend`, `streamSpawner`, `sink`, `gitObserver`,
-  `worktrees` and `errorMirror`. `stateReader` is built; the other two land with their callers.
+  `worktrees` and `errorMirror`. `stateReader` and `tenants` are built; `remoteRunner` lands with its
+  caller. **A test that configures a `validate` block and injects no `tenants` is the same hazard
+  `stateReader`'s absence is**, and it is in `CLAUDE.md` for the same reason.
   **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the observer uses**
   — the id echo in `lubbdubbWatchId`, the rows-never-counts refusal and `presence`'s zero-means-unknown
   are one implementation. A second parser would pass `knip` (it is used) and pass its own tests, and
@@ -1099,14 +1132,26 @@ a domain type from `src/types.ts` or `extends` it — never a re-declaration and
 
 **A new component is threaded through `src/system.ts`**, which is the composition root.
 
-**What the card draws today** is the block the sheet earns and no more: every row with its kind, its
-outcome and, where nothing was learned, **why in words**; and the one control this build's gate has,
-which is accepting a query against this environment on the evidence of what it returned. The tenant,
-the deployed commit, the artefact link, matched-versus-executed, the selector mismatches, the reseed
-and the press land with the things they are about. `RemoteSheetView`, `RemoteSheetRowView` and
-`RemoteReadingView` are in `src/wire.ts`, shipped on `CockpitState.remoteSheets`; the card is
-`remoteValidation` in `GOAL_SECTIONS` between `localValidation` and `signals`; and which environment's
-sheet is `Place.sheetEnvironment` (`web/src/cockpit/place.ts`), read off the `sheet` query parameter.
+**What the card draws today** is the block the sheet earns and no more. Above the rows sits the
+**gate**: the tenant and its age against the declared freshness window, the commit the last run
+pinned, a live run or an abandoned one's reason in words, and the four controls this build has —
+accept a query against this environment on the evidence of what it returned, deselect a row or take
+it back, reseed the tenant, and press go. Below it, every row with its kind, its outcome and, where
+nothing was learned, **why in words**. The artefact link, matched-versus-executed and the selector
+mismatches land with the browser half they are about. Every tone is an existing `--cn-*` property —
+the gate introduces no colour of its own, and a deselected row is dimmed rather than hidden, because
+a row an operator dropped is a decision they must be able to see and take back.
+
+`RemoteSheetView`, `RemoteSheetRowView`, `RemoteReadingView`, `RemoteRunView` and `RemoteTenantView`
+are in `src/wire.ts`, shipped on `CockpitState.remoteSheets`; the card is `remoteValidation` in
+`GOAL_SECTIONS` between `localValidation` and `signals`; and which environment's sheet is
+`Place.sheetEnvironment` (`web/src/cockpit/place.ts`), read off the `sheet` query parameter.
+
+**`RemoteTenantView` carries the tenant's _name_ and never a `tenantEnv`'s value.** Where the shape is
+`tenantEnv` the name is the variable's own — `$VALIDATION_TENANT` — because config names the variable
+and the value it holds reaches the spawn env and nowhere else. A wire type that widened to the value
+would put a per-operator identifier into every snapshot, on exactly the deployments careful enough to
+keep it out of config.
 
 ## Tests
 
@@ -1137,7 +1182,33 @@ defers rather than drops, asserted on a backlog of seven; a database written bef
 the pulse; that nothing under `src/dispatcher/` imports `src/remoteValidation/` or
 `src/environments/`; and the **off switch in both directions on one run** — no sheet, row, reading,
 stamp, bench mention, cockpit card, prompt note or spawned command with no `validate` block anywhere,
-and all of it with one environment declaring `permits: ["state"]` and a `state.run`.
+and all of it with one environment declaring `permits: ["state"]` and a `state.run` — extended, rather
+than duplicated, as each half lands: the press, the cancel and the tenant control are all inert on the
+deployment that configured nothing, and reachable on the same run where one environment did.
+
+The press half is built and its tests are in `test/remoteValidationPress.test.ts` and
+`test/remoteValidationTenants.test.ts`: two concurrent presses against one `(environment, tenant)`
+yield **one** run and two against two tenants yield **two**, asserted on the store's own conditional
+insert rather than on a caller's check; a press while a run is live is refused **409 naming the
+tenant** and a press with nothing selected **400**, and the run route is the only one in the module
+that runs a cycle; the pin's **three arms separately** — every landing reached opens the run, a
+landing the environment no longer holds abandons with a reason, and a clone that could not say
+abandons with a reason that is **not** the rollback's; an environment that has moved **forward** still
+runs where a rollback abandons, **asserted as a pair**, which is the whole difference from
+[32](32-local-validation.md#the-pin)'s pin; an abandoned press writes `blocked` on nothing and no
+readings at all, and leaves every row exactly as it was; a run is kept after it ends and an abandoned
+one's reason is readable afterwards; a later run **supersedes rather than deletes**, and every reading
+carries the run's `started_sha` and `ended_sha`; a press writes **no shortfall, no issue verdict, no
+`WorldEvent` and nothing into `watch_readings`**, asserted against the world's own list again, because
+the press is a second writer and the assembly's assertion does not cover it; the **outcome vocabulary
+itself** stays `passed | failed | blocked` however old the tenant is; the three tenant shapes resolve,
+a `tenantEnv` nobody set and an `ensureTenant` nobody ran both **block naming the configuration that
+would provide one** rather than inventing a name, and a `tenantEnv`'s **value reaches neither a prompt,
+the cockpit, nor a committed project layer**; the reseed runs the environment's own commands and stamps
+`remote_tenants`, on the fake's own record of what it was asked for and with **no process spawned**;
+and waiving is **not** a route here — the retire path is
+`POST /api/issues/:number/validation/:checkId/waive`, its reason is required, a waived check counts as
+clear at close-out and a **deferred** one does not.
 
 The rest, when it is built:
 
@@ -1146,39 +1217,17 @@ The rest, when it is built:
 - a run whose environment **moved**: a failed row reads `blocked` and a passed row still reads
   `passed`, and both record the commits they straddled — **asserted in both directions**, because a
   design that treated them alike is one edit away and only one of them is honest;
-- the pin's three arms, and that `unknown` is **abandoned** rather than assumed present;
-- an environment that has moved **forward** still runs, where a rollback abandons — the pair that
-  separates this pin from [32](32-local-validation.md#the-pin)'s;
-- an unapproved query is `blocked` and says what it waits for; a query approved against one
-  environment is **still `blocked`** on another;
-- a state row on a machine that cannot reach the store is `blocked` while every browser row on the
-  same run still reports — `blocked` per row, not per run;
-- a row of a kind the environment does not `permit` is `blocked`;
 - an aggregating state query is refused **at ingestion**, through the shared `aggregatingTail`;
 - a `spec` reading lands on an `unrun` check and on one whose last reading was a `spec`, and **does
   not** land on one an operator, an agent or a desktop session settled — asserted in both directions;
 - a `blocked` row writes nothing on the check at all;
-- a failed row writes **neither a shortfall nor a delivery**, and the goal stays delivered and parked;
-- **no `WorldEvent` is written by any of it**, asserted against the world's own list, and nothing is
-  written into `watch_readings`;
-- a waived check counts as clear at close-out with its reason listed, and a **deferred** one does not
-  — the pair [20](20-validation.md#deferral-and-waiving) is built on;
-- a second arrival re-runs the sheet that exists rather than opening a second one, and a sheet never
-  expires;
-- a sheet is **not** assembled for an arrival older than two probe intervals, and the arrival is
-  stamped anyway; an arrival on a deployment with no `validate` block is left **unstamped**;
-- the per-pulse cap defers rather than drops, oldest arrival first;
 - the run agent is refused `validation_report`, and every other agent is refused
-  `remote_validation_report` **by name**; the planner is refused `state_declare` by name and a part
-  agent is not;
+  `remote_validation_report` **by name**;
 - the report tool accepts no outcome — asserted on the advertised schema, which is derived rather than
   written ([11](11-mcp-tools.md#the-advertised-schema-is-derived-never-written));
-- two presses against **two tenants** on one environment are two runs; two against the same tenant is
-  a 409;
 - the rule's position in `DISPATCH_PIPELINE`, its origin's classification as **evidence** in
   `src/issueOrigins.ts`, and that nothing under `src/dispatcher/` imports _src/remoteValidation/_ or
   `src/environments/` — asserted structurally with the existing lens assertions;
-- the desk's position in the pulse, asserted the way the watch pass's is;
 - every project-supplied command reaches its **fake** and no process is spawned, asserted by a fake
   that records what it was asked for.
 

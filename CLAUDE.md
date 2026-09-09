@@ -116,12 +116,20 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   `upstream`.** The default is the real `gh` CLI against **AdamAwan/LubbDubb** — a test without
   `FakeUpstreamIssues` files a live issue on the project's tracker and passes while doing it.
   → [15](docs/spec/15-integrations.md)
-- **A test that configures an environment with a `validate` block must inject `stateReader`.** The
-  default is the real `CommandStateReader`, which spawns the project's own `validate.state.run` against
-  a **deployed store** — a test that queries somebody's environment and passes while doing it. What
-  saves an ordinary test is only that a config with no `validate` block declares no command to run;
-  rely on that deliberately. Use `FakeStateReader`, which records what it was asked for.
+- **A test that configures an environment with a `validate` block must inject `stateReader` _and_
+  `tenants`.** The defaults are the real `CommandStateReader`, which spawns the project's own
+  `validate.state.run` against a **deployed store**, and the real `CommandTenantKeeper`, which spawns
+  its `ensureTenant` and `reseed` — a test that queries somebody's environment, or **provisions a
+  tenant in it**, and passes while doing it. What saves an ordinary test is only that a config with no
+  `validate` block declares no command to run; rely on that deliberately. Use `FakeStateReader` and
+  `FakeTenantKeeper`, each of which records what it was asked for.
   → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
+- **The harness never generates or infers a tenant identifier, anywhere.** Environments reap tenants
+  matching a name pattern past a short age, so an invented name survives about an hour and its
+  disappearance presents as mysterious mass failure. No tenant configured is a `blocked` row **naming
+  the command or variable that would provide one** — and a `tenantEnv`'s _value_ goes into the spawn
+  env and nowhere else: the lock, the cockpit and every prompt carry the **variable's own name**.
+  → [36](docs/spec/36-remote-validation.md#tenants)
 - **A test that reads the project config layer injects `projectConfigFile`, or points `repoRoot` at
   a temp directory.** `lubbdubb.project.json` is read from `repoRoot`, and this repo is itself a
   LubbDubb target — the day one is committed here every test on the default starts merging it.

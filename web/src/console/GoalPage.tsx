@@ -865,9 +865,15 @@ function RemoteValidation({
           sheets={sheets}
           showing={showing}
           onShow={(environment) => actions.openRemoteSheet(environment)}
-          onRule={(environment, rowId, accept) =>
-            actions.ruleRemoteQuery(page.issue.number, environment, rowId, accept)
-          }
+          controls={{
+            onRule: (environment, rowId, accept) =>
+              actions.ruleRemoteQuery(page.issue.number, environment, rowId, accept),
+            onSelect: (environment, rowId, selected) =>
+              actions.selectRemoteRow(page.issue.number, environment, rowId, selected),
+            onPress: (environment) => actions.pressRemoteSheet(page.issue.number, environment),
+            onCancel: (environment) => actions.cancelRemoteRun(page.issue.number, environment),
+            onReseed: (environment) => actions.reseedRemoteTenant(page.issue.number, environment),
+          }}
         />
       )}
     </section>

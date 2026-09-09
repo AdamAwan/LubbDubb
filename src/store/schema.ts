@@ -927,6 +927,42 @@ CREATE TABLE IF NOT EXISTS remote_readings (
 
 CREATE INDEX IF NOT EXISTS remote_readings_row ON remote_readings (goal_ref, environment, row_id);
 
+-- One press (see RemoteValidationStore). Kept after it ends, local_validations' rule:
+-- a run abandoned because the environment went back past the goal's work is the case
+-- an operator actually hits, and its reason has to be readable afterwards. The
+-- mutual exclusion is a conditional insert inside the transaction with this partial
+-- index behind it: keyed on the environment alone, two operators validating one
+-- environment against two tenants would overwrite each other's readings -- a silent
+-- wrong answer rather than a visible clash.
+CREATE TABLE IF NOT EXISTS remote_runs (
+  id          TEXT PRIMARY KEY,
+  goal_ref    TEXT NOT NULL,      -- issue:<n>
+  environment TEXT NOT NULL,
+  tenant      TEXT NOT NULL,      -- the tenant's *key*; never a tenantEnv's value, and '' where no shape supplies one
+  status      TEXT NOT NULL,      -- running | ended | abandoned
+  started_sha TEXT,               -- what the environment's at said when the pin was taken
+  ended_sha   TEXT,               -- and what it said when the run finished
+  started_at  TEXT NOT NULL,
+  ended_at    TEXT,
+  note        TEXT                -- why an abandoned run was abandoned, in the sheet's own words
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS remote_runs_live ON remote_runs (environment, tenant) WHERE status = 'running';
+
+-- When an environment's tenant was last provisioned and last reseeded (see
+-- RemoteValidationStore). A persistent tenant accumulates the residue of every
+-- previous run, and a red row that is not the code's fault is worse than no row --
+-- so the age is drawn at the gate, which is where an operator can act on it. The
+-- name is always the project's own: the harness generates or infers no tenant
+-- identifier anywhere.
+CREATE TABLE IF NOT EXISTS remote_tenants (
+  environment TEXT NOT NULL,
+  tenant      TEXT NOT NULL,
+  ensured_at  TEXT,
+  reseeded_at TEXT,
+  PRIMARY KEY (environment, tenant)
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

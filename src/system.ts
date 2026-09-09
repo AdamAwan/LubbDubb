@@ -61,6 +61,8 @@ import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js'
 import { CommandStateReader, type StateReader } from './remoteValidation/stateReader.js';
 import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { RemoteValidationDesk } from './remoteValidation/desk.js';
+import { RemoteRunDesk } from './remoteValidation/run.js';
+import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
@@ -130,6 +132,7 @@ export interface System {
   watch: WatchDryRunner;
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
+  remoteRuns: RemoteRunDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -167,6 +170,7 @@ interface BuildOptions {
   reviewProber?: ReviewProber;
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
+  tenants?: TenantKeeper;
   errorMirror?: (entry: ErrorLogEntry) => void;
   ingressSecrets?: IngressSecrets;
   configFile?: string;
@@ -612,6 +616,16 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  const remoteRuns = new RemoteRunDesk({
+    store,
+    environments: config.environments,
+    desk: remoteValidation,
+    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    git: gitObserver,
+    tenants: opts.tenants ?? new CommandTenantKeeper(config.repoRoot),
+    errors,
+  });
+
   const closeOutSink = opts.sink ?? connector;
   const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
@@ -904,6 +918,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watch: watchDryRun,
     stateQueries,
     remoteValidation,
+    remoteRuns,
     updates,
     runtimeControl,
     pets,
