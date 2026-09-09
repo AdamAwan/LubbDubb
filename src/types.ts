@@ -854,6 +854,11 @@ export interface ValidationCheck {
   revision: ValidationRevision | null;
   amendedAt: string | null;
   amendNote: string | null;
+  /**
+   * The selector a runner offers for this check, compared against the pre-flight's own listing. Null
+   * is *no area declared* — a check a person carries out, exactly as every check is today.
+   */
+  area: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1440,6 +1445,11 @@ export interface RemoteSheetRow {
   /** Non-null means no reading was taken, and this is what an operator is told instead. */
   blockedReason: string | null;
   awaitingApproval: boolean;
+  /**
+   * How many tests the pre-flight's listing attributes to this row's area. Null on a row the
+   * pre-flight had nothing to ask about, and never derived from a report.
+   */
+  matched: number | null;
 }
 
 /**

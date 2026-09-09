@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
+import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
@@ -61,6 +62,7 @@ function build(
   stateReader: FakeStateReader,
   keeper: FakeTenantKeeper = new FakeTenantKeeper(),
   prober: FakeEnvironmentProber = new FakeEnvironmentProber(),
+  runner: FakeRemoteRunner = new FakeRemoteRunner(),
 ): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-remote-off-'));
   const config = loadConfig({
@@ -80,6 +82,7 @@ function build(
     backend: new FakePtyBackend(),
     stateReader,
     tenants: keeper,
+    remoteRunner: runner,
     environmentProber: prober,
     gitObserver: new FakeGitObserver().setContains(DEPLOYED, LANDED, true),
     projectConfigFile: join(dir, 'absent.json'),
@@ -141,7 +144,8 @@ function cardRows(state: Record<string, unknown>): number | null {
 test('a deployment that configured nothing takes the build inert', async () => {
   const asked = reader();
   const keeper = new FakeTenantKeeper();
-  const system = build([OFF], asked, keeper);
+  const runner = new FakeRemoteRunner();
+  const system = build([OFF], asked, keeper, new FakeEnvironmentProber(), runner);
   try {
     seed(system);
     await system.harness.runCycle('manual');
@@ -153,6 +157,7 @@ test('a deployment that configured nothing takes the build inert', async () => {
     assert.equal(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'no arrival stamped');
     assert.deepEqual(asked.asked, [], 'no command is spawned');
     assert.deepEqual(keeper.asked, [], 'no tenant command either — and none is ever invented');
+    assert.deepEqual(runner.asked, [], 'and the runner is inert: no listing, no run, no publish');
     assert.deepEqual(system.store.listRemoteRuns(), [], 'no run');
     assert.deepEqual(system.store.listRemoteTenants(), [], 'no tenant stamped');
 
@@ -164,6 +169,7 @@ test('a deployment that configured nothing takes the build inert', async () => {
     assert.equal((await system.remoteRuns.prepareTenant('acceptance')).ok, false);
     assert.deepEqual(system.store.listRemoteRuns(), [], 'and still no run row');
     assert.deepEqual(keeper.asked, [], 'and still no tenant command');
+    assert.deepEqual(runner.asked, [], 'and still nothing asked of a runner');
 
     const bench = system.store.listHumanTasksOfKind('validate');
     assert.equal(bench.length, 1, 'the validate row is filed as it always was');
@@ -183,7 +189,8 @@ test('a deployment that configured nothing takes the build inert', async () => {
 test('and one environment declaring permits: ["state"] with a state.run turns all of it on', async () => {
   const asked = reader();
   const keeper = new FakeTenantKeeper();
-  const system = build([ON], asked, keeper, new FakeEnvironmentProber({ acceptance: [DEPLOYED] }));
+  const runner = new FakeRemoteRunner();
+  const system = build([ON], asked, keeper, new FakeEnvironmentProber({ acceptance: [DEPLOYED] }), runner);
   try {
     seed(system);
     await system.harness.runCycle('manual');
@@ -206,6 +213,11 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
       asked.asked.map((a) => `${a.environment}:${a.kind}`),
       ['acceptance:presence', 'acceptance:state'],
       'the command reached its fake, and nothing else',
+    );
+    assert.deepEqual(
+      runner.asked,
+      [],
+      'and this environment declares no browser block, so the pre-flight asks a runner nothing',
     );
 
     const bench = system.store.listHumanTasksOfKind('validate');

@@ -1258,6 +1258,13 @@ export class Store {
   ): void {
     this.remoteValidation.saveRemoteSheetRows(goalRef, environment, rows);
   }
+  recordRemotePreflight(
+    goalRef: string,
+    environment: string,
+    verdicts: readonly { rowId: string; matched: number | null; blockedReason: string | null }[],
+  ): void {
+    this.remoteValidation.recordRemotePreflight(goalRef, environment, verdicts);
+  }
   blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
     this.remoteValidation.blockRemoteSheetRow(goalRef, environment, rowId, reason);
   }

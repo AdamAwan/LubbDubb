@@ -166,6 +166,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     revision: null,
     amendedAt: null,
     amendNote: null,
+    area: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
