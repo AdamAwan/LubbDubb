@@ -157,3 +157,41 @@ export function watchDeclareNote(environments: readonly { name: string; watch?: 
   }
   return lines.join('\n');
 }
+
+export function testPartNote(
+  environments: readonly { name: string; validate?: { browser?: { runner?: string } } }[],
+): string {
+  if (!environments.some((env) => env.validate?.browser !== undefined)) return '';
+  return [
+    '',
+    '',
+    '## Coverage this change needs, or invalidates',
+    '',
+    'This deployment has an end-to-end browser suite. Where the goal needs coverage the suite does not ' +
+      'have — **or invalidates coverage it already has** — declare a part for it and give that part a ' +
+      '`coverage` field naming the **area** it adds or amends, in words rather than as a file path ' +
+      '(`checkout with a saved card`, not `tests/checkout.spec.ts`). Amending an existing spec is the ' +
+      'normal case rather than a conflict: a change that changes behaviour is supposed to change the ' +
+      'statement of that behaviour, in the same change, reviewed by the same reviewer.',
+    '',
+    'It is an ordinary part in every other respect. It produces code, it is judged on its own ' +
+      '`acceptance`, it merges, and **it holds the goal exactly as any other part does** — there is no ' +
+      'soft hold and no delivered-except-for-the-test. So the declaration is the decision, and the bar ' +
+      'is strict:',
+    '',
+    '- **Automate only where the failure would be silent and consequential** — usually a common path a ' +
+      'person would not notice breaking until somebody else did. **Most goals get none.** A refactor ' +
+      'whose whole claim is that behaviour did not change declares no test part; so does a copy change, ' +
+      'a config change and most bug fixes. **Nothing counts test parts and nothing rewards a longer ' +
+      'list.**',
+    '- **The critical path is an allow-list, never a deny-list.** The deployment pipeline selects only ' +
+      'what carries the critical tag, so a new spec is invisible to it until somebody deliberately tags ' +
+      'it. Promoting one into the critical path is a separate, reviewed pull request with an argument ' +
+      'attached — never a line in this plan.',
+    '- **A spec copied from a neighbour inherits that neighbour’s tags**, and a critical tag riding ' +
+      'along that way is noticed only when the pipeline is two minutes slower. Say in the part’s ' +
+      '`acceptance` that any inherited tags are stripped.',
+    '',
+    'Declaring at most one is the usual shape. Declaring none is a complete answer.',
+  ].join('\n');
+}

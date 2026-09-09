@@ -66,7 +66,8 @@ export function issuePlan(s: StageContext): void {
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          s.watchNote,
+          s.watchNote +
+          s.testPartNote,
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

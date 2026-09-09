@@ -364,7 +364,8 @@ that cannot point at what already does the thing is not sure enough to say this.
     }
   ],
   "parts": [
-    { "slug": "schema", "title": "...", "scope": "src/store/...", "atoms": ["catalog-module"], "dependsOn": [] }
+    { "slug": "schema", "title": "...", "scope": "src/store/...", "atoms": ["catalog-module"], "dependsOn": [] },
+    { "slug": "checkout-coverage", "title": "...", "scope": "e2e/", "coverage": "checkout with a saved card" }
   ],
   "validation": { "resources": [], "checks": [] }
 }
@@ -393,6 +394,10 @@ is a plan with one part`), because the deployments most likely to submit a partl
   chain walk _was_ the whole graph, but the moment a part may name several a cycle reachable only
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
+- `coverage` is optional, non-empty, and names the **area** of the end-to-end browser suite the part
+  adds or amends coverage for — in words, never as a file path. It is the string a remote validation
+  sheet's selectors are later resolved against, and it is declared only on the deployments the bar is
+  appended to. → [36](36-remote-validation.md#browser-coverage-is-a-plan-part-and-it-holds-the-goal)
 - `atoms` is optional and defaults to empty, and each part's `atoms` likewise. The refusals over them
   are in [Atoms](#atoms--the-pieces-a-part-is-made-of) above; an atom's `slug`, `title` and `intent`
   are non-empty, `touches` is capped like a part's, and `rejected` is capped at eight entries.
@@ -425,6 +430,16 @@ transport changes shape:
 | `risks`      | plan  | What could go wrong with this split                          |
 | `outOfScope` | plan  | What the planner deliberately left out                       |
 | `document`   | plan  | The full narrative, markdown — the read-in-depth version     |
+
+**`coverage` is a part field beside those two, and it is not a narrative one.** It says nothing about
+why the part exists; it names what the part is _for_, and the harness reads it. It is appended to the
+part's own prompt by `partDeclarationNote`, so the agent building it is shown the area it was asked to
+cover, and it is stored on `plan_parts.coverage`. A part carrying one is an ordinary `code` part in
+every other respect: `partSettled`, `liveParts`, `planProgress`, `partBase`, rule `plan-part` and the
+close-out roll-up all read it as the part it is, and it **holds the goal exactly as any other part
+does**. What decides whether a planner declares one at all is the bar appended to `issue-plan` and
+`issue-replan` — `testPartNote`, appended only where some environment declares a `validate.browser`
+block. → [36](36-remote-validation.md#browser-coverage-is-a-plan-part-and-it-holds-the-goal)
 
 **`diagnosis` and `approach` are separate from `reason` because they answer different questions, and
 one field asked all three answered whichever the planner reached for.** `reason` is the verdict's own
@@ -472,7 +487,7 @@ trim reported**, never refused: refusing would reject the whole plan submission 
 (testimony, so refuse what cannot be attributed).
 
 `plans` carries `diagnosis`/`approach`/`risks`/`out_of_scope`/`document` and `plan_parts` carries
-`rationale`/`acceptance` —
+`rationale`/`acceptance`/`coverage` —
 see [14](14-persistence.md). `Store.upsertPlan` **preserves each on absence** rather than clearing it,
 the same discipline it already applies to `statusCommentRef`: a caller updating only what it knows
 about must not erase a narrative some other write put there.
@@ -1706,9 +1721,18 @@ the old reasoning still applies), and that the amendment is shown to the operato
 the write-up should open with what changed the planner's mind, which is the one thing the diff cannot
 show.
 
+**Both of them carry the test-part bar, appended rather than interpolated.** `testPartNote`
+(`src/plans/planning.ts`) is computed once in `src/system.ts`, threaded through `RuleContext`, and
+concatenated after the rendered `issue-plan` / `issue-replan` text — `watchNote`'s arrangement exactly,
+and for its reason: `loadPromptTemplates` rejects only _unknown_ placeholders, so a `{token}` for it
+would be dropped in silence by every override that never learned the token. It returns the empty
+string where no environment declares a `validate.browser` block, because a planner told to declare a
+part nobody can build parks the goal behind it forever, with nothing red.
+→ [36](36-remote-validation.md#the-prompts)
+
 ## Tests
 
 `test/issuePlan.test.ts`, `test/planIngestion.test.ts`, `test/planPart.test.ts`,
 `test/planApproval.test.ts`, `test/planReconcile.test.ts`, `test/planDiscussion.test.ts`,
-`test/planNarrative.test.ts`, `test/planAmendment.test.ts`, `test/stackedPrs.test.ts`,
-`test/closedPrs.test.ts`.
+`test/planNarrative.test.ts`, `test/planAmendment.test.ts`, `test/planTestPart.test.ts`,
+`test/stackedPrs.test.ts`, `test/closedPrs.test.ts`.

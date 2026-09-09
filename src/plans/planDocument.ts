@@ -61,6 +61,7 @@ const PartSchema = z.object({
   acceptance: z.string().min(1).optional(),
   expectedKind: z.enum(['code', 'report', 'determination', 'human']).optional(),
   profile: z.string().min(1).optional(),
+  coverage: z.string().min(1).optional(),
 });
 
 const PlanDocumentSchema = z
@@ -294,6 +295,7 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     size: part.size ?? null,
     expectedKind: part.expectedKind ?? null,
     profile: part.profile ?? null,
+    coverage: part.coverage ?? null,
   }));
 }
 

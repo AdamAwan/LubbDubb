@@ -208,8 +208,18 @@ export function partAtoms(part: PlanPart, planAtoms: readonly PlanAtom[]): PlanA
 
 export function partDeclarationNote(part: PlanPart, planAtoms: readonly PlanAtom[] = []): string {
   const atoms = partAtoms(part, planAtoms);
-  if (part.touches.length === 0 && part.acceptance === null && atoms.length === 0) return '';
+  const coverage = part.coverage ?? null;
+  if (part.touches.length === 0 && part.acceptance === null && coverage === null && atoms.length === 0) return '';
   const lines: string[] = [];
+  if (coverage !== null) {
+    lines.push(
+      `**The end-to-end coverage this part is for:** ${coverage}\n\nIts planner declared this part as the one ` +
+        `that adds or amends the browser suite's coverage of that area. Amending an existing spec is the ` +
+        `normal case rather than a conflict. If you write a new one by copying a neighbour, strip the tags ` +
+        `you inherited: the critical path is an allow-list, and promoting a spec into it is a separate ` +
+        `reviewed change.`,
+    );
+  }
   if (part.touches.length > 0) {
     lines.push(
       `**The paths this part owns**, as its planner declared them:\n${part.touches.map((p) => `- ${p}`).join('\n')}\n\n` +

@@ -105,6 +105,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly prRefStyle: PrRefStyle;
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
+  private readonly testPartNote: string;
   private readonly planning: PlanningPolicy;
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
@@ -128,9 +129,11 @@ export class RuleDispatcher implements Dispatcher {
     watchNote = '',
     watchDeclareNote = '',
     localValidation: () => LocalValidationPolicy = () => DEFAULT_LOCAL_VALIDATION,
+    testPartNote = '',
   ) {
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
+    this.testPartNote = testPartNote;
     this.review = { ...DEFAULT_PR_REVIEW, ...review };
     this.reviewCharters = reviewCharters;
     this.validation = {
@@ -411,6 +414,7 @@ export class RuleDispatcher implements Dispatcher {
       prRefStyle: this.prRefStyle,
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
+      testPartNote: this.testPartNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,
       localValidations: ctx.localValidations ?? [],
