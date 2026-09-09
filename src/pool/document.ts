@@ -8,6 +8,12 @@ export const POOL_SCHEMA_VERSION = 1;
 
 export const POOL_CLOCK_KINDS: readonly PoolClockKind[] = ['digest'];
 
+export const POOL_STALE_DAYS = 7;
+
+export function poolStaleBefore(now: string): string {
+  return new Date(new Date(now).getTime() - POOL_STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
 const POOL_RETIRED_CLOCK_KINDS: readonly string[] = ['claims'];
 
 export function poolRetiredPaths(fleetId: string): string[] {
@@ -63,13 +69,18 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
   if (typeof raw.publishedAt !== 'string') {
     return { ok: false, reason: 'malformed', detail: 'no "publishedAt" in the body' };
   }
-  return readDigest(raw);
+  const publishedAt = new Date(raw.publishedAt);
+  if (Number.isNaN(publishedAt.getTime())) {
+    return { ok: false, reason: 'malformed', detail: `"publishedAt" is not a timestamp: ${raw.publishedAt}` };
+  }
+  return readDigest(raw, publishedAt.toISOString());
 }
 
-function readDigest(raw: Record<string, unknown>): PoolParse {
+function readDigest(raw: Record<string, unknown>, publishedAt: string): PoolParse {
   const document: PoolDigestDocument = {
     ...(raw as unknown as PoolDigestDocument),
     kind: 'digest',
+    publishedAt,
     byPhase: readRows(raw.byPhase),
     byCause: readRows(raw.byCause),
     byCheck: readRows(raw.byCheck),

@@ -8628,6 +8628,12 @@ select:disabled {
 .pool-fleet-at {
   color: var(--cn-fg-dim);
 }
+/* A fleet whose digest stopped being updated: still named, and dimmed, because its
+   rows have been dropped from every total on the page. */
+.pool-fleet.stale {
+  border-style: dashed;
+  color: var(--cn-fg-dim);
+}
 
 /* ---------------------------------------------------------------------------
    The feature board (issue #—) — the fleet's work read one tier up.

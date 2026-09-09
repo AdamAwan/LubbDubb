@@ -1599,6 +1599,7 @@ export interface PoolFleetReading {
   digestAt: string | null;
   ahead: boolean;
   seenAt: string;
+  stale: boolean;
 }
 
 export interface PoolPublication {

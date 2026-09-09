@@ -448,6 +448,57 @@ year-over-year reading is not available. On the `git` transport the older rows d
 history, and that is deliberately **not** part of the contract — a service has no such history, and a
 promise that rested on one substrate would be one the interface could not keep.
 
+### A mirrored fleet expires after a week
+
+_Built._ The publisher's ninety days bound the **document**. This bounds the **mirror**: a fleet whose
+digest has not been republished for **seven days** is expired — its rows are dropped from
+`pool_digest_rows` and count in no total, mean or fleet tally on the shared page.
+
+**What it is for is a fleet that stopped existing rather than one that went quiet.** A `fleetId` is a
+deployment's own name and an operator may change it — a laptop rebuilt, a name corrected, a person
+moving between projects. The old name's `fleets/<old>/digest.json` stays in the pool repository,
+because [one writer per namespace](#one-writer-per-namespace) means only that fleet could ever have
+removed it and it no longer runs. Every other fleet then fetches it for ever, and one person's work is
+summed twice under two names — a company-wide figure inflated by however many renames a team has had,
+with nothing red and nothing to notice.
+
+**The stamp is `publishedAt`, never `seenAt`.** That is the whole mechanism: the abandoned document is
+still *fetched* on every poll, so anything keyed on when it was last read never ages. Only the
+publisher's own stamp stops advancing when the fleet behind it stops.
+
+**Seven days, and a stated constant like retention.** The digest republishes hourly and a fleet is
+allowed to be off for a long weekend; a week is comfortably past the longest ordinary silence and
+comfortably short of a quarter's readings being wrong. It is [not a key](#what-is-deliberately-not-a-key)
+for retention's reason exactly: an operator tuning it would be tuning the answer, and two deployments'
+figures would stop being comparable.
+
+**The expiry drops rows and never the fleet.** The `pool_fleets` row survives with its last `digestAt`,
+carries a derived `stale`, and the cockpit still draws the fleet — named, dashed, and told that it is
+not counted below. A fleet that vanished from the page without a word would be indistinguishable from
+one that was never in the pool, which is the same folding of two facts into one that
+[the three verdicts](24-environments.md#the-three-verdicts) forbid one level down.
+
+**It runs only after a poll that succeeded**, so it can never turn an outage into an expiry. A fetch
+that fails leaves the mirror exactly as it was, [as it must](#when-the-pool-is-unreachable).
+
+**And the landing arm holds the same cut**, or the sweep would fight it: a document that arrives already
+older than the window is recorded as a reading and never mirrored, so an expired fleet is not re-landed
+and re-swept on every pulse.
+
+**Nothing is deleted from the pool itself.** The stale `digest.json` stays where it is. Expiry is a
+judgement each reader makes of its own mirror, and a fleet reaching into another fleet's namespace to
+tidy it is exactly what one writer per namespace exists to prevent. An operator who wants the file gone
+deletes it from the repository by hand.
+
+**A fleet ahead of this build never expires on the digest stamp**, because there is none to read — its
+row ages on `seenAt` instead, which is the only stamp such a fleet has. It contributes no rows either
+way, so it cannot double-count.
+
+**Re-publishing undoes it.** There is no tombstone and nothing to clear: the next document inside the
+window lands like any other and the fleet is counted again. That is what makes the expiry safe — it
+throws away nothing that is not re-derivable from the pool by construction, which is
+[the same test](#the-mirrors-own-tables) that made dropping `pool_claims` safe.
+
 ### The throughput section
 
 What each fleet's work produced, keyed by `ThroughputMeasure` and counted per UTC day like everything
@@ -792,7 +843,8 @@ The pool is drawn in two places and is a **view** in both. It is never a databas
 
 **On the Insights page**, above the readings it is about: what this fleet has published and when, when
 the pool was last polled, and which fleets have been heard from — the ones ahead of this build drawn as
-such rather than as fleets that have published nothing. It draws nothing at all where no pool is
+such rather than as fleets that have published nothing, and the ones a week past their last digest drawn
+as expired rather than dropped ([above](#a-mirrored-fleet-expires-after-a-week)). It draws nothing at all where no pool is
 configured, because an empty panel there would say in the operator's words that something is broken.
 
 It sat above the Knowledge page until that page went with the claim store behind it
@@ -880,7 +932,9 @@ rule. Two properties are worth stating here, because both cut against the arrang
   of an agent, and the one that used to is gone with the store behind it
   ([27](27-obstacles.md#what-the-claim-store-left-behind)).
 - **No reading acts.** A stale mirror and a fleet that has not published in a month are drawn for the
-  person who can act on them, and neither moves anything.
+  person who can act on them, and neither moves anything. A fleet a week past its last digest has its
+  rows expired out of the sums ([above](#a-mirrored-fleet-expires-after-a-week)) and is still only
+  drawn — nothing is dispatched, held or ranked by it, and nothing is deleted from the pool.
 - **Nothing reads another fleet's faults.** `byFault` is published and never mirrored, never summed and
   never drawn on the shared insights page — see [the faults section](#the-faults-section).
 
@@ -893,6 +947,10 @@ from — and all three went with the tables they were on
 publish from rows the fleet already holds, and the envelope carries the project name.
 
 ### The mirror's own tables
+
+**`stale` on a fleet reading is derived, never a column.** It is `digest_at ?? seen_at` against the
+week, read at the moment the row is read — a stored flag would be a second copy of the clock that goes
+wrong the minute nothing polls. → [above](#a-mirrored-fleet-expires-after-a-week)
 
 `pool_digest_rows`, `pool_fleets` and this fleet's own `pool_publications` are the three that remain;
 `pool_claims` went with the arm that filled it. Each is created whole by `CREATE TABLE IF NOT EXISTS`

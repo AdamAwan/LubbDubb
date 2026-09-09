@@ -5,6 +5,11 @@ import { relTime } from './util.js';
 
 // → docs/spec/17-cockpit.md
 
+export function fleetClass(fleet: { ahead: boolean; stale: boolean }): string {
+  if (fleet.ahead) return 'pool-fleet ahead';
+  return fleet.stale ? 'pool-fleet stale' : 'pool-fleet';
+}
+
 export function PoolStatus({ now }: { now: number }): JSX.Element | null {
   const [payload, setPayload] = useState<PoolStatePayload | null>(null);
   useEffect(() => {
@@ -45,7 +50,7 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
       {payload === null || payload.fleets.length === 0 ? null : (
         <div className="pool-fleets">
           {payload.fleets.map((fleet) => (
-            <span key={fleet.fleetId} className={fleet.ahead ? 'pool-fleet ahead' : 'pool-fleet'}>
+            <span key={fleet.fleetId} className={fleetClass(fleet)}>
               {/* No `<Ref/>`: a pooled fleet has no ref to draw, and its name is text. */}
               <strong>{fleet.fleetId}</strong>
               <span className="pool-fleet-at">
@@ -55,6 +60,7 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
                     ? 'no digest yet'
                     : relTime(fleet.digestAt, now)}
               </span>
+              {fleet.stale && !fleet.ahead ? <span className="pool-fleet-at">expired</span> : null}
             </span>
           ))}
         </div>

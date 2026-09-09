@@ -4,7 +4,7 @@ import { packSecretRefusal } from '../reviewPacks/secrets.js';
 import type { Store } from '../store/store.js';
 import type { PoolClockDocument, PoolClockKind, PoolPackDocument, ReviewPackShare } from '../types.js';
 import { buildDigestDocument } from './digestArm.js';
-import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash } from './document.js';
+import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
 import type { PoolTransport } from './transport.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -150,6 +150,7 @@ export class PoolDesk {
       return;
     }
     const now = this.deps.now();
+    const staleBefore = poolStaleBefore(now);
     for (const entry of fetched) {
       const parsed = parsePoolDocument(entry.text, entry.addressedTo ?? undefined);
       if (!parsed.ok) {
@@ -167,12 +168,13 @@ export class PoolDesk {
         this.record(`Skipped a pool document: ${parsed.detail}`, null);
         continue;
       }
-      this.land(parsed.document);
+      this.land(parsed.document, staleBefore);
     }
+    this.expire();
     this.polledAt = now;
   }
 
-  private land(document: PoolClockDocument): void {
+  private land(document: PoolClockDocument, staleBefore: string): void {
     try {
       if (document.fleetId === this.deps.fleetId) {
         this.deps.store.recordPoolFleetReading({
@@ -183,7 +185,9 @@ export class PoolDesk {
         });
         return;
       }
-      this.deps.store.replacePoolFleetDigest(document.fleetId, document.project, document);
+      if (document.publishedAt >= staleBefore) {
+        this.deps.store.replacePoolFleetDigest(document.fleetId, document.project, document);
+      }
       this.deps.store.recordPoolFleetReading({
         fleetId: document.fleetId,
         project: document.project,
@@ -192,6 +196,14 @@ export class PoolDesk {
       });
     } catch (error) {
       this.record(`Could not land ${document.fleetId}'s ${document.kind} document`, error);
+    }
+  }
+
+  private expire(): void {
+    try {
+      this.deps.store.expireStalePoolDigests();
+    } catch (error) {
+      this.record('Could not expire the stale fleets in the pool mirror', error);
     }
   }
 

@@ -526,11 +526,14 @@ export class Store {
   replacePoolFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
     this.pool.replaceFleetDigest(fleetId, project, document);
   }
-  recordPoolFleetReading(reading: Omit<PoolFleetReading, 'seenAt'>): void {
+  recordPoolFleetReading(reading: Omit<PoolFleetReading, 'seenAt' | 'stale'>): void {
     this.pool.recordFleetReading(reading);
   }
   listPoolFleets(): PoolFleetReading[] {
     return this.pool.listPoolFleets();
+  }
+  expireStalePoolDigests(): string[] {
+    return this.pool.expireStaleDigests();
   }
   listPoolDigestRows(project: string | null): PoolDigestMirrorRow[] {
     return this.pool.listDigestRows(project);
