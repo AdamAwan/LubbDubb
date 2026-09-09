@@ -51,7 +51,9 @@ present.
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
 reason: once the code has landed it is a second document describing the application, and a reader
-cannot tell by looking which of the two is true. There is none open at present.
+cannot tell by looking which of the two is true. One is open:
+[`docs/plans/36-remote-validation.md`](plans/36-remote-validation.md), for
+[36 — Remote validation](spec/36-remote-validation.md).
 
 ## `CLAUDE.md` and `spec/` — the division of labour
 
@@ -122,6 +124,7 @@ deliberately left unchecked, and why, is in
 | [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story               |
 | [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section              |
 | [35](spec/35-ejection.md)            | Ejection                   | Taking a running agent's work into your own Claude Code: the claim, the held slot, the handoff, the three ways back     |
+| [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is  |
 
 ## Conventions used throughout
 

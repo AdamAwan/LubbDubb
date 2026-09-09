@@ -17,13 +17,14 @@ with a procedure, an expectation and the resources it needs, that a person runs 
 Stated first, because each boundary is a thing the harness already does and would otherwise be
 re-litigated:
 
-| Not                 | Because                                                                                                                                      |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| A test suite        | `npm run check` runs on every branch. This is the layer above: checks needing a running harness, a real environment, a browser, or a person. |
-| Acceptance criteria | Those are per **part**, ticked by a reviewer reading a diff ([08](08-planning.md)). A check is executed against the delivered goal.          |
-| CI                  | Nothing here gates a merge, and **no result is ever inferred from a build**.                                                                 |
-| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.    |
-| A blocker           | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.      |
+| Not                  | Because                                                                                                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test suite         | `npm run check` runs on every branch. This is the layer above: checks needing a running harness, a real environment, a browser, or a person.                                                                                                                                             |
+| Acceptance criteria  | Those are per **part**, ticked by a reviewer reading a diff ([08](08-planning.md)). A check is executed against the delivered goal.                                                                                                                                                      |
+| CI                   | Nothing here gates a merge, and **no result is ever inferred from a build**.                                                                                                                                                                                                             |
+| A credential store   | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.                                                                                                                                                |
+| A blocker            | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.                                                                                                                                                  |
+| A run somewhere real | A check is a procedure and a reading. Assembling checks against an environment the work has **arrived** in, running the project's own specs against them and reading the result is [36](36-remote-validation.md), which writes its readings onto these rows and authors none of its own. |
 
 ## The bar
 
@@ -108,19 +109,20 @@ it is a property of the decomposition. Databases written under the old key are r
 one at boot, `id` and `letter` untouched
 ([14](14-persistence.md#rebuilding-a-table-whose-key-changed)).
 
-| Field            | What it is                                                                                          |
-| ---------------- | --------------------------------------------------------------------------------------------------- |
-| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.   |
-| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                       |
-| `title`          | One line, the headline.                                                                             |
-| `do`             | The procedure, markdown.                                                                            |
-| `expect`         | What a pass looks like.                                                                             |
-| `uses`           | Resource **names**, not paths.                                                                      |
-| `covers`         | Part slugs this check exercises. Optional, any number.                                              |
-| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.** |
-| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**        |
-| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                    |
-| `state`          | Below.                                                                                              |
+| Field            | What it is                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                               |
+| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                   |
+| `title`          | One line, the headline.                                                                                                         |
+| `do`             | The procedure, markdown.                                                                                                        |
+| `expect`         | What a pass looks like.                                                                                                         |
+| `uses`           | Resource **names**, not paths.                                                                                                  |
+| `covers`         | Part slugs this check exercises. Optional, any number.                                                                          |
+| `area`           | The suite area a remote run selects this check by. Optional; null is a check nothing automates. → [36](36-remote-validation.md) |
+| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                             |
+| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                    |
+| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                |
+| `state`          | Below.                                                                                                                          |
 
 ### States
 
@@ -228,6 +230,13 @@ The hand-over is what that person does with the nomination, and it is offered on
 check rather than only on a nominated one: an operator who knows their own deployment does not need
 the planner's permission to use it.
 
+There is a **fourth**, and it is not a runner at all in the sense the other three are: a **reviewed
+spec** in the project's own browser suite, selected by the check's `area` and run against an
+environment the goal's work has arrived in ([36](36-remote-validation.md)). No model reads anything —
+the suite's machine-readable report is the only source of the outcome — so what it writes is a
+`spec` reading, which is a fourth thing again and says so wherever it is drawn. It is not an `actor`
+either: nothing dispatches it, an operator presses go, and a check with no `area` is untouched by it.
+
 There is a **third** runner, and it is the answer to the same problem from the other side: the
 operator's own Claude Code, on the operator's own machine, which has the browser and the login the
 fleet does not. See [the desktop channel](#the-desktop-channel). It is not an `actor` — nobody
@@ -255,6 +264,13 @@ every delivered goal with a check a **person** still has to run, once a pulse, b
 asks and against the same gate ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)).
 It states what is outstanding through the same `outstandingChecks` the close-out reads, refreshed
 every pulse, so the bench row and the obligation beneath it cannot disagree about what a goal owes.
+
+Where a goal has arrived somewhere with a `validate` block configured, the row's detail also carries
+what that environment's **sheet** says — the readings already in hand, any selector the pre-flight
+could not find, the tenant's age, and what is waiting on a query approval — refreshed on the same
+pulse for the same reason the counts are. The press is a person's act, so the row is filed for one
+even where every remaining check is automatable, and **no second bench kind is added**: a sheet
+waiting to be run is this row's business. → [36](36-remote-validation.md#saying-so-on-the-bench)
 
 **It blocks nothing**, which is the table at the top of this document holding: the row gates no
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
@@ -699,12 +715,19 @@ environment could not be reached and no reading was taken.
 
 ### What a desktop reading is worth
 
-`result_by` is `desktop`, which is neither of the other two and says so wherever the reading is
+`result_by` is `desktop`, which is neither of the other three and says so wherever the reading is
 drawn. `operator` means a person carried the steps out — what a validation checklist already means,
 which is why it is the one that draws no marker. `agent` means the fleet ran it unattended. `desktop`
 means the operator's own Claude ran it at their keyboard: stronger than the fleet's, because it
 reached the real environment, and weaker than a person's, because no person did the steps. A reader
 deciding whether to re-run a check before closing a goal is deciding on exactly that difference.
+
+**`spec` is the fourth**, and it is stronger than `agent` for the reason `desktop` is: a reviewed
+spec ran against a real environment and a report said what happened, with no model between the run
+and the reading. It is still not `operator`, because nobody watched. A `spec` reading may only be
+written over `unrun` or over another `spec` reading — a reading a person, an agent or a desktop
+session took is theirs, and overwriting it is the harness deciding it knows better than whoever
+watched the thing happen. → [36](36-remote-validation.md#what-a-spec-reading-is-worth)
 
 ### The skill
 
@@ -834,6 +857,14 @@ this".
 today's work and does not take it out of the count. Otherwise it becomes the quiet exit that `unrun`
 is loud about.
 
+**Waiving is also how a check the product has moved past is retired**, and it is the only way
+([36](36-remote-validation.md#the-sheet-records-intent-and-a-person-retires-it)). Nothing infers that
+a check has stopped applying, because nothing can tell that from a check that is failing — and the
+guess would be made in whichever direction was cheapest to implement, silently. So the retirement is
+an act somebody signs, with a reason, listed at close-out. That it cannot be reached by deferral is
+the same guard read forwards: the two are kept apart precisely so the cheap word cannot do the
+expensive word's job.
+
 ## The flag
 
 `validationVerdict(checks)` (`src/validation/verdict.ts`, pure) answers `clear` — every live check
@@ -960,8 +991,12 @@ A row carrying one half of a claim without the other reads as claimed by nobody,
 direction here for `actor`'s reason inverted: an unreadable claim becoming live would block the fleet
 from a check forever.
 
-`result_by` needed no migration when it gained `agent`, nor again when it gained `desktop` — the
-column existed and only gained values it may hold. `rowToCheck`
+`result_by` needed no migration when it gained `agent`, nor again when it gained `desktop`, nor a
+third time for `spec` — the column existed and only gained values it may hold. `area` is a different
+case and has a real entry: it is a column on an **existing** table, so without one it is invisible on
+every database from before it existed, every check reads as unautomatable and every remote sheet is
+all-manual, with nothing red. Its null means _no area declared_, which is true of every older row and
+stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `rowToCheck`
 narrows it, `checkStateOf`'s sharp edge: a reading attributed to something this does not recognise
 reads as attributed to nobody, and `actor` narrows the same way, to `human`, because an unreadable
 column becoming a hand-over would dispatch an agent nobody asked for.
