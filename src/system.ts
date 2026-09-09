@@ -60,6 +60,7 @@ import { CommandEnvironmentObserver, type EnvironmentObserver } from './environm
 import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
 import { CommandStateReader, type StateReader } from './remoteValidation/stateReader.js';
 import { StateQueryDesk } from './remoteValidation/stateQueries.js';
+import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
@@ -128,6 +129,7 @@ export interface System {
   pool?: PoolDesk;
   watch: WatchDryRunner;
   stateQueries: StateQueryDesk;
+  remoteValidation: RemoteValidationDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -601,6 +603,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reader: opts.stateReader ?? new CommandStateReader(config.repoRoot),
   });
 
+  const remoteValidation = new RemoteValidationDesk({
+    store,
+    environments: config.environments,
+    observer: environmentObserver,
+    queries: stateQueries,
+    probeIntervalMs: config.environmentProbeIntervalMs,
+    errors,
+  });
+
   const closeOutSink = opts.sink ?? connector;
   const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
@@ -700,6 +711,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     issuePickup,
     branchReaps,
     environments,
+    remoteValidation,
     prWatch,
     prWorkItems,
     review: config.review,
@@ -891,6 +903,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     upstream,
     watch: watchDryRun,
     stateQueries,
+    remoteValidation,
     updates,
     runtimeControl,
     pets,

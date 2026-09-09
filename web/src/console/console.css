@@ -2001,6 +2001,16 @@ a.cn-qbody {
 .cn-sig-row.pending .cn-sig-stripe {
   background: var(--cn-violet-line);
 }
+/* A validation sheet's rows, drawn in the same frame. → docs/spec/36-remote-validation.md */
+.cn-sig-row.passed .cn-sig-stripe {
+  background: var(--cn-green-line);
+}
+.cn-sig-row.failed .cn-sig-stripe {
+  background: var(--cn-red-line);
+}
+.cn-sig-row.blocked .cn-sig-stripe {
+  background: var(--cn-amber-line);
+}
 .cn-sig-row.editing {
   background: var(--cn-panel-2);
 }

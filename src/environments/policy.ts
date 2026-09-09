@@ -1,4 +1,4 @@
-import type { EnvironmentGate } from '../types.js';
+import type { EnvironmentGate, RemoteRowKind } from '../types.js';
 
 // → docs/spec/24-environments.md
 
@@ -10,8 +10,6 @@ export interface EnvironmentConfig {
   watch?: EnvironmentWatch;
   validate?: EnvironmentValidate;
 }
-
-type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
 
 const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state', 'signal', 'measure'];
 

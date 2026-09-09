@@ -266,11 +266,14 @@ It states what is outstanding through the same `outstandingChecks` the close-out
 every pulse, so the bench row and the obligation beneath it cannot disagree about what a goal owes.
 
 Where a goal has arrived somewhere with a `validate` block configured, the row's detail also carries
-what that environment's **sheet** says — the readings already in hand, any selector the pre-flight
-could not find, the tenant's age, and what is waiting on a query approval — refreshed on the same
-pulse for the same reason the counts are. The press is a person's act, so the row is filed for one
-even where every remaining check is automatable, and **no second bench kind is added**: a sheet
-waiting to be run is this row's business. → [36](36-remote-validation.md#saying-so-on-the-bench)
+one line per environment saying that environment's **sheet** is assembled, how many rows it has, and
+how many are waiting on a query approval — folded on the server off the sheet's own rows, refreshed on
+the same pulse and for the same reason the counts are. It is deliberately that short: an operator has
+to be told a sheet exists on the pulse sheets start existing, and what the sheet says is the sheet's
+own surface to say. What the browser half adds to the line — the selectors the pre-flight could not
+find, the tenant's age — lands with the pre-flight. The press is a person's act, so the row is filed
+for one even where every remaining check is automatable, and **no second bench kind is added**: a
+sheet waiting to be run is this row's business. → [36](36-remote-validation.md#the-desk)
 
 **It blocks nothing**, which is the table at the top of this document holding: the row gates no
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running

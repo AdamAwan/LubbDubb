@@ -1328,6 +1328,7 @@ export interface GoalArrival {
   arrivedAt: string;
   announcedAt: string | null;
   watchedAt: string | null;
+  sheetedAt: string | null;
 }
 
 export type GoalWatchKind = 'signal' | 'measure';
@@ -1414,6 +1415,47 @@ export interface StateQuery extends StateQueryInput {
   dryRunRows: number | null;
   dryRunDetail: string | null;
   dryRunSample: string | null;
+}
+
+export type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
+
+export type RemoteRowOutcome = 'passed' | 'failed' | 'blocked';
+
+/** One goal's checks, watches and state queries, assembled against one environment. */
+export interface RemoteSheet {
+  goalRef: string;
+  environment: string;
+  assembledAt: string;
+}
+
+export interface RemoteSheetRow {
+  goalRef: string;
+  environment: string;
+  rowId: string;
+  kind: RemoteRowKind;
+  seq: number;
+  title: string;
+  sourceId: string;
+  selected: boolean;
+  /** Non-null means no reading was taken, and this is what an operator is told instead. */
+  blockedReason: string | null;
+  awaitingApproval: boolean;
+}
+
+/**
+ * A point-in-time answer on one sheet row. Never a `WorldEvent` and never a `watch_readings` row —
+ * see 36-remote-validation.md.
+ */
+export interface RemoteReading {
+  goalRef: string;
+  environment: string;
+  rowId: string;
+  runId: string | null;
+  outcome: RemoteRowOutcome;
+  rows: number | null;
+  value: number | null;
+  detail: string | null;
+  readAt: string;
 }
 
 /** One operator's "I have read this, and it is safe *here*" — see 36-remote-validation.md. */

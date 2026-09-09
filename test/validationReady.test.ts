@@ -98,6 +98,7 @@ const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
     issues: [],
     deliveries: [],
     shortfalls: [],
+    sheetRows: new Map(),
     existing: [],
     checks: new Map(),
     opened: null,

@@ -143,6 +143,9 @@ export interface CockpitActions {
   setFeatureQuery(next: Partial<Pick<Place, 'featureCard' | 'featureSort' | 'featurePrs'>>): void;
   collapseFeature(issueNumber: number, collapsed: boolean): void;
   openGoalSection(section: string, open: boolean): void;
+  /** Which environment's validation sheet the goal page is showing — a place, never a useState. */
+  openRemoteSheet(environment: string | null): void;
+  ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
   setUpNextProfile(origin: string, profile: string | null): Promise<void>;
 

@@ -2,7 +2,7 @@ import { openedGoals } from '../environments/arrival.js';
 import { watchClearedGoals } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
-import type { Issue, ValidationCheck } from '../types.js';
+import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { validationReadyPass } from './ready.js';
 
 // → docs/spec/20-validation.md
@@ -28,6 +28,7 @@ export class ValidationReadyDesk {
       shortfalls: this.store.listShortfalls(),
       existing,
       checks: this.checksByOrigin(deliveries.map((d) => d.originRef)),
+      sheetRows: this.sheetRowsByOrigin(),
       watchCleared: watchClearedGoals(
         'validate',
         this.environments,
@@ -54,6 +55,17 @@ export class ValidationReadyDesk {
       else if (step.kind === 'reopen') this.store.reopenHumanTask(step.taskId, step.detail);
       else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
     }
+  }
+
+  private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {
+    const out = new Map<string, RemoteSheetRow[]>();
+    if (!this.environments.some((e) => e.validate !== undefined)) return out;
+    for (const row of this.store.listRemoteSheetRows()) {
+      const held = out.get(row.goalRef);
+      if (held === undefined) out.set(row.goalRef, [row]);
+      else held.push(row);
+    }
+    return out;
   }
 
   private checksByOrigin(origins: readonly string[]): Map<string, ValidationCheck[]> {

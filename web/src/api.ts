@@ -321,6 +321,14 @@ const realApi = {
       note === undefined ? undefined : { note },
     ),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
+  ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) => {
+    const [kind, id] = splitRemoteRowId(rowId);
+    return post<{ ok: true }>(
+      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/` +
+        `${kind === 'watch' ? 'watch-queries' : 'queries'}/${encodeURIComponent(id)}`,
+      { accept },
+    );
+  },
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch-proposals/${encodeURIComponent(checkId)}`, { accept }),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) =>
@@ -516,6 +524,12 @@ function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: bo
 }
 
 const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO === '1';
+
+/** A sheet row id is `<kind>:<id>`; which door its approval goes through follows from the kind. */
+function splitRemoteRowId(rowId: string): [string, string] {
+  const at = rowId.indexOf(':');
+  return at < 0 ? ['', rowId] : [rowId.slice(0, at), rowId.slice(at + 1)];
+}
 
 export const isDemo = DEMO;
 export const api = DEMO ? demoApi : realApi;

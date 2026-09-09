@@ -279,6 +279,9 @@ export function useCockpit(): CockpitStatus {
             ? current.goalShut.filter((name) => name !== section)
             : [...current.goalShut.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b)),
         })),
+      openRemoteSheet: (environment) => go({ sheetEnvironment: environment }),
+      ruleRemoteQuery: (issueNumber, environment, rowId, accept) =>
+        then(api.ruleRemoteQuery(issueNumber, environment, rowId, accept)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
@@ -399,6 +402,7 @@ export function useCockpit(): CockpitStatus {
       insightsScope: place.insightsScope,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
+      sheetEnvironment: place.sheetEnvironment,
       selectedGoal: place.goal,
       selectedPr: place.pr,
       goalAgents,
