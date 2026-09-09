@@ -39,6 +39,36 @@ applying, and never assumes one environment has one name. Each of those is knowl
 or the operator has, and each wrong guess fails **silently** rather than loudly — which is why the
 principle is a rule rather than a preference.
 
+## Off by default, and off in one place
+
+**`environments` is an empty list by default, and `validate` is optional on an environment that
+exists.** A deployment that edits no configuration gets no sheet, no row, no bench line, no cockpit
+surface, no prompt note and no spawned command — and that is inherited rather than re-implemented:
+`environments` is already the off switch for everything in [24](24-environments.md) and
+[29](29-post-deploy-watch.md), and this hangs off the arrival that subsystem records.
+
+There are four gates, and the point of naming them together is that a later change must not add a
+fifth surface that misses one:
+
+| Gate                                    | Off means                                                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `environments`                       | No probe, no arrival, nothing to assemble a sheet from. The whole subsystem never runs.                                                                                             |
+| An environment with no `validate` block | No sheet is assembled for its arrivals, and **the arrival is left unstamped** — see [the desk](#the-desk).                                                                          |
+| No `validate.state` anywhere            | `state_declare` is not named to any agent and refuses a caller by name. → [The prompts](#the-prompts)                                                                               |
+| No `validate.browser` anywhere          | The test-part bar is not appended, so a planner cannot declare a part nobody can build. → [Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal) |
+
+**Nothing here is drawn empty rather than absent.** A card of question marks on a deployment that
+configured nothing is a feature announcing itself as broken, which is the rule the environments card
+and the signals card are both already built to.
+
+**One thing does happen on every deployment, and it is the only one**: the tables are created and the
+three columns are added on the boot that takes the build. All ten are inert, none is backfilled, and
+a database that never sees a `validate` block never has a row written to any of them.
+→ [Migrations](#migrations)
+
+Turning it on is one block on one environment, and the honest first setting is an acceptance
+environment with `permits: ["state"]` — read-only, cheap, and nothing driving a browser anywhere.
+
 ## What it is not
 
 Stated first, because each boundary is a thing the harness already does and would otherwise be
@@ -556,6 +586,12 @@ report landed. **It states no outcome** — → [The report tool](#the-report-to
   agent per run is the store's `WHERE status = 'pending'` on the dispatched flip, which is what makes
   it true across a restart.
 - **Nothing is dispatched for a sheet nobody pressed.** The rule reads run rows, never sheets.
+- **It carries an `enabled` predicate** on a `RuleConditions` flag — true only where some environment
+  declares a `validate` block — beside `review` and `sequencer`. A rule with no run rows to read
+  would already produce nothing, so this buys one thing and it is worth having: the rule book draws
+  it as **inert** on a deployment that has not turned the feature on, rather than as a rule that
+  looks live and never fires. An operator reading the book to find out why nothing happened is
+  entitled to the difference.
 
 **A new `issue:<n>:…` origin is classified in `src/issueOrigins.ts`**, and `validate-remote:` joins
 `EVIDENCE_SUFFIX_PREFIXES` beside `validate:`, `validate-failure:` and `validate-local:`. A run is
@@ -645,7 +681,16 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   declares a `validate.browser` block, so a planner on a deployment with no suite is never told to
   declare a part nobody can build;
 - the **`state_declare` instruction** on the two prompts that dispatch work, `watchDeclareNote`'s
-  arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)).
+  arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
+  **appended only where some environment declares a `validate.state` executor**, which is where that
+  arrangement is deliberately departed from. `watch_declare`'s note is unconditional and can afford
+  to be, because a watch declared on a deployment with no `observe` draws no surface and costs a line
+  of prompt. This one would cost the same line on every dispatch on every deployment, to collect
+  queries **nothing can ever run**, and the collecting is the harm: a goal page listing questions
+  about a deployed store on a fleet that has no deployed store to ask is a surface that reads as
+  broken and was never turned on. So the tool is not named to any agent there, and a caller that
+  reaches for it anyway is **refused by name**, told which configuration is missing — the harness's
+  habit of a legible refusal over a silent store.
 
 ## What a spec reading is worth
 
@@ -712,6 +757,12 @@ inferred from a green build, a merged pull request or an absence of errors.
 passes: assemble the sheets for arrivals nothing has assembled yet, run the approved deterministic
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
+
+**It returns immediately where no environment declares a `validate` block**, which is the steady
+state for every deployment that has not turned this on, and it stamps nothing on the way past —
+`EnvironmentDesk`'s own arrangement for its five conditional passes. Stamping an arrival it did not
+assemble would burn the freshness guard that makes turning the feature on next month safe, which is
+the one way an early return could be got wrong quietly.
 
 Its position in the pulse is an **invariant, not a preference**, and it is stated here so a reordering
 elsewhere is not silent:
@@ -938,6 +989,11 @@ argument for its reason: this card carries **controls and a press**, and a contr
 inside a status card is a control nobody finds. Its order in the page is the order the questions are
 asked in: did we build it (Validation), does it work here (this), did it do anything over time
 (Signals), where has it got to (Environments).
+
+**The card is absent entirely where no environment declares a `validate` block**, and absent on a
+goal with no sheet — not an empty card, and not a row of question marks. That is the rule the
+Environments card and the Signals card are both built to, and it is what keeps a deployment that has
+not turned this on from reading as a deployment where it is broken.
 
 It draws one block per environment that has a sheet: the tenant and its age against the declared
 freshness window, the deployed commit, every row with its kind, its outcome and its reason, the

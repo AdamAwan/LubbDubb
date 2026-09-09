@@ -71,6 +71,8 @@ that cannot mean what it says.
   `tenantFreshnessMs` with no tenant of any shape; an empty command anywhere in the block.
 - **No secret is a config key.** `tenantEnv` names an env var; the value reaches the spawn env and
   never the prompt, the cockpit or a project layer. Asserted.
+- A `RuleConditions` flag — true only where some environment declares a `validate` block — is
+  computed here, so parts 6, 10 and 15 have one answer to read rather than three.
 - A test builds its config with `loadConfig`, never `loadDeploymentConfig`, and points
   `projectConfigFile` or `repoRoot` at a temp directory.
 
@@ -139,7 +141,11 @@ The query kind the watch does not have, on the watch's own arrangement.
   shape — including `authored: 'operator'`, which a replan does not touch.
 - The instruction naming the tool is **appended** to the two prompts that dispatch work as a rendered
   string, `watchDeclareNote`'s arrangement — never interpolated, and never imported into
-  `src/dispatcher/`.
+  `src/dispatcher/` — and **only where some environment declares a `validate.state` executor**.
+  Asserted in both directions: a deployment with none never sees the line, and one with a `state`
+  executor does.
+- With no `validate.state` anywhere, `state_declare` **refuses by name** and says which configuration
+  is missing, rather than storing a query nothing can ever run.
 - A test asserts a declared query is never written to any file: the store is the only writer, and
   nothing puts one in a worktree.
 
@@ -180,6 +186,9 @@ The query kind the watch does not have, on the watch's own arrangement.
   environment declares a `validate` block is left **unstamped** — asserted, because stamping it burns
   the guard that makes turning the feature on next month safe.
 - **Cap of five sheets per pulse**, oldest arrival first, deferring rather than dropping.
+- The desk **returns immediately where no environment declares a `validate` block**, and stamps
+  nothing on the way past. Asserted, because stamping there burns the guard that makes turning the
+  feature on next month safe.
 - The desk is the one owner of every sheet write. A pass that throws goes through `errors.record` and
   never fails the cycle; **no swallowed `catch`**.
 - Nothing under `src/dispatcher/` imports _src/remoteValidation/_ or `src/environments/` — asserted
@@ -255,6 +264,8 @@ The query kind the watch does not have, on the watch's own arrangement.
   capped run queues as `waiting` rather than vanishing.
 - **`DISPATCH_PIPELINE` position: immediately below `validate-check`, above `validation-failed`** —
   asserted by index, both neighbours named.
+- The rule carries an **`enabled` predicate** on part 2's flag, beside `review` and `sequencer`, so
+  the rule book draws it **inert** rather than live-and-never-firing where the feature is off.
 - Origin **`issue:<n>:validate-remote:<runId>`**, lease `validate-remote/issue/<n>/<runId>`, a
   read-only checkout **pinned to the deployed commit** and no ref minted.
 - **`src/issueOrigins.ts`**: `'validate-remote:'` added to `EVIDENCE_SUFFIX_PREFIXES`. A test asserts
@@ -349,6 +360,8 @@ The part where the runner contract becomes true rather than aspirational.
 - **No colour is a literal**: every tone is a `--cn-*` property on both `:root` blocks and registered
   in `web/src/cockpit/tokens.ts`, asserted by `test/cockpitTheme.test.ts`.
 - `blocked` and `unknown` say **why in words**, never in a clean reading's vocabulary.
+- **The card is absent** where no environment declares a `validate` block, and on a goal with no
+  sheet — not an empty card and not a row of question marks. Asserted.
 - Both typecheckers pass — `typecheck` and `typecheck:web` are separate passes.
 
 ---
@@ -376,7 +389,39 @@ because nothing else needs it and because it is the part an operator feels.
 
 ---
 
-## Part 16 — Closing the documentation out
+## Part 16 — The off switch, asserted end to end
+
+Not a feature, and deliberately its own part rather than a line in each of the others: the containment
+is what makes this safe to ship to a deployment that did not ask for it, and it is exactly the kind of
+property that is true in fifteen places and false in the sixteenth nobody checked.
+
+**Acceptance**
+
+One test, over a `buildSystem` whose config edits **nothing** — no `environments`, no `validate`
+block — driving a goal all the way through delivery and an arrival, asserting each of these on the
+same run:
+
+- no sheet, no sheet row, no run and no reading is written to any of the seven tables;
+- **no arrival is stamped `sheeted_at`** — the guard that keeps turning the feature on later safe;
+- no bench row and no bench detail mentions a sheet;
+- the cockpit ships no `remoteSheets` and draws no card;
+- **no command is spawned** — asserted on the fakes' own record of what they were asked for, with
+  none of them injected being the stronger version of the same assertion;
+- the `state_declare` note reaches neither work prompt, and the test-part bar reaches neither planning
+  prompt;
+- rule `remote-validation` is **inert** in the rule book and produces no candidate.
+
+And its opposite, so the test is not passing for the wrong reason: the same run with one environment
+declaring `permits: ["state"]` and a `state.run` assembles a sheet, appends the note, and enables the
+rule — **both directions**, `planApproval.test.ts`'s discipline, because a feature that is off and a
+feature that is broken are one edit apart and only one of them is honest.
+
+The migrations are the deliberate exception and are asserted as such: the ten schema changes **do**
+apply on a deployment that configured nothing, and every one of them is inert and unbackfilled.
+
+---
+
+## Part 17 — Closing the documentation out
 
 **Acceptance**
 
