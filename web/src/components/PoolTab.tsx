@@ -2,6 +2,7 @@ import type { JSX, ReactNode } from 'react';
 import type { PoolFleetReading, PoolInsightsPayload, PoolRollupRow } from '../types.js';
 import { fmtUsd, relTime } from './util.js';
 import { MethodNote } from './insightsMethod.js';
+import { fleetClass } from './PoolStatus.js';
 
 // → docs/spec/17-cockpit.md#just-me-or-the-pool, docs/spec/28-cross-fleet-pool.md#in-the-cockpit
 
@@ -215,13 +216,16 @@ function Fleets({ fleets }: { fleets: PoolFleetReading[] }): JSX.Element | null 
   return (
     <div className="pool-fleets">
       {fleets.map((fleet) => (
-        <span key={fleet.fleetId} className={fleet.ahead ? 'pool-fleet ahead' : 'pool-fleet'}>
+        <span key={fleet.fleetId} className={fleetClass(fleet)}>
           {/* No `<Ref/>`: a pooled fleet has no ref to draw, and its name is text. */}
           <strong>{fleet.fleetId}</strong>
           {fleet.project === null ? null : <span className="pool-fleet-p">{fleet.project}</span>}
           <span className="pool-fleet-at">
             {fleet.ahead ? 'ahead of this build' : fleet.digestAt === null ? 'no digest yet' : relTime(fleet.digestAt)}
           </span>
+          {/* Expired out of every total on this page, and still named: a fleet dropped
+              without a word reads as one that was never in the pool. */}
+          {fleet.stale && !fleet.ahead ? <span className="pool-fleet-at">expired — not counted below</span> : null}
         </span>
       ))}
     </div>

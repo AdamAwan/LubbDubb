@@ -1,3 +1,4 @@
+import { poolStaleBefore } from '../pool/document.js';
 import type { PoolDigestDocument, PoolDigestRow, PoolClockKind, PoolFleetReading, PoolPublication } from '../types.js';
 import type { StoreContext } from './context.js';
 
@@ -24,7 +25,7 @@ export class PoolStore {
     write();
   }
 
-  recordFleetReading(reading: Omit<PoolFleetReading, 'seenAt'>): void {
+  recordFleetReading(reading: Omit<PoolFleetReading, 'seenAt' | 'stale'>): void {
     this.ctx.db
       .prepare(
         `INSERT INTO pool_fleets (fleet_id, project, digest_at, ahead, seen_at)
@@ -39,6 +40,7 @@ export class PoolStore {
   }
 
   listPoolFleets(): PoolFleetReading[] {
+    const before = poolStaleBefore(this.ctx.now());
     const rows = this.ctx.db.prepare(`SELECT * FROM pool_fleets ORDER BY fleet_id ASC`).all() as FleetRow[];
     return rows.map((r) => ({
       fleetId: r.fleet_id,
@@ -46,7 +48,25 @@ export class PoolStore {
       digestAt: r.digest_at,
       ahead: r.ahead === 1,
       seenAt: r.seen_at,
+      stale: (r.digest_at ?? r.seen_at) < before,
     }));
+  }
+
+  expireStaleDigests(): string[] {
+    const before = poolStaleBefore(this.ctx.now());
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT f.fleet_id AS fleet_id FROM pool_fleets f
+          WHERE f.digest_at IS NOT NULL AND f.digest_at < ?
+            AND EXISTS (SELECT 1 FROM pool_digest_rows r WHERE r.fleet_id = f.fleet_id)`,
+      )
+      .all(before) as { fleet_id: string }[];
+    const write = this.ctx.db.transaction(() => {
+      const drop = this.ctx.db.prepare(`DELETE FROM pool_digest_rows WHERE fleet_id=?`);
+      for (const row of rows) drop.run(row.fleet_id);
+    });
+    write();
+    return rows.map((r) => r.fleet_id);
   }
 
   listDigestRows(project: string | null): PoolDigestMirrorRow[] {
