@@ -67,6 +67,7 @@ import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localVa
 import { featureSummary } from './rules/featureSummary.js';
 import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';
+import { remoteValidation } from './rules/remoteValidation.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -92,6 +93,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'local-validation': localValidation,
   'local-validation-fix': localValidationFix,
   'validate-check': validateCheck,
+  'remote-validation': remoteValidation,
   'validation-failed': validationFailed,
   'feature-summary': featureSummary,
   'feature-sequence': featureSequence,
@@ -111,6 +113,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
   private readonly localValidation: () => LocalValidationPolicy;
+  private readonly remoteValidationOn: boolean;
   private readonly review: PrReviewPolicy;
   private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
@@ -132,7 +135,9 @@ export class RuleDispatcher implements Dispatcher {
     localValidation: () => LocalValidationPolicy = () => DEFAULT_LOCAL_VALIDATION,
     testPartNote = '',
     stateDeclareNote = '',
+    remoteValidationOn = false,
   ) {
+    this.remoteValidationOn = remoteValidationOn;
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
     this.testPartNote = testPartNote;
@@ -182,6 +187,7 @@ export class RuleDispatcher implements Dispatcher {
       workItemInProgress: s.workItemInProgress !== null,
       review: this.review.enabled,
       sequencer: this.pickup.sequencing === 'full',
+      remoteValidation: this.remoteValidationOn,
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.enabled && !rule.enabled(conditions)) continue;
@@ -421,6 +427,7 @@ export class RuleDispatcher implements Dispatcher {
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,
+      remoteRuns: ctx.remoteRuns ?? [],
       localValidations: ctx.localValidations ?? [],
       localValidation: this.localValidation(),
       validationClaimMinutes: this.validation.desktopClaimMinutes,

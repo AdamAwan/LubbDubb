@@ -1046,6 +1046,9 @@ export function buildDemoState(): DemoSeed {
           startedAt: '2026-08-19T09:20:00.000Z',
           endedAt: '2026-08-19T09:20:41.000Z',
           note: null,
+          taskId: null,
+          reportPath: null,
+          artefacts: null,
         },
         tenant: {
           tenant: 'validation-customer-1',

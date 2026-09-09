@@ -102,6 +102,7 @@ unconditional.
 | `plan-part`                | Plan part ready                      | —                    | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                                                                                                                                                                                         |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                                                                                                                                                                              |
 | `validate-check`           | Handed-over validation check         | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                          |
+| `remote-validation`        | Validation sheet pressed             | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed  | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                           |
 | `feature-summary`          | Feature has moved                    | —                    | A Feature's children stand somewhere other than where its summary was written, or it has none. One desk agent says where the Feature is. Produces no work at all, so nothing may wait behind it.                                                                                                                                                                                                           |
 | `feature-sequence`         | Feature has unsequenced stories      | `sequencer`          | A Feature has gained or lost stories since anybody wrote an order for them, or has never had one. One desk agent proposes which go first; holds nothing until an operator accepts. Beside `feature-summary` at the bottom, for its reason. → [33](33-story-sequencing.md)                                                                                                                                  |
@@ -110,7 +111,11 @@ unconditional.
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`. `workItemInProgress` is
 the same shape over the other pair — `issueInProgressState` and a non-empty `issuePickupStates` — and
 is a separate condition because the two states are separate knobs: setting one must not switch on the
-rule that reads the other.
+rule that reads the other. `remoteValidation` is a feature flag and reads whether **any** environment
+declares a `validate` block: a rule with no run rows to read would already produce nothing, so the
+condition buys one thing and it is worth having — the book draws it as **inert** on a deployment that
+has not turned the feature on, rather than as a rule that looks live and never fires.
+→ [36](36-remote-validation.md#the-dispatch--rule-remote-validation)
 
 The seven PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than eight,
 because at most one agent works a branch and the fold that picks the top concern has to see them
@@ -447,15 +452,22 @@ is no second list to keep in step with it. What each stage contributes:
    something else did not run. Below the cut it queues as `waiting` like anything else, which is how a
    hand-over that the fleet has no room for stays visible instead of looking like a button that did
    nothing.
-10. **Failed validation checks** (`validation-failed`), directly below the run and for its reason. A
+10. **Pressed validation sheets** (`remote-validation`), below the handed-over check because that is
+    an obligation an operator explicitly assigned to the fleet and the older one, and above the
+    diagnosis because this rule **produces that rule's input** — the other way round reads as
+    backwards and delays every diagnosis by a pulse. Not beside `local-validation`, which ranks second
+    for a reason that does not hold here: that is a person at a screen with an environment burning on
+    their own machine, and this is a press somebody walks away from.
+    → [36](36-remote-validation.md#the-dispatch--rule-remote-validation)
+11. **Failed validation checks** (`validation-failed`), directly below the run and for its reason. A
     check waiting to be run is work nobody has done; this is a second opinion on work somebody has,
     so it goes below — and below every rule that produces work for `validate-check`'s reason, which is
     the same promise.
-11. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+12. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
     below even a handed-over validation check, because it is the only kind of rule in the book that
     produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
     readings already taken. Nothing may wait behind it.
-12. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
+13. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
     in an order — **last**, beside `feature-summary` and for its reason: it proposes an ordering and
     holds nothing, so it produces no work either. → [33](33-story-sequencing.md)
 
@@ -1312,7 +1324,7 @@ list, and a doc string.
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `plan-amendment`,
 `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
-`issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
+`issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-split`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, `review-pack-author`, `review-pack-check`, and the retired `work-item-ticket`,
 `blueprint-ticket`, `blueprint-ticket-body` and `issue-assay`. The filing ids are route-driven rather than dispatcher-driven — they are here

@@ -111,7 +111,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!pressed.ok) return reply.code(pressed.code).send({ error: pressed.error, live: pressed.live ?? null });
       hub.broadcast({ type: 'dirty', sections: ['goals'] });
       await system.harness.runCycle('manual');
-      return { ok: true, run: pressed.run, abandoned: pressed.abandoned, read: pressed.read };
+      return {
+        ok: true,
+        run: pressed.run,
+        abandoned: pressed.abandoned,
+        read: pressed.read,
+        owed: pressed.owed,
+      };
     }),
   );
 

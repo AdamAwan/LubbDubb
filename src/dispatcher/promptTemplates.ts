@@ -25,6 +25,7 @@ type PromptId =
   | 'validation-failed'
   | 'local-validation'
   | 'local-validation-fix'
+  | 'remote-validation'
   | 'obstacle-repair'
   | 'obstacle-ticket-body'
   | 'local-run'
@@ -518,6 +519,16 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       "Reproduce before you change anything. A finding is one agent's reading of a running application, taken without being able to ask anybody what was intended, so it can be wrong about which half is broken and it can be wrong about whether anything is. If a finding describes behaviour that is actually correct, say so and leave the code alone: changing working code to satisfy a mistaken finding is the one outcome here that is worse than doing nothing.\n\n" +
       'Commit and push what you fix. Do not open a pull request — if this branch has one your push reaches it, and if it has not, opening one belongs to the work this branch is part of rather than to this dispatch.',
     doc: 'Sent to a code agent when a local validation was reported `failed` with findings (rule `local-validation-fix`). It runs on the branch that was validated, writable, and the findings and the plan that produced them are *appended* to the rendered prompt rather than interpolated. It fixes and pushes; it opens no pull request and records no reading on the validation, which belongs to the agent that took it. Placeholders: {number} {title}.',
+  },
+  'remote-validation': {
+    placeholders: ['number', 'title', 'environment'],
+    template:
+      'Issue #{number} ("{title}") has shipped to {environment}, an operator has read its validation sheet and pressed go, and you are going to carry the run out. Everything you need is appended below.\n\n' +
+      'This is not a code review, it is not the test suite, and it is not a judgement. The project owns a browser suite that describes what the product should do; the harness owns the sheet that says which parts of it this goal is about. Your whole job is to invoke the project\u2019s own runner against the deployed build, publish the report it produces, and say where that report landed.\n\n' +
+      '**You do not say whether anything passed.** The report file is the only source of row outcomes and the harness reads it — the tool you answer with has no field you could put an opinion in, deliberately. You built none of this and you watched none of it run, so an opinion from here would be a guess wearing a reading\u2019s clothes.\n\n' +
+      'You are in a read-only checkout pinned to the commit {environment} stands at right now, not to a branch: the specs that describe the deployed build are the ones in it. Install what the suite needs, invoke the declared command, and leave the suite itself exactly as you found it.\n\n' +
+      'If you cannot carry the run out at all \u2014 the environment will not answer, the credentials are not here, the install fails \u2014 hand it back with your reason. That records nothing, leaves every row as it was, and puts your reason in front of the operator, which is the honest answer rather than a last resort.',
+    doc: 'Sent to a code agent when an operator has pressed go on a validation sheet and a run row is open for it (rule `remote-validation`). Everything the agent cannot act without \u2014 the environment and its profile alias, the declared runner and publish commands with the environment variables their parameters ride in, the confirmed rows and the selectors they are verified against, the tenant\u2019s *name*, the report and artefact directories, the deployed commit and the rules of the run \u2014 is *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot run without. The agent answers once with `remote_validation_report`, which has no field it could state an outcome in. Placeholders: {number} {title} {environment}.',
   },
   'obstacle-repair': {
     placeholders: ['claim'],

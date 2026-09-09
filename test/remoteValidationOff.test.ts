@@ -15,6 +15,8 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { stateDeclareNote } from '../src/plans/planning.js';
+import { remoteRunBriefs } from '../src/remoteValidation/briefing.js';
+import { remoteValidationOriginParts } from '../src/remoteValidation/origin.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { buildGoalPage, goalSectionsOpen } from '../web/src/view/goalPage.js';
@@ -181,6 +183,28 @@ test('a deployment that configured nothing takes the build inert', async () => {
     assert.equal(cardRows(state), null, 'and the goal page draws no card — not an empty one, and not question marks');
 
     assert.equal(stateDeclareNote(system.config.environments), '', 'and the note reaches neither work prompt');
+
+    // The dispatch half is inert here too: no run row for the rule to read, so nothing is briefed,
+    // no agent is proposed, and the report tool has no origin it would parse.
+    assert.deepEqual(
+      remoteRunBriefs({
+        store: system.store,
+        environments: system.config.environments,
+        validationRoot: system.config.validationRoot,
+      }),
+      [],
+      'nothing is briefed, so rule `remote-validation` proposes nothing',
+    );
+    assert.deepEqual(
+      system.store.listDecisions(50).filter((d) => d.rule === 'remote-validation'),
+      [],
+      'and no cycle here decided anything under it',
+    );
+    assert.equal(
+      remoteValidationOriginParts('issue:12'),
+      null,
+      'the fence is the narrow kind, so the only origin this deployment has is refused',
+    );
   } finally {
     system.store.close();
   }

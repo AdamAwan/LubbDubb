@@ -940,15 +940,24 @@ CREATE TABLE IF NOT EXISTS remote_runs (
   goal_ref    TEXT NOT NULL,      -- issue:<n>
   environment TEXT NOT NULL,
   tenant      TEXT NOT NULL,      -- the tenant's *key*; never a tenantEnv's value, and '' where no shape supplies one
-  status      TEXT NOT NULL,      -- running | ended | abandoned
+  status      TEXT NOT NULL,      -- pending | dispatched | ended | abandoned; the first two are live
   started_sha TEXT,               -- what the environment's at said when the pin was taken
   ended_sha   TEXT,               -- and what it said when the run finished
   started_at  TEXT NOT NULL,
   ended_at    TEXT,
-  note        TEXT                -- why an abandoned run was abandoned, in the sheet's own words
+  note        TEXT,               -- why an abandoned run was abandoned, in the sheet's own words
+  task_id     TEXT,               -- the dispatched agent's task, written by the conditional flip that claimed it
+  report_path TEXT,               -- where the agent said the runner's machine-readable report landed
+  artefacts   TEXT                -- the URL the publish command printed, where it ran
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS remote_runs_live ON remote_runs (environment, tenant) WHERE status = 'running';
+-- The lock is over both live statuses. The old index named only 'running', which this
+-- vocabulary no longer holds -- IF NOT EXISTS never re-predicates an index that is
+-- already there, so the stale name is dropped by name before the new one is declared.
+DROP INDEX IF EXISTS remote_runs_live;
+
+CREATE UNIQUE INDEX IF NOT EXISTS remote_runs_open ON remote_runs (environment, tenant)
+  WHERE status IN ('pending', 'dispatched');
 
 -- When an environment's tenant was last provisioned and last reseeded (see
 -- RemoteValidationStore). A persistent tenant accumulates the residue of every

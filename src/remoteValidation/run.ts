@@ -4,6 +4,7 @@ import type { EnvironmentProber } from '../environments/prober.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantStanding } from '../types.js';
+import { runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
 import { rowRun } from './sheet.js';
 import { resolveTenant, stalenessNote, type TenantEnvironment, type TenantKeeper } from './tenants.js';
@@ -37,12 +38,14 @@ interface PressResult {
   /** Non-null where the pin abandoned the press: it ran nothing and this is why. */
   abandoned: string | null;
   read: number;
+  /** How many confirmed `check` rows the run is left open for an agent to carry out. */
+  owed: number;
 }
 
 /**
- * The press, the pin and the lock. With no browser in this goal, a press re-runs the sheet's
- * confirmed **deterministic** rows synchronously under the pin — which is what makes the run row,
- * the lock and the pin real rather than scaffolding.
+ * The press, the pin and the lock. A press re-runs the sheet's confirmed **deterministic** rows
+ * synchronously under the pin — they are read-only, consented and cheap — and leaves the run row
+ * `pending` where a confirmed `check` row is owed the agent rule `remote-validation` dispatches.
  */
 export class RemoteRunDesk {
   private readonly now: () => number;
@@ -109,14 +112,22 @@ export class RemoteRunDesk {
 
     if (pin.abandon !== null) {
       const ended = store.endRemoteRun(run.id, { status: 'abandoned', note: pin.abandon });
-      return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0 };
+      return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
     }
 
     const read = await this.readAll(environment, goalRef, run, rows, tenant.standing);
+
+    // The deterministic rows are read here, synchronously and under the pin: they are read-only,
+    // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
+    // **this** row — it is left `pending` where a confirmed `check` row is owed one, and settled here
+    // where none is, which is a run nothing will ever report against.
+    const owed = runnableSelectors(store, environment, goalRef, rows).length;
+    if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
+
     const endedSha = await this.deployedSha(environment);
     store.attributeRemoteReadings(run.id, endedSha);
     const ended = store.endRemoteRun(run.id, { status: 'ended', endedSha });
-    return { ok: true, run: ended ?? run, abandoned: null, read };
+    return { ok: true, run: ended ?? run, abandoned: null, read, owed: 0 };
   }
 
   /** @public the seam the cancel route settles a run an operator abandoned by hand through */

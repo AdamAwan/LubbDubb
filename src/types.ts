@@ -1471,7 +1471,14 @@ export interface RemoteReading {
   readAt: string;
 }
 
-export type RemoteRunStatus = 'running' | 'ended' | 'abandoned';
+/**
+ * A press opens a run `pending`; the dispatch flip claims it `dispatched`, conditionally and inside
+ * the transaction, which is what makes one agent per run true across a restart. Both are *live* and
+ * the `(environment, tenant)` lock holds over both. A run settles once: `ended` where a report was
+ * recorded against it, `abandoned` where none ever will be — the pin refused it, an operator called
+ * it off, or the agent handed it back.
+ */
+export type RemoteRunStatus = 'pending' | 'dispatched' | 'ended' | 'abandoned';
 
 /**
  * One press. Kept after it ends, `local_validations`' rule: a run abandoned because the environment
@@ -1492,6 +1499,35 @@ export interface RemoteRun {
   startedAt: string;
   endedAt: string | null;
   note: string | null;
+  /** The dispatched agent's task, written by the same conditional flip that claimed the run. */
+  taskId: string | null;
+  /** Where the agent said the runner's machine-readable report landed. Parsing it is another part. */
+  reportPath: string | null;
+  /** The URL the publish command printed, where it ran. */
+  artefacts: string | null;
+}
+
+/**
+ * One open run, with everything the dispatcher needs to put an agent on it already rendered. The
+ * rule reads these and imports nothing from `src/remoteValidation/` or `src/environments/` — the
+ * arrangement `testPartNote` and `stateDeclareNote` already make for their prompts.
+ */
+export interface RemoteRunBrief {
+  runId: string;
+  goalRef: string;
+  issueNumber: number;
+  environment: string;
+  status: RemoteRunStatus;
+  /** `issue:<n>:validate-remote:<runId>` — evidence about delivered work, never work. */
+  origin: string;
+  /** The lease key the read-only checkout is taken under. No ref is minted. */
+  leaseKey: string;
+  /** The commit the environment stood at when the pin was taken. The checkout is pinned to it. */
+  deployedSha: string;
+  /** How many `check` rows this run is for. Zero is a run no agent is dispatched for. */
+  confirmed: number;
+  /** Everything the agent must read, already rendered — appended to the prompt, never interpolated. */
+  briefing: string;
 }
 
 /** When an environment's tenant was last provisioned and last reseeded. */

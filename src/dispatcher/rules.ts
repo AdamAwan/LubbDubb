@@ -7,6 +7,7 @@ export interface RuleConditions {
   workItemInProgress: boolean;
   review: boolean;
   sequencer: boolean;
+  remoteValidation: boolean;
 }
 
 export interface DispatchRule {
@@ -224,6 +225,15 @@ const RULES = [
     name: 'Handed-over validation check',
     description:
       'A validation check on a delivered goal that the **operator** handed to the fleet, and which nobody has recorded a reading against, gets a code agent to run it on a throwaway branch cut from the default branch and report what it saw. The hand-over is the entire gate: a planner’s `fleetCandidate` nomination dispatches nothing, because whether an agent can run a check depends on what logins and browsers this deployment has, which a planner reading the repository cannot know. It ranks last of every rule that produces work, below even one-shot pickup — only `validation-failed`, which is a second opinion on work somebody has already done, and the two Feature desks, which produce no work at all, sit below it — because validation’s standing promise is that it blocks nothing — a check that could take the final slot from a blocked part or a red build would make the one feature that gates nothing the reason something else did not run. An agent that finds it cannot do the work hands the check back with its reason instead of recording a failure, which returns it to the operator; one that crashes or spends its attempt cap leaves the check exactly as it was, `unrun` and still flagged, with no escalation — the flag is already the ask.',
+  },
+
+  {
+    id: 'remote-validation',
+    kind: 'rule',
+    name: 'Validation sheet pressed against a deployed environment',
+    description:
+      "An operator read a goal's validation sheet against a deployed environment and pressed go, which opened a run row; this puts one code agent on that row. Nothing here asks a model to judge anything — what the agent does is invoke the project's own runner command against the deployed build, publish the report it produces, and say where the report landed. It **states no outcome**, and the tool it answers with has no field it could state one in: one invocation carries many rows and one exit code, so the machine-readable report is the only source of row outcomes. It is a code agent because the run needs a checkout at the environment's *current* commit with the suite's dependencies installed, which is worktree work; because it takes minutes, which a pulse must not block on; and because only a dispatched task gives the run a lease, a reaper, a transcript and a kill. The checkout is read-only and pinned to the deployed commit rather than to a branch — the specs that describe the deployed build are the ones in it, and a branch tip describes a product nobody is running. It ranks below `validate-check`, which is an older obligation an operator explicitly assigned to the fleet, and above `validation-failed`, because it produces that rule's input and the other way round delays every diagnosis by a pulse. A run row is one press rather than a standing signal, so there is no cooldown budget and no escalation: it is re-proposed each pulse until it dispatches, the operator calls it off, or the pin goes bad. One agent per run across a restart is the store's conditional flip and never a check the rule makes first, and nothing is dispatched for a sheet nobody pressed — the rule reads run rows and never sheets. Inert where no environment declares a `validate` block, which is a different thing from a rule that looks live and never fires.",
+    enabled: (c) => c.remoteValidation,
   },
 
   {

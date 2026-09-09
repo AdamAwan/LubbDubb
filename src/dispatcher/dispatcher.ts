@@ -27,6 +27,7 @@ import type {
   TaskSummary,
   LocalRun,
   LocalValidation,
+  RemoteRunBrief,
   ValidationCheck,
   Ejection,
   WorldEvent,
@@ -62,6 +63,7 @@ export interface DispatchContext {
   validationChecks?: ValidationCheck[];
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
+  remoteRuns?: RemoteRunBrief[];
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
   goalPauses?: GoalPause[];

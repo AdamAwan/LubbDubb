@@ -195,6 +195,10 @@ export class ActionExecutor {
                   store.markLocalValidationFix(action.localValidation.id, task.id);
                 else store.markLocalValidationDispatched(action.localValidation.id, task.id);
               }
+              // One agent per run, across a restart: the conditional `WHERE status = 'pending'` is
+              // the store's own and never a check made here first.
+              if (action.type === 'dispatch_code_agent' && action.remoteRun)
+                store.claimRemoteRun(action.remoteRun.id, task.id);
               const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
               record(
                 'executed',
