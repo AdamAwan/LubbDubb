@@ -116,6 +116,12 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   `upstream`.** The default is the real `gh` CLI against **AdamAwan/LubbDubb** — a test without
   `FakeUpstreamIssues` files a live issue on the project's tracker and passes while doing it.
   → [15](docs/spec/15-integrations.md)
+- **A test that configures an environment with a `validate` block must inject `stateReader`.** The
+  default is the real `CommandStateReader`, which spawns the project's own `validate.state.run` against
+  a **deployed store** — a test that queries somebody's environment and passes while doing it. What
+  saves an ordinary test is only that a config with no `validate` block declares no command to run;
+  rely on that deliberately. Use `FakeStateReader`, which records what it was asked for.
+  → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
 - **A test that reads the project config layer injects `projectConfigFile`, or points `repoRoot` at
   a temp directory.** `lubbdubb.project.json` is read from `repoRoot`, and this repo is itself a
   LubbDubb target — the day one is committed here every test on the default starts merging it.

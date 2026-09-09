@@ -232,4 +232,45 @@ export const PLAN_DOCUMENT_SHAPE = {
         'environment the moment you submit, and you get told what it answered.',
     )
     .optional(),
+  state: z
+    .object({
+      queries: z
+        .array(
+          z.object({
+            id: z.string().describe('Stable lowercase kebab-case id, and the merge key on a replan.'),
+            title: z.string().describe('One line: what being wrong here would look like.'),
+            query: z
+              .string()
+              .describe(
+                'The query itself, in whatever language the deployed store answers. It is handed to the ' +
+                  "operator's command as a value, never pasted into a shell, and it must be read-only. It " +
+                  'returns the matching **rows themselves** and the harness counts them: do not aggregate it. ' +
+                  'A query ending in a count answers one row whatever the number is, which defeats every guard ' +
+                  'the contract has, and is refused.',
+              ),
+            presence: z
+              .string()
+              .describe(
+                'A second query whose only job is to prove this store holds the thing at all. Required, and ' +
+                  'it is the whole design: a query naming a column that is not there answers zero rows, and ' +
+                  'zero rows is indistinguishable from a healthy release. It returns rows too, and for that ' +
+                  'reason must not aggregate: a count can never answer zero.',
+              ),
+            why: z
+              .string()
+              .describe('Why this is the question that matters, and what a wrong answer means.')
+              .optional(),
+          }),
+        )
+        .describe('One question each about the data this change writes.')
+        .optional(),
+    })
+    .describe(
+      "Questions about the *data* the change writes, asked of a real environment's own store once the work " +
+        'is deployed there. Seed one only where the shape is obvious from the repository as it stands — the ' +
+        'agent that does the work knows which table took the new column and which row the change writes, and ' +
+        'you reading the code before it exists mostly cannot. Declaring nothing here is the normal answer. ' +
+        'Nothing runs until an operator has read the query and accepted it against a named environment.',
+    )
+    .optional(),
 };

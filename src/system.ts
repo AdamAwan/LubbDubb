@@ -58,8 +58,10 @@ import { CommandReviewProber, type ReviewProber } from './review/reviewedElsewhe
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
 import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
+import { CommandStateReader, type StateReader } from './remoteValidation/stateReader.js';
+import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { WatchDesk } from './environments/watchDesk.js';
-import { testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
+import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -125,6 +127,7 @@ export interface System {
   tickets: TicketSweep;
   pool?: PoolDesk;
   watch: WatchDryRunner;
+  stateQueries: StateQueryDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -161,6 +164,7 @@ interface BuildOptions {
   environmentHealthProber?: EnvironmentHealthProber;
   reviewProber?: ReviewProber;
   environmentObserver?: EnvironmentObserver;
+  stateReader?: StateReader;
   errorMirror?: (entry: ErrorLogEntry) => void;
   ingressSecrets?: IngressSecrets;
   configFile?: string;
@@ -301,6 +305,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     filing: (): McpToolDeps['filing'] => filing,
     prReply: (): McpToolDeps['prReply'] => executor,
     watch: (): McpToolDeps['watch'] => watchDryRun,
+    state: (): McpToolDeps['state'] => stateQueries,
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     localValidations: (): LocalValidationDesk => localValidations,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
@@ -512,6 +517,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watchDeclareNote(config.environments),
     undefined,
     testPartNote(config.environments),
+    stateDeclareNote(config.environments),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -587,6 +593,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     environments: config.environments,
     observer: environmentObserver,
+  });
+
+  const stateQueries = new StateQueryDesk({
+    store,
+    environments: config.environments,
+    reader: opts.stateReader ?? new CommandStateReader(config.repoRoot),
   });
 
   const closeOutSink = opts.sink ?? connector;
@@ -878,6 +890,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     filing,
     upstream,
     watch: watchDryRun,
+    stateQueries,
     updates,
     runtimeControl,
     pets,

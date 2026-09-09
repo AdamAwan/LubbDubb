@@ -34,6 +34,7 @@ import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairP
 import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { LocalValidationStore, LOCAL_VALIDATION_COLUMNS } from './localValidations.js';
 import { WatchStore, WATCH_COLUMNS } from './watches.js';
+import { RemoteValidationStore, REMOTE_VALIDATION_COLUMNS, type StateQueryDryRun } from './remoteValidation.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -149,6 +150,10 @@ import type {
   StackLanding,
   StackLandingStatus,
   Task,
+  StateQuery,
+  StateQueryApproval,
+  StateQueryAuthor,
+  StateQueryInput,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
@@ -220,6 +225,7 @@ export class Store {
   private readonly branchReaps: BranchReapStore;
   private readonly environments: EnvironmentStore;
   private readonly watches: WatchStore;
+  private readonly remoteValidation: RemoteValidationStore;
   private readonly localRuns: LocalRunStore;
   private readonly localValidations: LocalValidationStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
@@ -271,6 +277,7 @@ export class Store {
       LOCAL_VALIDATION_COLUMNS,
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
+      REMOTE_VALIDATION_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
       PR_REVIEW_COLUMNS,
       SCRATCH_COLUMNS,
@@ -329,6 +336,7 @@ export class Store {
     this.branchReaps = new BranchReapStore(ctx);
     this.environments = new EnvironmentStore(ctx);
     this.watches = new WatchStore(ctx);
+    this.remoteValidation = new RemoteValidationStore(ctx);
     this.localRuns = new LocalRunStore(ctx);
     this.localValidations = new LocalValidationStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
@@ -1207,6 +1215,27 @@ export class Store {
   }
   listWatchReadings(): WatchReading[] {
     return this.watches.listWatchReadings();
+  }
+  saveStateQueries(originRef: string, queries: readonly StateQueryInput[], authored: StateQueryAuthor): string[] {
+    return this.remoteValidation.saveStateQueries(originRef, queries, authored);
+  }
+  listStateQueries(): StateQuery[] {
+    return this.remoteValidation.listStateQueries();
+  }
+  deleteStateQuery(originRef: string, queryId: string): boolean {
+    return this.remoteValidation.deleteStateQuery(originRef, queryId);
+  }
+  recordStateQueryDryRun(originRef: string, queryId: string, reading: StateQueryDryRun): void {
+    this.remoteValidation.recordStateQueryDryRun(originRef, queryId, reading);
+  }
+  approveStateQuery(input: Omit<StateQueryApproval, 'approvedAt'>): void {
+    this.remoteValidation.approveStateQuery(input);
+  }
+  declineStateQuery(digest: string, environment: string): void {
+    this.remoteValidation.declineStateQuery(digest, environment);
+  }
+  listStateQueryApprovals(): StateQueryApproval[] {
+    return this.remoteValidation.listStateQueryApprovals();
   }
 
   beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {

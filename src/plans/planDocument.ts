@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ValidationSchema } from '../validation/checkDocument.js';
 import { WatchSchema } from '../validation/watchDocument.js';
+import { StateSchema } from '../validation/stateDocument.js';
 import type { PlanAtomInput, PlanNarrative, PlanPartInput } from '../types.js';
 
 // → docs/spec/08-planning.md
@@ -88,6 +89,7 @@ const PlanDocumentSchema = z
     parts: z.array(PartSchema).default([]),
     validation: ValidationSchema.optional(),
     watch: WatchSchema.optional(),
+    state: StateSchema.optional(),
   })
   .superRefine((doc, ctx) => {
     if (doc.parts.length === 0) {

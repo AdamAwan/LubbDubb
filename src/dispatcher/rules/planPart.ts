@@ -148,7 +148,8 @@ function partCandidate(
         partDeclarationNote(part, atoms) +
         budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
-        s.watchDeclareNote,
+        s.watchDeclareNote +
+        s.stateDeclareNote,
       originRef: origin,
       originTitle: `${issue.title} — ${part.title}`,
       originSummary: part.scope,

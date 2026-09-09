@@ -24,6 +24,7 @@ import type { ActionSink } from '../../sink/actionSink.js';
 import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
+import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
 import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
@@ -136,6 +137,7 @@ export interface McpToolDeps {
   prReply?: PrReplyDesk;
   filing?: TicketFiler;
   watch?: WatchDryRunner;
+  state?: Pick<StateQueryDesk, 'configured' | 'declare' | 'dryRun'>;
   reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
   reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
   localValidations?: () => LocalValidationDesk;

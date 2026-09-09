@@ -117,6 +117,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How often an open post-deploy watch asks its environment again. Nothing is asked when none is open.',
   },
   {
+    path: 'remoteValidation.runTimeoutMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a remote validation run may take before it is killed. Thirty seconds — what every other command in the harness gets — is the wrong number for a browser suite, which is the whole reason this key exists.',
+  },
+  {
     path: 'upNextOverrideTtlMs',
     type: 'number',
     ms: true,

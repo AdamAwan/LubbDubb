@@ -34,6 +34,7 @@ import { localValidationPlan } from './tools/localValidationPlan.js';
 import { localRunRead } from './tools/localRunRead.js';
 import { localValidationReport } from './tools/localValidationReport.js';
 import { watchDeclare } from './tools/watchDeclare.js';
+import { stateDeclare } from './tools/stateDeclare.js';
 import { worldRead } from './tools/worldRead.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -65,6 +66,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   local_run_read: localRunRead,
   local_validation_report: localValidationReport,
   watch_declare: watchDeclare,
+  state_declare: stateDeclare,
   review_report: reviewReport,
   review_route: reviewRoute,
   split_assess: splitAssess,

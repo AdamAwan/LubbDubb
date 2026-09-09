@@ -11,8 +11,26 @@ export interface EnvironmentConfig {
   validate?: EnvironmentValidate;
 }
 
+type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
+
+const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state', 'signal', 'measure'];
+
 interface EnvironmentValidate {
-  browser?: { runner?: string };
+  permits: RemoteRowKind[];
+  tenant?: string;
+  tenantEnv?: string;
+  ensureTenant?: string;
+  reseed?: string;
+  tenantFreshnessMs?: number;
+  browser?: EnvironmentValidateBrowser;
+  state?: { run: string };
+}
+
+interface EnvironmentValidateBrowser {
+  runner: string;
+  listSelectors?: string;
+  profile?: string;
+  publishArtefacts?: string;
 }
 
 interface EnvironmentWatch {
@@ -62,6 +80,7 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
       );
     validateArrival(env.arrival, `${where} ("${env.name}")`);
     validateWatch(env, `${where} ("${env.name}")`);
+    validateValidate(env.validate, `${where} ("${env.name}")`);
   });
 }
 
@@ -135,4 +154,106 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
         `${where}: "${String(gate)}" is not an obligation the harness files, so holding it holds nothing. ` +
           `"watch.holds" names ${ENVIRONMENT_GATES.join(' / ')}.`,
       );
+}
+
+const TENANT_SHAPES = ['tenant', 'tenantEnv', 'ensureTenant'] as const;
+
+function commandFields(validate: EnvironmentValidate): { path: string; value: unknown }[] {
+  return [
+    { path: 'ensureTenant', value: validate.ensureTenant },
+    { path: 'reseed', value: validate.reseed },
+    { path: 'browser.runner', value: validate.browser?.runner },
+    { path: 'browser.listSelectors', value: validate.browser?.listSelectors },
+    { path: 'browser.profile', value: validate.browser?.profile },
+    { path: 'browser.publishArtefacts', value: validate.browser?.publishArtefacts },
+    { path: 'state.run', value: validate.state?.run },
+  ];
+}
+
+function validateValidate(validate: EnvironmentValidate | undefined, where: string): void {
+  if (validate === undefined) return;
+  if (typeof validate !== 'object' || validate === null || Array.isArray(validate))
+    throw new Error(`${where}: "validate" must be an object — {"permits": ["state"], "state": {"run": "..."}}.`);
+
+  if (!Array.isArray(validate.permits))
+    throw new Error(
+      `${where}: "validate.permits" must be a list of ${REMOTE_ROW_KINDS.join(' / ')} — the row kinds this ` +
+        'environment may be asked for.',
+    );
+  if (validate.permits.length === 0)
+    throw new Error(
+      `${where}: "validate.permits" is empty. It reads as a configuration and permits nothing, so every row ` +
+        `would come back blocked forever — name ${REMOTE_ROW_KINDS.join(' / ')}, or drop the "validate" block.`,
+    );
+  for (const kind of validate.permits)
+    if (!REMOTE_ROW_KINDS.includes(kind))
+      throw new Error(
+        `${where}: "${String(kind)}" is not a row kind a sheet has. ` +
+          `"validate.permits" names ${REMOTE_ROW_KINDS.join(' / ')}.`,
+      );
+
+  for (const path of ['tenant', 'tenantEnv'] as const) {
+    const value = validate[path];
+    if (value !== undefined && (typeof value !== 'string' || value.trim() === ''))
+      throw new Error(
+        `${where}: "validate.${path}" must be a non-empty name, or be left out. The harness never generates ` +
+          'or infers a tenant identifier, so an empty one names nothing it could fall back to.',
+      );
+  }
+
+  for (const { path, value } of commandFields(validate))
+    if (value !== undefined && (typeof value !== 'string' || value.trim() === ''))
+      throw new Error(
+        `${where}: "validate.${path}" must be a non-empty command, or be left out. An empty one answers ` +
+          'nothing, and the row it would have run is blocked with no way to say why.',
+      );
+
+  if (validate.permits.includes('check') && validate.browser === undefined)
+    throw new Error(
+      `${where}: "validate.permits" names "check" and there is no "validate.browser" block. A kind permitted ` +
+        'with nothing able to run it is every row of that kind blocked, forever — declare the runner, or drop ' +
+        '"check" from "permits".',
+    );
+  if (validate.permits.includes('state') && (validate.state === undefined || typeof validate.state.run !== 'string'))
+    throw new Error(
+      `${where}: "validate.permits" names "state" and there is no "validate.state.run" command. A kind ` +
+        'permitted with nothing able to run it is every row of that kind blocked, forever — declare the ' +
+        'command, or drop "state" from "permits".',
+    );
+  if (validate.browser !== undefined && validate.browser.listSelectors === undefined)
+    throw new Error(
+      `${where}: "validate.browser" declares a runner and no "listSelectors". The pre-flight asks the ` +
+        'deployed runner which selectors it offers, and without it every selector is unverifiable until a ' +
+        'press has already been spent on it.',
+    );
+
+  const shapes = TENANT_SHAPES.filter((shape) => validate[shape] !== undefined);
+  if (shapes.length > 1)
+    throw new Error(
+      `${where}: "validate" declares ${shapes.map((s) => `"${s}"`).join(' and ')} — two answers to one ` +
+        'question. A tenant is a literal "tenant", a "tenantEnv" naming the variable that carries one, or an ' +
+        '"ensureTenant" command that provisions one. Name exactly one.',
+    );
+  if (shapes.length === 0) {
+    if (validate.reseed !== undefined)
+      throw new Error(
+        `${where}: "validate.reseed" reseeds a tenant and no tenant of any shape is declared. Name a ` +
+          '"tenant", a "tenantEnv" or an "ensureTenant" — or drop the reseed.',
+      );
+    if (validate.tenantFreshnessMs !== undefined)
+      throw new Error(
+        `${where}: "validate.tenantFreshnessMs" is freshness about nothing — no tenant of any shape is ` +
+          'declared here. Name a "tenant", a "tenantEnv" or an "ensureTenant", or drop it.',
+      );
+  }
+  if (
+    validate.tenantFreshnessMs !== undefined &&
+    (typeof validate.tenantFreshnessMs !== 'number' ||
+      !Number.isFinite(validate.tenantFreshnessMs) ||
+      validate.tenantFreshnessMs <= 0)
+  )
+    throw new Error(
+      `${where}: "validate.tenantFreshnessMs" must be a positive number of milliseconds — how old a tenant ` +
+        'may be before a reading against it is drawn as stale.',
+    );
 }

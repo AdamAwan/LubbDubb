@@ -48,6 +48,7 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
       parts: args.parts ?? [],
       validation: args.validation,
       watch: args.watch,
+      state: args.state,
     });
     if (!parsed.ok) {
       return toolError(`Plan rejected: ${parsed.error}`);
@@ -58,6 +59,7 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
       title: task.originTitle ?? task.title,
     });
     const refusals = (await deps.watch?.run(issueOrigin(planner.number))) ?? [];
+    const stateRefusals = (await deps.state?.dryRun(issueOrigin(planner.number))) ?? [];
     return ok({
       accepted: true,
       status: result.status,
@@ -70,6 +72,15 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
               'Each of these queries was run once against the environment it would watch and did not come back ' +
               'with a reading anybody could act on. Fix the query — or say why the ticket is wrong — and submit ' +
               'again. A query that resolves nothing forever is the failure this whole surface exists to catch.',
+          }
+        : {}),
+      ...(stateRefusals.length > 0
+        ? {
+            stateDryRun: stateRefusals,
+            stateDryRunNote:
+              'Each of these was put once to the store it would ask and did not come back with a reading ' +
+              'anybody could act on. Fix the query — or drop it and leave it to whoever does the work, who ' +
+              'will know the shape you could not.',
           }
         : {}),
     });

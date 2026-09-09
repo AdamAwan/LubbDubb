@@ -4,6 +4,7 @@ import type { PlanDocument } from './planDocument.js';
 import { planAtomInputs, planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import { watchCheckInputs } from '../validation/watchDocument.js';
+import { stateQueryInputs } from '../validation/stateDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
 import { partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
 import { AMENDED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
@@ -77,6 +78,8 @@ export function ingestPlanDocument(
   }
 
   if (doc.watch) store.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
+
+  if (doc.state) store.saveStateQueries(originRef, stateQueryInputs(doc.state), 'plan');
 
   const rolled = input.approved === true ? store.rollUpPlanStatus(plan.id) : null;
 

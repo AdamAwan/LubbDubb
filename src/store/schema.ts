@@ -829,6 +829,53 @@ CREATE TABLE IF NOT EXISTS watch_readings (
   PRIMARY KEY (goal_ref, environment, check_id, read_at)
 );
 
+-- A question about the data one goal's change writes, asked of a real environment's
+-- store (see RemoteValidationStore). Per-goal, harness-held and never committed: a
+-- query is one goal's question about one change at one moment, where a repository
+-- holds what is true across all of them. Merged on the author's own slug, and
+-- withdrawn by nobody but an operator. The dry-run columns are what the environment
+-- said when the query was last put to it -- the evidence an operator accepts or
+-- rejects the query on -- and they are cleared by a re-declaration that changed the
+-- text, because a reading is a reading of *that* query.
+CREATE TABLE IF NOT EXISTS remote_state_queries (
+  goal_ref   TEXT NOT NULL,        -- issue:<n>
+  query_id   TEXT NOT NULL,        -- the author's kebab-case slug, and the merge key
+  seq        INTEGER NOT NULL,     -- position in the document; display order only
+  title      TEXT NOT NULL,
+  query      TEXT NOT NULL,
+  presence   TEXT NOT NULL,        -- the second query proving the code path runs; zero rows is unknown, never clean
+  why        TEXT,
+  digest     TEXT NOT NULL,        -- of query + presence together; the half of an approval's key that is the question
+  authored   TEXT NOT NULL DEFAULT 'agent', -- 'plan' | 'agent' | 'operator'; an operator's row is neither swept nor overwritten by a replan
+  dry_run_environment TEXT,        -- NULL while nothing has been asked
+  dry_run_at          TEXT,
+  dry_run_verdict     TEXT,        -- 'fires' | 'zero' | 'unknown'
+  dry_run_presence    TEXT,        -- the same three, for the presence query
+  dry_run_rows        INTEGER,     -- NULL when the query did not answer
+  dry_run_detail      TEXT,        -- what the author and the operator are told, in words
+  dry_run_sample      TEXT,        -- what it actually returned, as JSON; a query that reads correctly and returns nonsense is caught only here
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (goal_ref, query_id)
+);
+
+-- One operator's "I have read this query, and it is safe *here*" (see
+-- RemoteValidationStore). Keyed on the digest *and* the environment, deliberately:
+-- keyed on the digest alone, the same text accepted against acceptance would arrive
+-- pre-approved against production, and consent to a place is not transferable. An
+-- unchanged query stays accepted for the environment it was accepted on; an edited
+-- one drops its old digest's approvals everywhere and is a new question again.
+CREATE TABLE IF NOT EXISTS remote_query_approvals (
+  query_digest    TEXT NOT NULL,
+  environment     TEXT NOT NULL,
+  goal_ref        TEXT NOT NULL,   -- the goal the accepted query was read on; drawn, never keyed on
+  query_id        TEXT NOT NULL,
+  approved_at     TEXT NOT NULL,
+  approved_rows   INTEGER,         -- what the dry run answered when it was accepted
+  approved_detail TEXT,
+  PRIMARY KEY (query_digest, environment)
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.
