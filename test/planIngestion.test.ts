@@ -69,6 +69,7 @@ test('a plan needs at least one part, and one part is an ordinary plan', () => {
       size: null,
       expectedKind: null,
       profile: null,
+      coverage: null,
     },
     {
       slug: 'reader',
@@ -83,6 +84,7 @@ test('a plan needs at least one part, and one part is an ordinary plan', () => {
       size: null,
       expectedKind: null,
       profile: null,
+      coverage: null,
     },
   ]);
 });

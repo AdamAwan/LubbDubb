@@ -52,6 +52,7 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     size: 'TEXT',
     expected_kind: 'TEXT',
     profile: 'TEXT',
+    coverage: 'TEXT',
     outcome_kind: 'TEXT',
     outcome_ref: 'TEXT',
     outcome_summary: 'TEXT',
@@ -287,6 +288,7 @@ export class PlanStore {
         size: input.size,
         expectedKind: input.expectedKind,
         profile: input.profile,
+        coverage: input.coverage ?? null,
         outcomeKind: prev?.outcomeKind ?? null,
         outcomeRef: prev?.outcomeRef ?? null,
         outcomeSummary: prev?.outcomeSummary ?? null,
@@ -304,16 +306,17 @@ export class PlanStore {
     });
     const stmt = this.ctx.db.prepare(
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, atoms, rationale, acceptance,
-         acceptance_met, size, expected_kind, profile,
+         acceptance_met, size, expected_kind, profile, coverage,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
          blocked_by, task_id, created_at, updated_at)
        VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @atoms, @rationale, @acceptance,
-         @acceptanceMet, @size, @expectedKind, @profile,
+         @acceptanceMet, @size, @expectedKind, @profile, @coverage,
          @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
          @blockedBy, @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
          touches=excluded.touches, atoms=excluded.atoms, rationale=excluded.rationale, acceptance=excluded.acceptance,
          size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
+         coverage=excluded.coverage,
          depends_on=excluded.depends_on, status=excluded.status,
          blocked_reason=excluded.blocked_reason, blocked_by=excluded.blocked_by,
          updated_at=excluded.updated_at`,
@@ -606,6 +609,7 @@ interface PlanPartRow {
   size: string | null | undefined;
   expected_kind: string | null | undefined;
   profile: string | null | undefined;
+  coverage: string | null | undefined;
   outcome_kind: string | null | undefined;
   outcome_ref: string | null | undefined;
   outcome_summary: string | null | undefined;
@@ -658,6 +662,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     size: partSizeOf(r.size),
     expectedKind: partOutcomeKindOf(r.expected_kind),
     profile: r.profile ?? null,
+    coverage: r.coverage ?? null,
     outcomeKind: partOutcomeKindOf(r.outcome_kind),
     outcomeRef: r.outcome_ref ?? null,
     outcomeSummary: r.outcome_summary ?? null,
@@ -865,6 +870,7 @@ function parseRevisionParts(raw: string): PlanPartInput[] {
           size: partSizeOf(text('size')),
           expectedKind: partOutcomeKindOf(text('expectedKind')),
           profile: text('profile'),
+          coverage: text('coverage'),
         },
       ];
     });

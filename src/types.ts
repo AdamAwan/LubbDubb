@@ -944,6 +944,7 @@ export interface PlanPart {
   size: PartSize | null;
   expectedKind: PartOutcomeKind | null;
   profile?: string | null;
+  coverage?: string | null;
   outcomeKind: PartOutcomeKind | null;
   outcomeRef: string | null;
   outcomeSummary: string | null;
@@ -994,6 +995,7 @@ export type PlanPartInput = Pick<
   | 'size'
   | 'expectedKind'
   | 'profile'
+  | 'coverage'
 >;
 
 export interface AgentUsage {

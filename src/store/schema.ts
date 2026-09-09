@@ -535,6 +535,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   size        TEXT,                   -- s | m | l, how big this is to review; null = unstated
   expected_kind   TEXT,               -- code | report | determination; null = unstated, reads as code
   profile     TEXT,                   -- the model profile this part runs on; null = inherit the goal's pin
+  coverage    TEXT,                   -- the end-to-end area this part adds or amends coverage for; null = not a test part
   outcome_kind    TEXT,               -- what it actually produced, written at close (never for a merge)
   outcome_ref     TEXT,               -- flag:<id> | finding:<id>, optional evidence
   outcome_summary TEXT,               -- what the concluding agent found; required at close

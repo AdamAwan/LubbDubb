@@ -1,8 +1,11 @@
 # 36 — Remote validation
 
-> **Not yet built.** Nothing in this document runs. No table, module, route, rule, prompt or tool
-> named here exists, every path is written in italics until it does, and the whole document is the
-> thing the next change is written against. The behaviour it describes is settled — it is
+> **Mostly not built yet.** One piece runs: [Browser coverage is a plan
+> part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal) — the `coverage` field on a plan part
+> and the bar note that governs when a planner declares one. Everything else here is still a design.
+> No table, module, route, rule, tool or runner named below exists, every path that does not yet exist
+> is written in italics, and the rest of the document is the thing the next change is written against.
+> The behaviour it describes is settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
 > staged order it gets built in is [`docs/plans/36-remote-validation.md`](../plans/36-remote-validation.md),
 > deleted by the change that finishes the last stage.
@@ -195,9 +198,13 @@ already has** — the planner declares a part for it: _add end-to-end coverage f
 card_, or _amend the checkout area to accept the new confirmation step_. It is built, reviewed and
 merged like every other part ([08](08-planning.md)).
 
-A part declares the area it covers in an optional `coverage` field, which is the string the sheet's
-selectors are later resolved against. Everything else about it is an ordinary part: it produces code,
-it has per-part `acceptance`, it merges.
+A part declares the area it covers in an optional `coverage` field on the plan document
+(`src/plans/planDocument.ts`), stored on `plan_parts.coverage` (`src/store/plans.ts`) and carried back
+on `PlanPart.coverage`. It is the string the sheet's selectors are later resolved against — that
+resolution, and `validation_checks.area` on the other side of it, are not built. Everything else about
+it is an ordinary part: it produces code, it has per-part `acceptance`, it merges, and
+`partDeclarationNote` (`src/plans/parts.ts`) shows the building agent the area it was asked to cover.
+→ [08](08-planning.md#the-seven-narrative-fields)
 
 **Amending an existing spec is the normal case, not a conflict.** A goal that changes behaviour is
 supposed to change the statement of that behaviour, in the same change, reviewed by the same reviewer.
@@ -230,7 +237,15 @@ selector has to resolve, the spec is in the deployed build.
 **A test part must not be declarable where it cannot be built.** A project with no browser suite —
 concretely, an environment with no `validate.browser` block — would take a hold nobody can lift. So
 the planner is told, in a note appended to the planning prompts, whether the deployment has one; where
-it does not, the bar section is not appended at all and the check stays manual. → [The prompts](#the-prompts)
+it does not, the bar section is not appended at all and the check stays manual. That note is
+`testPartNote` (`src/plans/planning.ts`), and its gate reads the narrow `validate.browser` shape
+`EnvironmentConfig` (`src/environments/policy.ts`) now carries — the block's full parse and its
+refusals are still to come. → [The prompts](#the-prompts)
+
+**The field and the note ship together, and must never be split.** `PlanDocumentSchema` is zod and zod
+**strips unknown keys**, so a note that reached planners before the field existed would have them
+declaring a `coverage` that is silently dropped: no refusal, an ordinary part, the hold never taken,
+nothing red.
 
 **A replan does not retract a merged test part.** A merged spec is ordinary repository code and the
 part that produced it is closed; a replan that wants it different declares a _new_ part to amend it,
@@ -679,7 +694,10 @@ Two notes are appended to prompts that already exist, both rendered strings rath
 
 - the **test-part bar** on `issue-plan` and `issue-replan`, appended only where some environment
   declares a `validate.browser` block, so a planner on a deployment with no suite is never told to
-  declare a part nobody can build;
+  declare a part nobody can build. **Built**: `testPartNote` (`src/plans/planning.ts`), computed once
+  in `src/system.ts`, threaded through `RuleContext` and the `RuleDispatcher` constructor, and
+  concatenated onto both renderings in `src/dispatcher/rules/issuePlan.ts` — never imported into
+  `src/dispatcher/` from `src/environments/`;
 - the **`state_declare` instruction** on the two prompts that dispatch work, `watchDeclareNote`'s
   arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
   **appended only where some environment declares a `validate.state` executor**, which is where that
@@ -928,7 +946,9 @@ TABLE`, guarded by `PRAGMA table_info` and declared in that module's `ColumnMigr
 TABLE IF NOT EXISTS` never alters an existing table, so without the entry the column is invisible on
   every database from before it existed — every check unautomatable, every sheet all-manual, and
   nothing red.
-- **`plan_parts.coverage`** is the same case one table over, declared in `PLAN_COLUMNS`.
+- **`plan_parts.coverage`** is the same case one table over, and is **built**: declared in
+  `PLAN_COLUMNS` (`src/store/plans.ts`), with its `ALTER TABLE` guarded by `PRAGMA table_info` like
+  every other entry there.
 - **`goal_arrivals.sheeted_at`** is the same case again, declared in `src/store/environments.ts`
   beside `announced_at` and `watched_at`.
 - **No backfill is needed, and each for a stated reason rather than by luck.**
@@ -1031,7 +1051,19 @@ a domain type from `src/types.ts` or `extends` it — never a re-declaration and
 ## Tests
 
 At the `buildSystem` seam with the three fakes injected, plus unit tests on the pure halves. The ones
-that earn their place are the silences and the asymmetries:
+that earn their place are the silences and the asymmetries.
+
+The test-part half is built and its tests are in `test/planTestPart.test.ts`: `coverage` parses
+through **both** transports and reaches `plan_parts.coverage`; a database written before the column
+gains it on boot and **no backfill runs** over it; a declared test part holds the plan's roll-up like
+any other and nothing under `src/plans/` or `src/dispatcher/` reads the field to decide settlement,
+asserted structurally; and the note is asserted on the **exact prompt text in both directions** —
+present on `issue-plan` and `issue-replan` where one environment declares a `validate.browser` block,
+absent where none does, and still present in full under an operator override that declares no tokens
+at all. Each of the bar's three phrases is asserted by name, so a later reword cannot drop one
+silently.
+
+The rest, when it is built:
 
 - a selector matching **zero** tests is `blocked`, never `passed`; and one where fewer ran than matched
   is `blocked` too, with the matched count coming from the pre-flight listing;

@@ -8,6 +8,11 @@ export interface EnvironmentConfig {
   health?: string;
   arrival?: EnvironmentArrival;
   watch?: EnvironmentWatch;
+  validate?: EnvironmentValidate;
+}
+
+interface EnvironmentValidate {
+  browser?: { runner?: string };
 }
 
 interface EnvironmentWatch {

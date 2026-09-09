@@ -59,7 +59,7 @@ import { CommandEnvironmentProber, type EnvironmentProber } from './environments
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
 import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
 import { WatchDesk } from './environments/watchDesk.js';
-import { watchDeclareNote, watchNote } from './plans/planning.js';
+import { testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -510,6 +510,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewCharters,
     watchNote(config.environments),
     watchDeclareNote(config.environments),
+    undefined,
+    testPartNote(config.environments),
   );
   const dispatcher: Dispatcher = rules;
 

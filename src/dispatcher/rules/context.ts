@@ -82,6 +82,7 @@ export interface StageContext {
   prRefStyle: PrRefStyle;
   watchNote: string;
   watchDeclareNote: string;
+  testPartNote: string;
   validationRoot: string;
   liveLocalRun: LocalRun | null;
   localValidations: LocalValidation[];

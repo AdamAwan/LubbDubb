@@ -108,6 +108,14 @@ export const PLAN_DOCUMENT_SHAPE = {
           .optional(),
         rationale: z.string().describe('Why this is its own PR rather than folded into a sibling.').optional(),
         acceptance: z.string().describe('What makes this part done.').optional(),
+        coverage: z
+          .string()
+          .describe(
+            'Only on a part whose job is to add or amend the end-to-end browser suite: the area it ' +
+              'covers, in words rather than as a file path. Declare it only where the planning prompt ' +
+              'told you this deployment has a suite, and only where the bar it states is met.',
+          )
+          .optional(),
       }),
     )
     .describe('The parts, in order. At least one is required — one part is a plan, not a special case.'),
