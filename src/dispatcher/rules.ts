@@ -150,7 +150,7 @@ const RULES = [
     kind: 'rule',
     name: 'Issue needs a plan',
     description:
-      'A watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. The same rule fires for a *replan* (an operator sent an existing plan back), with the planner primed with the current plan and part states so it amends rather than re-derives. A planner that never produces a plan fails open to the single-PR path after the attempt cap — or, for a replan, back to the decomposition the issue already had — so a failure can never park an issue.',
+      'A watched open issue with no plan yet gets a planning agent first: it reads the repository and decides how the work divides into parts, where one part is an ordinary answer rather than a privileged one — the count follows the seams it finds, and nothing downstream reads a one-part plan differently from an eight-part one. Planners rank ahead of pickups because a planner unblocks work. The same rule fires for a *replan* (an operator sent an existing plan back), with the planner primed with the current plan and part states so it amends rather than re-derives. A planner that never produces a plan fails open to working the issue whole after the attempt cap — or, for a replan, back to the decomposition the issue already had — so a failure can never park an issue.',
   },
   {
     id: 'issue-assess',
