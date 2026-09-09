@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
+import { aggregatingQueryRefusal, aggregatingTail } from './watchQueryShape.js';
 
 // → docs/spec/20-validation.md
 
@@ -46,6 +47,22 @@ const WatchMeasureSchema = z
   })
   .strict('a measure declares only id/title/query/expect/unit/why');
 
+function refuseAggregation(
+  signal: { id: string; query: string; presence: string },
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+): void {
+  for (const field of ['query', 'presence'] as const) {
+    const operator = aggregatingTail(signal[field]);
+    if (operator === null) continue;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [...path, field],
+      message: `signal "${signal.id}": ${aggregatingQueryRefusal(field, operator)}`,
+    });
+  }
+}
+
 export const WatchSchema = z
   .object({
     signals: z
@@ -59,6 +76,9 @@ export const WatchSchema = z
   })
   .strict('a watch block declares only "signals" and "measures"')
   .superRefine((block, ctx) => {
+    block.signals.forEach((signal, index) => {
+      refuseAggregation(signal, ctx, ['signals', index]);
+    });
     const ids = new Set<string>();
     for (const check of [...block.signals, ...block.measures]) {
       if (ids.has(check.id))
@@ -67,14 +87,18 @@ export const WatchSchema = z
     }
   });
 
-export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unknown> = z.discriminatedUnion('kind', [
-  WatchSignalSchema.extend({ kind: z.literal('signal') }).strict(
-    'a signal declares only kind/id/title/query/presence/tolerate/why',
-  ),
-  WatchMeasureSchema.extend({ kind: z.literal('measure') }).strict(
-    'a measure declares only kind/id/title/query/expect/unit/why',
-  ),
-]);
+export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unknown> = z
+  .discriminatedUnion('kind', [
+    WatchSignalSchema.extend({ kind: z.literal('signal') }).strict(
+      'a signal declares only kind/id/title/query/presence/tolerate/why',
+    ),
+    WatchMeasureSchema.extend({ kind: z.literal('measure') }).strict(
+      'a measure declares only kind/id/title/query/expect/unit/why',
+    ),
+  ])
+  .superRefine((check, ctx) => {
+    if (check.kind === 'signal') refuseAggregation(check, ctx, []);
+  });
 
 export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalWatchInput {
   if (check.kind === 'signal')

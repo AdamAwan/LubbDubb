@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentObserver } from './observer.js';
-import type { WatchResult } from './watchResult.js';
+import { scalarShaped, type WatchResult } from './watchResult.js';
 
 // → docs/spec/24-environments.md
 
@@ -92,6 +92,18 @@ export class WatchDryRun implements WatchDryRunner {
       };
     if (check.kind === 'measure')
       return { verdict, presence, rows: result.rows!.length, value: result.value, detail: null };
+    if (scalarShaped(result.rows!))
+      return {
+        verdict,
+        presence,
+        rows: result.rows!.length,
+        value: null,
+        detail:
+          `${environment.name} answered one row carrying one number, which is the shape of a query that ` +
+          'aggregated: a signal answers with the matching rows themselves and the harness counts them, so this ' +
+          'reads as exactly one occurrence however many there are. Return the rows rather than a count — ' +
+          '"tolerate" is how many of them the harness may count.',
+      };
     if (verdict === 'zero')
       return {
         verdict,

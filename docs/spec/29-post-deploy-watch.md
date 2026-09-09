@@ -73,6 +73,40 @@ A measure declares no `presence`, and that is not an omission. Presence exists b
 indistinguishable from a healthy release; a measure that answers no row at all is already `unknown`
 under the output contract, which requires exactly one row carrying a numeric `value`.
 
+### A signal query returns rows, never a count
+
+**A signal's `query` and its `presence` query each answer one row per occurrence, and the harness
+does the counting. A query that aggregates is refused at ingestion**, by `WatchSchema`
+(`src/validation/watchDocument.ts`) through `aggregatingTail`
+(`src/validation/watchQueryShape.ts`), so all three writers — the planner's `watch` block, the
+working agent's `watch_declare` and the operator's own edit through `WatchCheckSchema` — are held to
+it by one rule rather than by three.
+
+The refused shape is a **scalar** tail: `| count`, `| summarize` with no `by` clause,
+`| make-series`, and a pipe-less `select count(…)` with no `group by`. A `summarize … by role`
+answers one row per group, which is one row per occurrence of a group, and is accepted.
+
+This is the one output-contract mistake that defeats every guard the subsystem has, which is why it
+is refused rather than documented:
+
+- **The verdict is permanent.** `watchCheckVerdict` counts `rows.length` against `tolerate`, and an
+  aggregate answers exactly one row whatever its value is — so a `tolerate: 0` check reads
+  `regressed`, on every reading, for the life of the watch, on the arithmetic being right.
+- **`presence` is neutralised.** An author who aggregates the signal usually aggregates the presence
+  query too, and an aggregating presence query can never answer zero. The arm that exists to catch a
+  query naming an operation that does not exist reports the code path live on an environment where
+  it has never run.
+- **The dry run inverts.** A correct signal matching nothing reads `zero` and is handed back; an
+  aggregate reads `fires` and hands the operator positive evidence for accepting it.
+
+The prompts say it where the query is written rather than only here — the `query`, `presence` and
+`tolerate` field descriptions on both schemas, and both notes in `src/plans/planning.ts`. `tolerate`
+is _how many rows the harness may count_, and a field described as a count is half of why the
+mistake gets made.
+
+A **measure** is exempt, and that is the point of the two kinds: a measure is required to answer
+exactly one row carrying a numeric `value`, which is precisely the shape a signal may not have.
+
 The two shapes are the two things a change is for. New behaviour should not throw — a signal, and
 there is no before to compare against. Changed behaviour should be better than it was — a measure,
 and an absolute threshold is a number somebody guessed where a baseline is a number that was
@@ -193,6 +227,14 @@ Three outcomes, and each is worth something different:
 | fires    | fires  | The query is proven live and the reported defect is proven real. This reading is the baseline.                |
 | fires    | zero   | The code path runs and the thing being reported is not happening. Either the query is wrong or the ticket is. |
 | zero     | —      | The telemetry has never heard of this code path. Wrong name, wrong application, or nothing instrumented.      |
+
+A fourth reading is handed back the same way: a signal that answers **one row carrying one number**
+and nothing else. That is the signature of a query that aggregated somewhere the schema could not
+see it — inside an operator's wrapper, or in a tail the tail-detector does not know — and the dry run
+is the cheapest place to catch it, before the operator spends a credential accepting it
+(`scalarShaped`, `src/environments/watchResult.ts`). A signal legitimately matching one occurrence
+with one numeric column is refused too, and told what to write; a second column is enough to say it
+is rows.
 
 Rows two and three are handed back to the author as a refusal it can act on, the way a schema
 violation from `plan_submit` is. A syntactically valid query against a table that exists, matching
@@ -790,6 +832,11 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
 - a measure whose baseline was never taken is `unknown`, not clean — it has nothing to compare
   against;
 - a measure declaring neither a threshold nor a baseline is refused at ingestion;
+- an **aggregating signal query is refused at ingestion**, through `WatchSchema` and through
+  `WatchCheckSchema`, and a `summarize … by` is not (`test/watchAggregation.test.ts`);
+- a signal whose reading is one row carrying one number is handed back by the dry run —
+  `FakeEnvironmentObserver` answers an aggregating query as an engine does, one row whatever it was
+  scripted with, so the guard has something to catch;
 - `watch_declare` merges on the slug and takes effect on nothing until the operator accepts it, and
   an accepted amendment clears the readings of the text it replaced (`test/watchDeclare.test.ts`);
 - a watch does **not** open for an arrival older than two probe intervals, and the arrival is stamped

@@ -181,7 +181,10 @@ export const PLAN_DOCUMENT_SHAPE = {
               .string()
               .describe(
                 "The query itself, in whatever language this deployment's telemetry answers. It is handed to " +
-                  "the operator's command as a value, never pasted into a shell.",
+                  "the operator's command as a value, never pasted into a shell. It returns **one row per " +
+                  'occurrence** and the harness counts the rows: do not aggregate it. A query ending in a ' +
+                  'count answers one row whatever the number is, which reads as one occurrence for ever, and ' +
+                  'is refused.',
               ),
             presence: z
               .string()
@@ -189,18 +192,25 @@ export const PLAN_DOCUMENT_SHAPE = {
                 'A second query whose only job is to prove the code path is running at all. Required, and it ' +
                   'is the whole design: a query naming an operation that does not exist returns zero rows, and ' +
                   'zero rows is indistinguishable from a healthy release. Without this the harness would report ' +
-                  'your fix verified on the strength of a typo.',
+                  'your fix verified on the strength of a typo. It returns rows too, and for that reason must ' +
+                  'not aggregate: a count can never answer zero, so an aggregated presence query proves ' +
+                  'nothing and is refused.',
               ),
             tolerate: z
               .number()
-              .describe('The count this must not exceed. Almost always 0 — the thing should not be happening.')
+              .describe(
+                'How many rows the query may answer before this reads as a regression. The harness does the ' +
+                  'counting — your query returns the occurrences. Almost always 0: the thing should not be ' +
+                  'happening at all.',
+              )
               .optional(),
             why: z.string().describe('Why this is the right question to ask after it ships.').optional(),
           }),
         )
         .describe(
           'Things that should not be happening: exceptions, failures, retries, a log line only written when ' +
-            'something has gone wrong.',
+            'something has gone wrong. Each query returns the matching rows themselves and the harness counts ' +
+            'them against "tolerate".',
         )
         .optional(),
     })
