@@ -44,8 +44,63 @@ export type NeedKind =
 
 export type NeedGroup = 'blocking' | 'yours';
 
-function assignedPrRows(state: AppState): NeedRow[] {
-  const rows: NeedRow[] = [];
+/**
+ * How soon the ask wants answering, which is the rail's first cut and is about
+ * what the operator can *do*, not who is stopped. `now` is work the fleet cannot
+ * get past without an answer; `next` an obligation that is the operator's and
+ * gates something; `later` an ask holding nothing at all, which the rail folds
+ * away rather than spending a row on.
+ *
+ * Total over {@link NeedKind}, like the rail's own tables, so a new kind is
+ * placed deliberately rather than inheriting the last one's urgency.
+ */
+export type NeedUrgency = 'now' | 'next' | 'later';
+
+const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
+  recovery: 'now',
+  escalation: 'now',
+  permission: 'now',
+  dispatch: 'now',
+  config: 'now',
+  plan: 'now',
+  merge: 'now',
+  reply: 'next',
+  shortfall: 'next',
+  intake: 'next',
+  profile: 'next',
+  close_out: 'next',
+  validate: 'next',
+  bench: 'next',
+  config_gap: 'next',
+  supply: 'next',
+  limit: 'later',
+  watch: 'later',
+  burn: 'later',
+  placement: 'later',
+  assigned: 'later',
+  upgrade: 'later',
+  project_pull: 'later',
+};
+
+/**
+ * A row as its source writes it. The tier is derived from the finished row —
+ * `holding` is not known where several of these are built — so it is added in
+ * one pass at the end rather than restated at each of the fourteen push sites.
+ */
+export type NeedDraft = Omit<NeedRow, 'urgency'>;
+
+/**
+ * Parts held downstream promote any ask to `now`, whatever its kind: a bench row
+ * with four parts waiting behind it is stopping more work than most escalations,
+ * and a tier read off the kind alone would file it under "when you have a
+ * minute".
+ */
+function urgencyOf(row: NeedDraft): NeedUrgency {
+  return row.holding > 0 ? 'now' : KIND_URGENCY[row.kind];
+}
+
+function assignedPrRows(state: AppState): NeedDraft[] {
+  const rows: NeedDraft[] = [];
   for (const pr of state.world.pullRequests) {
     const assignment = pr.attention?.assignedToYou;
     if (assignment === undefined) continue;
@@ -87,6 +142,7 @@ export interface NeedRow {
   id: string;
   kind: NeedKind;
   group: NeedGroup;
+  urgency: NeedUrgency;
   title: string;
   goalRef: string | null;
   originRef: string | null;
@@ -240,7 +296,7 @@ const KIND_FOR_VERDICT: Record<SetupVerdict, NeedKind | null> = {
   unknown: null,
 };
 
-function configRows(setup: SetupPayload | null, applied: readonly AppliedFix[]): NeedRow[] {
+function configRows(setup: SetupPayload | null, applied: readonly AppliedFix[]): NeedDraft[] {
   if (setup === null) return [];
   return setup.checks
     .filter((check) => {
@@ -335,7 +391,7 @@ function refusalLine(detail: string): string {
   return detail.length > 200 ? `${detail.slice(0, 199)}…` : detail;
 }
 
-function refusedDispatchRows(state: AppState): NeedRow[] {
+function refusedDispatchRows(state: AppState): NeedDraft[] {
   return refusedDispatches(state).map((r) => {
     const goalRef = goalOf(r.originRef, state);
     return {
@@ -355,6 +411,7 @@ function refusedDispatchRows(state: AppState): NeedRow[] {
 }
 
 const GROUP_RANK: Record<NeedGroup, number> = { blocking: 0, yours: 1 };
+const URGENCY_RANK: Record<NeedUrgency, number> = { now: 0, next: 1, later: 2 };
 
 export function buildNeedsYou(
   state: AppState,
@@ -364,7 +421,7 @@ export function buildNeedsYou(
 ): NeedRow[] {
   const parts = state.planParts ?? [];
   const proposals = state.proposals ?? [];
-  const rows: NeedRow[] = [];
+  const rows: NeedDraft[] = [];
 
   rows.push(...configRows(setup, applied));
   rows.push(...updateAskRows(state, nowIso));
@@ -508,10 +565,13 @@ export function buildNeedsYou(
     });
   }
 
-  return rows.sort((a, b) => {
-    if ((a.kind === 'recovery') !== (b.kind === 'recovery')) return a.kind === 'recovery' ? -1 : 1;
-    if (a.group !== b.group) return GROUP_RANK[a.group] - GROUP_RANK[b.group];
-    if (a.holding !== b.holding) return b.holding - a.holding;
-    return a.raisedAt.localeCompare(b.raisedAt);
-  });
+  return rows
+    .map((row) => ({ ...row, urgency: urgencyOf(row) }))
+    .sort((a, b) => {
+      if ((a.kind === 'recovery') !== (b.kind === 'recovery')) return a.kind === 'recovery' ? -1 : 1;
+      if (a.urgency !== b.urgency) return URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
+      if (a.group !== b.group) return GROUP_RANK[a.group] - GROUP_RANK[b.group];
+      if (a.holding !== b.holding) return b.holding - a.holding;
+      return a.raisedAt.localeCompare(b.raisedAt);
+    });
 }

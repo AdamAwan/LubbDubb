@@ -342,12 +342,20 @@ test('a panel draws its backdrop and its close button, both of them ways out', (
   assert.ok(html.includes('<h2>Faults</h2>'));
 });
 
-test('the rail carries every blocking kind in one list', () => {
+test('the rail carries every ask that holds something, and folds the rest behind a count', () => {
   const html = render(view());
   const v = view();
   assert.ok(v.needsYou.length > 0, 'the demo fixtures must carry at least one ask');
   const decoded = decode(html);
-  for (const row of v.needsYou) assert.ok(decoded.includes(row.title), `the rail dropped ${row.kind}`);
+  const pressing = v.needsYou.filter((row) => row.urgency !== 'later');
+  const folded = v.needsYou.filter((row) => row.urgency === 'later');
+  for (const row of pressing) assert.ok(decoded.includes(row.title), `the rail dropped ${row.kind}`);
+  if (folded.length > 0) {
+    assert.ok(
+      decoded.includes(`Show ${folded.length} holding nothing`),
+      'an ask the fold hides is still counted on the control that opens it — a queue may drop nothing silently',
+    );
+  }
 });
 
 test('a row states what it is holding, and a row holding nothing draws no count', () => {
@@ -355,6 +363,7 @@ test('a row states what it is holding, and a row holding nothing draws no count'
     {
       id: 'a',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Holds two',
       goalRef: 'issue:1',
@@ -365,6 +374,7 @@ test('a row states what it is holding, and a row holding nothing draws no count'
     {
       id: 'b',
       kind: 'bench',
+      urgency: 'next',
       group: 'yours',
       title: 'Holds nothing',
       goalRef: 'issue:1',
@@ -384,6 +394,7 @@ test('one part is held, not "1 parts" — the count and the noun agree', () => {
     {
       id: 'a',
       kind: 'bench',
+      urgency: 'now',
       group: 'yours',
       title: 'Holds exactly one',
       goalRef: 'issue:1',
@@ -419,6 +430,7 @@ test('a group with no rows draws no heading; a group with rows draws its own', (
     {
       id: 'a',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Only blocking',
       goalRef: 'issue:1',
@@ -432,6 +444,7 @@ test('a group with no rows draws no heading; a group with rows draws its own', (
     {
       id: 'b',
       kind: 'bench',
+      urgency: 'next',
       group: 'yours',
       title: 'Yours too',
       goalRef: 'issue:1',
@@ -455,6 +468,7 @@ test('the rail renders array order within a group, never a re-sort', () => {
     {
       id: 'yours-1',
       kind: 'bench',
+      urgency: 'next',
       group: 'yours',
       title: 'Yours first in the array',
       goalRef: 'issue:1',
@@ -465,6 +479,7 @@ test('the rail renders array order within a group, never a re-sort', () => {
     {
       id: 'blocking-low',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Blocking low holder',
       goalRef: 'issue:2',
@@ -475,6 +490,7 @@ test('the rail renders array order within a group, never a re-sort', () => {
     {
       id: 'blocking-high',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Blocking high holder',
       goalRef: 'issue:3',
@@ -498,6 +514,7 @@ test('every row that opens something is a button; only the recovery hold is not'
     {
       id: 'clickable',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Opens a goal',
       goalRef: 'issue:9',
@@ -509,6 +526,7 @@ test('every row that opens something is a button; only the recovery hold is not'
     {
       id: 'no-goal',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'Opens the ask panel',
       goalRef: null,
@@ -520,6 +538,7 @@ test('every row that opens something is a button; only the recovery hold is not'
     {
       id: 'recovery',
       kind: 'recovery',
+      urgency: 'now',
       group: 'blocking',
       title: 'Answered on the banner above',
       goalRef: null,
@@ -560,7 +579,12 @@ test('every row that opens something is a button; only the recovery hold is not'
 });
 
 test('every act a rail card carries is in the card’s action bar', () => {
-  const html = render(view());
+  // Every card drawn, fold included: the bar's rule is about the card, and half
+  // the kinds that carry acts are asks that hold nothing.
+  const v = view();
+  const html = render(
+    view({ needsYou: v.needsYou.map((row) => ({ ...row, urgency: row.urgency === 'later' ? 'next' : row.urgency })) }),
+  );
   const rail = html.slice(html.indexOf('cn-rail'), html.indexOf('cn-sit'));
   const cards = rail.split(/(?=<(?:button|div)[^>]*class="cn-q(?: |"))/).filter((c) => /class="cn-q(?: |")/.test(c));
   assert.ok(cards.length > 0, 'the demo snapshot must fill the rail');
@@ -595,6 +619,7 @@ test('every kind of ask draws in its own tone, under its own glyph', () => {
   const rows = kinds.map((kind, i) => ({
     id: `row-${i}`,
     kind,
+    urgency: 'now' as const,
     group: i % 2 === 0 ? 'blocking' : 'yours',
     title: `The ${kind} row`,
     goalRef: null,
@@ -621,6 +646,7 @@ test("the group is drawn as weight within the kind's own hue", () => {
     {
       id: 'parked',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'An agent is parked on this',
       goalRef: null,
@@ -633,6 +659,7 @@ test("the group is drawn as weight within the kind's own hue", () => {
     {
       id: 'unparked',
       kind: 'escalation',
+      urgency: 'now',
       group: 'yours',
       title: 'Nothing is waiting on this',
       goalRef: null,
@@ -927,6 +954,7 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
     {
       id: 'mine',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'On the open goal',
       goalRef: ref,
@@ -938,6 +966,7 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
     {
       id: 'other',
       kind: 'escalation',
+      urgency: 'now',
       group: 'blocking',
       title: 'On some other goal',
       goalRef: 'issue:9999',
@@ -949,6 +978,7 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
     {
       id: 'recovery',
       kind: 'recovery',
+      urgency: 'now',
       group: 'blocking',
       title: 'Answered on the banner above',
       goalRef: null,

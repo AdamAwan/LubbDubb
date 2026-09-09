@@ -579,3 +579,44 @@ test('a burn notice names the spending run; every other human task carries neith
     'the agent that merely asked is not what the row is about',
   );
 });
+
+test('urgency ranks the queue, and a watch holding parts is not filed under "whenever"', () => {
+  const demo = buildDemoState();
+  const parts = [
+    part({ id: 'p:a', slug: 'a', dependsOn: [] }),
+    part({ id: 'p:b', slug: 'b', dependsOn: ['a'] }),
+    part({ id: 'p:c', slug: 'c', dependsOn: ['a'] }),
+  ];
+  const rows = buildNeedsYou({
+    ...demo,
+    planParts: parts,
+    escalations: [escalation({ id: 'e1' })],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [],
+    humanTasks: [
+      task({ id: 'watch1', kind: 'watch', partId: 'p:a' }),
+      task({ id: 'watch2', kind: 'watch', partId: null }),
+      task({ id: 'close1', kind: 'close_out', partId: null }),
+    ],
+  });
+
+  const urgencyOf = (id: string): string | undefined => rows.find((r) => r.id === id)?.urgency;
+  assert.equal(urgencyOf('e1'), 'now', 'an agent that cannot get past a question is answered first');
+  assert.equal(urgencyOf('close1'), 'next', "the step after a delivery is the operator's, and holds nothing");
+  assert.equal(urgencyOf('watch2'), 'later', 'a watch holding nothing is what the fold exists for');
+  assert.equal(
+    urgencyOf('watch1'),
+    'now',
+    'two parts are waiting behind it — held work outranks the kind it was raised as',
+  );
+
+  const order = rows.map((r) => r.urgency);
+  assert.deepEqual(
+    [...order].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)),
+    order,
+    'the rail renders array order, so the merge must already be in urgency order',
+  );
+});
+
+const ORDER = ['now', 'next', 'later'];

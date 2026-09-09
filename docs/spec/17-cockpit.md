@@ -743,6 +743,42 @@ owes. It stops being drawn the moment somebody takes the assignment off again �
 operator approves the pull request, which is the same thing said by the provider
 ([07](07-pull-requests.md#when-the-assignment-ends)).
 
+### Urgency is the rail's first cut
+
+**Three urgencies, and the question they answer is _what do I answer first_.** `NeedUrgency`
+(`web/src/view/needsYou.ts`) is `now`, `next` or `later`, and the rail's headings — `Answer now`,
+`Yours to do`, `Whenever` — are that reading rather than the group's. Twenty-three kinds down the two
+headings the rail used to carry put a build upgrade and an assigned pull request in the same list as
+an agent that cannot proceed, and the operators reading it stopped reading it: the queue was
+_complete_ and, past about a dozen rows, that was the whole of its cost.
+
+`KIND_URGENCY` is total over `NeedKind`, so a new kind is placed deliberately rather than inheriting
+the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
+`dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
+obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
+`close_out`, `validate`, `bench`, `config_gap`, `supply`. `later` is an ask holding nothing at all —
+`watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
+
+**`limit` is `later` and `blocking` at once, which is the point of having both readings.** An agent is
+parked and its slot is held — the group says so, and its row still draws at full weight — but there is
+nothing the operator can do about a window that has to turn over, so it does not belong above a
+question an agent is sitting in. Urgency is about what is _answerable_; the group is about what is
+_stopped_. Folding one into the other loses whichever reading it was folded into.
+
+**Held parts promote any ask to `now`, whatever its kind.** A watch row with four parts waiting behind
+it stops more work than most escalations, and an urgency read off the kind alone would file it under
+"whenever". `holding` is the one number the merge already computes for every row, and it is the honest
+measure of what an ask is costing. It is applied in one pass over the finished rows — `NeedDraft` is
+the row as its fourteen sources write it — rather than restated at each push site, where `holding` is
+not always known.
+
+**The `later` section is folded behind a control that counts it**, not a heading: `Show 6 holding
+nothing`. The count is on the control precisely because a queue may drop nothing silently — an ask
+behind the fold is still an ask, and the number over the rail's own heading stays the whole queue for
+the same reason. The fold opens on its own when nothing is pressing, since a rail whose only content
+is a fold reads as an empty one. Its open/shut state is a `useState` and not a `Place` field: it says
+nothing about where the operator is ([the address bar](#the-address-bar)).
+
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
 is `yours` for that reason and against how much it stops: it holds a whole goal's dispatch, and no
@@ -804,9 +840,12 @@ inside a 10px monospace tag on exactly the operator's machine nobody tested on. 
 for a variation selector to fix, which is the point — `✔`, `☑` and `🏳` are out for that reason and `✓`,
 `⚑` and `◆` are in.
 
-**The group is said three ways instead of one.** The `Blocking` sub-heading, the sort order, and each
-row's own weight: `blocking` draws `cn-parked` — a full-strength stripe and a filled tag — against the
-softened stripe and outlined tag of a row nothing is waiting on. Opacity within one hue rather than a
+**The group is said three ways instead of one.** The word on the row, the sort order within an
+urgency, and each row's own weight: `blocking` draws `cn-parked` — a full-strength stripe and a filled
+tag — against the softened stripe and outlined tag of a row nothing is waiting on. The word used to be
+the section heading, which the urgency now owns; it moved into the parked rows' own meta line rather
+than being dropped, because a reading carried only by opacity is one an operator has to have been told
+about. Opacity within one hue rather than a
 second colour per tone, so the two readings cannot drift apart. `test/console.test.ts` renders every
 kind with the group alternating beneath it, so a rail that quietly went back to colouring by group
 fails rather than merely looking wrong.

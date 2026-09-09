@@ -1,7 +1,7 @@
 import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
+import type { AppliedFix, NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
 import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { PrLink, Ref, refLabel } from '../components/refs.js';
@@ -126,7 +126,20 @@ const GROUP_LABEL: Record<NeedGroup, string> = {
   blocking: 'Blocking',
   yours: 'Yours to do',
 };
-const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
+
+/**
+ * The rail's own headings, which are tiers rather than groups: the operator's
+ * question at a glance is *what do I answer first*, and `blocking` / `yours`
+ * answers a different one — who is stopped — that each row still carries as its
+ * weight. Twenty-three kinds down two headings put a build upgrade beside an
+ * agent that cannot proceed.
+ */
+const URGENCY_LABEL: Record<NeedUrgency, string> = {
+  now: 'Answer now',
+  next: 'Yours to do',
+  later: 'Whenever',
+};
+const URGENCY_ORDER: NeedUrgency[] = ['now', 'next', 'later'];
 
 const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
 
@@ -215,6 +228,12 @@ function Row({
         {row.agentId !== null && goal !== null && <span>·</span>}
         {goal !== null && <span>{goal}</span>}
         {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}
+        {/* The group's third statement, which used to be the section heading the
+            tier now owns: the weight and the sort say who is stopped, and a
+            reading carried only by opacity is one an operator has to have been
+            told about. Drawn on the parked rows alone — the word on every row
+            says nothing. */}
+        {parked && <span className="cn-blk">{GROUP_LABEL[row.group]}</span>}
       </div>
     </>
   );
@@ -543,24 +562,52 @@ function SettledFix({ applied, actions }: { applied: AppliedFix; actions: Cockpi
 export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = view.needsYou;
   const focus = view.goalPage === null ? null : `issue:${view.goalPage.issue.number}`;
-  const sections = GROUP_ORDER.map((group) => ({ group, rows: rows.filter((r) => r.group === group) })).filter(
-    (s) => s.rows.length > 0,
-  );
+  const [showLater, setShowLater] = useState(false);
+  const sections = URGENCY_ORDER.map((urgency) => ({
+    urgency,
+    rows: rows.filter((r) => r.urgency === urgency),
+  })).filter((s) => s.rows.length > 0);
+  /* The count over the heading stays the whole queue, folded rows included: a
+     number that moved when a section closed would read as asks going away. */
+  const pressing = rows.filter((r) => r.urgency !== 'later').length;
+  /* With nothing pressing there is nothing to protect the operator from, and a
+     rail whose only content is a fold reads as an empty one. */
+  const openLater = showLater || pressing === 0;
 
   return (
     <>
       <div className="cn-rail-head">
         <h2>Needs you</h2>
-        {rows.length > 0 && <i className="cn-count">{rows.length}</i>}
+        {rows.length > 0 && (
+          <i className="cn-count" title={`${pressing} to answer, ${rows.length} in all`}>
+            {rows.length}
+          </i>
+        )}
       </div>
       <div className="cn-rail-list">
         {rows.length === 0 ? (
           <p className="cn-rail-empty">Nothing is waiting on you</p>
         ) : (
           sections.map((section) => (
-            <Fragment key={section.group}>
-              <div className="cn-railsub">{GROUP_LABEL[section.group]}</div>
-              {section.rows.map((row) => (
+            <Fragment key={section.urgency}>
+              {section.urgency === 'later' ? (
+                /* Folded, and by a control that says what is behind it rather
+                   than a chevron: these hold nothing, and a rail that spends a
+                   row each on them is the reason the pressing ones get skimmed.
+                   The fold is per-visit state, not a `Place` field — it says
+                   nothing about where the operator is. */
+                <button
+                  type="button"
+                  className="cn-railmore"
+                  aria-expanded={openLater}
+                  onClick={() => setShowLater((open) => !open)}
+                >
+                  {openLater ? 'Hide' : 'Show'} {section.rows.length} holding nothing
+                </button>
+              ) : (
+                <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
+              )}
+              {(section.urgency === 'later' && !openLater ? [] : section.rows).map((row) => (
                 <Row key={row.id} row={row} now={view.now} focus={focus} build={view.state.build} actions={actions} />
               ))}
             </Fragment>
