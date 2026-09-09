@@ -853,6 +853,16 @@
 .cn-qmeta .cn-hold {
   color: var(--cn-tone);
 }
+/* The group, said in a word on the rows that carry it. In the row's own tone, so
+   it reads as part of the ask rather than a second palette. */
+.cn-qmeta .cn-blk {
+  color: var(--cn-tone-ink);
+  text-transform: uppercase;
+  letter-spacing: var(--label-track);
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  align-self: center;
+}
 /* ---------- the card's action bar ----------
    The row body is the control that opens the ask, so nothing else may live inside
    it: one click may not have two destinations. Everything a card can *do* is in
@@ -1036,6 +1046,26 @@ a.cn-qbody {
 .cn-railsub {
   padding: 10px 14px 4px;
   color: var(--cn-fg-faint);
+}
+/* The fold over the asks that hold nothing. A row-width control rather than a
+   heading with a chevron: it is the only thing standing between the operator and
+   those asks, so it has to look pressable at rail width. */
+.cn-railmore {
+  margin: 10px 6px 0;
+  padding: 7px 8px;
+  border: 1px dashed var(--cn-line);
+  border-radius: 6px;
+  background: none;
+  color: var(--cn-fg-faint);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.cn-railmore:hover,
+.cn-railmore:focus-visible {
+  color: var(--cn-fg);
+  border-color: var(--cn-line-hi);
 }
 /* Zero rows still draws the rail — a note here, not an absent surface, is
    what keeps "quiet" distinguishable from "broken". */

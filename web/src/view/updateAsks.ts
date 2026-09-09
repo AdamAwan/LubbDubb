@@ -1,5 +1,5 @@
 import type { AppState, BuildReading } from '../types.js';
-import type { NeedRow } from './needsYou.js';
+import type { NeedDraft } from './needsYou.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -68,9 +68,9 @@ function behindSince(build: BuildReading): string {
  *
  * @public merged into the queue by `buildNeedsYou`.
  */
-export function updateAskRows(state: AppState, nowIso: string): NeedRow[] {
+export function updateAskRows(state: AppState, nowIso: string): NeedDraft[] {
   const build = state.build;
-  const rows: NeedRow[] = [];
+  const rows: NeedDraft[] = [];
 
   if (build.upgradable && !snoozed(build.snoozedUntil.upgrade, nowIso)) {
     rows.push({
