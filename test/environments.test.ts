@@ -298,6 +298,7 @@ test('a reading that has not sat long enough, and a goal already arrived, are no
           arrivedAt: '2026-01-02T00:00:00.000Z',
           announcedAt: null,
           watchedAt: null,
+          sheetedAt: null,
         },
       ],
       now: Date.parse('2026-01-03T00:00:00.000Z'),
@@ -1036,7 +1037,14 @@ test('a gate is opened by whichever environment declaring it the goal reaches fi
     { name: 'liveUk', at: 'x', arrival: { comment: true } },
   ];
   const arrived = (environment: string): GoalArrival[] => [
-    { goalRef: 'issue:12', environment, arrivedAt: '2026-08-20T00:00:00.000Z', announcedAt: null, watchedAt: null },
+    {
+      goalRef: 'issue:12',
+      environment,
+      arrivedAt: '2026-08-20T00:00:00.000Z',
+      announcedAt: null,
+      watchedAt: null,
+      sheetedAt: null,
+    },
   ];
   assert.equal(openedGoals('close_out', envs, arrived('testIe'), [])?.has('issue:12'), true);
   assert.equal(

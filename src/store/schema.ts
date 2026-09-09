@@ -876,6 +876,57 @@ CREATE TABLE IF NOT EXISTS remote_query_approvals (
   PRIMARY KEY (query_digest, environment)
 );
 
+-- One goal's checks, watches and state queries assembled against one environment,
+-- opened by RemoteValidationDesk when the goal's work arrives there (see
+-- RemoteValidationStore). Written OR IGNORE: a second arrival re-runs the sheet that
+-- exists rather than opening a second one, and a sheet does not expire -- a row
+-- records what this goal meant to be true, and intent does not rot.
+CREATE TABLE IF NOT EXISTS remote_sheets (
+  goal_ref     TEXT NOT NULL,      -- issue:<n>
+  environment  TEXT NOT NULL,
+  assembled_at TEXT NOT NULL,
+  PRIMARY KEY (goal_ref, environment)
+);
+
+-- One row of one sheet. blocked_reason is what an operator is told where no reading
+-- was taken at all, and awaiting_approval marks the one blocked cause a person can
+-- clear from the sheet itself: a query nobody has accepted against this environment.
+CREATE TABLE IF NOT EXISTS remote_sheet_rows (
+  goal_ref          TEXT NOT NULL,
+  environment       TEXT NOT NULL,
+  row_id            TEXT NOT NULL,   -- 'check:<id>' | 'state:<id>' | 'watch:<id>'
+  kind              TEXT NOT NULL,   -- 'check' | 'state' | 'signal' | 'measure'
+  seq               INTEGER NOT NULL,
+  title             TEXT NOT NULL,
+  source_id         TEXT NOT NULL,   -- the check, query or watch this row stands for
+  selected          INTEGER NOT NULL DEFAULT 1,
+  blocked_reason    TEXT,
+  awaiting_approval INTEGER NOT NULL DEFAULT 0,
+  updated_at        TEXT NOT NULL,
+  PRIMARY KEY (goal_ref, environment, row_id)
+);
+
+-- What a row came back as. Append-only: a later reading supersedes rather than
+-- deletes, so the reading a person acted on stays readable. run_id is NULL for a
+-- reading taken at assembly, which is every reading until the press lands. These are
+-- never WorldEvents and never watch_readings: a world event matching the goal's issue
+-- ref expires its standing delivery verdict, and a point-in-time read folded into the
+-- watch's table would move a settled verdict on the window's clock.
+CREATE TABLE IF NOT EXISTS remote_readings (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  goal_ref    TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  row_id      TEXT NOT NULL,
+  run_id      TEXT,
+  outcome     TEXT NOT NULL,   -- 'passed' | 'failed' | 'blocked'
+  rows        INTEGER,
+  value       REAL,
+  detail      TEXT,
+  read_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS remote_readings_row ON remote_readings (goal_ref, environment, row_id);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

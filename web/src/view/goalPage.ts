@@ -14,6 +14,7 @@ import type {
   GoalEnvironmentReach,
   GoalWatch,
   GoalWatchView,
+  RemoteSheetView,
   ValidationCheck,
   ValidationResourceView,
 } from '../types.js';
@@ -59,6 +60,7 @@ export interface GoalPageView {
   environments: GoalEnvironmentReach[];
   gateHold: string | null;
   gateRelease: EnvironmentGateRelease | null;
+  remoteSheets: RemoteSheetView[];
   watches: GoalWatchView[];
   signals: GoalWatch[];
   sequence: FeatureSequence | null;
@@ -258,6 +260,7 @@ export function buildGoalPage(
     environments: reach?.environments ?? [],
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
+    remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
     sequence: goalSequence(state, issue),
@@ -390,6 +393,7 @@ export const GOAL_SECTIONS = [
   'ticket',
   'validation',
   'localValidation',
+  'remoteValidation',
   'signals',
   'sequence',
   'environments',
@@ -404,6 +408,7 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     ticket: !workStarted(page),
     validation: (shipped(page) && liveChecks(page) > 0) || page.checks.some((c) => c.state !== 'unrun'),
     localValidation: page.issue.localValidation !== null,
+    remoteValidation: page.remoteSheets.length > 0,
     signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
     environments: page.environments.some((e) => e.status !== 'absent'),
     sequence: false,

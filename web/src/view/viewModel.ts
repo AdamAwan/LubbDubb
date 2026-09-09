@@ -101,6 +101,7 @@ export interface CockpitView {
   insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
+  sheetEnvironment: string | null;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -155,6 +156,7 @@ interface ViewInputs {
   insightsScope?: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject?: string | null;
+  sheetEnvironment?: string | null;
   selectedGoal: string | null;
   selectedPr?: number | null;
   consolePanel: ConsolePanel;
@@ -247,6 +249,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     insightsScope: input.insightsScope ?? 'mine',
     insightsWindow: input.insightsWindow,
     poolProject: input.poolProject ?? null,
+    sheetEnvironment: input.sheetEnvironment ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
     goalOpen: new Set(input.goalOpen ?? []),
     goalShut: new Set(input.goalShut ?? []),

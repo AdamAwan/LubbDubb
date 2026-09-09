@@ -15,6 +15,7 @@ import type {
   Retrospective,
   ScratchPadSummary,
   TaskSummary,
+  RemoteReading,
   WatchReading,
   WorldSnapshot,
 } from '../types.js';
@@ -34,6 +35,7 @@ import type {
   OpenPullRequest,
   PlanPartView,
   PullRequest,
+  RemoteSheetView,
   ValidationResourceView,
 } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
@@ -472,6 +474,7 @@ export function buildStateSections(
     | 'environmentHealth'
     | 'goalWatchWindows'
     | 'environmentArrivals'
+    | 'remoteSheets'
     | 'stackLandings'
   > => ({
     worldObservedAt: baseline?.takenAt ?? null,
@@ -490,6 +493,7 @@ export function buildStateSections(
     environmentHealth: buildEnvironmentHealth(store, config.environments),
     goalWatchWindows: buildGoalWatchWindows(store, config.environments),
     environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
+    remoteSheets: buildRemoteSheets(store, config.environments),
     stackLandings: [
       ...stacks.map((stack) => {
         const rungPrs = stack.rungs.flatMap((rung) => {
@@ -754,6 +758,27 @@ function buildGoalWatchWindows(store: System['store'], environments: Environment
         baselineValue: c.baselineValue,
         reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
       })),
+  }));
+}
+
+/**
+ * The sheets an arrival assembled, with the latest reading on every row folded in here rather than
+ * in the cockpit — a cockpit that worked an outcome out for itself would be a second opinion drawn
+ * beside the reading it describes. Absent entirely where no environment declares a `validate` block:
+ * a card of question marks on a deployment that configured nothing reads as broken.
+ */
+function buildRemoteSheets(store: System['store'], environments: EnvironmentConfig[]): RemoteSheetView[] {
+  if (!environments.some((e) => e.validate !== undefined)) return [];
+  const sheets = store.listRemoteSheets();
+  if (sheets.length === 0) return [];
+  const newest = new Map<string, RemoteReading>();
+  for (const r of store.listRemoteReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
+  const rows = store.listRemoteSheetRows();
+  return sheets.map((sheet) => ({
+    ...sheet,
+    rows: rows
+      .filter((row) => row.goalRef === sheet.goalRef && row.environment === sheet.environment)
+      .map((row) => ({ ...row, reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null })),
   }));
 }
 

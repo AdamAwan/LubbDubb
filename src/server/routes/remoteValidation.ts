@@ -65,4 +65,31 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, query: ruled.query, reading: ruled.reading, approval: ruled.approval };
     }),
   );
+
+  /*
+   * The same consent, one row kind over: a check live on the watch is still blocked on a sheet until
+   * its digest has been accepted against *this* environment. The watch asked whether the query
+   * parses; the sheet asks it of a named place. → docs/spec/36-remote-validation.md
+   */
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/watch-queries/:queryId',
+    checked({ params: ApprovalParams, body: RulingBody }, async ({ params, body, reply }) => {
+      const environment = system.config.environments.find((e) => e.name === params.environment);
+      if (environment?.watch === undefined)
+        return reply.code(409).send({
+          error:
+            `"${params.environment}" declares no "watch.observe" command, so a query accepted against it ` +
+            'could never be put to anything.',
+        });
+      const ruled = await system.remoteValidation.ruleWatchQuery(
+        issueOrigin(params.number),
+        params.queryId,
+        params.environment,
+        body.accept,
+      );
+      if (ruled === null) return reply.code(404).send({ error: 'no such watch check on that goal' });
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, check: ruled.check, reading: ruled.reading, approved: ruled.approved };
+    }),
+  );
 }

@@ -151,6 +151,9 @@ import type {
   StackLandingStatus,
   Task,
   StateQuery,
+  RemoteReading,
+  RemoteSheet,
+  RemoteSheetRow,
   StateQueryApproval,
   StateQueryAuthor,
   StateQueryInput,
@@ -1142,6 +1145,9 @@ export class Store {
   markArrivalAnnounced(goalRef: string, environment: string): void {
     this.environments.markArrivalAnnounced(goalRef, environment);
   }
+  markArrivalSheeted(goalRef: string, environment: string): void {
+    this.environments.markArrivalSheeted(goalRef, environment);
+  }
   markArrivalWatched(goalRef: string, environment: string): void {
     this.environments.markArrivalWatched(goalRef, environment);
   }
@@ -1236,6 +1242,31 @@ export class Store {
   }
   listStateQueryApprovals(): StateQueryApproval[] {
     return this.remoteValidation.listStateQueryApprovals();
+  }
+  openRemoteSheet(input: { goalRef: string; environment: string }): void {
+    this.remoteValidation.openRemoteSheet(input);
+  }
+  listRemoteSheets(): RemoteSheet[] {
+    return this.remoteValidation.listRemoteSheets();
+  }
+  saveRemoteSheetRows(
+    goalRef: string,
+    environment: string,
+    rows: readonly Omit<RemoteSheetRow, 'goalRef' | 'environment'>[],
+  ): void {
+    this.remoteValidation.saveRemoteSheetRows(goalRef, environment, rows);
+  }
+  blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
+    this.remoteValidation.blockRemoteSheetRow(goalRef, environment, rowId, reason);
+  }
+  listRemoteSheetRows(): RemoteSheetRow[] {
+    return this.remoteValidation.listRemoteSheetRows();
+  }
+  recordRemoteReading(input: Omit<RemoteReading, 'readAt'>): void {
+    this.remoteValidation.recordRemoteReading(input);
+  }
+  listRemoteReadings(): RemoteReading[] {
+    return this.remoteValidation.listRemoteReadings();
   }
 
   beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {

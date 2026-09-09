@@ -1,5 +1,6 @@
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
-import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationCheck } from '../types.js';
+import { sheetBenchLine } from '../remoteValidation/sheet.js';
+import type { HumanTask, Issue, IssueDelivery, IssueShortfall, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { liveChecks, outstandingChecks } from './verdict.js';
 
 // → docs/spec/20-validation.md
@@ -15,6 +16,8 @@ interface ValidationReadyInput {
   shortfalls: readonly IssueShortfall[];
   existing: readonly HumanTask[];
   checks: ReadonlyMap<string, readonly ValidationCheck[]>;
+  /** The sheet rows an arrival assembled, by goal — one line each on the row's detail. */
+  sheetRows: ReadonlyMap<string, readonly RemoteSheetRow[]>;
   opened: ReadonlySet<string> | null;
   watchCleared: ReadonlySet<string> | null;
 }
@@ -48,7 +51,7 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
         steps.push({
           kind: 'reopen',
           taskId: existing.id,
-          detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length),
+          detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length, input.sheetRows.get(originRef)),
         });
       continue;
     }
@@ -58,7 +61,7 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
       kind: 'file',
       originRef,
       title: validateTitle(originRef),
-      detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length),
+      detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length, input.sheetRows.get(originRef)),
     });
   }
 
@@ -84,7 +87,12 @@ function validateTitle(originRef: string): string {
   return `Run the validation checks for ${originRef.replace(/^issue:/, 'issue #')}`;
 }
 
-function validateDetail(issue: Issue | null, live: readonly ValidationCheck[], owed: number): string {
+function validateDetail(
+  issue: Issue | null,
+  live: readonly ValidationCheck[],
+  owed: number,
+  sheetRows: readonly RemoteSheetRow[] | undefined,
+): string {
   const name = issue ? `**${issue.title}**` : 'This goal';
   const lines = [
     `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
@@ -93,8 +101,19 @@ function validateDetail(issue: Issue | null, live: readonly ValidationCheck[], o
     '',
     'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
   ];
+  for (const line of sheetLines(sheetRows ?? [])) lines.push('', line);
   if (issue?.url) lines.push('', issue.url);
   return lines.join('\n');
+}
+
+function sheetLines(rows: readonly RemoteSheetRow[]): string[] {
+  const byEnvironment = new Map<string, RemoteSheetRow[]>();
+  for (const row of rows) {
+    const held = byEnvironment.get(row.environment);
+    if (held === undefined) byEnvironment.set(row.environment, [row]);
+    else held.push(row);
+  }
+  return [...byEnvironment.entries()].map(([environment, its]) => sheetBenchLine(environment, its));
 }
 
 function settledResolution(total: number): string {

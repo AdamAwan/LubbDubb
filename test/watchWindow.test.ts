@@ -16,6 +16,7 @@ function arrival(over: Partial<GoalArrival> = {}): GoalArrival {
     environment: 'testUk',
     arrivedAt: ago(PROBE_MS),
     announcedAt: null,
+    sheetedAt: null,
     watchedAt: null,
     ...over,
   };

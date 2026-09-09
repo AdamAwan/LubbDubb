@@ -56,6 +56,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights', insightsScope: 'pool' }),
     at({ tab: 'insights', insightsScope: 'pool', insightsView: 'throughput', poolProject: 'acme-api' }),
     at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
+    at({ goal: 'issue:142', sheetEnvironment: 'acceptance' }),
     at({ tab: 'features' }),
     at({ tab: 'features', featureCard: 812 }),
     at({ tab: 'features', featureCard: 812, featureSort: 'spend', featurePrs: 'all' }),

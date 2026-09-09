@@ -15,7 +15,7 @@ import type { ColumnMigrations } from './migrate.js';
 // → docs/spec/14-persistence.md
 
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
-  goal_arrivals: { watched_at: 'TEXT' },
+  goal_arrivals: { watched_at: 'TEXT', sheeted_at: 'TEXT' },
   goal_landings: { on_integration: 'TEXT' },
 };
 
@@ -106,12 +106,24 @@ export class EnvironmentStore {
       arrivedAt: r.arrived_at,
       announcedAt: r.announced_at,
       watchedAt: r.watched_at,
+      sheetedAt: r.sheeted_at,
     }));
   }
 
   markArrivalWatched(goalRef: string, environment: string): void {
     this.ctx.db
       .prepare(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
+      .run(this.ctx.now(), goalRef, environment);
+  }
+
+  /**
+   * Considered by `RemoteValidationDesk` — assembled, or found too old to assemble. Null means *not
+   * considered yet*, which is what makes turning the feature on next month walk the history once
+   * rather than sheeting every goal that ever arrived. → docs/spec/36-remote-validation.md
+   */
+  markArrivalSheeted(goalRef: string, environment: string): void {
+    this.ctx.db
+      .prepare(`UPDATE goal_arrivals SET sheeted_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
@@ -212,6 +224,7 @@ interface ArrivalRow {
   recorded_at: string;
   announced_at: string | null;
   watched_at: string | null;
+  sheeted_at: string | null;
 }
 
 interface ReleaseRow {

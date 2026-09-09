@@ -53,6 +53,60 @@ export function openableArrivals(input: {
   return out;
 }
 
+const MAX_SHEETS_PER_PULSE = 5;
+
+interface SheetArrivalVerdict {
+  arrival: GoalArrival;
+  /** False where the arrival is only being stamped: it is older than the guard allows. */
+  assemble: boolean;
+}
+
+/**
+ * Which arrivals `RemoteValidationDesk` considers this pulse, oldest first.
+ *
+ * `openableArrivals`' guard, one subsystem over and for its reason: without it the first pulse after
+ * an operator adds a `validate` block to an environment that has been probing for a month would
+ * assemble a sheet for every goal that ever arrived, spawn a state command per approved query for
+ * each of them, and put a bench row on work that shipped in March. An arrival confirmed longer ago
+ * than two probe intervals is returned to be **stamped and not assembled**, which is what makes the
+ * next arrival the first one sheeted rather than the whole history arriving at once — and is why
+ * `goal_arrivals.sheeted_at` needs no backfill.
+ *
+ * An arrival on an environment that declares no `validate` block is not returned at all. Stamping it
+ * would spend the guard where the feature is off, and burn it for the environment that turns it on.
+ *
+ * The cap defers rather than drops: a deferred arrival is left unstamped and is the oldest one the
+ * next pulse sees. Deliberately smaller than the watch's twenty — what this bounds is a command per
+ * approved row on each sheet, where that one bounds a query.
+ *
+ * → docs/spec/36-remote-validation.md#the-desk
+ */
+export function sheetableArrivals(input: {
+  arrivals: readonly GoalArrival[];
+  environments: readonly EnvironmentConfig[];
+  probeIntervalMs: number;
+  now: number;
+}): SheetArrivalVerdict[] {
+  const byName = new Map(input.environments.map((e) => [e.name, e]));
+  const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
+  const oldestFirst = [...input.arrivals].sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
+  const out: SheetArrivalVerdict[] = [];
+  let assembling = 0;
+  for (const arrival of oldestFirst) {
+    if (arrival.sheetedAt !== null) continue;
+    if (byName.get(arrival.environment)?.validate === undefined) continue;
+    const seen = Date.parse(arrival.arrivedAt);
+    if (!Number.isFinite(seen) || seen < floor) {
+      out.push({ arrival, assemble: false });
+      continue;
+    }
+    if (assembling >= MAX_SHEETS_PER_PULSE) continue;
+    assembling += 1;
+    out.push({ arrival, assemble: true });
+  }
+  return out;
+}
+
 export function settlingWindows(windows: readonly WatchWindow[], now: number): WatchWindow[] {
   return windows.filter((w) => w.settledAt === null && Date.parse(w.settlesAt) <= now);
 }

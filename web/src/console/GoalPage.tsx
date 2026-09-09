@@ -45,6 +45,7 @@ import {
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { SignalsSection } from '../components/SignalsSection.js';
+import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
@@ -120,6 +121,7 @@ export function GoalPage({
         fold={folds.validation}
       />
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
+      <RemoteValidation page={page} view={view} actions={actions} fold={folds.remoteValidation} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
       <Sequence page={page} fold={folds.sequence} />
       <div className="cn-gcols">
@@ -821,6 +823,51 @@ function Signals({
           onSave={(check) => actions.saveWatchCheck(issue.number, check)}
           onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
           onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
+ * Absent entirely where the goal has no sheet — and, on the server, where no environment declares a
+ * `validate` block at all. Not an empty card and not a row of question marks: a deployment that has
+ * not turned this on must not read as a deployment where it is broken.
+ */
+function RemoteValidation({
+  page,
+  view,
+  actions,
+  fold,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  fold: Fold;
+}): JSX.Element | null {
+  const sheets = page.remoteSheets;
+  if (sheets.length === 0) return null;
+  const showing = view.sheetEnvironment;
+  const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
+  const waiting = open.rows.filter((r) => r.awaitingApproval).length;
+  return (
+    <section className="cn-card" id="cn-remote-validation">
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Does it work here" />
+        <i className="cn-n">
+          {open.rows.length === 1 ? '1 row' : `${open.rows.length} rows`}
+          {waiting > 0 && ` · ${waiting} waiting on an approval`}
+        </i>
+        <span className="cn-more">asked of {open.environment}, where this goal&rsquo;s work has arrived</span>
+      </h3>
+      {fold.open && (
+        <RemoteValidationSection
+          sheets={sheets}
+          showing={showing}
+          onShow={(environment) => actions.openRemoteSheet(environment)}
+          onRule={(environment, rowId, accept) =>
+            actions.ruleRemoteQuery(page.issue.number, environment, rowId, accept)
+          }
         />
       )}
     </section>

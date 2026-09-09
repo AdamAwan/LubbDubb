@@ -1,20 +1,25 @@
 # 36 — Remote validation
 
-> **Partly built.** What runs is the half of this document that has nothing to do with a sheet: the
-> `validate` block on an environment and the refusals that keep it from meaning something it cannot
-> ([Configuration](#configuration)); the `state` query kind with its three writers and the
-> `state_declare` tool ([Queries](#queries-are-per-goal-harness-held-and-never-committed)); the
-> `StateReader` seam and its scripted fake ([Seams](#seams-and-why-the-fake-comes-first)); the dry run
-> that makes a query runnable, with approval written on `(query digest, environment)`
-> ([A query is approved](#a-query-is-approved-by-a-person-before-it-is-ever-run)); and the `coverage`
+> **Partly built.** What runs is the `validate` block on an environment and the refusals that keep it
+> from meaning something it cannot ([Configuration](#configuration)); the `state` query kind with its
+> three writers and the `state_declare` tool
+> ([Queries](#queries-are-per-goal-harness-held-and-never-committed)); the `StateReader` seam and its
+> scripted fake ([Seams](#seams-and-why-the-fake-comes-first)); the dry run that makes a query
+> runnable, with approval written on `(query digest, environment)`
+> ([A query is approved](#a-query-is-approved-by-a-person-before-it-is-ever-run)); the `coverage`
 > field on a plan part with the bar note that governs it
-> ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal)).
+> ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal)); and —
+> as of the sheet an arrival assembles — **the sheet itself** ([The sheet](#the-sheet)), the **desk**
+> that assembles one off an arrival and runs its approved deterministic rows
+> ([The desk](#the-desk)), the three sheet tables and `goal_arrivals.sheeted_at`
+> ([Persistence](#persistence)), the minimal bench line, and the **cockpit card** that draws a sheet
+> ([The cockpit](#the-cockpit)).
 >
-> **Everything else is still a design**: no sheet, no desk, no press, no pin, no run row, no tenant,
-> no browser runner, no pre-flight, no dispatch rule, no `remote_validation_report`, no `spec`
-> reading and no cockpit surface. A path is written in italics until the thing it names exists, and a
-> section that is still a description rather than an account says so where it starts. The behaviour is
-> settled — it is
+> **Everything else is still a design**: no press, no pin, no run row, no tenant, no browser runner,
+> no pre-flight, no artefacts, no dispatch rule, no `remote_validation_report` and no `spec` reading.
+> Nothing browser-shaped runs, so a `check` row is blocked or manual. A path is written in italics
+> until the thing it names exists, and a section that is still a description rather than an account
+> says so where it starts. The behaviour is settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
 > staged order it gets built in is [`docs/plans/36-remote-validation.md`](../plans/36-remote-validation.md),
 > deleted by the change that finishes the last stage.
@@ -107,7 +112,9 @@ re-litigated:
 existing one: it is the goal's checks, with the declared query rows alongside them, so that _does it
 work_, _is anything screaming_ and _is the data right_ are read in one place and settled together.
 
-There are **three row kinds**:
+There are **three row kinds**. Until the browser half lands, a `check` row is **blocked or manual**:
+where the environment permits `check` it is a person's to run and its result is recorded on the goal's
+own validation row, and where it does not it is blocked saying so.
 
 | Row kind             | Answers                                          | Run by                                                         |
 | -------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
@@ -316,7 +323,8 @@ mechanism is the one the watch already has rather than a new one: the **dry run*
 _and what it actually returned_, and accepts or rejects on that evidence. A query that reads correctly
 and returns nonsense is caught here, and only here.
 
-**Built for `state`**; the second key on a live watch check lands with the sheet that reads it.
+**Built**, for `state` and — with the sheet that reads it — for a live watch check, whose second key is
+written through `.../watch-queries/:queryId` and read by the desk exactly as a `state` row's is.
 
 - **Approval keys on `(query digest, environment)`.** Digest alone leaks: the same text accepted
   against acceptance would arrive pre-approved against production, and _I have read this and it is
@@ -349,7 +357,7 @@ What runs at assembly, without asking:
   the operator arrives at a sheet with those readings already on it. That is a better-informed press
   than an empty one, and it keeps the gate from becoming the bottleneck that makes people
   rubber-stamp it.
-- **A pre-flight.** Ask the deployed runner, through `validate.browser.listSelectors`, which selectors
+- **A pre-flight** — _not yet built, and nothing is asked of a runner until it is_. Ask the deployed runner, through `validate.browser.listSelectors`, which selectors
   it actually offers, and compare against what the sheet's `check` rows name. A selector is a
   compatibility surface between a harness-held check and a runner config in a repository that moves,
   and a mismatch is one of this design's own `blocked` causes — so it belongs **before** the consent,
@@ -790,10 +798,16 @@ inferred from a green build, a merged pull request or an absence of errors.
 
 ## The desk
 
-`RemoteValidationDesk` (_src/remoteValidation/desk.ts_) is the one owner of every sheet write. Four
+`RemoteValidationDesk` (`src/remoteValidation/desk.ts`) is the one owner of every sheet write. Four
 passes: assemble the sheets for arrivals nothing has assembled yet, run the approved deterministic
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
+
+**Two of the four are built**, and the two that are not are the two with nothing yet to do: there is
+no pre-flight because nothing browser-shaped runs, and no run to sweep because there is no press. What
+runs is the assembly, and the approved `state`, `signal` and `measure` rows on a sheet it has just
+assembled. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
+which is why the desk's position above it is load-bearing rather than tidy.
 
 **It returns immediately where no environment declares a `validate` block**, which is the steady
 state for every deployment that has not turned this on, and it stamps nothing on the way past —
@@ -819,12 +833,19 @@ sentence an operator reads at the moment they decide to press would be the one b
 landed. `DeliveryCloseOutDesk` stays below both
 ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)).
 
+**The `validate` bench row's own line about a sheet is minimal on purpose** — _a validation sheet is
+assembled for `acceptance` — 4 rows, 1 waiting on an approval_ — because an operator has to be told a
+sheet exists on the pulse sheets start existing, and what the sheet says is the sheet's own surface to
+say. It is folded on the **server**, off the rows the card draws, in `sheetBenchLine`
+(`src/remoteValidation/sheet.ts`).
+
 **Only an arrival the harness watched gets a sheet.** The freshness guard from the announce and watch
 passes applies unchanged and for its reason: the first pulse after this ships — or after an operator
 adds a `validate` block to an environment that has been probing for a month — would otherwise assemble
 a sheet for **every goal that ever arrived**, spawn a state command per approved query for each of
 them, and put a bench row on work that shipped in March. So a sheet is assembled only for an arrival
-confirmed within two probe intervals of now, and **every arrival is stamped either way** —
+confirmed within two probe intervals of now — `sheetableArrivals` in `src/environments/watchWindow.ts`,
+beside the `openableArrivals` whose guard it is — and **every arrival is stamped either way** —
 `goal_arrivals.sheeted_at`, beside `announced_at` and `watched_at`. The stamp is what makes the next
 arrival the first one sheeted rather than the whole history arriving at once, and it is spent only
 where the feature is on: an arrival on a deployment where no environment declares a `validate` block
@@ -923,6 +944,7 @@ throw**.
 | `POST /api/issues/:number/remote-validation/:environment/cancel`           | Settle an open run `abandoned`.                                                                            |
 | `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`      | `{selected}` — deselect a row, or take it back.                                                            |
 | `POST /api/issues/:number/remote-validation/:environment/queries/:queryId` | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval. |
+| `POST /api/issues/:number/remote-validation/:environment/watch-queries/:queryId` | **built.** The same consent for a **live watch check**, which is how the second key on one is written. |
 | `POST /api/issues/:number/remote-validation/:environment/reseed`           | Invoke the environment's `reseed`, and stamp the tenant.                                                   |
 | `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`. |
 
@@ -941,10 +963,10 @@ writes are synchronous, which is what keeps the harness logic race-free.
 
 | Table                    | One row per                   | Written                                                                                                |
 | ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `remote_sheets`          | `(goal_ref, environment)`     | `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one          |
-| `remote_sheet_rows`      | `(sheet, row_id)`             | `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                             |
+| `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one |
+| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                   |
 | `remote_runs`            | one press                     | conditional insert, unique on `(environment, tenant)` while live                                       |
-| `remote_readings`        | `(run, row_id)`               | append-only; a later run supersedes rather than deletes                                                |
+| `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, which is every reading until the press lands |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                          |
 | `remote_tenants`         | `(environment, tenant)`       | `OR REPLACE` — when it was last reseeded                                                               |
@@ -973,8 +995,9 @@ TABLE IF NOT EXISTS` never alters an existing table, so without the entry the co
 - **`plan_parts.coverage`** is the same case one table over, and is **built**: declared in
   `PLAN_COLUMNS` (`src/store/plans.ts`), with its `ALTER TABLE` guarded by `PRAGMA table_info` like
   every other entry there.
-- **`goal_arrivals.sheeted_at`** is the same case again, declared in `src/store/environments.ts`
-  beside `announced_at` and `watched_at`.
+- **`goal_arrivals.sheeted_at`** is the same case again, and is **built**: declared in
+  `ENVIRONMENT_COLUMNS` (`src/store/environments.ts`) beside `watched_at`, with its `ALTER TABLE`
+  guarded by `PRAGMA table_info` like every other entry there.
 - **No backfill is needed, and each for a stated reason rather than by luck.**
   `validation_checks.area` null means _no area declared_, which is true of every row written before
   the column existed and stays true; `plan_parts.coverage` the same. `goal_arrivals.sheeted_at` null
@@ -1076,6 +1099,15 @@ a domain type from `src/types.ts` or `extends` it — never a re-declaration and
 
 **A new component is threaded through `src/system.ts`**, which is the composition root.
 
+**What the card draws today** is the block the sheet earns and no more: every row with its kind, its
+outcome and, where nothing was learned, **why in words**; and the one control this build's gate has,
+which is accepting a query against this environment on the evidence of what it returned. The tenant,
+the deployed commit, the artefact link, matched-versus-executed, the selector mismatches, the reseed
+and the press land with the things they are about. `RemoteSheetView`, `RemoteSheetRowView` and
+`RemoteReadingView` are in `src/wire.ts`, shipped on `CockpitState.remoteSheets`; the card is
+`remoteValidation` in `GOAL_SECTIONS` between `localValidation` and `signals`; and which environment's
+sheet is `Place.sheetEnvironment` (`web/src/cockpit/place.ts`), read off the `sheet` query parameter.
+
 ## Tests
 
 At the `buildSystem` seam with the three fakes injected, plus unit tests on the pure halves. The ones
@@ -1090,6 +1122,22 @@ present on `issue-plan` and `issue-replan` where one environment declares a `val
 absent where none does, and still present in full under an operator override that declares no tokens
 at all. Each of the bar's three phrases is asserted by name, so a later reword cannot drop one
 silently.
+
+The sheet half is built and its tests are in `test/remoteValidationSheet.test.ts` and
+`test/remoteValidationOff.test.ts`: an arrival assembles one sheet of the goal's checks, watches and
+`state` queries; a second arrival re-runs the sheet that exists; an unapproved query is `blocked` and
+says what it waits for, asserted for a `state` query **and** for a live watch check; a query approved
+against one environment is still `blocked` on another; a state row on a store nothing can reach is
+`blocked` while every other row on the same sheet still reports; a row of an unpermitted kind is
+`blocked`; **no reading is a `WorldEvent` and nothing is written into `watch_readings`**, asserted
+against the world's own list; an arrival older than two probe intervals is stamped and assembles
+nothing; an arrival on an environment with no `validate` block is left **unstamped**; the cap of five
+defers rather than drops, asserted on a backlog of seven; a database written before
+`goal_arrivals.sheeted_at` gains it on boot and **no backfill runs** over it; the desk's position in
+the pulse; that nothing under `src/dispatcher/` imports `src/remoteValidation/` or
+`src/environments/`; and the **off switch in both directions on one run** — no sheet, row, reading,
+stamp, bench mention, cockpit card, prompt note or spawned command with no `validate` block anywhere,
+and all of it with one environment declaring `permits: ["state"]` and a `state.run`.
 
 The rest, when it is built:
 

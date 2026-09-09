@@ -102,6 +102,9 @@ import type {
   Retrospective,
   ReviewAttention,
   ReviewMark,
+  RemoteReading,
+  RemoteSheet,
+  RemoteSheetRow,
   ReviewPackRecord,
   ReviewPackShare,
   ScratchEntry,
@@ -349,6 +352,7 @@ export interface CockpitState {
   goalWatchWindows: GoalWatchView[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
+  remoteSheets: RemoteSheetView[];
   stackLandings: StackLandingView[];
   tasks: TaskSummary[];
   jobs: Job[];
@@ -390,6 +394,21 @@ export interface GoalReachView {
   gateHold: string | null;
   released: EnvironmentGateRelease | null;
 }
+
+/**
+ * One goal's sheet against one environment, with every row's reading folded in on the server. The
+ * cockpit renders what the server read; it never re-decides an outcome.
+ */
+export interface RemoteSheetView extends RemoteSheet {
+  rows: RemoteSheetRowView[];
+}
+
+export interface RemoteSheetRowView extends RemoteSheetRow {
+  /** The latest reading on this row, or null where none was taken — a blocked row, or a manual one. */
+  reading: RemoteReadingView | null;
+}
+
+export type RemoteReadingView = RemoteReading;
 
 export interface GoalWatchView extends WatchWindow {
   checks: GoalWatchCheckView[];
@@ -802,6 +821,11 @@ export type {
   ReviewIdea,
   ReviewMark,
   ReviewNote,
+  RemoteReading,
+  RemoteRowKind,
+  RemoteRowOutcome,
+  RemoteSheet,
+  RemoteSheetRow,
   ReviewPack,
   ReviewPackShare,
   ReviewRange,

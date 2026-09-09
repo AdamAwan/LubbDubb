@@ -307,6 +307,17 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   `unrecordedLandings` cuts on `baseBranch`, `unattributedMerges` on the node's `baseRef`, and
   `EnvironmentDesk` reconciles what neither can see against the clone into `goal_landings.on_integration`.
   → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
+- **A `RemoteValidationDesk` pass that stamps an arrival it did not assemble burns the guard that
+  makes turning remote validation on next month safe.** `goal_arrivals.sheeted_at` null means _not
+  considered yet_, and the freshness guard does a backfill's job — so the early return where no
+  environment declares a `validate` block stamps **nothing**, and an arrival on an environment with
+  no `validate` block is left unstamped. Stamp on the way past and the operator who turns it on gets
+  a sheet, a spawned query and a bench row for every goal that ever arrived.
+  → [36](docs/spec/36-remote-validation.md#the-desk)
+- **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an
+  arrival's, one subsystem over: `deliveryHold` expires a standing delivery verdict on any world event
+  matching the goal's issue ref, so a reading written as one un-parks the goal it just reported on.
+  → [36](docs/spec/36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)
 - **An arrival must never be written as a `WorldEvent`.** `deliveryHold` expires a standing delivery
   verdict on **any** world event matching the goal's issue ref, so an arrival written as one un-parks
   the goal it just announced and hands delivered work back to the fleet. Arrivals have their own

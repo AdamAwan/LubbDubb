@@ -34,6 +34,8 @@ export interface Place {
   insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
+  /** Which environment's validation sheet is open on the goal page. → 36-remote-validation.md */
+  sheetEnvironment: string | null;
   collapsed: number[];
   ticketWatch: TicketWatchFilter;
   ticketTracking: TicketTrackingFilter;
@@ -102,6 +104,7 @@ export const NOWHERE: Place = {
   insightsView: 'economics',
   insightsScope: 'mine',
   poolProject: null,
+  sheetEnvironment: null,
   insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
   ticketWatch: 'any',
@@ -188,6 +191,7 @@ export function readPlace(search: string): Place {
     configGroup: param(query, 'keys'),
     ...readInsights(param(query, 'view'), param(query, 'scope')),
     poolProject: param(query, 'project') ?? null,
+    sheetEnvironment: param(query, 'sheet'),
     insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
     ticketWatch: TICKET_WATCH.find((w) => w === param(query, 'watch')) ?? 'any',
@@ -323,6 +327,7 @@ export function placeQuery(place: Place): string {
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
   if (place.insightsScope !== 'mine') query.set('scope', place.insightsScope);
   if (place.poolProject !== null) query.set('project', place.poolProject);
+  if (place.sheetEnvironment !== null) query.set('sheet', place.sheetEnvironment);
   if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
   if (place.collapsed.length > 0) {
     query.set('collapsed', [...place.collapsed].sort((a, b) => a - b).join(','));

@@ -891,6 +891,33 @@ class DemoServer {
     return { ok: true };
   }
 
+  ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<{ ok: true }> {
+    const sheet = (this.state.remoteSheets ?? []).find(
+      (s) => s.goalRef === `issue:${issueNumber}` && s.environment === environment,
+    );
+    const row = sheet?.rows.find((r) => r.rowId === rowId);
+    if (row !== undefined) {
+      row.awaitingApproval = false;
+      row.blockedReason = accept
+        ? null
+        : `an operator declined this query against ${environment}, so nothing here was put to its store.`;
+      if (accept)
+        row.reading = {
+          goalRef: sheet!.goalRef,
+          environment,
+          rowId,
+          runId: null,
+          outcome: 'passed',
+          rows: 0,
+          value: null,
+          detail: null,
+          readAt: new Date().toISOString(),
+        };
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
   async ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<{ ok: true }> {
     const origin = `issue:${issueNumber}`;
     const watches = this.state.goalWatches ?? [];
@@ -4683,6 +4710,8 @@ export const demoApi = {
     getServer().reopenPrThread(prNumber, threadId, reopened),
   dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
+  ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) =>
+    getServer().ruleRemoteQuery(issueNumber, environment, rowId, accept),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     getServer().ruleWatchProposal(issueNumber, checkId, accept),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
