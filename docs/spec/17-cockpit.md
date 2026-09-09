@@ -455,7 +455,7 @@ once.
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                          |
+| `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                         |
 | `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                                                                       |
 | `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                                                                   |
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
@@ -474,7 +474,7 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
-| `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                     |
+| `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -5142,9 +5142,9 @@ shape of a wrong seam.
   **never shown to the checker**, because a label that has learned to agree with its reader has stopped
   being evidence. Fetched on the tab's first visit for a window, like Trend and MCP: it folds every pack
   against every mark.
-Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
-in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
-and the trend's.
+  Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
+  in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
+  and the trend's.
 
 ### One tab, one question
 
@@ -5212,7 +5212,7 @@ again, and on every visit after it is the thing between the reader and the next 
 So it is a `<details>` (`web/src/components/insightsMethod.tsx`), summarised `How this is counted`,
 folded shut. One click from the numbers it qualifies, and one line tall until then. The figure-side
 prose above it is cut to the shortest thing that is still true — the denominators and the units — and
-everything that was a caveat about *how* a number was arrived at moved inside the fold rather than
+everything that was a caveat about _how_ a number was arrived at moved inside the fold rather than
 being deleted, because the note is the only written account of the method a reader on the page has.
 
 ### The page is bounded, because a reading is not
@@ -6345,7 +6345,7 @@ children are being drawn in a control row, and `DesktopLink` reads it: inside on
 `CONTROL_CLASS`, everywhere else the shared button. The `control` flag is still a prop, for the one
 site that is a control row without being a `ControlGroup` — the top bar's `cn-asks`, where it sits
 beside `ControlButton` and `ExtLink` — and it wins over the context when it is given. It was the call
-site's alone, and the goal header's *Leave this page* row is what that cost: `Open ticket ↗` and
+site's alone, and the goal header's _Leave this page_ row is what that cost: `Open ticket ↗` and
 `File a new bug` wore `.cn-tgl` beside a hand-off still wearing `.btn ghost small`, two kits in a row
 of three, on the one row the [top bar's pair](#the-top-bar-and-the-panels) is argued from.
 
@@ -6600,6 +6600,18 @@ its column to the _left_ and painted the pull request's own token over the readi
 `agent on it` read as `ag`. The word is gone, `--cn-w-refs` is wide enough for the two tokens, and the
 group is `overflow: hidden` so it can never again spill onto its neighbour. The relation stays in the
 goal ref's hover, which is where a sentence belongs.
+
+**What the clip must never take is the arm.** `--cn-w-refs` is a ceiling on a `minmax(0, …)` rail, so a
+narrow card takes it back, and the group clips on the right — where the arm is. Sized for two tokens
+before a reference grew its second door, it clipped the pair's arm off both the fleet card and the rack:
+a token that looks whole and has silently lost its way to the tracker, which is the linking bug this
+whole section exists to prevent, arrived by a width. The rail is now sized for **two four-digit pairs**,
+the group's **floor is its arms** (`min-width: min-content`, which with a shrinkable token comes to one
+arm per reference and the gaps between them), and the pair itself **gives way from its number** —
+`.ref-pair`'s token ellipses, the arm is `flex: none`. So the rail can be squeezed to a phone's width
+and what it costs is digits, never a door. Three references — the fleet's `OnWhat` draws a job's origin,
+the work it stands in for and that work's goal — read as three shortened numbers with six live targets
+rather than two and a half tokens.
 
 **And on the grid the group packs from the rule, not from the card's edge.** The order being fixed is
 what makes a position mean something, and packing right threw that away: the _first_ reference sat at

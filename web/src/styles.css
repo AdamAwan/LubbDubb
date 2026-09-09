@@ -1098,13 +1098,28 @@ select:disabled {
 .ref-pair.ref-pair {
   display: inline-flex;
   align-items: stretch;
+  min-width: 0;
 }
 .ref-pair.ref-pair > .ref-goal.ref-goal {
   border-right: 0;
+  /* The pair gives way from the *number*, never from the arm. Drawn in a group
+     narrower than it wants — a row's refs column, which is a ceiling a narrow
+     card takes back — a pair that cannot shrink is clipped at the group's edge,
+     and the arm being the last thing on the line, what goes is the whole door to
+     the tracker: a token that looks finished and has silently lost half its
+     targets. Shrinking here instead ellipses the number, which still reads as a
+     reference and keeps both doors reachable. `display: block` because
+     `text-overflow` has nothing to act on inside a flex container. */
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ref-arm.ref-arm {
   display: inline-flex;
   align-items: center;
+  flex: none;
   padding: 0 5px;
   border: 1px solid var(--link-line);
   border-left-style: dashed;
