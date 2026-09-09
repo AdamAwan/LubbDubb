@@ -25,8 +25,10 @@ goal page. → [What an arrival means](#what-an-arrival-means)
 
 A goal's work **arriving** is not the same as that work **behaving**, and this subsystem has no
 opinion about the second: a goal reads `reached` whether the fix worked, did nothing, or made things
-worse. That question is [29](29-post-deploy-watch.md), which opens its window on the arrival this one
-records.
+worse. That question is asked twice, in two shapes, and both hang off the arrival this one records:
+[29](29-post-deploy-watch.md) opens a window and watches declared telemetry over hours, and
+[36](36-remote-validation.md) assembles the goal's validation sheet for that environment and asks,
+at a moment somebody chooses, whether the product still works with this change in it.
 
 ## What it is not
 
@@ -453,6 +455,14 @@ lets the signal read as something that happened.
 `arrival` on an environment declares what its arrival does. Every field is optional and an `arrival`
 declaring none of them is refused.
 
+Two things happen on an arrival whatever `arrival` says, because they are declared elsewhere: a watch
+window opens where the environment declares an `observe` and the goal declares a check
+([29](29-post-deploy-watch.md#opening)), and a **remote validation sheet** is assembled where the
+environment declares a `validate` block ([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)).
+Both ride the same freshness guard as the announce pass and stamp the arrival either way — the sheet
+on `goal_arrivals.sheeted_at` — because without it the first pulse after either ships works through
+every arrival the table has ever held.
+
 ### `opens`
 
 The obligations a delivered goal owes a person are filed on the delivery today
@@ -644,6 +654,13 @@ than a preference: a watch window opens on an arrival the third pass records, so
 would read arrivals that have not been written yet and the whole feature would be one pulse late
 forever, with nothing red. Making the order a line in this file is what stops a reordering elsewhere
 being silent.
+
+`RemoteValidationDesk` ([36](36-remote-validation.md#the-desk)) is on the same rule from the other
+side: it is **not** a pass on this desk, because it is not a lens — it feeds a dispatch rule through
+the store — but it runs immediately **below** this whole desk and above `ValidationReadyDesk`, for
+that fifth pass's reason and for one more. Below `ValidationReadyDesk` the bench row would state the
+previous pulse's sheet, so the sentence an operator reads at the moment they decide to press would be
+the one from before the readings landed.
 
 The attribution pass runs unconditionally; the other five return immediately with no environments
 configured. That split is not tidiness: a merge SHA is only on offer while its pull request is inside
@@ -840,7 +857,11 @@ Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStor
 and a goal can land more than once.
 
 `goal_arrivals` is `OR IGNORE` rather than `OR REPLACE` for a second reason beyond the first: a
-replace would clear `announced_at`, so a goal that grew another merge would collect a comment per
-later landing.
+replace would clear `announced_at` — and, with it, `watched_at` and `sheeted_at` — so a goal that grew
+another merge would collect a comment per later landing, re-open a settled window, and assemble a
+second sheet where re-running the one that exists is the whole design one document over.
+`sheeted_at` is a column on an **existing** table and carries the `ColumnMigrations` entry that rule
+requires, declared in `src/store/environments.ts` beside `watched_at`; its null means _not considered
+yet_, which the freshness guard reads correctly, so it needs no backfill.
 
 All are bounded by the landings times the environments, and none is pruned.

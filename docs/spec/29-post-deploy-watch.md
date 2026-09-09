@@ -17,15 +17,16 @@ know — and everything from the declaration onwards is a scripted pass with no 
 
 ## What it is not
 
-| Not                    | Because                                                                                                                                                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| An APM                 | Nothing here stores telemetry, draws a time series, or is somewhere to go and look. It asks a declared question on a schedule and keeps the answers for one goal, for days.                                                   |
-| Anomaly detection      | No baseline is inferred, no threshold is learned, no reading is scored. An expectation is declared or the check does not exist.                                                                                               |
-| An alerting system     | A finding is a bench row on one goal. There is no routing, no severity ladder, no on-call. The team's existing alerts are unaffected and unduplicated.                                                                        |
-| A dispatch input       | Same rule as the rest of `src/environments/`: nothing under `src/dispatcher/` may import it. A regression files a row and draws a card; the route from a reading to new work is an operator's click. → [05](05-dispatcher.md) |
-| A provider integration | An environment's telemetry is a **command**, exactly as its deployed commit is. Application Insights is one answer; the harness holds no opinion and ships no SDK. → [Asking the environment](#asking-the-environment)        |
-| A gate                 | A watch holds nothing by default. It reports, and the close-out carries what it says. One opt-in makes it hold, and it is off. → [What a finding does](#what-a-finding-does)                                                  |
-| A model spend          | No agent is dispatched to read telemetry, interpret a number or decide whether a reading is bad. The only model tokens are riders on sessions already running. → [Cost](#cost)                                                |
+| Not                    | Because                                                                                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An APM                 | Nothing here stores telemetry, draws a time series, or is somewhere to go and look. It asks a declared question on a schedule and keeps the answers for one goal, for days.                                                                                      |
+| Anomaly detection      | No baseline is inferred, no threshold is learned, no reading is scored. An expectation is declared or the check does not exist.                                                                                                                                  |
+| An alerting system     | A finding is a bench row on one goal. There is no routing, no severity ladder, no on-call. The team's existing alerts are unaffected and unduplicated.                                                                                                           |
+| A dispatch input       | Same rule as the rest of `src/environments/`: nothing under `src/dispatcher/` may import it. A regression files a row and draws a card; the route from a reading to new work is an operator's click. → [05](05-dispatcher.md)                                    |
+| A provider integration | An environment's telemetry is a **command**, exactly as its deployed commit is. Application Insights is one answer; the harness holds no opinion and ships no SDK. → [Asking the environment](#asking-the-environment)                                           |
+| A gate                 | A watch holds nothing by default. It reports, and the close-out carries what it says. One opt-in makes it hold, and it is off. → [What a finding does](#what-a-finding-does)                                                                                     |
+| A point-in-time read   | A window accumulates and asks _is this behaving_. _Is the data this change writes shaped correctly_ is one reading taken at a moment somebody chose, which is a `state` row on a validation sheet and lives there. → [36](36-remote-validation.md#two-lifetimes) |
+| A model spend          | No agent is dispatched to read telemetry, interpret a number or decide whether a reading is bad. The only model tokens are riders on sessions already running. → [Cost](#cost)                                                                                   |
 
 ## The declaration
 
@@ -106,6 +107,10 @@ mistake gets made.
 
 A **measure** is exempt, and that is the point of the two kinds: a measure is required to answer
 exactly one row carrying a numeric `value`, which is precisely the shape a signal may not have.
+
+`state` queries ([36](36-remote-validation.md)) are held to the refusal too, through this same
+`aggregatingTail` rather than a second copy of it: they are read by a different executor against a
+different clock, and the mistake they can make is identical.
 
 The two shapes are the two things a change is for. New behaviour should not throw — a signal, and
 there is no before to compare against. Changed behaviour should be better than it was — a measure,
@@ -474,6 +479,21 @@ rather than with time. The one case a reading is deleted is a check an amendment
 which takes its readings with it in the same transaction: neither a verdict nor its evidence is left
 behind, because a reading of a check no document declares is a number with no rule.
 
+### A sheet reads these checks, and takes nothing from this table
+
+A remote validation sheet draws its `signal` and `measure` rows from the goal's **live** watch checks,
+through `listGoalWatches` like every other reader that puts a query to an environment — so an agent's
+unapproved declaration cannot reach the operator's telemetry through it either. Two rules keep the two
+subsystems from folding into one:
+
+- **A sheet's reading is never written into `watch_readings`.** Those rows are a window's evidence on
+  the window's own clock, and a point-in-time read folded in would move a settled verdict and look
+  exactly like the watch working. The sheet keeps its own readings.
+- **A live check is still `blocked` on a sheet until its query digest has been accepted against that
+  environment.** The dry run puts a query to one environment to learn whether it parses, which is a
+  property of the query; a sheet puts it to a named place, and consent to a place is not transferable.
+  → [36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)
+
 ## The verdict
 
 Per check, three-valued, and folded per environment:
@@ -575,7 +595,9 @@ on and hand the finished fix straight back to the fleet to do again. Nothing err
 re-dispatch of completed work looks like the harness deciding there is more to do. Watch readings
 have their own table and their own wire list, and the cockpit merges them at the feed's door, which
 is what arrivals already do and for this exact reason
-([24](24-environments.md#in-the-cockpit)).
+([24](24-environments.md#in-the-cockpit)). A remote validation reading is held to the same rule, for
+the same reason and with the same consequence: no reading of any kind creates or clears a hold
+([36](36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)).
 
 ## Cost
 
