@@ -1,16 +1,25 @@
 # 36 — Remote validation
 
-> **Mostly not built yet.** One piece runs: [Browser coverage is a plan
-> part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal) — the `coverage` field on a plan part
-> and the bar note that governs when a planner declares one. Everything else here is still a design.
-> No table, module, route, rule, tool or runner named below exists, every path that does not yet exist
-> is written in italics, and the rest of the document is the thing the next change is written against.
-> The behaviour it describes is settled — it is
+> **Partly built.** What runs is the half of this document that has nothing to do with a sheet: the
+> `validate` block on an environment and the refusals that keep it from meaning something it cannot
+> ([Configuration](#configuration)); the `state` query kind with its three writers and the
+> `state_declare` tool ([Queries](#queries-are-per-goal-harness-held-and-never-committed)); the
+> `StateReader` seam and its scripted fake ([Seams](#seams-and-why-the-fake-comes-first)); the dry run
+> that makes a query runnable, with approval written on `(query digest, environment)`
+> ([A query is approved](#a-query-is-approved-by-a-person-before-it-is-ever-run)); and the `coverage`
+> field on a plan part with the bar note that governs it
+> ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal)).
+>
+> **Everything else is still a design**: no sheet, no desk, no press, no pin, no run row, no tenant,
+> no browser runner, no pre-flight, no dispatch rule, no `remote_validation_report`, no `spec`
+> reading and no cockpit surface. A path is written in italics until the thing it names exists, and a
+> section that is still a description rather than an account says so where it starts. The behaviour is
+> settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
 > staged order it gets built in is [`docs/plans/36-remote-validation.md`](../plans/36-remote-validation.md),
 > deleted by the change that finishes the last stage.
 
-_src/remoteValidation/_. A goal's work has arrived in a real environment ([24](24-environments.md)).
+`src/remoteValidation/`. A goal's work has arrived in a real environment ([24](24-environments.md)).
 This is the one page an operator opens to answer the question that arrival raises and nothing in the
 harness answers today:
 
@@ -284,7 +293,7 @@ them through `listGoalWatches` and declares nothing of its own. → [29](29-post
 others do not:
 
 - **The planner, at plan time**, through an optional `state` block on the plan document beside
-  `validation` and `watch` (_src/validation/stateDocument.ts_). It may seed one where the shape is
+  `validation` and `watch` (`src/validation/stateDocument.ts`). It may seed one where the shape is
   obvious and often will not.
 - **The working agent, at conclude time**, through `state_declare` — the writer that matters. The
   query depends on what was actually built: which table took the new column, which row the change
@@ -307,10 +316,14 @@ mechanism is the one the watch already has rather than a new one: the **dry run*
 _and what it actually returned_, and accepts or rejects on that evidence. A query that reads correctly
 and returns nonsense is caught here, and only here.
 
+**Built for `state`**; the second key on a live watch check lands with the sheet that reads it.
+
 - **Approval keys on `(query digest, environment)`.** Digest alone leaks: the same text accepted
   against acceptance would arrive pre-approved against production, and _I have read this and it is
   safe here_ is a statement about a place as much as about a query. An unchanged query stays accepted
-  for the environment it was accepted on; an edited one is a new question everywhere.
+  for the environment it was accepted on; an edited one drops its old digest's approvals on **every**
+  environment and is a new question again — an edit and an edit back must not resurface a consent
+  nobody re-gave.
 - **An unapproved query is `blocked`, never `failed`**, and the row says what it is waiting for.
 - **Approval is a property of the query, not of the run.** Approve once per environment, run on every
   arrival.
@@ -360,7 +373,7 @@ The tenant's age is drawn at the gate too, which is where an operator can act on
 
 ## The press
 
-`POST /api/issues/:number/remote-validation/:environment/run`, in _src/server/routes/remoteValidation.ts_.
+`POST /api/issues/:number/remote-validation/:environment/run`, in `src/server/routes/remoteValidation.ts`.
 In order: refuse **409** if a run is already live for this `(environment, tenant)`, naming it; refuse
 **400** if nothing is selected; take the pin; open the run row; broadcast; **run a cycle**.
 
@@ -467,8 +480,8 @@ deploy-schedule knowledge the harness does not have and cannot be told without a
 
 ### The state command contract
 
-A `state` row is executed by a project-supplied command, `validate.state.run`, that receives the
-approved query **out-of-band** — in a file, or in an env var, **never interpolated into a command
+**Built**, in `src/remoteValidation/stateReader.ts`. A `state` row is executed by a project-supplied
+command, `validate.state.run`, that receives the approved query **out-of-band** — in a file, or in an env var, **never interpolated into a command
 string** — and emits the harness's row contract on stdout.
 
 The command form is not a workaround for a hard case. It is what makes the **easy** case work:
@@ -659,10 +672,13 @@ other caller — the agent that just built the thing most of all — is refused 
 `validation-failed` agent this run may go on to produce is refused structurally, by the parse, exactly
 as it is refused `validation_report`.
 
-`state_declare` is the second tool, and its fence is the **wide** kind, `validation_amend`'s: a query
-is a note about how a goal gets checked, and the agent best placed to notice one is wrong is whoever
-is looking at the code — so the whole-issue agent, a part agent and the assessor all qualify, the
-origin comes off the credential, and the planner is refused by name.
+`state_declare` is the second tool and is **built** — `src/mcp/tools/stateDeclare.ts`, in
+`MCP_TOOL_NAMES` and `buildTools`, classified `point-of-use`. Its fence is the **wide** kind,
+`validation_amend`'s: a query is a note about how a goal gets checked, and the agent best placed to
+notice one is wrong is whoever is looking at the code — so the whole-issue agent, a part agent and the
+assessor all qualify, the origin comes off the credential, and the planner is refused by name and
+pointed at the document block. Where no environment declares a `validate.state.run`, it refuses **by
+name** and says which configuration is missing, rather than storing a query nothing can ever run.
 
 **Neither name is ever deleted once shipped.** A withdrawn tool name goes in `RETIRED_TOOL_NAMES`
 (`src/mcp/names.ts`) and answers with a refusal pointing at what replaced it, because a name that is
@@ -698,7 +714,10 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   in `src/system.ts`, threaded through `RuleContext` and the `RuleDispatcher` constructor, and
   concatenated onto both renderings in `src/dispatcher/rules/issuePlan.ts` — never imported into
   `src/dispatcher/` from `src/environments/`;
-- the **`state_declare` instruction** on the two prompts that dispatch work, `watchDeclareNote`'s
+- the **`state_declare` instruction** on the two prompts that dispatch work — **built**, as
+  `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system.ts`, threaded through
+  `RuleContext` and appended to the `issue-pickup` and `plan-part` renderings, so nothing under
+  `src/dispatcher/` imports `src/remoteValidation/`. `watchDeclareNote`'s
   arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
   **appended only where some environment declares a `validate.state` executor**, which is where that
   arrangement is deliberately departed from. `watch_declare`'s note is unconditional and can afford
@@ -827,7 +846,7 @@ rather than `error`.
 
 ## Configuration
 
-The whole of it is one optional block on an environment, plus one top-level key.
+**Built.** The whole of it is one optional block on an environment, plus one top-level key.
 
 ```jsonc
 {
@@ -873,8 +892,9 @@ a project layer that gets committed.**
 
 `remoteValidation` is the one **new top-level key**, and it exists because 30 seconds — the kill every
 other command in the harness gets — is the wrong number for a browser suite. It carries
-`runTimeoutMs`, default 30 minutes. **It is claimed by the `Features` group in
-`src/server/runningConfig.ts`**: an unclaimed key validates, applies, and is drawn nowhere.
+`runTimeoutMs`, default 30 minutes; every other command, `state.run` included, keeps the 30-second
+kill. **It is claimed by the `Features` group in `src/server/runningConfig.ts`**: an unclaimed key
+validates, applies, and is drawn nowhere.
 
 `validateEnvironments` (`src/environments/policy.ts`) grows the refusals whose absence is otherwise
 silent:
@@ -891,19 +911,20 @@ silent:
 
 ## Routes
 
-_src/server/routes/remoteValidation.ts_, a module and a `ROUTE_MODULES` entry — `app.ts` stays wiring
-only ([16](16-http-api.md#shape)). Every handler is wrapped in `checked(schemas, handler)` and handed
+`src/server/routes/remoteValidation.ts`, a module and a `ROUTE_MODULES` entry — `app.ts` stays wiring
+only ([16](16-http-api.md#shape)). The module exists and carries the query routes; the press, the
+cancel and the row and reseed controls land with the sheet they act on. Every handler is wrapped in `checked(schemas, handler)` and handed
 `{params, body, req, reply}` already parsed; **a refusal is a returned value and a 400, never a
 throw**.
 
-| Route                                                                      | Does                                                                                                     |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `POST /api/issues/:number/remote-validation/:environment/run`              | Press go. The only route here that runs a cycle.                                                         |
-| `POST /api/issues/:number/remote-validation/:environment/cancel`           | Settle an open run `abandoned`.                                                                          |
-| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`      | `{selected}` — deselect a row, or take it back.                                                          |
-| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId` | `{accept｜decline}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval. |
-| `POST /api/issues/:number/remote-validation/:environment/reseed`           | Invoke the environment's `reseed`, and stamp the tenant.                                                 |
-| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | The operator's own writer, `watch/checks/:checkId`'s shape exactly.                                      |
+| Route                                                                      | Does                                                                                                       |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST /api/issues/:number/remote-validation/:environment/run`              | Press go. The only route here that runs a cycle.                                                           |
+| `POST /api/issues/:number/remote-validation/:environment/cancel`           | Settle an open run `abandoned`.                                                                            |
+| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`      | `{selected}` — deselect a row, or take it back.                                                            |
+| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId` | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval. |
+| `POST /api/issues/:number/remote-validation/:environment/reseed`           | Invoke the environment's `reseed`, and stamp the tenant.                                                   |
+| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`. |
 
 **Waiving is not here.** A check the product has moved past is waived through
 `POST /api/issues/:number/validation/:checkId/waive` ([20](20-validation.md#routes)), which already
@@ -913,20 +934,20 @@ rule.
 
 ## Persistence
 
-→ [14](14-persistence.md). One new module, _src/store/remoteValidation.ts_, taking a `StoreContext`
+→ [14](14-persistence.md). One new module, `src/store/remoteValidation.ts`, taking a `StoreContext`
 and delegated to from `src/store/store.ts` under the same method names
 ([14](14-persistence.md#shape)). `src/store/` stays the only directory that touches SQLite and the
 writes are synchronous, which is what keeps the harness logic race-free.
 
-| Table                    | One row per                   | Written                                                                                       |
-| ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `remote_sheets`          | `(goal_ref, environment)`     | `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one |
-| `remote_sheet_rows`      | `(sheet, row_id)`             | `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                    |
-| `remote_runs`            | one press                     | conditional insert, unique on `(environment, tenant)` while live                              |
-| `remote_readings`        | `(run, row_id)`               | append-only; a later run supersedes rather than deletes                                       |
-| `remote_state_queries`   | `(goal_ref, query_id)`        | `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is   |
-| `remote_query_approvals` | `(query_digest, environment)` | `OR REPLACE`; the dry run's reading kept beside it                                            |
-| `remote_tenants`         | `(environment, tenant)`       | `OR REPLACE` — when it was last reseeded                                                      |
+| Table                    | One row per                   | Written                                                                                                |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `remote_sheets`          | `(goal_ref, environment)`     | `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one          |
+| `remote_sheet_rows`      | `(sheet, row_id)`             | `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                             |
+| `remote_runs`            | one press                     | conditional insert, unique on `(environment, tenant)` while live                                       |
+| `remote_readings`        | `(run, row_id)`               | append-only; a later run supersedes rather than deletes                                                |
+| `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is |
+| `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                          |
+| `remote_tenants`         | `(environment, tenant)`       | `OR REPLACE` — when it was last reseeded                                                               |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the
 environment went back past the goal's work is the case an operator actually hits, and its reason has
@@ -940,7 +961,10 @@ environment moves. A reading with no commit beside it is a reading of a product 
 
 - **Every one of the seven tables declares a `ColumnMigrations` block, empty or not.** A table being
   new **once** does not keep it exempt, which is exactly what `local_runs`' usage columns and
-  `validation_checks`' band cost ([14](14-persistence.md#migrations)).
+  `validation_checks`' band cost ([14](14-persistence.md#migrations)). The two that exist —
+  `remote_state_queries` and `remote_query_approvals` — declare theirs empty, in
+  `REMOTE_VALIDATION_COLUMNS` (`src/store/remoteValidation.ts`), and the entry is what the next column
+  either of them takes will be added to.
 - **`validation_checks.area`** is a column on an **existing** table and needs an additive `ALTER
 TABLE`, guarded by `PRAGMA table_info` and declared in that module's `ColumnMigrations`. `CREATE
 TABLE IF NOT EXISTS` never alters an existing table, so without the entry the column is invisible on
@@ -978,7 +1002,7 @@ succeeds.
 | `EnvironmentProber` (existing)                        | `CommandEnvironmentProber` · `FakeEnvironmentProber`     | `at`, for the pin                             |
 | `EnvironmentObserver` (existing)                      | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows    |
 | `RemoteRunner` (_src/remoteValidation/runner.ts_)     | `CommandRemoteRunner` · `FakeRemoteRunner`               | `runner`, `listSelectors`, `publishArtefacts` |
-| `StateReader` (_src/remoteValidation/stateReader.ts_) | `CommandStateReader` · `FakeStateReader`                 | `state.run`                                   |
+| `StateReader` (`src/remoteValidation/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                   |
 | `TenantKeeper` (_src/remoteValidation/tenants.ts_)    | `CommandTenantKeeper` · `FakeTenantKeeper`               | `ensureTenant`, `reseed`                      |
 
 Three rules hold them honest:
@@ -986,9 +1010,13 @@ Three rules hold them honest:
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with the fakes injected and
   `dbPath: ':memory:'` ([19](19-development.md)). The three new seams are new `opts` keys —
   `remoteRunner`, `stateReader`, `tenants` — beside `backend`, `streamSpawner`, `sink`, `gitObserver`,
-  `worktrees` and `errorMirror`.
+  `worktrees` and `errorMirror`. `stateReader` is built; the other two land with their callers.
+  **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the observer uses**
+  — the id echo in `lubbdubbWatchId`, the rows-never-counts refusal and `presence`'s zero-means-unknown
+  are one implementation. A second parser would pass `knip` (it is used) and pass its own tests, and
+  then drift about all three, silently.
 - **A test that configures an environment with a `validate` block and injects none of them is the
-  hazard**, and it is the sentence that belongs in `CLAUDE.md` on the day this lands. The default
+  hazard**, and it is in `CLAUDE.md` for that reason. The default
   implementations are the command ones; what saves an ordinary test is that a config with no
   `validate` block declares no command to run, which is a property to rely on deliberately rather than
   to discover.

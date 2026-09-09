@@ -1392,6 +1392,41 @@ export interface GoalWatchProposal {
   declaration: GoalWatchInput;
 }
 
+export type StateQueryAuthor = 'plan' | 'agent' | 'operator';
+
+export interface StateQueryInput {
+  id: string;
+  seq: number;
+  title: string;
+  query: string;
+  presence: string;
+  why: string | null;
+}
+
+export interface StateQuery extends StateQueryInput {
+  originRef: string;
+  digest: string;
+  authored: StateQueryAuthor;
+  dryRunEnvironment: string | null;
+  dryRunAt: string | null;
+  dryRunVerdict: WatchReadingVerdict | null;
+  dryRunPresence: WatchReadingVerdict | null;
+  dryRunRows: number | null;
+  dryRunDetail: string | null;
+  dryRunSample: string | null;
+}
+
+/** One operator's "I have read this, and it is safe *here*" — see 36-remote-validation.md. */
+export interface StateQueryApproval {
+  digest: string;
+  environment: string;
+  originRef: string;
+  queryId: string;
+  approvedAt: string;
+  rows: number | null;
+  detail: string | null;
+}
+
 export interface WatchWindow {
   goalRef: string;
   environment: string;

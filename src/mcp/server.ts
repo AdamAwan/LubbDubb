@@ -38,6 +38,7 @@ interface McpBridgeServerOptions {
   filing?: () => McpToolDeps['filing'];
   prReply?: () => McpToolDeps['prReply'];
   watch?: () => McpToolDeps['watch'];
+  state?: () => McpToolDeps['state'];
   reviewPacks?: () => McpToolDeps['reviewPacks'];
   reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
   localValidations?: McpToolDeps['localValidations'];
@@ -205,6 +206,7 @@ export class McpBridgeServer {
         filing: this.opts.filing?.(),
         prReply: this.opts.prReply?.(),
         watch: this.opts.watch?.(),
+        state: this.opts.state?.(),
         reviewPacks: this.opts.reviewPacks?.(),
         reviewPackChecker: this.opts.reviewPackChecker?.(),
         localValidations: this.opts.localValidations,

@@ -195,3 +195,36 @@ export function testPartNote(
     'Declaring at most one is the usual shape. Declaring none is a complete answer.',
   ].join('\n');
 }
+
+export function stateDeclareNote(
+  environments: readonly { name: string; validate?: { state?: { run: string } } }[],
+): string {
+  const stores = environments.filter((env) => (env.validate?.state?.run ?? '').trim() !== '');
+  if (stores.length === 0) return '';
+  return [
+    '',
+    '',
+    '## The data it writes',
+    '',
+    'If your change writes data — a new column, a new row, a status, a flag, a record — declare the query ' +
+      'that says whether it is shaped correctly with the `state_declare` tool before you conclude. You are ' +
+      'the only party who knows which table took it and what a correct row looks like: a planner reading ' +
+      'the repository as it stood *before* the work could not have known, and nothing downstream can ' +
+      'recover it.',
+    '',
+    'It returns the matching **rows themselves** and the harness counts them — do not aggregate: `| count` ' +
+      'answers one row whatever the number is, and is refused. It needs a `presence` query beside it whose ' +
+      'only job is to prove the store holds the thing at all, because a query naming a column that is not ' +
+      'there answers zero rows, which looks exactly like a healthy release; a presence query must not ' +
+      'aggregate either, since a count can never answer zero. Every query must be **read-only** — nothing ' +
+      'here may write to a deployed environment.',
+    '',
+    'It merges on the id, so naming one query leaves the rest alone, and it withdraws nothing. Nothing you ' +
+      'declare runs on a sheet until an operator has read the query and accepted it against one named ' +
+      'environment: it goes to their store with their credential, and consent to a place is not ' +
+      'transferable. Declaring nothing is a legitimate answer — a refactor, a docs change or a build fix ' +
+      'writes no data to ask about.',
+    '',
+    `Environments whose store can be asked: ${stores.map((env) => env.name).join(', ')}.`,
+  ].join('\n');
+}

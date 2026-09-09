@@ -22,7 +22,14 @@ const NO_BROWSER: EnvironmentConfig[] = [{ name: 'acceptance', at: 'echo sha' }]
 
 const WITH_BROWSER: EnvironmentConfig[] = [
   { name: 'acceptance', at: 'echo sha' },
-  { name: 'production', at: 'echo sha', validate: { browser: { runner: 'npx playwright test' } } },
+  {
+    name: 'production',
+    at: 'echo sha',
+    validate: {
+      permits: ['check'],
+      browser: { runner: 'npx playwright test', listSelectors: 'npx playwright test --list' },
+    },
+  },
 ];
 
 function document(coverage: string | null): string {

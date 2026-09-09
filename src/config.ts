@@ -71,6 +71,7 @@ export interface Config {
   environmentProbeIntervalMs: number;
   environmentHealthIntervalMs: number;
   watchIntervalMs: number;
+  remoteValidation: RemoteValidationPolicy;
   ci: CiPolicy;
   upNextOverrideTtlMs: number;
   agentMode: 'stream' | 'raw';
@@ -103,6 +104,12 @@ export interface Config {
   auth: AuthConfig;
   ingress: IngressBounds;
 }
+
+interface RemoteValidationPolicy {
+  runTimeoutMs: number;
+}
+
+const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = { runTimeoutMs: 30 * 60 * 1000 };
 
 interface AuthConfig {
   enabled: boolean;
@@ -192,6 +199,7 @@ const DEFAULTS: Config = {
   environmentProbeIntervalMs: 5 * 60 * 1000,
   environmentHealthIntervalMs: 5 * 60 * 1000,
   watchIntervalMs: 30 * 60 * 1000,
+  remoteValidation: DEFAULT_REMOTE_VALIDATION,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
@@ -257,6 +265,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.review = { ...DEFAULTS.review, ...overrides.review };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
   merged.localValidation = { ...DEFAULTS.localValidation, ...overrides.localValidation };
+  merged.remoteValidation = { ...DEFAULTS.remoteValidation, ...overrides.remoteValidation };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
   merged.ingress = { ...DEFAULTS.ingress, ...overrides.ingress };
   merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
@@ -428,6 +437,7 @@ export const DEEP_MERGED_BLOCKS = [
   'review',
   'localRun',
   'localValidation',
+  'remoteValidation',
   'auth',
   'ingress',
   'ci',
