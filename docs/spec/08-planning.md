@@ -831,11 +831,16 @@ of a plan_ below. Stating them is not decoration: before they existed the only "
 the one that re-plans the goal, so an operator who had decided the _ticket_ was wrong pressed it and
 the harness answered by re-deriving a plan for work nobody wanted.
 
-`planApprovalNote` is **one paragraph** now. It was two, and picking between them was the reason it
-was appended in the first place: a one-pull-request plan settled somewhere else entirely — approving
-it handed the issue to ordinary pickup, and refusing it had nowhere to fall back to — so a reader
-given the other arm's paragraph would answer the wrong question. Both settle identically, so there is
-no wrong paragraph left to hand anyone. `caveatNotice` appends after that — see below.
+`planApprovalNote` is **one list** now, a line per answer under a lead-in. It was two paragraphs, and
+picking between them was the reason it was appended in the first place: a one-pull-request plan settled
+somewhere else entirely — approving it handed the issue to ordinary pickup, and refusing it had nowhere
+to fall back to — so a reader given the other arm's paragraph would answer the wrong question. Both
+settle identically, so there is no wrong paragraph left to hand anyone. What survived that merge was
+still prose — four answers run together in one block, which is where the reader stops at the first
+sentence and presses the primary button — so each answer is now its own bullet, named by the control
+that gives it, and the one fact common to all four ("nothing is scheduled either way until a plan is
+approved") sits in the lead-in rather than buried mid-sentence. `caveatNotice` appends after that — see
+below.
 
 ### What the plan raises is acknowledged, not merely rendered
 
@@ -863,6 +868,13 @@ button was the appended paragraph back again in checkbox form, with nothing scan
 The cockpit draws the label as the line being ticked and the detail quietly under it
 ([17](17-cockpit.md#how-an-escalation-card-is-laid-out)); `caveatNotice` renders the same two parts as
 a bullet and an indented block.
+
+**`caveatNotice`'s closing instructions are a list too, for the same reason the caveats are.** What to
+do about the boxes — tick them here or send them with the accept, that a tick may carry words, that
+those words ride to whoever works the plan rather than back to a planner, that only the accept is gated
+— was a four-sentence paragraph sitting directly above the buttons, which is the shape this whole
+section exists to get rid of. Each is now its own bullet under `Approving is held until each of these
+is acknowledged:`. The wording is unchanged in substance; only the paragraph is gone.
 
 **A planner field rides whole, and brevity is asked of the planner.** Nothing here truncates: the
 detail _is_ the thing being acknowledged, and half of it under an ellipsis is worse than either the

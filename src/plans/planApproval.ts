@@ -32,10 +32,11 @@ export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | '
 
 export function planApprovalNote(): string {
   return (
-    `\n\nApprove and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and ` +
-    `the plan goes back to a planner with your reason — nothing is scheduled either way until a plan is approved. ` +
-    `If the ticket itself is the problem rather than the plan, back out instead: close the ticket with a comment, ` +
-    `or hold it, which stops watching it and sends this plan back — watch it again and a fresh plan is written for it.`
+    `\n\nWhat each answer does — nothing is scheduled either way until a plan is approved:\n\n` +
+    `- Approve — each part gets its own agent, branch and pull request, bottom of the stack first.\n` +
+    `- Reject — the plan goes back to a planner with your reason.\n` +
+    `- Close the ticket with a comment — if the ticket itself is the problem rather than the plan.\n` +
+    `- Hold the ticket — stops watching it and sends this plan back; watch it again and a fresh plan is written for it.`
   );
 }
 
