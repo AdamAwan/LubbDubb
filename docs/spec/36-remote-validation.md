@@ -261,6 +261,13 @@ supposed to change the statement of that behaviour, in the same change, reviewed
 That is what keeps the suite a description of the product rather than of its history — and it is what
 makes retiring an older goal's check safe rather than lossy.
 
+**A coverage part informs the validation planner and binds nothing.** What the part built — its area,
+what that area now asserts — is handed over as input when the check set is written
+([20](20-validation.md#a-permanent-test-influences-and-never-dictates)). From there the validation
+planner may find the permanent test settles the question and declare nothing, declare a check whose
+one step runs that area, or run it and look at more besides. What it may never be is automatic: a
+coverage part that emitted a check of its own would put a row on the sheet that nobody chose.
+
 **A declared test part holds the goal, exactly as any other part does.** No special case, no soft
 hold, no "delivered except for the test". If the plan says the goal is not done until the path is
 covered, then it is not done until the path is covered: a goal that ships without the coverage its own
@@ -310,7 +317,17 @@ which is the route any other goal takes to the same file ([08](08-planning.md#am
 
 ### How a check comes to have an area
 
-`plan_parts.coverage` and `validation_checks.area` are the two ends of one string, and for a while
+**A `suite` step names it, and nothing else does.** A check's `area` is set by a validation planner
+writing a step that runs a named area ([20](20-validation.md#the-test-plan)); it is no longer
+inherited from the `coverage` of a test part the check happens to `cover`. Inheritance made a check
+automatable by accident — a `covers` entry is a bibliography, and it was deciding what ran. A goal
+whose coverage part built an area the validation planner then chose not to run is now an ordinary
+outcome rather than an unreachable state.
+
+Everything below still holds for the string itself: where it comes from, why it is compared exactly,
+and where a mismatch is refused. The author changed; the contract did not.
+
+`plan_parts.coverage` and `validation_checks.area` were the two ends of one string, and for a while
 nothing joined them: the column was built, nothing wrote it, and **every check on every deployment
 had a null area**. That is the quietest failure this document holds. `areasOf` drops a check with no
 area, so `runnableSelectors` answers empty, `remoteRunBriefs` reports `confirmed: 0`, the rule
@@ -467,6 +484,12 @@ because it is asking whether the query parses; the sheet puts it to a named plac
 place is not transferable.
 
 ## When a sheet is assembled, and what runs without asking
+
+**Assembly waits for the check set.** The set is authored after the assessor writes `delivered`
+([20](20-validation.md#when-the-check-set-is-written)), and a deployment quick enough to arrive first
+would assemble a sheet carrying only the watch-derived rows — a bench that offers nothing to run,
+reads as a misconfiguration, and is not one. It is this document's own null-`area` failure in a new
+place, and it takes the same remedy: an explicit gate rather than a race that has not been lost yet.
 
 An arrival assembles a sheet and **never starts a browser run**. That gate is the only moment in a
 goal's life when somebody looks at the list of checks with the delivered thing actually in front of
@@ -819,6 +842,55 @@ environment does not permit is `blocked`, saying so.
 An acceptance environment only, at first: a deployment that declares `permits` on nothing gets no
 sheets at all, which is the off switch.
 
+## The one-off script
+
+**Not built.** A `check` row runs a **reviewed spec** in the project's own browser suite, selected by
+area. That is the right instrument for a journey the product will keep having, and the wrong one for
+the thing most goals actually need checking: data arranged into one particular situation, a column
+option selected in one particular table, a state that exists to demonstrate this change and will never
+be interesting again. A suite cannot hold every scenario and should not try — a suite that does stops
+being a description of the product.
+
+So there is a second kind of browser work, and the distinction is the one this document already
+draws between a spec and a query:
+
+|              | **Suite spec**                               | **One-off script**                       |
+| ------------ | -------------------------------------------- | ---------------------------------------- |
+| Lifetime     | Permanent, versioned, amended by later goals | The goal's, plus a grace period          |
+| Reviewed     | Yes, as ordinary repository code             | No                                       |
+| Ever in a PR | Always                                       | **Never**                                |
+| Selected by  | `area`, against the runner's offering        | Written for this check, run as it stands |
+| Written by   | A part agent, as a `coverage` plan part      | The validation planner                   |
+
+A one-off script is the browser-shaped member of the **query** column
+([Two lifetimes](#two-lifetimes)), and it inherits that column's answers: it is not repository
+code, it is not reviewed by a pull request's reviewer, and it does not outlive the question it was
+written to answer.
+
+**It acts, where a query only reads, and that is the one genuinely new capability.** Arranging data
+into a particular situation means writing to the environment. So a one-off script runs **inside the
+run's tenant**, under exactly the machinery the suite run already uses — `ensureTenant`, `reseed`, the
+lock, the reap window ([Tenants](#tenants)) — and an environment with no tenant is an environment
+where a script that writes is a `blocked` row, not a script that runs somewhere it should not.
+
+**Its green is worth less than a suite spec's green, and the sheet must say so.** Nothing reviewed it.
+A reading it produces is attributed `script`, never `spec`, and the two are never folded — an operator
+counting green rows is otherwise told a throwaway and a reviewed spec are the same evidence. The
+script's source is drawn on the row beside its reading: it is small and goal-scoped, which is exactly
+what a suite spec is not, so it is the rare case where reading the test is cheaper than trusting it.
+
+**It may assert, and go green on its own.** The alternative — capture only, every script coming back
+for a person to judge — buys nothing here: the deployment pipeline's own critical-path suite is what
+guards against regression, and a check's job is to answer whether _this goal_ works. A script that can
+only gather evidence puts a person back in the loop on every goal, which is the thing this design set
+out to remove.
+
+**It is deleted with the goal, after a grace period**, and the deletion is declared rather than
+incidental. A one-off that survives its goal is an unreviewed test that no one maintains and no one
+can attribute, failing mysteriously against a product that moved on — a second suite grown by
+accident. The window is `remoteValidation.scriptGraceMs`, defaulting to 30 days past goal close, and
+the sweep names what it removed.
+
 ## Artefacts, and making worth observable
 
 CI suites already publish an HTML report — traces, screenshots, video retained on failure — to a
@@ -840,6 +912,31 @@ sharp edge of this half: it lives on `remote_sheet_rows`, written by the pre-fli
 Both numbers are in one object by the time the fold runs and the wrong one is a character away — and
 taking it off the report is exactly the shape that makes a selector matching **zero** read as a
 clean pass.
+
+### Handing a screen back to look at
+
+**Not built.** A `screenshot` step ([20](20-validation.md#the-test-plan)) captures the screen and
+attaches it to the row. It asserts nothing, and that is its whole point: the checks a browser cannot
+honestly judge — whether a column reads legibly at that width, whether a truncation is acceptable,
+whether a number is believable beside the source it came from — are judgements, and a suite that
+claims them produces a green row that verified something else.
+
+What it removes is not the person; it is the **journey**. Today a visual check makes an operator log
+in, arrange the data, navigate to the screen and only then use the one faculty a machine does not
+have. The capture moves everything before the looking onto the fleet.
+
+So the row does not go green on its own, and it does not sit `unrun` either. It reaches a state that
+says **captured, waiting to be looked at**, carrying the image — and it becomes `passed` or `failed`
+only when a person records a reading, which is
+[a result is declared, never derived](20-validation.md#states) applied exactly as written. A capture
+that coloured its own row would be the failure this design refuses everywhere else, arrived at by the
+one route that looks helpful.
+
+**A capture is not an artefact URL, and the difference is retention.** The publish command's report
+is the run's, swept on the runner's own schedule; a screenshot a person still has to look at outlives
+the run that took it and is held with the goal's validation directory
+([12](12-artifacts-and-files.md)). A capture that expired before anybody opened it would leave a row
+asking for a judgement about an image that is gone.
 
 ## The dispatch — rule `remote-validation`
 
