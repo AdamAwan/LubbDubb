@@ -212,7 +212,7 @@ const DEFAULTS: Config = {
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
-  agentPermissionMode: 'acceptEdits',
+  agentPermissionMode: 'auto',
   agentAllowedTools: [
     'Bash(npm:*)',
     'Bash(npx:*)',

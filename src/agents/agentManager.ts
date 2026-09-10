@@ -77,6 +77,7 @@ interface AgentManagerOptions {
     extraAllowedTools: string[];
     model: string | null;
     effort: string | null;
+    permissionMode: string | null;
   }) => string[];
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;
@@ -177,6 +178,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         mcpConfigPath: mcp?.configPath ?? null,
         model: task.model ?? null,
         effort: task.effort ?? null,
+        permissionMode: task.permissionMode ?? null,
       }),
       cwd,
       env: {
@@ -232,6 +234,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         mcpConfigPath: mcp?.configPath ?? null,
         model: task.model ?? null,
         effort: task.effort ?? null,
+        permissionMode: task.permissionMode ?? null,
       }),
       cwd: agent.cwd,
       env: {

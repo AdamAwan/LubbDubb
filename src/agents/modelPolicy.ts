@@ -13,6 +13,7 @@ interface AgentProfile {
   description: string;
   model: string;
   effort?: AgentEffort;
+  permissionMode?: string;
 }
 
 type AgentEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -23,6 +24,7 @@ interface ResolvedProfile {
   name: string;
   model: string;
   effort: string | null;
+  permissionMode: string | null;
   source: ProfileSource;
 }
 
@@ -47,6 +49,14 @@ export function validateAgentModels(models: AgentModels | undefined): void {
       throw new Error(
         `Refusing to start: agentModels.profiles."${name}".effort is "${profile.effort}", which is not an effort ` +
           `level. Known levels: ${EFFORT_LEVELS.join(', ')}.`,
+      );
+    if (
+      profile.permissionMode !== undefined &&
+      (typeof profile.permissionMode !== 'string' || profile.permissionMode.length === 0)
+    )
+      throw new Error(
+        `Refusing to start: agentModels.profiles."${name}".permissionMode must be a non-empty mode string — ` +
+          `it is handed to \`claude --permission-mode\` in place of agentPermissionMode for this profile.`,
       );
     if (typeof profile.rank !== 'number' || !Number.isFinite(profile.rank))
       throw new Error(
@@ -101,7 +111,13 @@ export function resolveAgentProfile(
   if (name === undefined) return null;
   const profile = models.profiles[name];
   if (profile === undefined) return null;
-  return { name, model: profile.model, effort: profile.effort ?? null, source };
+  return {
+    name,
+    model: profile.model,
+    effort: profile.effort ?? null,
+    permissionMode: profile.permissionMode ?? null,
+    source,
+  };
 }
 
 export function orderedProfiles(models: AgentModels | undefined): { name: string; description: string }[] {

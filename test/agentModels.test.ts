@@ -13,7 +13,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { failPlanningOpen } from './support/plans.js';
 
 const PROFILES = {
-  fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
+  fast: { model: 'haiku', permissionMode: 'acceptEdits', rank: 1, description: 'mechanical work' },
   standard: { model: 'sonnet', effort: 'medium', rank: 2, description: 'ordinary work' },
   deep: { model: 'opus', effort: 'medium', rank: 3, description: 'work whose shape is unclear' },
 } as const;
@@ -24,13 +24,20 @@ test('a rule with an assignment resolves to that profile', () => {
     name: 'deep',
     model: 'opus',
     effort: 'medium',
+    permissionMode: null,
     source: 'rule',
   });
 });
 
 test('a rule with no assignment falls through to the default, as does a dispatch with no rule', () => {
   const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
-  const standard = { name: 'standard', model: 'sonnet', effort: 'medium', source: 'default' } as const;
+  const standard = {
+    name: 'standard',
+    model: 'sonnet',
+    effort: 'medium',
+    permissionMode: null,
+    source: 'default',
+  } as const;
   assert.deepEqual(resolveAgentProfile(models, 'pr-ci-failing'), standard);
   assert.deepEqual(resolveAgentProfile(models, null), standard);
 });
@@ -46,12 +53,14 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
     name: 'standard',
     model: 'sonnet',
     effort: 'medium',
+    permissionMode: null,
     source: 'rule',
   });
   assert.deepEqual(resolveAgentProfile(models, 'issue-appraisal'), {
     name: 'standard',
     model: 'sonnet',
     effort: 'medium',
+    permissionMode: null,
     source: 'default',
   });
 });
@@ -87,6 +96,13 @@ test('config load rejects an effort that is not a level', () => {
   assert.throws(
     () => load({ profiles: { deep: { model: 'opus', effort: 'maximum' } } as never }),
     /agentModels\.profiles\."deep"\.effort is "maximum".*low, medium, high, xhigh, max/s,
+  );
+});
+
+test('config load rejects a permissionMode that is present but not a mode string', () => {
+  assert.throws(
+    () => load({ profiles: { deep: { model: 'opus', permissionMode: '' } } as never }),
+    /agentModels\.profiles\."deep"\.permissionMode must be a non-empty mode string/,
   );
 });
 
@@ -208,4 +224,22 @@ test('with no policy configured, no launch carries --model and no task records o
   assert.equal(task.effort, null);
   assert.equal(args.includes('--model'), false);
   assert.equal(args.includes('--effort'), false);
+});
+
+test('a profile that names a permission mode launches under it, in place of the fleet-wide one', async () => {
+  const { args, task } = await dispatch({ profiles: PROFILES, default: 'fast' }, 934);
+  assert.equal(task.permissionMode, 'acceptEdits', 'resolved at dispatch and stored on the row');
+  assert.equal(args[args.indexOf('--permission-mode') + 1], 'acceptEdits');
+});
+
+test("a profile that names no permission mode launches on the fleet's own, which defaults to auto", async () => {
+  const { args, task } = await dispatch({ profiles: PROFILES, default: 'deep' }, 935);
+  assert.equal(task.permissionMode, null);
+  assert.equal(args[args.indexOf('--permission-mode') + 1], 'auto');
+});
+
+test('with no policy at all, every launch carries the fleet-wide permission mode', async () => {
+  const { args, task } = await dispatch(undefined, 936);
+  assert.equal(task.permissionMode, null);
+  assert.equal(args[args.indexOf('--permission-mode') + 1], 'auto');
 });

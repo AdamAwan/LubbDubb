@@ -16,6 +16,7 @@ export const TASK_COLUMNS: ColumnMigrations = {
     ci_checks: 'TEXT',
     model: 'TEXT',
     effort: 'TEXT',
+    permission_mode: 'TEXT',
     profile: 'TEXT',
     profile_source: 'TEXT',
     mcp_servers: 'TEXT',
@@ -41,6 +42,7 @@ export class TaskStore {
       | 'mcpServers'
       | 'model'
       | 'effort'
+      | 'permissionMode'
       | 'profile'
       | 'profileSource'
     > & {
@@ -53,6 +55,7 @@ export class TaskStore {
       mcpServers?: ExtraMcpServer[] | null;
       model?: string | null;
       effort?: string | null;
+      permissionMode?: string | null;
       profile?: string | null;
       profileSource?: string | null;
     },
@@ -77,13 +80,14 @@ export class TaskStore {
       mcpServers: input.mcpServers ?? null,
       model: input.model ?? null,
       effort: input.effort ?? null,
+      permissionMode: input.permissionMode ?? null,
       profile: input.profile ?? null,
       profileSource: input.profileSource ?? null,
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, profile, profile_source, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, permission_mode, profile, profile_source, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
       .run({
         ...task,
@@ -172,6 +176,7 @@ const SUMMARY_COLUMNS = [
   'mcp_servers',
   'model',
   'effort',
+  'permission_mode',
   'profile',
   'profile_source',
   'status',
@@ -194,6 +199,7 @@ interface TaskSummaryRow {
   mcp_servers: string | null;
   model: string | null;
   effort: string | null;
+  permission_mode: string | null;
   profile: string | null;
   profile_source: string | null;
   status: string;
@@ -288,6 +294,7 @@ function rowToSummary(r: TaskSummaryRow): TaskSummary {
     mcpServers: parseMcpServers(r.mcp_servers),
     model: r.model,
     effort: r.effort,
+    permissionMode: r.permission_mode ?? null,
     profile: r.profile ?? null,
     profileSource: r.profile_source ?? null,
     status: r.status as Task['status'],

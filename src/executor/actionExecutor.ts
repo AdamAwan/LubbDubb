@@ -801,6 +801,7 @@ export class ActionExecutor {
         mcpServers: action.mcpServers?.length ? action.mcpServers : null,
         model: profile?.model ?? null,
         effort: profile?.effort ?? null,
+        permissionMode: profile?.permissionMode ?? null,
         profile: profile?.name ?? null,
         profileSource: profile?.source ?? null,
       });
@@ -816,6 +817,7 @@ export class ActionExecutor {
       rule: action.rule,
       model: profile?.model ?? null,
       effort: profile?.effort ?? null,
+      permissionMode: profile?.permissionMode ?? null,
       profile: profile?.name ?? null,
       profileSource: profile?.source ?? null,
     });

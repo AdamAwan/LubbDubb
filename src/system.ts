@@ -258,12 +258,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     extraAllowedTools: string[];
     model: string | null;
     effort: string | null;
+    permissionMode: string | null;
   }) => string[];
   const agentSetup = {
     stream: {
-      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode }) =>
         buildClaudeStreamArgs({
-          permissionMode: perm,
+          permissionMode: permissionMode ?? perm,
           extraArgs,
           allowedTools,
           additionalDirectories,
