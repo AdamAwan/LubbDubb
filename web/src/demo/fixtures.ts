@@ -171,7 +171,7 @@ export function buildDemoState(): DemoSeed {
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
       canPlaceWorkItem: true,
-      desktopFolder: '/Users/you/code/demo-shop',
+      desktopFolder: '/Users/you/code/markdown-magpie',
       ejectionEnabled: true,
       localRunConfigured: true,
       localValidationBrowserConfigured: true,
@@ -562,6 +562,15 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(96),
         },
       ],
+      // The pickup roll-call: every one of `issuePickupStatus`'s thirteen answers is carried by a
+      // goal here, so no operator meets one of them for the first time as a suspected bug.
+      //   container #300 · planning #333 (at the approval gate) and #390 (parts in flight) ·
+      //   active #332 #368 · eligible #341 · has_pr #376 #388 · delivered #364 #395 ·
+      //   appraisal #379 · blocked #382 · cooldown #345 · escalated #359 · unwatched #366 #371 ·
+      //   done #352 · retained #357, which lives in `retainedRuns` below.
+      // The arithmetic has to hold too: the cap is 3 with two agents live, so exactly one goal is
+      // `eligible` and the ready rest are `blocked`.
+      // → docs/spec/17-cockpit.md#demo-mode
       issues: [
         demoIssue({
           id: 'iss-300',
@@ -637,7 +646,7 @@ export function buildDemoState(): DemoSeed {
             },
           ],
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
+          pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
         }),
         demoIssue({
           id: 'iss-332',
@@ -845,7 +854,14 @@ export function buildDemoState(): DemoSeed {
           labels: ['refactor', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
+          pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
+          delivery: {
+            summary:
+              'All four parts merged. A download link opens in a new tab with auth on and with auth off, and a tampered capability is refused.',
+            by: 'assessor',
+            decidedAt: ago(200),
+          },
+          spend: demoSpend(395, 9.42, 5),
           validation: {
             state: 'flagged',
             total: 9,
@@ -1234,8 +1250,8 @@ export function buildDemoState(): DemoSeed {
         extendedAt: null,
         checks: [
           {
-            checkId: 'no-checkout-retries',
-            title: 'Checkout stops retrying itself',
+            checkId: 'no-payload-rejections',
+            title: 'Runners stop rejecting their own job payloads',
             kind: 'signal',
             tolerate: 0,
             expectUnder: null,
@@ -1246,7 +1262,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:390',
               environment: 'staging',
-              checkId: 'no-checkout-retries',
+              checkId: 'no-payload-rejections',
               readAt: ago(0.5),
               verdict: 'clean',
               rows: 0,
@@ -1255,8 +1271,8 @@ export function buildDemoState(): DemoSeed {
             },
           },
           {
-            checkId: 'checkout-p95',
-            title: 'Checkout is no slower at p95',
+            checkId: 'job-claim-p95',
+            title: 'Claiming a job is no slower at p95',
             kind: 'measure',
             tolerate: 0,
             expectUnder: null,
@@ -1267,7 +1283,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:390',
               environment: 'staging',
-              checkId: 'checkout-p95',
+              checkId: 'job-claim-p95',
               readAt: ago(0.5),
               verdict: 'clean',
               rows: null,
@@ -1276,8 +1292,8 @@ export function buildDemoState(): DemoSeed {
             },
           },
           {
-            checkId: 'invoice-queue-depth',
-            title: 'The invoice queue stops backing up',
+            checkId: 'catalog-queue-depth',
+            title: 'The catalog’s job queue stops backing up',
             kind: 'signal',
             tolerate: 0,
             expectUnder: null,
@@ -1288,7 +1304,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:390',
               environment: 'staging',
-              checkId: 'invoice-queue-depth',
+              checkId: 'catalog-queue-depth',
               readAt: ago(0.5),
               verdict: 'unknown',
               rows: null,
@@ -1305,7 +1321,7 @@ export function buildDemoState(): DemoSeed {
       id: 'run-1',
       originRef: 'issue:390',
       ref: 'issue/390/validate',
-      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      dir: '/Users/you/code/markdown-magpie/.lubbdubb/local-run',
       commit: '8b052b99c4d1e7f2a3b6c9d0e1f2a3b4c5d6e7f8',
       pid: 48211,
       status: 'running',
@@ -1318,7 +1334,7 @@ export function buildDemoState(): DemoSeed {
       },
       freshness: { checkedAt: ago(0), behindTip: 2, base: { ref: 'issue/390/schema', behind: 0 } },
       url: 'http://localhost:5173',
-      note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
+      note: 'Up on :5173. Seeded the sample corpus — the instruction did not mention that step.',
       startedAt: ago(18),
       endedAt: null,
       interruptedAt: null,
@@ -1462,10 +1478,71 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       },
       {
+        id: 'plan-333',
+        originRef: 'issue:333',
+        title: 'Verify a document against its sources before correcting it',
+        status: 'awaiting_approval',
+        diagnosis:
+          'A patrol reads a document once and writes a correction from that single read, so the model is asked to spot the error and fix it in the same breath. When it is wrong about the error it is confidently wrong about the fix, and nothing downstream can tell the two apart: the proposal carries a diff and no account of what it thought was broken.',
+        approach:
+          'Split the read from the write. `verify_document` reports findings — a claim the document makes, the source line it disagrees with, and nothing else. `correct_document` runs only on a document that came back with findings, and is handed them as its input. A document that verifies clean never reaches a writer at all.',
+        reason:
+          'The verifier is a pure reporter with no callers, so it lands and is judged on its own findings before anything writes from them.',
+        risks:
+          '**Two model calls per document.** Every patrol pass costs a verify as well as a correct, and most documents verify clean — the saving is real only if the clean path stops before the writer. **Finding drift.** The corrector is handed findings from a read that may be a minute old; a document edited in between is corrected against a source it no longer matches.',
+        outOfScope:
+          '- Ranking findings by severity. A finding is a finding here; whether some are worth ignoring is a judgement nothing in this goal makes.\n- The patrol schedule, which stays as it is.\n- Correcting anything outside the document under patrol.',
+        alternatives:
+          '**Keep one call and ask for findings alongside the diff.** Cheaper, and it was the first thing I wrote. Rejected because a model asked for both hands back a diff and a justification of that diff — the finding stops being a reading of the document and becomes a description of the edit.\n\n' +
+          '**Verify against the index rather than the source.** Faster, and wrong for the same reason the goal exists: the index is built from the documents, so a document that disagrees with the code agrees with itself.',
+        openQuestions:
+          'What should a patrol do with a document whose findings it cannot resolve — an assertion about code that no longer exists anywhere? I have written it as a finding with no correction, which leaves the document untouched and the finding on the record. Filing it as a ticket is the other reading and I have not taken it.',
+        verification:
+          'Worth checking end to end on a document that is wrong in a way the code makes obvious: the patrol should report the claim and the line it disagrees with before it writes anything, and a document that is already correct should come back with no proposal at all rather than a no-op diff.',
+        evidence: [
+          {
+            path: 'src/patrol/correct.ts',
+            line: 63,
+            note: 'the single call that reads and writes together — the prompt asks for a diff and gets a rationale for it',
+          },
+          {
+            path: 'src/patrol/tools.ts',
+            line: 21,
+            note: 'the file-tool loop a verifier would read the sources through',
+          },
+          {
+            path: 'src/proposals/draft.ts',
+            line: 104,
+            note: 'the proposal is drafted straight from the diff, with nowhere to carry a finding',
+          },
+        ],
+        document:
+          '# Splitting the patrol’s read from its write\n\n' +
+          'A patrol reads a document once and writes a correction from that single read. The model is asked ' +
+          'to spot the error and fix it in the same breath.\n\n' +
+          '## Why that is the wrong shape\n\n' +
+          'When the model is wrong about the error it is confidently wrong about the fix, and nothing ' +
+          'downstream can tell the two apart: the proposal carries a diff and no account of what it thought ' +
+          'was broken.\n\n' +
+          '> Asking for findings alongside the diff in one call was the first thing I wrote. A model asked ' +
+          'for both hands back a diff and a justification of that diff — the finding stops being a reading of ' +
+          'the document and becomes a description of the edit.\n\n' +
+          '## Why three pull requests\n\n' +
+          '1. The verifier is a pure reporter with no callers.\n' +
+          '2. The gate is the only part that changes what a patrol pass does.\n' +
+          '3. Carrying the finding onto the proposal touches the console as well as the drafter.\n\n' +
+          '## The one thing I am unsure about\n\n' +
+          'A claim about code that no longer exists anywhere cannot be corrected. I leave the document ' +
+          'untouched with the finding on the record; filing a ticket is the other reading.',
+        statusCommentRef: 'issue:333:comment:8471',
+        createdAt: ago(14),
+        updatedAt: ago(14),
+      },
+      {
         id: 'plan-395',
         originRef: 'issue:395',
         title: 'Snapshot downloads 401 in the review console',
-        status: 'awaiting_approval',
+        status: 'complete',
         diagnosis:
           'Every snapshot download 401s, and not because the guard is wrong: `/snapshots/:id/download` sits **inside** the `/api` prefix the console guards with an Auth0 bearer token, and clicking a download link is a top-level browser navigation — which cannot carry an `Authorization` header. The route has never been reachable the way it is reached.',
         approach:
@@ -1518,9 +1595,9 @@ export function buildDemoState(): DemoSeed {
           '## The one thing I am unsure about\n\n' +
           'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
           'That means two modes and only one of them is covered by the tests.',
-        statusCommentRef: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
+        statusCommentRef: 'issue:395:comment:8455',
+        createdAt: ago(4320),
+        updatedAt: ago(200),
       },
     ],
     planCaveatAnswers: [],
@@ -1689,6 +1766,79 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       }),
       demoPart({
+        id: 'plan-333:verify',
+        planId: 'plan-333',
+        slug: 'verify',
+        seq: 1,
+        title: 'Add verify_document, which reports and never writes',
+        scope: 'The verifier tool and the finding it returns. Nothing calls it yet.',
+        dependsOn: [],
+        rationale:
+          'A pure reporter with no callers — judged on the findings it returns, in isolation from anything that acts on them.',
+        acceptance:
+          '- A document that contradicts its source comes back with a finding naming the claim and the source line.\n' +
+          '- A document that agrees with its source comes back with no findings.\n' +
+          '- The tool has no write path at all.',
+        touches: ['src/patrol/verify.ts', 'src/patrol/finding.ts'],
+        acceptanceMet: [],
+        size: 'm',
+        depth: 0,
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(14),
+        updatedAt: ago(14),
+      }),
+      demoPart({
+        id: 'plan-333:gate',
+        planId: 'plan-333',
+        slug: 'gate',
+        seq: 2,
+        title: 'Run correct_document only on a document that came back with findings',
+        scope: 'Where the patrol decides to write, and what it hands the writer.',
+        dependsOn: ['verify'],
+        rationale:
+          'This is the only part that changes what a patrol pass does, so it stays separate from the verifier it reads.',
+        acceptance:
+          '- A document verified clean produces no proposal and no diff.\n' +
+          '- A document with findings reaches the corrector with those findings as its input.\n' +
+          '- A patrol pass over an unchanged corpus writes nothing.',
+        touches: ['src/patrol/correct.ts', 'src/patrol/pass.ts'],
+        acceptanceMet: [],
+        size: 'm',
+        depth: 1,
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(14),
+        updatedAt: ago(14),
+      }),
+      demoPart({
+        id: 'plan-333:cite',
+        planId: 'plan-333',
+        slug: 'cite',
+        seq: 3,
+        title: 'Carry the finding’s source line onto the proposal',
+        scope: 'The proposal payload and the console row that draws it.',
+        dependsOn: ['gate'],
+        rationale: 'Touches the console as well as the drafter, so it waits until there is a finding to carry.',
+        acceptance:
+          '- Every proposal drafted from a finding cites the file and line it was drawn from.\n' +
+          '- A proposal with no finding behind it is not drafted at all.',
+        touches: ['src/proposals/draft.ts', 'apps/web/src/app/proposals/row.tsx'],
+        acceptanceMet: [],
+        size: 's',
+        depth: 2,
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(14),
+        updatedAt: ago(14),
+      }),
+      demoPart({
         id: 'plan-395:signer',
         planId: 'plan-395',
         slug: 'signer',
@@ -1702,15 +1852,19 @@ export function buildDemoState(): DemoSeed {
           '- An expired capability is refused.\n' +
           '- A tampered payload is refused.',
         touches: ['apps/api/src/features/snapshots/download-capability.ts'],
-        acceptanceMet: [],
+        acceptanceMet: [
+          'A capability minted for a snapshot id verifies, and one for another id does not.',
+          'An expired capability is refused.',
+          'A tampered payload is refused.',
+        ],
         size: 's',
         depth: 0,
-        branch: null,
-        prNumber: null,
-        status: 'ready',
+        branch: 'issue/395/signer',
+        prNumber: 420,
+        status: 'concluded',
         taskId: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
+        createdAt: ago(3600),
+        updatedAt: ago(900),
       }),
       demoPart({
         id: 'plan-395:route',
@@ -1726,15 +1880,19 @@ export function buildDemoState(): DemoSeed {
           '- Every route still under `/api` 401s without a bearer token.\n' +
           '- With `AUTH_ENABLED` off the route serves with no capability at all.',
         touches: ['apps/api/src/app.ts', 'apps/api/src/features/snapshots/routes.ts'],
-        acceptanceMet: [],
+        acceptanceMet: [
+          '`/snapshots/:id/download` serves only with a valid capability.',
+          'Every route still under `/api` 401s without a bearer token.',
+          'With `AUTH_ENABLED` off the route serves with no capability at all.',
+        ],
         size: 'm',
         depth: 1,
-        branch: null,
-        prNumber: null,
-        status: 'ready',
+        branch: 'issue/395/route',
+        prNumber: 421,
+        status: 'concluded',
         taskId: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
+        createdAt: ago(3400),
+        updatedAt: ago(640),
       }),
       demoPart({
         id: 'plan-395:mint',
@@ -1750,15 +1908,18 @@ export function buildDemoState(): DemoSeed {
           '- Every snapshot row in the console opens in a new tab without a 401.\n' +
           '- The payload carries a capability per row, and none for a snapshot whose file has been pruned.',
         touches: ['apps/api/src/features/snapshots/list.ts', 'apps/web/src/app/snapshots/page.tsx'],
-        acceptanceMet: [],
+        acceptanceMet: [
+          'Every snapshot row in the console opens in a new tab without a 401.',
+          'The payload carries a capability per row, and none for a snapshot whose file has been pruned.',
+        ],
         size: 'm',
         depth: 2,
-        branch: null,
-        prNumber: null,
-        status: 'ready',
+        branch: 'issue/395/mint',
+        prNumber: 422,
+        status: 'concluded',
         taskId: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
+        createdAt: ago(3100),
+        updatedAt: ago(420),
       }),
       demoPart({
         id: 'plan-395:e2e-download',
@@ -1775,15 +1936,18 @@ export function buildDemoState(): DemoSeed {
           '- The snapshots spec opens a download in a new tab and asserts the file arrives.\n' +
           '- No spec still asserts the 401.',
         touches: ['apps/e2e/specs/snapshots.spec.ts'],
-        acceptanceMet: [],
+        acceptanceMet: [
+          'The snapshots spec opens a download in a new tab and asserts the file arrives.',
+          'No spec still asserts the 401.',
+        ],
         size: 's',
         depth: 3,
-        branch: null,
-        prNumber: null,
-        status: 'ready',
+        branch: 'issue/395/e2e-download',
+        prNumber: 423,
+        status: 'concluded',
         taskId: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
+        createdAt: ago(2900),
+        updatedAt: ago(210),
       }),
     ],
     validationPlans: [
@@ -1824,7 +1988,7 @@ export function buildDemoState(): DemoSeed {
         covers: ['route'],
         amendedAt: ago(3),
         amendNote:
-          'An agent working this goal amended the validation plan: the unsigned path now redirects rather ' +
+          'The agent sent back to fix check G amended the plan: the unsigned path now redirects rather ' +
           'than serving inline, so "no capability in the URL" was no longer the thing to look at.',
         revision: {
           title: 'With auth off, snapshot downloads still serve',
@@ -1922,8 +2086,10 @@ export function buildDemoState(): DemoSeed {
         expect: 'A 403 naming the key, and a fresh page load mints one that works.',
         covers: ['signer'],
         state: 'deferred',
-        resultNote: 'There is no rotation path yet — the signer part is the one that adds it.',
-        deferUntil: 'the signer part merges',
+        resultNote:
+          'The signer verifies a capability against one key and there is no rotation path to exercise yet — ' +
+          'adding one is its own goal, and nobody has filed it.',
+        deferUntil: 'a key-rotation path exists',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
@@ -1980,7 +2146,7 @@ export function buildDemoState(): DemoSeed {
     ],
     goalWatches: [
       {
-        originRef: 'issue:284',
+        originRef: 'issue:395',
         id: 'snapshot-download-401s',
         seq: 1,
         kind: 'signal',
@@ -2006,7 +2172,7 @@ export function buildDemoState(): DemoSeed {
         authored: 'plan',
       },
       {
-        originRef: 'issue:284',
+        originRef: 'issue:395',
         id: 'snapshot-download-p95',
         seq: 2,
         kind: 'measure',
@@ -2191,6 +2357,54 @@ export function buildDemoState(): DemoSeed {
       snoozedUntil: { upgrade: null, projectPull: null },
     },
     archivedPullRequests: [
+      {
+        id: 'pr-420',
+        number: 420,
+        title: '#395 [1/4] feat(snapshots): add the download capability signer',
+        branch: 'issue/395/signer',
+        ciStatus: 'passing',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(900),
+      },
+      {
+        id: 'pr-421',
+        number: 421,
+        title: '#395 [2/4] feat(snapshots): move the download route outside /api and require the capability',
+        branch: 'issue/395/route',
+        ciStatus: 'passing',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(640),
+      },
+      {
+        id: 'pr-422',
+        number: 422,
+        title: '#395 [3/4] feat(snapshots): mint capabilities into the snapshot list',
+        branch: 'issue/395/mint',
+        ciStatus: 'passing',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(420),
+      },
+      {
+        id: 'pr-423',
+        number: 423,
+        title: '#395 [4/4] test(snapshots): open a download in a new tab',
+        branch: 'issue/395/e2e-download',
+        ciStatus: 'passing',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(210),
+      },
       {
         id: 'pr-388',
         number: 388,
@@ -2494,31 +2708,31 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'prop-2',
         kind: 'plan',
-        ref: 'issue:395:plan',
+        ref: 'issue:333:plan',
         status: 'pending',
         action: {
           type: 'propose_plan',
-          reason: 'Issue #395 was decomposed into 3 part(s) and approval is required before any is scheduled.',
-          planId: 'plan-395',
-          originRef: 'issue:395',
+          reason: 'Issue #333 was decomposed into 3 part(s) and approval is required before any is scheduled.',
+          planId: 'plan-333',
+          originRef: 'issue:333',
           caveats: [
             {
               id: 'open-questions',
               label: 'Open questions — approving decides them the planner’s way',
               detail:
-                'With `AUTH_ENABLED` off there is no signing key, so the route has to serve with no capability at ' +
-                'all — and I am not certain that arm should exist rather than the route simply 404ing. I have ' +
-                'written it as "serves everything", which is what the operator running with auth off has already ' +
-                'chosen, but it is the one decision here I would want argued with.',
+                'What should a patrol do with a document whose findings it cannot resolve — an assertion about ' +
+                'code that no longer exists anywhere? I have written it as a finding with no correction, which ' +
+                'leaves the document untouched and the finding on the record. Filing it as a ticket is the other ' +
+                'reading and I have not taken it.',
             },
             {
               id: 'risks',
               label: 'Risks the planner named',
               detail:
-                '**Guard window.** Moving `/snapshots` outside the `/api` prefix means part 2 briefly serves ' +
-                'snapshots with no guard at all — the capability check has to land in the same PR, not a later ' +
-                'one. **Two modes.** With `AUTH_ENABLED` off there is no signing key, so the route serves with no ' +
-                'capability at all, and only one of those two modes is covered by the tests today.',
+                '**Two model calls per document.** Every patrol pass costs a verify as well as a correct, and ' +
+                'most documents verify clean — the saving is real only if the clean path stops before the writer. ' +
+                '**Finding drift.** The corrector is handed findings from a read that may be a minute old; a ' +
+                'document edited in between is corrected against a source it no longer matches.',
             },
           ],
         },
@@ -2526,7 +2740,7 @@ export function buildDemoState(): DemoSeed {
         decidedBy: null,
         decidedAt: null,
         escalationId: 'esc-3',
-        createdAt: ago(12),
+        createdAt: ago(14),
       },
       {
         id: 'prop-3',
@@ -2568,28 +2782,29 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'There is a plan for issue #395 ("Snapshot downloads 401 in the review console") and nothing is ' +
-          'scheduled until you approve it — 3 pull requests of work.\n\n' +
-          'Why this shape: split on the seams the tests already draw; one PR would put the signer and the ' +
-          'guard change in the same review.',
+          'There is a plan for issue #333 ("Verify a document against its sources before correcting it") and ' +
+          'nothing is scheduled until you approve it — 3 pull requests of work.\n\n' +
+          'Why this shape: the verifier is judged on its findings before anything writes from them; one PR ' +
+          'would put the reader and the writer in the same review.',
         context: {
-          originRef: 'issue:395',
-          planId: 'plan-395',
+          originRef: 'issue:333',
+          planId: 'plan-333',
           detailFrom: 'What the plan says',
           detail:
             "**What's wrong**\n\n" +
-            'The snapshot download route sits inside the `/api` prefix the console guards with a bearer token, ' +
-            'and clicking a download link is a top-level navigation — which cannot carry an `Authorization` ' +
-            'header. The route has never been reachable the way it is reached.\n\n' +
+            'A patrol reads a document once and writes a correction from that single read, so the model spots ' +
+            'the error and fixes it in the same breath. When it is wrong about the error it is confidently ' +
+            'wrong about the fix, and the proposal carries a diff with no account of what it thought was ' +
+            'broken.\n\n' +
             "**What we'll do**\n\n" +
-            'Move the route out from behind the prefix guard and gate it on a short-lived signed capability ' +
-            'minted into the snapshot list beside each row. The URL carries its own proof, so a plain ' +
-            'navigation works and nothing else moves outside the guard.',
+            'Split the read from the write. `verify_document` reports findings and never writes; ' +
+            '`correct_document` runs only on a document that came back with findings, and is handed them as ' +
+            'its input. A document that verifies clean never reaches a writer at all.',
         },
         agentId: null,
         taskId: null,
         response: null,
-        createdAt: ago(12),
+        createdAt: ago(14),
         answeredAt: null,
       },
       {
@@ -2598,24 +2813,26 @@ export function buildDemoState(): DemoSeed {
         status: 'open',
         prompt: "I've read the plan against the code — three things I'd question before we approve it.",
         context: {
-          taskTitle: 'Discuss the plan for issue #395',
-          originRef: 'issue:395',
+          taskTitle: 'Discuss the plan for issue #333',
+          originRef: 'issue:333',
           questions: [
             {
-              question: 'Part two is fat — split it, or leave it as one?',
+              question: 'Verify every document every pass, or only changed ones?',
               detail:
-                'The guard move, the capability check and the two-mode arm are one review. The riskiest bit ' +
-                '(the window in which the route serves unguarded) is buried in the middle of it.',
-              options: ['Split into two parts', 'Keep it as one'],
+                'A verify call on a document nothing has touched since the last clean pass buys nothing, and ' +
+                'the plan runs one anyway. Skipping them halves the cost and misses a document whose sources ' +
+                'moved under it.',
+              options: ['Verify every pass', 'Only changed documents'],
             },
             {
-              question: 'Should the unauthenticated arm serve, or 404?',
+              question: 'An unresolvable finding — leave it, or file it?',
               detail:
-                'With `AUTH_ENABLED` off there is no signing key. Serving everything matches what the operator ' +
-                'already chose by turning auth off; 404 is the safer default and a surprise.',
-              options: ['Serve everything', '404 the route'],
+                'A claim about code that no longer exists anywhere cannot be corrected. The plan leaves the ' +
+                'document untouched with the finding on the record; filing a ticket puts it in front of ' +
+                'somebody and costs a tracker item per patrol pass.',
+              options: ['Leave it on the record', 'File a ticket'],
             },
-            { question: 'Capability in the query string, or a path segment?' },
+            { question: 'Should a finding cite the source line, or the whole hunk?' },
           ],
         },
         agentId: null,
@@ -2804,26 +3021,26 @@ export function buildDemoState(): DemoSeed {
           override: 'fast',
         },
         {
-          origin: 'issue:395:part:signer',
+          origin: 'issue:333:part:verify',
           rule: 'plan-part',
-          title: 'Issue #395 part: Add the download capability signer',
+          title: 'Issue #333 part: Add verify_document, which reports and never writes',
           kind: 'code',
-          branch: 'issue/395/signer',
+          branch: 'issue/333/verify',
           status: 'unapproved',
           reason:
-            'Part "signer" of issue #395 is ready and has no agent. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "verify" of issue #333 is ready and has no agent. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
           profile: 'deep',
           profileSource: 'pin',
         },
         {
-          origin: 'issue:395:part:route',
+          origin: 'issue:333:part:gate',
           rule: 'plan-part',
-          title: 'Issue #395 part: Move the download route outside /api and require the capability',
+          title: 'Issue #333 part: Run correct_document only on a document that came back with findings',
           kind: 'code',
-          branch: 'issue/395/route',
+          branch: 'issue/333/gate',
           status: 'unapproved',
           reason:
-            'Part "route" of issue #395 is ready and stacks on issue/395/signer. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "gate" of issue #333 is ready and stacks on issue/333/verify. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
           profile: 'standard',
           profileSource: 'default',
         },
@@ -2893,8 +3110,9 @@ export function buildDemoState(): DemoSeed {
       'issue:390': 'https://github.com/example/markdown-magpie/issues/390',
       'issue:395': 'https://github.com/example/markdown-magpie/issues/395',
       'issue:390:part:watcher': 'https://github.com/example/markdown-magpie/issues/390',
-      'issue:395:part:route': 'https://github.com/example/markdown-magpie/issues/395',
-      'issue:395:part:signer': 'https://github.com/example/markdown-magpie/issues/395',
+      'issue:333': 'https://github.com/example/markdown-magpie/issues/333',
+      'issue:333:part:gate': 'https://github.com/example/markdown-magpie/issues/333',
+      'issue:333:part:verify': 'https://github.com/example/markdown-magpie/issues/333',
       'pr:409': 'https://github.com/example/markdown-magpie/pull/409',
       'pr:411': 'https://github.com/example/markdown-magpie/pull/411',
       'pr:412': 'https://github.com/example/markdown-magpie/pull/412',
@@ -3159,7 +3377,7 @@ export function demoPlanHistory(planId: string): PlanHistory {
       id: 'rev-395-1',
       planId,
       seq: 1,
-      at: at(40),
+      at: at(4320),
       narrative: narrative({
         reason: 'The signer has to exist before the route can verify one, and the guard change touches every route.',
         approach: 'Sign a short-lived capability into the download URL and move the route out from behind the guard.',
@@ -3202,7 +3420,7 @@ export function demoPlanHistory(planId: string): PlanHistory {
       id: 'rev-395-2',
       planId,
       seq: 2,
-      at: at(12),
+      at: at(4200),
       narrative: narrative({
         reason:
           'The capability signer has to exist before the route can verify one, and the guard change touches every route.',

@@ -7128,7 +7128,10 @@ row in `fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its
 real vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for
 the first time is trying to follow one story across nine panels, and a fixture set drawn from three
 unrelated products reads to them as a console that is showing them noise. A new fixture joins that story
-or it does not go in.
+or it does not go in — and an old one that does not is a bug to fix rather than a quirk to keep: a goal
+watch reading `Checkout is no slower at p95` on a goal about job payloads, or a parent feature named
+`Payments`, is a leftover from a fixture set this one replaced and reads as a second product bleeding
+through.
 
 **A demo interaction commits.** Where the real cockpit writes, the fake writes to its own world and
 the card stays where it was dropped — `setIssueState` moves the work item for real. A drop that
@@ -7150,6 +7153,20 @@ while work is still on it and the rest behind its `kept` disclosure; `done` is
 carried without being listed anywhere, because no surface lists a closed goal the harness holds no run
 for — it is still a reading the wire ships and the goal page draws.
 
+**Every goal is in a state the harness could have put it in, and the check set is the sharp edge.**
+A check set is authored once, by a validation planner dispatched _after_ the assessor writes
+`delivered` ([20](20-validation.md#when-the-check-set-is-written)) — so a goal carrying passed and
+failed readings while its plan still waits at the approval gate is a world no pulse could have
+produced, and it is the one contradiction a visitor is guaranteed to notice, because the two
+readings sit on the same masthead. The two showcases are therefore two goals. **#395 is delivered**:
+its plan is `complete`, all four parts are `concluded` behind merged pull requests #420–#423, the
+assessor has parked it, and the ten checks are what the validation planner wrote against that merged
+code. **#333 is at the approval gate**: a three-part plan, `awaiting_approval`, with the proposal, the
+planner's caveats and the two parts held `unapproved` in Up next — and no checks at all, so the goal
+page draws the plan's **hint** in the empty validation section, which is the reading an operator
+actually gets before delivery. Neither goal can demonstrate the other's half, and a fixture that put
+both on one goal was demonstrating a bug.
+
 **Every state a check can be in has a check in the fixtures.** Goal #395 carries ten, for the reason
 the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
 weighted differently on the card ([Validation on the goal](#validation-on-the-goal)), and a weighting
@@ -7159,6 +7176,16 @@ needs somebody to type it — and the withdrawn check is there because nothing i
 plan, so the fold that lists what an amendment dropped would never draw at all. The same fixture set
 carries every marker for _who_ ran a check: by hand, by the fleet, from a desktop session, claimed by
 one right now, handed back, and amended out from under a reading.
+
+**The demo's setup reading is every check `ok`, and carries no `config` or `config_gap` row.** Those
+two kinds are real and the rail draws them ([Setup](#setup)); what the demo has no honest way to show
+is the _fix_. A config row's body opens the key on the config page and its strip applies a remedy, and
+the Pages build writes no file and restarts no harness — so every config row in the demo was a red or
+amber alert whose every control was a dead end, four of them, sitting above the work the demo exists to
+show. Worse, they were alerts about the demo's own fixture: `agentMode is raw`, `no config file at all`,
+`userId is unset` are true of the mock and false of anything a visitor would run, so the first thing the
+cockpit said to a new reader was that it was broken. The fake reports a harness that is configured and
+healthy, and the rail opens on the fleet.
 
 **The demo carries one review pack, and it is a whole one.** PR #413 has a written and checked pack
 ([31](31-review-packs.md)), reached from the pull request page's masthead control the way a real one

@@ -253,8 +253,8 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'starting the containers',
     lines: toolLines('09:41:12', 'Bash', 'docker compose up -d', '09:41:38', [
-      'Container demo-shop-postgres  Started',
-      'Container demo-shop-redis     Started',
+      'Container markdown-magpie-postgres  Started',
+      'Container markdown-magpie-redis     Started',
     ]),
   },
   {
@@ -268,7 +268,7 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
     phase: 'seeding the sample data',
     lines: [
       'The compose file brings the database up empty, so it needs seeding before the app has anything to draw.',
-      ...toolLines('09:42:21', 'Bash', 'npm run seed', '09:42:44', ['seeded 240 invoices across 18 suppliers']),
+      ...toolLines('09:42:21', 'Bash', 'npm run seed', '09:42:44', ['seeded 240 documents across 18 repositories']),
     ],
   },
   {
@@ -306,9 +306,9 @@ const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'taking the containers down',
     lines: toolLines('10:02:15', 'Bash', 'docker compose down', '10:02:39', [
-      'Container demo-shop-postgres  Removed',
-      'Container demo-shop-redis     Removed',
-      'Network demo-shop_default     Removed',
+      'Container markdown-magpie-postgres  Removed',
+      'Container markdown-magpie-redis     Removed',
+      'Network markdown-magpie_default     Removed',
     ]),
   },
 ];
@@ -322,10 +322,10 @@ class DemoServer {
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
   private lines: string[] = [
-    'Bringing #395 up on this machine — the compose file first, then the app.',
+    'Bringing #390 up on this machine — the compose file first, then the app.',
     ...toolLines('09:12:04', 'Bash', 'docker compose up -d', '09:12:31', [
-      'Container demo-shop-postgres  Started',
-      'Container demo-shop-redis     Started',
+      'Container markdown-magpie-postgres  Started',
+      'Container markdown-magpie-redis     Started',
     ]),
     ...toolLines('09:12:32', 'Bash', 'npm run dev -- --host', '09:12:34', ['VITE ready in 1180 ms']),
     'Up on http://localhost:5173. Nothing needed that the instruction did not mention.',
@@ -1355,7 +1355,7 @@ class DemoServer {
       id: `run-${String(this.state.localRun === null ? 2 : Number(this.state.localRun.id.split('-')[1] ?? 1) + 1)}`,
       originRef: `issue:${String(issue)}`,
       ref: ref ?? facts?.ref ?? 'main',
-      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      dir: '/Users/you/code/markdown-magpie/.lubbdubb/local-run',
       commit: DEMO_TIP,
       pid: 48000 + issue,
       status: 'starting',
@@ -4429,7 +4429,7 @@ async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; re
 const DEMO_REPO_ROOT = '/Users/you/code/markdown-magpie';
 const DEMO_ORIGIN = 'git@github.com:example/markdown-magpie.git';
 
-let demoSetupWritten = false;
+let demoSetupWritten = true;
 
 let demoConfigText = '{}\n';
 
@@ -4443,79 +4443,35 @@ function demoChanges(set: Record<string, unknown>): ConfigChange[] {
 }
 
 function demoSetupReading(): SetupPayload {
-  const checks: SetupCheck[] = demoSetupWritten
-    ? [
-        {
-          id: 'pointed',
-          label: 'Pointed at real work',
-          verdict: 'ok',
-          detail: 'issues via github, source control via github',
-        },
-        { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'GITHUB_TOKEN present' },
-        { id: 'identity', label: 'Who you are', verdict: 'ok', detail: 'userId is you' },
-        {
-          id: 'watch',
-          label: 'Something to work',
-          verdict: 'warn',
-          detail:
-            'none of the 12 open item(s) carries magpie-watch, so nothing is eligible and the fleet will correctly do nothing.',
-          remedy: 'Tag something from the Tickets tab, or create magpie-watch on the tracker.',
-        },
-        { id: 'agent', label: 'Agent runtime', verdict: 'ok', detail: 'stream · 2.1.4' },
-        {
-          id: 'billing',
-          label: 'Model billing',
-          verdict: 'bad',
-          detail:
-            'ANTHROPIC_API_KEY is set, and agents inherit it — in non-interactive mode the CLI uses the key whenever it is present, with no prompt, so every agent bills the API rather than the login.',
-          remedy: 'Unset it in the shell that starts the harness unless that is what you meant.',
-        },
-      ]
-    : [
-        {
-          id: 'pointed',
-          label: 'Pointed at real work',
-          verdict: 'warn',
-          detail: 'No config file at all, so this is the shipped mock: a fake tracker and a fake agent.',
-          remedy: 'Answer the two questions and Setup will write the file.',
-        },
-        { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'the fake provider needs none' },
-        {
-          id: 'identity',
-          label: 'Who you are',
-          verdict: 'warn',
-          detail:
-            'userId is unset, so all three ownership gates are off: any tagger counts, filed tickets go unassigned, and every open pull request is surfaced.',
-          remedy: 'Setup resolves it from your email against the provider.',
-        },
-        {
-          id: 'watch',
-          label: 'Something to work',
-          verdict: 'unknown',
-          detail: 'no cycle has read the world yet, so there is nothing to count.',
-        },
-        {
-          id: 'agent',
-          label: 'Agent runtime',
-          verdict: 'warn',
-          detail: 'agentMode is raw, the mock — a dispatch writes a transcript and never calls a model.',
-          remedy: 'Set agentMode to stream.',
-        },
-        {
-          id: 'billing',
-          label: 'Model billing',
-          verdict: 'bad',
-          detail:
-            'ANTHROPIC_API_KEY is set, and agents inherit it — in non-interactive mode the CLI uses the key whenever it is present, with no prompt, so every agent bills the API rather than the login.',
-          remedy: 'Unset it in the shell that starts the harness unless that is what you meant.',
-        },
-      ];
+  const checks: SetupCheck[] = [
+    {
+      id: 'pointed',
+      label: 'Pointed at real work',
+      verdict: 'ok',
+      detail: 'issues via github, source control via github — example/markdown-magpie',
+    },
+    { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'GITHUB_TOKEN present' },
+    { id: 'identity', label: 'Who you are', verdict: 'ok', detail: 'userId is you' },
+    {
+      id: 'watch',
+      label: 'Something to work',
+      verdict: 'ok',
+      detail: '11 of the 17 open item(s) carry lubbdubb-watch, so the fleet has work to pick up.',
+    },
+    { id: 'agent', label: 'Agent runtime', verdict: 'ok', detail: 'stream · 2.1.4' },
+    {
+      id: 'billing',
+      label: 'Model billing',
+      verdict: 'ok',
+      detail: 'ANTHROPIC_API_KEY is unset — agents bill the login.',
+    },
+  ];
   return {
     configFile: '/Users/you/code/LubbDubb/lubbdubb.config.json',
     configFileExists: demoSetupWritten,
     prefill: {
       email: 'you@example.com',
-      repoRoot: '/Users/you/code/LubbDubb',
+      repoRoot: DEMO_REPO_ROOT,
       repoRootIsSelf: false,
     },
     checks,
@@ -4876,8 +4832,8 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
 const DEMO_STATE_MOVES = new Map<number, string>();
 
 const DEMO_FEATURES = [
-  { number: 900, title: 'Payments' },
-  { number: 901, title: 'Onboarding' },
+  { number: 900, title: 'Retrieval and answering' },
+  { number: 901, title: 'Indexing and ingestion' },
   { number: 902, title: 'Platform hygiene' },
   { number: 300, title: 'Source-grounded document patrols' },
   { number: 903, title: 'Search and console polish' },
@@ -5088,7 +5044,11 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       changedAt: iso(30),
     }),
     goal(341, 'Answers cite a heading the section splitter renamed', 'queued', { issueType: 'Bug', changedAt: iso(1) }),
-    goal(395, 'Snapshot downloads 401 in the review console', 'queued', { workItemState: 'Ready', changedAt: iso(12) }),
+    goal(395, 'Snapshot downloads 401 in the review console', 'delivered', {
+      workItemState: 'Active',
+      costUsd: 9.42,
+      changedAt: iso(200 / 60),
+    }),
     goal(379, 'Make retrieval smarter', 'queued', { workItemState: 'New', changedAt: iso(52) }),
   ];
 
@@ -5102,6 +5062,16 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     [
       364,
       { summary: 'PR #410 landed the deadlock note and the console warning with it.', by: 'assessor', at: iso(1.5) },
+    ],
+    [
+      395,
+      {
+        summary:
+          'All four parts merged. A download link opens in a new tab with auth on and with auth off, and a ' +
+          'tampered capability is refused.',
+        by: 'assessor',
+        at: iso(200 / 60),
+      },
     ],
   ]);
   const blocking = new Map<number, Omit<FeatureBlockRow, 'number' | 'title'>>([
@@ -5369,33 +5339,33 @@ const DEMO_UNTRIAGED: {
   issueType: string;
 }[] = [
   {
-    number: 412,
-    title: 'Document the two-watcher requirement for maintenance jobs',
+    number: 336,
+    title: 'An answer cites the same section twice when two headings match',
     hoursAgo: 5,
-    issueType: 'Task',
-  },
-  {
-    number: 409,
-    title: 'Gap clustering merges unrelated questions into one gap',
-    hoursAgo: 30,
     issueType: 'Bug',
   },
   {
-    number: 402,
-    title: 'Spike: replace node-pty with a portable shim',
-    hoursAgo: 72,
+    number: 348,
+    title: 'Spike: stream the Markdown parser instead of reading whole files',
+    hoursAgo: 30,
     issueType: 'Tech Debt',
   },
   {
-    number: 398,
+    number: 355,
     title: 'Sweep docs/ for links that no longer resolve',
-    hoursAgo: 96,
+    hoursAgo: 72,
     issueType: 'User Story',
   },
   {
-    number: 371,
-    title: 'Retire the legacy priority override table',
-    hoursAgo: 200,
+    number: 361,
+    title: 'Index a repository over SSH as well as HTTPS',
+    hoursAgo: 96,
     issueType: 'Capability',
+  },
+  {
+    number: 373,
+    title: 'Retire the legacy citation-anchor table',
+    hoursAgo: 200,
+    issueType: 'Task',
   },
 ];
