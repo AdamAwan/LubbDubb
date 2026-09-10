@@ -87,6 +87,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
 [--model <model>]
+[--effort <level>]
 [...claudeArgs]
 ```
 
@@ -134,6 +135,14 @@ Points that are load-bearing:
   bullet is about is unchanged, and deliberately: the pin is keyed on the dispatch's _origin_, never
   on the run, so a retry and a re-dispatch resolve what the first attempt resolved.
   → [02](02-configuration.md#model-assignment-by-rule), [02](02-configuration.md#pinning-one-goal-to-a-profile)
+- **`--permission-mode` is per-launch too, and for a reason `--model` does not have: the two are one
+  decision.** The fleet-wide `agentPermissionMode` is the value unless the task's profile named its
+  own, in which case the profile's wins — resolved at _dispatch_ beside the model and stored on the
+  row, so a boot-`resume` re-launches under the posture the conversation started on. It is a profile
+  field because a mode is a per-model fact: the default is `auto`, the smallest models do not take it,
+  and `claude` answers a mode it will not accept the way it answers a re-used `--session-id` — exit 1,
+  no stream event, an agent that reads as having died for no reason.
+  → [02](02-configuration.md#model-assignment-by-rule)
 - When a launch carries the tool channel, `MCP_PROTOCOL_ADDENDUM` is appended too — see
   [11](11-mcp-tools.md).
 
@@ -191,9 +200,10 @@ can put something in front of the whole fleet without anything ranking or gating
 
 ## Permission model (issue #130)
 
-`agentPermissionMode: 'acceptEdits'` (the default) auto-accepts **file edits only**, so a headless
-agent — the production default, with no human at the permission prompt — hangs the moment it runs
-`npm run check`, `git` or `gh`. The old workaround, `bypassPermissions`, removes _every_ gate at once
+`agentPermissionMode: 'acceptEdits'` — the default until the CLI grew `auto`, and still what a profile
+on a model that cannot take `auto` falls back to — auto-accepts **file edits only**, so a headless
+agent, with no human at the permission prompt, hangs the moment it runs `npm run check`, `git` or `gh`.
+The old workaround, `bypassPermissions`, removes _every_ gate at once
 in a worktree of the real repo with the operator's shell environment inherited, and is refused under
 root. Two mechanisms replace that, on an "authorise the routine, ask about the rest" split:
 
@@ -209,7 +219,11 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
   [11](11-mcp-tools.md#request_permission) for the `request_permission` tool, the blocking
   `PermissionDesk`, and how the operator's Allow/Deny reaches the same live agent.
 
-`agentPermissionMode` stays available and unchanged, root-refusal caveat included.
+`agentPermissionMode` stays available, root-refusal caveat included. Its **default is now `auto`**,
+which leaves both mechanisms above exactly as they are: the allow-list is evaluated first either way,
+and what `auto` declines to take on itself still reaches the backstop rather than a prompt nobody is
+at. A profile may override the mode for its own launches — the model and the posture it can launch
+under are one decision → [02](02-configuration.md#model-assignment-by-rule).
 
 ### Reading outside the worktree
 

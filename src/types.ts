@@ -215,6 +215,7 @@ export interface TaskSummary {
   mcpServers?: ExtraMcpServer[] | null;
   model?: string | null;
   effort?: string | null;
+  permissionMode?: string | null;
   profile?: string | null;
   profileSource?: string | null;
   status: TaskStatus;

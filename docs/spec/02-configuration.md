@@ -792,7 +792,7 @@ can ever trip the watch. → [18](18-observability.md#the-burn-watch)
 | `agentMode`            | `'stream' \| 'raw'`             | `'stream'`              | Which runtime launches agents. `stream` is real Claude Code over headless stream-JSON; `raw` runs `claudeCommand`/`claudeArgs` verbatim over a terminal and calls no model (the mock agent, and the tests).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `claudeCommand`        | `string`                        | `'claude'`              | The command spawned for an agent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `claudeArgs`           | `string[]`                      | `[]`                    | Extra args, appended **after** the harness's own, so an explicit flag there has the last word.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `agentPermissionMode`  | `string`                        | `'acceptEdits'`         | Passed to `--permission-mode`. `acceptEdits` auto-accepts file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `agentPermissionMode`  | `string`                        | `'auto'`                | Passed to `--permission-mode`. `auto` (the default) lets the CLI judge each call and escalates only what it will not take on itself; `acceptEdits` is the narrower posture — file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root. Not every model supports every mode, so a profile that pins a model may pin a mode with it — see [Model assignment](#model-assignment-by-rule).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `agentModels`          | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on and how hard, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model` or `--effort`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `agentAllowedTools`    | `string[]`                      | JS toolchain + git + gh | Tool allow rules merged into `--settings` as `permissions.allow` (Claude Code syntax, e.g. `Bash(npm:*)`). Pre-approves the mechanical validate/commit/push commands so the default config completes a task unattended without `bypassPermissions`. Never on `--allowedTools` (that carries the MCP grants). Default: `Bash(npm:*)`, `Bash(npx:*)`, `Bash(pnpm:*)`, `Bash(yarn:*)`, `Bash(node:*)`, `Bash(git:*)`, `Bash(gh:*)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `agentPromptDelayMs`   | `number`                        | `1200`                  | `raw` only: delay before the first message is delivered. Stream mode uses `0` — stdin is ready the moment it spawns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -817,7 +817,12 @@ a model per _kind_ of work:
 {
   "agentModels": {
     "profiles": {
-      "fast": { "model": "haiku", "rank": 1, "description": "Mechanical, well-specified work." },
+      "fast": {
+        "model": "haiku",
+        "permissionMode": "acceptEdits",
+        "rank": 1,
+        "description": "Mechanical, well-specified work."
+      },
       "standard": { "model": "sonnet", "effort": "medium", "rank": 2, "description": "Ordinary feature and bug work." },
       "deep": { "model": "opus", "effort": "medium", "rank": 3, "description": "Work whose shape is unclear." }
     },
@@ -845,13 +850,13 @@ a model per _kind_ of work:
   together. Splitting the id is the mechanism this file offers for that; the two still share one
   cooldown origin, because the split is about price, not about accounting.
   → [05](05-dispatcher.md#pr-base-update--two-arms)
-- **A rule points at a named profile, and a profile is a model and the depth it runs at.** The
-  indirection buys a name (`deep`, `fast`) that survives a model being replaced: when a new model
-  ships, one profile value changes and every rule pointing at it follows. A profile deliberately
-  carries nothing else — no permission mode, no extra args. `claudeArgs` stays the single global
-  escape hatch, which structurally removes the risk of a profile's args clobbering the
-  `--allowedTools` MCP grants; both fields a profile does carry are flags the harness emits itself,
-  which is what keeps them out of that argument.
+- **A rule points at a named profile, and a profile is a model, the depth it runs at, and the
+  permission posture it launches under.** The indirection buys a name (`deep`, `fast`) that survives a
+  model being replaced: when a new model ships, one profile value changes and every rule pointing at it
+  follows. A profile carries nothing beyond those three — no extra args. `claudeArgs` stays the single
+  global escape hatch, which structurally removes the risk of a profile's args clobbering the
+  `--allowedTools` MCP grants; all three fields a profile does carry are flags the harness emits
+  itself, which is what keeps them out of that argument.
 - **The two fields resolve together, as one profile.** A lookup that fell back for the model and not
   the effort could pair a cheap model with a depth chosen for an expensive one, so `resolveAgentProfile`
   returns a whole profile or nothing.
@@ -863,15 +868,26 @@ a model per _kind_ of work:
   reordering the block would silently re-rank the fleet. `description` is the whole of what the
   appraiser is told about a deployment's profiles when it proposes one, so it is written as
   instructions to an agent about when to pick this profile rather than as a note to the operator.
+- **`permissionMode` is optional, and it is there because a permission posture is a per-_model_ fact.**
+  `agentPermissionMode` is fleet-wide and its default is `auto`, which the smallest models do not
+  support — so a profile that pins such a model would launch on a mode it cannot take, and `claude`
+  answers that with exit 1 and no stream event, which reads to the harness as a process that died for
+  no reason ([10](10-agent-runtimes.md#launch-arguments)). Set on a profile, it replaces
+  `agentPermissionMode` for that profile's launches and nothing else; omitted, the profile launches on
+  `agentPermissionMode`. It is resolved and stored with the model and the effort, on the same task row
+  and for the same reason: a boot-`resume` re-launches under the posture the conversation started on.
+
 - **`effort` is optional, and omitting it is not the middle setting.** `claude --effort` takes
   `low`/`medium`/`high`/`xhigh`/`max`, and the CLI's own default is the top of that ladder — so an
   unassigned rule is the _expensive_ one, not the neutral one. This is the argument for setting
   `default`: a policy that covers only some rules leaves the rest at the CLI's default depth.
   A profile that omits `effort` passes no flag, which is what the smallest models need — they refuse
   the flag outright, so a cheap model and a shallow depth are alternative levers, not composable ones.
-- **The model string and the effort level are both unvalidated.** Only the installed `claude` knows
-  which models exist and which of them accept `--effort`, so either being wrong fails at _spawn_ — as
-  a failed agent — rather than at boot.
+- **The model string, the effort level and the permission mode are unvalidated as _values_.** Only
+  the installed `claude` knows which models exist, which of them accept `--effort`, and which modes
+  each will take, so one being wrong fails at _spawn_ — as a failed agent — rather than at boot. The
+  mode is deliberately not checked against a list of known modes: `auto` was a mode the CLI did not
+  have, and an enum here would have refused the default this file now ships.
 - **`default` covers every rule with no `byRule` entry, and every run dispatched outside a rule.** An
   operator who sets only this has moved the whole fleet with one line. Omitted, an unassigned rule
   carries neither flag.
@@ -891,6 +907,8 @@ from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
   rather than starting it with a profile the resolver reads as having no model;
 - an `effort` that is not one of the five levels, which would otherwise reach the CLI as a flag value
   it rejects — at spawn, per agent, rather than once at boot;
+- a `permissionMode` that is present but not a non-empty string. Only its _shape_ is checked, for the
+  reason above: the set of modes lives in the installed CLI, not here;
 - a missing or non-numeric `rank`, a missing or empty `description`, or two profiles sharing a rank.
   The first two are refused rather than defaulted because both have a _silent_ wrong answer available:
   an inferred rank reads as a deliberate ordering, and an empty description makes every appraisal proposal
