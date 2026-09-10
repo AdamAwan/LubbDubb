@@ -268,6 +268,13 @@ plan called for has quietly redefined itself, and the part would never be built 
 
 That makes the **declaration** the decision, which is where it belongs:
 
+- **A check about how something _looks_ is not an area, and the bar says so.** A legibility check at
+  a particular width, a single component's rendering, a truncation judgement: there is no journey to
+  select and no area in the suite that could honestly claim it. A planner handed eight areas and told
+  to pick the one that fits has an obvious wrong move — pick the nearest — and it produces a green row
+  that verified something the check does not talk about, which is worse than the manual row it
+  replaced. The honest answer there is no test part: the check stays a person's, or the snapshot
+  suite's.
 - **Most goals do not get one.** The bar is strict and it is the same bar
   [20](20-validation.md#the-bar) states one layer over: automate when the failure would be **silent
   and consequential**, which is usually a common path. A refactor whose claim is that behaviour did
@@ -1020,7 +1027,12 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   declare a part nobody can build. **Built**: `testPartNote` (`src/plans/planning.ts`), computed once
   in `src/system.ts`, threaded through `RuleContext` and the `RuleDispatcher` constructor, and
   concatenated onto both renderings in `src/dispatcher/rules/issuePlan.ts` — never imported into
-  `src/dispatcher/` from `src/environments/`;
+  `src/dispatcher/` from `src/environments/`. **The same string is returned by `plan_read` on the
+  desktop channel**, as `testPart`, computed there from `deps.environments` and the offering cache:
+  `plan_amend` accepts `coverage` because it spreads the same shape, so a discussion that was never
+  handed the bar has the capability and not the invitation, and the one correction a person at their
+  keyboard cannot make is the one that makes a check row runnable
+  ([08](08-planning.md#discussing-a-plan));
 - the **`state_declare` instruction** on the two prompts that dispatch work — **built**, as
   `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system.ts`, threaded through
   `RuleContext` and appended to the `issue-pickup` and `plan-part` renderings, so nothing under

@@ -4,7 +4,7 @@ import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { amendPlanInPlace, proposePlanAmendment } from '../plans/planAmendment.js';
-import { issueOrigin } from '../plans/planning.js';
+import { issueOrigin, testPartNote } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
@@ -318,10 +318,25 @@ const planRead: DesktopToolFactory = (deps) => ({
       parts: currentPlanSummary(plan, parts, deps.prRefStyle ?? '#'),
       acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
       validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
+      ...testPartSection(deps),
       next: PLAN_READ_NEXT,
     });
   },
 });
+
+/**
+ * The test-part bar, on the discuss surface. It is the same string the planning prompts are given —
+ * `testPartNote(environments, offerings)` — because `coverage` refuses to be declared without it: the
+ * field is accepted here, but an agent that was never told a suite exists, or which areas it offers,
+ * can only leave it out or invent an area the pre-flight will refuse. The offering cache is what makes
+ * this cheap: the areas are known before anything has arrived, so a goal whose coverage was missed is
+ * corrected in a discussion rather than by replanning it.
+ * → docs/spec/08-planning.md#discussing-a-plan
+ */
+function testPartSection(deps: DesktopToolDeps): { testPart?: string } {
+  const note = testPartNote(deps.environments, deps.store.listSelectorOfferings()).trim();
+  return note === '' ? {} : { testPart: note };
+}
 
 function submittedPlanDocument(args: Record<string, unknown>): Record<string, unknown> {
   return {

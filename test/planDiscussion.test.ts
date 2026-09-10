@@ -13,7 +13,9 @@ import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { desktopDeps } from './support/desktop.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
+import { testPartNote } from '../src/plans/planning.js';
 import type { Plan } from '../src/types.js';
+import type { EnvironmentConfig } from '../src/environments/policy.js';
 
 test('plan_read hands the session the verdict, the parts and the agenda', async () => {
   const { system, session, close } = await buildDesk();
@@ -174,13 +176,53 @@ test('discussing a plan dispatches nothing', async () => {
   await close();
 });
 
+const WITH_BROWSER: EnvironmentConfig[] = [
+  {
+    name: 'acceptance',
+    at: 'echo unused',
+    validate: { permits: ['check'], browser: { runner: 'npm run e2e', listSelectors: 'npm run e2e -- --list' } },
+  },
+];
+
+test('plan_read hands the discussion the same test-part bar the planning prompts carry', async () => {
+  const { system, session, close } = await buildDesk(WITH_BROWSER);
+  seedAwaitingApprovalPlan(system);
+  system.store.recordSelectorOffering('acceptance', [
+    { selector: 'Checkout Tests', tests: 4 },
+    { selector: 'Login Tests', tests: 2 },
+  ]);
+
+  const read = await session.call('plan_read', { issue: 231 });
+  assert.ok(!read.isError, read.content[0]?.text);
+  const body = JSON.parse(read.content[0]!.text) as Record<string, unknown>;
+  const bar = body.testPart as string;
+  assert.ok(typeof bar === 'string' && bar !== '', 'the bar reaches the operator’s own keyboard, not only the fleet');
+  assert.equal(bar, testPartNote(WITH_BROWSER, system.store.listSelectorOfferings()).trim(), 'and it is that string');
+  assert.match(bar, /`Checkout Tests`, `Login Tests`/, 'enumerated from the offering cache, so nothing is invented');
+  assert.match(bar, /silent and consequential/, 'the bar comes with it rather than the areas alone');
+  await close();
+});
+
+test('plan_read carries no bar where no environment declares a suite', async () => {
+  const { system, session, close } = await buildDesk();
+  seedAwaitingApprovalPlan(system);
+
+  const read = await session.call('plan_read', { issue: 231 });
+  const body = JSON.parse(read.content[0]!.text) as Record<string, unknown>;
+  assert.equal(body.testPart, undefined, 'a discussion is never told to declare a part nobody can build');
+  await close();
+});
+
 type Session = NonNullable<ReturnType<McpDesktopServer['session']>>;
 
-async function buildDesk(): Promise<{ system: System; session: Session; close: () => Promise<void> }> {
+async function buildDesk(
+  environments: EnvironmentConfig[] = [],
+): Promise<{ system: System; session: Session; close: () => Promise<void> }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
+    environments,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
