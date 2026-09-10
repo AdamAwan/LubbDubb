@@ -1,9 +1,28 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, GoalSection, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
+import type {
+  GoalPageView,
+  GoalSection,
+  GoalStage,
+  GoalStageAt,
+  GoalTab,
+  GoalTabBadge,
+  GoalTabOpening,
+  PartGroup,
+} from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { buildGoalStrip, goalSectionsOpen, reachCount, GOAL_SECTIONS } from '../view/goalPage.js';
+import {
+  buildGoalStrip,
+  goalSectionsOpen,
+  goalTabBadges,
+  goalTabOpening,
+  reachCount,
+  GOAL_SECTIONS,
+  GOAL_TABS,
+  GOAL_TAB_LABEL,
+  GOAL_TAB_OF,
+} from '../view/goalPage.js';
 import type {
   Agent,
   EnvironmentGate,
@@ -91,6 +110,16 @@ const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
   tail: 'tail',
 };
 
+/* Which pane each stage of the track lives in. The strip and the tabs are one
+   control — a stage that scrolled to a section behind a closed pane would be a
+   button that appears to do nothing. → docs/spec/17-cockpit.md#the-panes */
+const STAGE_TAB: Record<GoalStageAt, GoalTab> = {
+  plan: 'work',
+  validation: 'validation',
+  environments: 'shipping',
+  tail: 'record',
+};
+
 const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
 export function GoalPage({
@@ -103,16 +132,148 @@ export function GoalPage({
   actions: CockpitActions;
 }): JSX.Element {
   const folds = buildFolds(page, view, actions);
+  const jump = buildJump(folds, actions);
+  const opening = goalTabOpening(page);
+  /* The operator's pick beats the rule, and once made it is the only thing read:
+     a goal that lands in an environment while somebody is reading its plan must
+     not take the pane out from under them.
+     → docs/spec/17-cockpit.md#which-pane-opens */
+  const tab = view.goalTab ?? opening.tab;
   return (
     <div className="cn-goal">
-      <Header page={page} view={view} actions={actions} folds={folds} />
+      <Header page={page} view={view} actions={actions} jump={jump} />
       <OrphanBand issue={page.issue} view={view} actions={actions} />
-      <TrackStrip page={page} folds={folds} />
+      <TrackStrip page={page} jump={jump} />
+      {/* Above the tabs, never inside one: an ask is the reason the page was
+          opened, and a pane is a thing you have to be on to see. */}
       {parentAskElsewhere(page).map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
+      <GoalTabs page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
+      <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
+        {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
+        {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+      </div>
+    </div>
+  );
+}
+
+function GoalTabs({
+  page,
+  tab,
+  chosen,
+  opening,
+  actions,
+}: {
+  page: GoalPageView;
+  tab: GoalTab;
+  chosen: GoalTab | null;
+  opening: GoalTabOpening;
+  actions: CockpitActions;
+}): JSX.Element {
+  const badges = goalTabBadges(page);
+  return (
+    <div className="cn-gtabs" role="tablist" aria-label="This goal">
+      {GOAL_TABS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          id={`cn-tab-${id}`}
+          aria-selected={id === tab}
+          aria-controls={`cn-pane-${id}`}
+          className={`cn-gtab ${id === tab ? 'cn-on' : ''}`}
+          title={
+            id === tab && chosen === null
+              ? `Opened here because ${opening.why}`
+              : `What this goal's ${GOAL_TAB_LABEL[id].toLowerCase()} says`
+          }
+          onClick={() => {
+            if (id !== tab) logUsage('goal.expand');
+            actions.openGoalTab(id);
+          }}
+        >
+          {GOAL_TAB_LABEL[id]}
+          <Badge badge={badges[id]} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* Null is drawn as nothing, never as a zero: a badge reading `0` says a thing
+   was counted, which is not what an empty pane means. */
+function Badge({ badge }: { badge: GoalTabBadge | null }): JSX.Element | null {
+  if (badge === null) return null;
+  return <i className={`cn-gtb ${badge.tone === null ? '' : `t-${badge.tone}`}`}>{badge.text}</i>;
+}
+
+function TicketPane({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  return (
+    <>
       <Ticket issue={page.issue} refUrls={view.state.refUrls} fold={folds.ticket} />
+      <div className="cn-gcols">
+        <div className="cn-stack">
+          <Instructions issue={page.issue} actions={actions} />
+        </div>
+        <div className="cn-stack">
+          <Sequence page={page} fold={folds.sequence} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function WorkPane({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <>
       <PlanWaves page={page} view={view} actions={actions} />
+      <div className="cn-gcols">
+        <div className="cn-stack">
+          <PullRequests page={page} view={view} actions={actions} />
+        </div>
+        <div className="cn-stack">
+          <OnThisGoal page={page} view={view} actions={actions} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ValidationPane({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  return (
+    <>
       <Validation
         page={page}
         actions={actions}
@@ -122,22 +283,52 @@ export function GoalPage({
       />
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
       <RemoteValidation page={page} view={view} actions={actions} fold={folds.remoteValidation} />
+    </>
+  );
+}
+
+function ShippingPane({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  return (
+    <>
+      <Environments page={page} actions={actions} now={view.now} fold={folds.environments} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
-      <Sequence page={page} fold={folds.sequence} />
+    </>
+  );
+}
+
+function RecordPane({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  return (
+    <>
       <div className="cn-gcols">
         <div className="cn-stack">
-          <PullRequests page={page} view={view} actions={actions} />
-          <Environments page={page} actions={actions} now={view.now} fold={folds.environments} />
+          <Spend issue={page.issue} />
         </div>
         <div className="cn-stack">
-          <OnThisGoal page={page} view={view} actions={actions} />
-          <Instructions issue={page.issue} actions={actions} />
           <Tail issue={page.issue} actions={actions} fold={folds.tail} />
-          <Spend issue={page.issue} />
         </div>
       </div>
       <Reference page={page} view={view} fold={folds.record} />
-    </div>
+    </>
   );
 }
 
@@ -168,34 +359,46 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-function jumpTo(anchor: string, fold: Fold | null): void {
-  fold?.reveal();
-  requestAnimationFrame(() => {
-    document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  });
+/**
+ * Going to a reading from somewhere else on the page: select the pane it lives
+ * in, unfold its section, then scroll. Two frames rather than one — the first
+ * paints the pane the tab just selected, and an anchor inside a pane that has
+ * not rendered yet resolves to nothing.
+ */
+type GoalJump = (tab: GoalTab, section: GoalSection | null, anchor: string) => void;
+
+function buildJump(folds: Record<GoalSection, Fold>, actions: CockpitActions): GoalJump {
+  return (tab, section, anchor) => {
+    actions.openGoalTab(tab);
+    if (section !== null) folds[section].reveal();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    });
+  };
 }
 
 function parentAskElsewhere(page: GoalPageView): NeedRow[] {
   return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
 }
 
-function TrackStrip({ page, folds }: { page: GoalPageView; folds: Record<GoalSection, Fold> }): JSX.Element {
+function TrackStrip({ page, jump }: { page: GoalPageView; jump: GoalJump }): JSX.Element {
   return (
     <div className="cn-strip">
       {buildGoalStrip(page).map((stage) => (
-        <Stage key={stage.at} stage={stage} folds={folds} />
+        <Stage key={stage.at} stage={stage} jump={jump} />
       ))}
     </div>
   );
 }
 
-function Stage({ stage, folds }: { stage: GoalStage; folds: Record<GoalSection, Fold> }): JSX.Element {
-  const section = STAGE_SECTION[stage.at];
+function Stage({ stage, jump }: { stage: GoalStage; jump: GoalJump }): JSX.Element {
   return (
     <button
       type="button"
       className={`cn-tk cn-t-${stage.tone}`}
-      onClick={() => jumpTo(ANCHOR[stage.at], section === null ? null : folds[section])}
+      onClick={() => jump(STAGE_TAB[stage.at], STAGE_SECTION[stage.at], ANCHOR[stage.at])}
       title={`${stage.label}: ${stage.reading} — go to it`}
     >
       <span className="cn-tkk">{stage.label}</span>
@@ -251,12 +454,12 @@ function Header({
   page,
   view,
   actions,
-  folds,
+  jump,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
-  folds: Record<GoalSection, Fold>;
+  jump: GoalJump;
 }): JSX.Element {
   const { issue } = page;
   const { config } = view.state;
@@ -349,7 +552,7 @@ function Header({
           <button
             type="button"
             className={`tag tag-fill tag-button ${issue.validation.state === 'clear' ? 't-green' : 't-amber'}`}
-            onClick={() => jumpTo(ANCHOR.validation, folds.validation)}
+            onClick={() => jump(GOAL_TAB_OF.validation, 'validation', ANCHOR.validation)}
             title={
               issue.validation.state === 'clear'
                 ? `All ${issue.validation.total} validation checks are settled — go to them`
@@ -369,7 +572,7 @@ function Header({
           <button
             type="button"
             className={`tag tag-fill tag-button cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
-            onClick={() => jumpTo(LOCAL_VALIDATION_ANCHOR, folds.localValidation)}
+            onClick={() => jump(GOAL_TAB_OF.localValidation, 'localValidation', LOCAL_VALIDATION_ANCHOR)}
             title={issue.localValidation.summary ?? 'Go to what the local validation found'}
           >
             <Icon name="flask" size={12} />

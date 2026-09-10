@@ -10,7 +10,7 @@ import {
   widenedFor,
   type Place,
 } from '../web/src/cockpit/place.js';
-import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
+import { GOAL_SECTIONS, GOAL_TABS } from '../web/src/view/goalPage.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
 
@@ -290,6 +290,15 @@ test('every foldable goal section round-trips, opened or folded', () => {
     const folded = at({ goal: 'issue:142', goalShut: [section] });
     assert.deepEqual(readPlace(placeQuery(folded)), folded, section);
   }
+});
+
+test('every pane of the goal page round-trips, and the rule\u2019s own landing is a bare URL', () => {
+  for (const pane of GOAL_TABS) {
+    const at_ = at({ goal: 'issue:142', goalTab: pane });
+    assert.deepEqual(readPlace(placeQuery(at_)), at_, pane);
+  }
+  assert.equal(placeQuery(at({ goal: 'issue:142' })), '?goal=issue%3A142', 'no pick is not a place');
+  assert.equal(readPlace('?goal=issue:142&pane=nowhere').goalTab, null, 'a pane nobody drew hands it back to the rule');
 });
 
 test('a hand-edited fold list drops a section that does not exist', () => {

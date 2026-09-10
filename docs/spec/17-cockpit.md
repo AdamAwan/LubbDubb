@@ -461,6 +461,7 @@ once.
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                          |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1107,7 +1108,7 @@ Order on the page, top to bottom:
 
 1. **The goal header**, in three rows with fixed roles — what the goal _is_, then what anybody has
    decided about it, then what you can do to it ([The header](#the-header)).
-   1a. **The track** — the goal's pipeline in one row, each stretch a way to the section that owns it
+   1a. **The track** — the goal's pipeline in one row, each stretch a way to the pane that owns it
    ([The track](#the-track)).
 2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
    asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
@@ -1117,25 +1118,75 @@ Order on the page, top to bottom:
    goal page's private component, because the goal page is not the only place an ask is read: the ask
    panel draws the same band for a row with no goal page. One band, two placements — a second wiring
    is a second set of verdicts to keep in step.
-3. **The ticket as it stood at pickup**, drawn through `renderRichText` because the body is the
-   _tracker's_ prose and Azure DevOps writes it as HTML ([Tracker-authored prose](#tracker-authored-prose)).
-   **Open until the work starts, folded from the moment it has**
-   ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)).
-4. **The plan**, left to right in dispatch order. **Full width**, because the waves are a board read
-   left to right and a column is what kept them stacked to 1500px.
-5. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
-   check. Full width ([Validation](#validation-on-the-goal)), and **below the plan**, which is the
-   ordering the card itself has always asked for: its own subtitle says the checks are written by the
-   plan, and the plan was underneath it. Then **Signals** — what this goal asked production to show for
-   the work. Both are folded until the work is somewhere
-   ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)).
-6. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
-   requests for this goal**, open and closed, with the court chip and the checks mark, then
-   **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
-   it now, [below](#who-is-on-the-goal)), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
-   column.
-7. **The record** — this goal's own subtree of the durable work graph, folded away at the foot of the
-   page ([The record](#the-record-on-the-goal-it-belongs-to)).
+3. **The five panes**, and the one of them the goal's own state opens ([The panes](#the-panes)).
+
+Everything above the panes is drawn on every goal whatever pane is open: the header, the track and
+the bands are the reasons the page was opened, and a pane is a thing you have to be on to see. **An ask
+behind a tab is an ask nobody answers**, which is the one regression this arrangement had to avoid.
+
+### The panes
+
+The page draws fourteen cards, and on a goal that has shipped nine of them have something in them.
+Every one earned its place — and read top to bottom they are a scroll, not a page: the ticket sits a
+screen and a half above the environments, and which card is worth reading changes completely between a
+goal nobody has planned and one held at a gate.
+
+So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
+(`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
+it:
+
+| Pane           | What is behind it                                                       |
+| -------------- | ----------------------------------------------------------------------- |
+| **Ticket**     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
+| **Work**       | the plan's waves, the pull requests they carry, who is on the goal now   |
+| **Validation** | the checks, the local validation run, the remote sheets                  |
+| **Shipping**   | the environments and the gate, and the signals the work asked production for |
+| **Record**     | spend, the tail, and this goal's subtree of the work graph                |
+
+**A part and the pull request that carries it are one thing**, which is why Work is one pane and not
+two: the plan's parts each name a pull request, the pull request's court chip is what says whether that
+part is moving, and reading either without the other was the split the old page made you scroll across.
+
+**`GOAL_TAB_OF` is the page's map, not the console's.** The track strip routes through it too, so a
+stage of the pipeline and the pane it is drawn in cannot disagree — a stage that scrolled to a card
+behind a pane nobody had opened would be a button that appears to do nothing, which is the dead end
+this spec keeps naming.
+
+**A badge is a reading, and null is a real answer.** `goalTabBadges(page)` gives each tab its own
+count and the tone the strip would give the same reading — `3/4` green on a plan that has landed,
+`2 in your court` red on a pull request waiting on the operator, `gate held` amber on Shipping. A pane
+with nothing in it yet carries **no badge at all**, because a badge reading `0` says a thing was
+counted, which is not what an empty pane means.
+
+**The folds live on**, inside the panes. A tab is which reading you are looking at; a fold is how much
+of one card you want ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)). The two
+answer different questions, so a card that opens itself when its stage arrives goes on doing that in
+whatever pane it now sits behind.
+
+### Which pane opens
+
+`goalTabOpening(page)` answers which pane a goal opens on when nobody has picked one, and the sentence
+that says why — read top to bottom, first answer wins, and **the order is the rule**:
+
+| The goal…                                  | opens on   |
+| ------------------------------------------ | ---------- |
+| is finished, closed or abandoned            | Record     |
+| is held at an environment gate              | Shipping   |
+| has a pull request in the operator's court  | Work       |
+| has a flagged validation plan or local run  | Validation |
+| has reached an environment                  | Shipping   |
+| has begun its checks                        | Validation |
+| has a plan, a pull request or an agent      | Work       |
+| has none of those                           | Ticket     |
+
+Every arm names a state some other surface on this page already draws, so the landing and the track
+never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
+"why am I here" is answerable without reading this document.
+
+**It decides the landing only.** The moment an operator picks a tab the pick is on `Place` and the rule
+is not consulted again — a goal that lands in an environment while somebody is reading its plan must
+not take the pane out from under them. `?pane=` is that pick; absent, the rule answers
+([The address bar](#the-address-bar)).
 
 ### Folding what is not relevant yet
 
@@ -1185,9 +1236,11 @@ early slamming shut for the same reason. The operator's word outranks the readin
 and the empty pair is still the page as it stands.
 
 **A jump opens what it lands on.** The track's stages and the header's validation chip scroll to a
-card, and a card the goal's progress had folded away made both read as controls that do nothing — the
-page moved and the reading it moved to was not drawn. `jumpTo` opens the section first and scrolls a
-frame later, once the card has grown.
+card, and a card the goal's progress had folded away — or, now, a card behind a pane nobody had
+selected — made both read as controls that do nothing: the page moved and the reading it moved to was
+not drawn. `buildJump` selects the pane, unfolds the section and scrolls **two** frames later rather
+than one, because the first frame is what paints the pane the tab just selected and an anchor inside a
+pane that has not rendered yet resolves to nothing.
 
 **The environment gate's hold is drawn folded or not.** Nothing is filed while a gate holds, so a
 delivered goal with an empty bench is indistinguishable from a finished one; a fold is not a reason to
