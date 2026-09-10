@@ -262,8 +262,12 @@ text rather than its index ([08](08-planning.md)).
 
 ## The test plan
 
-**Not built.** A check's `steps` are one journey through the delivered goal, in order, and each step
-says who carries it out. The ordering is the point: a database or log reading whose subject is _what
+**Built.** A check's `steps` are one journey through the delivered goal, in order, and each step
+says who carries it out. Their shapes are `ValidationStepSchema` (`src/validation/checkDocument.ts`),
+resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. What is **not** built
+is the `screenshot` step's own state — a capture reaches an ordinary row today and the
+_captured, waiting to be looked at_ state is still to come
+([36](36-remote-validation.md#handing-a-screen-back-to-look-at)). The ordering is the point: a database or log reading whose subject is _what
 the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
 to anything but a reader.
 
@@ -301,6 +305,11 @@ otherwise automated run:
   there. No agent can hold a browser session across a person's day, so the check is really two runs
   with a wait between them.
 
+**Built.** `segmentBoundary` (`src/validation/steps.ts`) is the first step that is a person's _and_
+inline; `checkBriefing` draws the plan and names the step to stop after, and rule `validate-check`
+declines a check whose **first** step is a person's rather than sending an agent to sit in front of
+somebody's day. A deferred step is not a boundary and never becomes one.
+
 They read identically in a step list and they are not the same thing. A validation planner that
 writes an inline human step into a run it has otherwise assigned to the fleet has written a check
 that can never execute — dispatched, held, and blocking nothing, which is the quietest way for a
@@ -315,6 +324,20 @@ theirs, because a planner reading a repository cannot know whether the deploymen
 login or an account — and a wrong guess is a check sitting dispatched against a login the fleet does
 not have.
 
+**Built.** `stepCapabilities` folds what every configured environment declares, once, and `resolveSteps`
+answers each step off it: `browser`, `suite` and `screenshot` need a `validate.browser` block, `state`
+needs `validate.state.run`, `signal` and `measure` need `watch.observe`, and `manual` is a person's by
+definition. A `browser` step needs a **tenant** as well, because unlike the others it acts, and the
+harness never generates or infers a tenant identifier
+([36](36-remote-validation.md#tenants)). A step the fleet cannot carry comes back to a person **naming
+the block that would have carried it**, never as "unsupported" — an operator meeting a check every step
+of which came back to them is entitled to read which line they have not written.
+
+Nothing declared at all is the fail-open arm and it fails **towards the person**: every step is theirs.
+That is the only safe direction here, because the two mistakes are not symmetrical — a step wrongly
+given to a person sits on the sheet where somebody sees it, and a step wrongly given to a fleet that
+cannot carry it is dispatched, held, and blocking nothing.
+
 **Reading it off the configuration is not a guess.** By the time the validation planner runs, what the
 deployment can drive is declared: an environment's `validate.browser` block, its `state.run`, its
 `observe` command, its tenant. A step whose kind the environment does not permit is a step the fleet
@@ -323,7 +346,9 @@ from the configuration, and the two things that stay the operator's are unchange
 — nothing is dispatched until they press — and the ability to take any step back by hand.
 
 `fleetCandidate` keeps its meaning for a check with no `steps`, where there is still nothing but a
-planner's suggestion to go on.
+planner's suggestion to go on. `fleetCanStart` answers **null** there for that reason, which is a
+different fact from "the fleet cannot start this" and must not be folded into it: null is the
+operator's press deciding, false is a plan that can never execute.
 
 ## The document block
 
@@ -365,7 +390,7 @@ everywhere else.
 `validation_plan` (`src/mcp/tools/validationPlan.ts`), on the same `ValidationCheckSchema` and
 `ValidationResourceSchema` the plan document reaches — a second copy of those shapes would drift the
 first time either learned a field. It speaks for the **whole** set, on `ingestValidation`'s terms:
-omission is withdrawal. `steps` is the layer above and is [not built](#the-test-plan):
+omission is withdrawal, and a check may carry [`steps`](#the-test-plan):
 
 ```json
 {
@@ -381,6 +406,11 @@ omission is withdrawal. `steps` is the layer above and is [not built](#the-test-
         "expect": "No issue/284/reap ref locally or on the remote; the part reads merged on the goal page; one \"reaped\" line in the log and no error record.",
         "uses": ["fixture-repo.tar.gz"],
         "covers": ["reap-writer", "reap-desk"],
+        "steps": [
+          { "kind": "manual", "do": "Unpack the fixture repo and point a local harness at it", "when": "deferred" },
+          { "kind": "state", "do": "Read the part back off the goal page — it should say merged" },
+          { "kind": "signal", "do": "One \"reaped\" line in the log, and no error record" }
+        ],
         "fleetCandidate": true,
         "why": "reads the repo and runs git; needs no login and no browser"
       }
@@ -1219,7 +1249,12 @@ third time for `spec` — the column existed and only gained values it may hold.
 case and has a real entry: it is a column on an **existing** table, so without one it is invisible on
 every database from before it existed, every check reads as unautomatable and every remote sheet is
 all-manual, with nothing red. Its null means _no area declared_, which is true of every older row and
-stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `rowToCheck`
+stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `steps` is the same case one change later, and its null is the same kind of fact: a check written
+before test plans existed genuinely had none, so null reads as `[]` and stays that way. `parseSteps`
+answers `[]` for anything it cannot read back, which is the reading rule this column shares with
+`revision` — a half-written test plan the fleet acts on would be worse than none.
+
+`rowToCheck`
 narrows it, `checkStateOf`'s sharp edge: a reading attributed to something this does not recognise
 reads as attributed to nobody, and `actor` narrows the same way, to `human`, because an unreadable
 column becoming a hand-over would dispatch an agent nobody asked for.

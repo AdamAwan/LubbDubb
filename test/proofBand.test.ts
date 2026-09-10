@@ -242,6 +242,7 @@ function check(over: Partial<ValidationCheck> & { id: string }): ValidationCheck
     expect: 'The file downloads.',
     uses: [],
     covers: [],
+    steps: [],
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

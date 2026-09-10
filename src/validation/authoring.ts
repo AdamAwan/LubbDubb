@@ -93,8 +93,46 @@ export function authoringBriefing(input: {
   }
 
   if (input.environments !== '') lines.push(input.environments);
+  lines.push(TEST_PLAN_NOTE);
   return lines.join('\n');
 }
+
+/**
+ * The test plan, appended rather than interpolated for the reason everything an agent must read is:
+ * `loadPromptTemplates` rejects only *unknown* placeholders, so an override that never learned this
+ * would drop it silently, on exactly the deployments that customised most.
+ * → docs/spec/20-validation.md#the-test-plan
+ */
+const TEST_PLAN_NOTE = `## Give a check a test plan
+
+A check may carry \`steps\`: **one ordered journey** through the delivered goal. The ordering is the
+whole point — a store reading whose subject is *what the browser steps just did* is meaningless taken
+before them, and prose in a \`do\` cannot say that to anything but a reader.
+
+| kind | what it does |
+| --- | --- |
+| \`browser\` | Drives the application — navigate, upload, click, wait. |
+| \`suite\` | Runs a named \`area\` of the project's own browser suite. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
+| \`screenshot\` | Captures the screen for somebody to look at. |
+| \`state\` | Reads the deployed store. |
+| \`signal\` | Reads logs and error records. |
+| \`measure\` | Reads a metric. |
+| \`manual\` | Something only a person can do. |
+
+**Who carries each step is not yours to say.** It is read off what the deployment declares above: a
+step whose kind nothing here can drive comes back to a person, with the configuration that would have
+carried it named on the row. That is a fact rather than a nomination, which is why you write the
+journey and not the assignment.
+
+**A \`manual\` step's \`when\` is yours, and it matters more than it looks.** \`deferred\` is *somebody
+looks at this afterwards*: the run completes and it costs the sequence nothing. \`inline\` stops the
+run where it sits, because no agent holds a session across a person's day — so an inline step splits
+the check into two runs with a wait between them, and a check whose **first** step is an inline
+person's can never be dispatched at all. Write \`deferred\` wherever you mean it.
+
+Steps are optional. A check that is a person's journey end to end is well described by its \`do\`, and
+that is what most checks have always been.
+`;
 
 /**
  * What the deployment can drive, and the areas its runner last said it offers — fleet-wide rather
@@ -108,10 +146,12 @@ export function authoringBriefing(input: {
 export function validationPlanNote(
   environments: readonly {
     name: string;
+    watch?: { observe: string };
     validate?: {
       permits: readonly string[];
       tenant?: string;
       tenantEnv?: string;
+      ensureTenant?: string;
       browser?: { runner: string };
       state?: { run: string };
     };
@@ -125,14 +165,19 @@ export function validationPlanNote(
     const validate = env.validate;
     if (validate === undefined) continue;
     const can: string[] = [];
-    if (validate.browser !== undefined) can.push('drives a browser through the project’s own suite');
-    if (validate.state !== undefined) can.push('reads the deployed store');
+    // Named by step kind, because that is the join the planner has to make: a step whose kind
+    // nothing here carries comes back to a person. → docs/spec/20-validation.md#who-carries-a-step
+    if (validate.browser !== undefined)
+      can.push('drives a browser through the project’s own suite (`browser`, `suite`, `screenshot` steps)');
+    if (validate.state !== undefined) can.push('reads the deployed store (`state` steps)');
+    if ((env.watch?.observe ?? '').trim() !== '')
+      can.push('reads logs, error records and metrics (`signal` and `measure` steps)');
     const areas = [...new Set(offerings.filter((o) => o.environment === env.name).map((o) => o.selector))].sort();
     lines.push(
       `- **${env.name}** — permits ${validate.permits.map((kind) => `\`${kind}\``).join(', ')}` +
         (can.length === 0 ? '.' : `; ${can.join(', and ')}.`) +
-        (validate.tenant === undefined && validate.tenantEnv === undefined
-          ? ' No tenant is configured, so a run that writes has nowhere to write.'
+        (validate.tenant === undefined && validate.tenantEnv === undefined && validate.ensureTenant === undefined
+          ? ' No tenant is configured, so a run that writes has nowhere to write and a `browser` step is a person’s.'
           : '') +
         (areas.length === 0
           ? ''

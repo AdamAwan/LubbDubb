@@ -461,7 +461,7 @@ once.
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                          |
+| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                           |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1135,13 +1135,13 @@ So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
 (`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
 it:
 
-| Pane           | What is behind it                                                       |
-| -------------- | ----------------------------------------------------------------------- |
+| Pane           | What is behind it                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------- |
 | **Ticket**     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
-| **Work**       | the plan's waves, the pull requests they carry, who is on the goal now   |
-| **Validation** | the checks, the local validation run, the remote sheets                  |
-| **Shipping**   | the environments and the gate, and the signals the work asked production for |
-| **Record**     | spend, the tail, and this goal's subtree of the work graph                |
+| **Work**       | the plan's waves, the pull requests they carry, who is on the goal now                            |
+| **Validation** | the checks, the local validation run, the remote sheets                                           |
+| **Shipping**   | the environments and the gate, and the signals the work asked production for                      |
+| **Record**     | spend, the tail, and this goal's subtree of the work graph                                        |
 
 **A part and the pull request that carries it are one thing**, which is why Work is one pane and not
 two: the plan's parts each name a pull request, the pull request's court chip is what says whether that
@@ -1170,14 +1170,14 @@ that says why — read top to bottom, first answer wins, and **the order is the 
 
 | The goal…                                  | opens on   |
 | ------------------------------------------ | ---------- |
-| is finished, closed or abandoned            | Record     |
-| is held at an environment gate              | Shipping   |
-| has a pull request in the operator's court  | Work       |
-| has a flagged validation plan or local run  | Validation |
-| has reached an environment                  | Shipping   |
-| has begun its checks                        | Validation |
-| has a plan, a pull request or an agent      | Work       |
-| has none of those                           | Ticket     |
+| is finished, closed or abandoned           | Record     |
+| is held at an environment gate             | Shipping   |
+| has a pull request in the operator's court | Work       |
+| has a flagged validation plan or local run | Validation |
+| has reached an environment                 | Shipping   |
+| has begun its checks                       | Validation |
+| has a plan, a pull request or an agent     | Work       |
+| has none of those                          | Ticket     |
 
 Every arm names a state some other surface on this page already draws, so the landing and the track
 never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
@@ -6019,8 +6019,8 @@ rule one surface up — nothing declared is a third fact and not a synonym for c
 the cells that had something would invert it, since a plan would read as a fuller proof the less its
 planner wrote.
 
-**The manual cell counts checks with no `area`, not every check.** A check that inherited an area from
-a test part it covers is the suite's to answer, and counting it in both would tell an operator that
+**The manual cell counts checks with no `area`, not every check.** A check whose test plan names an
+area in a `suite` step is the suite's to answer, and counting it in both would tell an operator that
 more work is theirs than is. It follows that the two cells do not sum to the validation card's total,
 and that is the split being stated rather than a discrepancy
 ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).

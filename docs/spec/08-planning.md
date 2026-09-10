@@ -438,9 +438,12 @@ transport changes shape:
 **`coverage` is a part field beside those two, and it is not a narrative one.** It says nothing about
 why the part exists; it names what the part is _for_, and the harness reads it. It is appended to the
 part's own prompt by `partDeclarationNote`, so the agent building it is shown the area it was asked to
-cover; it is stored on `plan_parts.coverage`; and a validation check whose `covers` names this part
-**inherits it as the check's `area`**, which is the whole of how a check comes to have one
-([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)). A part carrying one is an ordinary `code` part in
+cover; and it is stored on `plan_parts.coverage`. It once became the `area` of every check whose
+`covers` named the part; it no longer does. A check's area comes from a `suite` step the validation
+planner writes, and a `coverage` part **informs that planner and binds nothing** — a `covers` entry is
+a bibliography and was deciding what ran
+([36](36-remote-validation.md#how-a-check-comes-to-have-an-area),
+[20](20-validation.md#the-test-plan)). A part carrying one is an ordinary `code` part in
 every other respect: `partSettled`, `liveParts`, `planProgress`, `partBase`, rule `plan-part` and the
 close-out roll-up all read it as the part it is, and it **holds the goal exactly as any other part
 does**. What decides whether a planner declares one at all is the bar appended to `issue-plan` and

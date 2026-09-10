@@ -829,6 +829,39 @@ export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'd
 export type ValidationCheckActor = 'human' | 'fleet';
 
 /**
+ * A step's kind, and the whole of what decides who can carry it. Each one names a thing the
+ * deployment either declares or does not: `browser`, `suite` and `screenshot` need an environment's
+ * `validate.browser` block, `state` its `state.run`, `signal` and `measure` its `watch.observe`.
+ * `manual` is a person's by definition. → docs/spec/20-validation.md#the-test-plan
+ */
+export type ValidationStepKind = 'browser' | 'suite' | 'screenshot' | 'state' | 'signal' | 'measure' | 'manual';
+
+/**
+ * **When** a person's step is taken, which is a different fact from who takes it. A `deferred` step
+ * costs the sequence nothing — the run completes and somebody looks afterwards. An `inline` one stops
+ * the run where it sits, because no agent holds a browser session across a person's day.
+ * → docs/spec/20-validation.md#an-inline-person-and-a-deferred-one-are-not-the-same-step
+ */
+type ValidationStepWhen = 'inline' | 'deferred';
+
+/**
+ * One step of a check's test plan. `kind`, `do`, `area` and `when` are the author's; `actor` and
+ * `why` are **read off the configuration** at ingestion and are never the author's to say.
+ * → docs/spec/20-validation.md#who-carries-a-step
+ */
+export interface ValidationStep {
+  kind: ValidationStepKind;
+  /** What this step does, in the author's words. */
+  do: string;
+  /** `suite` only: the area of the project's own browser suite this step runs. Sets the check's `area`. */
+  area: string | null;
+  when: ValidationStepWhen;
+  actor: ValidationCheckActor;
+  /** Why it is a person's, naming the configuration that would have made it the fleet's. Null where the fleet carries it. */
+  why: string | null;
+}
+
+/**
  * Four different facts, and the whole point of keeping them apart is that one must never be assumed
  * from evidence that supports another. `spec` is **a reviewed spec ran against a real environment
  * and its report said so** — stronger than `agent`, because no model read anything, and different
@@ -866,6 +899,13 @@ export interface ValidationCheck {
    * is *no area declared* — a check a person carries out, exactly as every check is today.
    */
   area: string | null;
+  /**
+   * The check's test plan: one ordered journey through the delivered goal. Empty is **no steps**,
+   * which is every check written before the column existed and every check whose author declared
+   * only prose — `fleetCandidate` keeps its meaning there and nowhere else.
+   * → docs/spec/20-validation.md#the-test-plan
+   */
+  steps: ValidationStep[];
   createdAt: string;
   updatedAt: string;
 }
@@ -889,11 +929,14 @@ export interface ValidationCheckInput {
   fleetCandidate: boolean;
   candidateWhy: string | null;
   /**
-   * The selector this check is verified against, **inherited** from the `coverage` of a test part it
-   * covers. Null is no area declared, which is a check a person carries out — it is never authored on
-   * the check itself, so that declaring coverage stays one deliberate, reviewable act on the plan.
+   * The selector this check is verified against. It comes from a `suite` step naming one, and from
+   * nothing else — a `covers` entry is a bibliography and no longer decides what runs. Null is no
+   * area declared, which is a check a person carries out.
+   * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
    */
   area?: string | null;
+  /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
+  steps?: ValidationStep[];
 }
 
 export type ValidationCheckAmendment = Omit<ValidationCheckInput, 'seq'>;

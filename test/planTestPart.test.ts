@@ -185,20 +185,13 @@ test('nothing in src/plans/ or src/dispatcher/ reads coverage to decide settleme
   };
   assert.deepEqual(
     [...mentions('src/plans'), ...mentions('src/dispatcher')].sort(),
-    ['src/plans/parts.ts', 'src/plans/planDocument.ts', 'src/plans/planIngest.ts'].sort(),
+    ['src/plans/parts.ts', 'src/plans/planDocument.ts'].sort(),
     'a soft hold, a special case in partSettled/liveParts, or an exemption in the roll-up would show up here',
   );
-  const ingest = readFileSync('src/plans/planIngest.ts', 'utf8');
-  assert.equal(
-    (ingest.match(/\.coverage\b/g) ?? []).length,
-    1,
-    'planIngest reads it once, to hand a check the area it inherits — never to decide whether a part is done',
-  );
-  assert.match(
-    ingest,
-    /validationCheckInputs\([\s\S]{0,200}coverage/,
-    'and that one read is the join into validation_checks.area',
-  );
+  // planIngest read it once, to hand a check the area it inherited. That join is gone: an area comes
+  // from a `suite` step and from nothing else, so a `covers` entry decides nothing about what runs.
+  // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
+  assert.doesNotMatch(readFileSync('src/plans/planIngest.ts', 'utf8'), /\.coverage\b/);
   const parts = readFileSync('src/plans/parts.ts', 'utf8');
   const note = parts.slice(parts.indexOf('export function partDeclarationNote'));
   const declaration = note.slice(0, note.indexOf('\nfunction atomCommitNote'));

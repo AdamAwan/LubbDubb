@@ -52,6 +52,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     expect: 'No issue/284/reap ref, locally or on the remote.',
     uses: [],
     covers: [],
+    steps: [],
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

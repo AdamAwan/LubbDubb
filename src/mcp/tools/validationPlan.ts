@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
-import { twoAreaRefusal, validationCheckInputs, validationResourceInputs } from '../../validation/checkDocument.js';
+import { validationCheckSetInputs, validationResourceInputs } from '../../validation/checkDocument.js';
 import {
   AUTHORED_AMEND_NOTE,
   AUTHORED_SUPERSEDED_REASON,
@@ -9,6 +9,7 @@ import {
   validationPlanIssue,
 } from '../../validation/authoring.js';
 import { withdrawResourceAsks } from '../../validation/ask.js';
+import { NO_STEP_CAPABILITIES } from '../../validation/steps.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -70,6 +71,43 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
                   'decides — it dispatches nothing, and the hand-over is an operator’s press.',
               )
               .optional(),
+            steps: z
+              .array(
+                z.object({
+                  kind: z
+                    .enum(['browser', 'suite', 'screenshot', 'state', 'signal', 'measure', 'manual'])
+                    .describe(
+                      '"browser" drives the application; "suite" runs a named area of the project’s own browser ' +
+                        'suite; "screenshot" captures the screen; "state" reads the deployed store; "signal" reads ' +
+                        'logs and error records; "measure" reads a metric; "manual" is something only a person can do.',
+                    ),
+                  do: z.string().describe('What this step does, concretely.'),
+                  area: z
+                    .string()
+                    .describe(
+                      'A "suite" step only, and required on one: the area to run, copied **exactly** from what the ' +
+                        'runner was listed as offering. It is compared character for character, so an area the ' +
+                        'suite does not offer can never run. It is also what gives the check its area.',
+                    )
+                    .optional(),
+                  when: z
+                    .enum(['inline', 'deferred'])
+                    .describe(
+                      'A "manual" step only. "deferred" is *somebody looks at this afterwards* and costs the run ' +
+                        'nothing. "inline" stops the run where it sits — no agent holds a session across a ' +
+                        'person’s day — so an inline step in an otherwise automated plan splits the check into two ' +
+                        'runs with a wait between them. Default is "inline"; say "deferred" when you mean it.',
+                    )
+                    .optional(),
+                }),
+              )
+              .describe(
+                'The test plan: one ordered journey through the delivered goal, in order. The ordering is the ' +
+                  'point — a store or log reading whose subject is what the browser steps just did is meaningless ' +
+                  'taken before them. Who carries each step is **not yours to say**: it is read off what the ' +
+                  'deployment declares it can drive. Omit it to leave the check as prose.',
+              )
+              .optional(),
             why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
           }),
         )
@@ -113,9 +151,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateCheckSet(args);
     if (!parsed.ok) return toolError(`Check set rejected: ${parsed.error}`);
     const set = parsed.set;
-    const parts = deps.store.listPlanParts(plan.id).map((p) => ({ slug: p.slug, coverage: p.coverage ?? null }));
-    const spread = twoAreaRefusal(set.checks, parts);
-    if (spread !== null) return toolError(`Check set rejected: ${spread}`);
+    const slugs = deps.store.listPlanParts(plan.id).map((p) => p.slug);
 
     const resources = validationResourceInputs(set.resources);
     withdrawResourceAsks(
@@ -124,7 +160,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       resources.filter((r) => !r.provided).map((r) => r.name),
     );
     const written = deps.store.ingestValidation(origin, {
-      checks: validationCheckInputs({ checks: set.checks, resources: set.resources }, parts),
+      checks: validationCheckSetInputs(set.checks, set.resources, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
       resources,
       supersededReason: AUTHORED_SUPERSEDED_REASON,
       amendNote: AUTHORED_AMEND_NOTE,

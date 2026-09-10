@@ -106,6 +106,16 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   `DELETE`.** Which verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer
   that clears its siblings itself silently reintroduces the pairwise drift the matrix replaced.
   → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
+- **A validation check's `area` comes from a `suite` step and from nothing else, and a second writer
+  of that column is a silent undo.** It was inherited from the `coverage` of a covered part and
+  repaired from SQL at boot; both are gone, because a boot pass that recomputes it now overwrites what
+  the step named on _every_ boot — the join quietly unpicking the author, with nothing red.
+  → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
+- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has
+  no steps_ — `fleetCandidate` and the operator's press still decide, which is every check written
+  before test plans. False is a plan whose first step is a person's, which can never execute. Fold them
+  and every prose check on the deployment stops being dispatchable, with a full "Up next" queue and
+  nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
 - **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's
   **delivery** row, and the delivery is what parks the goal: writing one un-parks it, settles the
   close-out obligation and declines the validation bench row — the reading deleting the rows it was
