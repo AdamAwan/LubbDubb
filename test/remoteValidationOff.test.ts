@@ -205,6 +205,24 @@ test('a deployment that configured nothing takes the build inert', async () => {
       null,
       'the fence is the narrow kind, so the only origin this deployment has is refused',
     );
+
+    // And the reading half with it: there is no run to settle, no `spec` reading to write, and the
+    // Environments card's own row carries no folded line about a sheet that does not exist.
+    const settled = await system.remoteReadings.settle('a-run-that-was-never-opened', {
+      reportPath: '/tmp/results.json',
+      artefacts: null,
+    });
+    assert.equal(settled.ok, false, 'a report against no run is a returned refusal, never a throw');
+    assert.equal(system.remoteReadings.handback('a-run-that-was-never-opened', 'nothing here').ok, false);
+    assert.deepEqual(system.store.listRemoteReadings(), [], 'and nothing was written by either');
+    assert.equal(
+      system.store.listValidationChecks('issue:12')[0]?.resultBy,
+      null,
+      'no check here is attributed to a spec, because no spec ran anywhere',
+    );
+    for (const goal of state['environmentReach'] as { environments: { sheet: string | null }[] }[])
+      for (const env of goal.environments)
+        assert.equal(env.sheet, null, 'and the Environments card draws no folded line about a sheet');
   } finally {
     system.store.close();
   }
@@ -274,6 +292,26 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
       'this environment declares no tenant, and none is made up',
     );
     assert.deepEqual(keeper.asked, [], 'and a press never provisions or reseeds one');
+
+    // The reading half is reachable on the same run. This environment permits `state` only, so its
+    // `check` row is blocked and no browser row is owed an agent — what a report has to say here is
+    // that there is no run left open for one, which is the honest answer rather than a silent one.
+    const runId = system.store.listRemoteRuns()[0]!.id;
+    const settled = await system.remoteReadings.settle(runId, {
+      reportPath: join(system.config.repoRoot, 'results.json'),
+      artefacts: null,
+    });
+    assert.equal(settled.ok, false, 'the press already settled this run, so a second settle is refused');
+
+    const reach = (buildStateSnapshot(system) as unknown as Record<string, unknown>)['environmentReach'] as {
+      goalRef: string;
+      environments: { environment: string; sheet: string | null }[];
+    }[];
+    const folded = reach
+      .flatMap((goal) => goal.environments)
+      .map((env) => env.sheet)
+      .filter((line) => line !== null);
+    assert.deepEqual(folded, ['sheet · 2 rows · 1 blocked'], 'and the fold reaches the Environments card’s own row');
   } finally {
     system.store.close();
   }

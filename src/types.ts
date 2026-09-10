@@ -827,7 +827,13 @@ export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'd
 
 export type ValidationCheckActor = 'human' | 'fleet';
 
-export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop';
+/**
+ * Four different facts, and the whole point of keeping them apart is that one must never be assumed
+ * from evidence that supports another. `spec` is **a reviewed spec ran against a real environment
+ * and its report said so** — stronger than `agent`, because no model read anything, and different
+ * from `operator`, because nobody watched it. → docs/spec/36-remote-validation.md#what-a-spec-reading-is-worth
+ */
+export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop' | 'spec';
 
 export interface ValidationCheck {
   originRef: string;
@@ -1468,6 +1474,18 @@ export interface RemoteReading {
   /** The commits the run this reading came through straddled. Both null on one taken at assembly. */
   startedSha: string | null;
   endedSha: string | null;
+  /**
+   * What the run's own report said about this row: how many of the matched tests actually ran, how
+   * many retries it took, and how long it stood there. Null on a deterministic row, which is a
+   * query rather than a suite. **`matched` is not here** — it is on the sheet row, written by the
+   * pre-flight's listing, because derived from a report a selector that matched nothing reads as a
+   * clean pass.
+   */
+  executed: number | null;
+  retries: number | null;
+  durationMs: number | null;
+  /** The URL the publish command printed, which is what makes a red row actionable in thirty seconds. */
+  artefacts: string | null;
   readAt: string;
 }
 

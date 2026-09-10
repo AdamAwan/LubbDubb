@@ -209,6 +209,22 @@ function briefing(input: BriefingInput): string {
 
   lines.push(
     '',
+    '## What the harness reads out of the report',
+    '',
+    'A JSON list of the tests that ran — **rows, never counts**. Point `reportPath` at a file of this shape; ' +
+      'the project’s own runner emits it through its own reporter, and it is not yours to write by hand or to ' +
+      'edit afterwards:',
+    '',
+    '```json',
+    '[',
+    '  { "selector": "<the area, exactly as above>", "status": "passed", "retries": 0, "durationMs": 4100 },',
+    '  { "selector": "<the area>", "status": "skipped", "note": "the auth-setup project failed" }',
+    ']',
+    '```',
+    '',
+    'A totals line is not a report: matched-versus-executed is the guard this design leans on, and a declared ' +
+      'count is the thing being checked. If the runner emits several files, point at the machine-readable one.',
+    '',
     '## How to answer',
     '',
     'Call **remote_validation_report** exactly once, at the end. Which run you are reporting on is already ' +

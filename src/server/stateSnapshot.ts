@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { System } from '../system.js';
 import type { Config } from '../config.js';
+import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -463,6 +464,10 @@ export function buildStateSections(
     control,
   });
 
+  // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
+  // carries their fold. Two readers would be two opinions drawn beside each other.
+  const remoteSheets = buildRemoteSheets(store, config.environments);
+
   const goalsSection = (): Pick<
     CockpitState,
     | 'worldObservedAt'
@@ -489,12 +494,12 @@ export function buildStateSections(
     retainedRuns: retainedRuns(),
     archivedPullRequests: archivedPullRequests.map(withReview),
     stacks,
-    environmentReach: buildEnvironmentReach(store, config.environments),
+    environmentReach: buildEnvironmentReach(store, config.environments, remoteSheets),
     featureSequences: store.listFeatureSequences(),
     environmentHealth: buildEnvironmentHealth(store, config.environments),
     goalWatchWindows: buildGoalWatchWindows(store, config.environments),
     environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
-    remoteSheets: buildRemoteSheets(store, config.environments),
+    remoteSheets,
     stackLandings: [
       ...stacks.map((stack) => {
         const rungPrs = stack.rungs.flatMap((rung) => {
@@ -705,7 +710,11 @@ function buildEnvironmentHealth(store: System['store'], environments: Environmen
     .flatMap((env) => readings.filter((r) => r.environment === env.name));
 }
 
-function buildEnvironmentReach(store: System['store'], environments: EnvironmentConfig[]): GoalReachView[] {
+function buildEnvironmentReach(
+  store: System['store'],
+  environments: EnvironmentConfig[],
+  sheets: readonly RemoteSheetView[],
+): GoalReachView[] {
   if (environments.length === 0) return [];
   const arrivals = store.listGoalArrivals();
   const releases = store.listEnvironmentGateReleases();
@@ -731,9 +740,23 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     environments,
   }).map((goal) => ({
     ...goal,
+    // Folded here rather than in the cockpit, off the same rows the sheet card draws.
+    // → 36-remote-validation.md#the-cockpit
+    environments: goal.environments.map((env) => ({
+      ...env,
+      sheet: sheetFold(sheets, goal.goalRef, env.environment),
+    })),
     gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));
+}
+
+function sheetFold(sheets: readonly RemoteSheetView[], goalRef: string, environment: string): string | null {
+  const sheet = sheets.find((s) => s.goalRef === goalRef && s.environment === environment);
+  if (sheet === undefined) return null;
+  return sheetFoldLine(
+    sheet.rows.map((row) => ({ blockedReason: row.blockedReason, outcome: row.reading?.outcome ?? null })),
+  );
 }
 
 function buildGoalWatchWindows(store: System['store'], environments: EnvironmentConfig[]): GoalWatchView[] {

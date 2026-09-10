@@ -503,7 +503,7 @@ function checkStateOf(raw: string): ValidationCheckState {
 }
 
 function resultByOf(raw: string | null): ValidationCheckResultBy | null {
-  return raw === 'operator' || raw === 'agent' || raw === 'desktop' ? raw : null;
+  return raw === 'operator' || raw === 'agent' || raw === 'desktop' || raw === 'spec' ? raw : null;
 }
 
 function resourceKindOf(raw: string | null): ValidationResourceKind | null {

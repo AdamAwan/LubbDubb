@@ -31,12 +31,20 @@
 > ([The prompts](#the-prompts)), and the **`remote_validation_report` tool**
 > (`src/mcp/tools/remoteValidationReport.ts`) with its narrow origin fence
 > (`src/remoteValidation/origin.ts`) and no field an agent could state an outcome in
-> ([The report tool](#the-report-tool)).
+> ([The report tool](#the-report-tool)); and — as of the readings — **the fold of a report into row
+> outcomes** (`src/remoteValidation/report.ts`, `src/remoteValidation/readings.ts`) with the exit
+> code read nowhere ([The report is the only source of row outcomes](#the-report-is-the-only-source-of-row-outcomes)),
+> the **environment-moved asymmetry** ([The asymmetry](#the-environment-moved-asymmetry)), the
+> **`spec` reading** and the two rules governing what it may be written over
+> ([What a spec reading is worth](#what-a-spec-reading-is-worth)), what a browser row **records**
+> ([Artefacts](#artefacts-and-making-worth-observable)), and the **reading-shaped half of the
+> cockpit** with the Environments card's folded line ([The cockpit](#the-cockpit)).
 >
-> **Everything else is still a design**: the fold of a report into row outcomes, and the `spec`
-> reading it writes on a check ([What a spec reading is worth](#what-a-spec-reading-is-worth)). So a
-> run is carried out and settled, and what its report *says* is not read yet: the run row records
-> where the report and the artefacts landed, and a `check` row's own reading is still a person's. A
+> **What is still owed is the sweep's arm** — a `dispatched` run whose task is no longer active
+> ([The desk](#the-desk)) — and, in another goal, the **test part**: `plan_parts.coverage`'s bar on
+> `issue-plan` and `issue-replan`, and the critical path's allow-list rule
+> ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal),
+> [Keeping the critical path lean](#keeping-the-critical-path-lean)). A
 > path is written in italics until the thing it names exists, and a section that is still a
 > description rather than an account says so where it starts. The behaviour is settled — it is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
@@ -501,6 +509,10 @@ bypasses all of it and fails at the first authenticated call. So:
 
 ### The report is the only source of row outcomes
 
+**Built**, in `src/remoteValidation/report.ts` — the parse and the fold, pure — and
+`src/remoteValidation/readings.ts` — `RemoteReadingDesk`, which reads the file, folds a row at a time
+and writes what it says.
+
 > **The runner's machine-readable report is the only source of row outcomes. The exit code is never
 > read.**
 
@@ -521,9 +533,35 @@ to be wrong for some row. From the report, and from nothing else:
   spec, surfaced through [what a row records](#artefacts-and-making-worth-observable) rather than
   treated as a failure.
 
+**The shape of the report is the harness's, and the project's own reporter emits it** —
+`validate.state.run`'s arrangement one subsystem over, and for the governing principle's reason. It
+is a JSON list of the tests that ran, or an object carrying one under `tests`; each entry names its
+`selector` — the area, compared against `validation_checks.area` and nothing else — and its `status`,
+and may carry `retries`, `durationMs` and a `note`. **Rows, never counts**, the state contract's own
+refusal: a report that declares totals defeats matched-versus-executed, which is the guard, because
+the declared count is the thing being checked. A status word the parse does not recognise folds to
+`skipped` rather than to `passed` — an unread word must never be the one that colours a row green.
+The shape is appended to the run's prompt in `briefing`, so the agent knows which file to point at.
+
+**The order the arms are tried in is load-bearing**, and it is `foldRowOutcome`'s own doc comment:
+a report nobody could read blocks every row through it; a selector the report names **no test**
+under is `blocked`; a test that genuinely **failed** is a failure whatever else the row did — a
+narrowed run is not a reason to withhold a red the deployed product actually earned; and only then
+the narrowing case, `blocked` and never `failed`. A row whose `matched` is zero or absent is
+`blocked` too, because a row whose selector matched nothing is never a pass.
+
+**A row that learned nothing writes a `blocked` _reading_, not a `blockedReason` on the sheet row.**
+The two are different facts and folding them would cost the sheet its next press: a row's own
+`blockedReason` is a cause a press cannot overcome — an unpermitted kind, an unapproved query, a
+selector the pre-flight could not find — where a run's `blocked` is a reading, of this run, at this
+moment, which the next press is entitled to take again. Both draw the same word and say why in the
+same words; only one of them keeps the row out of the next invocation.
+
 ### The environment-moved asymmetry
 
-The deployed sha is read from `at` at the start of the run and again at the end. If it changed:
+**Built**, as `RemoteReadingDesk`'s own arm. The deployed sha is read from `at` at the start of the
+run — that reading is already on the row as `started_sha`, taken with the pin — and again at the end,
+when the report is folded. If it changed:
 
 > **A failure is `blocked`. A pass is still a pass.**
 
@@ -653,6 +691,13 @@ Recorded per browser row: **wall-clock**, **tests matched and executed**, and **
 are slow, areas that never fail, and areas that only ever pass on a retry all become visible, which is
 the other half of keeping a suite honest.
 
+**Built.** `executed`, `retries`, `duration_ms` and `artefacts` are columns on `remote_readings`,
+written by the fold and drawn on the sheet card. **`matched` is not among them**, and that is the
+sharp edge of this half: it lives on `remote_sheet_rows`, written by the pre-flight's own listing.
+Both numbers are in one object by the time the fold runs and the wrong one is a character away — and
+taking it off the report is exactly the shape that makes a selector matching **zero** read as a
+clean pass.
+
 ## The dispatch — rule `remote-validation`
 
 **Built.** A run is carried out by a dispatched agent, `src/dispatcher/rules/remoteValidation.ts`, a
@@ -732,12 +777,12 @@ needs no migration — `toRemoteRun` narrows it and folds anything it does not r
 `abandoned`, which is the safe direction: a run this build cannot name is a run nothing will ever
 report against.
 
-| Status       | Means                                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------- |
-| `pending`    | The press opened it and no agent has claimed it. **Live.**                                            |
-| `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                      |
-| `ended`      | Settled with a report recorded against it.                                                           |
-| `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or a handback.   |
+| Status       | Means                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| `pending`    | The press opened it and no agent has claimed it. **Live.**                                          |
+| `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                     |
+| `ended`      | Settled with a report recorded against it.                                                          |
+| `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or a handback. |
 
 The pair is what the design needs and one status could not carry. `pending` is a run the rule may
 claim and `dispatched` is one it may not, which is the whole of one-agent-per-run across a restart —
@@ -767,9 +812,13 @@ artefacts were published, and nothing else:
 | `artefacts`  | The URL the publish command printed, if it ran.                               |
 | `handback`   | A reason, **instead of** a report: the run could not be carried out at all.   |
 
-The call **records where the report and the artefacts landed on the run row and settles the run** —
-`remote_runs.report_path` and `remote_runs.artefacts`, with the status going to `ended`. Parsing that
-file and folding every row's outcome out of it is the half that is still a design.
+The call **records where the report and the artefacts landed on the run row, folds the report into a
+reading per confirmed row, and settles the run** — `remote_runs.report_path` and
+`remote_runs.artefacts`, with the status going to `ended`. The fold is not in the tool module: it
+needs the environment's config and its `at` command, which a tool module has no business holding, so
+it reaches the handler as `deps.remoteReadings` — `RemoteReadingDesk`, injected from `src/system.ts`
+exactly as `deps.state` and `deps.localValidations` are. **The tool stays an origin fence and a parse
+call**, which is what keeps it a place a model's opinion cannot get into.
 
 That split is what keeps [the runner contract](#the-report-is-the-only-source-of-row-outcomes) true
 rather than aspirational: a tool with a `result` field is a tool through which a model's opinion
@@ -852,9 +901,10 @@ Two notes are appended to prompts that already exist, both rendered strings rath
 
 ## What a spec reading is worth
 
-`resultBy` gains a fourth value, **`spec`**, beside `operator`, `agent` and `desktop`. The column
-exists and only gains a value it may hold, so it needs no migration — `rowToCheck` narrows it and a
-value it does not recognise reads as attributed to nobody, which is the safe direction.
+**Built.** `resultBy` gains a fourth value, **`spec`**, beside `operator`, `agent` and `desktop`. The
+column exists and only gains a value it may hold, so it needs no migration — `rowToCheck`
+(`src/store/validation.ts`) narrows it and a value it does not recognise reads as attributed to
+nobody, which is the safe direction.
 
 The four are four different facts and the whole feature exists to stop one being assumed from evidence
 that supports another:
@@ -1078,15 +1128,15 @@ and delegated to from `src/store/store.ts` under the same method names
 ([14](14-persistence.md#shape)). `src/store/` stays the only directory that touches SQLite and the
 writes are synchronous, which is what keeps the harness logic race-free.
 
-| Table                    | One row per                   | Written                                                                                                                                                                                                |
-| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                               |
-| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                                                                                                                  |
-| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path` and `artefacts` written by the dispatch flip and the report |
-| `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, and `started_sha` / `ended_sha` carry the commits the run that took it straddled |
-| `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                 |
-| `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                          |
-| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                               |
+| Table                    | One row per                   | Written                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                                                                                                                                    |
+| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                                                                                                                                                                                                                       |
+| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path` and `artefacts` written by the dispatch flip and the report                                                                             |
+| `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, `started_sha` / `ended_sha` carry the commits the run that took it straddled, and `executed`, `retries`, `duration_ms` and `artefacts` carry what the report said about a browser row |
+| `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
+| `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |
+| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                                                                                                                                    |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the
 environment went back past the goal's work is the case an operator actually hits, and its reason has
@@ -1105,8 +1155,12 @@ environment moves. A reading with no commit beside it is a reading of a product 
   any of them takes is added to — which is what `remote_readings`' `started_sha` and `ended_sha`
   already are: a column on a table that was new **one release ago**, additive, guarded by
   `PRAGMA table_info`, and invisible without the entry on every database from before it existed. So
-  are `remote_runs`' `task_id`, `report_path` and `artefacts`. A run's **status** is not one of them:
-  it is a column *value*, and the vocabulary widening needed no migration
+  are `remote_runs`' `task_id`, `report_path` and `artefacts`, and `remote_readings`' `executed`,
+  `retries`, `duration_ms` and `artefacts` — the same case a third time, on a table two releases
+  old now, which is exactly what a table being new **once** does not exempt it from. None of them
+  needs a backfill: a null on any of the four means _this reading was not taken through a report_,
+  which is true of every reading written before the fold existed and stays true. A run's **status** is not one of them:
+  it is a column _value_, and the vocabulary widening needed no migration
   ([the vocabulary](#a-runs-status-vocabulary)) — what it did need was the partial unique index
   dropped by name and re-declared, because `IF NOT EXISTS` never re-predicates one that is there.
 - **`validation_checks.area`** is a column on an **existing** table and is **built**: declared in
@@ -1204,10 +1258,15 @@ dry run, deselect a row, reseed, press go. A row waived through the check's own 
 reason and does not run. **An `unknown` from a query and a `blocked` row say why in words**, and never
 in the vocabulary of a clean one.
 
-**The Environments card's row gains one folded line** — `sheet · 4 rows · 1 blocked` — folded on the
-**server** off the same rows the card above draws. A cockpit that worked it out for itself would be a
-second opinion drawn beside the reading it describes, which is the disagreement the strip's fold
-exists to prevent.
+**The Environments card's row gains one folded line** — `sheet · 4 rows · 1 failed · 1 blocked`,
+each clause drawn only where it is non-zero — folded on the **server** off the same rows the card
+above draws. A cockpit that worked it out for itself would be a second opinion drawn beside the
+reading it describes, which is the disagreement the strip's fold exists to prevent. **Built**, as
+`sheetFoldLine` (`src/remoteValidation/sheet.ts`) beside `sheetBenchLine`, read in
+`buildEnvironmentReach` off the very `RemoteSheetView`s `buildRemoteSheets` handed the sheet card,
+and shipped on `GoalEnvironmentReachView.sheet`. A row is **blocked** in the fold whichever road it
+took there — a cause the sheet settled before any press, or a run that came back having learned
+nothing.
 
 Three conventions this card is held to, each of which fails silently if missed:
 
@@ -1215,9 +1274,12 @@ Three conventions this card is held to, each of which fails silently if missed:
   a `--cn-*` custom property on one of the two `:root` blocks — ideally a `color-mix` of the core —
   and registered in `web/src/cockpit/tokens.ts`. Only `test/cockpitTheme.test.ts` reads the
   stylesheets. → [17](17-cockpit.md#tokens)
-- **A reference is drawn with `<Ref to={ref}/>`**, never as text, and never inside a button: the goal,
-  the run's agent and any pull request the sheet names get a way there, drawn beside the control
-  rather than as it. → [17](17-cockpit.md#links)
+- **A reference is drawn with `<Ref to={ref}/>`**, never as text, and never inside a button. As built
+  the card names no goal and no pull request of its own — it is drawn on the goal's own page — so it
+  draws no `<Ref/>`; its one outward door is the **artefact URL**, which is an external link rather
+  than a harness reference, drawn in a `cn-refs` group beside the row and never as a control. A
+  later surface that does name a goal or a pull request draws it with `<Ref/>`.
+  → [17](17-cockpit.md#links)
 - **Which environment's sheet am I looking at is a field on `Place`** (`web/src/cockpit/place.ts`),
   never a `useState` in `useCockpit`. The cockpit's place is the query string, and state held outside
   it breaks on the back button and on reload. → [17](17-cockpit.md#the-address-bar)
@@ -1229,15 +1291,23 @@ a domain type from `src/types.ts` or `extends` it — never a re-declaration and
 
 **A new component is threaded through `src/system.ts`**, which is the composition root.
 
-**What the card draws today** is the block the sheet earns and no more. Above the rows sits the
+**What the card draws** is the block the sheet earns and no more. Above the rows sits the
 **gate**: the tenant and its age against the declared freshness window, the commit the last run
-pinned, a live run or an abandoned one's reason in words, and the four controls this build has —
-accept a query against this environment on the evidence of what it returned, deselect a row or take
-it back, reseed the tenant, and press go. Below it, every row with its kind, its outcome and, where
-nothing was learned, **why in words**. The artefact link, matched-versus-executed and the selector
-mismatches land with the browser half they are about. Every tone is an existing `--cn-*` property —
-the gate introduces no colour of its own, and a deselected row is dimmed rather than hidden, because
-a row an operator dropped is a decision they must be able to see and take back.
+pinned, a live run or an abandoned one's reason in words, and the four controls — accept a query
+against this environment on the evidence of what it returned, deselect a row or take it back, reseed
+the tenant, and press go. Below it, every row with its kind, its outcome and, where nothing was
+learned, **why in words** — including whose reading a run's own did **not** replace, which is where
+an operator finds out the sheet holds a finding the goal's check does not. Under each browser row
+sits what the run cost and what it produced: **executed of matched**, retries where there were any,
+wall-clock, and a link to the runner's own report.
+
+**Every tone on this card is one that already exists.** `passed`, `failed`, `blocked` and unread are
+the four the signals card already draws, the gate introduced no colour of its own and neither does
+the reading half, and what a row nothing was learned from says is why **in words** rather than a
+fifth tint. A colour written as a literal in a stylesheet is a colour no theme can reach, so a later
+tint here is a `--cn-*` property on **both** `:root` blocks and an entry in
+`web/src/cockpit/tokens.ts`. A deselected row is dimmed rather than hidden, because a row an operator
+dropped is a decision they must be able to see and take back.
 
 `RemoteSheetView`, `RemoteSheetRowView`, `RemoteReadingView`, `RemoteRunView` and `RemoteTenantView`
 are in `src/wire.ts`, shipped on `CockpitState.remoteSheets`; the card is `remoteValidation` in
@@ -1347,19 +1417,37 @@ settling it, readably afterwards; a **handback** settling it with the agent's re
 readings and leaving every sheet row and every check exactly as it was; and a withdrawn name answered
 from `RETIRED_TOOL_NAMES` rather than as an unknown method.
 
+The reading half is built and its tests are in `test/remoteValidationReadings.test.ts` and
+`test/remoteValidationCockpit.test.ts`, with `test/remoteValidationOff.test.ts` extended a fourth
+time: **the exit code is never read**, asserted twice against `FakeRemoteRunner`'s own record — a
+non-zero invocation over a report full of passes yields passes, and a clean one over a report full of
+failures yields failures; a selector the report names **no** test under is `blocked`, never `passed`;
+one where fewer ran than matched is `blocked`, with the **matched** count coming off
+`remote_sheet_rows` and the executed count off the report, asserted as a pair on a report that reads
+as a clean pass if the two are confused; tests skipped because a dependency failed are `blocked` and
+never `failed`, with the runner's own note carried into the reason; a retried pass is a `passed` that
+records its retries, its wall-clock and its artefact URL; a run whose environment **moved** —
+a failed row reads `blocked` and a passed row still reads `passed`, **asserted in both directions**,
+because a design that treated them alike is one edit away and only one of them is honest, and both
+record the commits they straddled; a later run **supersedes rather than deletes** and every reading
+carries the run's `started_sha` and `ended_sha`; a `spec` reading lands on an `unrun` check and again
+on one whose last reading was a `spec`, and **does not** land on one an `operator`, an `agent` or a
+`desktop` session settled — asserted in all four directions, with the sheet saying whose reading it
+is not replacing and the row still running; a `blocked` row writes nothing on the check at all, and
+a check naming **no area** takes no reading and settles the run anyway; a `failed` row reaches rule
+`validation-failed` through the ordinary reading and nothing new routes it; a failed row is **no
+shortfall, no issue verdict, no `WorldEvent` and nothing in `watch_readings`** — asserted against the
+world's own list, with the goal still delivered and parked, the close-out still open and the
+`validate` bench row not declined; a database carrying an **unknown `result_by`** reads as attributed
+to nobody rather than throwing; settling a run **spawns no process**, asserted on the fake's own
+record; and on the wire the reading's `executed`, `retries`, `durationMs` and `artefacts` reach the
+sheet card while the Environments card's line is folded on the **server** off the same rows,
+asserted against `sheetFoldLine` itself rather than in a component.
+
 The rest, when it is built:
 
-- a selector matching **zero** tests is `blocked`, never `passed`; and one where fewer ran than matched
-  is `blocked` too, with the matched count coming from the pre-flight listing;
-- a run whose environment **moved**: a failed row reads `blocked` and a passed row still reads
-  `passed`, and both record the commits they straddled — **asserted in both directions**, because a
-  design that treated them alike is one edit away and only one of them is honest;
 - an aggregating state query is refused **at ingestion**, through the shared `aggregatingTail`;
-- a `spec` reading lands on an `unrun` check and on one whose last reading was a `spec`, and **does
-  not** land on one an operator, an agent or a desktop session settled — asserted in both directions;
-- a `blocked` row writes nothing on the check at all;
-- every project-supplied command reaches its **fake** and no process is spawned, asserted by a fake
-  that records what it was asked for.
+- a `dispatched` run whose task is no longer active is settled by the desk's sweep.
 
 ## What it does not see
 

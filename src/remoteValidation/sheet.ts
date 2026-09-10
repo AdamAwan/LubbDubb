@@ -1,6 +1,13 @@
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { queryDigest } from '../store/remoteValidation.js';
-import type { GoalWatch, RemoteRowKind, RemoteSheetRow, StateQuery, ValidationCheck } from '../types.js';
+import type {
+  GoalWatch,
+  RemoteRowKind,
+  RemoteRowOutcome,
+  RemoteSheetRow,
+  StateQuery,
+  ValidationCheck,
+} from '../types.js';
 import { liveChecks } from '../validation/verdict.js';
 
 // → docs/spec/36-remote-validation.md
@@ -134,6 +141,32 @@ export function sheetBenchLine(environment: string, rows: readonly RemoteSheetRo
   const waiting = rows.filter((r) => r.awaitingApproval).length;
   const said = `A validation sheet is assembled for \`${environment}\` — ${count(rows.length, 'row')}`;
   return waiting === 0 ? `${said}.` : `${said}, ${String(waiting)} waiting on an approval.`;
+}
+
+/**
+ * The one line the Environments card's own row carries about a sheet. It is folded **here**, on the
+ * server, off the same rows the sheet card draws: a cockpit that worked it out for itself would be a
+ * second opinion drawn beside the reading it describes, which is the disagreement this fold exists
+ * to prevent.
+ *
+ * A **blocked** row is one nothing was learned from, whichever road it took there — a cause the
+ * sheet settled before any press, or a run that came back having learned nothing.
+ */
+export function sheetFoldLine(rows: readonly SheetFoldRow[]): string | null {
+  if (rows.length === 0) return null;
+  const blocked = rows.filter((r) => r.blockedReason !== null || r.outcome === 'blocked').length;
+  const failed = rows.filter((r) => r.blockedReason === null && r.outcome === 'failed').length;
+  return [
+    `sheet · ${count(rows.length, 'row')}`,
+    ...(failed === 0 ? [] : [`${String(failed)} failed`]),
+    ...(blocked === 0 ? [] : [`${String(blocked)} blocked`]),
+  ].join(' · ');
+}
+
+/** What the fold reads, which is exactly what the card reads: a row's own block, and its reading. */
+interface SheetFoldRow {
+  blockedReason: string | null;
+  outcome: RemoteRowOutcome | null;
 }
 
 function count(n: number, noun: string): string {

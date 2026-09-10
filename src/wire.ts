@@ -392,9 +392,19 @@ export interface EjectionView extends Ejection {
 
 export interface GoalReachView {
   goalRef: string;
-  environments: GoalEnvironmentReach[];
+  environments: GoalEnvironmentReachView[];
   gateHold: string | null;
   released: EnvironmentGateRelease | null;
+}
+
+/**
+ * One environment's row on the Environments card. The sheet's line is folded on the **server**, off
+ * the same rows the sheet card above it draws — a cockpit that worked it out for itself would be a
+ * second opinion drawn beside the reading it describes.
+ */
+export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
+  /** `sheet · 4 rows · 1 blocked`, or null where this goal has no sheet against this environment. */
+  sheet: string | null;
 }
 
 /**

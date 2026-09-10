@@ -595,7 +595,11 @@ test('a report records where things landed and settles the run, readably afterwa
     assert.equal(run?.status, 'ended');
     assert.equal(run?.reportPath, `/srv/validation/issue-12/remote/${runId}/report/results.json`);
     assert.equal(run?.artefacts, 'https://reports.example.com/run/9f2c');
-    assert.deepEqual(sys.store.listRemoteReadings(), [], 'parsing that file into readings is another part’s');
+    assert.deepEqual(
+      sys.store.listRemoteReadings(),
+      [],
+      'this check declares no area, so it was never a runner’s question and the fold has no row to read',
+    );
 
     const again = (await sys.mcp.session(agent.id)!.call('remote_validation_report', {
       reportPath: '/somewhere/else.json',

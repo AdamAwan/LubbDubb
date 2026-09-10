@@ -206,6 +206,11 @@ export class RemoteValidationDesk {
       detail: reading.detail,
       startedSha: null,
       endedSha: null,
+      // A deterministic row is a query, not a suite: nothing here matched, ran, retried or published.
+      executed: null,
+      retries: null,
+      durationMs: null,
+      artefacts: null,
     });
   }
 

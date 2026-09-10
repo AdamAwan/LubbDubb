@@ -329,6 +329,11 @@ export class RemoteRunDesk {
           detail: qualified(reading.detail, stale),
           startedSha: run.startedSha,
           endedSha: null,
+          // A deterministic row is a query, not a suite: nothing here matched, ran or published.
+          executed: null,
+          retries: null,
+          durationMs: null,
+          artefacts: null,
         });
         read += 1;
       } catch (err) {

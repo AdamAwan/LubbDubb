@@ -62,6 +62,7 @@ import { CommandStateReader, type StateReader } from './remoteValidation/stateRe
 import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { RemoteRunDesk } from './remoteValidation/run.js';
+import { RemoteReadingDesk } from './remoteValidation/readings.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
 import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runner.js';
 import { WatchDesk } from './environments/watchDesk.js';
@@ -135,6 +136,7 @@ export interface System {
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
   remoteRuns: RemoteRunDesk;
+  remoteReadings: RemoteReadingDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -317,6 +319,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     state: (): McpToolDeps['state'] => stateQueries,
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     localValidations: (): LocalValidationDesk => localValidations,
+    remoteReadings: (): RemoteReadingDesk => remoteReadings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     errors,
@@ -631,6 +634,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  const remoteReadings = new RemoteReadingDesk({
+    store,
+    environments: config.environments,
+    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    errors,
+  });
+
   const closeOutSink = opts.sink ?? connector;
   const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
@@ -928,6 +938,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     stateQueries,
     remoteValidation,
     remoteRuns,
+    remoteReadings,
     updates,
     runtimeControl,
     pets,
