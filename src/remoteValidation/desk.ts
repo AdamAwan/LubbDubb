@@ -5,6 +5,7 @@ import { sheetableArrivals } from '../environments/watchWindow.js';
 import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
+import { isActiveTask } from '../tasks.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
 import { preflightRows } from './preflight.js';
@@ -14,6 +15,10 @@ import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md
+
+const SWEPT =
+  'the agent dispatched to run it ended without reporting — its transcript says what happened. ' +
+  'Nothing was read, so nothing was written on the sheet.';
 
 interface RemoteValidationDeskDeps {
   store: Store;
@@ -44,6 +49,11 @@ export class RemoteValidationDesk {
   /** @public the pass `Harness.runCycle` runs below `EnvironmentDesk` */
   async run(): Promise<void> {
     if (!this.deps.environments.some((e) => e.validate !== undefined)) return;
+    await this.assembleAll();
+    this.sweep();
+  }
+
+  private async assembleAll(): Promise<void> {
     const { store, errors } = this.deps;
     let considered: { arrival: GoalArrival; assemble: boolean }[];
     try {
@@ -69,6 +79,39 @@ export class RemoteValidationDesk {
             `${(err as Error).message}`,
         });
       }
+    }
+  }
+
+  /**
+   * A `dispatched` run whose task is no longer active. An agent that crashed, was killed or spent
+   * its stall park leaves a run nobody will ever report against, the `(environment, tenant)` lock
+   * held over it and the sheet's press absent for good — `LocalValidationDesk`'s second arm exactly,
+   * and the settle path an operator's own `.../cancel` route was until this landed.
+   *
+   * The bias is to leave a run alone. Settling one whose agent is still working loses the reading it
+   * was about to report and frees the lock underneath it, so a second press opens a run against a
+   * tenant somebody is already driving — a silent wrong answer rather than a visible clash. So
+   * `pending` is never touched, and a `dispatched` run with no task named, or one naming a task this
+   * build cannot resolve, is a run the sweep **cannot say** about and is left standing: `unknown` is
+   * folded into neither arm here, as it is nowhere else in this subsystem.
+   *
+   * It writes no reading, no check result and nothing on a row: a run nobody reported against
+   * learned nothing about the goal, `handback`'s rule.
+   */
+  private sweep(): void {
+    const { store, errors } = this.deps;
+    try {
+      for (const run of store.listRemoteRuns()) {
+        if (run.status !== 'dispatched' || run.taskId === null) continue;
+        const task = store.getTask(run.taskId);
+        if (task === null || isActiveTask(task)) continue;
+        store.endRemoteRun(run.id, { status: 'abandoned', note: SWEPT });
+      }
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message: `the remote validation sweep failed: ${(err as Error).message}`,
+      });
     }
   }
 
