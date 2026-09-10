@@ -1334,7 +1334,12 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   amended_at  TEXT,                   -- when an amendment last changed it; cleared by the next reading
   amend_note  TEXT,                   -- why it changed, in the amender's words
   area        TEXT,                   -- the selector a runner offers for this check; NULL is "no
-                                      -- area declared", which is a check a person carries out
+                                      -- area declared", which is a check a person carries out.
+                                      -- It comes from a "suite" step and from nothing else.
+  steps       TEXT,                   -- JSON: the check's test plan, one ordered journey through the
+                                      -- delivered goal, each step with the actor read off the
+                                      -- configuration. NULL is "no steps", which is every row from
+                                      -- before the column and stays true, so nothing is backfilled
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (origin_ref, id)

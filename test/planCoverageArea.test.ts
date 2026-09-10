@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
@@ -13,15 +12,17 @@ import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { validatePlanDocument, parsePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { testPartNote } from '../src/plans/planning.js';
-import { coveredAreas, twoAreaRefusal } from '../src/validation/checkDocument.js';
+import { ValidationCheckSchema, validationCheckSetInputs } from '../src/validation/checkDocument.js';
+import { stepCapabilities } from '../src/validation/steps.js';
 import { runnableSelectors } from '../src/remoteValidation/briefing.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 
 /*
  * How a check comes to have an area. The planner picks one from the runner's own offering, a part
- * carries it as `coverage`, and a check covering that part inherits it into `validation_checks.area`
- * — which is what the pre-flight compares and what the run's selectors are drawn from. Nothing else
- * writes that column: an area is never authored on a check.
+ * carries it as `coverage`, and the validation planner writes a `suite` step naming one — which is
+ * what lands in `validation_checks.area`, what the pre-flight compares, and what the run's selectors
+ * are drawn from. **A `covers` entry no longer decides any of it**: it is a bibliography, and while
+ * it was the join a check became automatable by accident.
  *
  * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
  */
@@ -130,50 +131,122 @@ test('an empty offering fails open — a listing nobody has taken never withhold
   assert.equal(viaFile.ok, true, 'and the file transport is the same loader');
 });
 
-test('a check inheriting two areas is refused rather than run against the first', () => {
-  const doc = JSON.parse(
-    JSON.stringify({
-      version: 1,
-      reason: 'Two areas.',
-      parts: [
-        { slug: 'a', title: 'A', scope: 'e2e/', coverage: 'Checkout Tests' },
-        { slug: 'b', title: 'B', scope: 'e2e/', coverage: 'Login Tests' },
-      ],
-      validation: {
-        checks: [{ id: 'both', title: 'Both', do: 'do', expect: 'expect', covers: ['a', 'b'] }],
-      },
-    }),
-  ) as unknown;
-  const parsed = validatePlanDocument(doc, ['Checkout Tests', 'Login Tests']);
-  assert.equal(parsed.ok, false);
-  if (parsed.ok) return;
-  assert.match(parsed.error, /covers parts that declare different areas/);
-  assert.match(parsed.error, /`Checkout Tests` and `Login Tests`/);
-});
-
-test('coveredAreas reads the check’s own order, and an unknown slug names no area', () => {
-  const parts = [
-    { slug: 'a', coverage: 'Checkout Tests' },
-    { slug: 'b', coverage: null },
-  ];
-  assert.deepEqual(coveredAreas(['b', 'a'], parts), ['Checkout Tests']);
-  assert.deepEqual(coveredAreas(['b'], parts), [], 'a part that is not a test part carries no area');
-  assert.deepEqual(coveredAreas(['nope'], parts), [], 'and a slug no part holds is not an area');
-  assert.equal(twoAreaRefusal([{ id: 'x', covers: ['a', 'b'] }], parts), null, 'one area is not two');
-});
-
 // ------------------------------------------------------------------ the join
 
-test('a check covering a test part inherits that part’s coverage as its area', () => {
+/** One check, authored the way the validation planner authors it: through the shared schema. */
+function authored(store: Store, steps: unknown[], covers: string[] = []): void {
+  const parsed = ValidationCheckSchema.safeParse({
+    id: 'an-order-places',
+    title: 'An order still places end to end',
+    do: 'Place one',
+    expect: 'It places',
+    covers,
+    steps,
+  });
+  assert.equal(parsed.success, true, parsed.success ? '' : JSON.stringify(parsed.error.issues));
+  if (!parsed.success) return;
+  store.ingestValidation('issue:12', {
+    checks: validationCheckSetInputs(
+      [parsed.data],
+      [],
+      ['checkout', 'checkout-coverage'],
+      stepCapabilities([ACCEPTANCE]),
+    ),
+    resources: [],
+    supersededReason: 'gone',
+    amendNote: 'changed',
+  });
+}
+
+test('a suite step names the area, and it is what lands on the row', () => {
   const store = new Store(':memory:');
   try {
     const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
+    authored(store, [{ kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests' }]);
 
     const check = store.listValidationChecks('issue:12')[0];
-    assert.equal(check?.area, 'Checkout Tests', 'the column the pre-flight compares is written by the join');
+    assert.equal(check?.area, 'Checkout Tests', 'the column the pre-flight compares is written by the step');
+    assert.equal(check?.steps[0]?.actor, 'fleet', 'and the environment declares a browser block, so the fleet has it');
+  } finally {
+    store.close();
+  }
+});
+
+test('covering a test part is a bibliography and no longer an area', () => {
+  const store = new Store(':memory:');
+  try {
+    const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
+    authored(store, [{ kind: 'manual', do: 'Look at it' }], ['checkout-coverage']);
+
+    const check = store.listValidationChecks('issue:12')[0];
+    assert.deepEqual(check?.covers, ['checkout-coverage'], 'the entry is kept — it says what the check exercises');
+    assert.equal(
+      check?.area,
+      null,
+      'and it decides nothing: a check became automatable by accident while this was the join',
+    );
+  } finally {
+    store.close();
+  }
+});
+
+test('a plan document’s own legacy check set inherits nothing either', () => {
+  const store = new Store(':memory:');
+  try {
+    const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
+    assert.equal(store.listValidationChecks('issue:12')[0]?.area, null);
+  } finally {
+    store.close();
+  }
+});
+
+test('an area on any step but a suite step is refused where it is authored', () => {
+  const spread = ValidationCheckSchema.safeParse({
+    id: 'x',
+    title: 'T',
+    do: 'd',
+    expect: 'e',
+    steps: [{ kind: 'browser', do: 'click', area: 'Checkout Tests' }],
+  });
+  assert.equal(spread.success, false);
+  if (spread.success) return;
+  assert.match(spread.error.issues[0]?.message ?? '', /belongs to a "suite" step/);
+
+  const nameless = ValidationCheckSchema.safeParse({
+    id: 'x',
+    title: 'T',
+    do: 'd',
+    expect: 'e',
+    steps: [{ kind: 'suite', do: 'run it' }],
+  });
+  assert.equal(nameless.success, false, 'and a suite step that names no area runs nothing');
+});
+
+test('the first suite step wins, so a check is still verified against one selector', () => {
+  const store = new Store(':memory:');
+  try {
+    const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
+    authored(store, [
+      { kind: 'suite', do: 'Run checkout', area: 'Checkout Tests' },
+      { kind: 'suite', do: 'Run login', area: 'Login Tests' },
+    ]);
+    assert.equal(
+      store.listValidationChecks('issue:12')[0]?.area,
+      'Checkout Tests',
+      'the two-areas refusal went with the inheritance: a step names one, in an order the author chose',
+    );
   } finally {
     store.close();
   }
@@ -189,6 +262,7 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
+    authored(store, [{ kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests' }]);
     store.recordGoalArrival({
       goalRef: 'issue:12',
       environment: 'acceptance',
@@ -207,77 +281,12 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     await desk.run();
 
     const row = store.listRemoteSheetRows().find((r) => r.kind === 'check');
-    assert.equal(row?.blockedReason, null, 'the pre-flight found the area the planner picked');
+    assert.equal(row?.blockedReason, null, 'the pre-flight found the area the step named');
     assert.equal(row?.matched, 4, 'and counted the tests the runner attributes to it');
     assert.deepEqual(
       runnableSelectors(store, ACCEPTANCE, 'issue:12', store.listRemoteSheetRows()),
       ['Checkout Tests'],
       'which is the whole of what the browser half was missing: a selector to carry',
-    );
-  } finally {
-    store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
-});
-
-test('a check covering no test part has no area, which is a check a person carries out', () => {
-  const store = new Store(':memory:');
-  try {
-    const parsed = parsePlanDocument(document({ covers: ['checkout'] }));
-    assert.equal(parsed.ok, true);
-    if (!parsed.ok) return;
-    ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
-    assert.equal(store.listValidationChecks('issue:12')[0]?.area, null);
-  } finally {
-    store.close();
-  }
-});
-
-test('a replan that drops the part’s coverage takes the check’s area with it', () => {
-  const store = new Store(':memory:');
-  try {
-    const first = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
-    assert.equal(first.ok, true);
-    if (!first.ok) return;
-    ingestPlanDocument(store, { doc: first.document, originRef: 'issue:12', title: 'Checkout' });
-    assert.equal(store.listValidationChecks('issue:12')[0]?.area, 'Checkout Tests');
-
-    const second = parsePlanDocument(document({}));
-    assert.equal(second.ok, true);
-    if (!second.ok) return;
-    ingestPlanDocument(store, { doc: second.document, originRef: 'issue:12', title: 'Checkout' });
-    assert.equal(
-      store.listValidationChecks('issue:12')[0]?.area,
-      null,
-      'a stale area is a selector the runner no longer offers, which blocks the row for a reason nobody wrote',
-    );
-  } finally {
-    store.close();
-  }
-});
-
-test('a database from before the join has its areas supplied on the next boot', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-join-boot-'));
-  const file = join(dir, 'harness.sqlite');
-  let store = new Store(file);
-  try {
-    const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
-    assert.equal(parsed.ok, true);
-    if (!parsed.ok) return;
-    ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
-    store.close();
-
-    // What every row on a deployment from before the join looks like: the coverage declared, the
-    // column there, and nothing having written across them.
-    const db = new Database(file);
-    db.prepare(`UPDATE validation_checks SET area=NULL`).run();
-    db.close();
-
-    store = new Store(file);
-    assert.equal(
-      store.listValidationChecks('issue:12')[0]?.area,
-      'Checkout Tests',
-      'the join is idempotent and nothing else writes the column, so boot is where a null one is supplied',
     );
   } finally {
     store.close();

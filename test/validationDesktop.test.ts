@@ -564,6 +564,7 @@ function handedOver(over: Partial<ValidationCheck> = {}): ValidationCheck {
     expect: 'It opens with the columns intact.',
     uses: [],
     covers: [],
+    steps: [],
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'fleet',

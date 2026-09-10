@@ -68,6 +68,7 @@ import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runne
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { validationPlanNote } from './validation/authoring.js';
+import { stepCapabilities } from './validation/steps.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
@@ -324,6 +325,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteReadings: (): RemoteReadingDesk => remoteReadings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
+    stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     errors,
   });
 

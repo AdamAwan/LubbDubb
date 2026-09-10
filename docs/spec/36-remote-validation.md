@@ -48,8 +48,8 @@
 > [Keeping the critical path lean](#keeping-the-critical-path-lean)). Nothing in this document is
 > owed: every section is an account of what runs. How an author declares a check's **area** is now
 > built as well: the planner is handed the runner's own offering and picks from it, a `coverage` it
-> does not offer is refused at submission, and a check inherits the area of a test part it covers
-> ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). The pipeline-side guards
+> does not offer is refused at submission, and a check's area is named by a `suite` step of its test
+> plan ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). The pipeline-side guards
 > on the critical path remain project conventions by design
 > ([Keeping the critical path lean](#keeping-the-critical-path-lean)). The behaviour is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree.
@@ -318,13 +318,19 @@ which is the route any other goal takes to the same file ([08](08-planning.md#am
 
 ### How a check comes to have an area
 
-**A `suite` step names it, and nothing else does. Not built** — `steps` is not built, so what runs
-today is still the inheritance below, now written by the validation planner rather than by a
-planner. The two land together: withdrawing the inheritance before a step can name an area would
-leave every check with a null one.
+**A `suite` step names it, and nothing else does. Built.** `stepArea` (`src/validation/steps.ts`)
+reads the first `suite` step that names one, `checkAmendment` writes it, and the inheritance below is
+gone — along with the boot repair that recomputed it and the two-areas refusal that existed only
+because of it. The two landed **together**, deliberately: withdrawing the inheritance before a step
+could name an area would have left every check with a null one, which is this document's own quietest
+failure.
+
+The area already written on a deployment's existing checks stays where it is — nothing clears the
+column — so a goal mid-flight keeps its browser half. It is recomputed from the steps the next time
+the check is authored or amended, which is the change taking effect rather than a row going quiet.
 
 A check's `area` is set by a validation planner
-writing a step that runs a named area ([20](20-validation.md#the-test-plan)); it is no longer
+writing a `suite` step that names one ([20](20-validation.md#the-test-plan)); it is no longer
 inherited from the `coverage` of a test part the check happens to `cover`. Inheritance made a check
 automatable by accident — a `covers` entry is a bibliography, and it was deciding what ran. A goal
 whose coverage part built an area the validation planner then chose not to run is now an ordinary
@@ -363,20 +369,20 @@ because `PlanDocumentSchema` is zod and zod strips unknown keys. It **fails open
 offering**: no listing yet, a runner that could not answer, no browser block at all are one arm, and
 a hold on an offering nobody has is a fleet that cannot submit a plan with nothing red.
 
-**A check inherits the area of a test part it covers.** `covers` already names part slugs; a covered
-part's `coverage` is the check's `area`, computed in `checkAmendment` (`src/validation/checkDocument.ts`)
-and recomputed on every ingest and every amendment, and again from SQL at boot for every check that
-already exists (`joinCheckAreas`, `src/store/store.ts`) — which is what a deployment already
-holding a hundred checks needs, since without it every one of them waits on a replan that is never
-coming. That pass is a **repair rather than a migration**: an area is never authored on a check, so
-recomputing one can only agree with what the ingest wrote or supply what a database from before the
-join never had, and it needs no `runOnce` id. A check that would inherit two areas is left null there,
-not given the first — going forward that shape is refused where it is authored, and at boot there is
-no author to refuse to — so a part that stops being a test part, or whose
-coverage changes, takes the check's area with it rather than leaving a selector the runner no longer
-offers. **An area is never authored on a check.** Adding an `area` field to `validation_amend` would
-have been smaller and is worse in a specific way: it moves area authoring outside the plan, which is
-exactly where this design put the hold that makes coverage deliberate and reviewable.
+**A `suite` step carries it.** The step names the area and `stepArea` reads it, in `checkAmendment`
+(`src/validation/checkDocument.ts`), recomputed on every ingest and every amendment — so an author
+that moves the step, or drops it, moves the area with it rather than leaving a selector the runner no
+longer offers.
+
+**It was inherited from `covers`, and that is withdrawn.** A covered part's `coverage` used to become
+the check's `area`, recomputed on every ingest and again from SQL at boot (`joinCheckAreas`). Both are
+gone. The inheritance made a check automatable **by accident**: `covers` is a bibliography — it says
+what a check exercises — and it was deciding what ran. A goal whose coverage part built an area the
+validation planner then chose not to run is now an ordinary outcome rather than an unreachable state.
+
+The boot repair went with it for a sharper reason than tidiness. It was idempotent only while nothing
+else wrote the column; a step writes it now, so the same pass would have overwritten a step-named area
+with the `covers` reading on every boot — the join quietly undoing the author, with nothing red.
 
 #### The cached offering is a convenience and the pre-flight is the authority
 
@@ -400,12 +406,14 @@ the clock it was written from and two clocks make an interval that never elapses
 
 Two shapes are ordinary rather than exceptional, and the join answers each.
 
-**A check may cover several parts.** Where more than one of them declares an area, the check is
-**refused where it is authored** — `twoAreaRefusal`, on the same pass as the coverage refusal and
-again at `validation_amend`. A check is matched against one selector at the pre-flight and its report
-is read under one, so a check spanning two areas would report a pass for coverage nothing exercised.
-Taking the first area silently is precisely the failure this subsystem exists to prevent, and the
-author splits the check or drops a `covers` entry.
+**A check may cover several parts, and it no longer matters.** While the area was inherited, a check
+covering two parts declaring different areas was **refused where it was authored** — `twoAreaRefusal`
+— because a check is matched against one selector at the pre-flight and read under one, and taking the
+first silently would report a pass for coverage nothing exercised. That refusal went with the
+inheritance: the ambiguity it guarded cannot arise once a step names the area, because the author is
+naming it rather than being assigned it. Where a plan writes two `suite` steps, the **first** is the
+check's area — an order the author chose, not a coin the harness tossed — and the second is a step in
+the same journey.
 
 **A part may cover an area no check names.** That is simply not on the sheet, and nothing is wrong
 with it: the sheet is the goal's checks, a test part is held by the plan like any other part, and a
@@ -1717,18 +1725,18 @@ blocks the check rows and leaves the sheet's other readings standing; a check na
 person's and the pre-flight spawns nothing about it; the pre-flight runs on the assembly pass only and
 inside the cap of five, and a throw goes through `errors.record`; `buildSystem` takes `remoteRunner`
 and defaults to the command implementation, and an environment with no `validate.browser` block
-declares no command for it to run; and a database written before `validation_checks.area` gains it
-on boot with **no backfill** over it.
+declares no command for it to run; and a database written before `validation_checks.steps` reads null
+as **no steps**, with nothing backfilled.
 
 `test/planCoverageArea.test.ts` covers the join: the note enumerates what the runner offers and asks
 for prose only where nothing has been listed; an environment with no browser block offers nothing to
 the planner; a `coverage` the suite does not offer is refused at submission, naming what is offered;
-an empty offering fails open through both plan transports; a check inheriting two areas is refused
-rather than run against the first; a check covering a test part inherits its area and one covering no
-test part has none; a replan dropping the coverage takes the area with it; a database with the column
-null has it supplied on the next boot; and with the area written the sheet's check row confirms, is
-counted by the pre-flight and yields a selector for the run to carry — the whole of what the browser
-half was missing. The offering cache is covered there too: one spawn with no goal in sight, throttled
+an empty offering fails open through both plan transports; a `suite` step's area lands on the row and
+a `covers` entry lands nothing; an area on any other step kind is refused where it is authored, as is
+a `suite` step naming none; the first `suite` step wins, so a check is still verified against one
+selector; and with the area written the sheet's check row confirms, is counted by the pre-flight and
+yields a selector for the run to carry — the whole of what the browser half was missing.
+`test/validationSteps.test.ts` covers the assignment, the segment boundary and the column. The offering cache is covered there too: one spawn with no goal in sight, throttled
 after it, and a listing that could not say leaving the last answer standing.
 
 The dispatch, the origin, the prompt and the report tool are built and their tests are in

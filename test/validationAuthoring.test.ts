@@ -232,6 +232,7 @@ test('the rule dispatches for a delivered goal with no check set, and for nothin
           expect: 'It opens.',
           uses: [],
           covers: [],
+          steps: [],
           fleetCandidate: false,
           candidateWhy: null,
           actor: 'human',

@@ -1,6 +1,7 @@
 import { nextCheckLetter } from '../validation/checkDocument.js';
 import type {
   ValidationAmendment,
+  ValidationStep,
   ValidationPlanRecord,
   ValidationAmendResult,
   ValidationCheck,
@@ -30,6 +31,11 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // The selector a runner offers for this check. Null means *no area declared*, which is true of
     // every row written before the column existed and stays true — so nothing is backfilled.
     area: 'TEXT',
+    // The check's test plan, JSON. Null means *no steps* — true of every row written before the
+    // column existed and of every check whose author declared only prose, and it stays true, so
+    // nothing is backfilled. A null read as `[]` and a null read as "unknown" are the same answer
+    // here, which is why this one needs no reading rule beside it.
+    steps: 'TEXT',
   },
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
@@ -190,10 +196,14 @@ export class ValidationStore {
       revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
       amendedAt: band ? ts : (prev?.amendedAt ?? null),
       amendNote: band ? amendNote : (prev?.amendNote ?? null),
-      // Inherited from the `coverage` of a test part this check covers, recomputed on every ingest
-      // and every amendment: a part whose coverage changed, or that stopped being a test part, moves
-      // this with it rather than leaving a selector nothing offers.
+      // From the check's own `suite` step, recomputed on every ingest and every amendment: an
+      // author that moved the step, or dropped it, moves this with it rather than leaving a
+      // selector nothing offers. → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
       area: input.area ?? null,
+      // Resolved from the configuration at ingestion and recomputed on every amendment, exactly as
+      // `area` is — a check's assignment is a fact about what the deployment declares, and a step
+      // whose kind nothing declares is a step the fleet cannot carry.
+      steps: input.steps ?? [],
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
     };
@@ -442,11 +452,11 @@ export class ValidationStore {
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
-           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area,
+           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area, steps,
            created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
-           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area,
+           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area, @steps,
            @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
@@ -457,7 +467,7 @@ export class ValidationStore {
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note, area=excluded.area,
-           updated_at=excluded.updated_at`,
+           steps=excluded.steps, updated_at=excluded.updated_at`,
       )
       .run({
         ...check,
@@ -465,6 +475,7 @@ export class ValidationStore {
         covers: JSON.stringify(check.covers),
         fleetCandidate: check.fleetCandidate ? 1 : 0,
         revision: check.revision === null ? null : JSON.stringify(check.revision),
+        steps: check.steps.length === 0 ? null : JSON.stringify(check.steps),
       });
   }
 }
@@ -515,6 +526,7 @@ interface ValidationCheckRow {
   amended_at: string | null | undefined;
   amend_note: string | null | undefined;
   area: string | null | undefined;
+  steps: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -555,6 +567,7 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     amendedAt: r.amended_at ?? null,
     amendNote: r.amend_note ?? null,
     area: r.area ?? null,
+    steps: parseSteps(r.steps ?? null),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -600,6 +613,26 @@ function parseRevision(raw: string | null): ValidationRevision | null {
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Null is **no steps**, and so is anything this cannot read back — the same rule the rest of this
+ * module's JSON columns follow. A column added to an existing table is null on every row from before
+ * it, and there is nothing to backfill: a check written before test plans existed genuinely had none.
+ */
+function parseSteps(raw: string | null): ValidationStep[] {
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((step): step is ValidationStep => {
+      if (typeof step !== 'object' || step === null) return false;
+      const s = step as Record<string, unknown>;
+      return typeof s.kind === 'string' && typeof s.do === 'string' && typeof s.actor === 'string';
+    });
+  } catch {
+    return [];
   }
 }
 

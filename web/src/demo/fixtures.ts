@@ -64,6 +64,7 @@ function demoCheck(
     expect: '',
     uses: [],
     covers: [],
+    steps: [],
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

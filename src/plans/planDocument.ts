@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { twoAreaRefusal, ValidationSchema } from '../validation/checkDocument.js';
+import { ValidationSchema } from '../validation/checkDocument.js';
 import { WatchSchema } from '../validation/watchDocument.js';
 import { StateSchema } from '../validation/stateDocument.js';
 import type { PlanAtomInput, PlanNarrative, PlanPartInput } from '../types.js';
@@ -298,9 +298,6 @@ export function validatePlanDocument(value: unknown, offeredAreas: readonly stri
  * either way — this is the same question asked earlier off a cached answer, never a second one.
  */
 function coverageRefusal(doc: PlanDocument, offeredAreas: readonly string[]): string | null {
-  const parts = doc.parts.map((part) => ({ slug: part.slug, coverage: part.coverage ?? null }));
-  const spread = twoAreaRefusal(doc.validation?.checks ?? [], parts);
-  if (spread !== null) return spread;
   if (offeredAreas.length === 0) return null;
   const offered = new Set(offeredAreas);
   const bad = doc.parts.filter((part) => part.coverage !== undefined && !offered.has(part.coverage));

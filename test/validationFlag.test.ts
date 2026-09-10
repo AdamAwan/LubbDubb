@@ -49,6 +49,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     expect: 'It works.',
     uses: [],
     covers: [],
+    steps: [],
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

@@ -37,6 +37,7 @@ import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
 import type { LocalValidationDesk } from '../../localValidation/desk.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
+import type { StepCapabilities } from '../../validation/steps.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -150,6 +151,13 @@ export interface McpToolDeps {
   remoteReadings?: () => RemoteReadingDesk;
   localRun?: () => { runner: LocalRunner; watch: LocalRunWatch };
   repoRoot?: string;
+  /**
+   * What the configured environments declare they can drive, which is the whole of who carries a
+   * validation step. Absent is *nothing declared*, so every step is a person's — the direction this
+   * has to fail in, because a step wrongly given to a fleet that cannot carry it is dispatched, held
+   * and blocking nothing. → docs/spec/20-validation.md#who-carries-a-step
+   */
+  stepCapabilities?: StepCapabilities;
   errors?: ErrorRecorder;
 }
 
