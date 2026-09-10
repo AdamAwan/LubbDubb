@@ -146,7 +146,7 @@ answers the parts it has:
 | Field       | GitHub                                                    | Azure DevOps                                          |
 | ----------- | --------------------------------------------------------- | ----------------------------------------------------- |
 | `title`     | the issue title                                           | `System.Title`                                        |
-| `body`      | the issue body                                            | `System.Description`                                  |
+| `body`      | the issue body                                            | `System.Description` (reads fold in every content field — [below](#where-a-work-items-body-lives)) |
 | `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create        |
 | `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                     |
 | `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)              |
@@ -640,6 +640,30 @@ Behaviour worth knowing:
   Setup's credential probe, which must ask exactly what the auth path asks
   ([26](26-setup.md#the-credential-check-asks-both-routes)). `isSignInHtml` detects a sign-in-HTML response,
   which is retried; only a request that spends _every_ attempt reaches the Errors panel.
+
+### Where a work item's body lives
+
+**`System.Description` is not where an Azure work item's prose is.** Which field holds it belongs to
+the process template and to the item's type: a Bug's is `Microsoft.VSTS.TCM.ReproSteps`, a Product
+Backlog Item states its bar in `Microsoft.VSTS.Common.AcceptanceCriteria`, a custom process can add
+its own rich-text field and often does. Read `System.Description` alone and a whole work-item type
+arrives at the fleet with **an empty body** — and nothing is red: an appraisal reports that the item
+has no body at all and parks it, an operator reading the same item in Azure sees a page full of
+prose, and the only bug is in what the harness ever fetched.
+
+So `composeWorkItemBody` (`src/integrations/azure/workItemBody.ts`) folds **every** content-bearing
+field the batch read returns into one body. Four are named and ordered — description, repro steps,
+acceptance criteria, system info — and after them comes any _other_ field whose value carries HTML
+markup, under its own reference name humanised (`Custom.RootCauseAnalysis` → "Root cause analysis"),
+which is what covers a custom process without the harness having to know its schema. A field holding
+a scalar, an identity or a date is not prose and is not folded in; `System.Title`, `System.Tags` and
+`System.History` are excluded by name because each is already carried as its own thing.
+
+Sections are separated by an `<h3>` heading, matching the HTML the fields themselves hold
+([17](17-cockpit.md#tracker-authored-prose) renders it) — **except** when the description is the only
+section there is, which is the common case and stays exactly the bare description it always was. The
+batch read already asks for every field (`workitemsbatch` with no `fields` filter), so none of this
+costs a request.
 
 ### Reading less on Azure
 

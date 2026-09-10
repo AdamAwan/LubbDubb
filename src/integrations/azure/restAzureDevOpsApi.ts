@@ -19,6 +19,7 @@ import type {
 } from './azureDevOpsApi.js';
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
 import { parseTags } from './workItems.js';
+import { composeWorkItemBody } from './workItemBody.js';
 import { AzureEtagCache } from './conditionalRequests.js';
 
 // → docs/spec/15-integrations.md
@@ -550,7 +551,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return {
       id: w.id,
       title: String(fields['System.Title'] ?? ''),
-      body: String(fields['System.Description'] ?? ''),
+      body: composeWorkItemBody(fields),
       state: String(fields['System.State'] ?? ''),
       tags: rawTags
         .split(';')
