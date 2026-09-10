@@ -282,7 +282,8 @@ That makes the **declaration** the decision, which is where it belongs:
   Nothing counts test parts and nothing rewards a longer list.
 - **It is decided once, at plan time**, by whoever is deciding what the goal is made of — not per
   arrival, and not by the harness at a later moment when the cost is already sunk.
-- **It is visible at plan approval and an operator can strike it** ([08](08-planning.md#the-approval-gate)).
+- **It is visible at plan approval and an operator can strike it** ([08](08-planning.md#the-approval-gate)),
+  which is what the plan sheet's proof band draws it for ([17](17-cockpit.md#the-proof-band)).
   That is the pressure valve — a person deciding this goal does not need it — rather than a weaker
   hold every goal skips silently.
 
@@ -430,6 +431,10 @@ others do not:
   **withdraws nothing**; a check that should go is the operator's to delete.
 - **The operator, at any point**, from the goal's own page — and the operator is the only party that
   can make one runnable at all.
+
+What a goal declared is drawn on the plan sheet as well, read-only, beside the watch it sits next to
+in the document ([17](17-cockpit.md#the-state-digest)) — and counted on the sheet's proof band
+([17](17-cockpit.md#the-proof-band)), which is where a plan's four kinds of proof are read together.
 
 The planner is refused `state_declare` **by name**, `validation_amend`'s rule for its reason: it
 already has a transport that declares the whole block, and two ways to say one thing that disagree
