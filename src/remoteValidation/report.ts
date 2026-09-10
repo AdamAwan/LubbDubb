@@ -125,7 +125,11 @@ interface FoldInput {
  *
  * - a report nobody could read learns nothing, so every row through it is `blocked`;
  * - a selector the report names **no test** under is `blocked` and never `passed` — with generated
- *   specs gone this is the ordinary failure rather than an exotic one;
+ *   specs gone this is the ordinary failure rather than an exotic one. What it says happened depends
+ *   on what else the report holds: a runner that reports the tests a failed dependency held as
+ *   `skipped` reaches the narrowing arm with its own words, and a runner that omits them entirely
+ *   arrives here instead, where a failure under another selector is the only evidence of that
+ *   available — so it is named rather than left as a renamed area;
  * - a test that genuinely **failed** is a failure, and it is a failure whatever else the row did.
  *   A narrowed run is a run that verified less than it claimed; it is not a reason to withhold a
  *   red the deployed product actually earned;
@@ -154,14 +158,7 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
     : null;
   const measured = { executed, retries, durationMs };
 
-  if (mine.length === 0)
-    return {
-      outcome: 'blocked',
-      detail:
-        `the report names no test under \`${area}\` — a renamed area, a deleted spec or a wrong profile. ` +
-        'A selector that matched zero tests is never a pass.',
-      ...measured,
-    };
+  if (mine.length === 0) return { outcome: 'blocked', detail: unnamed(area, report.tests), ...measured };
 
   const failed = mine.filter((test) => test.status === 'failed');
   if (failed.length > 0)
@@ -197,6 +194,31 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
     detail: `${environment} ran ${count(executed, 'test')} under \`${area}\` and every one passed${retried(retries)}.`,
     ...measured,
   };
+}
+
+/**
+ * A selector the report holds nothing under. The reason matters more than the outcome here, because
+ * the reason is what an operator acts on, and two very different things arrive at this arm.
+ *
+ * A **renamed area, a deleted spec or a wrong profile** is one. The other is a dependency that
+ * failed before this area was ever reached: the contract asks a project to report the tests it never
+ * ran as `skipped` rows naming the dependency — which lands in the narrowing arm with the right
+ * words — but a runner mapping its own report one-to-one commonly **omits** them, and then this arm
+ * is where a failed auth setup arrives. The harness cannot know a suite's dependency graph, so it
+ * names what it can see: a failure under some other selector, which is the shape that reading has.
+ */
+function unnamed(area: string, tests: readonly ReportTest[]): string {
+  const elsewhere = [...new Set(tests.filter((t) => t.status === 'failed').map((t) => t.selector))];
+  const dependency =
+    elsewhere.length === 0
+      ? ''
+      : ` Nothing under it failed either, but ${elsewhere.map((s) => `\`${s}\``).join(', ')} did — where the ` +
+        'runner omits the tests a failed dependency was holding up rather than reporting them skipped, that ' +
+        'is what this looks like.';
+  return (
+    `the report names no test under \`${area}\` — a renamed area, a deleted spec or a wrong profile.` +
+    `${dependency} A selector that matched zero tests is never a pass.`
+  );
 }
 
 /** A retried pass **is a pass**, and the row records that it was retried. Retry policy is the project's. */

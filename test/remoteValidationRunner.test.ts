@@ -15,6 +15,7 @@ import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { CommandRemoteRunner, parseSelectorListing, runnerEnv } from '../src/remoteValidation/runner.js';
 import { preflightRows } from '../src/remoteValidation/preflight.js';
+import { runnableSelectors } from '../src/remoteValidation/briefing.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -186,6 +187,49 @@ test('a listing is read as areas, and one that could not answer is never an offe
   ]);
   assert.equal(parseSelectorListing('   ').offers, null, 'nothing printed is never an empty offering');
   assert.match(parseSelectorListing('').detail ?? '', /printed nothing/);
+});
+
+test('a banner ahead of the listing is not read as areas, and prose is refused rather than guessed at', () => {
+  // A suite's own config prints ahead of its report — a dotenv banner is the ordinary case, and it
+  // holds a brace of its own, so seeking the first `{` is not enough.
+  const banner = "injected env (10) from .env // tip: custom filepath { path: '/custom/path/.env' }";
+  const prefixed = parseSelectorListing(
+    `${banner}\n[{"selector":"checkout","tests":2},{"selector":"refunds","tests":63}]`,
+  );
+  assert.equal(prefixed.detail, null);
+  assert.deepEqual(prefixed.offers, [
+    { selector: AREA, tests: 2 },
+    { selector: 'refunds', tests: 63 },
+  ]);
+
+  // And a banner with no listing behind it answers *nothing*. Read as one name per line it offers
+  // areas no check can match, which blocks every row naming a renamed area against a runner that
+  // offered exactly the right ones — the same shape as an empty listing read as an answer.
+  const garbage = parseSelectorListing(banner);
+  assert.equal(garbage.offers, null, 'a banner is never an offering');
+  assert.match(garbage.detail ?? '', /not a list of selectors/);
+  for (const prose of ['{"tests": 4}', 'see https://example/docs // for the areas', `x${'y'.repeat(200)}`])
+    assert.equal(parseSelectorListing(`checkout\n${prose}`).offers, null, `${prose.slice(0, 20)} is not an area`);
+});
+
+test('an area holding the delimiter its own list is joined on blocks its row at assembly', async () => {
+  const b = bench(new FakeRemoteRunner({ acceptance: { listing: JSON.stringify([{ selector: AREA, tests: 12 }]) } }));
+  try {
+    seed(b, 'Reports, exports');
+    await b.desk.run();
+
+    const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    assert.match(row?.blockedReason ?? '', /LUBBDUBB_SELECTORS/, 'and the reason names the delimiter');
+    assert.match(row?.blockedReason ?? '', /two selectors that do not exist/);
+    assert.equal(row?.matched, null, 'the pre-flight leaves a row another cause has already blocked');
+    assert.deepEqual(
+      runnableSelectors(b.store, ACCEPTANCE, 'issue:12', b.store.listRemoteSheetRows()),
+      [],
+      'so nothing comma-joins it into the variable a project would mis-split',
+    );
+  } finally {
+    shut(b);
+  }
 });
 
 test('CommandRemoteRunner spawns the project’s own command with the parameters as environment only', async () => {

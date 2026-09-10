@@ -630,7 +630,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     desk: remoteValidation,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
     git: gitObserver,
-    tenants: opts.tenants ?? new CommandTenantKeeper(config.repoRoot),
+    tenants: opts.tenants ?? new CommandTenantKeeper(config.repoRoot, config.remoteValidation.tenantTimeoutMs),
     errors,
   });
 

@@ -124,6 +124,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a remote validation run may take before it is killed. Thirty seconds — what every other command in the harness gets — is the wrong number for a browser suite, which is the whole reason this key exists.',
   },
   {
+    path: 'remoteValidation.tenantTimeoutMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an ensureTenant or reseed command may take before it is killed. Provisioning a tenant is a job of tens of minutes by the spec’s own account, so the thirty seconds every other command gets would kill both of them on every invocation.',
+  },
+  {
     path: 'upNextOverrideTtlMs',
     type: 'number',
     ms: true,

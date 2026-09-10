@@ -71,6 +71,12 @@ test('remoteValidation.runTimeoutMs defaults to thirty minutes and the Features 
   assert.equal(config.remoteValidation.runTimeoutMs, 30 * 60 * 1000);
   assert.ok(groupedTopLevelKeys().has('remoteValidation'), 'an unclaimed key validates, applies, and is drawn nowhere');
   assert.ok(CONFIG_FIELDS.some((f) => f.path === 'remoteValidation.runTimeoutMs'));
+
+  // The tenant commands are not the runner, and neither of them is a thirty-second job: this
+  // document's own account of ensureTenant is "possibly very slow", so the ordinary kill would end
+  // both on every invocation.
+  assert.equal(config.remoteValidation.tenantTimeoutMs, 60 * 60 * 1000);
+  assert.ok(CONFIG_FIELDS.some((f) => f.path === 'remoteValidation.tenantTimeoutMs'));
 });
 
 test('an empty permits list is refused — it reads as a configuration and permits nothing', () => {

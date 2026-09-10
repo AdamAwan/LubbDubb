@@ -170,10 +170,11 @@ Rows keep their own downstream consequences. A failed `check` still reaches `val
 | `failed`  | The run did not satisfy what was declared.                                                                  | `failed`, `resultBy: 'spec'`                                                                     |
 | `blocked` | **No reading was taken.** Nothing was learned about the goal.                                               | Nothing at all                                                                                   |
 
-Seven things produce `blocked`, and the number of roads into it is the point:
+Eight things produce `blocked`, and the number of roads into it is the point:
 
 - the row's query is **not approved for this environment**;
 - the selector **matched zero tests**, or **matched more than it ran**;
+- the check's area holds the **selector delimiter**, so it could never be passed as one selector;
 - the environment does not `permit` that row kind;
 - there is no private network, no credential or no tenant;
 - the goal's work is **no longer in the deployed commit**, or the pin could not say;
@@ -400,6 +401,25 @@ What runs at assembly, without asking:
   selector that matched nothing reads as a clean pass. It is written onto `remote_sheet_rows.matched`
   and read from nowhere else.
 
+  **The listing is read from the operator's own checkout, and that skew is accepted.** The run itself
+  happens in a checkout pinned to the deployed commit; `listSelectors` runs with `cwd` at `repoRoot`,
+  which is whatever branch the harness's own checkout is on. Usually they are the same commit. Where
+  they differ — an operator sitting on a branch that reorganised the suite — `matched` comes from one
+  commit and `executed` from another, and the row fails toward `blocked` with a reason naming the
+  wrong cause. Pinning the pre-flight too means a checkout per sheet assembly, which is a great deal
+  of machinery for a rare skew whose failure is safe; it is declined deliberately rather than
+  overlooked, and this paragraph is the account of it.
+
+  **The listing may be prefixed, and it may not be guessed at.** A suite's own config prints ahead of
+  its report — a dotenv banner is the ordinary case — so `parseSelectorListing` _seeks_ the JSON array
+  in the output rather than requiring it at byte 0, and seeks it at each `[` rather than at the first
+  brace, because a banner holds a brace of its own. What it will not do is read prose as areas: a
+  line-form listing holding a line that is not a name — a brace, a `//`, or more than 120 characters —
+  is **refused**, `offers: null`, exactly as a kill is. A banner read as one name per line offers
+  areas no check can match, and every row then blocks naming a renamed area against a runner that
+  offered precisely the right ones — this arm's own stated danger one step out, since a garbage
+  listing read as an answer has the same shape as an empty one.
+
   Two rows the pre-flight leaves exactly as they are, and both matter. One another cause has already
   blocked keeps the reason it has — a kind this environment does not permit is not a mismatch. And a
   check that **names no area** is a person's, exactly as every check is today: the pre-flight asks a
@@ -499,6 +519,14 @@ bypasses all of it and fails at the first authenticated call. So:
   never assembled from them.
 - **A selector names an area, never a file path.** A path breaks the first time a later goal
   reorganises the specs inside it, and it breaks silently, as a selector matching nothing.
+- **A selector never holds the delimiter its own list is joined on.** `LUBBDUBB_SELECTORS` is
+  comma-joined, and areas are operator-authored free text, so `Reports, exports` is an ordinary thing
+  to type and is silently split by the project into two selectors that do not exist. A check whose
+  area holds a comma is `blocked` at assembly, naming the delimiter, by `selectorFault` in
+  `src/remoteValidation/runner.ts` — where the joining lives — read from `sheetRows`, which is the
+  one cause of `blocked` a press could never overcome that the sheet can see without asking anybody
+  anything. Refusing where the area is read is the cheap fix; encoding the list as JSON in the
+  variable is the other one, and it changes the contract for every project already reading it.
 - **Specs are resolved from the environment's _current_ commit, at run time.** Not from a working
   tree, not from the default branch's tip, and not from a commit frozen when the sheet was assembled.
   The environment holds a particular build and the specs that describe that build are the ones in it —
@@ -530,7 +558,13 @@ to be wrong for some row. From the report, and from nothing else:
   nothing. The check is **matched-versus-executed consistency**, never a count declared on the check,
   which would be a number to keep in step that rots the first time a spec is legitimately split.
 - tests **skipped because a dependency failed** are `blocked`, not `failed` — that is what a failed
-  auth-setup project looks like, and only the report distinguishes it.
+  auth-setup project looks like, and only the report distinguishes it. Which means it is only
+  distinguishable if the report **holds those tests**: a runner mapping its own output one-to-one
+  commonly omits the tests it never ran rather than reporting them skipped, and a report that omits
+  them says, to the fold, that the area holds no test at all — which is what a renamed area says. So
+  the contract asks for them explicitly, below, and where they are missing the zero-match arm names a
+  failure under another selector rather than a renamed area, because that is the only evidence of a
+  dependency the harness has. The harness cannot know a suite's dependency graph and does not try to.
 - **a retried pass is a pass**, and the row records that it was retried. Retry policy belongs to the
   project's runner config, not to the harness. Repeated retries on one area are a signal about the
   spec, surfaced through [what a row records](#artefacts-and-making-worth-observable) rather than
@@ -540,7 +574,16 @@ to be wrong for some row. From the report, and from nothing else:
 `validate.state.run`'s arrangement one subsystem over, and for the governing principle's reason. It
 is a JSON list of the tests that ran, or an object carrying one under `tests`; each entry names its
 `selector` — the area, compared against `validation_checks.area` and nothing else — and its `status`,
-and may carry `retries`, `durationMs` and a `note`. **Rows, never counts**, the state contract's own
+and may carry `retries`, `durationMs` and a `note`.
+
+**Every requested selector appears in it, including the ones nothing ran under.** A selector whose
+tests never ran because a dependency failed must appear as a `skipped` row whose `note` names the
+dependency. That note is the only place the difference between a failed auth setup and a deleted spec
+is written down, and a project that does the obvious thing — map the runner's own report one-to-one,
+dropping the projects it never reached — gets the right outcome with the wrong reason, which is the
+half an operator acts on. It is in the run's briefing for that reason.
+
+**Rows, never counts**, the state contract's own
 refusal: a report that declares totals defeats matched-versus-executed, which is the guard, because
 the declared count is the thing being checked. A status word the parse does not recognise folds to
 `skipped` rather than to `passed` — an unread word must never be the one that colours a row green.
@@ -614,6 +657,13 @@ consumer.
 **Built**, in `src/remoteValidation/tenants.ts` — `TenantKeeper`, `CommandTenantKeeper`, its scripted
 fake in `src/remoteValidation/fakeTenantKeeper.ts`, and the pure `resolveTenant` the press, the gate
 and the cockpit all read.
+
+Both commands are killed at `remoteValidation.tenantTimeoutMs`, default **one hour**, and not at the
+30 seconds every other command in the harness gets — see [Configuration](#configuration). A
+provisioning or reseeding job runs for tens of minutes, so the ordinary kill ends it every time, and
+the workaround it invites is worse than the bug: launching the real work detached and returning
+immediately stamps the tenant as reseeded when the rebuild _started_, which makes the age drawn at
+the gate a lie in exactly the window the freshness reading exists for.
 
 **The harness never generates or infers a tenant identifier.** Environments commonly run reapers that
 hard-delete tenants matching a name pattern past a short age; a harness-invented name survives about
@@ -977,7 +1027,7 @@ press's pin. The pre-flight runs on the **assembly** pass only and inside its ca
 spawn per sheet, and a sheet already assembled is never re-listed. The bench line is refreshed by
 `ValidationReadyDesk` reading the rows out of the store, which is why the desk's position above it is
 load-bearing rather than tidy. An operator's own `.../cancel` remains a settle path beside the sweep —
-it is how a run is called off before its agent has gone anywhere — and it stopped being the *only*
+it is how a run is called off before its agent has gone anywhere — and it stopped being the _only_
 one when the sweep landed.
 
 **It returns immediately where no environment declares a `validate` block**, which is the steady
@@ -1102,7 +1152,7 @@ rather than `error`.
       },
     },
   ],
-  "remoteValidation": { "runTimeoutMs": 1800000 },
+  "remoteValidation": { "runTimeoutMs": 1800000, "tenantTimeoutMs": 3600000 },
 }
 ```
 
@@ -1118,8 +1168,13 @@ a project layer that gets committed.**
 
 `remoteValidation` is the one **new top-level key**, and it exists because 30 seconds — the kill every
 other command in the harness gets — is the wrong number for a browser suite. It carries
-`runTimeoutMs`, default 30 minutes; every other command, `state.run` included, keeps the 30-second
-kill. **It is claimed by the `Features` group in `src/server/runningConfig.ts`**: an unclaimed key
+`runTimeoutMs`, default 30 minutes, the kill for a **runner** invocation; and `tenantTimeoutMs`,
+default one hour, the kill for `ensureTenant` and `reseed`. Every other command, `state.run` included,
+keeps the 30-second kill. The tenant commands get their own key rather than sharing the runner's
+because the two are unrelated lengths — a suite's runtime against a provisioning job's — and they get
+one at all because this document's own account of `ensureTenant` is "possibly very slow": provisioning
+or reseeding a tenant is a job of tens of minutes, so the ordinary kill would end both commands on
+**every** invocation, and the failure presents as a tenant command that will not answer. **It is claimed by the `Features` group in `src/server/runningConfig.ts`**: an unclaimed key
 validates, applies, and is drawn nowhere.
 
 `validateEnvironments` (`src/environments/policy.ts`) grows the refusals whose absence is otherwise

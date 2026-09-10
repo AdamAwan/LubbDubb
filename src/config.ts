@@ -107,9 +107,18 @@ export interface Config {
 
 interface RemoteValidationPolicy {
   runTimeoutMs: number;
+  /**
+   * The kill for `ensureTenant` and `reseed`. Its own key rather than `runTimeoutMs` because the two
+   * are unrelated lengths — a suite's runtime against a provisioning job's — and its own default
+   * because 30 seconds kills every tenant command this design has, always.
+   */
+  tenantTimeoutMs: number;
 }
 
-const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = { runTimeoutMs: 30 * 60 * 1000 };
+const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
+  runTimeoutMs: 30 * 60 * 1000,
+  tenantTimeoutMs: 60 * 60 * 1000,
+};
 
 interface AuthConfig {
   enabled: boolean;
