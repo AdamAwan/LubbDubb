@@ -433,3 +433,140 @@ function tailBegun(page: GoalPageView): boolean {
   const { issue } = page;
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
+
+export const GOAL_TABS = ['ticket', 'work', 'validation', 'shipping', 'record'] as const;
+
+export type GoalTab = (typeof GOAL_TABS)[number];
+
+export const GOAL_TAB_LABEL: Record<GoalTab, string> = {
+  ticket: 'Ticket',
+  work: 'Work',
+  validation: 'Validation',
+  shipping: 'Shipping',
+  record: 'Record',
+};
+
+/**
+ * Which pane each foldable section lives behind. The page's own map rather than
+ * the console's, because the track strip routes through it too: a strip stage
+ * and the tab it belongs to must never disagree about where a stage is drawn.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
+  ticket: 'ticket',
+  sequence: 'ticket',
+  validation: 'validation',
+  localValidation: 'validation',
+  remoteValidation: 'validation',
+  environments: 'shipping',
+  signals: 'shipping',
+  tail: 'record',
+  record: 'record',
+};
+
+export interface GoalTabOpening {
+  tab: GoalTab;
+  why: string;
+}
+
+/**
+ * Which pane the page opens on when the operator has not picked one, and the
+ * sentence that says why. Read top to bottom, first answer wins: the order *is*
+ * the rule, and each arm names a state some other surface already draws.
+ *
+ * It decides the landing only. The moment an operator picks a tab the pick is on
+ * `Place` and this is not consulted again — a goal that lands in an environment
+ * while somebody is reading its plan must not take the pane out from under them.
+ * → docs/spec/17-cockpit.md#which-pane-opens
+ */
+export function goalTabOpening(page: GoalPageView): GoalTabOpening {
+  if (settled(page)) return { tab: 'record', why: 'this goal is finished — the record is what the page is for now' };
+  if (page.gateHold !== null) return { tab: 'shipping', why: 'a gate is holding this goal short of an environment' };
+  if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
+    return { tab: 'work', why: 'a pull request is in your court' };
+  if (page.issue.validation?.state === 'flagged' || flaggedLocally(page))
+    return { tab: 'validation', why: 'the validation plan is not settled' };
+  if (shipped(page)) return { tab: 'shipping', why: 'the work has reached an environment' };
+  if (validationBegun(page)) return { tab: 'validation', why: 'the work is merged and its checks have begun' };
+  if (workStarted(page)) return { tab: 'work', why: 'there is a plan, a pull request or an agent on this goal' };
+  return { tab: 'ticket', why: 'nothing has been planned yet, so the ask is the page' };
+}
+
+export interface GoalTabBadge {
+  text: string;
+  tone: 'green' | 'amber' | 'red' | 'blue' | null;
+}
+
+/**
+ * What each tab carries on its own label: a count, and the tone the strip would
+ * give the same reading. Null is a real answer and means the pane holds nothing
+ * yet — a badge reading `0` says a thing was counted, which is not the same.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export function goalTabBadges(page: GoalPageView): Record<GoalTab, GoalTabBadge | null> {
+  return {
+    ticket: page.issue.instructions.length === 0 ? null : { text: `${page.issue.instructions.length}`, tone: null },
+    work: workBadge(page),
+    validation: validationBadge(page),
+    shipping: shippingBadge(page),
+    record: page.issue.spend === null ? null : { text: fmtCost(page.issue.spend.costUsd), tone: null },
+  };
+}
+
+function workBadge(page: GoalPageView): GoalTabBadge | null {
+  const wants = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
+  if (wants > 0) return { text: `${wants} in your court`, tone: 'red' };
+  const track = buildGoalTrack(page.parts);
+  if (track.total > 0) {
+    const text = `${track.merged}/${track.total}`;
+    if (track.merged === track.total) return { text, tone: 'green' };
+    if (track.held > 0) return { text, tone: 'amber' };
+    return { text, tone: track.now > 0 ? 'blue' : null };
+  }
+  const open = page.openPullRequests.length;
+  return open === 0 ? null : { text: `${open} open`, tone: 'blue' };
+}
+
+function validationBadge(page: GoalPageView): GoalTabBadge | null {
+  const v = page.issue.validation;
+  if (v === null || v.total === 0) return flaggedLocally(page) ? { text: 'asked of you', tone: 'amber' } : null;
+  const settledChecks = v.passed + v.waived;
+  return {
+    text: `${settledChecks}/${v.total}`,
+    tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'red' : 'amber',
+  };
+}
+
+function shippingBadge(page: GoalPageView): GoalTabBadge | null {
+  if (page.gateHold !== null) return { text: 'gate held', tone: 'amber' };
+  const envs = page.environments;
+  if (envs.length === 0) return null;
+  const reached = envs.filter((e) => e.status === 'reached').length;
+  if (reached === 0) return envs.some((e) => e.status === 'partial') ? { text: 'partial', tone: 'amber' } : null;
+  return { text: `${reached}/${envs.length}`, tone: reached === envs.length ? 'green' : 'blue' };
+}
+
+/* Two decimals under ten dollars and none over: the badge is a glance at what a
+   goal has cost, and cents on a two-figure number are three characters of noise
+   on a control that has to stay one line. */
+function fmtCost(usd: number): string {
+  return usd >= 10 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
+}
+
+function settled(page: GoalPageView): boolean {
+  const { issue } = page;
+  return issue.state !== 'open' || issue.conclusion.verdict === 'done' || issue.run?.dismissed === true;
+}
+
+function flaggedLocally(page: GoalPageView): boolean {
+  const local = page.issue.localValidation;
+  return local !== null && (local.status === 'failed' || local.status === 'blocked');
+}
+
+function validationBegun(page: GoalPageView): boolean {
+  return (
+    page.checks.some((c) => c.supersededReason === null && c.state !== 'unrun') ||
+    page.issue.localValidation !== null ||
+    page.remoteSheets.length > 0
+  );
+}

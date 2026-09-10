@@ -1,5 +1,5 @@
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from './actions.js';
-import { GOAL_SECTIONS } from '../view/goalPage.js';
+import { GOAL_SECTIONS, GOAL_TABS, type GoalTab } from '../view/goalPage.js';
 import type {
   InsightsWindow,
   TicketOrder,
@@ -26,6 +26,8 @@ export interface Place {
   reviewIdea: string | null;
   obstacle: string | null;
   obstacleEnded: boolean;
+  /** Which pane of the goal page is open, or null to let the lifecycle rule pick. */
+  goalTab: GoalTab | null;
   goalOpen: string[];
   goalShut: string[];
   configTab: ConfigTab;
@@ -95,6 +97,7 @@ export const NOWHERE: Place = {
   scratchpad: null,
   reviewPack: null,
   reviewIdea: null,
+  goalTab: null,
   goalOpen: [],
   goalShut: [],
   obstacle: null,
@@ -183,6 +186,7 @@ export function readPlace(search: string): Place {
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
+    goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
     goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
     obstacle: param(query, 'obs'),
@@ -318,6 +322,7 @@ export function placeQuery(place: Place): string {
     query.set('pack', String(place.reviewPack));
     if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
   }
+  if (place.goalTab !== null) query.set('pane', place.goalTab);
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
   if (place.obstacle !== null) query.set('obs', place.obstacle);

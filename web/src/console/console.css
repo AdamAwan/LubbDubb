@@ -1506,6 +1506,84 @@ a.cn-qbody {
   background: none;
 }
 
+/* The goal's five panes. The strip above says where the goal *is*; this row says
+   which reading you are looking at, and the two are one control — a strip stage
+   selects the pane that holds it. → docs/spec/17-cockpit.md#the-panes
+
+   Scrollable rather than wrapping: five tabs on two lines stop reading as one
+   row of alternatives, and the pane below is what the width is for. */
+.cn-gtabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--cn-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cn-gtabs::-webkit-scrollbar {
+  display: none;
+}
+.cn-gtab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--cn-fg-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cn-gtab:hover {
+  color: var(--cn-fg);
+  background: var(--cn-hover);
+}
+.cn-gtab.cn-on {
+  color: var(--cn-fg);
+  font-weight: 600;
+  background: var(--cn-panel);
+  border-color: var(--cn-line);
+  border-bottom: 1px solid var(--cn-panel);
+}
+/* The count on a tab's own label. Toneless by default — a badge is a reading,
+   and most readings are not verdicts — and it takes its hue from the `cn-t-*`
+   alias the badge carries, so a theme moves it with everything else. */
+.cn-gtb {
+  font-family: var(--cn-mono);
+  font-size: 10px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 5px;
+  border: 1px solid var(--cn-inert);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg-faint);
+}
+.cn-gtb.cn-t-green,
+.cn-gtb.cn-t-amber,
+.cn-gtb.cn-t-red,
+.cn-gtb.cn-t-blue {
+  color: var(--cn-tone-ink);
+  border-color: var(--cn-tone-line);
+  background: var(--cn-tone-bg);
+}
+.cn-gpane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* The pane takes focus when a jump lands in it, and a focus ring around the
+   whole page body is furniture: the tab that selected it is the thing that
+   reads as focused. */
+.cn-gpane:focus {
+  outline: none;
+}
+
 /* The orphan warning — a goal hanging off no Feature, said above every card on
    its page. → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature
 

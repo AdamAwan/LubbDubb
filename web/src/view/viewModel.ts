@@ -20,7 +20,7 @@ import type {
 import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
 import { buildGoalPage, goalOfOrigin } from './goalPage.js';
-import type { GoalPageView } from './goalPage.js';
+import type { GoalPageView, GoalTab } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from '../cockpit/actions.js';
@@ -54,6 +54,7 @@ export interface CockpitView {
   consolePanel: ConsolePanel;
   tab: ConsoleTab;
   collapsedFeatures: ReadonlySet<number>;
+  goalTab: GoalTab | null;
   goalOpen: ReadonlySet<string>;
   goalShut: ReadonlySet<string>;
   configTab: ConfigTab;
@@ -162,6 +163,7 @@ interface ViewInputs {
   consolePanel: ConsolePanel;
   tab: ConsoleTab;
   collapsed?: readonly number[];
+  goalTab?: GoalTab | null;
   goalOpen?: readonly string[];
   goalShut?: readonly string[];
   configTab?: ConfigTab;
@@ -251,6 +253,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     poolProject: input.poolProject ?? null,
     sheetEnvironment: input.sheetEnvironment ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
+    goalTab: input.goalTab ?? null,
     goalOpen: new Set(input.goalOpen ?? []),
     goalShut: new Set(input.goalShut ?? []),
     configTab: input.configTab ?? 'values',

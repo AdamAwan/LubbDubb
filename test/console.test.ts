@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { EnvironmentHealthReading } from '../web/src/types.js';
-import type { GoalPartView } from '../web/src/view/goalPage.js';
+import type { GoalPartView, GoalTab } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
@@ -687,10 +687,12 @@ function goalView(
   ref: string = goalRef(),
   goalOpen: readonly string[] = [],
   goalShut: readonly string[] = [],
+  goalTab: GoalTab | null = null,
 ): CockpitView {
   const state = buildDemoState().state;
   mutate(state);
   return buildViewModel({
+    goalTab,
     goalOpen,
     goalShut,
     state,
@@ -825,14 +827,14 @@ test('a pull request the world has lost is said so, rather than falling through 
 });
 
 test('a goal draws its own durable record, not only the live snapshot', () => {
-  const shut = render(goalView());
+  const shut = render(goalView(() => {}, goalRef(), [], [], 'record'));
   assert.ok(shut.includes('The record'), 'the goal page must carry the history the snapshot forgets');
   assert.ok(
     !shut.includes('Reading the record'),
     'folded away it fetches nothing — "on open, never polled" is the disclosure now, not the page',
   );
 
-  const open = render(goalView(() => {}, goalRef(), ['record']));
+  const open = render(goalView(() => {}, goalRef(), ['record'], [], 'record'));
   assert.ok(open.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
 });
 
@@ -854,7 +856,7 @@ test('a goal can still be sent back for more work, not only marked done', () => 
       },
     ];
   });
-  const standing = render(already);
+  const standing = render({ ...already, goalTab: 'ticket' });
   assert.ok(standing.includes('Give instructions'), 'and it still is once one stands');
   assert.ok(standing.includes('change the button to primary'), 'what was asked for is drawn, not just counted');
   assert.ok(standing.includes('Withdraw'), 'and there is a way to take it back');
@@ -1012,7 +1014,7 @@ test('the rail marks the open goal’s asks and mutes the rest', () => {
 });
 
 test('the ask is drawn above the plan, which is the whole point of the page', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), [], [], 'work');
   if ((v.goalPage?.needs.length ?? 0) === 0) return;
   const html = render(v);
   assert.ok(html.indexOf('cn-needs') < html.indexOf('cn-waves'));
@@ -1025,7 +1027,7 @@ test('a goal with no ask draws no band at all', () => {
 });
 
 test('a held part quotes the reconciler’s own reason rather than inventing one', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), [], [], 'work');
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
   const first = page.parts[0];
@@ -1045,7 +1047,7 @@ test('a held part quotes the reconciler’s own reason rather than inventing one
 });
 
 test('a plan with no live parts draws what it proposed rather than only saying so', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), [], [], 'work');
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
   const seed = page.parts[0]?.part ?? v.state.planParts?.[0];
@@ -1085,7 +1087,7 @@ test('a goal with no plan draws no way into one', () => {
 });
 
 test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
-  const v = goalView(() => {}, goalRef(), ['ticket']);
+  const v = goalView(() => {}, goalRef(), ['ticket'], [], 'ticket');
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
 
@@ -1099,11 +1101,11 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
 });
 
 test('the ticket arrives folded on a goal under way, and opens from the place', () => {
-  const shut = render(goalView());
+  const shut = render(goalView(() => {}, goalRef(), [], [], 'ticket'));
   assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
   assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
 
-  const open = render(goalView(() => {}, goalRef(), ['ticket']));
+  const open = render(goalView(() => {}, goalRef(), ['ticket'], [], 'ticket'));
   assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
 });
 
@@ -1116,7 +1118,21 @@ test('a goal nobody has planned opens on its ticket, unless the operator folded 
   });
   const page = fresh.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
-  const bare = { ...fresh, goalPage: { ...page, plan: null, parts: [], openPullRequests: [], agents: [] } };
+  const bare = {
+    ...fresh,
+    goalPage: {
+      ...page,
+      plan: null,
+      parts: [],
+      openPullRequests: [],
+      agents: [],
+      checks: [],
+      remoteSheets: [],
+      environments: [],
+      gateHold: null,
+      issue: { ...page.issue, localValidation: null, validation: null },
+    },
+  };
   assert.ok(render(bare).includes('class="cn-tick"'), 'the ticket is the page on a goal with nothing else on it');
 
   assert.ok(
@@ -1149,12 +1165,15 @@ test('validation and signals are folded on a goal that has not shipped', () => {
       ],
     },
   };
-  const html = render(nowhere);
+  const html = render({ ...nowhere, goalTab: 'validation' });
   assert.ok(html.includes('Validation'), 'the card is named — a surface that vanishes when quiet looks broken');
   assert.ok(!html.includes('cn-vin'), 'and its body is not drawn while there is nothing in it');
-  assert.ok(html.includes('0/1 reached'), 'a folded environments card still says how far the work has got');
+  assert.ok(
+    render({ ...nowhere, goalTab: 'shipping' }).includes('0/1 reached'),
+    'a folded environments card still says how far the work has got',
+  );
 
-  const open = render({ ...nowhere, goalOpen: new Set(['validation']) });
+  const open = render({ ...nowhere, goalTab: 'validation', goalOpen: new Set(['validation']) });
   assert.ok(open.includes('cn-vin'), 'the place is what opens it');
 });
 
@@ -1380,7 +1399,7 @@ test('the theme section draws a preset picker, the token rows and the save bar',
 });
 
 test('a goal with no measured spend draws no spend row rather than $0.00', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), [], [], 'record');
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
 
@@ -1879,10 +1898,16 @@ test('the goal header offers Validate locally only where an agent could run it',
 
   const noBranch = decode(
     render(
-      goalView((state) => {
-        const target = state.localRunTargets.find((t) => t.issueNumber === 390);
-        if (target) target.runnable = false;
-      }, ref),
+      goalView(
+        (state) => {
+          const target = state.localRunTargets.find((t) => t.issueNumber === 390);
+          if (target) target.runnable = false;
+        },
+        ref,
+        [],
+        [],
+        'validation',
+      ),
     ),
   );
   assert.ok(!noBranch.includes('Validate locally'));
@@ -1890,9 +1915,15 @@ test('the goal header offers Validate locally only where an agent could run it',
 
   const unconfigured = decode(
     render(
-      goalView((state) => {
-        state.config.localRunConfigured = false;
-      }, ref),
+      goalView(
+        (state) => {
+          state.config.localRunConfigured = false;
+        },
+        ref,
+        [],
+        [],
+        'validation',
+      ),
     ),
   );
   assert.ok(!unconfigured.includes('Validate locally'));
@@ -1938,7 +1969,7 @@ test('the local validation chip words each phase of a run in flight', () => {
 });
 
 test('the local validation card draws the findings, the pages and the plan it ran', () => {
-  const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'])));
+  const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'], [], 'validation')));
   assert.ok(html.includes('A job with no schema is accepted'), 'the finding');
   assert.ok(html.includes('blocker'), 'and what it is worth');
   assert.ok(html.includes('http://localhost:5173/jobs/new'), 'the page it was found on');
@@ -1958,6 +1989,8 @@ test('a passed local validation reads settled and offers nothing to do', () => {
         },
         'issue:390',
         ['localValidation'],
+        [],
+        'validation',
       ),
     ),
   );
