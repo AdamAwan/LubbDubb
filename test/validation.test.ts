@@ -40,7 +40,9 @@ test('a validation block is optional, and absent is not the same as empty', () =
   const plain = doc();
   assert.equal(plain.validation, undefined);
   const empty = doc({ validation: { checks: [] } });
-  assert.deepEqual(empty.validation, { checks: [], resources: [] });
+  assert.deepEqual(empty.validation, { checks: [] }, 'an omitted array stays omitted — it is not an empty one');
+  const hint = doc({ validation: { hint: 'the upload path against a real store' } });
+  assert.deepEqual(hint.validation, { hint: 'the upload path against a real store' });
 });
 
 test('a check carrying an actor is refused rather than ignored', () => {

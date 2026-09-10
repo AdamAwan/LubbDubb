@@ -913,6 +913,23 @@ export interface ValidationAmendResult {
   unknown: string[];
 }
 
+/**
+ * A goal's validation plan, either half of it. The plan document writes the `hint` — prose intent,
+ * binding nothing — and the validation planner writes the rest after delivery: its account of where
+ * it departed from that hint, and, where it declared nothing, why nothing was worth running.
+ *
+ * `authoredAt` is the fact nothing else holds. An empty check set is a legitimate answer and is
+ * indistinguishable from a planner that never ran, so sheet assembly waits on this stamp rather
+ * than on a check count. → docs/spec/20-validation.md#when-the-check-set-is-written
+ */
+export interface ValidationPlanRecord {
+  originRef: string;
+  hint: string | null;
+  note: string | null;
+  emptyReason: string | null;
+  authoredAt: string | null;
+}
+
 export interface ValidationResourceInput {
   name: string;
   kind: ValidationResourceKind | null;

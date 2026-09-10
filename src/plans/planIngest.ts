@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planAtomInputs, planNarrative, planPartInputs } from './planDocument.js';
-import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
+import { declaresCheckSet, validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import { watchCheckInputs } from '../validation/watchDocument.js';
 import { stateQueryInputs } from '../validation/stateDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
@@ -59,8 +59,13 @@ export function ingestPlanDocument(
     });
   }
 
-  if (doc.validation) {
-    const resources = validationResourceInputs(doc.validation.resources);
+  if (doc.validation) store.recordValidationHint(originRef, doc.validation.hint ?? null);
+
+  // A `validation` block that declares only a hint writes no check set. Reading a hint-only block as
+  // `checks: []` would supersede a check set an operator may be halfway through — the omission rule
+  // the whole-set transport is held to. → docs/spec/20-validation.md#amendment
+  if (doc.validation && declaresCheckSet(doc.validation)) {
+    const resources = validationResourceInputs(doc.validation.resources ?? []);
     withdrawResourceAsks(
       store,
       originRef,

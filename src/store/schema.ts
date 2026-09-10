@@ -1340,6 +1340,24 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   PRIMARY KEY (origin_ref, id)
 );
 
+-- A goal's validation plan, written in two halves. The plan document writes the
+-- hint — prose intent, binding nothing — and the validation planner writes the
+-- rest after the goal is delivered, against merged code.
+--
+-- The authored_at stamp is the fact nothing else holds. An empty check set is a
+-- legitimate answer and is indistinguishable from a planner that never ran, so
+-- sheet assembly waits on this stamp rather than on a check count: a sheet
+-- assembled before the set is authored carries only the watch-derived rows and
+-- reads as a misconfiguration.
+CREATE TABLE IF NOT EXISTS validation_plans (
+  origin_ref   TEXT PRIMARY KEY,      -- the goal, issue:<n>
+  hint         TEXT,                  -- the plan's prose intent; null is a plan that declared none
+  note         TEXT,                  -- where the planner departed from the hint, and why
+  empty_reason TEXT,                  -- why nothing was declared; null where checks were
+  authored_at  TEXT,                  -- null is "the check set has not been written yet"
+  updated_at   TEXT NOT NULL
+);
+
 -- What a check needs that is not in the repository: a seeded fixture, a reference
 -- screenshot, an account on an environment. Named rather than pathed — the path
 -- an agent sees, the path the cockpit serves and the path an operator opens are

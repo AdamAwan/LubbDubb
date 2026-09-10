@@ -1,6 +1,7 @@
 import { nextCheckLetter } from '../validation/checkDocument.js';
 import type {
   ValidationAmendment,
+  ValidationPlanRecord,
   ValidationAmendResult,
   ValidationCheck,
   ValidationCheckActor,
@@ -31,6 +32,9 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     area: 'TEXT',
   },
   validation_resources: {},
+  // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
+  // it exempt, and `validation_checks` collected that debt one change later.
+  validation_plans: {},
 };
 
 export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
@@ -239,6 +243,61 @@ export class ValidationStore {
     this.ctx.db
       .prepare(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
       .run(humanTaskId, originRef, name);
+  }
+
+  /**
+   * The plan document's half of the goal's validation plan: prose intent, written before the code
+   * exists, binding nothing. It is handed to the validation planner as input and read by an operator
+   * at the approval gate. Writing it never touches the authoring half — a replan re-states an intent
+   * and does not un-write a check set. → docs/spec/20-validation.md#the-document-block
+   */
+  recordValidationHint(originRef: string, hint: string | null): ValidationPlanRecord {
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
+         VALUES (?, ?, NULL, NULL, NULL, ?)
+         ON CONFLICT(origin_ref) DO UPDATE SET hint=excluded.hint, updated_at=excluded.updated_at`,
+      )
+      .run(originRef, hint, ts);
+    return this.getValidationPlanRecord(originRef) as ValidationPlanRecord;
+  }
+
+  /**
+   * The validation planner's half: its account of the set it just wrote, and — where it wrote none —
+   * why nothing was worth running. The `authored_at` stamp is what sheet assembly waits on, which is
+   * why it is written even for an empty set: null with no account of itself is indistinguishable
+   * from a planner that never ran, and a sheet assembled on that reads as a misconfiguration and is
+   * not one. → docs/spec/20-validation.md#when-the-check-set-is-written
+   */
+  recordValidationAuthoring(
+    originRef: string,
+    input: { note: string; emptyReason: string | null },
+  ): ValidationPlanRecord {
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
+         VALUES (?, NULL, ?, ?, ?, ?)
+         ON CONFLICT(origin_ref) DO UPDATE SET note=excluded.note, empty_reason=excluded.empty_reason,
+           authored_at=excluded.authored_at, updated_at=excluded.updated_at`,
+      )
+      .run(originRef, input.note, input.emptyReason, ts, ts);
+    return this.getValidationPlanRecord(originRef) as ValidationPlanRecord;
+  }
+
+  listValidationPlanRecords(): ValidationPlanRecord[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM validation_plans ORDER BY origin_ref ASC`)
+      .all() as ValidationPlanRow[];
+    return rows.map(rowToPlanRecord);
+  }
+
+  getValidationPlanRecord(originRef: string): ValidationPlanRecord | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
+      | ValidationPlanRow
+      | undefined;
+    return row ? rowToPlanRecord(row) : null;
   }
 
   listValidationChecks(originRef: string): ValidationCheck[] {
@@ -552,4 +611,22 @@ function parseStringArray(raw: string | null): string[] {
   } catch {
     return [];
   }
+}
+
+interface ValidationPlanRow {
+  origin_ref: string;
+  hint: string | null;
+  note: string | null;
+  empty_reason: string | null;
+  authored_at: string | null;
+}
+
+function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
+  return {
+    originRef: r.origin_ref,
+    hint: r.hint ?? null,
+    note: r.note ?? null,
+    emptyReason: r.empty_reason ?? null,
+    authoredAt: r.authored_at ?? null,
+  };
 }

@@ -105,12 +105,15 @@ test('the agent doing the work may amend; the planner is refused and told where 
     assert.equal(res.isError, false, `${origin} may amend its own goal's validation plan`);
   }
 
-  const planner = await callTool(system, spawnAgent(system, 'issue:12:plan'), 'validation_amend', {
+  // The refusal moved with the authoring: the check set is written after delivery, by the validation
+  // planner, which has a transport speaking for the whole set. An ordinary planner has no
+  // check-writing transport to be held to, so it is not a caller this tool refuses.
+  const planner = await callTool(system, spawnAgent(system, 'issue:12:validate-plan'), 'validation_amend', {
     note: 'n',
     checks: [check({ id: 'planner-check' })],
   });
   assert.equal(planner.isError, true);
-  assert.match(planner.text, /plan_submit/);
+  assert.match(planner.text, /validation_plan/);
 
   const stray = await callTool(system, spawnAgent(system, 'finding:9'), 'validation_amend', {
     note: 'n',

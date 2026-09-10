@@ -36,25 +36,28 @@ export const ValidationCheckSchema = z
 
 export const ValidationSchema = z
   .object({
+    hint: z.string().min(1).optional(),
     resources: z
       .array(ValidationResourceSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
+      .optional()
+      .transform((list) => (list !== undefined && list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
     checks: z
       .array(ValidationCheckSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
+      .optional()
+      .transform((list) => (list !== undefined && list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
   })
-  .strict('a validation block declares only "resources" and "checks"')
+  .strict(
+    'a validation block declares only "hint", and — from a plan written before the hint — "resources" and "checks"',
+  )
   .superRefine((block, ctx) => {
     const ids = new Set<string>();
-    for (const check of block.checks) {
+    for (const check of block.checks ?? []) {
       if (ids.has(check.id))
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['checks'], message: `duplicate check id "${check.id}"` });
       ids.add(check.id);
     }
     const names = new Set<string>();
-    for (const resource of block.resources) {
+    for (const resource of block.resources ?? []) {
       if (names.has(resource.name))
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -77,9 +80,25 @@ interface CoveredPart {
   coverage: string | null;
 }
 
+/**
+ * A plan document's own check set — the **legacy** shape, and the reason it survives. The check set
+ * is authored after delivery now ([20](../../docs/spec/20-validation.md#when-the-check-set-is-written)),
+ * but a plan carrying `checks` was ingested into rows an operator may be halfway through, and
+ * re-reading such a document as a hint would delete them.
+ */
 export function validationCheckInputs(block: ValidationBlock, parts: readonly CoveredPart[]): ValidationCheckInput[] {
-  const names = new Set(block.resources.map((r) => r.name));
-  return block.checks.map((check, index) => ({ ...checkAmendment(check, names, parts), seq: index + 1 }));
+  const names = new Set((block.resources ?? []).map((r) => r.name));
+  return (block.checks ?? []).map((check, index) => ({ ...checkAmendment(check, names, parts), seq: index + 1 }));
+}
+
+/**
+ * Whether a `validation` block declares a check set at all. A hint-only block declares none, and an
+ * omitted array is **not** an empty one: ingesting `checks: []` supersedes every check on the goal,
+ * which is the right reading of an explicit `[]` and the wrong reading of a plan that simply said
+ * what it thought was worth checking. → [20](../../docs/spec/20-validation.md#amendment)
+ */
+export function declaresCheckSet(block: ValidationBlock): boolean {
+  return block.checks !== undefined || block.resources !== undefined;
 }
 
 export function validationCheckAmendments(

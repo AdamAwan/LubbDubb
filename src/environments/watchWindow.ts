@@ -79,11 +79,22 @@ interface SheetArrivalVerdict {
  * next pulse sees. Deliberately smaller than the watch's twenty — what this bounds is a command per
  * approved row on each sheet, where that one bounds a query.
  *
+ * **A fresh arrival whose goal has no check set yet is deferred the same way**, and the order of the
+ * two cuts is what makes that safe. The set is authored after the assessor writes `delivered`
+ * ([20](../../docs/spec/20-validation.md#when-the-check-set-is-written)), which routinely takes
+ * longer than two probe intervals, so a sheet assembled first carries only the watch-derived rows —
+ * a bench that offers nothing to run, reads as a misconfiguration, and is not one. The staleness cut
+ * runs **first**, so the arrivals that would flood in on the pulse an operator turns this on are
+ * stamped and not assembled before authoring is ever consulted; only an arrival that entered fresh
+ * waits, and it waits as long as the planner takes.
+ *
  * → docs/spec/36-remote-validation.md#the-desk
  */
 export function sheetableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: readonly EnvironmentConfig[];
+  /** Whether this goal's validation check set has been authored. A fresh arrival waits until it has. */
+  authored: (goalRef: string) => boolean;
   probeIntervalMs: number;
   now: number;
 }): SheetArrivalVerdict[] {
@@ -100,6 +111,7 @@ export function sheetableArrivals(input: {
       out.push({ arrival, assemble: false });
       continue;
     }
+    if (!input.authored(arrival.goalRef)) continue;
     if (assembling >= MAX_SHEETS_PER_PULSE) continue;
     assembling += 1;
     out.push({ arrival, assemble: true });

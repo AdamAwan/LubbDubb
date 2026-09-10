@@ -220,6 +220,14 @@ const RULES = [
   },
 
   {
+    id: 'validation-plan',
+    kind: 'rule',
+    name: 'Delivered goal has no validation check set',
+    description:
+      "A goal the harness has parked as delivered, whose validation check set nobody has written, gets one code agent in a read-only checkout of the default branch to write it. Authoring is deliberately late: a planner writes against code that does not exist yet, so every check it writes is a guess about a screen, a command or a table the second part may move — and `delivered` is the first moment nothing further is coming, which the last merged pull request is not, because the assessor may answer `more_work` and send the goal back round. What the plan carries instead is a prose **hint**, read by an operator at the approval gate and handed to this agent as input along with what any `coverage` part built and what the deployment can actually drive. The agent declares the whole set in one call and says where it departed from the hint; declaring nothing is a complete answer and carries a reason, because null with no account of itself is indistinguishable from an agent that did nothing. It ranks directly above `validate-check`, on that rule's own argument one step earlier: it produces the input every other validation rule reads, and validation's standing promise is that it blocks nothing — so it sits below every rule that produces product work. A goal that already carries checks is left alone, whoever wrote them: a plan document from before this change ingested a set an operator may be halfway through, and re-authoring over it would supersede work in progress. An agent that crashes or spends its attempt cap leaves the goal exactly as delivered with no escalation — the goal is parked either way, and a check set nobody wrote is a bench row that says so.",
+  },
+
+  {
     id: 'validate-check',
     kind: 'rule',
     name: 'Handed-over validation check',

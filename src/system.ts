@@ -67,6 +67,7 @@ import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenan
 import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runner.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
+import { validationPlanNote } from './validation/authoring.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
@@ -532,6 +533,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     (offerings) => testPartNote(config.environments, offerings),
     stateDeclareNote(config.environments),
     config.environments.some((env) => env.validate !== undefined),
+    (offerings) => validationPlanNote(config.environments, offerings),
   );
   const dispatcher: Dispatcher = rules;
 
