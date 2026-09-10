@@ -28,12 +28,18 @@ export interface TenantKeeper {
   reseed(request: TenantRequest): Promise<TenantOutcome>;
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * `remoteValidation.tenantTimeoutMs`. Not the 30 seconds every other command gets: provisioning or
+ * reseeding a tenant is a job of tens of minutes — this document's own account of `ensureTenant` is
+ * "possibly very slow, so it is an operator-invoked setup step" — so the ordinary kill would end both
+ * commands on every invocation, and the failure presents as a tenant command that will not answer.
+ */
+const DEFAULT_TENANT_TIMEOUT_MS = 60 * 60 * 1000;
 
 export class CommandTenantKeeper implements TenantKeeper {
   constructor(
     private readonly repoRoot: string,
-    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    private readonly timeoutMs: number = DEFAULT_TENANT_TIMEOUT_MS,
   ) {}
 
   /**

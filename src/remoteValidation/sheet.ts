@@ -9,6 +9,7 @@ import type {
   ValidationCheck,
 } from '../types.js';
 import { liveChecks } from '../validation/verdict.js';
+import { selectorFault } from './runner.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -44,7 +45,8 @@ interface SheetInput {
  * environment. Nothing here is a second checklist beside the one an operator already keeps.
  *
  * Every cause of `blocked` this function can see is resolved **per row**: a kind the environment
- * does not permit, and a query nobody has accepted here. What is left to the desk is the causes only
+ * does not permit, a query nobody has accepted here, and an area holding the character its own
+ * selector list is joined on. What is left to the desk is the causes only
  * a reading can produce, which is why a state row on a store nothing can reach is blocked while
  * every other row on the same sheet still reports.
  */
@@ -63,7 +65,8 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       title: check.title,
       sourceId: check.id,
       selected: true,
-      blockedReason: unpermitted('check', permits, environment.name),
+      blockedReason:
+        unpermitted('check', permits, environment.name) ?? (check.area === null ? null : selectorFault(check.area)),
       awaitingApproval: false,
       matched: null,
       run: null,

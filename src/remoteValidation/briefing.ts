@@ -222,6 +222,13 @@ function briefing(input: BriefingInput): string {
     ']',
     '```',
     '',
+    '**Every selector above appears in it, including the ones nothing ran under.** A runner whose tests never ' +
+      'ran because a dependency failed commonly omits them from its own report rather than reporting them ' +
+      'skipped — and a report that omits them says, to this harness, that the area holds no test at all, which ' +
+      'is what a renamed area says. So a selector no test ran under must appear as a `skipped` row whose ' +
+      '`note` names the dependency that failed. The harness cannot know the suite’s dependency graph; that ' +
+      'note is the only place the difference between a failed auth setup and a deleted spec is written down.',
+    '',
     'A totals line is not a report: matched-versus-executed is the guard this design leans on, and a declared ' +
       'count is the thing being checked. If the runner emits several files, point at the machine-readable one.',
     '',

@@ -53,6 +53,9 @@ export interface RemoteRunner {
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 
+/** The one character `LUBBDUBB_SELECTORS` is joined on, and the one an area may therefore not hold. */
+const SELECTOR_DELIMITER = ',';
+
 /**
  * The parameters of a run, as the spawn env alone. Exported because it is the one place they are
  * written, and the one place a test can read what a real spawn would carry without spawning one.
@@ -61,15 +64,49 @@ export function runnerEnv(request: RunnerRequest): Record<string, string> {
   const env: Record<string, string> = { LUBBDUBB_ENVIRONMENT: request.environment };
   if (request.profile !== null) env['LUBBDUBB_PROFILE'] = request.profile;
   if (request.tenant !== null) env['LUBBDUBB_TENANT'] = request.tenant;
-  if (request.selectors.length > 0) env['LUBBDUBB_SELECTORS'] = request.selectors.join(',');
+  if (request.selectors.length > 0) env['LUBBDUBB_SELECTORS'] = request.selectors.join(SELECTOR_DELIMITER);
   if (request.reportDir !== null) env['LUBBDUBB_REPORT_DIR'] = request.reportDir;
   return env;
+}
+
+/**
+ * Longer than any area anybody names, and the length at which a line stops being a name and starts
+ * being prose. It is a refusal threshold, never a truncation.
+ */
+const MAX_SELECTOR_LENGTH = 120;
+
+/**
+ * Why this area can never reach a runner, in the words an operator is told. Null where it can.
+ *
+ * The selectors of a run reach the command as one comma-joined variable, and nothing else in this
+ * design forbids a comma in an area — so an area holding one is silently split by the project into
+ * selectors that do not exist, and the rows block for a reason neither side can see. Areas are
+ * operator-authored free text, so `Reports, exports` is an ordinary thing to type.
+ */
+export function selectorFault(area: string): string | null {
+  if (!area.includes(SELECTOR_DELIMITER)) return null;
+  return (
+    `this check's area \`${area}\` holds a \`${SELECTOR_DELIMITER}\`, which is the character the run's ` +
+    'selectors are joined on in `LUBBDUBB_SELECTORS`. A runner reading that variable would be handed ' +
+    'two selectors that do not exist rather than this one that does, so nothing here can be run until ' +
+    'the area is reworded without it.'
+  );
 }
 
 /**
  * What a listing came back as. A JSON array of `{selector, tests}` where the runner counts, a JSON
  * array of names where it does not, or one name per line. A selector **names an area, never a file
  * path**, and nothing here reasons about tags: the harness passes the selector it is told.
+ *
+ * A suite's own config prints ahead of its report — a dotenv banner is the common case — so the JSON
+ * form is **sought** in the output rather than required at byte 0. Seeking the first `{` is not
+ * enough: a banner holds one. What is sought is a balanced JSON *array*, tried at each `[`.
+ *
+ * And a line-form listing that does not look like a listing is **refused**, not read: a banner read
+ * as one name per line yields offers no check can match, and every row then blocks naming a renamed
+ * area against a runner that offered exactly the right ones. That is this arm's own stated danger
+ * one step out — an empty listing read as an answer is every selector matching zero, and a garbage
+ * listing read as an answer is the same shape. Refusing is legible where guessing is not.
  */
 export function parseSelectorListing(stdout: string): SelectorListing {
   const text = stdout.trim();
@@ -88,27 +125,88 @@ export function parseSelectorListing(stdout: string): SelectorListing {
       return { offers: null, detail: 'the listing began a JSON array and did not parse as one.' };
     }
     if (!Array.isArray(parsed)) return { offers: null, detail: 'the listing was not a list of selectors.' };
-    const offers: SelectorOffer[] = [];
-    for (const entry of parsed) {
-      if (typeof entry === 'string' && entry.trim() !== '') {
-        offers.push({ selector: entry.trim(), tests: null });
-        continue;
-      }
-      if (typeof entry !== 'object' || entry === null) continue;
-      const record = entry as Record<string, unknown>;
-      const selector = record['selector'];
-      if (typeof selector !== 'string' || selector.trim() === '') continue;
-      const tests = record['tests'];
-      offers.push({ selector: selector.trim(), tests: typeof tests === 'number' && tests >= 0 ? tests : null });
-    }
-    return { offers, detail: null };
+    return { offers: offersOf(parsed), detail: null };
   }
-  const offers = text
+  const embedded = embeddedJsonArray(text);
+  if (embedded !== null) return { offers: offersOf(embedded), detail: null };
+  const lines = text
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line !== '')
-    .map((selector) => ({ selector, tests: null }));
-  return { offers, detail: null };
+    .filter((line) => line !== '');
+  const prose = lines.find((line) => !looksLikeSelector(line));
+  if (prose !== undefined)
+    return {
+      offers: null,
+      detail:
+        `the listing is not a list of selectors — it holds \`${prose.slice(0, 80)}\`, which is output about ` +
+        'the run rather than an area name. Nothing was learned about which selectors this runner offers, ' +
+        'because a banner read as one name per line offers areas that do not exist.',
+    };
+  return { offers: lines.map((selector) => ({ selector, tests: null })), detail: null };
+}
+
+/** A line that is an area name, rather than a banner, a tip or a path the suite printed beside one. */
+function looksLikeSelector(line: string): boolean {
+  return line.length <= MAX_SELECTOR_LENGTH && !line.includes('{') && !line.includes('}') && !line.includes('//');
+}
+
+/**
+ * The first balanced JSON array in the output that parses. Tried at each `[` rather than at the
+ * first, because a banner's own brackets parse as nothing and must not stop the search.
+ */
+function embeddedJsonArray(text: string): unknown[] | null {
+  for (let at = text.indexOf('['); at !== -1; at = text.indexOf('[', at + 1)) {
+    const end = balancedEnd(text, at);
+    if (end === null) continue;
+    try {
+      const parsed: unknown = JSON.parse(text.slice(at, end));
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/** Where the array opening at `from` closes, string literals and their escapes respected. */
+function balancedEnd(text: string, from: number): number | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let at = from; at < text.length; at += 1) {
+    const ch = text[at];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '[' || ch === '{') depth += 1;
+    else if (ch === ']' || ch === '}') {
+      depth -= 1;
+      if (depth === 0) return at + 1;
+      if (depth < 0) return null;
+    }
+  }
+  return null;
+}
+
+function offersOf(entries: readonly unknown[]): SelectorOffer[] {
+  const offers: SelectorOffer[] = [];
+  for (const entry of entries) {
+    if (typeof entry === 'string' && entry.trim() !== '') {
+      offers.push({ selector: entry.trim(), tests: null });
+      continue;
+    }
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const selector = record['selector'];
+    if (typeof selector !== 'string' || selector.trim() === '') continue;
+    const tests = record['tests'];
+    offers.push({ selector: selector.trim(), tests: typeof tests === 'number' && tests >= 0 ? tests : null });
+  }
+  return offers;
 }
 
 export class CommandRemoteRunner implements RemoteRunner {

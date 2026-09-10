@@ -360,6 +360,27 @@ test('tests skipped because a dependency failed are blocked, never failed', asyn
   }
 });
 
+test('a report that omits the tests a failed dependency held names that failure, not a renamed area', async () => {
+  // A runner mapping its own report one-to-one drops the projects it never reached rather than
+  // reporting them skipped, so this arrives at the zero-match arm rather than the narrowing one.
+  // The harness cannot know the suite's dependency graph; a failure under another selector is the
+  // only evidence of one it has, and naming it beats reporting a deleted spec.
+  const b = bench();
+  try {
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
+    await settle(b, runId, report(b, [{ selector: OTHER_AREA, status: 'failed' }]));
+
+    const read = reading(b, CHECK.id);
+    assert.equal(read.outcome, 'blocked');
+    assert.match(read.detail ?? '', /names no test under/);
+    assert.match(read.detail ?? '', new RegExp(`\`${OTHER_AREA}\` did`), 'the failure elsewhere is named');
+    assert.match(read.detail ?? '', /failed dependency/);
+    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'unrun');
+  } finally {
+    b.close();
+  }
+});
+
 test('a retried pass is a pass, and the row records that it was retried', async () => {
   const b = bench();
   try {
