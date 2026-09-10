@@ -109,10 +109,22 @@ export function parseRunReport(text: string): RunReport {
 
 interface FoldInput {
   environment: string;
-  /** The check's own area, which is the selector this row is verified against. */
+  /**
+   * The selector this row is verified against. For a **suite spec** it is the check's own `area`, out
+   * of a `suite` step; for a **one-off script** it is the check's own id, which is what the script is
+   * told to report under. Two instruments, one report, and never one selector.
+   */
   area: string;
   /** `remote_sheet_rows.matched`, from the pre-flight's listing. Null where it never counted. */
   matched: number | null;
+  /**
+   * Which of the two browser instruments ran. It is not cosmetic: a `spec` row is read against the
+   * pre-flight's listing, and a **`script` row has no listing to be read against** — nobody lists a
+   * program written ten minutes ago. So the "the pre-flight attributed no tests" arm, which is what
+   * stops a selector matching zero from reading as a clean pass, cannot apply to a script and is
+   * replaced by the script's own emptiness check.
+   */
+  instrument: 'spec' | 'script';
   report: RunReport;
 }
 
@@ -138,7 +150,8 @@ interface FoldInput {
  *   `failed`**, and only the report distinguishes it.
  */
 export function foldRowOutcome(input: FoldInput): RowOutcome {
-  const { environment, area, matched, report } = input;
+  const { environment, area, matched, report, instrument } = input;
+  const ran = instrument === 'script' ? `the one-off script for \`${area}\`` : `\`${area}\``;
   if (report.tests === null)
     return {
       outcome: 'blocked',
@@ -158,14 +171,19 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
     : null;
   const measured = { executed, retries, durationMs };
 
-  if (mine.length === 0) return { outcome: 'blocked', detail: unnamed(area, report.tests), ...measured };
+  if (mine.length === 0)
+    return {
+      outcome: 'blocked',
+      detail: instrument === 'script' ? silentScript(area, report.tests) : unnamed(area, report.tests),
+      ...measured,
+    };
 
   const failed = mine.filter((test) => test.status === 'failed');
   if (failed.length > 0)
     return {
       outcome: 'failed',
       detail:
-        `${environment} ran ${count(executed, 'test')} under \`${area}\` and ${String(failed.length)} of them ` +
+        `${environment} ran ${count(executed, 'test')} under ${ran} and ${String(failed.length)} of them ` +
         `did not pass${retried(retries)}.`,
       ...measured,
     };
@@ -180,7 +198,11 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
       ...measured,
     };
 
-  if (matched === null || matched === 0)
+  // A script is written for this check and run as it stands: there is no listing of it to compare
+  // against, so this arm — the one that stops a selector matching zero reading as a clean pass — has
+  // no question to ask. What does the same job for a script is the emptiness check above: a script
+  // that reported nothing under its own id learned nothing, whatever its exit code said.
+  if (instrument === 'spec' && (matched === null || matched === 0))
     return {
       outcome: 'blocked',
       detail:
@@ -189,9 +211,16 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
       ...measured,
     };
 
+  if (executed === 0)
+    return {
+      outcome: 'blocked',
+      detail: `every assertion ${ran} reported was skipped, so nothing ran. A row nothing ran under is never a pass.`,
+      ...measured,
+    };
+
   return {
     outcome: 'passed',
-    detail: `${environment} ran ${count(executed, 'test')} under \`${area}\` and every one passed${retried(retries)}.`,
+    detail: `${environment} ran ${count(executed, 'test')} under ${ran} and every one passed${retried(retries)}.`,
     ...measured,
   };
 }
@@ -218,6 +247,22 @@ function unnamed(area: string, tests: readonly ReportTest[]): string {
   return (
     `the report names no test under \`${area}\` — a renamed area, a deleted spec or a wrong profile.` +
     `${dependency} A selector that matched zero tests is never a pass.`
+  );
+}
+
+/**
+ * A script that reported nothing under its own id. It is not the renamed-area story `unnamed` tells —
+ * nobody renames a program written for one check — so it says the thing that is actually true here:
+ * the script ran, or did not, and either way it said nothing this harness can read a row from.
+ */
+function silentScript(checkId: string, tests: readonly ReportTest[]): string {
+  const elsewhere =
+    tests.length === 0 ? '' : ` The report holds ${count(tests.length, 'other test')}, none of them its.`;
+  return (
+    `the one-off script for \`${checkId}\` reported nothing under its own id.${elsewhere} A script emits its ` +
+    `result with \`selector\` set to the check's id, and one that emitted none learned nothing about the goal — ` +
+    'a script that fell over before it asserted and one that asserted and passed look identical from here, so ' +
+    'this is never read as a pass.'
   );
 }
 

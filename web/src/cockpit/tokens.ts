@@ -440,6 +440,27 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: "A violet chip's edge",
   },
   {
+    name: '--cn-captured',
+    label: 'Captured, waiting to be looked at',
+    group: 'tints',
+    kind: 'colour',
+    why: 'A validation check whose screen was handed back for somebody to judge — never amber, never green',
+  },
+  {
+    name: '--cn-captured-fill',
+    label: 'Captured fill',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The ground behind a captured chip and its row',
+  },
+  {
+    name: '--cn-captured-line',
+    label: 'Captured border',
+    group: 'tints',
+    kind: 'colour',
+    why: "A captured chip's edge",
+  },
+  {
     name: '--cn-readying',
     label: 'Console readying',
     group: 'tints',

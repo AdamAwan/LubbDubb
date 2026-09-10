@@ -233,6 +233,7 @@ test('the rule dispatches for a delivered goal with no check set, and for nothin
           uses: [],
           covers: [],
           steps: [],
+          capture: null,
           fleetCandidate: false,
           candidateWhy: null,
           actor: 'human',

@@ -5,6 +5,7 @@ import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCap
 import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
 import { localValidationOutputDir } from '../../localValidation/origin.js';
+import { validationGoalDir, validationResourcePath } from '../../validation/resources.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
@@ -89,6 +90,57 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+
+  /**
+   * The screen a `screenshot` step handed back. The file **name** is never a parameter: it is read
+   * off the check's own row, so the only thing a caller can name is a check — a capture is held with
+   * the goal's validation directory, which also holds its resources, and a route that took a name
+   * would serve any of them. → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+   */
+  app.get(
+    '/validation-captures/:originRef/:checkId',
+    { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
+    checked({ params: ValidationCaptureParams }, async ({ params, req, reply }) => {
+      const { originRef, checkId } = params;
+      if (artifactKey) {
+        const tk = (req.query as { tk?: unknown })?.tk;
+        if (
+          typeof tk !== 'string' ||
+          !verifyArtifactCapability(artifactKey, tk, validationCaptureSubject(originRef, checkId), Date.now())
+        )
+          return reply.code(401).send({ error: 'missing or invalid capture capability' });
+      }
+      const check = store.getValidationCheck(originRef, checkId);
+      if (!check?.capture) return reply.code(404).send({ error: 'capture not found' });
+      const file = confinedTo(
+        validationGoalDir(config.validationRoot, originRef),
+        validationResourcePath(config.validationRoot, originRef, check.capture),
+      );
+      if (!file) return reply.code(404).send({ error: 'capture not found' });
+      reply
+        .header('content-type', artifactMime(file))
+        .header('content-security-policy', 'sandbox')
+        .header('x-content-type-options', 'nosniff')
+        .header('cache-control', 'private, max-age=300, immutable');
+      return reply.send(readFileSync(file));
+    }),
+  );
+}
+
+const ValidationCaptureParams = z.object({
+  originRef: z.string().min(1).max(200),
+  checkId: z.string().min(1).max(200),
+});
+
+function validationCaptureSubject(originRef: string, checkId: string): string {
+  return `validation-capture:${originRef}:${checkId}`;
+}
+
+export function validationCaptureSignerFor(key: Buffer): (originRef: string, checkId: string) => string {
+  return (originRef, checkId) => {
+    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
+    return mintArtifactCapability(key, validationCaptureSubject(originRef, checkId), bucket * ARTIFACT_CAP_TTL_MS);
+  };
 }
 
 function attachmentSubject(id: string): string {

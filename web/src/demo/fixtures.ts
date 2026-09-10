@@ -11,6 +11,7 @@ import type {
   PlanPartView,
   PlanRevision,
   ValidationCheck,
+  ValidationCheckView,
 } from '../types.js';
 
 // → docs/spec/17-cockpit.md
@@ -56,15 +57,18 @@ function demoIssue(seed: IssueSeed): Issue {
 }
 
 function demoCheck(
-  seed: Partial<ValidationCheck> & Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
-): ValidationCheck {
+  seed: Partial<ValidationCheckView> &
+    Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
+): ValidationCheckView {
   return {
     originRef: 'issue:395',
+    captureUrl: null,
     do: '',
     expect: '',
     uses: [],
     covers: [],
     steps: [],
+    capture: null,
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',
@@ -842,7 +846,16 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
-          validation: { state: 'flagged', total: 9, passed: 3, failed: 1, unrun: 3, deferred: 1, waived: 1 },
+          validation: {
+            state: 'flagged',
+            total: 9,
+            passed: 3,
+            failed: 1,
+            unrun: 3,
+            deferred: 1,
+            waived: 1,
+            captured: 0,
+          },
         }),
         demoIssue({
           id: 'iss-382',

@@ -36,6 +36,13 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // nothing is backfilled. A null read as `[]` and a null read as "unknown" are the same answer
     // here, which is why this one needs no reading rule beside it.
     steps: 'TEXT',
+    // The screen a `screenshot` step handed back — a file name in the goal's validation directory.
+    // Null means *no capture*, true of every row written before the column existed and of every
+    // check nobody ever pointed a camera at, so nothing is backfilled. A capture is **not** the
+    // run's artefact URL: that one is swept on the runner's own schedule and this one outlives the
+    // run, because somebody still has to look at it.
+    // → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+    capture: 'TEXT',
   },
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
@@ -204,6 +211,10 @@ export class ValidationStore {
       // `area` is — a check's assignment is a fact about what the deployment declares, and a step
       // whose kind nothing declares is a step the fleet cannot carry.
       steps: input.steps ?? [],
+      // A reworded check loses its reading, and the capture is that reading's evidence: an image of
+      // a screen the procedure no longer describes is worse than no image, because it looks like one
+      // somebody could still judge. Word for word re-declared, it stays.
+      capture: keep ? prev.capture : null,
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
     };
@@ -421,6 +432,13 @@ export class ValidationStore {
       note: string | null;
       by: ValidationCheckResultBy | null;
       until?: string | null;
+      /**
+       * The screen a `screenshot` step handed back. Omitted keeps whatever is on the row, which is
+       * what the person recording their judgement of the capture is looking at — clearing it there
+       * would delete the evidence at the exact moment somebody is acting on it. Only a reset, which
+       * means *nothing to attribute*, takes it away.
+       */
+      capture?: string | null;
     },
   ): ValidationCheck | null {
     const current = this.getValidationCheck(originRef, checkId);
@@ -432,6 +450,7 @@ export class ValidationStore {
       resultNote: input.note,
       resultBy: input.by,
       resultAt: input.state === 'unrun' ? null : ts,
+      capture: input.state === 'unrun' ? null : (input.capture ?? current.capture),
       deferUntil: input.state === 'deferred' ? (input.until ?? null) : null,
       revision: null,
       amendedAt: null,
@@ -445,6 +464,20 @@ export class ValidationStore {
     return next;
   }
 
+  /**
+   * The grace sweep's one write: the check's steps, and nothing else on the row. It is deliberately
+   * not `recordValidationResult` — removing a script's source says nothing about whether the check
+   * passed, and a writer that cleared the reading, the hand-back and the amendment band beside it
+   * would take a goal's whole validation history out with a housekeeping pass.
+   *
+   * @public the seam `RemoteValidationDesk`'s script grace sweep writes through
+   */
+  sweepValidationScripts(originRef: string, checkId: string, steps: readonly ValidationStep[]): void {
+    this.ctx.db
+      .prepare(`UPDATE validation_checks SET steps=?, updated_at=? WHERE origin_ref=? AND id=?`)
+      .run(JSON.stringify(steps), this.ctx.now(), originRef, checkId);
+  }
+
   private writeCheck(check: ValidationCheck): void {
     this.ctx.db
       .prepare(
@@ -453,11 +486,11 @@ export class ValidationStore {
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area, steps,
-           created_at, updated_at)
+           capture, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area, @steps,
-           @createdAt, @updatedAt)
+           @capture, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
@@ -467,7 +500,7 @@ export class ValidationStore {
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note, area=excluded.area,
-           steps=excluded.steps, updated_at=excluded.updated_at`,
+           steps=excluded.steps, capture=excluded.capture, updated_at=excluded.updated_at`,
       )
       .run({
         ...check,
@@ -527,6 +560,7 @@ interface ValidationCheckRow {
   amend_note: string | null | undefined;
   area: string | null | undefined;
   steps: string | null | undefined;
+  capture: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -568,17 +602,27 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     amendNote: r.amend_note ?? null,
     area: r.area ?? null,
     steps: parseSteps(r.steps ?? null),
+    capture: r.capture ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
 }
 
+/**
+ * Anything unrecognised narrows to `unrun`, and that direction is what makes `captured` safe to add:
+ * a row written before the state existed lands on *nobody has got to it* rather than on *there is an
+ * image here waiting for you*. Adding a value to a column is not a schema change — `state` gained it
+ * the way `result_by` gained `agent`, `desktop` and `spec`.
+ */
 function checkStateOf(raw: string): ValidationCheckState {
-  return raw === 'passed' || raw === 'failed' || raw === 'waived' || raw === 'deferred' ? raw : 'unrun';
+  return raw === 'passed' || raw === 'failed' || raw === 'waived' || raw === 'deferred' || raw === 'captured'
+    ? raw
+    : 'unrun';
 }
 
+/** `script` is its own answer and is never read back as `spec` — nothing reviewed a one-off script. */
 function resultByOf(raw: string | null): ValidationCheckResultBy | null {
-  return raw === 'operator' || raw === 'agent' || raw === 'desktop' || raw === 'spec' ? raw : null;
+  return raw === 'operator' || raw === 'agent' || raw === 'desktop' || raw === 'spec' || raw === 'script' ? raw : null;
 }
 
 function resourceKindOf(raw: string | null): ValidationResourceKind | null {

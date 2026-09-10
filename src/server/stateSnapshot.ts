@@ -38,6 +38,7 @@ import type {
   PlanPartView,
   PullRequest,
   RemoteSheetView,
+  ValidationCheckView,
   ValidationResourceView,
 } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
@@ -115,6 +116,7 @@ interface SnapshotOpts {
   artifactSigner?: (flagId: string) => string;
   attachmentSigner?: (attachmentId: string) => string;
   localValidationFileSigner?: (id: string, name: string) => string;
+  validationCaptureSigner?: (originRef: string, checkId: string) => string;
 }
 
 export function buildStateSnapshot(system: System, opts?: SnapshotOpts): CockpitState {
@@ -211,9 +213,10 @@ export function buildStateSections(
     outsideScope: drift.get(part.id) ?? [],
   }));
   const claimNow = new Date().toISOString();
-  const validationChecks = store
+  const validationChecks: ValidationCheckView[] = store
     .listAllValidationChecks()
-    .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes));
+    .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes))
+    .map((check) => ({ ...check, captureUrl: captureUrl(check, opts?.validationCaptureSigner) }));
   const checksByGoal = new Map<string, typeof validationChecks>();
   for (const check of validationChecks) {
     const list = checksByGoal.get(check.originRef);
@@ -942,6 +945,19 @@ function localValidationView(
     agent: agentOf(row.taskId),
     fixAgent: agentOf(row.fixTaskId),
   };
+}
+
+/**
+ * Where a capture can be looked at. Null is a check with none — and a check that has one on a
+ * deployment with no artifact key gets the bare path, exactly as a local run's screenshot does.
+ */
+function captureUrl(
+  check: { originRef: string; id: string; capture: string | null },
+  signer?: (originRef: string, checkId: string) => string,
+): string | null {
+  if (check.capture === null) return null;
+  const base = `/validation-captures/${encodeURIComponent(check.originRef)}/${encodeURIComponent(check.id)}`;
+  return signer ? `${base}?tk=${encodeURIComponent(signer(check.originRef, check.id))}` : base;
 }
 
 function localValidationPhase(row: LocalValidation, live: LocalRun | null): LocalValidationPhase | null {

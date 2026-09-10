@@ -41,6 +41,10 @@ function validation(checks: ValidationCheck[]): string {
 function recorder(check: ValidationCheck): string {
   if (check.resultBy === 'agent') return ' _(recorded by an agent)_';
   if (check.resultBy === 'desktop') return ' _(recorded from a desktop session)_';
+  // A reviewed spec and a one-off script are never the same evidence, and a ticket that folded them
+  // would tell a reader counting ticks that a throwaway nobody read is repository code.
+  if (check.resultBy === 'spec') return ' _(recorded by the project’s own browser suite)_';
+  if (check.resultBy === 'script') return ' _(recorded by a one-off script — unreviewed, written for this check)_';
   return '';
 }
 
@@ -59,6 +63,8 @@ function checkMark(check: ValidationCheck): string {
       return '➖';
     case 'deferred':
       return '⏸️';
+    case 'captured':
+      return '📷';
     default:
       return '⬜';
   }

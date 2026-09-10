@@ -109,6 +109,7 @@ function handedOverCheck(): ValidationCheck {
     uses: [],
     covers: [],
     steps: [],
+    capture: null,
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'fleet',

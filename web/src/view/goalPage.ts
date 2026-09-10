@@ -15,7 +15,7 @@ import type {
   GoalWatch,
   GoalWatchView,
   RemoteSheetView,
-  ValidationCheck,
+  ValidationCheckView,
   ValidationResourceView,
 } from '../types.js';
 import type { NeedRow } from './needsYou.js';
@@ -55,7 +55,7 @@ export interface GoalPageView {
   closedPullRequests: PullRequest[];
   agents: GoalAgentView[];
   decisions: CockpitDecision[];
-  checks: ValidationCheck[];
+  checks: ValidationCheckView[];
   checkResources: ValidationResourceView[];
   environments: GoalEnvironmentReachView[];
   gateHold: string | null;

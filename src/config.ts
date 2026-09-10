@@ -113,11 +113,20 @@ interface RemoteValidationPolicy {
    * because 30 seconds kills every tenant command this design has, always.
    */
   tenantTimeoutMs: number;
+  /**
+   * How long a one-off script's source is kept past the goal's delivery. A one-off that survives its
+   * goal is an unreviewed test nobody maintains and nobody can attribute, failing mysteriously
+   * against a product that moved on — a second suite grown by accident. Thirty days, and the sweep
+   * that applies it names what it removed.
+   * → docs/spec/36-remote-validation.md#the-one-off-script
+   */
+  scriptGraceMs: number;
 }
 
 const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
   runTimeoutMs: 30 * 60 * 1000,
   tenantTimeoutMs: 60 * 60 * 1000,
+  scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
 };
 
 interface AuthConfig {

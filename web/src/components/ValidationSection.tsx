@@ -1,5 +1,6 @@
+import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import type { ValidationCheck, ValidationCheckState, ValidationResourceView } from '../types.js';
+import type { ValidationCheck, ValidationCheckState, ValidationCheckView, ValidationResourceView } from '../types.js';
 import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
@@ -48,7 +49,7 @@ export function ValidationSection({
   onReset,
   onHandover,
 }: {
-  checks: ValidationCheck[];
+  checks: ValidationCheckView[];
   issueNumber: number;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
@@ -177,7 +178,7 @@ export function ValidationDigest({
   refUrls,
   onOpenGoal,
 }: {
-  checks: ValidationCheck[];
+  checks: ValidationCheckView[];
   refUrls: Record<string, string>;
   onOpenGoal: (() => void) | null;
 }) {
@@ -275,7 +276,7 @@ function CheckBlock({
   onReset,
   onHandover,
 }: {
-  check: ValidationCheck;
+  check: ValidationCheckView;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
   look: ButtonLook;
@@ -378,6 +379,7 @@ function CheckBlock({
                 {renderMarkdown(check.expect, refUrls)}
               </div>
             </div>
+            {check.steps.length > 0 && <StepPlan steps={check.steps} />}
             {resources.length > 0 && (
               <div className="pm-vres">
                 {resources.map((resource) => (
@@ -407,13 +409,40 @@ function CheckBlock({
                 reserved for a person, because that is what a checklist already
                 means. */}
             {check.resultBy === 'desktop' && <i className="k">recorded from a desktop session</i>}
+            {/* The two machine readings are drawn apart, and that is the whole
+                point of keeping the attribution: a reviewed spec is repository
+                code that a pull request's reviewer read, and a one-off script is
+                a throwaway nobody read. An operator counting green rows would
+                otherwise be told they are the same evidence. */}
+            {check.resultBy === 'spec' && <i className="k">recorded by the project’s own browser suite</i>}
+            {check.resultBy === 'script' && (
+              <i
+                className="k"
+                title="A one-off script, written for this check alone and never reviewed. Its source is in the test plan."
+              >
+                recorded by a one-off script — unreviewed
+              </i>
+            )}
             {check.deferUntil !== null && <i className="k">until {check.deferUntil}</i>}
+          </div>
+        )}
+        {/* The screen itself, on the row. A `captured` check asks for one thing —
+            somebody's eyes — and a state chip that only says the word would make
+            an operator go and find the image before they could answer it. It is
+            held with the goal's validation directory rather than swept with the
+            run, because the whole point is that it outlives the run that took it.
+            → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at */}
+        {check.captureUrl !== null && (
+          <div className="pm-vcap">
+            <a href={check.captureUrl} target="_blank" rel="noreferrer" title="Open the full capture">
+              <img src={check.captureUrl} alt={`The screen captured for check ${check.letter}`} />
+            </a>
           </div>
         )}
         {open &&
           (verb === null ? (
             <div className="pm-vacts">
-              {check.state === 'unrun' ? (
+              {check.state === 'unrun' || check.state === 'captured' ? (
                 <>
                   <Button {...look} onClick={() => setVerb('passed')}>
                     Passed
@@ -551,5 +580,63 @@ function stateTone(state: ValidationCheckState): TagTone | undefined {
   if (state === 'passed') return 'green';
   if (state === 'failed') return 'red';
   if (state === 'unrun' || state === 'deferred') return 'amber';
+  // Its own hue, and not folded into either neighbour: amber would say *nobody has
+  // started*, which is wrong — the work is done and the screen is here — and green
+  // would say it passed, which is the one thing a capture never gets to claim.
+  if (state === 'captured') return 'captured';
   return undefined;
+}
+
+/**
+ * The test plan, in order, with who carries each step and why where it is a person's. The ordering is
+ * the point — a store reading whose subject is what the browser steps just did is meaningless taken
+ * before them — so it is drawn as an ordered list and never regrouped by actor.
+ *
+ * A one-off script's **source** is drawn here, beside the step that carries it. It is small and
+ * goal-scoped, which is exactly what a suite spec is not, so this is the rare case where reading the
+ * test is cheaper than trusting it. Where the grace sweep has taken it, the step says so rather than
+ * reading as a `browser` step a person always drove.
+ * → docs/spec/20-validation.md#the-test-plan, [36](docs/spec/36-remote-validation.md#the-one-off-script)
+ */
+function StepPlan({ steps }: { steps: ValidationCheckView['steps'] }): JSX.Element {
+  return (
+    <div>
+      <b>Test plan</b>
+      <ol className="pm-vsteps">
+        {steps.map((step, at) => (
+          <li key={at}>
+            <Tag lower title={`A ${step.kind} step`}>
+              {step.kind}
+            </Tag>{' '}
+            {step.do}
+            {step.area !== null && (
+              <Tag lower title="The suite area this step runs, and the check's own area">
+                {step.area}
+              </Tag>
+            )}
+            {step.actor === 'human' ? (
+              <Tag tone="amber" title={step.why ?? 'A person carries this step'}>
+                {step.when === 'deferred' ? 'you, afterwards' : 'you, and the run stops here'}
+              </Tag>
+            ) : (
+              <Tag tone="grey" title="The fleet can carry this step">
+                the fleet
+              </Tag>
+            )}
+            {step.script !== null && (
+              <div className="pm-vscript">
+                <i className="k">a one-off script — written for this check, never reviewed, never committed</i>
+                <pre>{step.script}</pre>
+              </div>
+            )}
+            {step.scriptSweptAt !== null && (
+              <i className="k" title="A one-off script does not outlive its goal by more than the grace period">
+                its one-off script was removed on {step.scriptSweptAt.slice(0, 10)}
+              </i>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }

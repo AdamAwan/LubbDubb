@@ -10,6 +10,7 @@ export interface RouteContext {
   artifactSigner?: (flagId: string) => string;
   attachmentSigner?: (attachmentId: string) => string;
   localValidationFileSigner?: (id: string, name: string) => string;
+  validationCaptureSigner?: (originRef: string, checkId: string) => string;
   artifactKey: Buffer | null;
 }
 

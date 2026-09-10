@@ -25,7 +25,7 @@ import type { RouteContext } from './context.js';
 
 export function register(
   app: FastifyInstance,
-  { system, artifactSigner, attachmentSigner, localValidationFileSigner, hub }: RouteContext,
+  { system, artifactSigner, attachmentSigner, localValidationFileSigner, validationCaptureSigner, hub }: RouteContext,
 ): void {
   const { config, errors, liveConfig, store, updates, agents, runtimeControl } = system;
   const filePath = system.configFile;
@@ -65,8 +65,18 @@ export function register(
     '/api/state',
     checked({ query: StateQuery }, async ({ query }) =>
       query.sections === undefined
-        ? buildStateSnapshot(system, { artifactSigner, attachmentSigner, localValidationFileSigner })
-        : buildStateSections(system, query.sections, { artifactSigner, attachmentSigner, localValidationFileSigner }),
+        ? buildStateSnapshot(system, {
+            artifactSigner,
+            attachmentSigner,
+            localValidationFileSigner,
+            validationCaptureSigner,
+          })
+        : buildStateSections(system, query.sections, {
+            artifactSigner,
+            attachmentSigner,
+            localValidationFileSigner,
+            validationCaptureSigner,
+          }),
     ),
   );
 

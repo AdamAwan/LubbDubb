@@ -873,7 +873,7 @@ sheets at all, which is the off switch.
 
 ## The one-off script
 
-**Not built.** A `check` row runs a **reviewed spec** in the project's own browser suite, selected by
+**Built.** A `check` row runs a **reviewed spec** in the project's own browser suite, selected by
 area. That is the right instrument for a journey the product will keep having, and the wrong one for
 the thing most goals actually need checking: data arranged into one particular situation, a column
 option selected in one particular table, a state that exists to demonstrate this change and will never
@@ -902,6 +902,13 @@ run's tenant**, under exactly the machinery the suite run already uses — `ensu
 lock, the reap window ([Tenants](#tenants)) — and an environment with no tenant is an environment
 where a script that writes is a `blocked` row, not a script that runs somewhere it should not.
 
+Two places carry that refusal and both name the line the operator has not written, never "no
+tenant": `stepFault` gives the step back to a person, and `sheetRows`' `scriptTenantFault` blocks
+the row. It runs from the **sheet's run** and not from the `validate-check` dispatch, which has no
+tenant, no lock and no reap window — `checkBriefing` prints the source there and says so in as many
+words, because an agent that read a script it was not to run and ran it is the failure the
+machinery exists to prevent.
+
 **Its green is worth less than a suite spec's green, and the sheet must say so.** Nothing reviewed it.
 A reading it produces is attributed `script`, never `spec`, and the two are never folded — an operator
 counting green rows is otherwise told a throwaway and a reviewed spec are the same evidence. The
@@ -919,6 +926,19 @@ incidental. A one-off that survives its goal is an unreviewed test that no one m
 can attribute, failing mysteriously against a product that moved on — a second suite grown by
 accident. The window is `remoteValidation.scriptGraceMs`, defaulting to 30 days past goal close, and
 the sweep names what it removed.
+
+The clock runs from the goal's **delivery** — `issue_deliveries.decided_at`, which is what parks the
+goal and the one moment the harness records as _this goal is over_. Dating it from anything the
+check itself carries would restart the window every time somebody recorded a reading on the row.
+
+`RemoteValidationDesk.sweepScripts` is a fourth pass, below the run sweep, **inside the same early
+return** and in its own `try`, for that pass's reasons exactly. It names what it removed **where the
+source was**: `scriptSweptAt` on the step (`sweptScripts`). A `browser` step reading _there was a
+script here and it is gone_ is not the same row as one a person always drove, and a sweep that
+simply nulled the field would quietly rewrite how a green row was earned. It writes the steps column
+and nothing else — removing a source says nothing about whether the check passed, and a writer that
+cleared the reading, the hand-back and the amendment band beside it would take a goal's whole
+validation history out with a housekeeping pass.
 
 ## Artefacts, and making worth observable
 
@@ -944,7 +964,7 @@ clean pass.
 
 ### Handing a screen back to look at
 
-**Not built.** A `screenshot` step ([20](20-validation.md#the-test-plan)) captures the screen and
+**Built.** A `screenshot` step ([20](20-validation.md#the-test-plan)) captures the screen and
 attaches it to the row. It asserts nothing, and that is its whole point: the checks a browser cannot
 honestly judge — whether a column reads legibly at that width, whether a truncation is acceptable,
 whether a number is believable beside the source it came from — are judgements, and a suite that
@@ -961,11 +981,36 @@ only when a person records a reading, which is
 that coloured its own row would be the failure this design refuses everywhere else, arrived at by the
 one route that looks helpful.
 
+The state is **`captured`**, a value on `validation_checks.state` and so no `ALTER TABLE` — the same
+case as `result_by` gaining `agent`, `desktop` and `spec`. What makes it safe to add is the
+direction `checkStateOf` narrows in: anything it does not recognise reads `unrun`, so a row written
+before the state existed lands on _nobody has got to it_ rather than on _there is an image here
+waiting for you_. It is counted apart from `unrun` on `ValidationVerdict` for the same reason — the
+two ask different things of the person reading them.
+
+Both report channels carry it: `result: 'captured'` plus a `capture`, on `ReportSchema`
+(`src/validation/report.ts`) and so on the fleet's `validation_report` and the operator's desktop
+one together. The capture is **required** with `captured` and **refused** with anything else — an
+image beside a pass reads as the evidence for it, and nobody looked. A person's later reading keeps
+the image they judged; only a reset, which means _nothing to attribute_, clears it.
+
 **A capture is not an artefact URL, and the difference is retention.** The publish command's report
 is the run's, swept on the runner's own schedule; a screenshot a person still has to look at outlives
 the run that took it and is held with the goal's validation directory
 ([12](12-artifacts-and-files.md)). A capture that expired before anybody opened it would leave a row
 asking for a judgement about an image that is gone.
+
+So `validation_checks.capture` holds a **file name** and never a path or a URL — the resource name's
+own rule, and for the resource name's reason: a name cannot escape the directory it is resolved
+against, so nothing downstream has to prove that it did not. It is a new column on an existing table
+and has its `ALTER TABLE` in `VALIDATION_COLUMNS`; null means _no capture_, true of every row from
+before it, so nothing is backfilled.
+
+`GET /validation-captures/:originRef/:checkId` serves it, capability-signed like a local run's
+screenshot. **The file name is never a parameter**: it is read off the check's own row, so the only
+thing a caller can name is a check — the goal's validation directory also holds its resources, and a
+route that took a name would serve any of them. The signed URL reaches the cockpit as
+`ValidationCheckView.captureUrl`.
 
 ## The dispatch — rule `remote-validation`
 
@@ -1379,7 +1424,7 @@ rather than `error`.
       },
     },
   ],
-  "remoteValidation": { "runTimeoutMs": 1800000, "tenantTimeoutMs": 3600000 },
+  "remoteValidation": { "runTimeoutMs": 1800000, "tenantTimeoutMs": 3600000, "scriptGraceMs": 2592000000 },
 }
 ```
 

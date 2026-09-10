@@ -218,6 +218,7 @@ export type {
   UsageVerb,
   ValidationCheck,
   ValidationCheckState,
+  ValidationCheckView,
   ValidationResourceView,
   ValidationVerdict,
   GoalWatch,

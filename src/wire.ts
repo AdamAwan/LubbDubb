@@ -263,6 +263,16 @@ export interface ValidationResourceView extends ValidationResource {
   present: boolean;
 }
 
+/**
+ * A check, plus where its capture can actually be looked at. The row carries the capture's **name**;
+ * a surface needs a URL, and minting one is the server's job — a cockpit that assembled the path
+ * itself would be a second opinion about where the goal's validation directory is.
+ * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+ */
+export interface ValidationCheckView extends ValidationCheck {
+  captureUrl: string | null;
+}
+
 export interface PlanHistory {
   revisions: PlanRevision[];
   diff: PlanDiff | null;
@@ -345,7 +355,7 @@ export interface CockpitState {
   planParts: PlanPartView[];
   planAtoms: PlanAtom[];
   planCaveatAnswers: PlanCaveatAnswer[];
-  validationChecks: ValidationCheck[];
+  validationChecks: ValidationCheckView[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
   stateQueries: StateQuery[];

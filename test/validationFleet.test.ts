@@ -152,6 +152,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     uses: [],
     covers: [],
     steps: [],
+    capture: null,
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

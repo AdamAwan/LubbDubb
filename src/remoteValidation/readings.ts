@@ -4,6 +4,7 @@ import type { EnvironmentConfig } from '../environments/policy.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../types.js';
+import { stepScript } from '../validation/steps.js';
 import { foldRowOutcome, parseRunReport, type RowOutcome, type RunReport } from './report.js';
 
 // → docs/spec/36-remote-validation.md#the-report-is-the-only-source-of-row-outcomes
@@ -24,7 +25,7 @@ interface Settled {
   read: number;
   /** How many learned nothing, each of which writes on no check at all. */
   blocked: number;
-  /** How many checks took a `spec` reading. */
+  /** How many checks took a `spec` or `script` reading. Which of the two is on each row. */
   wrote: number;
   /** The checks a run did not overwrite, because somebody else's reading is on them. */
   kept: string[];
@@ -99,15 +100,23 @@ export class RemoteReadingDesk {
 
     for (const row of rows) {
       const check = checks.get(row.sourceId);
-      const area = check?.area ?? null;
-      if (check === undefined || area === null) continue;
+      if (check === undefined) continue;
+      // Two instruments, and which one this row ran decides both what the report is read against and
+      // what the reading is worth. A `suite` step's area selects reviewed code and is verified
+      // against the pre-flight's listing; a one-off script has no listing — it was written for this
+      // check — and reports under the check's own id. A check declaring both is read as a spec: the
+      // reviewed instrument is the stronger evidence, and the two are never folded into one word.
+      const instrument =
+        check.area !== null ? ('spec' as const) : stepScript(check.steps) !== null ? ('script' as const) : null;
+      if (instrument === null) continue;
+      const area = instrument === 'spec' ? (check.area as string) : check.id;
       const folded = this.moveAware(
-        foldRowOutcome({ environment: run.environment, area, matched: row.matched, report }),
+        foldRowOutcome({ environment: run.environment, area, matched: row.matched, instrument, report }),
         moved,
         run,
         endedSha,
       );
-      const settling = folded.outcome === 'blocked' ? null : this.writeCheck(run, check, folded);
+      const settling = folded.outcome === 'blocked' ? null : this.writeCheck(run, check, folded, instrument);
       if (settling !== null && settling.kept !== null) kept.push(settling.kept);
       if (settling?.wrote === true) wrote += 1;
 
@@ -165,11 +174,16 @@ export class RemoteReadingDesk {
   }
 
   /**
-   * **A run writes onto the check row only where the current reading is `unrun`, or was itself a
-   * `spec` reading.** A reading a person, an agent or a desktop session took is theirs, and
-   * overwriting it with a spec's is the harness deciding it knows better than whoever watched the
+   * **A run writes onto the check row only where the current reading is `unrun`, or was one this
+   * instrument itself took.** A reading a person, an agent or a desktop session took is theirs, and
+   * overwriting it with a machine's is the harness deciding it knows better than whoever watched the
    * thing happen. Where the check is settled by somebody else the row still runs, the reading still
    * lands on the sheet, and the sheet says whose reading it is not replacing.
+   *
+   * The predicate is the instrument's **own** attribution and not "a machine took it": a script must
+   * not overwrite a reviewed spec's reading and a spec must not overwrite a script's, because the two
+   * are never folded — an operator counting green rows would otherwise be told a throwaway and a
+   * reviewed spec are the same evidence, by the one route that looks like tidying.
    *
    * A `blocked` row never reaches here at all: no reading was taken.
    */
@@ -177,8 +191,9 @@ export class RemoteReadingDesk {
     run: RemoteRun,
     check: ValidationCheck,
     folded: RowOutcome,
+    by: 'spec' | 'script',
   ): { wrote: boolean; kept: string | null } {
-    if (check.state !== 'unrun' && check.resultBy !== 'spec')
+    if (check.state !== 'unrun' && check.resultBy !== by)
       return {
         wrote: false,
         kept:
@@ -188,7 +203,7 @@ export class RemoteReadingDesk {
     this.deps.store.recordValidationResult(run.goalRef, check.id, {
       state: folded.outcome === 'passed' ? 'passed' : 'failed',
       note: `${folded.detail ?? 'the run reported it.'} → the validation sheet for \`${run.environment}\`.`,
-      by: 'spec',
+      by,
     });
     return { wrote: true, kept: null };
   }
@@ -248,6 +263,8 @@ function whose(check: ValidationCheck): string {
   if (check.resultBy === 'operator') return 'a person who carried the steps out';
   if (check.resultBy === 'agent') return 'the fleet, unattended';
   if (check.resultBy === 'desktop') return 'the operator’s own Claude, at their keyboard';
+  if (check.resultBy === 'spec') return 'the project’s own reviewed browser suite';
+  if (check.resultBy === 'script') return 'a one-off script written for this check, which nobody reviewed';
   return 'somebody this build cannot name';
 }
 

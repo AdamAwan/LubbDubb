@@ -76,7 +76,8 @@ test('every API route declared under routes/ refuses an unauthenticated request'
     if (
       route.url.startsWith('/artifacts/') ||
       route.url.startsWith('/attachments/') ||
-      route.url.startsWith('/local-validations/')
+      route.url.startsWith('/local-validations/') ||
+      route.url.startsWith('/validation-captures/')
     ) {
       const res = await app.inject({ method: route.method, url: route.url });
       assert.equal(res.statusCode, 401, `${route.url} must refuse a request carrying no capability`);

@@ -174,6 +174,7 @@ import type {
   ValidationCheck,
   ValidationCheckActor,
   ValidationCheckResultBy,
+  ValidationStep,
   ValidationCheckState,
   PrReview,
   PrReviewInput,
@@ -786,9 +787,14 @@ export class Store {
       note: string | null;
       by: ValidationCheckResultBy | null;
       until?: string | null;
+      capture?: string | null;
     },
   ): ValidationCheck | null {
     return this.validation.recordValidationResult(planId, checkId, input);
+  }
+
+  sweepValidationScripts(originRef: string, checkId: string, steps: readonly ValidationStep[]): void {
+    this.validation.sweepValidationScripts(originRef, checkId, steps);
   }
 
   recordIssueConclusion(input: Parameters<IssueVerdictStore['recordIssueConclusion']>[0]): IssueConclusion {

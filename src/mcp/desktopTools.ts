@@ -190,11 +190,21 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
   inputSchema: toolSchema(
     z.object({
       result: z
-        .enum(['passed', 'failed', 'handback'])
+        .enum(['passed', 'failed', 'handback', 'captured'])
         .describe(
           '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
-            'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded.',
+            'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you ' +
+            'took the picture and somebody else judges it, so you state no outcome. "handback" — you could not ' +
+            'run it, so nothing is recorded.',
         ),
+      capture: z
+        .string()
+        .describe(
+          'The screenshot you wrote into the check’s own resource directory, by file name. Required with ' +
+            '"captured" and accepted with nothing else — a screenshot asserts nothing, so it never rides a ' +
+            'result that does.',
+        )
+        .optional(),
       note: z
         .string()
         .describe(
@@ -223,7 +233,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     }
     const parsed = validateReport(args);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
-    const { result, note } = parsed.report;
+    const { result, note, capture } = parsed.report;
 
     if (result !== 'handback' && amendedSinceRunBegan(check, held.claimedAt)) {
       session.held = null;
@@ -247,6 +257,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
       state: result,
       note,
       by: 'desktop',
+      ...(capture === undefined ? {} : { capture }),
     });
     session.held = null;
     if (!next) {
@@ -255,6 +266,17 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
           'more is needed on it.',
       );
     }
+    if (next.state === 'captured')
+      return toolJson({
+        reported: 'captured',
+        check: `${check.letter}. ${check.id}`,
+        capture: next.capture,
+        recordedBy: 'desktop',
+        means:
+          'the screen is on the row and the operator is asked to look at it. You have stated no outcome and the ' +
+          'check is not green — whether what you captured is right is a judgement, which is why the plan asked ' +
+          'for a picture rather than an assertion.',
+      });
     return toolJson({
       reported: next.state,
       check: `${check.letter}. ${check.id}`,

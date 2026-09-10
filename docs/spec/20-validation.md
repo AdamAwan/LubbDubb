@@ -225,8 +225,22 @@ one at boot, `id` and `letter` untouched
 
 ### States
 
-`unrun` → `passed` | `failed`, plus `waived` and `deferred`, and one way back to `unrun` from any of
-them.
+`unrun` → `passed` | `failed`, plus `waived`, `deferred` and `captured`, and one way back to `unrun`
+from any of them.
+
+| State      | What it means                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unrun`    | Nobody has got to it. It is also what a row from before any later state was added reads as — `checkStateOf` narrows anything unrecognised here.                                                                                    |
+| `passed`   | Somebody ran the procedure and saw what it expects.                                                                                                                                                                                |
+| `failed`   | Somebody ran it and did not. Rule `validation-failed` is the consumer.                                                                                                                                                             |
+| `waived`   | An operator decided it does not need running.                                                                                                                                                                                      |
+| `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                  |
+| `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. → [36](36-remote-validation.md#handing-a-screen-back-to-look-at) |
+
+**`captured` is a value on the existing column and needs no `ALTER TABLE`**, exactly as `result_by`
+gained `agent`, `desktop` and `spec`. It is counted apart from `unrun` on `ValidationVerdict`: the
+two ask different things of whoever reads them — _nobody has started_ against _the only thing left
+is your eyes_.
 
 Every transition carries a **required note**, and the note is the check's one current reading:
 `recordValidationResult` writes the whole set together and clears what the last reading left behind,
@@ -264,22 +278,23 @@ text rather than its index ([08](08-planning.md)).
 
 **Built.** A check's `steps` are one journey through the delivered goal, in order, and each step
 says who carries it out. Their shapes are `ValidationStepSchema` (`src/validation/checkDocument.ts`),
-resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. What is **not** built
-is the `screenshot` step's own state — a capture reaches an ordinary row today and the
-_captured, waiting to be looked at_ state is still to come
-([36](36-remote-validation.md#handing-a-screen-back-to-look-at)). The ordering is the point: a database or log reading whose subject is _what
+resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. A `browser` step may
+carry a **one-off script**, which is the only step field that is a body of code and the only one that
+acts ([36](36-remote-validation.md#the-one-off-script)); a `screenshot` step reaches the `captured`
+state and asserts nothing ([36](36-remote-validation.md#handing-a-screen-back-to-look-at)). The
+ordering is the point: a database or log reading whose subject is _what
 the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
 to anything but a reader.
 
-| Step kind    | What it does                                                                   |
-| ------------ | ------------------------------------------------------------------------------ |
-| `browser`    | Drives the application — navigate, upload, click, wait.                        |
-| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`. |
-| `screenshot` | Captures the screen and attaches it to the row.                                |
-| `state`      | Reads the deployed store through the environment's `state.run`.                |
-| `signal`     | Reads logs and error records.                                                  |
-| `measure`    | Reads a metric.                                                                |
-| `manual`     | A person does something the fleet cannot.                                      |
+| Step kind    | What it does                                                                         |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `browser`    | Drives the application — navigate, upload, click, wait.                              |
+| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`.       |
+| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`. |
+| `state`      | Reads the deployed store through the environment's `state.run`.                      |
+| `signal`     | Reads logs and error records.                                                        |
+| `measure`    | Reads a metric.                                                                      |
+| `manual`     | A person does something the fleet cannot.                                            |
 
 Everything one journey settles belongs to one check, on the rule
 [One run is one check](#one-run-is-one-check) states: the setup is the expensive part, and a journey
@@ -820,7 +835,9 @@ what a person can do that an agent could not. The next dispatch is handed that r
 re-hand-over does not rediscover the same wall and spend an attempt saying so.
 
 **`resultBy` is drawn wherever the reading is** — the cockpit row, and `_(recorded by an agent)_` on
-the ticket comment. "An agent says this passed" and "I ran it and it passed" are different facts, and
+the ticket comment. All five are drawn apart, `spec` and `script` most of all: a reviewed spec is
+repository code a pull request's reviewer read and a one-off script is a throwaway nobody read, and
+an operator counting green rows must never be told they are the same evidence. "An agent says this passed" and "I ran it and it passed" are different facts, and
 the whole feature exists to stop the second being assumed from evidence that only supports the first.
 The ticket says it only for the agent: a validation checklist already means a person checked it, and
 the exception is what a reader deciding how much a tick is worth is entitled to know.
@@ -1287,9 +1304,26 @@ at the goal instead. → [17](17-cockpit.md#the-validation-digest)
 Three markers say who, and each exists because its absence would be read as something else: **with
 the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a **live**
 claim (the timestamp on the hover; an expired claim is not shipped at all, so the chip and the fleet
-list's keyboard entry go together), and beside a reading, **recorded by an agent** or **recorded from
-a desktop session**. A reading by a person draws nothing, because that is what a checklist already
-means.
+list's keyboard entry go together), and beside a reading, who took it. A reading by a person draws
+nothing, because that is what a checklist already means; every other `resultBy` draws its own words,
+and the two machine ones are **never one word**: _recorded by the project's own browser suite_ is
+reviewed repository code, and _recorded by a one-off script — unreviewed_ is a throwaway written for
+this check alone.
+
+An open row draws the **test plan**: each step in order, its kind, who carries it and — where it is a
+person's — why, off `ValidationStep.why`, which names the block that would have made it the fleet's.
+A one-off script's **source** is drawn there beside the step that carries it, because it is small
+and goal-scoped and reading it is cheaper than trusting it; where the grace sweep has taken it, the
+step says so rather than reading as a `browser` step a person always drove.
+→ [36](36-remote-validation.md#the-one-off-script)
+
+A **capture** is drawn inline, on the closed row beside the reading, and links out to the full image.
+A `captured` check asks for exactly one thing — somebody's eyes — and a state chip that only said the
+word would make an operator go and find the image before they could answer it. It carries its own
+hue, `--cn-captured` and the `captured` tone: not amber, which would say _nobody has started_, and
+not green, which would say it passed. The four reading buttons are offered on a `captured` row as
+they are on an `unrun` one, because a person's reading is the only thing that settles it.
+→ [36](36-remote-validation.md#handing-a-screen-back-to-look-at)
 
 Every control writes an operator's reading and derives nothing: there is no "mark all", and no state
 is inferred from a merged part or a green build. Superseded checks are drawn folded, as the record of
@@ -1303,7 +1337,15 @@ should not be the one reading that goes nowhere.
 
 ## Tests
 
-`test/validationAuthoring.test.ts` (the authoring move: that a legacy plan document's full check set
+`test/validationScriptCapture.test.ts` (the two readings: that a one-off script rides a `browser`
+step and nothing else, that its source reaches the check briefing marked as not that dispatch's to
+run, that a script check with no tenant blocks naming the command or variable that would provide one,
+that its reading is attributed `script` and that a script and a spec never overwrite each other, that
+a script reporting nothing under its own id is blocked rather than passed, that a run whose only
+confirmed check carries a script still owes an agent and briefs it with the source, that the grace
+sweep removes a script past its window and stamps where it was while leaving a fresh goal alone, and
+that a `captured` report attaches the screen without going green while a row from before the state
+reads `unrun`), `test/validationAuthoring.test.ts` (the authoring move: that a legacy plan document's full check set
 still ingests and is not an authoring, that a hint-only block withdraws nothing where an explicit
 `[]` withdraws everything, when the rule dispatches and the three gates that stop it, that the
 dispatch goes through the candidate list rather than an inline `raw.push`, that the hint, the

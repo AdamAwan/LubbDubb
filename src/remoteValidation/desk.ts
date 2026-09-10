@@ -6,6 +6,7 @@ import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
+import { sweptScripts } from '../validation/steps.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
 import { preflightRows } from './preflight.js';
@@ -35,6 +36,11 @@ interface RemoteValidationDeskDeps {
   queries: StateQueryDesk;
   runner: RemoteRunner;
   probeIntervalMs: number;
+  /**
+   * `remoteValidation.scriptGraceMs` — how long a one-off script's source outlives the goal's
+   * delivery. → docs/spec/36-remote-validation.md#the-one-off-script
+   */
+  scriptGraceMs: number;
   errors?: ErrorRecorder;
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
@@ -60,6 +66,7 @@ export class RemoteValidationDesk {
     await this.refreshSelectorOfferings();
     await this.assembleAll();
     this.sweep();
+    this.sweepScripts();
   }
 
   /**
@@ -182,6 +189,46 @@ export class RemoteValidationDesk {
   }
 
   /**
+   * The one-off scripts whose goals are long since delivered. A one-off that survives its goal is an
+   * unreviewed test nobody maintains and nobody can attribute, failing mysteriously against a product
+   * that moved on — a second suite grown by accident, which is the whole reason the source is
+   * goal-scoped rather than committed.
+   *
+   * The clock runs from the goal's **delivery**, which is what parks it: the delivery row is the one
+   * moment the harness records as *this goal is over*, and dating the grace from anything the check
+   * itself carries would restart it every time somebody recorded a reading on the row.
+   *
+   * It **names what it removed**, and it names it where the source was: `scriptSweptAt` on the step.
+   * A `browser` step that reads *there was a script here and it is gone* is not the same row as one a
+   * person always drove, and a sweep that simply nulled the field would rewrite how a green row was
+   * earned. Nothing else on the row is touched — the reading, the hand-back and the amendment band
+   * are the goal's history and this is housekeeping.
+   *
+   * Its own `try`, beside the run sweep's and for the same reason: a pass that throws goes through
+   * `errors.record` and never fails the cycle or the pass beside it.
+   */
+  private sweepScripts(): void {
+    const { store, errors } = this.deps;
+    try {
+      const at = new Date(this.now()).toISOString();
+      const cutoff = this.now() - this.deps.scriptGraceMs;
+      for (const delivery of store.listDeliveries()) {
+        if (Date.parse(delivery.decidedAt) > cutoff) continue;
+        for (const check of store.listValidationChecks(delivery.originRef)) {
+          const swept = sweptScripts(check.steps, at);
+          if (swept === null) continue;
+          store.sweepValidationScripts(delivery.originRef, check.id, swept);
+        }
+      }
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message: `the one-off script grace sweep failed: ${(err as Error).message}`,
+      });
+    }
+  }
+
+  /**
    * The second key, for a live watch check: an operator has read this query and accepted it *here*.
    * The watch put it to one environment to learn whether it parses; a sheet puts it to a named place,
    * and consent to a place is not transferable — so a check live on the watch is still blocked on a
@@ -228,6 +275,14 @@ export class RemoteValidationDesk {
       watches: store.listGoalWatches().filter((w) => w.originRef === goalRef),
       queries: store.listStateQueries().filter((q) => q.originRef === goalRef),
       approvals: new Set(store.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
+      // Resolved here rather than in `sheetRows`: the sheet is a pure fold, and where a tenant comes
+      // from is a question about stamped rows, the machine's environment and the clock.
+      tenant: resolveTenant({
+        environment,
+        stamped: store.listRemoteTenants(),
+        now: this.now(),
+        env: this.deps.env,
+      }).standing,
     });
     store.openRemoteSheet({ goalRef, environment: environment.name });
     store.saveRemoteSheetRows(

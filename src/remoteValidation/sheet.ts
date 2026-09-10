@@ -8,6 +8,7 @@ import type {
   StateQuery,
   ValidationCheck,
 } from '../types.js';
+import { stepScript } from '../validation/steps.js';
 import { liveChecks } from '../validation/verdict.js';
 import { selectorFault } from './runner.js';
 
@@ -38,6 +39,13 @@ interface SheetInput {
   queries: readonly StateQuery[];
   /** `${digest} ${environment}` for every approval a person has written. */
   approvals: ReadonlySet<string>;
+  /**
+   * The tenant this environment resolves to, and why it has none where it has none. A one-off script
+   * **acts**, so it needs one — and the harness generates and infers no tenant identifier anywhere,
+   * so an environment that names none blocks the row rather than running the script somewhere it
+   * should not. → docs/spec/36-remote-validation.md#the-one-off-script
+   */
+  tenant?: { tenant: string | null; blockedReason: string | null };
 }
 
 /**
@@ -66,7 +74,9 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       sourceId: check.id,
       selected: true,
       blockedReason:
-        unpermitted('check', permits, environment.name) ?? (check.area === null ? null : selectorFault(check.area)),
+        unpermitted('check', permits, environment.name) ??
+        (check.area === null ? null : selectorFault(check.area)) ??
+        scriptTenantFault(check, input.tenant, environment.name),
       awaitingApproval: false,
       matched: null,
       run: null,
@@ -118,6 +128,31 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
   }
 
   return out;
+}
+
+/**
+ * A check whose plan carries a one-off script, on an environment with no tenant. Unlike every other
+ * row on a sheet a script **writes**, and the machinery that makes that safe — provisioning,
+ * reseeding, the lock and the reap window — is keyed on a tenant the operator declares. So the row is
+ * `blocked` **naming the command or the variable that would provide one**, never "no tenant": an
+ * operator meeting this is entitled to read which line they have not written, and the harness never
+ * invents a name, because an invented one is reaped within the hour and its disappearance presents
+ * as mysterious mass failure.
+ *
+ * A check with no script never reaches this. → docs/spec/36-remote-validation.md#tenants
+ */
+function scriptTenantFault(check: ValidationCheck, tenant: SheetInput['tenant'], environment: string): string | null {
+  if (stepScript(check.steps) === null) return null;
+  if (tenant === undefined) return null;
+  if (tenant.blockedReason !== null) return tenant.blockedReason;
+  if (tenant.tenant !== null && tenant.tenant !== '') return null;
+  return (
+    `this check carries a one-off script, and a script acts on ${environment} — it arranges the data the ` +
+    'check is about. Nothing here names a tenant for it to act inside: declare a literal ' +
+    '"validate.tenant", a "validate.tenantEnv" naming the variable that carries one, or a ' +
+    '"validate.ensureTenant" command that provisions one. The harness will not invent a name, because an ' +
+    'invented tenant is reaped within the hour and its disappearance reads as mass failure.'
+  );
 }
 
 function unpermitted(kind: RemoteRowKind, permits: readonly RemoteRowKind[], environment: string): string | null {

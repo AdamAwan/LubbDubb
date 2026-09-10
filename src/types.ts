@@ -824,7 +824,18 @@ export interface PlanEvidence {
   note: string | null;
 }
 
-export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred';
+/**
+ * `captured` is *captured, waiting to be looked at*: a `screenshot` step took the picture and
+ * attached it, and nobody has judged it yet. It is deliberately **not** a reading — it goes green or
+ * red only when a person records one, which is [a result is declared, never
+ * derived](docs/spec/20-validation.md#states) applied exactly as written.
+ *
+ * A row from before the state existed reads `unrun`, and must: `checkStateOf` narrows anything it
+ * does not recognise to `unrun`, so the old rows land on the state that means *nobody has got to
+ * it* rather than on the one that means *there is an image here for you*.
+ * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+ */
+export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred' | 'captured';
 
 export type ValidationCheckActor = 'human' | 'fleet';
 
@@ -856,18 +867,39 @@ export interface ValidationStep {
   /** `suite` only: the area of the project's own browser suite this step runs. Sets the check's `area`. */
   area: string | null;
   when: ValidationStepWhen;
+  /**
+   * `browser` only: the one-off script's source, run as it stands. It is the browser-shaped member of
+   * the query column — unreviewed, tenant-scoped, written for this check and never in a pull request
+   * — so it is drawn beside its reading rather than trusted, and swept `remoteValidation.scriptGraceMs`
+   * past the goal's delivery. Null is a `browser` step a person drives.
+   * → docs/spec/36-remote-validation.md#the-one-off-script
+   */
+  script: string | null;
+  /**
+   * When the grace sweep removed the script's source, ISO. It is stamped **where the source was**,
+   * which is what "the sweep names what it removed" comes to: a step reading *there was a one-off
+   * script here and it is gone* is a different thing from a `browser` step a person always drove, and
+   * folding the two would quietly rewrite the history of how a green row was earned. Null is a step
+   * whose script is still here, or one that never had one.
+   * → docs/spec/36-remote-validation.md#the-one-off-script
+   */
+  scriptSweptAt: string | null;
   actor: ValidationCheckActor;
   /** Why it is a person's, naming the configuration that would have made it the fleet's. Null where the fleet carries it. */
   why: string | null;
 }
 
 /**
- * Four different facts, and the whole point of keeping them apart is that one must never be assumed
+ * Five different facts, and the whole point of keeping them apart is that one must never be assumed
  * from evidence that supports another. `spec` is **a reviewed spec ran against a real environment
  * and its report said so** — stronger than `agent`, because no model read anything, and different
- * from `operator`, because nobody watched it. → docs/spec/36-remote-validation.md#what-a-spec-reading-is-worth
+ * from `operator`, because nobody watched it. `script` is the same machinery with the review taken
+ * out: a one-off script written for this check alone, never in a pull request and read by nobody. It
+ * is **never folded with `spec`** in any reader — an operator counting green rows would otherwise be
+ * told a throwaway and a reviewed spec are the same evidence.
+ * → docs/spec/36-remote-validation.md#what-a-spec-reading-is-worth, [the one-off script](docs/spec/36-remote-validation.md#the-one-off-script)
  */
-export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop' | 'spec';
+export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop' | 'spec' | 'script';
 
 export interface ValidationCheck {
   originRef: string;
@@ -906,6 +938,14 @@ export interface ValidationCheck {
    * → docs/spec/20-validation.md#the-test-plan
    */
   steps: ValidationStep[];
+  /**
+   * The screen a `screenshot` step handed back, as a **file name** in the goal's validation directory
+   * — never a path and never an artefact URL. The difference from the run's artefacts is retention:
+   * the publish command's report is swept on the runner's own schedule, and a screenshot somebody
+   * still has to look at outlives the run that took it. Null is no capture.
+   * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+   */
+  capture: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -999,6 +1039,13 @@ export interface ValidationVerdict {
   unrun: number;
   deferred: number;
   waived: number;
+  /**
+   * Captured and waiting to be looked at. Its own counter rather than folded into `unrun`: the two
+   * ask different things of the person reading them — *nobody has got to it* against *there is an
+   * image here and the only thing left is your eyes* — and `total` is the sum of the six.
+   * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+   */
+  captured: number;
 }
 
 export type PartSize = 's' | 'm' | 'l';

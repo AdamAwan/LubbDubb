@@ -104,9 +104,13 @@ test('nothing outside DesktopLink builds a link into Claude Code', () => {
   assert.deepEqual(offenders, [], 'draw a desktop hand-off through <DesktopLink>');
 });
 
-test('the control sits with the hand-over, on an unrun check', () => {
-  const unrun = SOURCE.slice(SOURCE.indexOf("check.state === 'unrun' ?"), SOURCE.indexOf('Back to unrun'));
-  assert.ok(unrun.includes('<DesktopLink'), 'the desktop hand-off is drawn on an unrun check');
+test('the control sits with the hand-over, on a check nobody has answered yet', () => {
+  // `captured` is in the same arm on purpose: the screen is on the row and the only thing left is a
+  // person's reading, which is exactly what the hand-offs beside it are for.
+  const anchor = "check.state === 'unrun' || check.state === 'captured' ?";
+  const unrun = SOURCE.slice(SOURCE.indexOf(anchor), SOURCE.indexOf('Back to unrun'));
+  assert.ok(SOURCE.includes(anchor), 'the four readings are offered on an unrun check and on a captured one');
+  assert.ok(unrun.includes('<DesktopLink'), 'the desktop hand-off is drawn there');
   assert.ok(unrun.includes('Hand to the fleet'), 'beside the fleet hand-over');
 });
 

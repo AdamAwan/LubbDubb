@@ -106,6 +106,7 @@ function bench(
     observer: env,
     queries: new StateQueryDesk({ store, environments, reader: stateReader }),
     runner: new FakeRemoteRunner(),
+    scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,
     now,
   });
@@ -412,6 +413,7 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
         },
       } as unknown as StateQueryDesk,
       runner: new FakeRemoteRunner(),
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: PROBE_MS,
       errors: { record: (e: { message: string }) => logged.push(e.message) } as never,
       now: () => NOW,
@@ -473,6 +475,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
         observer: observer(),
         queries: new StateQueryDesk({ store, environments: [ACCEPTANCE], reader: reader() }),
         runner: new FakeRemoteRunner(),
+        scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
         probeIntervalMs: PROBE_MS,
         now: () => NOW + PROBE_MS * 10,
       });

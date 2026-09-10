@@ -15,7 +15,7 @@ import type {
   Proposal,
   QueueItem,
   StateQuery,
-  ValidationCheck,
+  ValidationCheckView,
 } from '../types.js';
 import { api } from '../api.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
@@ -75,7 +75,7 @@ export function PlanModal({
   plan: Plan;
   parts: PlanPartView[];
   atoms: PlanAtom[];
-  checks: ValidationCheck[];
+  checks: ValidationCheckView[];
   caveatAnswers: PlanCaveatAnswer[];
   watches: GoalWatch[];
   queries: StateQuery[];

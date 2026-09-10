@@ -4,7 +4,7 @@ import type { EnvironmentProber } from '../environments/prober.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantStanding } from '../types.js';
-import { runnableSelectors } from './briefing.js';
+import { runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
 import { rowRun } from './sheet.js';
 import { resolveTenant, stalenessNote, type TenantEnvironment, type TenantKeeper } from './tenants.js';
@@ -121,7 +121,12 @@ export class RemoteRunDesk {
     // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
     // **this** row — it is left `pending` where a confirmed `check` row is owed one, and settled here
     // where none is, which is a run nothing will ever report against.
-    const owed = runnableSelectors(store, environment, goalRef, rows).length;
+    // Both browser instruments count. A sheet whose only confirmed check carries a one-off script
+    // names no selector at all, and a press counting selectors alone would settle that run on the
+    // spot with its whole browser half still owed — a press that quietly did less than it said.
+    const owed =
+      runnableSelectors(store, environment, goalRef, rows).length +
+      runnableScripts(store, environment, goalRef, rows).length;
     if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
 
     const endedSha = await this.deployedSha(environment);

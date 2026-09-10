@@ -71,6 +71,17 @@
   --cn-violet-fill: color-mix(in srgb, var(--cn-violet) 5%, var(--cn-panel));
   --cn-violet-line: color-mix(in srgb, var(--cn-violet) 24%, var(--cn-panel));
 
+  /* A validation check whose screen was captured and is waiting to be looked at.
+     Its own hue, and derived rather than a fourteenth core colour so every preset
+     answers it by answering the two it is mixed from: cool, so it does not read as
+     an outstanding amber, and not green, because nothing has passed — the row is
+     one somebody has to *look* at, which is neither of the two states either of
+     those colours already mean.
+     → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at */
+  --cn-captured: color-mix(in srgb, var(--cn-violet) 55%, var(--cn-accent));
+  --cn-captured-fill: color-mix(in srgb, var(--cn-captured) 6%, var(--cn-panel));
+  --cn-captured-line: color-mix(in srgb, var(--cn-captured) 26%, var(--cn-panel));
+
   /* The harness readying an action into an agent: the fleet's own accent, pulled
      most of the way to the faint ink. Derived rather than a fourteenth core
      colour, so every preset answers it by answering the two it is mixed from —

@@ -99,6 +99,7 @@ function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | und
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader }),
       runner: new FakeRemoteRunner(),
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
     }),

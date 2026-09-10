@@ -275,6 +275,7 @@ test('with the area written, a sheet’s check row confirms and the run has a se
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
       runner: new FakeRemoteRunner({ acceptance: { listing: OFFERING } }),
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
     });
@@ -309,6 +310,7 @@ test('the desk lists what each runner offers, and keeps the answer where a plann
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
       runner,
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
     });
@@ -338,6 +340,7 @@ test('a listing that could not say leaves the offering the last answer left stan
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
       runner,
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
     });
