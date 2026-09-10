@@ -1006,6 +1006,39 @@ against, so nothing downstream has to prove that it did not. It is a new column 
 and has its `ALTER TABLE` in `VALIDATION_COLUMNS`; null means _no capture_, true of every row from
 before it, so nothing is backfilled.
 
+**The sheet's own run never hands a screen back, and that asymmetry is deliberate.** A capture
+arrives through `validation_report` on the `validate-check` dispatch and through the desktop tool,
+and through nothing else: `remote_validation_report` takes a report path and artefacts, and gains no
+capture field. Three things say so, and each one is a property this design holds elsewhere.
+
+**A capture belongs to one check, and a run's rows are keyed on a selector rather than on a check.**
+A spec row's selector is the check's `area`, and an area is not unique to a check — two checks may
+name one, which is ordinary and which
+[the join answers](#a-check-is-verified-against-one-area-and-a-covered-area-needs-no-check). A
+capture riding that row would land on every check reading that area: one image, taken once, offered
+as the thing several different people have to look at. `validation_checks.capture` is one file name
+per check because a capture is evidence about one journey.
+
+**A `captured` row asserts nothing, and every row of a sheet run does.** The two browser instruments
+the run carries — a reviewed suite area and a one-off script — both report `passed` or `failed`, and
+`captured` is a state that competes with those on the same column. A capture on a row that also
+asserted would have to either colour the row green and leave the image nobody was asked to look at,
+or downgrade an assertion the product actually earned to _waiting to be looked at_. The first is the
+failure this whole reading exists to refuse; the second discards a real result.
+
+**Nothing in a run may write where a capture has to live.** A capture outlives the run — that is the
+retention argument above — and the run's agent writes into the run's report and artefact directories
+and nowhere else, which is one of the rules of the run. Closing the gap would mean either relaxing
+that rule or having the harness move a file named by a report the agent points at, and a capture
+that arrived as a path in a report is exactly the shape `validation_checks.capture` holding a **name**
+refuses.
+
+What is left is not a gap in capability. A check whose plan wants a screen handed back is carried by
+`validate-check`, which takes its steps in order and has a directory of its own; the sheet's run is
+where a suite invocation is folded, and the screens it takes on the way are **artefacts** — which
+have their own channel, published by the project's own command and swept on its schedule, because
+nobody has to look at them for the row to mean something.
+
 `GET /validation-captures/:originRef/:checkId` serves it, capability-signed like a local run's
 screenshot. **The file name is never a parameter**: it is read off the check's own row, so the only
 thing a caller can name is a check — the goal's validation directory also holds its resources, and a

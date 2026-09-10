@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -452,4 +453,27 @@ test('the environment note lists what each environment can drive, and the areas 
   );
   assert.match(note, /`Checkout Tests`/, 'the area is a pick from the runner’s own listing, copied exactly');
   assert.match(note, /No tenant is configured/, 'and a run that writes is told it has nowhere to write');
+});
+
+// → docs/spec/20-validation.md#saying-nothing-was-worth-running
+test('the planner’s account reaches the cockpit, because an empty set has no row to carry it', async () => {
+  const system = build();
+  ingest(system, { hint: 'the upload path' });
+
+  const before = buildStateSnapshot(system).validationPlans.find((r) => r.originRef === GOAL);
+  assert.equal(before?.hint, 'the upload path');
+  assert.equal(before?.authoredAt, null, 'not authored yet is a third thing, and the section says which');
+
+  const agent = spawnAgent(system, 'issue:12:validate-plan');
+  const res = await callTool(system, agent, 'validation_plan', {
+    note: 'followed the hint',
+    emptyReason: 'area `Checkout Tests` now asserts the confirmation step and nothing else needs a run',
+  });
+  assert.equal(res.isError, false, res.text);
+
+  const after = buildStateSnapshot(system).validationPlans.find((r) => r.originRef === GOAL);
+  assert.match(after?.emptyReason ?? '', /Checkout Tests/, 'a required reason nobody can read bought nothing');
+  assert.match(after?.note ?? '', /followed the hint/);
+  assert.notEqual(after?.authoredAt, null);
+  system.store.close();
 });

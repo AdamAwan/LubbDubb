@@ -219,6 +219,7 @@ export type {
   ValidationCheck,
   ValidationCheckState,
   ValidationCheckView,
+  ValidationPlanRecord,
   ValidationResourceView,
   ValidationVerdict,
   GoalWatch,

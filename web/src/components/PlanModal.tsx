@@ -16,6 +16,7 @@ import type {
   QueueItem,
   StateQuery,
   ValidationCheckView,
+  ValidationPlanRecord,
 } from '../types.js';
 import { api } from '../api.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
@@ -47,6 +48,7 @@ export function PlanModal({
   parts,
   atoms,
   checks,
+  validationPlan,
   caveatAnswers,
   watches,
   queries,
@@ -76,6 +78,7 @@ export function PlanModal({
   parts: PlanPartView[];
   atoms: PlanAtom[];
   checks: ValidationCheckView[];
+  validationPlan: ValidationPlanRecord | null;
   caveatAnswers: PlanCaveatAnswer[];
   watches: GoalWatch[];
   queries: StateQuery[];
@@ -381,6 +384,7 @@ export function PlanModal({
                     places is two wirings of one set of refusals. */}
               <ValidationDigest
                 checks={checks}
+                plan={validationPlan}
                 refUrls={refUrls}
                 onOpenGoal={
                   issueNumber === null

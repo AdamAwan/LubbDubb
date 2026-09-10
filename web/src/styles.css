@@ -3887,6 +3887,12 @@ select:disabled {
   border-left: 2px solid var(--border);
   color: var(--text);
 }
+/* The planner's own sentence inside an empty section, where the note is the only
+   thing on the surface: it has to break the line it follows rather than trail it. */
+.empty > .pm-vnote {
+  display: block;
+  margin-top: 6px;
+}
 .pm-vacts,
 .pm-vsay {
   display: flex;

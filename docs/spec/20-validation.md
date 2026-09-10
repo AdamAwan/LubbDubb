@@ -177,6 +177,40 @@ Both are refusals rather than conventions: `validation_plan` requires `note` on 
 requires `emptyReason` on a call declaring no checks. A refused call authors nothing — the stamp is
 not written, so the sheet keeps waiting rather than assembling off a set nobody wrote.
 
+### Saying nothing was worth running
+
+**Built.** A required `emptyReason` an operator cannot read is a refusal that bought nothing, and for
+three slices that is what it was: the record was written, read by the dispatch rule and by sheet
+assembly, and reached no surface at all. The only place an operator meets a goal with no checks said
+_No validation plan. Nothing checks that this goal actually works_ — which is one of the three
+things an empty section can mean, asserted over the other two.
+
+So `ValidationPlanRecord` is on the wire (`CockpitState.validationPlans`) and the empty section draws
+what the record actually says:
+
+- **`emptyReason` set** — the planner read the delivered goal and declared no checks, in its own
+  words. That is a verdict, and the section says so.
+- **Not authored yet** — the set is written after delivery, so before then there is nothing to run
+  and nothing is wrong. The plan's **hint** is drawn here, because it is the only thing anybody has
+  said about validating this goal yet and it is exactly what an operator is looking for.
+- **Authored, and still nothing** — the old sentence, which is now true where it is drawn: no
+  account of the absence exists, and closing the goal is a judgement call.
+
+Beside a set that **does** exist, the same record's `note` is drawn above the rows. Without it the
+hint is theatre in the other direction: an operator read the intent at the approval gate, and the set
+in front of them was written days later against code that hint could not see.
+
+**What a `coverage` part built is not drawn beside an empty set, and that is settled.** The bench
+could name the area a permanent test part added and put it beside the absence — the fact is in the
+harness, and it was the last open question on this design. It stays with the planner's sentence, for
+the reason `sheetFoldLine` is folded on the server
+([36](36-remote-validation.md#the-cockpit)): the planner **read** that part, weighed it against
+the delivered code and wrote what it concluded, and an area drawn beside that sentence is a second
+opinion about the same fact, assembled by a surface that read neither. Where the two agree it is
+noise; where they disagree — a part that built an area the planner judged irrelevant — the surface is
+contradicting the only reader that looked. The empty state is one sentence with a reason under it,
+and the reason is the agent's.
+
 ### A permanent test influences and never dictates
 
 A goal may build or amend a spec in the project's own browser suite. That is buildable work: a
@@ -1296,6 +1330,11 @@ as the work that is left rather than as the whole list. Scoped to the head, lift
 opened, and lighter than the treatment a withdrawn check gets: withdrawn and done are not the same
 news. → [17](17-cockpit.md#validation-on-the-goal)
 
+Both surfaces draw the **empty** case off the goal's `ValidationPlanRecord` rather than off the
+absence of rows, and they draw it identically — the digest and the section describe one check set,
+and the failure worth designing against is the two describing one goal differently.
+→ [Saying nothing was worth running](#saying-nothing-was-worth-running)
+
 The **plan sheet** keeps a read-only `ValidationDigest` between the parts and the caveats, with a rail
 entry carrying the settled count — the reading order is answer, then work, then how anyone knows it
 worked. A plan under review has to show what it proposes to check; it just offers no verb, and points
@@ -1351,7 +1390,9 @@ still ingests and is not an authoring, that a hint-only block withdraws nothing 
 dispatch goes through the candidate list rather than an inline `raw.push`, that the hint, the
 coverage part and the environments reach the agent, the origin's classification and its spend phase,
 the tool's two refusals and what a refused call does not stamp, that `validation_amend` is refused at
-the planner's own origin, and that sheet assembly waits — with the staleness guard cut first),
+the planner's own origin, that sheet assembly waits — with the staleness guard cut first — and that
+the record reaches the cockpit before and after authoring, which is what makes a required
+`emptyReason` worth requiring),
 `test/validation.test.ts` (the schema's refusals, letters, what an amendment may do to a check
 somebody has run, and the resource ask: that it waits for the delivery, that a replan which stops
 needing the resource withdraws it, and that a withdrawal never overwrites the operator's own answer), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two

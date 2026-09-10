@@ -1786,6 +1786,15 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       }),
     ],
+    validationPlans: [
+      {
+        originRef: 'issue:395',
+        hint: 'Somebody should download a snapshot with auth on and with auth off, and try a tampered link.',
+        note: 'The hint asked for three journeys; the tampered link is two checks here, because a signature the signer refuses and one it has expired fail in different places.',
+        emptyReason: null,
+        authoredAt: ago(12),
+      },
+    ],
     validationChecks: [
       demoCheck({
         id: 'download-opens-in-a-new-tab',
