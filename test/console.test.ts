@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import * as React from 'react';
 import { createElement, isValidElement } from 'react';
@@ -16,6 +15,7 @@ import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
+import { repoPath, repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -81,7 +81,7 @@ function decode(html: string): string {
 }
 
 test('nothing under console/ imports the api module', () => {
-  const dir = fileURLToPath(new URL('../web/src/console/', import.meta.url));
+  const dir = repoPath('web/src/console');
   const walk = (d: string): string[] =>
     readdirSync(d).flatMap((n) => {
       const p = join(d, n);
@@ -95,14 +95,14 @@ test('nothing under console/ imports the api module', () => {
 });
 
 test('console.css never targets a shared component’s class', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/console/console.css');
   for (const cls of ['.escalation-card', '.recovery-panel', '.findings-panel', '.human-task-actions']) {
     assert.ok(!css.includes(cls), `console.css styles ${cls}; shared components restyle through tokens only`);
   }
 });
 
 test('console.css reaches no form control through .cn', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/console/console.css');
   const offenders = [...css.matchAll(/^\s*(\.cn[\w-]*\s+(?:input|textarea|select|option)\b[^,{]*)/gm)].map((m) =>
     m[1]!.trim(),
   );
@@ -110,7 +110,7 @@ test('console.css reaches no form control through .cn', () => {
 });
 
 test('the why bubble is held between the row’s two edges, cap and all', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/console/console.css');
   const rule = /^\.cn-why-tip\s*\{([^}]*)\}/m.exec(css)?.[1];
   assert.ok(rule !== undefined, 'console.css no longer declares .cn-why-tip');
   for (const edge of ['left:', 'right:']) {
@@ -1527,7 +1527,7 @@ test('a goal nothing is holding raises no intake row at all', () => {
 });
 
 test('the tickets tab is where unrecorded work is triaged', () => {
-  const src = readFileSync(fileURLToPath(new URL('../web/src/components/TicketsPanel.tsx', import.meta.url)), 'utf8');
+  const src = repoText('web/src/components/TicketsPanel.tsx');
   assert.ok(/import\s+\{[^}]*UnrecordedWork/.test(src), 'the tickets tab must mount the unrecorded-work call-out');
   assert.ok(src.includes('<UnrecordedWork'), 'and render it, not merely import it');
 
@@ -1730,7 +1730,7 @@ test('Insights is where the three cost readings went, and they did not stay behi
 });
 
 test('the shell renders the console, and the drawer that the console only asks for', () => {
-  const src = readFileSync(fileURLToPath(new URL('../web/src/App.tsx', import.meta.url)), 'utf8');
+  const src = repoText('web/src/App.tsx');
   assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
   assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
   assert.ok(!/import\s+\{[^}]*RecordPanel/.test(src), 'the shell must not import the work graph');

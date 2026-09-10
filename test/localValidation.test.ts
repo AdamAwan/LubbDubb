@@ -22,6 +22,7 @@ import { issueOriginRole } from '../src/issueOrigins.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { ALLOWED_MCP_TOOLS, extraMcpGrants, MCP_SERVER_ID } from '../src/mcp/names.js';
 import type { Agent, Issue, LocalRun, LocalValidation } from '../src/types.js';
+import { repoText } from './support/paths.js';
 
 const NOW = '2025-01-01T00:00:00.000Z';
 const COMMIT = 'a'.repeat(40);
@@ -580,8 +581,8 @@ test('the launch document carries both servers, and never lets an extra take the
 });
 
 test('every signer the route context declares is forwarded to the snapshot', () => {
-  const context = readFileSync(new URL('../src/server/routes/context.ts', import.meta.url), 'utf8');
-  const route = readFileSync(new URL('../src/server/routes/state.ts', import.meta.url), 'utf8');
+  const context = repoText('src/server/routes/context.ts');
+  const route = repoText('src/server/routes/state.ts');
   const signers = [...context.matchAll(/^\s{2}(\w*[Ss]igner)\?:/gm)].map((m) => m[1] as string);
   assert.ok(signers.length >= 3, `expected the context to declare signers, found ${String(signers.length)}`);
 

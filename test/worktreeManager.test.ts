@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { tmpDir } from './support/gitRepo.js';
+import { repoPath } from './support/paths.js';
 
 function initRepo(): string {
   const dir = tmpDir('lubbdubb-repo-');
@@ -540,7 +540,7 @@ test('the fake refuses past its bound, as the real one does', async () => {
 });
 
 test('every test that builds a System either fakes worktrees or brings its own repo', async () => {
-  const dir = dirname(fileURLToPath(import.meta.url));
+  const dir = repoPath('test');
   const files = readdirSync(dir).filter((f) => f.endsWith('.test.ts'));
 
   const offenders = files.filter((f) => {

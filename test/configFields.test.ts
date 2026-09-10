@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { configField, CONFIG_FIELDS, fieldValueRefusal, topSegment } from '../src/configFields.js';
 import { isLiveField, liveFieldPaths } from '../src/configApply.js';
 import { describeRunningConfig, groupedTopLevelKeys } from '../src/server/runningConfig.js';
 import { declaredTopLevelKeys, configTopLevelKeys } from '../src/configFields.js';
+import { repoPath } from './support/paths.js';
 
 test('every config key is declared, so a new one cannot arrive un-editable', () => {
   const declared = declaredTopLevelKeys();
@@ -20,9 +20,7 @@ test('every config key is declared, so a new one cannot arrive un-editable', () 
 });
 
 test('every key in the shipped example config is one this build still reads', () => {
-  const example = JSON.parse(
-    readFileSync(join(import.meta.dirname, '..', 'lubbdubb.config.example.json'), 'utf8'),
-  ) as Record<string, unknown>;
+  const example = JSON.parse(readFileSync(repoPath('lubbdubb.config.example.json'), 'utf8')) as Record<string, unknown>;
   const declared = declaredTopLevelKeys();
   const unknown = Object.keys(example).filter((key) => !key.startsWith('//') && !declared.has(key));
 

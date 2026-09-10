@@ -96,10 +96,48 @@ lockfile in a loop across a real take and requires every reading of it to be a w
 recreates the window's exact shape on disk — a lockfile that exists and names nobody — and requires a
 waiter to leave it alone.
 
-The shape of the cost, which is why the above is worth having: the test suite is **startup-bound**,
-not work-bound. Roughly half its files finish in under half a second, and each worker pays tsx's
-transpile boot (~230ms against ~30ms for bare node). So the suite is the floor on wall time, and the
-entire static half now finishes inside it — a warm run costs about what `test` alone costs.
+The shape of the cost, which is why the above is worth having: the test suite is the floor on wall
+time, and the entire static half finishes inside it — a warm run costs about what `test` alone costs.
+
+### Why the tests run from a build directory
+
+`test` does not run the TypeScript sources. `scripts/testBuild.ts` transpiles `src/`, `test/`,
+`scripts/` and `web/src/` into `.testbuild/` with esbuild, and `node --test` runs the plain JavaScript
+under `.testbuild/test/`.
+
+The reason is that the suite used to be **transpile-bound**, not work-bound. Node's test runner gives
+each test file its own process, and under `--import tsx` each of those ~320 processes re-transpiled
+the same module graph from scratch: a file that does nothing but import `src/system.ts` cost ~1.9s,
+of which ~1.7s was transpile. The suite burned 6m47s of CPU to produce 2m18s of wall clock — the
+parallelism was spent on repeating one piece of work 320 times.
+
+Transpiling once costs **under a second** for the whole repo, and the suite then runs on plain
+JavaScript in ~83s. The build is unconditional: it deletes `.testbuild/` and rebuilds on every `npm
+test`, because a staleness check that gets it wrong hands you a passing run of code you no longer
+have, and a second of esbuild is not worth that risk.
+
+Two consequences to know:
+
+- **A test never resolves a repo file relative to its own module.** `import.meta.url` points into
+  `.testbuild/test/`, not `test/`, so `new URL('../web/src/App.tsx', import.meta.url)` reads nothing.
+  Anything reaching for a file in the checkout — a source file a structural test greps, a fixture, the
+  example config, the docs — goes through `test/support/paths.ts`, whose `REPO_ROOT` walks up to the
+  nearest `package.json` and therefore answers the same from either tree. `repoPath(...)` joins onto
+  it and `repoText(...)` reads.
+- **Coverage is keyed on the build, and reported against the sources.** `.c8rc.json` includes
+  `.testbuild/src/**/*.js`, because c8 filters on the path it loaded before it consults a source map;
+  patterns naming `src/**/*.ts` match nothing that ran and report a flat zero rather than failing.
+  The report itself still names `config.ts` and its own line numbers, off the maps esbuild emits.
+- **A test that spawns a sibling script derives the extension from its own.**
+  `test/checkLock.test.ts` runs `checkLockChild` as a real process, and that file is `.ts` in the
+  checkout and `.js` in the build; it also passes `--import tsx` only for the former, because loading
+  the built child through tsx would resolve its imports back to the sources and give it a second copy
+  of every module.
+
+`.testbuild/` is gitignored and ignored by `eslint.config.js` alongside the other build outputs. It
+is not what `npm run build` produces: that is `tsc` into `dist/`, type-checked and used for shipping.
+esbuild here only strips types, which is safe precisely because `typecheck` is a separate stage of the
+same gate.
 
 Failure modes that are not obvious:
 
@@ -224,7 +262,8 @@ it to understand why a decision was made, and check the code before relying on a
 | `npm run serve`          | The cockpit bundle, then the server **under a supervisor** that can replace it. |
 | `npm run serve:server`   | The supervised server alone. See [21](21-self-update.md#applying-it).           |
 | `npm run dev`            | The server with `--watch`, no cockpit build (see below).                        |
-| `npm test`               | `node --import tsx --test test/**/*.test.ts`.                                   |
+| `npm test`               | Builds `.testbuild/`, then `node --test` over `.testbuild/test/*.test.js`.      |
+| `npm run test:build`     | `scripts/testBuild.ts` — the esbuild pass into `.testbuild/` (see above).       |
 | `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).               |
 | `npm run smoke`          | The real end-to-end run (see below).                                            |
 | `npm run build`          | `tsc -p tsconfig.json`.                                                         |

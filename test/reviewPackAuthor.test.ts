@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -16,6 +16,7 @@ import type { Agent, ReviewPack } from '../src/types.js';
 import type { ReviewPackPayload } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { findTask } from './support/tasks.js';
+import { REPO_ROOT as root } from './support/paths.js';
 
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const HEAD2 = 'b2c3d4e5f60718293a4b5c6d7e8f901234567890';
@@ -679,7 +680,6 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
 });
 
 test('nothing under src/dispatcher/ imports the review pack author — it is not a dispatch input', () => {
-  const root = resolve(import.meta.dirname, '..');
   const walk = (dir: string): string[] =>
     readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? walk(`${dir}/${e.name}`) : e.name.endsWith('.ts') ? [`${dir}/${e.name}`] : [],

@@ -16,6 +16,7 @@ import {
 } from '../src/server/auth.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { repoPath } from './support/paths.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-auth-'));
@@ -40,11 +41,11 @@ function tokenOf(cockpitUrl: string | null): string {
 type RouteMethod = 'GET' | 'POST' | 'DELETE';
 
 function declaredRoutes(): { method: RouteMethod; url: string }[] {
-  const dir = new URL('../src/server/routes/', import.meta.url);
+  const dir = repoPath('src/server/routes');
   const routes: { method: RouteMethod; url: string }[] = [];
   for (const file of readdirSync(dir).sort()) {
     if (!file.endsWith('.ts')) continue;
-    const source = readFileSync(new URL(file, dir), 'utf8');
+    const source = readFileSync(join(dir, file), 'utf8');
     for (const [, method, path] of source.matchAll(/\bapp\.(get|post|delete)\(\s*'([^']+)'/g)) {
       if (!method || !path) continue;
       routes.push({ method: method.toUpperCase() as RouteMethod, url: path.replace(/:[A-Za-z]+/g, '1') });

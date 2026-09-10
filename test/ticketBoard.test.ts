@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { boardColumns, cardReason, dropWarning, type BoardColumn, type StateRules } from '../web/src/ticketBoard.js';
 import type { Issue, TicketRow, TicketStateFacet } from '../web/src/types.js';
+import { repoText } from './support/paths.js';
 
 const facet = (state: string, count: number, live = count): TicketStateFacet => ({
   state,
@@ -237,7 +236,7 @@ test('with no state gate configured a drop disturbs nothing the harness reads', 
 });
 
 test('the cap is on the tab’s children, and the board is the one exception', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/styles.css');
   const rule = (re: RegExp): string => re.exec(css)?.[1] ?? '';
 
   assert.match(

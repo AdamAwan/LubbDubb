@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-
-const ROOT = resolve(import.meta.dirname, '..');
+import { join } from 'node:path';
+import { REPO_ROOT as ROOT } from './support/paths.js';
 
 const CHECKED_PREFIXES = ['src/', 'web/', 'test/', 'scripts/', 'docs/spec/'];
 

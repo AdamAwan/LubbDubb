@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateAssessment } from '../src/mcp/assessment.js';
-import { readFileSync } from 'node:fs';
 import { quotedAssessment, shortfallEscalationPrompt } from '../src/delivery/shortfall.js';
+import { repoText } from './support/paths.js';
 
 const ok = { status: 'more_work', summary: 'the CLI half is missing', cause: 'plan' };
 
@@ -79,7 +79,7 @@ test('the rules that quote someone say who, rather than leaving it to be guessed
     'src/executor/actionExecutor.ts',
   ];
   for (const file of sources) {
-    const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    const text = repoText(file);
     const details = text.match(/^\s*detail: /gm)?.length ?? 0;
     const froms = text.match(/^\s*detailFrom: /gm)?.length ?? 0;
     assert.ok(froms >= 1, `${file} sets an escalation detail, so it must name its author`);

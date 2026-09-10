@@ -1,8 +1,8 @@
 {
   "all": true,
-  "src": ["src"],
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.d.ts", "src/server/main.ts"],
+  "src": [".testbuild/src"],
+  "include": [".testbuild/src/**/*.js"],
+  "exclude": [".testbuild/src/server/main.js"],
   "reporter": ["text", "text-summary", "lcov"],
   "reports-dir": "coverage",
   "check-coverage": false,
