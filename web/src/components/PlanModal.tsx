@@ -14,6 +14,7 @@ import type {
   PlanningPolicy,
   Proposal,
   QueueItem,
+  StateQuery,
   ValidationCheck,
 } from '../types.js';
 import { api } from '../api.js';
@@ -27,6 +28,8 @@ import { renderMarkdown } from './markdown.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { PlanMap } from './PlanMap.js';
 import { PlanRegroup } from './PlanRegroup.js';
+import { ProofBand, proofCounts, type ProofCell } from './ProofBand.js';
+import { StateDigest } from './StateDigest.js';
 import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { WatchDigest } from './WatchDigest.js';
@@ -46,6 +49,7 @@ export function PlanModal({
   checks,
   caveatAnswers,
   watches,
+  queries,
   upcoming,
   proposal,
   spend,
@@ -74,6 +78,7 @@ export function PlanModal({
   checks: ValidationCheck[];
   caveatAnswers: PlanCaveatAnswer[];
   watches: GoalWatch[];
+  queries: StateQuery[];
   upcoming: QueueItem[];
   proposal?: Proposal;
   spend: IssueSpend | null;
@@ -141,6 +146,10 @@ export function PlanModal({
     setView('plan');
     requestAnimationFrame(() => sections.current[key]?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   };
+  // The band counts what four sections draw, so a cell lands on the section that
+  // holds its rows rather than repeating them.
+  const jumpProof = (cell: ProofCell): void =>
+    jump(cell === 'suite' ? 'parts' : cell === 'manual' ? 'validation' : cell);
   const focusPart = (slug: string): void => {
     setFocused(slug);
     jump(`part:${slug}`);
@@ -171,6 +180,14 @@ export function PlanModal({
       <div className="pm-rail">
         <button className="pm-jump" onClick={() => jump('verdict')}>
           Verdict
+        </button>
+        <button className="pm-jump" onClick={() => jump('proof')}>
+          Proof{' '}
+          <i className="k">
+            {proofCounts(checks, live, watches, queries)
+              .map((c) => c.count)
+              .join(' · ')}
+          </i>
         </button>
         {live.length > 0 && (
           <button className="pm-jump" onClick={() => jump('shape')}>
@@ -274,6 +291,18 @@ export function PlanModal({
                   )}
                 </div>
               )}
+            </section>
+
+            <section
+              ref={(el) => {
+                sections.current.proof = el;
+              }}
+            >
+              {/* Under the verdict and above the shape, because it is the other
+                    half of the verdict: what we'll do, and what would show that it
+                    worked. Counts only — every row it stands for is drawn by the
+                    section it lands on, so the two can never disagree. */}
+              <ProofBand checks={checks} parts={live} watches={watches} queries={queries} onJump={jumpProof} />
             </section>
 
             {live.length > 1 && (
@@ -381,6 +410,17 @@ export function PlanModal({
                   issueNumber === null ? null : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)
                 }
               />
+            </section>
+
+            <section
+              ref={(el) => {
+                sections.current.state = el;
+              }}
+            >
+              {/* Below the watch for the watch's own reason, one question further
+                    on: whether the thing works, whether it is behaving, and then
+                    whether the data it wrote is shaped the way the plan said. */}
+              <StateDigest queries={queries} refUrls={refUrls} />
             </section>
 
             <section

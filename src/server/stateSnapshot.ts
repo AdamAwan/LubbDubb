@@ -541,6 +541,7 @@ export function buildStateSections(
     | 'validationChecks'
     | 'validationResources'
     | 'goalWatches'
+    | 'stateQueries'
   > => ({
     plans: wirePlans,
     planParts: wirePlanParts,
@@ -549,6 +550,7 @@ export function buildStateSections(
     validationChecks,
     validationResources: wireValidationResources,
     goalWatches: [...store.listGoalWatches(), ...store.listProposedGoalWatches()],
+    stateQueries: store.listStateQueries(),
   });
 
   const fleetSection = (): Pick<

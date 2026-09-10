@@ -1746,6 +1746,31 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(12),
         updatedAt: ago(12),
       }),
+      demoPart({
+        id: 'plan-395:e2e-download',
+        planId: 'plan-395',
+        slug: 'e2e-download',
+        seq: 4,
+        title: 'Amend the snapshots area to open a download in a new tab',
+        scope: 'The snapshots browser spec, which asserts today that a download link 401s.',
+        dependsOn: ['mint'],
+        coverage: 'Snapshots',
+        rationale:
+          'The existing spec describes the behaviour this goal is changing, so it is amended in the same change and by the same reviewer.',
+        acceptance:
+          '- The snapshots spec opens a download in a new tab and asserts the file arrives.\n' +
+          '- No spec still asserts the 401.',
+        touches: ['apps/e2e/specs/snapshots.spec.ts'],
+        acceptanceMet: [],
+        size: 's',
+        depth: 3,
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(12),
+        updatedAt: ago(12),
+      }),
     ],
     validationChecks: [
       demoCheck({
@@ -1757,7 +1782,8 @@ export function buildDemoState(): DemoSeed {
         title: 'A snapshot download opens in a new tab with auth on',
         do: 'Run the console with `AUTH_ENABLED`, open /snapshots, and middle-click a download link.',
         expect: 'The file downloads. No 401, and no bearer token anywhere in the URL bar.',
-        covers: ['route'],
+        covers: ['route', 'e2e-download'],
+        area: 'Snapshots',
         state: 'passed',
         resultNote: 'Opened last night’s handbook snapshot in a new tab — served straight through.',
         resultBy: 'operator',
@@ -1909,6 +1935,26 @@ export function buildDemoState(): DemoSeed {
       }),
     ],
     validationResources: [],
+    stateQueries: [
+      {
+        originRef: 'issue:395',
+        id: 'capability-never-persisted',
+        seq: 1,
+        title: 'No capability is ever written to the snapshot table',
+        query: 'select id, created_at from snapshots where download_capability is not null',
+        presence: 'select id from snapshots order by created_at desc limit 50',
+        why: 'A capability is minted per request and must never be stored — one that is stored outlives its expiry.',
+        digest: 'sha256:4f21c0',
+        authored: 'agent',
+        dryRunEnvironment: 'liveUk',
+        dryRunAt: ago(2),
+        dryRunVerdict: 'zero',
+        dryRunPresence: 'fires',
+        dryRunRows: 0,
+        dryRunDetail: null,
+        dryRunSample: null,
+      },
+    ],
     goalWatches: [
       {
         originRef: 'issue:284',

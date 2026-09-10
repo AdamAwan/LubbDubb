@@ -377,6 +377,7 @@ function sheet(input: { parts: PlanPartView[]; atoms: PlanAtom[]; status: string
         checks: [],
         caveatAnswers: [],
         watches: [],
+        queries: [],
         upcoming: [],
         spend: null,
         planning: { fileBudget: 20, maxConcurrentPartsPerIssue: 2 },

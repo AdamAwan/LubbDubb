@@ -186,6 +186,7 @@ export type {
   SurfaceRow,
   SurfaceVerdict,
   StateSection,
+  StateQuery,
   TaskSummary,
   FeatureBlockRow,
   FeatureBoardPayload,

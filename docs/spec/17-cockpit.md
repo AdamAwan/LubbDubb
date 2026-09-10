@@ -5963,7 +5963,7 @@ surface mentions the plan.
 
 **One scroll with an anchor rail**, not tabs. It was two tabs, and a tab is a thing a reader has to
 know to click: the write-up sat behind one, so the most considered thing a planner wrote was the part
-least likely to be read. The rail jumps to Verdict / The shape / Parts / Validation / Caveats / Write-up, and
+least likely to be read. The rail jumps to Verdict / Proof / The shape / Parts / Validation / Caveats / Write-up, and
 scrolling reaches all of them anyway. The head, the rail and the decision bar are fixed and the middle
 scrolls between them, because a plan is read _while_ deciding and the verdict buttons must not scroll
 away from the part being read.
@@ -5991,6 +5991,41 @@ the question it answers. On a plan stored **before** `diagnosis` and `approach` 
 and `reason` falls back to the headline under the label it always had ("Why the planner split it", or
 "The approach" on a one-part plan). The fallback is why the fields are separate rather than `reason`
 being retargeted: a stored plan keeps meaning what it meant when it was written.
+
+### The proof band
+
+`ProofBand` (`web/src/components/ProofBand.tsx`), directly under the verdict band, because it is the
+other half of it: what we'll do, and what would show that it worked. Four cells, one per way a goal is
+shown to work — the checks a person runs ([20](20-validation.md)), the browser areas a test part
+covers ([36](36-remote-validation.md#browser-coverage-is-a-plan-part-and-it-holds-the-goal)), the
+post-deploy watch ([29](29-post-deploy-watch.md)) and the state queries
+([36](36-remote-validation.md#queries-are-per-goal-harness-held-and-never-committed)). All four are
+decided in one sitting, by one planner, in one document, and were read in four places on four surfaces.
+
+**One of them was drawn nowhere at all.** A part's `coverage` is what an area is declared on, it is
+what holds the goal until the spec merges, and no surface named it — so the operator at the approval
+gate, whose strike is the pressure valve that makes the hold safe, could not see the thing they were
+being asked to approve. Every other cell restates something a section below already draws; this one is
+the reason the band exists.
+
+**It counts and it jumps, and it draws no row of its own.** Each cell lands on the section that holds
+its rows — `manual` on the validation digest, `suite` on the parts, `watch` and `state` on their own
+digests — so a number on the band and the rows it stands for cannot disagree, which a second rendering
+of the same checks a screen higher would be free to do.
+
+**A cell with nothing declared still draws**, grey rather than in its own hue, and says which nothing:
+_no test part_, _no watch declared_, _no state query_. This is [29](29-post-deploy-watch.md#declaring-nothing-is-a-legitimate-answer)'s
+rule one surface up — nothing declared is a third fact and not a synonym for clean — and drawing only
+the cells that had something would invert it, since a plan would read as a fuller proof the less its
+planner wrote.
+
+**The manual cell counts checks with no `area`, not every check.** A check that inherited an area from
+a test part it covers is the suite's to answer, and counting it in both would tell an operator that
+more work is theirs than is. It follows that the two cells do not sum to the validation card's total,
+and that is the split being stated rather than a discrepancy
+([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
+
+The rail's `Proof` tab carries the four counts in the order the cells are drawn.
 
 ### The map
 
@@ -6155,6 +6190,27 @@ The state lives on the check itself (`goal_watches.live` and `goal_watches.propo
 the plan-amendment path: a declaration made at conclude time would otherwise put a goal's whole plan
 back through approval to carry one query, which holds the goal's own work to move a sentence about
 telemetry.
+
+### The state digest
+
+`StateDigest` (`web/src/components/StateDigest.tsx`) — the goal's state queries, drawn under the watch
+digest because it is one question further on again: whether the thing works, whether it is behaving,
+and then whether the data it wrote is shaped the way the plan said
+([36](36-remote-validation.md#queries-are-per-goal-harness-held-and-never-committed)).
+
+Each row is the query's title, the query itself, the `presence` query beside it, and whatever the dry
+run read. A query the working agent declared at conclude time is marked as such, because it arrived
+after the plan was approved and the diff is the only place its shape could have come from. Read-only,
+for `ValidationDigest`'s reason and one more: a state query is not runnable anywhere until an operator
+has read it and accepted it **against a named environment**, and that consent is given on the goal's
+own sheet, where the environment is named. Nothing here is a verdict about anybody's data.
+
+A goal that declared no queries draws nothing at all, the watch digest's rule.
+
+**`stateQueries` reaches the cockpit beside `goalWatches`**, on the same section of the state snapshot
+(`src/server/stateSnapshot.ts`). Before the band there was no cockpit surface for them at all: they
+were written by three parties, dry-run against an environment, and legible only as rows on a remote
+sheet that does not exist until the goal has arrived somewhere.
 
 ### The caveats
 
