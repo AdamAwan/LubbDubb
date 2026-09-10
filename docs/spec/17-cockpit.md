@@ -5760,6 +5760,16 @@ One state object, one socket.
   its own. It opens `ws(s)://<host>/ws` and **auto-reconnects with exponential backoff** on an
   unexpected close or error, **re-asserting its subscriptions** on the new socket — so a drawer left
   open across a dropped connection keeps receiving output rather than going quietly dead.
+- **A reconnect re-reads everything, including the readings no event announces.** `reconnectWatch`
+  (`web/src/cockpit/reconnect.ts`) marks the transition back to connected after a drop — never the
+  first open, which the mount fetch already covered — and that transition schedules a full refetch
+  and fires `lubbdubb:config-changed`, the one signal the setup reading and the Config page listen
+  on. Without it a **restart** is the silent case: the socket that carried `config:changed` is the
+  socket the restart closed, and the process that comes back has no change to announce, so the
+  pending-restart card and the setup check that sent the operator to it go on saying the file is
+  ahead of the process — of a process that is now running exactly what the file says. Everything
+  else recovers on the next pulse's `dirty`; those two are fetched nowhere else, so they stayed
+  wrong until a browser reload.
 
 The drawer subscribes to full output on open and unsubscribes on close or switch.
 
