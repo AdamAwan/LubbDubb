@@ -140,11 +140,11 @@ function seed(b: Pick<Bench, 'store' | 'file'>, environment = 'acceptance'): voi
   setArea(b.file, AREA);
 }
 
-function press(store: Store, environment = 'acceptance'): string {
+function press(store: Store, environment = 'acceptance', tenant = 'validation-customer-1'): string {
   const { run } = store.beginRemoteRun({
     goalRef: 'issue:12',
     environment,
-    tenant: 'validation-customer-1',
+    tenant,
     startedSha: DEPLOYED,
   });
   assert.ok(run, 'the press opened a run');
@@ -495,14 +495,15 @@ interface ToolResultText {
   isError?: boolean;
 }
 
-function system(): System {
+/** File-backed where the caller names a database, because an area is written onto the column. */
+function system(dbPath = ':memory:'): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-remote-report-'));
   return buildSystem(
     loadConfig({
       selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
-      dbPath: ':memory:',
+      dbPath,
       agentMode: 'raw',
       repoRoot: dir,
       deskRoot: join(dir, 'desk'),
@@ -687,6 +688,159 @@ test('a withdrawn tool name is answered from RETIRED_TOOL_NAMES rather than as a
       'so neither name shipped here is ever deleted — it is retired instead',
     );
     assert.equal(DISPATCH_RULES['remote-validation'].kind, 'rule');
+  } finally {
+    sys.store.close();
+  }
+});
+
+/* ── the sweep ───────────────────────────────────────────────────────────────────────────────── */
+
+/** A file-backed system, because the check's area is written onto the column the way a declarer will. */
+function swept(): { sys: System; file: string } {
+  const file = join(mkdtempSync(join(tmpdir(), 'lubbdubb-remote-sweep-')), 'harness.db');
+  const sys = system(file);
+  seed({ store: sys.store, file });
+  return { sys, file };
+}
+
+/** The dispatched flip, with the task the run's fate is read off left in the status it ended in. */
+function claimedBy(sys: System, runId: string, status: 'running' | 'failed'): string {
+  const task = sys.store.createTask({
+    kind: 'code',
+    title: 'Run the sheet',
+    prompt: 'run it',
+    branch: `validate-remote/issue/12/${runId}`,
+    originRef: `issue:12:validate-remote:${runId}`,
+    originTitle: 'Ship the channel',
+  });
+  sys.store.updateTask(task.id, { status });
+  assert.ok(sys.store.claimRemoteRun(runId, task.id), 'the conditional flip claimed it for exactly one task');
+  return task.id;
+}
+
+/**
+ * A `dispatched` run the flip did not finish writing, or one naming a task that is gone — written
+ * onto the columns, because neither is a state a caller can reach through the store's own flip.
+ */
+function forceDispatched(file: string, runId: string, taskId: string | null): void {
+  const db = new Database(file);
+  try {
+    db.prepare(`UPDATE remote_runs SET status='dispatched', task_id=? WHERE id=?`).run(taskId, runId);
+  } finally {
+    db.close();
+  }
+}
+
+test('a dispatched run whose task ended is swept, and one whose task is still working is not', async () => {
+  const { sys } = swept();
+  try {
+    const gone = press(sys.store, 'acceptance', 'tenant-gone');
+    const working = press(sys.store, 'acceptance', 'tenant-working');
+    claimedBy(sys, gone, 'failed');
+    claimedBy(sys, working, 'running');
+
+    await sys.remoteValidation.run();
+
+    const settled = sys.store.getRemoteRun(gone);
+    assert.equal(settled?.status, 'abandoned', 'an agent that crashed leaves a run nobody will ever report against');
+    assert.match(settled?.note ?? '', /ended without reporting/, 'and the reason is readable afterwards');
+    assert.equal(sys.store.liveRemoteRun('acceptance', 'tenant-gone'), null, 'so the lock it held is released');
+    const again = sys.store.beginRemoteRun({
+      goalRef: 'issue:12',
+      environment: 'acceptance',
+      tenant: 'tenant-gone',
+      startedSha: DEPLOYED,
+    });
+    assert.ok(again.run, 'and a second press opens a new run rather than being refused for ever');
+    assert.notEqual(again.run.id, gone);
+
+    const alive = sys.store.getRemoteRun(working);
+    assert.equal(alive?.status, 'dispatched', 'the bias is to leave a run alone — this agent is still working');
+    assert.equal(alive?.note, null, 'nothing was written about it');
+    assert.equal(
+      sys.store.liveRemoteRun('acceptance', 'tenant-working')?.id,
+      working,
+      'and the lock under it still holds, so nothing opens a second run against a tenant somebody is driving',
+    );
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a pending run is never swept, however long it has sat, and is still proposed by the rule', async () => {
+  const { sys } = swept();
+  try {
+    const runId = press(sys.store);
+    await sys.remoteValidation.run();
+    await sys.remoteValidation.run();
+
+    const run = sys.store.getRemoteRun(runId);
+    assert.equal(run?.status, 'pending', 'the rule has not claimed it yet, so there is no task to read it off');
+    assert.equal(run?.note, null);
+    const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(sys.store) }));
+    assert.equal(
+      actions.some((a) => a.rule === 'remote-validation' && a.type === 'dispatch_code_agent'),
+      true,
+      'and it is re-proposed each pulse until it dispatches, the operator calls it off, or the pin goes bad',
+    );
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a dispatched run the sweep cannot say about is left standing, in both its shapes', async () => {
+  const { sys, file } = swept();
+  try {
+    const unnamed = press(sys.store, 'acceptance', 'tenant-unnamed');
+    const stranger = press(sys.store, 'acceptance', 'tenant-stranger');
+    forceDispatched(file, unnamed, null);
+    forceDispatched(file, stranger, 'a-task-row-this-build-does-not-hold');
+
+    await sys.remoteValidation.run();
+
+    for (const [runId, tenant, why] of [
+      [unnamed, 'tenant-unnamed', 'a run naming no task is one the sweep cannot say about'],
+      [stranger, 'tenant-stranger', 'and so is one naming a task this build cannot resolve'],
+    ] as const) {
+      assert.equal(sys.store.getRemoteRun(runId)?.status, 'dispatched', why);
+      assert.equal(sys.store.getRemoteRun(runId)?.note, null);
+      assert.equal(
+        sys.store.liveRemoteRun('acceptance', tenant)?.id,
+        runId,
+        'unknown is folded into neither arm, so the lock stays held rather than being freed on a guess',
+      );
+    }
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a swept run writes no reading, no check result, no shortfall, no verdict and no WorldEvent', async () => {
+  const { sys } = swept();
+  try {
+    const runId = press(sys.store);
+    claimedBy(sys, runId, 'failed');
+    const rows = sys.store.listRemoteSheetRows();
+    const events = sys.store.listWorldEvents(50).length;
+
+    await sys.remoteValidation.run();
+
+    assert.equal(sys.store.getRemoteRun(runId)?.status, 'abandoned', 'the run is settled');
+    assert.deepEqual(sys.store.listRemoteReadings(), [], 'a run nobody reported against learned nothing');
+    assert.deepEqual(sys.store.listRemoteSheetRows(), rows, 'and leaves every row exactly as it was');
+    const check = sys.store.listValidationChecks('issue:12').find((c) => c.id === CHECK.id);
+    assert.equal(check?.state, 'unrun', 'no spec result is written on the check');
+    assert.equal(check?.resultBy, null);
+    assert.equal(
+      sys.store.listWorldEvents(50).length,
+      events,
+      'a sweep written as a WorldEvent would un-park the goal it just gave up on',
+    );
+    assert.deepEqual(sys.store.listWatchReadings(), [], 'and a window’s evidence is on the window’s clock');
+    assert.equal(sys.store.getShortfall('issue:12'), null, 'a shortfall would clear the delivery row that parks it');
+    assert.notEqual(sys.store.getDelivery('issue:12'), null, 'so the goal stays delivered, and parked');
+    assert.equal(sys.store.getIssueConclusion('issue:12'), null);
+    assert.equal(sys.store.getAppraisal('issue:12'), null);
   } finally {
     sys.store.close();
   }

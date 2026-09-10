@@ -1,6 +1,6 @@
 # 36 — Remote validation
 
-> **Partly built.** What runs is the `validate` block on an environment and the refusals that keep it
+> **Built.** What runs is the `validate` block on an environment and the refusals that keep it
 > from meaning something it cannot ([Configuration](#configuration)); the `state` query kind with its
 > three writers and the `state_declare` tool
 > ([Queries](#queries-are-per-goal-harness-held-and-never-committed)); the `StateReader` seam and its
@@ -38,18 +38,20 @@
 > **`spec` reading** and the two rules governing what it may be written over
 > ([What a spec reading is worth](#what-a-spec-reading-is-worth)), what a browser row **records**
 > ([Artefacts](#artefacts-and-making-worth-observable)), and the **reading-shaped half of the
-> cockpit** with the Environments card's folded line ([The cockpit](#the-cockpit)).
+> cockpit** with the Environments card's folded line ([The cockpit](#the-cockpit)); and — as of the
+> sweep — **the sweep's arm**, which settles a `dispatched` run whose task is no longer active and
+> releases the `(environment, tenant)` lock it was holding ([The desk](#the-desk)).
 >
-> **What is still owed is the sweep's arm** — a `dispatched` run whose task is no longer active
-> ([The desk](#the-desk)) — and, in another goal, the **test part**: `plan_parts.coverage`'s bar on
-> `issue-plan` and `issue-replan`, and the critical path's allow-list rule
+> The **test part** landed in another goal: `plan_parts.coverage`'s
+> bar on `issue-plan` and `issue-replan`, and the critical path's allow-list rule
 > ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal),
-> [Keeping the critical path lean](#keeping-the-critical-path-lean)). A
-> path is written in italics until the thing it names exists, and a section that is still a
-> description rather than an account says so where it starts. The behaviour is settled — it is
-> [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree — and the
-> staged order it gets built in is [`docs/plans/36-remote-validation.md`](../plans/36-remote-validation.md),
-> deleted by the change that finishes the last stage.
+> [Keeping the critical path lean](#keeping-the-critical-path-lean)). Nothing in this document is
+> owed: every section is an account of what runs. The one thing deliberately **not** harness
+> machinery is how an author declares a check's **area** — the column is built and a null area is a
+> check a person carries out ([Migrations](#migrations)) — and the pipeline-side guards on the
+> critical path are project conventions by design
+> ([Keeping the critical path lean](#keeping-the-critical-path-lean)). The behaviour is
+> [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree.
 
 `src/remoteValidation/`. A goal's work has arrived in a real environment ([24](24-environments.md)).
 This is the one page an operator opens to answer the question that arrival raises and nothing in the
@@ -140,9 +142,10 @@ re-litigated:
 existing one: it is the goal's checks, with the declared query rows alongside them, so that _does it
 work_, _is anything screaming_ and _is the data right_ are read in one place and settled together.
 
-There are **three row kinds**. Until the browser half lands, a `check` row is **blocked or manual**:
-where the environment permits `check` it is a person's to run and its result is recorded on the goal's
-own validation row, and where it does not it is blocked saying so.
+There are **three row kinds**. A `check` row naming an **area** is the suite's — the selector a
+dispatched agent runs and the harness folds a reading out of — and one naming none is a person's to
+run, with its result recorded on the goal's own validation row. Where the environment does not
+`permit` `check` it is blocked saying so.
 
 | Row kind             | Answers                                          | Run by                                                         |
 | -------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
@@ -752,9 +755,10 @@ a goal's priority flag ([05](05-dispatcher.md#marking-a-goal-a-priority)) and it
 "other" rather than the phase it belongs to ([18](18-observability.md)). Neither is red.
 
 `POST /api/issues/:number/remote-validation/:environment/cancel` settles an open run `abandoned`. It
-is required rather than a convenience, `validate-locally/cancel`'s reason: an operator who kills the
-agent from its drawer otherwise leaves a `dispatched` run nobody will ever report against, and the
-sheet's press stays absent for good.
+is required rather than a convenience, `validate-locally/cancel`'s reason: it is how a run is called
+off **before** its agent has gone anywhere — a `pending` one the operator no longer wants, or a
+`dispatched` one whose agent is still working. The desk's sweep is the other half and covers only the
+case the operator cannot: an agent that has already gone ([The sweep](#the-sweep)).
 
 ### The lens boundary
 
@@ -966,15 +970,15 @@ passes: assemble the sheets for arrivals nothing has assembled yet, run the appr
 rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
 that have gone away.
 
-**Three of the four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
+**All four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
 approved `state`, `signal` and `measure` rows on a sheet it has just assembled, and — through
 `RemoteRunDesk` ([The press](#the-press)) rather than the pulse — the same rows again under a
 press's pin. The pre-flight runs on the **assembly** pass only and inside its cap: it is a process
-spawn per sheet, and a sheet already assembled is never re-listed. **The sweep's arm is the one thing
-here still owed**: now that a run can be `dispatched`, an agent that crashed, was killed or spent its
-stall park leaves one nobody will report against, and until that arm lands an operator's own
-`.../cancel` is the settle path — which is why that route is required rather than a convenience. The bench line is refreshed by `ValidationReadyDesk` reading the rows out of the store,
-which is why the desk's position above it is load-bearing rather than tidy.
+spawn per sheet, and a sheet already assembled is never re-listed. The bench line is refreshed by
+`ValidationReadyDesk` reading the rows out of the store, which is why the desk's position above it is
+load-bearing rather than tidy. An operator's own `.../cancel` remains a settle path beside the sweep —
+it is how a run is called off before its agent has gone anywhere — and it stopped being the *only*
+one when the sweep landed.
 
 **It returns immediately where no environment declares a `validate` block**, which is the steady
 state for every deployment that has not turned this on, and it stamps nothing on the way past —
@@ -1024,9 +1028,43 @@ drains in a fixed order and nothing starves. Deliberately smaller than the watch
 bounds is a process spawn per approved query **plus a selector listing** per sheet, where that one
 bounds a query.
 
-The sweep's arm is the one nothing else covers: a `dispatched` run whose task is no longer active. An
+### The sweep
+
+The fourth pass is the one nothing else covers: a `dispatched` run whose task is no longer active. An
 agent that crashed, was killed or spent its stall park leaves a run nobody will ever report against,
-and the sheet's press absent for good.
+the `(environment, tenant)` lock held over it and the sheet's press absent for good — with nothing
+red. It is settled `abandoned`, with a reason an operator can read afterwards, which is what
+`remote_runs` keeps its rows for ([Persistence](#persistence)). It is
+[32](32-local-validation.md#the-desk)'s second arm one subsystem over, and it asks the same predicate:
+`isActiveTask` over the task row the flip named, so a turn boundary or a park is not a gone agent
+([10](10-agent-runtimes.md), [13](13-jobs-and-tickets.md)).
+
+It runs **below** the three passes above and **inside the same early return**, so a deployment where
+no environment declares a `validate` block sweeps nothing and — the point of putting it inside rather
+than before — stamps nothing either. The arrival-choosing pass returns where it
+throws, which would otherwise take the sweep with it, so the two are separate `try`s: a pass that
+throws goes through `errors.record` and never fails the cycle or the pass beside it.
+
+**Three things it must not do, each quiet if got wrong:**
+
+- **`pending` is never swept.** A `pending` run has no task: it is one the rule has not claimed yet,
+  re-proposed each pulse until it dispatches, the operator calls it off, or the pin goes bad
+  ([The dispatch](#the-dispatch--rule-remote-validation)). Sweeping wider than `dispatched` costs a
+  real reading.
+- **A run it cannot say about is left standing.** A `dispatched` run naming no task — a build that
+  died between the flip's two columns — or one naming a task this build cannot resolve is a run the
+  sweep **cannot say** about, and `unknown` is folded into neither arm, as it is folded into neither
+  anywhere else in this document ([The pin](#the-pin-asks-whether-the-work-is-still-there),
+  [24](24-environments.md#the-three-verdicts)). The bias is to leave a run alone: settling one whose
+  agent is still working loses the reading it was about to report **and** frees the
+  `(environment, tenant)` lock underneath it, so a second press opens a run against a tenant somebody
+  is already driving — a silent wrong answer rather than the visible 409 a held lock gives.
+- **A settled run writes nothing about the goal.** No reading, no `spec` result on a check, no
+  shortfall, no issue verdict, no `WorldEvent` and nothing in `watch_readings` — `handback`'s rule
+  exactly ([What a finding does](#what-a-finding-does-and-what-it-must-never-do)), because a run
+  nobody reported against learned nothing. `deliveryHold` expires a standing delivery verdict on
+  **any** world event matching the goal's issue ref, so a sweep written as one would un-park the goal
+  it just gave up on and hand delivered work back to the fleet.
 
 A pass that throws is recorded through `errors.record` and never fails the cycle. **No swallowed
 `catch`**: every caught failure is routed through `src/errorLog.ts`, whose event is named `logged`
@@ -1444,10 +1482,25 @@ record; and on the wire the reading's `executed`, `retries`, `durationMs` and `a
 sheet card while the Environments card's line is folded on the **server** off the same rows,
 asserted against `sheetFoldLine` itself rather than in a component.
 
-The rest, when it is built:
+The query half is built and its tests are in `test/remoteValidationQueries.test.ts`, among them that
+an aggregating state query is refused **at ingestion**, through the shared `aggregatingTail`
+(`src/validation/watchQueryShape.ts`) the watch document's own ingestion reads — one tail matcher
+rather than two, because a query that aggregates defeats every guard the contract has.
 
-- an aggregating state query is refused **at ingestion**, through the shared `aggregatingTail`;
-- a `dispatched` run whose task is no longer active is settled by the desk's sweep.
+The sweep is built and its tests are in `test/remoteValidationDispatch.test.ts`, with
+`test/remoteValidationOff.test.ts` extended a fifth time: a `dispatched` run whose task has ended is
+settled `abandoned`, its reason readable afterwards and the `(environment, tenant)` lock released so a
+second press opens a **new** run — asserted as a **pair** with a `dispatched` run whose task is still
+active, which is untouched and whose lock still holds, because that pair is the only thing holding the
+bias towards leaving a run alone; a `pending` run is untouched however long it has sat and is still
+proposed by rule `remote-validation`; a `dispatched` run the sweep **cannot say** about — one naming no
+task, and one naming a task this build cannot resolve, both written onto the columns because neither is
+reachable through the store's own flip — is left standing with its lock held, asserted in that
+direction; the sweep writes **no reading, no check result, no shortfall, no issue verdict, no
+`WorldEvent` and nothing into `watch_readings`**, asserted against the world's own list, because the
+sweep is a third writer and neither the assembly's assertion nor the press's covers it; and it is inert
+on the deployment that configured nothing, stamping **no arrival** on the way past, with a planted run
+left `dispatched` there and swept on the same run where one environment declares a `validate` block.
 
 ## What it does not see
 

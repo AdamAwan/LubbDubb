@@ -129,6 +129,31 @@ function seed(system: System): void {
   });
 }
 
+/**
+ * A `dispatched` run whose agent is gone — the sweep's whole subject. The run row is opened through
+ * the store because nothing on the off deployment would open one, and the task is left `failed`.
+ */
+function plantDeadRun(system: System): string {
+  const { run } = system.store.beginRemoteRun({
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    tenant: 'swept-tenant',
+    startedSha: DEPLOYED,
+  });
+  assert.ok(run, 'the store opened one');
+  const task = system.store.createTask({
+    kind: 'code',
+    title: 'Run the sheet',
+    prompt: 'run it',
+    branch: `validate-remote/issue/12/${run.id}`,
+    originRef: `issue:12:validate-remote:${run.id}`,
+    originTitle: 'A goal',
+  });
+  system.store.updateTask(task.id, { status: 'failed' });
+  assert.ok(system.store.claimRemoteRun(run.id, task.id), 'and the flip claimed it');
+  return run.id;
+}
+
 /** How many rows the goal page's own card would draw, or null where it draws nothing at all. */
 function cardRows(state: Record<string, unknown>): number | null {
   const world = state['world'] as { issues: unknown[] };
@@ -223,6 +248,13 @@ test('a deployment that configured nothing takes the build inert', async () => {
     for (const goal of state['environmentReach'] as { environments: { sheet: string | null }[] }[])
       for (const env of goal.environments)
         assert.equal(env.sheet, null, 'and the Environments card draws no folded line about a sheet');
+
+    // And the sweep with them. A run row can only be planted here, because nothing on this
+    // deployment opens one — and the early return the sweep sits inside must still stamp nothing.
+    const planted = plantDeadRun(system);
+    await system.harness.runCycle('manual');
+    assert.equal(system.store.getRemoteRun(planted)?.status, 'dispatched', 'the sweep never runs here');
+    assert.equal(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'and it stamps no arrival on the way past');
   } finally {
     system.store.close();
   }
@@ -312,6 +344,14 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
       .map((env) => env.sheet)
       .filter((line) => line !== null);
     assert.deepEqual(folded, ['sheet · 2 rows · 1 blocked'], 'and the fold reaches the Environments card’s own row');
+
+    // And the sweep is reachable on the same run: a dispatched run whose agent has gone is settled
+    // with a reason, so the `(environment, tenant)` lock is never held for good.
+    const planted = plantDeadRun(system);
+    await system.harness.runCycle('manual');
+    const swept = system.store.getRemoteRun(planted);
+    assert.equal(swept?.status, 'abandoned');
+    assert.match(swept?.note ?? '', /ended without reporting/, 'and the reason is readable afterwards');
   } finally {
     system.store.close();
   }
