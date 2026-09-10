@@ -199,6 +199,12 @@ export function testPartNote(
       'whose whole claim is that behaviour did not change declares no test part; so does a copy change, ' +
       'a config change and most bug fixes. **Nothing counts test parts and nothing rewards a longer ' +
       'list.**',
+    '- **A check about how something *looks* is not an area.** A legibility check at a particular ' +
+      'width, a single component’s rendering, a spacing or truncation judgement: there is no journey ' +
+      'to select and no area that could honestly claim it, so the honest answer is no test part — it ' +
+      'stays a person’s check, or the snapshot suite’s. Picking the nearest area for one of these ' +
+      'produces a green row that verified something the check does not talk about, which is worse ' +
+      'than the manual row it replaced.',
     '- **The critical path is an allow-list, never a deny-list.** The deployment pipeline selects only ' +
       'what carries the critical tag, so a new spec is invisible to it until somebody deliberately tags ' +
       'it. Promoting one into the critical path is a separate, reviewed pull request with an argument ' +

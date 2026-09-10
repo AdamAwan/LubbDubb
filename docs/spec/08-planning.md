@@ -1494,6 +1494,17 @@ Two tools on the desktop channel do the rest (→ [11](11-mcp-tools.md#the-deskt
   argue about, which is the agenda unless the operator brings one), the parts through
   `currentPlanSummary` so every slug is in front of the session, the acceptance criteria, the live
   validation checks and the revision count.
+  Where some environment declares a `validate.browser` block it also carries **`testPart`**: the same
+  test-part bar the planning prompts are appended, `testPartNote(environments, offerings)` computed
+  from the offering cache at the moment of the read. Without it the discussion has the capability and
+  not the invitation, which is the worst of the three states: `plan_amend` accepts `coverage` — it
+  spreads `PLAN_DOCUMENT_SHAPE` — but nothing has told the session a suite exists or which areas it
+  offers, and the field's own description then refuses a declaration made without the bar. So a
+  well-behaved session cannot add the one thing that makes a check row runnable, and a goal whose
+  coverage was missed — every goal planned before the offering cache had anything in it — could only
+  be corrected by a replan, which is a much bigger hammer than adding one part. The note is omitted
+  entirely where no environment declares a suite, for the reason it is omitted from the prompts.
+  → [36](36-remote-validation.md#the-prompts)
 - **`plan_amend(issue, note?, …plan document)`** — the same document as `plan_submit`, validated by
   `validatePlanDocument`. The schema is one export (`src/mcp/planDocumentSchema.ts`) shared by both
   tools rather than two literals, and the object handed to `validatePlanDocument` is built once
@@ -1727,7 +1738,9 @@ the old reasoning still applies), and that the amendment is shown to the operato
 the write-up should open with what changed the planner's mind, which is the one thing the diff cannot
 show.
 
-**Both of them carry the test-part bar, appended rather than interpolated.** `testPartNote`
+**Both of them carry the test-part bar, appended rather than interpolated** — as does `plan_read` on
+the desktop channel, so the surface an operator argues from can amend coverage too
+([the discussion](#discussing-a-plan)). `testPartNote`
 (`src/plans/planning.ts`) is computed once in `src/system.ts`, threaded through `RuleContext`, and
 concatenated after the rendered `issue-plan` / `issue-replan` text — `watchNote`'s arrangement exactly,
 and for its reason: `loadPromptTemplates` rejects only _unknown_ placeholders, so a `{token}` for it

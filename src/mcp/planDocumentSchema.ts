@@ -112,8 +112,9 @@ export const PLAN_DOCUMENT_SHAPE = {
           .string()
           .describe(
             'Only on a part whose job is to add or amend the end-to-end browser suite: the area it ' +
-              'covers, in words rather than as a file path. Declare it only where the planning prompt ' +
-              'told you this deployment has a suite, and only where the bar it states is met.',
+              'covers, in words rather than as a file path. Declare it only where the bar you were ' +
+              'handed — the planning prompt, or `plan_read` in a discussion — told you this ' +
+              'deployment has a suite, and only where that bar is met.',
           )
           .optional(),
       }),

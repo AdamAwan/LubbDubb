@@ -7,7 +7,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     store: system.store,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
-    environments: [],
+    environments: system.config.environments,
     localRun: () => system.localRun,
     localRunWatch: () => system.localRunWatch,
     proposals: () => system.proposals,

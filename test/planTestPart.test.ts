@@ -221,6 +221,17 @@ test('the note states the bar, the allow-list and the inherited tag, each by nam
   assert.match(note, /`coverage`/, 'and names the field the planner is to declare');
 });
 
+test('the note says what is not an area, so the nearest one is not picked for a look-at-it check', () => {
+  const note = testPartNote(WITH_BROWSER);
+  assert.match(note, /is not an area/, 'the shape of check that cannot honestly have one is named');
+  assert.match(note, /snapshot suite/, 'and where it goes instead');
+  assert.match(
+    note,
+    /green row that verified something the check does not talk about/,
+    'and why the nearest area is worse than no test part at all',
+  );
+});
+
 function issue(number: number): Issue {
   return {
     id: `issue_${number}`,
