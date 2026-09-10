@@ -10,6 +10,7 @@ import { homeTab, POOL_VIEWS, type Place } from './place.js';
 import { logUsage, notePlace, placeReach } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
+import { reconnectWatch } from './reconnect.js';
 import { goalPrNumbers } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -49,6 +50,7 @@ export function useCockpit(): CockpitStatus {
   const lastPulse = useRef<number>(Date.now());
   const now = useNow(1000);
 
+  const rejoined = useRef(reconnectWatch());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshing = useRef(false);
   const refreshQueued = useRef(false);
@@ -126,7 +128,12 @@ export function useCockpit(): CockpitStatus {
           scheduleRefresh();
         }
       },
-      (isConnected) => setConnected(isConnected),
+      (isConnected) => {
+        setConnected(isConnected);
+        if (!rejoined.current(isConnected)) return;
+        scheduleRefresh();
+        window.dispatchEvent(new Event('lubbdubb:config-changed'));
+      },
     );
     wsRef.current = ws;
     return () => {
