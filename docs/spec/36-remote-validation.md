@@ -46,10 +46,11 @@
 > bar on `issue-plan` and `issue-replan`, and the critical path's allow-list rule
 > ([Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal),
 > [Keeping the critical path lean](#keeping-the-critical-path-lean)). Nothing in this document is
-> owed: every section is an account of what runs. The one thing deliberately **not** harness
-> machinery is how an author declares a check's **area** — the column is built and a null area is a
-> check a person carries out ([Migrations](#migrations)) — and the pipeline-side guards on the
-> critical path are project conventions by design
+> owed: every section is an account of what runs. How an author declares a check's **area** is now
+> built as well: the planner is handed the runner's own offering and picks from it, a `coverage` it
+> does not offer is refused at submission, and a check inherits the area of a test part it covers
+> ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). The pipeline-side guards
+> on the critical path remain project conventions by design
 > ([Keeping the critical path lean](#keeping-the-critical-path-lean)). The behaviour is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree.
 
@@ -300,6 +301,86 @@ nothing red.
 part that produced it is closed; a replan that wants it different declares a _new_ part to amend it,
 which is the route any other goal takes to the same file ([08](08-planning.md#amending-a-running-plan)).
 
+### How a check comes to have an area
+
+`plan_parts.coverage` and `validation_checks.area` are the two ends of one string, and for a while
+nothing joined them: the column was built, nothing wrote it, and **every check on every deployment
+had a null area**. That is the quietest failure this document holds. `areasOf` drops a check with no
+area, so `runnableSelectors` answers empty, `remoteRunBriefs` reports `confirmed: 0`, the rule
+dispatches nothing and a press finds no browser half at all — on a deployment that configured
+`permits: ["check"]` and a full `validate.browser` block and got manual rows with no indication why.
+It reads as a misconfiguration and is not one.
+
+The join is three things, and the first two are what make the third trustworthy.
+
+**The planner is handed the runner's own offering and picks from it.** The two ends have to agree on
+what the string is, and the pre-flight compares it **exactly** — so a planner told to name the area
+"in words rather than as a file path" writes _amend the checkout area to accept the new confirmation
+step_ and the runner offers `Checkout Tests`, which can never match. Prose and exact matching cannot
+both be right, and reconciling them fuzzily at the pre-flight would be the harness guessing which area
+a planner meant, which is what this design refuses everywhere else. So `testPartNote`
+(`src/plans/planning.ts`) is given what each browser environment's runner last said it offers and
+names it: `coverage` is a **pick from a list**, copied exactly. Where nothing has been listed the note
+asks for the prose form and **nothing is withheld** — a deployment whose runner has never answered
+still plans.
+
+**A `coverage` the suite does not offer is refused where it is authored.** `validatePlanDocument`
+(`src/plans/planDocument.ts`) takes the offered set and refuses a part naming anything else, naming
+what is offered instead. Discovered at the pre-flight it is a `blocked` row a press too late — after
+an operator has consented to the spend; refused at submission it is the same verdict taken while the
+planner is still there to fix it. It has to be a real validation rather than a described convention,
+because `PlanDocumentSchema` is zod and zod strips unknown keys. It **fails open on an empty
+offering**: no listing yet, a runner that could not answer, no browser block at all are one arm, and
+a hold on an offering nobody has is a fleet that cannot submit a plan with nothing red.
+
+**A check inherits the area of a test part it covers.** `covers` already names part slugs; a covered
+part's `coverage` is the check's `area`, computed in `checkAmendment` (`src/validation/checkDocument.ts`)
+and recomputed on every ingest and every amendment, and again from SQL at boot for every check that
+already exists (`joinCheckAreas`, `src/store/store.ts`) — which is what a deployment already
+holding a hundred checks needs, since without it every one of them waits on a replan that is never
+coming. That pass is a **repair rather than a migration**: an area is never authored on a check, so
+recomputing one can only agree with what the ingest wrote or supply what a database from before the
+join never had, and it needs no `runOnce` id. A check that would inherit two areas is left null there,
+not given the first — going forward that shape is refused where it is authored, and at boot there is
+no author to refuse to — so a part that stops being a test part, or whose
+coverage changes, takes the check's area with it rather than leaving a selector the runner no longer
+offers. **An area is never authored on a check.** Adding an `area` field to `validation_amend` would
+have been smaller and is worse in a specific way: it moves area authoring outside the plan, which is
+exactly where this design put the hold that makes coverage deliberate and reviewable.
+
+#### The cached offering is a convenience and the pre-flight is the authority
+
+A planner picks from a listing taken on one commit; the run happens against another. So the cache
+never decides anything at a press: `RemoteValidationDesk.refreshSelectorOfferings` asks each browser
+environment's runner what it offers on its own clock — every 30 minutes, paced to the suite's rate of
+change rather than the pulse's, because the planner needs the offering **before** anything has
+arrived and the pre-flight's own listing only runs when something does — and the pre-flight asks the
+deployed runner again at assembly. Its answer is what a row blocks on. A stale cache costs a refusal
+at submission that the pre-flight would have made anyway; the reverse — trusting the cache at the
+press — would be the harness reporting on a listing nobody took.
+
+The offering lives in `remote_selector_offerings`, replaced whole per environment, and **only an
+answered listing is written**: a listing that could not say leaves the last one standing with its own
+`listed_at` saying how old it is. Emptying it instead would tell a planner this deployment has no
+areas at all, and — through the refusal above — refuse every `coverage` anybody names. The desk writes
+it on **its own clock**, not the store's, because the refresh throttle reads `listed_at` back against
+the clock it was written from and two clocks make an interval that never elapses or always does.
+
+#### A check is verified against one area, and a covered area needs no check
+
+Two shapes are ordinary rather than exceptional, and the join answers each.
+
+**A check may cover several parts.** Where more than one of them declares an area, the check is
+**refused where it is authored** — `twoAreaRefusal`, on the same pass as the coverage refusal and
+again at `validation_amend`. A check is matched against one selector at the pre-flight and its report
+is read under one, so a check spanning two areas would report a pass for coverage nothing exercised.
+Taking the first area silently is precisely the failure this subsystem exists to prevent, and the
+author splits the check or drops a `covers` entry.
+
+**A part may cover an area no check names.** That is simply not on the sheet, and nothing is wrong
+with it: the sheet is the goal's checks, a test part is held by the plan like any other part, and a
+covered area with no check is a spec that runs in the pipeline rather than a row somebody presses.
+
 ### Keeping the critical path lean
 
 New specs must not accumulate into the deployment pipeline. One rule does almost all of the work:
@@ -520,8 +601,10 @@ bypasses all of it and fails at the first authenticated call. So:
 - **A selector names an area, never a file path.** A path breaks the first time a later goal
   reorganises the specs inside it, and it breaks silently, as a selector matching nothing.
 - **A selector never holds the delimiter its own list is joined on.** `LUBBDUBB_SELECTORS` is
-  comma-joined, and areas are operator-authored free text, so `Reports, exports` is an ordinary thing
-  to type and is silently split by the project into two selectors that do not exist. A check whose
+  comma-joined, so an area holding one is silently split by the project into two selectors that do not
+  exist. A planner picking from the runner's own offering can only reproduce a comma the runner itself
+  named, but the guard stays: a `coverage` authored before anything was listed is free text, and
+  `Reports, exports` is an ordinary thing to type. A check whose
   area holds a comma is `blocked` at assembly, naming the delimiter, by `selectorFault` in
   `src/remoteValidation/runner.ts` — where the joining lives — read from `sheetRows`, which is the
   one cause of `blocked` a press could never overcome that the sheet can see without asking anybody
@@ -1015,12 +1098,18 @@ inferred from a green build, a merged pull request or an absence of errors.
 
 ## The desk
 
-`RemoteValidationDesk` (`src/remoteValidation/desk.ts`) is the one owner of every sheet write. Four
-passes: assemble the sheets for arrivals nothing has assembled yet, run the approved deterministic
-rows and the pre-flight on a freshly assembled sheet, refresh what the bench row says, and sweep runs
-that have gone away.
+`RemoteValidationDesk` (`src/remoteValidation/desk.ts`) is the one owner of every sheet write. Five
+passes: refresh what each browser runner says it offers, assemble the sheets for arrivals nothing has
+assembled yet, run the approved deterministic rows and the pre-flight on a freshly assembled sheet,
+refresh what the bench row says, and sweep runs that have gone away.
 
-**All four are built.** What runs is the assembly, the pre-flight over the sheet's `check` rows, the
+**The offering refresh runs first and is about the environment rather than any goal**, which is why it
+is not folded into the pre-flight: a planner needs to know which areas exist **before** there is
+anything to arrive, and the pre-flight's listing only runs when something does. It is throttled to
+thirty minutes per environment, so on a deployment already listing for its sheets it costs at most one
+extra spawn an hour. → [The cached offering](#the-cached-offering-is-a-convenience-and-the-pre-flight-is-the-authority)
+
+**All five are built.** What runs is the offering refresh, the assembly, the pre-flight over the sheet's `check` rows, the
 approved `state`, `signal` and `measure` rows on a sheet it has just assembled, and — through
 `RemoteRunDesk` ([The press](#the-press)) rather than the pulse — the same rows again under a
 press's pin. The pre-flight runs on the **assembly** pass only and inside its cap: it is a process
@@ -1260,11 +1349,17 @@ environment moves. A reading with no commit beside it is a reading of a product 
   `VALIDATION_COLUMNS` (`src/store/validation.ts`), with its `ALTER TABLE` guarded by `PRAGMA
 table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alters an existing
   table, so without the entry the column would be invisible on every database from before it existed
-  — every check unautomatable, every sheet all-manual, and nothing red. **How an author declares an
-  area is not built**; the column is, and a null area is a check a person carries out.
+  — every check unautomatable, every sheet all-manual, and nothing red. What **writes** it is the
+  join from `plan_parts.coverage` ([How a check comes to have an area](#how-a-check-comes-to-have-an-area));
+  a null area is a check a person carries out.
   `remote_sheet_rows.matched` is the same case one table over, declared in
   `REMOTE_VALIDATION_COLUMNS` — a column on a table that was new one release ago, which is exactly
   what that entry exists for.
+- **`remote_selector_offerings`** is a **new table**, so `CREATE TABLE IF NOT EXISTS` is the whole of
+  it and its `REMOTE_VALIDATION_COLUMNS` entry is empty — the entry exists because the table being new
+  **once** does not keep it exempt, and the next column on it needs one. It holds no verdict and no
+  reading: an empty one is a deployment whose runner has not answered yet, which fails open
+  everywhere it is read.
 - **`plan_parts.coverage`** is the same case one table over, and is **built**: declared in
   `PLAN_COLUMNS` (`src/store/plans.ts`), with its `ALTER TABLE` guarded by `PRAGMA table_info` like
   every other entry there.
@@ -1273,7 +1368,10 @@ table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alt
   guarded by `PRAGMA table_info` like every other entry there.
 - **No backfill is needed, and each for a stated reason rather than by luck.**
   `validation_checks.area` null means _no area declared_, which is true of every row written before
-  the column existed and stays true; `plan_parts.coverage` the same. `goal_arrivals.sheeted_at` null
+  the column existed and stays true; `plan_parts.coverage` the same. What the area **join** does at
+  boot is not a backfill and takes no `runOnce` id: it recomputes a derived column nothing else
+  writes, so it is idempotent by construction and runs on every boot deliberately
+  ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). `goal_arrivals.sheeted_at` null
   means _not considered yet_, and an arrival considered for the first time is assembled only if its
   confirming reading is fresh — so a database full of nulls is walked once, stamped, and assembles
   nothing for work that shipped in March. That is the freshness guard doing the backfill's job, and it
@@ -1480,11 +1578,22 @@ asserted on the fake's own record; the **matched** count on a row comes from the
 whose area the listing does not offer is `blocked` **before** a press with nothing written on the
 check — no reading, no `WorldEvent`, nothing in `watch_readings`; a listing that could not answer
 blocks the check rows and leaves the sheet's other readings standing; a check naming no area is a
-person's and no command is spawned about it; the pre-flight runs on the assembly pass only and
+person's and the pre-flight spawns nothing about it; the pre-flight runs on the assembly pass only and
 inside the cap of five, and a throw goes through `errors.record`; `buildSystem` takes `remoteRunner`
 and defaults to the command implementation, and an environment with no `validate.browser` block
 declares no command for it to run; and a database written before `validation_checks.area` gains it
 on boot with **no backfill** over it.
+
+`test/planCoverageArea.test.ts` covers the join: the note enumerates what the runner offers and asks
+for prose only where nothing has been listed; an environment with no browser block offers nothing to
+the planner; a `coverage` the suite does not offer is refused at submission, naming what is offered;
+an empty offering fails open through both plan transports; a check inheriting two areas is refused
+rather than run against the first; a check covering a test part inherits its area and one covering no
+test part has none; a replan dropping the coverage takes the area with it; a database with the column
+null has it supplied on the next boot; and with the area written the sheet's check row confirms, is
+counted by the pre-flight and yields a selector for the run to carry — the whole of what the browser
+half was missing. The offering cache is covered there too: one spawn with no goal in sight, throttled
+after it, and a listing that could not say leaving the last answer standing.
 
 The dispatch, the origin, the prompt and the report tool are built and their tests are in
 `test/remoteValidationDispatch.test.ts`, with `test/remoteValidationOff.test.ts` extended a third

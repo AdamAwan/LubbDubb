@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ValidationSchema } from '../validation/checkDocument.js';
+import { twoAreaRefusal, ValidationSchema } from '../validation/checkDocument.js';
 import { WatchSchema } from '../validation/watchDocument.js';
 import { StateSchema } from '../validation/stateDocument.js';
 import type { PlanAtomInput, PlanNarrative, PlanPartInput } from '../types.js';
@@ -265,22 +265,53 @@ export type PlanDocument = z.infer<typeof PlanDocumentSchema>;
 
 type PlanParseResult = { ok: true; document: PlanDocument } | { ok: false; error: string };
 
-export function parsePlanDocument(raw: string): PlanParseResult {
+export function parsePlanDocument(raw: string, offeredAreas: readonly string[] = []): PlanParseResult {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch (err) {
     return { ok: false, error: `not valid JSON: ${(err as Error).message}` };
   }
-  return validatePlanDocument(json);
+  return validatePlanDocument(json, offeredAreas);
 }
 
-export function validatePlanDocument(value: unknown): PlanParseResult {
+export function validatePlanDocument(value: unknown, offeredAreas: readonly string[] = []): PlanParseResult {
   const result = PlanDocumentSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
   }
+  const unoffered = coverageRefusal(result.data, offeredAreas);
+  if (unoffered !== null) return { ok: false, error: unoffered };
   return { ok: true, document: result.data };
+}
+
+/**
+ * A `coverage` naming an area no runner offers, refused where it is **authored**. The string is a
+ * compatibility surface with a suite in a repository that moves, and the pre-flight compares it
+ * exactly — so an area that will never match is a `blocked` row a press too late, discovered after an
+ * operator has consented to the spend. Refusing it at submission is the same verdict taken while the
+ * planner is still here to fix it.
+ *
+ * It **fails open on an empty offering**, which is the arm that matters: no listing taken yet, a
+ * runner that could not answer, a deployment with no browser block at all. A hold on an offering
+ * nobody has is a fleet that cannot submit a plan, with nothing red. The pre-flight is the authority
+ * either way — this is the same question asked earlier off a cached answer, never a second one.
+ */
+function coverageRefusal(doc: PlanDocument, offeredAreas: readonly string[]): string | null {
+  const parts = doc.parts.map((part) => ({ slug: part.slug, coverage: part.coverage ?? null }));
+  const spread = twoAreaRefusal(doc.validation?.checks ?? [], parts);
+  if (spread !== null) return spread;
+  if (offeredAreas.length === 0) return null;
+  const offered = new Set(offeredAreas);
+  const bad = doc.parts.filter((part) => part.coverage !== undefined && !offered.has(part.coverage));
+  if (bad.length === 0) return null;
+  const named = bad.map((part) => `"${part.slug}" names \`${part.coverage ?? ''}\``).join('; ');
+  return (
+    `${named} — and the deployed browser suite offers no such area. The string is compared against the ` +
+    `runner's own listing character for character, so an area it does not offer can never be run. It ` +
+    `offers: ${offeredAreas.map((area) => `\`${area}\``).join(', ')}. Copy one of those exactly, or drop ` +
+    `the part's "coverage" if this is not the area it covers.`
+  );
 }
 
 export function planPartInputs(doc: PlanDocument): PlanPartInput[] {

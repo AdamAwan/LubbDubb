@@ -186,7 +186,10 @@ export class ValidationStore {
       revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
       amendedAt: band ? ts : (prev?.amendedAt ?? null),
       amendNote: band ? amendNote : (prev?.amendNote ?? null),
-      area: prev?.area ?? null,
+      // Inherited from the `coverage` of a test part this check covers, recomputed on every ingest
+      // and every amendment: a part whose coverage changed, or that stopped being a test part, moves
+      // this with it rather than leaving a selector nothing offers.
+      area: input.area ?? null,
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
     };

@@ -185,7 +185,7 @@ function dispatcher(on = true, templates?: PromptTemplates): RuleDispatcher {
     '',
     '',
     undefined,
-    '',
+    () => '',
     '',
     on,
   );

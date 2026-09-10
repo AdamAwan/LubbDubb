@@ -158,10 +158,24 @@ export function watchDeclareNote(environments: readonly { name: string; watch?: 
   return lines.join('\n');
 }
 
+/**
+ * The planner is handed the runner's **own offering** and asked to pick from it, rather than asked to
+ * describe an area in prose. The two halves of `coverage` have to agree on what the string is: the
+ * pre-flight compares it against what `listSelectors` returns, **exactly**, so a described area never
+ * matches one and the mismatch surfaces as a `blocked` row a press too late. Enumerating is the only
+ * reconciliation that does not have the harness guessing which area a planner meant.
+ *
+ * Where nothing has been listed yet the prose form is asked for and **nothing is withheld**: a
+ * deployment whose runner has never answered still plans, and the pre-flight is where the area is put
+ * to a runner either way.
+ */
 export function testPartNote(
   environments: readonly { name: string; validate?: { browser?: { runner?: string } } }[],
+  offerings: readonly { environment: string; selector: string }[] = [],
 ): string {
   if (!environments.some((env) => env.validate?.browser !== undefined)) return '';
+  const browser = new Set(environments.filter((env) => env.validate?.browser !== undefined).map((env) => env.name));
+  const areas = [...new Set(offerings.filter((o) => browser.has(o.environment)).map((o) => o.selector))].sort();
   return [
     '',
     '',
@@ -169,8 +183,9 @@ export function testPartNote(
     '',
     'This deployment has an end-to-end browser suite. Where the goal needs coverage the suite does not ' +
       'have — **or invalidates coverage it already has** — declare a part for it and give that part a ' +
-      '`coverage` field naming the **area** it adds or amends, in words rather than as a file path ' +
-      '(`checkout with a saved card`, not `tests/checkout.spec.ts`). Amending an existing spec is the ' +
+      '`coverage` field naming the **area** it adds or amends. ' +
+      areaSentence(areas) +
+      ' Amending an existing spec is the ' +
       'normal case rather than a conflict: a change that changes behaviour is supposed to change the ' +
       'statement of that behaviour, in the same change, reviewed by the same reviewer.',
     '',
@@ -194,6 +209,30 @@ export function testPartNote(
     '',
     'Declaring at most one is the usual shape. Declaring none is a complete answer.',
   ].join('\n');
+}
+
+/**
+ * Which area string is wanted, and it is one of two sentences rather than a shading of one. Given the
+ * runner's offering, `coverage` is a **choice from that list**, refused at submission where it names
+ * something else. Given none, it is prose — the harness has nothing to check it against, and asking
+ * for a pick from a list nobody has is asking for an invention.
+ */
+function areaSentence(areas: readonly string[]): string {
+  if (areas.length === 0) {
+    return (
+      'Name it in words rather than as a file path (`checkout with a saved card`, not ' + '`tests/checkout.spec.ts`).'
+    );
+  }
+  return (
+    'It is **one of the areas the deployed suite already offers**, copied exactly — the harness ' +
+    "compares the string against the runner's own listing character for character, and a plan naming " +
+    'anything else is refused when you submit it. To **amend** existing coverage, name the area you ' +
+    'are amending. To **add** coverage, name the area the new spec will be filed under, which is ' +
+    "ordinarily one of these too — a genuinely new area is a new entry in the suite's own config and " +
+    'belongs in a part that says so. The suite offers: ' +
+    areas.map((area) => `\`${area}\``).join(', ') +
+    '.'
+  );
 }
 
 export function stateDeclareNote(

@@ -973,6 +973,20 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
   PRIMARY KEY (environment, tenant)
 );
 
+-- What each environment's runner last said it offers, cached so a planner can be
+-- shown the areas it may name rather than asked to describe one in prose (see
+-- RemoteValidationStore). It is a convenience and never an authority: the pre-flight
+-- asks the runner again at assembly, and its answer is what a row blocks on. Only an
+-- answered listing is written, so a listing that could not say leaves the last one
+-- standing with its own listed_at saying how old it is.
+CREATE TABLE IF NOT EXISTS remote_selector_offerings (
+  environment TEXT NOT NULL,
+  selector    TEXT NOT NULL,     -- the area, exactly as the runner names it
+  tests       INTEGER,           -- how many tests it holds, where the runner counted them
+  listed_at   TEXT NOT NULL,
+  PRIMARY KEY (environment, selector)
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

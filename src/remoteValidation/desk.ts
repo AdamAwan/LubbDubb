@@ -9,12 +9,20 @@ import { isActiveTask } from '../tasks.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
 import { preflightRows } from './preflight.js';
-import type { RemoteRunner } from './runner.js';
+import type { RemoteRunner, SelectorListing } from './runner.js';
 import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md
+
+/**
+ * How often a browser environment's runner is asked what it offers, outside the pre-flight's own
+ * listing. It is a process spawn per environment under the runner's 30-second kill, against an
+ * offering that changes when a spec is added or renamed — so it is paced to the suite's own rate of
+ * change rather than to the pulse's.
+ */
+const SELECTOR_LISTING_INTERVAL_MS = 30 * 60 * 1000;
 
 const SWEPT =
   'the agent dispatched to run it ended without reporting — its transcript says what happened. ' +
@@ -49,8 +57,64 @@ export class RemoteValidationDesk {
   /** @public the pass `Harness.runCycle` runs below `EnvironmentDesk` */
   async run(): Promise<void> {
     if (!this.deps.environments.some((e) => e.validate !== undefined)) return;
+    await this.refreshSelectorOfferings();
     await this.assembleAll();
     this.sweep();
+  }
+
+  /**
+   * Ask each browser environment's runner what it offers, and keep the answer where a planner can be
+   * shown it. The pre-flight already takes this listing, but only when a goal arrives — and a planner
+   * needs the offering *before* there is anything to arrive, on a deployment where nothing has
+   * arrived yet. So the listing is taken on its own clock as well, and the pre-flight's own answer is
+   * folded in on the way past.
+   *
+   * It is a **convenience and never an authority**. A planner picks an area from a listing taken on
+   * one commit and the run happens against another, so the pre-flight asks the deployed runner again
+   * at assembly and its answer is what a row blocks on. A stale cache costs a refusal at plan
+   * submission that the pre-flight would have made anyway; the reverse — trusting it at the press —
+   * would be the harness reporting on a listing nobody took.
+   */
+  private async refreshSelectorOfferings(): Promise<void> {
+    const listed = new Map(this.deps.store.listSelectorOfferings().map((o) => [o.environment, o.listedAt]));
+    for (const environment of this.deps.environments) {
+      const command = environment.validate?.browser?.listSelectors;
+      if (command === undefined) continue;
+      const at = listed.get(environment.name);
+      if (at !== undefined && this.now() - Date.parse(at) < SELECTOR_LISTING_INTERVAL_MS) continue;
+      try {
+        await this.listSelectors(environment, command);
+      } catch (err) {
+        this.deps.errors?.record({
+          source: 'cycle',
+          message: `listing the selectors ${environment.name} offers failed: ${(err as Error).message}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * One listing, and the one place a listing is taken. An answered one is recorded on the way back;
+   * one that could not say records nothing, leaving the offering the last answer left standing — an
+   * empty offering read as an answer is a planner told this deployment has no areas at all.
+   */
+  private async listSelectors(environment: EnvironmentConfig, command: string): Promise<SelectorListing> {
+    const listing = await this.deps.runner.listSelectors({
+      environment: environment.name,
+      command,
+      profile: environment.validate?.browser?.profile ?? null,
+      tenant: resolveTenant({
+        environment,
+        stamped: this.deps.store.listRemoteTenants(),
+        now: this.now(),
+        env: this.deps.env,
+      }).value,
+      selectors: [],
+      reportDir: null,
+    });
+    if (listing.offers !== null)
+      this.deps.store.recordSelectorOffering(environment.name, listing.offers, new Date(this.now()).toISOString());
+    return listing;
   }
 
   private async assembleAll(): Promise<void> {
@@ -194,19 +258,7 @@ export class RemoteValidationDesk {
     const checks = this.deps.store.listValidationChecks(goalRef);
     if (!checks.some((check) => check.area !== null && asks.some((row) => row.sourceId === check.id))) return;
     try {
-      const listing = await this.deps.runner.listSelectors({
-        environment: environment.name,
-        command,
-        profile: environment.validate?.browser?.profile ?? null,
-        tenant: resolveTenant({
-          environment,
-          stamped: this.deps.store.listRemoteTenants(),
-          now: this.now(),
-          env: this.deps.env,
-        }).value,
-        selectors: [],
-        reportDir: null,
-      });
+      const listing = await this.listSelectors(environment, command);
       this.deps.store.recordRemotePreflight(
         goalRef,
         environment.name,

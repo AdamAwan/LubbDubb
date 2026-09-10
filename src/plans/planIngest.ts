@@ -69,7 +69,7 @@ export function ingestPlanDocument(
     store.ingestValidation(originRef, {
       checks: validationCheckInputs(
         doc.validation,
-        written.map((p) => p.slug),
+        written.map((p) => ({ slug: p.slug, coverage: p.coverage ?? null })),
       ),
       resources,
       supersededReason: SUPERSEDED_CHECK_REASON,

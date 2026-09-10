@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
-import { validationCheckAmendments, validationResourceInputs } from '../../validation/checkDocument.js';
+import { twoAreaRefusal, validationCheckAmendments, validationResourceInputs } from '../../validation/checkDocument.js';
 import { amendmentNote, validateAmendment, validationAmendIssue, withdrawalReason } from '../../validation/amend.js';
 import { withdrawResourceAsks } from '../../validation/ask.js';
 import type { ValidationCheck } from '../../types.js';
@@ -115,6 +115,9 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateAmendment(args);
     if (!parsed.ok) return toolError(`Amendment rejected: ${parsed.error}`);
     const amendment = parsed.amendment;
+    const parts = deps.store.listPlanParts(plan.id).map((p) => ({ slug: p.slug, coverage: p.coverage ?? null }));
+    const spread = twoAreaRefusal(amendment.checks, parts);
+    if (spread !== null) return toolError(`Amendment rejected: ${spread}`);
 
     const resources = validationResourceInputs(amendment.resources);
     const known = [
@@ -130,11 +133,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
         .map((r) => r.name),
     );
     const result = deps.store.amendValidation(origin, {
-      checks: validationCheckAmendments(
-        amendment.checks,
-        known,
-        deps.store.listPlanParts(plan.id).map((p) => p.slug),
-      ),
+      checks: validationCheckAmendments(amendment.checks, known, parts),
       withdraw: amendment.withdraw.map((w) => ({ id: w.id, reason: withdrawalReason(w.reason) })),
       resources,
       note: amendmentNote(amendment.note),

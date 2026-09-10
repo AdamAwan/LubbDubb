@@ -360,6 +360,7 @@ export class Harness extends EventEmitter {
         localRun: store.liveLocalRun(),
         localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
         remoteRuns: this.deps.remoteRuns?.() ?? [],
+        selectorOfferings: store.listSelectorOfferings(),
         conclusions,
         deliveries,
         deliverySignals,

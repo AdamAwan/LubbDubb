@@ -154,6 +154,7 @@ import type {
   RemoteReading,
   RemoteRun,
   RemoteTenant,
+  SelectorOffering,
   RemoteSheet,
   RemoteSheetRow,
   StateQueryApproval,
@@ -202,6 +203,33 @@ import type {
 } from '../types.js';
 
 // → docs/spec/14-persistence.md
+
+/**
+ * `validation_checks.area` recomputed from the `coverage` of the test parts each check covers. It is
+ * the join written as SQL rather than a migration, because it is **idempotent and nothing else writes
+ * the column**: an area is never authored on a check, so recomputing one on every boot can only agree
+ * with what the ingest already wrote, or supply what a database from before the join has never had —
+ * which on a deployment that configured the browser half is every check it holds.
+ *
+ * A check covering **two** areas is left null rather than given the first. Going forward that shape is
+ * refused where it is authored; here there is no author to refuse to, and a check that spans two areas
+ * is a person's, which is exactly what a null area means.
+ */
+function joinCheckAreas(db: Database.Database): void {
+  db.prepare(
+    `UPDATE validation_checks
+        SET area = (
+          SELECT CASE WHEN COUNT(DISTINCT parts.coverage) = 1 THEN MIN(parts.coverage) END
+            FROM plan_parts AS parts
+            JOIN plans ON plans.id = parts.plan_id,
+                 json_each(validation_checks.covers) AS covered
+           WHERE plans.origin_ref = validation_checks.origin_ref
+             AND covered.value = parts.slug
+             AND parts.coverage IS NOT NULL
+        )
+      WHERE json_valid(covers)`,
+  ).run();
+}
 
 export class Store {
   private readonly db: Database.Database;
@@ -300,6 +328,7 @@ export class Store {
     backfillWholePlanParts(this.db, clock());
     backfillTaskDispatchKind(this.db);
     repairPartRefGoals(this.db);
+    joinCheckAreas(this.db);
     const partialGoalRefs = this.db
       .prepare(
         `SELECT DISTINCT plans.origin_ref AS goal_ref
@@ -1318,6 +1347,19 @@ export class Store {
   }
   listRemoteTenants(): RemoteTenant[] {
     return this.remoteValidation.listRemoteTenants();
+  }
+  recordSelectorOffering(
+    environment: string,
+    offers: readonly { selector: string; tests: number | null }[],
+    listedAt?: string,
+  ): void {
+    this.remoteValidation.recordSelectorOffering(environment, offers, listedAt);
+  }
+  listSelectorOfferings(): SelectorOffering[] {
+    return this.remoteValidation.listSelectorOfferings();
+  }
+  listOfferedAreas(): string[] {
+    return this.remoteValidation.listOfferedAreas();
   }
 
   beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {

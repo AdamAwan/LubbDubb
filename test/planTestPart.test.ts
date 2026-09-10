@@ -135,7 +135,16 @@ test('no backfill runs over the new column, and no runOnce id is introduced', ()
   inspect.close();
   assert.deepEqual(rows, [{ slug: 'checkout', coverage: null, updated_at: NOW }], 'no row was rewritten');
   const source = readFileSync('src/store/store.ts', 'utf8');
-  assert.ok(!/coverage/.test(source), 'nothing in the boot sequence is gated on the column having been added');
+  const join = source.slice(
+    source.indexOf('`validation_checks.area` recomputed'),
+    source.indexOf('export class Store'),
+  );
+  assert.equal(
+    (source.match(/\bcoverage\b/g) ?? []).length,
+    (join.match(/\bcoverage\b/g) ?? []).length,
+    'every mention in the boot sequence is inside the area join — nothing is gated on the column being added',
+  );
+  assert.ok(!/UPDATE plan_parts/.test(source), 'and the join reads coverage rather than rewriting a part with it');
   assert.ok(!/runOnce/.test(source), 'and no one-shot id came back with it');
 });
 
@@ -176,8 +185,19 @@ test('nothing in src/plans/ or src/dispatcher/ reads coverage to decide settleme
   };
   assert.deepEqual(
     [...mentions('src/plans'), ...mentions('src/dispatcher')].sort(),
-    ['src/plans/parts.ts', 'src/plans/planDocument.ts'].sort(),
+    ['src/plans/parts.ts', 'src/plans/planDocument.ts', 'src/plans/planIngest.ts'].sort(),
     'a soft hold, a special case in partSettled/liveParts, or an exemption in the roll-up would show up here',
+  );
+  const ingest = readFileSync('src/plans/planIngest.ts', 'utf8');
+  assert.equal(
+    (ingest.match(/\.coverage\b/g) ?? []).length,
+    1,
+    'planIngest reads it once, to hand a check the area it inherits — never to decide whether a part is done',
+  );
+  assert.match(
+    ingest,
+    /validationCheckInputs\([\s\S]{0,200}coverage/,
+    'and that one read is the join into validation_checks.area',
   );
   const parts = readFileSync('src/plans/parts.ts', 'utf8');
   const note = parts.slice(parts.indexOf('export function partDeclarationNote'));
@@ -301,7 +321,7 @@ async function plannerPrompt(
     '',
     '',
     undefined,
-    testPartNote(environments),
+    (offerings) => testPartNote(environments, offerings),
   );
   const { actions } = await dispatcher.decide(context);
   const action = actions.find((a) => a.rule === 'issue-plan');

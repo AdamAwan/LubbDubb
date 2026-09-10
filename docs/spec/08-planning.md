@@ -395,9 +395,13 @@ is a plan with one part`), because the deployments most likely to submit a partl
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
 - `coverage` is optional, non-empty, and names the **area** of the end-to-end browser suite the part
-  adds or amends coverage for — in words, never as a file path. It is the string a remote validation
-  sheet's selectors are later resolved against, and it is declared only on the deployments the bar is
-  appended to. → [36](36-remote-validation.md#browser-coverage-is-a-plan-part-and-it-holds-the-goal)
+  adds or amends coverage for. It is the string a remote validation sheet's selectors are later
+  resolved against, and it is declared only on the deployments the bar is appended to. Where the
+  deployment's runner has said what it offers, `coverage` is **refused unless it is one of those
+  areas, exactly** — the pre-flight compares it character for character, so an area no runner offers
+  is a check that can never run, and refusing it here is that verdict taken while the planner can
+  still fix it. Where nothing has been listed it is free text and refused only for being empty.
+  → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area)
 - `atoms` is optional and defaults to empty, and each part's `atoms` likewise. The refusals over them
   are in [Atoms](#atoms--the-pieces-a-part-is-made-of) above; an atom's `slug`, `title` and `intent`
   are non-empty, `touches` is capped like a part's, and `rejected` is capped at eight entries.
@@ -434,7 +438,9 @@ transport changes shape:
 **`coverage` is a part field beside those two, and it is not a narrative one.** It says nothing about
 why the part exists; it names what the part is _for_, and the harness reads it. It is appended to the
 part's own prompt by `partDeclarationNote`, so the agent building it is shown the area it was asked to
-cover, and it is stored on `plan_parts.coverage`. A part carrying one is an ordinary `code` part in
+cover; it is stored on `plan_parts.coverage`; and a validation check whose `covers` names this part
+**inherits it as the check's `area`**, which is the whole of how a check comes to have one
+([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)). A part carrying one is an ordinary `code` part in
 every other respect: `partSettled`, `liveParts`, `planProgress`, `partBase`, rule `plan-part` and the
 close-out roll-up all read it as the part it is, and it **holds the goal exactly as any other part
 does**. What decides whether a planner declares one at all is the bar appended to `issue-plan` and
