@@ -51,6 +51,7 @@ export function App() {
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
       caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
       watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
+      queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
       spend={state.world.issues.find((i) => `issue:${i.number}` === viewedPlan.originRef)?.spend ?? null}

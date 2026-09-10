@@ -2797,6 +2797,107 @@ select:disabled {
   }
 }
 
+/* The proof band: what the plan says will show that it worked, counted, directly
+   under the verdict it is the other half of. Four cells because there are four
+   ways a goal is shown to work, and a rail per cell in the hue that surface is
+   drawn in everywhere else — the band is a table of contents, so a cell has to
+   look like the section it lands on. A cell with nothing declared draws grey and
+   says so: nothing declared is a third fact, not a synonym for clean. */
+.pm-proof {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.pm-pcell {
+  background: var(--panel-2);
+  border: none;
+  border-top: 2px solid var(--kind, var(--grey));
+  padding: 9px 11px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pm-pcell:hover {
+  background: var(--panel);
+}
+.pm-pcell:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: -1px;
+}
+.pm-pcell .pm-section-label {
+  color: var(--kind, var(--muted));
+}
+.pm-pcell.manual {
+  --kind: var(--blue);
+}
+.pm-pcell.suite {
+  --kind: var(--green);
+}
+.pm-pcell.watch {
+  --kind: var(--violet);
+}
+.pm-pcell.state {
+  --kind: var(--amber);
+}
+.pm-pcount {
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.pm-pcount i {
+  font-style: normal;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.pm-pwait {
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  color: var(--amber);
+  font-size: 10px;
+  padding: 0 5px;
+}
+.pm-pnote,
+.pm-pnone {
+  margin: 0;
+  font-size: 11.5px;
+}
+.pm-pnote {
+  color: var(--muted);
+}
+/* Nothing declared, and the cell says which nothing. Grey rather than the hue,
+   because a cell drawn in its own colour reads as a surface that is covered. */
+.pm-pnone {
+  color: var(--grey);
+}
+.pm-pcell:has(.pm-pnone) {
+  border-top-color: var(--grey);
+}
+.pm-pcell:has(.pm-pnone) .pm-section-label,
+.pm-pcell:has(.pm-pnone) .pm-pcount {
+  color: var(--grey);
+}
+@media (max-width: 900px) {
+  .pm-proof {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .pm-proof {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* -- Parts ---------------------------------------------------------------- */
 /* Where a part wrote outside its declaration, and where a held part says why.
    Loud on purpose: both are the plan disagreeing with reality, which is the one

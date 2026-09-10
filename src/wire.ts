@@ -111,6 +111,7 @@ import type {
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
+  StateQuery,
   TenantStanding,
   StackLanding,
   GoalWatch,
@@ -347,6 +348,7 @@ export interface CockpitState {
   validationChecks: ValidationCheck[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
+  stateQueries: StateQuery[];
   planning: PlanningPolicy;
   stacks: Stack[];
   environmentReach: GoalReachView[];
@@ -867,6 +869,7 @@ export type {
   GoalWatchProposal,
   StackLanding,
   StallPark,
+  StateQuery,
   TaskSummary,
   TenantStanding,
   ValidationCheck,

@@ -333,6 +333,7 @@ function sheet(one: PlanPartView, atoms: PlanAtom[]): string {
         checks: [],
         caveatAnswers: [],
         watches: [],
+        queries: [],
         upcoming: [],
         spend: null,
         planning: { fileBudget: 20, maxConcurrentPartsPerIssue: 2 },
