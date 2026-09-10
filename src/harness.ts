@@ -357,6 +357,7 @@ export class Harness extends EventEmitter {
         planAtoms: store.listAllPlanAtoms(),
         planAmendments: store.listPendingPlanAmendments(),
         validationChecks: store.listAllValidationChecks(),
+        validationPlans: store.listValidationPlanRecords(),
         localRun: store.liveLocalRun(),
         localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
         remoteRuns: this.deps.remoteRuns?.() ?? [],

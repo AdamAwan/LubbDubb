@@ -170,6 +170,7 @@ import type {
   UsageEvent,
   ValidationAmendment,
   ValidationAmendResult,
+  ValidationPlanRecord,
   ValidationCheck,
   ValidationCheckActor,
   ValidationCheckResultBy,
@@ -783,6 +784,21 @@ export class Store {
   }
   listAllValidationChecks(): ValidationCheck[] {
     return this.validation.listAllValidationChecks();
+  }
+  recordValidationHint(originRef: string, hint: string | null): ValidationPlanRecord {
+    return this.validation.recordValidationHint(originRef, hint);
+  }
+  recordValidationAuthoring(
+    originRef: string,
+    input: Parameters<ValidationStore['recordValidationAuthoring']>[1],
+  ): ValidationPlanRecord {
+    return this.validation.recordValidationAuthoring(originRef, input);
+  }
+  listValidationPlanRecords(): ValidationPlanRecord[] {
+    return this.validation.listValidationPlanRecords();
+  }
+  getValidationPlanRecord(originRef: string): ValidationPlanRecord | null {
+    return this.validation.getValidationPlanRecord(originRef);
   }
   listValidationResources(planId: string): ValidationResource[] {
     return this.validation.listValidationResources(planId);

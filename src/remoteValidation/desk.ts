@@ -124,6 +124,8 @@ export class RemoteValidationDesk {
       considered = sheetableArrivals({
         arrivals: store.listGoalArrivals(),
         environments: this.deps.environments,
+        authored: (goalRef) =>
+          store.getValidationPlanRecord(goalRef)?.authoredAt != null || store.listValidationChecks(goalRef).length > 0,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });

@@ -28,6 +28,7 @@ import type {
   RemoteRunBrief,
   TaskSummary,
   ValidationCheck,
+  ValidationPlanRecord,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
 import type { PrRefStyle } from '../../prRef.js';
@@ -62,6 +63,8 @@ export interface StageContext {
   sequenceableFeatures: readonly SequenceableFeature[];
   sequences: ReadonlyMap<string, FeatureSequence>;
   validationChecks: Map<string, ValidationCheck[]>;
+  /** Each goal's validation plan: the plan's hint, and the planner's stamp once it has run. */
+  validationPlans: ReadonlyMap<string, ValidationPlanRecord>;
   obstacles: readonly ObstacleStanding[];
   redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
@@ -85,6 +88,8 @@ export interface StageContext {
   watchDeclareNote: string;
   testPartNote: string;
   stateDeclareNote: string;
+  /** What each configured environment can drive, and the areas its runner last offered. */
+  validationPlanNote: string;
   validationRoot: string;
   liveLocalRun: LocalRun | null;
   /** Every live run row, with what the agent must read already rendered. → 36-remote-validation.md */

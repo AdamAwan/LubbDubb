@@ -67,6 +67,7 @@ import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localVa
 import { featureSummary } from './rules/featureSummary.js';
 import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';
+import { validationPlan } from './rules/validationPlan.js';
 import { remoteValidation } from './rules/remoteValidation.js';
 
 // → docs/spec/05-dispatcher.md
@@ -92,6 +93,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'issue-pickup': issuePickup,
   'local-validation': localValidation,
   'local-validation-fix': localValidationFix,
+  'validation-plan': validationPlan,
   'validate-check': validateCheck,
   'remote-validation': remoteValidation,
   'validation-failed': validationFailed,
@@ -108,6 +110,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
   private readonly testPartNote: (areas: readonly SelectorOffering[]) => string;
+  private readonly validationPlanNote: (areas: readonly SelectorOffering[]) => string;
   private readonly stateDeclareNote: string;
   private readonly planning: PlanningPolicy;
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
@@ -136,11 +139,13 @@ export class RuleDispatcher implements Dispatcher {
     testPartNote: (areas: readonly SelectorOffering[]) => string = () => '',
     stateDeclareNote = '',
     remoteValidationOn = false,
+    validationPlanNote: (areas: readonly SelectorOffering[]) => string = () => '',
   ) {
     this.remoteValidationOn = remoteValidationOn;
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
     this.testPartNote = testPartNote;
+    this.validationPlanNote = validationPlanNote;
     this.stateDeclareNote = stateDeclareNote;
     this.review = { ...DEFAULT_PR_REVIEW, ...review };
     this.reviewCharters = reviewCharters;
@@ -403,6 +408,7 @@ export class RuleDispatcher implements Dispatcher {
       sequenceableFeatures,
       sequences,
       validationChecks,
+      validationPlans: new Map((ctx.validationPlans ?? []).map((r) => [r.originRef, r])),
       appraising: new Set<number>(),
       assessing: new Set<number>(),
       obstacles: ctx.obstacles ?? [],
@@ -424,6 +430,7 @@ export class RuleDispatcher implements Dispatcher {
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
       testPartNote: this.testPartNote(ctx.selectorOfferings ?? []),
+      validationPlanNote: this.validationPlanNote(ctx.selectorOfferings ?? []),
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,

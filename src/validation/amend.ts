@@ -20,13 +20,18 @@ export function validationAmendIssue(
         `origin is ${ref || '(none)'}, which names no issue.`,
     };
   }
-  if (match[2] === 'plan') {
+  // The refusal moved with the authoring. It named the `:plan` origin while a planner wrote the check
+  // set; the validation planner writes it now, and it has a transport that speaks for the whole set.
+  // Two ways to say one thing that disagree about what an omission means is the drift the split
+  // exists to prevent. → docs/spec/20-validation.md#validation_amend
+  if (match[2] === 'validate-plan') {
     return {
       ok: false,
       error:
-        `You are planning issue #${match[1]}, so the validation plan is yours to *write*, not to amend. ` +
-        `Declare the whole thing in plan_submit's "validation" block — that transport speaks for the entire ` +
-        `check set, which is what a planner is entitled to do and an agent halfway through a part is not.`,
+        `You are writing the validation plan for issue #${match[1]}, so the check set is yours to *write*, ` +
+        `not to amend. Declare the whole thing in one validation_plan call — that transport speaks for the ` +
+        `entire check set, which is what the validation planner is entitled to do and an agent halfway ` +
+        `through a part is not.`,
     };
   }
   return { ok: true, issueNumber: Number(match[1]) };

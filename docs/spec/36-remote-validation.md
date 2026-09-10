@@ -318,7 +318,12 @@ which is the route any other goal takes to the same file ([08](08-planning.md#am
 
 ### How a check comes to have an area
 
-**A `suite` step names it, and nothing else does.** A check's `area` is set by a validation planner
+**A `suite` step names it, and nothing else does. Not built** — `steps` is not built, so what runs
+today is still the inheritance below, now written by the validation planner rather than by a
+planner. The two land together: withdrawing the inheritance before a step can name an area would
+leave every check with a null one.
+
+A check's `area` is set by a validation planner
 writing a step that runs a named area ([20](20-validation.md#the-test-plan)); it is no longer
 inherited from the `coverage` of a test part the check happens to `cover`. Inheritance made a check
 automatable by accident — a `covers` entry is a bibliography, and it was deciding what ran. A goal
@@ -490,11 +495,22 @@ place is not transferable.
 
 ## When a sheet is assembled, and what runs without asking
 
-**Assembly waits for the check set.** The set is authored after the assessor writes `delivered`
-([20](20-validation.md#when-the-check-set-is-written)), and a deployment quick enough to arrive first
-would assemble a sheet carrying only the watch-derived rows — a bench that offers nothing to run,
-reads as a misconfiguration, and is not one. It is this document's own null-`area` failure in a new
-place, and it takes the same remedy: an explicit gate rather than a race that has not been lost yet.
+**Assembly waits for the check set. Built.** The set is authored after the assessor writes
+`delivered` ([20](20-validation.md#when-the-check-set-is-written)), and a deployment quick enough to
+arrive first would assemble a sheet carrying only the watch-derived rows — a bench that offers
+nothing to run, reads as a misconfiguration, and is not one. It is this document's own null-`area`
+failure in a new place, and it takes the same remedy: an explicit gate rather than a race that has
+not been lost yet.
+
+The gate is an `authored` predicate on `sheetableArrivals` — `validation_plans.authored_at`, or live
+checks a plan document ingested before authoring moved — and its **position among the cuts is
+load-bearing**. Authoring routinely takes longer than the two probe intervals the freshness guard
+allows, so an arrival deferred for the planner and then aged out by that guard would be stamped
+without a sheet and lose it for good. So the staleness cut runs **first**: the arrivals that would
+flood in on the pulse an operator adds a `validate` block are stamped and not assembled before
+authoring is consulted at all, and the backfill guard is intact. Only an arrival that entered fresh
+waits on the planner, and it waits as long as the planner takes — deferred unstamped, the cap's own
+arrangement, and re-considered every pulse until the set exists.
 
 An arrival assembles a sheet and **never starts a browser run**. That gate is the only moment in a
 goal's life when somebody looks at the list of checks with the delivered thing actually in front of
@@ -1639,6 +1655,12 @@ present on `issue-plan` and `issue-replan` where one environment declares a `val
 absent where none does, and still present in full under an operator override that declares no tokens
 at all. Each of the bar's three phrases is asserted by name, so a later reword cannot drop one
 silently.
+
+The authoring gate on assembly is asserted in `test/validationAuthoring.test.ts`, in the order the
+cuts run: a fresh arrival whose goal has no check set is deferred and left unstamped, the same
+arrival assembles once the set is authored, and an arrival older than the freshness guard is stamped
+without a sheet whether or not anything has been authored — which is the arm that keeps the backfill
+guard intact.
 
 The sheet half is built and its tests are in `test/remoteValidationSheet.test.ts` and
 `test/remoteValidationOff.test.ts`: an arrival assembles one sheet of the goal's checks, watches and

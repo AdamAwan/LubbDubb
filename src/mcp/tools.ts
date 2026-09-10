@@ -29,6 +29,7 @@ import { splitAssess } from './tools/splitAssess.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
 import { validationAmend } from './tools/validationAmend.js';
+import { validationPlan } from './tools/validationPlan.js';
 import { validationReport } from './tools/validationReport.js';
 import { remoteValidationReport } from './tools/remoteValidationReport.js';
 import { localValidationPlan } from './tools/localValidationPlan.js';
@@ -62,6 +63,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   open_pr: openPr,
   reply_to_review: replyToReview,
   validation_amend: validationAmend,
+  validation_plan: validationPlan,
   validation_report: validationReport,
   remote_validation_report: remoteValidationReport,
   local_validation_plan: localValidationPlan,

@@ -8,7 +8,9 @@ const DELIBERATION_SUFFIX_PREFIXES = ['split:'];
 
 const WORK_SUFFIX_PREFIXES = ['part:', 'validate-local-fix:'];
 
-const EVIDENCE_SUFFIXES = ['assess', 'retro'];
+// `validate-plan` is an exact suffix rather than a prefix: there is one check set per goal and it is
+// written once, so the origin carries no id — `assess` and `retro`'s shape, not `validate:<check>`'s.
+const EVIDENCE_SUFFIXES = ['assess', 'retro', 'validate-plan'];
 
 const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:', 'validate-local:', 'validate-remote:'];
 

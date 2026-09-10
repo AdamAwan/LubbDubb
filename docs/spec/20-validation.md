@@ -104,6 +104,9 @@ whatever `provided` says.
 
 ## When the check set is written
 
+**Built**, apart from `steps` — the authoring move landed with today's check shape, and
+[the test plan](#the-test-plan) is the layer above it.
+
 **Not at plan time.** A planner writes against code that does not exist yet, so every check it writes
 is a guess about a screen, a command or a table that the second part may move. That guess used to be
 the design's central problem, and [Amendment](#amendment) is the apparatus built to survive it:
@@ -124,6 +127,22 @@ validation planner as input. It is not executable, it declares no checks, and no
 | Read by    | An operator deciding whether to approve | The validation planner, then the bench     |
 | Binds      | Nothing                                 | The sheet                                  |
 
+The machinery is five pieces and each one is named here so a later change cannot quietly drop one:
+rule `validation-plan` (`src/dispatcher/rules/validationPlan.ts`, a `DISPATCH_PIPELINE` entry
+registered in `STAGES`), the origin `issue:<n>:validate-plan` classified in `src/issueOrigins.ts`,
+the `validation-plan` prompt, the `validation_plan` tool, and the `validation_plans` row that records
+the answer. The rule dispatches a **code** agent into a read-only checkout of the default branch —
+the delivered state is what a check is written against — and it is gated on three things: the goal is
+parked as delivered, it has a plan, and its check set has not been authored. It ranks directly above
+`validate-check`, on that rule's own argument one step earlier: it produces the input every other
+validation rule reads, and validation blocks nothing, so it sits below every rule that makes product
+work.
+
+**A goal already carrying checks is left alone, whoever wrote them.** A plan document from before
+this change ingested a set an operator may be halfway through, and a validation planner speaks for
+the whole set — dispatching one over those rows would supersede work in progress. So the rule's gate
+is _authored **or** already has live checks_, and only the first is a stamp.
+
 **Why after `delivered` and not at the last merged pull request.** "No open PR" is the assessor's own
 trigger, and the assessor may answer `more_work` — which sends the goal back round, lands more pull
 requests, and moves the code the check set was just written against. `delivered` is the first moment
@@ -134,7 +153,13 @@ nothing further is coming. → [06](06-issue-pickup.md)
 has finished would assemble one with no `check` rows on it — an operator meeting a bench that offers
 only the watch-derived rows, which reads as a misconfiguration and is not one. It is the same shape as
 a null `area`, one subsystem over, and the same remedy: the gate is explicit rather than a race
-nobody lost yet.
+nobody lost yet. `sheetableArrivals` defers such an arrival unstamped, and **cuts the staleness guard
+first** — which is the half the implementation forced. Authoring routinely takes longer than the two
+probe intervals that guard allows, so an arrival held for the planner and then aged out would lose
+its sheet for good; cutting staleness first means the arrivals that would flood in on the pulse an
+operator turns this on are stamped and not assembled before authoring is consulted at all, and only
+an arrival that entered fresh waits — for as long as the planner takes.
+→ [36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)
 
 **The hint is an input, and departures are stated.** A validation planner that does not read the hint
 makes it theatre, and the operator who read it at the approval gate learned nothing. So it is appended
@@ -147,6 +172,10 @@ indistinguishable from a validation planner that did nothing. The per-goal readi
 fact and not a synonym for clear" ([The flag](#the-flag)), and the validation planner's note is what
 tells the difference: _considered; area `Checkout Tests` now asserts the confirmation step and nothing
 else needs a run_. Null with no account of itself is the failure this document keeps meeting.
+
+Both are refusals rather than conventions: `validation_plan` requires `note` on every call, and
+requires `emptyReason` on a call declaring no checks. A refused call authors nothing — the stamp is
+not written, so the sheet keeps waiting rather than assembling off a set nobody wrote.
 
 ### A permanent test influences and never dictates
 
@@ -310,6 +339,18 @@ document that could declare an executable check set would be a second author for
 full `checks` array, is ingested exactly as it always was — the rows are real and an operator may be
 halfway through them, and re-reading them as a hint would delete a check set somebody is using.
 
+**An omitted array is not an empty one, and the block had to learn the difference.** `checks` and
+`resources` were `.default([])`, which makes a hint-only block indistinguishable after parsing from
+`"checks": []` — and that reading supersedes every check on the goal. They are optional now, and
+`declaresCheckSet` is what `ingestPlanDocument` asks before it writes anything at all. Withdrawing
+every check is still `"checks": []`, said out loud.
+
+The hint lands on `validation_plans.hint`, beside the authoring the validation planner writes later
+([Persistence](#persistence)). It is deliberately not a column on `plans`: the two halves are one
+record about the goal's validation, they are written by different agents at different times, and the
+plan row is 1:1 with a plan where this is 1:1 with a goal, which is what validation is keyed on
+everywhere else.
+
 ```json
 {
   "validation": {
@@ -320,8 +361,11 @@ halfway through them, and re-reading them as a hint would delete a check set som
 
 ### The check set
 
-**Not built.** The validation planner declares the whole set through its own transport, on the same
-`ValidationSchema` shapes, with `steps` added:
+**Built**, without `steps`. The validation planner declares the whole set through its own transport,
+`validation_plan` (`src/mcp/tools/validationPlan.ts`), on the same `ValidationCheckSchema` and
+`ValidationResourceSchema` the plan document reaches — a second copy of those shapes would drift the
+first time either learned a field. It speaks for the **whole** set, on `ingestValidation`'s terms:
+omission is withdrawal. `steps` is the layer above and is [not built](#the-test-plan):
 
 ```json
 {
@@ -1146,6 +1190,12 @@ delegated to under the same method names ([14](14-persistence.md#shape)).
   `revision` is JSON — the wording an amendment replaced and the reading it withdrew, kept as one
   record because it is read as one.
 - **`validation_resources`** — `origin_ref`, `name`, `kind`, `note`, `provided`, `human_task_id`.
+- **`validation_plans`** — `origin_ref`, `hint`, `note`, `empty_reason`, `authored_at`, `updated_at`.
+  The goal's validation plan in both halves: the plan document writes `hint`, the validation planner
+  writes the rest. `authored_at` null is _the check set has not been written yet_, which is what
+  sheet assembly and rule `validation-plan` both read — never a check count, because an empty set is
+  an answer. A fresh table, declared with an **empty `ColumnMigrations` anyway**: a table being new
+  once does not keep it exempt, and `validation_checks` collected exactly that debt one change later.
 
 Both tables shipped as fresh `CREATE TABLE`s and both declared an **empty `ColumnMigrations`
 anyway**, on the argument that a table being new once does not keep it exempt. The band collected
@@ -1218,6 +1268,13 @@ should not be the one reading that goes nowhere.
 
 ## Tests
 
+`test/validationAuthoring.test.ts` (the authoring move: that a legacy plan document's full check set
+still ingests and is not an authoring, that a hint-only block withdraws nothing where an explicit
+`[]` withdraws everything, when the rule dispatches and the three gates that stop it, that the
+dispatch goes through the candidate list rather than an inline `raw.push`, that the hint, the
+coverage part and the environments reach the agent, the origin's classification and its spend phase,
+the tool's two refusals and what a refused call does not stamp, that `validation_amend` is refused at
+the planner's own origin, and that sheet assembly waits — with the staleness guard cut first),
 `test/validation.test.ts` (the schema's refusals, letters, what an amendment may do to a check
 somebody has run, and the resource ask: that it waits for the delivery, that a replan which stops
 needing the resource withdraws it, and that a withdrawal never overwrites the operator's own answer), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two

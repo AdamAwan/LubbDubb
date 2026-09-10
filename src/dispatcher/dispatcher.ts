@@ -30,6 +30,7 @@ import type {
   RemoteRunBrief,
   SelectorOffering,
   ValidationCheck,
+  ValidationPlanRecord,
   Ejection,
   WorldEvent,
   WorldSnapshot,
@@ -62,6 +63,7 @@ export interface DispatchContext {
   planAtoms?: PlanAtom[];
   planAmendments?: PlanAmendment[];
   validationChecks?: ValidationCheck[];
+  validationPlans?: ValidationPlanRecord[];
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
   remoteRuns?: RemoteRunBrief[];

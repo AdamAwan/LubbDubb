@@ -21,6 +21,7 @@ type PromptId =
   | 'feature-sequence'
   | 'feature-resequence'
   | 'feature-summary'
+  | 'validation-plan'
   | 'validation-check'
   | 'validation-failed'
   | 'local-validation'
@@ -472,6 +473,22 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Two things to refuse. **No forecast**: no dates, no percentages, no "on track" or "at risk" — you have no grounds for one, and a reader given one stops reading the rest. **No invented section**: leave a field out where the Feature has nothing to put in it. Nothing usable yet, nothing blocked and nothing left are each ordinary states, and `standing` is where you say so.\n\n' +
       'Then call feature_summary once. It is drawn on the feature board and nowhere else: nothing is posted to the tracker, nothing is closed, and nothing is scheduled from it. It is rewritten the next time something under this Feature moves, so write where things are **now** rather than how they got here.',
     doc: "Sent to a desk agent when something under a Feature has moved since its summary was written, or when it has none (rule `feature-summary`). Every item under the Feature, its standing and the verdicts standing on it are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot write without — and the summary on file is appended with them, so a re-write revises rather than restarts. The four fields the tool takes are named in the tool's own description as well as here, for `retro_submit`'s reason: an override written before a field existed would otherwise lose it in silence. Placeholders: {number} {title}.",
+  },
+  'validation-plan': {
+    placeholders: ['number', 'title', 'body'],
+    template:
+      'Issue #{number} ("{title}") has been delivered. Write the validation check set for it \u2014 the checks a person, or the fleet, runs against the finished goal to see that it actually works.\n\n{body}\n\n' +
+      'You are the first agent on this goal that can read what was **actually built**. Every part is merged, every pull request is closed, and the assessor has said the goal is delivered. That is the whole reason this is written now rather than at planning time: a plan writes checks against code that does not exist yet, and by the second part it is describing a screen that moved.\n\n' +
+      'You are in a read-only checkout of the default branch. Read the delivered change first \u2014 what shipped, not what the ticket asked for. Nothing here is to be committed or pushed.\n\n' +
+      '## What a check is\n\n' +
+      'One run of the delivered thing, and everything that run settles. A check exists because something can only be found out by **running** the goal \u2014 a real environment, the state it wrote, the logs, the screen. Anything the diff, the type checker, the test suite or a green build already settles is **not a check**, and writing one sends a person out to redo work that is done.\n\n' +
+      '**One run is one check.** If two things would be seen in the same sitting \u2014 the screen renders and the row is written \u2014 they are one check with both in its `expect`, not two checks. The setup is the expensive part, and a journey cut into six checks reads on the bench as six obligations.\n\n' +
+      '## Declaring nothing is a complete answer\n\n' +
+      'A goal whose permanent suite coverage already settles the question gets an empty check set, and that is correct rather than a failure. What it must carry is a **reason**: _considered; the checkout area now asserts the confirmation step and nothing else needs a run_. An empty set with no account of itself is indistinguishable from an agent that did nothing, and an operator meeting a near-empty bench cannot tell which they have.\n\n' +
+      '## Then call validation_plan, once\n\n' +
+      'It speaks for the **whole** set: what you declare is what the goal has. Say in `note` where you went a different way from the plan\u2019s hint and why. Where you declare no checks, `emptyReason` is required.\n\n' +
+      'You cannot record a reading, and you cannot decide who runs a check: whether an agent can run one depends on the logins and browsers this deployment has, and the hand-over is an operator\u2019s press. `fleetCandidate` is a nomination with an argument attached, and it dispatches nothing.',
+    doc: "Sent to a code agent when a goal the harness parked as delivered has no validation check set (rule `validation-plan`). The plan's validation hint, what any `coverage` part built and what each configured environment can drive are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot author without. The agent is in a read-only checkout of the default branch and answers once with `validation_plan`, which speaks for the whole set. Placeholders: {number} {title} {body}.",
   },
   'validation-check': {
     placeholders: ['number', 'title', 'letter', 'root'],
