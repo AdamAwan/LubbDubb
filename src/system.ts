@@ -644,6 +644,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     environments: config.environments,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    validationRoot: config.validationRoot,
     errors,
   });
 

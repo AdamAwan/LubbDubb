@@ -542,6 +542,7 @@ export function buildStateSections(
     | 'planAtoms'
     | 'planCaveatAnswers'
     | 'validationChecks'
+    | 'validationPlans'
     | 'validationResources'
     | 'goalWatches'
     | 'stateQueries'
@@ -551,6 +552,7 @@ export function buildStateSections(
     planAtoms: store.listAllPlanAtoms(),
     planCaveatAnswers: store.listAllPlanCaveatAnswers(),
     validationChecks,
+    validationPlans: store.listValidationPlanRecords(),
     validationResources: wireValidationResources,
     goalWatches: [...store.listGoalWatches(), ...store.listProposedGoalWatches()],
     stateQueries: store.listStateQueries(),

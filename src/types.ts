@@ -1544,7 +1544,13 @@ export interface StateQuery extends StateQueryInput {
 
 export type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
 
-export type RemoteRowOutcome = 'passed' | 'failed' | 'blocked';
+/**
+ * What a sheet row came back as. **`captured` is not a synonym for either end of the other three**:
+ * a `screenshot` step asserts nothing, so the row holds a screen somebody still has to look at, and
+ * a person's reading is what turns it into a pass or a failure.
+ * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+ */
+export type RemoteRowOutcome = 'passed' | 'failed' | 'blocked' | 'captured';
 
 /** One goal's checks, watches and state queries, assembled against one environment. */
 export interface RemoteSheet {

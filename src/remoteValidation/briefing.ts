@@ -1,7 +1,7 @@
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
-import { stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepScript } from '../validation/steps.js';
 import { remoteValidationKey, remoteValidationOrigin, remoteValidationRunDir } from './origin.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
@@ -43,6 +43,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
     const confirmed = confirmedCheckRows(rows, run.goalRef, run.environment);
     const selectors = areasOf(store, run.goalRef, confirmed);
     const scripts = scriptsOf(store, run.goalRef, confirmed);
+    const screens = screensOf(store, run.goalRef, confirmed);
     const origin = remoteValidationOrigin(issueNumber, run.id);
     const runDir = remoteValidationRunDir(input.validationRoot, run.goalRef, run.id);
     const tenant = resolveTenant({
@@ -61,7 +62,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
       origin,
       leaseKey: remoteValidationKey(issueNumber, run.id),
       deployedSha: run.startedSha,
-      confirmed: selectors.length + scripts.length,
+      confirmed: selectors.length + scripts.length + screens.length,
       briefing: briefing({
         environment: environment.name,
         profile: browser.profile ?? null,
@@ -70,6 +71,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
         tenant,
         selectors,
         scripts,
+        screens,
         titles: confirmed.map((row) => row.title),
         reportDir: `${runDir}/report`,
         artefactDir: `${runDir}/artefacts`,
@@ -116,6 +118,24 @@ export function runnableScripts(
 ): RunScript[] {
   if (environment.validate?.browser?.runner === undefined) return [];
   return scriptsOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
+}
+
+/**
+ * The screens this run is asked to hand back. They are the **third** reason a run owes an agent, and
+ * the quietest of the three: a check that only hands a screen back names no suite area and carries
+ * no script, so a press counting the two instruments would settle the run with the whole point of
+ * that check still owed — and the check would sit `unrun` for ever with nothing red.
+ *
+ * @public read by `RemoteRunDesk` to decide whether a press still owes an agent
+ */
+export function runnableScreens(
+  store: Store,
+  environment: EnvironmentConfig,
+  goalRef: string,
+  rows: readonly RemoteSheetRow[],
+): RunScreen[] {
+  if (environment.validate?.browser?.runner === undefined) return [];
+  return screensOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
 }
 
 function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, environment: string): RemoteSheetRow[] {
@@ -165,6 +185,31 @@ function scriptsOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[
   return out;
 }
 
+/** One check that hands a screen back, and the id it reports the image under — the check's own. */
+interface RunScreen {
+  checkId: string;
+  title: string;
+  do: string;
+}
+
+/**
+ * The checks whose test plan carries a `screenshot` step. This is the only channel that can take one:
+ * the `validate-check` dispatch is told in its own prompt that the fleet has no interactive login, no
+ * browser and no account on the environment, and here there are all three.
+ * → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+ */
+function screensOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScreen[] {
+  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const out: RunScreen[] = [];
+  for (const row of rows) {
+    const check = checks.get(row.sourceId);
+    if (check === undefined || !handsBackAScreen(check.steps)) continue;
+    const step = check.steps.find((s) => s.kind === 'screenshot');
+    out.push({ checkId: check.id, title: check.title, do: step?.do ?? check.do });
+  }
+  return out;
+}
+
 interface BriefingInput {
   environment: string;
   profile: string | null;
@@ -174,6 +219,7 @@ interface BriefingInput {
   tenant: string | null;
   selectors: readonly string[];
   scripts: readonly RunScript[];
+  screens: readonly RunScreen[];
   titles: readonly string[];
   reportDir: string;
   artefactDir: string;
@@ -232,12 +278,15 @@ function briefing(input: BriefingInput): string {
     '',
     'One row each, and the selector each one is verified against:',
     '',
-    ...(input.selectors.length === 0 && input.scripts.length === 0
+    ...(input.selectors.length === 0 && input.scripts.length === 0 && input.screens.length === 0
       ? ['- (nothing is confirmed on this sheet)']
       : input.selectors.map((selector, at) => `- \`${selector}\` — ${input.titles[at] ?? 'a confirmed check'}`)),
     ...(input.scripts.length === 0
       ? []
       : input.scripts.map((script) => `- \`${script.checkId}\` — ${script.title}, by the one-off script below`)),
+    ...(input.screens.length === 0
+      ? []
+      : input.screens.map((screen) => `- \`${screen.checkId}\` — ${screen.title}, a screen to hand back`)),
   ];
 
   if (input.scripts.length > 0) {
@@ -271,6 +320,36 @@ function briefing(input: BriefingInput): string {
       '',
       'A reading a script produces is recorded as **`script`**, never `spec`, and its source is drawn on the ' +
         'sheet beside it. Nothing reviewed it, and the sheet says so.',
+    );
+  }
+
+  if (input.screens.length > 0) {
+    lines.push(
+      '',
+      '## The screens to hand back',
+      '',
+      'These checks ask for a **screenshot**, and a screenshot **asserts nothing** — neither do you on its ' +
+        'account. Take the screen the step describes, write the image into the artefact directory below, and ' +
+        'name the file in the report under the check’s own id. A person looks at it and decides what it shows.',
+      '',
+      ...input.screens.flatMap((screen) => [`- \`${screen.checkId}\` — ${screen.do}`]),
+      '',
+      `Write them into \`${input.artefactDir}\`, and name each one in the report by **file name only** — not a ` +
+        'path and not a URL. The harness moves the image out of this run’s artefacts and keeps it with the goal, ' +
+        'because the artefacts are swept on the project’s own schedule and a screen somebody still has to look ' +
+        'at outlives the run that took it:',
+      '',
+      '```json',
+      '{ "selector": "<the check id above>", "status": "skipped", "capture": "confirmation-screen.png" }',
+      '```',
+      '',
+      '**Do not say whether it looks right.** Whether a column reads legibly, whether a truncation is ' +
+        'acceptable, whether a number is believable beside the source it came from — these are judgements, and ' +
+        'a run that claimed them would be green about something else. The row reaches *captured, waiting to be ' +
+        'looked at*, and a person settles it.',
+      '',
+      'A check that asks for a screen and comes back without one is **blocked**, not passed: handing the screen ' +
+        'back is the whole of what the step is for.',
     );
   }
 

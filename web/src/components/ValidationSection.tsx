@@ -1,6 +1,12 @@
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import type { ValidationCheck, ValidationCheckState, ValidationCheckView, ValidationResourceView } from '../types.js';
+import type {
+  ValidationCheck,
+  ValidationCheckState,
+  ValidationCheckView,
+  ValidationPlanRecord,
+  ValidationResourceView,
+} from '../types.js';
 import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
@@ -14,6 +20,40 @@ import { logUsage } from '../cockpit/usage.js';
 
 function isMissingFile(resource: ValidationResourceView): boolean {
   return !resource.present && resource.kind !== 'access';
+}
+
+/**
+ * What a goal with no checks on it actually means, which is three different things and only one of
+ * them is *nobody planned any*. The planner declares the whole set after delivery, so an empty
+ * section before that is a set not yet written, and an empty section after it can be a considered
+ * answer — `emptyReason` is required of a planner that declares nothing, precisely so that answer is
+ * on the record. Drawn from that record rather than derived: what a `coverage` part built is a fact
+ * the planner read, and a second reading of it beside the planner's own sentence would be the
+ * cockpit disagreeing with the agent that looked at the code.
+ * → docs/spec/20-validation.md#saying-nothing-was-worth-running
+ */
+function EmptySet({ plan }: { plan: ValidationPlanRecord | null }) {
+  if (plan?.emptyReason != null)
+    return (
+      <p className="empty">
+        The validation planner read the delivered goal and declared no checks.
+        <span className="pm-vnote">{plan.emptyReason}</span>
+      </p>
+    );
+  if (plan?.authoredAt == null)
+    return (
+      <p className="empty">
+        No check set yet. It is written against the merged code once this goal is delivered, so there is nothing to run
+        here before then.
+        {plan?.hint != null && <span className="pm-vnote">The plan asked for: {plan.hint}</span>}
+      </p>
+    );
+  return (
+    <p className="empty">
+      No validation plan. Nothing checks that this goal actually works beyond what the parts merged, so closing it is a
+      judgement call rather than a verdict.
+    </p>
+  );
 }
 
 /**
@@ -38,6 +78,7 @@ function isMissingFile(resource: ValidationResourceView): boolean {
  */
 export function ValidationSection({
   checks,
+  plan,
   issueNumber,
   resources,
   refUrls,
@@ -50,6 +91,7 @@ export function ValidationSection({
   onHandover,
 }: {
   checks: ValidationCheckView[];
+  plan: ValidationPlanRecord | null;
   issueNumber: number;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
@@ -70,14 +112,7 @@ export function ValidationSection({
   const amended = live.filter((c) => c.amendedAt !== null);
   const byName = new Map(resources.map((r) => [r.name, r]));
 
-  if (checks.length === 0) {
-    return (
-      <p className="empty">
-        No validation plan. Nothing checks that this goal actually works beyond what the parts merged, so closing it is
-        a judgement call rather than a verdict.
-      </p>
-    );
-  }
+  if (checks.length === 0) return <EmptySet plan={plan} />;
 
   return (
     <>
@@ -105,6 +140,11 @@ export function ValidationSection({
           )}
         </div>
       )}
+      {/* Where the planner went a different way from the plan's hint, in its own
+          words. Without it the hint is theatre: an operator read it at the
+          approval gate, and the set they are now looking at was written days
+          later against code the hint could not see. */}
+      {plan?.note != null && <div className="pm-vnote">{plan.note}</div>}
       {resources.length > 0 && (
         <div className="pm-vres">
           {resources.map((resource) => (
@@ -175,10 +215,12 @@ export function ValidationSection({
  */
 export function ValidationDigest({
   checks,
+  plan,
   refUrls,
   onOpenGoal,
 }: {
   checks: ValidationCheckView[];
+  plan: ValidationPlanRecord | null;
   refUrls: Record<string, string>;
   onOpenGoal: (() => void) | null;
 }) {
@@ -186,14 +228,7 @@ export function ValidationDigest({
   const withdrawn = checks.filter((c) => c.supersededReason !== null);
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
 
-  if (checks.length === 0) {
-    return (
-      <p className="empty">
-        No validation plan. Nothing checks that this goal actually works beyond what the parts merged, so closing it is
-        a judgement call rather than a verdict.
-      </p>
-    );
-  }
+  if (checks.length === 0) return <EmptySet plan={plan} />;
 
   return (
     <>

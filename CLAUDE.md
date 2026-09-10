@@ -345,6 +345,12 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   no `validate` block is left unstamped. Stamp on the way past and the operator who turns it on gets
   a sheet, a spawned query and a bench row for every goal that ever arrived.
   → [36](docs/spec/36-remote-validation.md#the-desk)
+- **Anything a sheet run owes its agent is counted at the press, or the run settles with it still
+  owed.** `runnableSelectors`, `runnableScripts` and `runnableScreens` are three halves of one
+  question, and a check that carries only the newest of them names nothing the older two count: the
+  press ends the run on the spot, the check stays `unrun` for ever, and the sheet reads as a run that
+  answered. A fourth thing a run can carry is a fourth entry there.
+  → [36](docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run)
 - **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an
   arrival's, one subsystem over: `deliveryHold` expires a standing delivery verdict on any world event
   matching the goal's issue ref, so a reading written as one un-parks the goal it just reported on.

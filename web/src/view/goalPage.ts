@@ -16,6 +16,7 @@ import type {
   GoalWatchView,
   RemoteSheetView,
   ValidationCheckView,
+  ValidationPlanRecord,
   ValidationResourceView,
 } from '../types.js';
 import type { NeedRow } from './needsYou.js';
@@ -56,6 +57,8 @@ export interface GoalPageView {
   agents: GoalAgentView[];
   decisions: CockpitDecision[];
   checks: ValidationCheckView[];
+  /** The goal's validation plan record — the plan's hint, and the planner's account of the set. */
+  checkPlan: ValidationPlanRecord | null;
   checkResources: ValidationResourceView[];
   environments: GoalEnvironmentReachView[];
   gateHold: string | null;
@@ -256,6 +259,7 @@ export function buildGoalPage(
     }),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
     checks: (state.validationChecks ?? []).filter((c) => c.originRef === ref),
+    checkPlan: (state.validationPlans ?? []).find((r) => r.originRef === ref) ?? null,
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
     environments: reach?.environments ?? [],
     gateHold: reach?.gateHold ?? null,

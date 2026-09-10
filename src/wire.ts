@@ -122,6 +122,7 @@ import type {
   StallPark,
   TaskSummary,
   ValidationCheck,
+  ValidationPlanRecord,
   ValidationResource,
   ValidationVerdict,
   WorkNode,
@@ -356,6 +357,14 @@ export interface CockpitState {
   planAtoms: PlanAtom[];
   planCaveatAnswers: PlanCaveatAnswer[];
   validationChecks: ValidationCheckView[];
+  /**
+   * One record per goal, both halves of it: the plan document's `hint` and the validation planner's
+   * `note` and `emptyReason`. It is on the wire because **an empty check set has no check to hang
+   * its account on** — the row is where the *how* of a check lives, and a goal that was considered
+   * and given no checks draws no row at all, so without this the only surface an operator meets says
+   * nothing was planned. → docs/spec/20-validation.md#saying-nothing-was-worth-running
+   */
+  validationPlans: ValidationPlanRecord[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
   stateQueries: StateQuery[];
@@ -884,6 +893,7 @@ export type {
   TenantStanding,
   ValidationCheck,
   ValidationCheckState,
+  ValidationPlanRecord,
   ValidationResource,
   ValidationResourceKind,
   ValidationVerdict,

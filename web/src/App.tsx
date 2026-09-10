@@ -49,6 +49,7 @@ export function App() {
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
       atoms={(state.planAtoms ?? []).filter((a) => a.planId === viewedPlan.id)}
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
+      validationPlan={(state.validationPlans ?? []).find((r) => r.originRef === viewedPlan.originRef) ?? null}
       caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
       watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
       queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}

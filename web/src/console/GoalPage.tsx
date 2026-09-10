@@ -969,6 +969,7 @@ function Validation({
         <div className="cn-vin">
           <ValidationSection
             checks={checks}
+            plan={page.checkPlan}
             issueNumber={issue.number}
             resources={page.checkResources}
             refUrls={refUrls}
