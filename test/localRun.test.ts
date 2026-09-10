@@ -18,6 +18,7 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from '../src/agents/session.js';
 import type { PlanPart } from '../src/types.js';
+import { repoText } from './support/paths.js';
 
 class FakeSession extends EventEmitter implements AgentSession {
   status: AgentSessionStatus = 'starting';
@@ -567,7 +568,7 @@ test('a pulse dates the run the harness is holding, at the buildSystem seam', as
 });
 
 test('the pulse dates the run above its own recovery hold', () => {
-  const text = readFileSync(new URL('../src/harness.ts', import.meta.url), 'utf8');
+  const text = repoText('src/harness.ts');
   const stamp = text.indexOf('localRun?.noteAlive()');
   const hold = text.indexOf('recovery?.pendingCount()');
   assert.ok(stamp > 0, 'the pulse stamps the local run it is holding');

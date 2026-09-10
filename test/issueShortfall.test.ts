@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadConfig } from '../src/config.js';
@@ -31,6 +31,7 @@ import type {
   Task,
   WorldEvent,
 } from '../src/types.js';
+import { repoText } from './support/paths.js';
 
 const NOW = '2026-07-28T12:00:00.000Z';
 
@@ -51,7 +52,7 @@ test('with no plan, the two plan-shaped arms degrade to asking a person', () => 
 });
 
 test('the pickup gate names no shortfall type — the polarity is structural, not a runtime check', () => {
-  const source = readFileSync(new URL('../src/delivery/delivery.ts', import.meta.url), 'utf8');
+  const source = repoText('src/delivery/delivery.ts');
   for (const name of ['IssueShortfall', 'shortfall', 'Shortfall']) {
     assert.equal(source.includes(name), false, `deliveryHold's module must not name ${name}`);
   }

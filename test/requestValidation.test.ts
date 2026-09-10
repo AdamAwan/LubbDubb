@@ -10,6 +10,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { IdParams, IssueNumberParams, optionalText, readRequest, requiredBoolean } from '../src/server/validation.js';
 import { z } from 'zod';
+import { repoPath } from './support/paths.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -281,12 +282,12 @@ function writeRoutes(): string[] {
 }
 
 function routeSources(): [string, string][] {
-  const server = new URL('../src/server/', import.meta.url);
+  const server = repoPath('src/server');
   const files = ['app.ts'];
-  for (const entry of readdirSync(new URL('routes/', server)).sort()) {
+  for (const entry of readdirSync(join(server, 'routes')).sort()) {
     if (entry.endsWith('.ts')) files.push(`routes/${entry}`);
   }
-  return files.map((file) => [file, readFileSync(new URL(file, server), 'utf8')]);
+  return files.map((file) => [file, readFileSync(join(server, file), 'utf8')]);
 }
 
 test('the validation routes refuse a missing account by naming the field each one takes', async () => {

@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -43,7 +43,7 @@ test('a button is a button, never a form submit', () => {
 });
 
 test('no surface writes a button family of its own', () => {
-  const root = fileURLToPath(new URL('../web/src', import.meta.url));
+  const root = repoPath('web/src');
   const owner = join(root, 'components', 'button.tsx');
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((entry) => {

@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import * as React from 'react';
 import { createElement } from 'react';
@@ -9,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import { repoPath, repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -222,7 +222,7 @@ test('a part row links the pull request that carries it', () => {
 });
 
 test('a reference is drawn as a token at rest, and shows a ring when it takes focus', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/styles.css');
   const rule = (selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
     assert.notEqual(at, -1, `${selector} must still be a rule in styles.css`);
@@ -272,7 +272,7 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
 });
 
 test('a pair drawn in a group narrower than it wants gives way from its number, never from its arm', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/styles.css');
   const rule = (selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
     assert.notEqual(at, -1, `${selector} must still be a rule in styles.css`);
@@ -285,7 +285,7 @@ test('a pair drawn in a group narrower than it wants gives way from its number, 
   assert.match(token, /min-width: 0/);
   assert.match(token, /text-overflow: ellipsis/, 'so what a narrow column costs is a digit');
 
-  const console_ = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const console_ = repoText('web/src/console/console.css');
   const slot = console_.indexOf('\n.cn-frow .cn-refs {');
   assert.notEqual(slot, -1);
   assert.match(
@@ -303,7 +303,7 @@ test('a pair drawn in a group narrower than it wants gives way from its number, 
 });
 
 test('the references slot is a column, drawn on rows that have nothing to put in it', () => {
-  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const css = repoText('web/src/console/console.css');
   const at = css.indexOf('\n.cn-refs {');
   const body = css.slice(at, css.indexOf('}', at));
   assert.match(body, /border-left: 1px solid var\(--cn-line\)/, 'the slot is ruled off the row’s own words');
@@ -323,7 +323,7 @@ test('the references slot is a column, drawn on rows that have nothing to put in
 });
 
 test('a surface off its own route merges that route’s refUrls over the shell’s', () => {
-  const root = fileURLToPath(new URL('../web/src/components/', import.meta.url));
+  const root = repoPath('web/src/components');
   for (const [file, map] of [
     ['FeatureBoard.tsx', 'board.refUrls'],
     ['TicketsBoard.tsx', 'refUrls'],
@@ -339,7 +339,7 @@ test('a surface off its own route merges that route’s refUrls over the shell�
 });
 
 test('nothing outside refs.tsx strips a ref down to a number', () => {
-  const root = fileURLToPath(new URL('../web/src/', import.meta.url));
+  const root = repoPath('web/src');
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((name) => {
       const path = join(dir, name);

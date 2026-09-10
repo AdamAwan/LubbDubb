@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import type { ReliabilityInsights, SpendInsights, SpendPhase } from '../web/src/types.js';
+import { repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -316,7 +315,7 @@ test('the method note leaves as rows — the two windows, what a red is, what st
 });
 
 test('the page exports nothing it could not fetch — there is no file of zeroes', () => {
-  const src = readFileSync(fileURLToPath(new URL('../web/src/components/InsightsPage.tsx', import.meta.url)), 'utf8');
+  const src = repoText('web/src/components/InsightsPage.tsx');
   const first = src.indexOf('<Downloads');
   assert.notEqual(first, -1, 'the page must offer an export');
   assert.ok(src.includes('spend !== null'), "the spend tabs' export must be gated on a payload");

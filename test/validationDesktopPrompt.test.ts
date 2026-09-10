@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import * as React from 'react';
 import { createElement } from 'react';
@@ -15,15 +14,16 @@ import {
   localRunPrompt,
   questionPrompt,
 } from '../web/src/cockpit/desktopLink.js';
+import { repoPath, repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
 const { DesktopLink } = await import('../web/src/components/DesktopLink.js');
 const { ControlBar, ControlGroup } = await import('../web/src/components/controls.js');
 
-const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx', import.meta.url), 'utf8');
-const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
-const TOP_BAR = readFileSync(new URL('../web/src/console/TopBar.tsx', import.meta.url), 'utf8');
+const SOURCE = repoText('web/src/components/ValidationSection.tsx');
+const GOAL_PAGE = repoText('web/src/console/GoalPage.tsx');
+const TOP_BAR = repoText('web/src/console/TopBar.tsx');
 
 const desktop = (props: { folder: string; prompt: string; explain: string; ready?: string }): string =>
   renderToStaticMarkup(createElement(DesktopLink, props));
@@ -89,7 +89,7 @@ test('a prompt the operator still has to finish says so', () => {
 });
 
 test('nothing outside DesktopLink builds a link into Claude Code', () => {
-  const root = fileURLToPath(new URL('../web/src/', import.meta.url));
+  const root = repoPath('web/src');
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((name) => {
       const path = join(dir, name);

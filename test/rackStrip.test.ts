@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -93,7 +94,7 @@ test('the row carries both rails, and the strip stops at the refs rule', () => {
 
 test('the stacked cut is a ceiling, off the card’s own width', async () => {
   const { readFile } = await import('node:fs/promises');
-  const sheet = await readFile(new URL('../web/src/console/console.css', import.meta.url), 'utf8');
+  const sheet = await readFile(repoPath('web/src/console/console.css'), 'utf8');
   assert.match(sheet, /\.cn-rows\s*\{[^}]*container:\s*cn-rows\s*\/\s*inline-size/, 'the rows are not a container');
   const query = /@container cn-rows \(min-width: \d+px\) \{([\s\S]*?)\n\}/.exec(sheet);
   assert.ok(query, 'the sheet carries no ceiling for the stacked cut');

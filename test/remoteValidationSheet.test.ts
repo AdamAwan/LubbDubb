@@ -14,6 +14,7 @@ import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput, StateQueryInput, ValidationCheckInput } from '../src/types.js';
+import { repoText } from './support/paths.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -492,7 +493,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
 });
 
 test('the desk assembles below EnvironmentDesk and above ValidationReadyDesk', () => {
-  const text = readFileSync(new URL('../src/harness.ts', import.meta.url), 'utf8');
+  const text = repoText('src/harness.ts');
   const at = (needle: string): number => {
     const found = text.indexOf(needle);
     assert.ok(found > 0, `${needle} is in the pulse`);

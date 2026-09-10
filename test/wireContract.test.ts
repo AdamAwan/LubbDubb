@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -11,8 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import type { CockpitState } from '../src/wire.js';
 import type { AppState } from '../web/src/types.js';
-
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
+import { REPO_ROOT as ROOT } from './support/paths.js';
 
 const SHARED = ['src/wire.ts', 'src/types.ts'];
 

@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveCoreBudget } from '../scripts/checkLock.js';
 
-const CHILD = fileURLToPath(new URL('./support/checkLockChild.ts', import.meta.url));
+const EXT = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
+const CHILD = fileURLToPath(new URL(`./support/checkLockChild${EXT}`, import.meta.url));
 
 let dir: string;
 let seq = 0;
@@ -35,7 +36,7 @@ const paths = (): { lock: string; log: string } => {
 };
 
 const spawnChild = (lock: string, log: string, holdMs: number): ChildProcess =>
-  spawn(process.execPath, ['--import', 'tsx', CHILD, lock, log, String(holdMs)], {
+  spawn(process.execPath, [...(EXT === '.ts' ? ['--import', 'tsx'] : []), CHILD, lock, log, String(holdMs)], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

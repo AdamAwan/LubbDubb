@@ -1,17 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PlanCaveat } from '../web/src/types.js';
+import { repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
 const { PlanAnswers } = await import('../web/src/components/PlanAnswers.js');
 
-const PLAN_MODAL = readFileSync(new URL('../web/src/components/PlanModal.tsx', import.meta.url), 'utf8');
-const ESCALATION = readFileSync(new URL('../web/src/components/EscalationCard.tsx', import.meta.url), 'utf8');
+const PLAN_MODAL = repoText('web/src/components/PlanModal.tsx');
+const ESCALATION = repoText('web/src/components/EscalationCard.tsx');
 
 const CAVEAT: PlanCaveat = { id: 'risks', label: 'Risks the planner named', detail: 'It touches the hold.' };
 
@@ -56,9 +56,7 @@ test('Approve is held while a caveat is unticked, and says how many', () => {
 });
 
 test('Approve carries no note of its own — only the ticks and what was written beside them', () => {
-  const accept = /onDecide\(proposalId, 'accept'[^)]*\)/.exec(
-    readFileSync(new URL('../web/src/components/PlanAnswers.tsx', import.meta.url), 'utf8'),
-  )?.[0];
+  const accept = /onDecide\(proposalId, 'accept'[^)]*\)/.exec(repoText('web/src/components/PlanAnswers.tsx'))?.[0];
   assert.equal(accept, "onDecide(proposalId, 'accept', undefined, acknowledged, answers)");
 });
 
@@ -67,7 +65,7 @@ test('the Claude Code hand-off is dropped where no goal number resolves the plan
 });
 
 test('the drawers are held until there are words, and each says where they go', () => {
-  const source = readFileSync(new URL('../web/src/components/PlanAnswers.tsx', import.meta.url), 'utf8');
+  const source = repoText('web/src/components/PlanAnswers.tsx');
   assert.ok(source.includes('disabled={words.length === 0}'), 'a drawer can be submitted empty');
   assert.match(source, /placeholder: 'The planner gets these words and amends the plan'/);
   assert.match(source, /placeholder: 'Posted on the ticket as the closing comment'/);
