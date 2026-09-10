@@ -105,6 +105,7 @@ interface DeclaredStep {
   do: string;
   area?: string | undefined;
   when?: 'inline' | 'deferred' | undefined;
+  script?: string | undefined;
 }
 
 /**
@@ -120,6 +121,8 @@ export function resolveSteps(declared: readonly DeclaredStep[], caps: StepCapabi
       do: step.do,
       area: step.kind === 'suite' ? (step.area ?? null) : null,
       when: step.kind === 'manual' ? (step.when ?? 'inline') : 'inline',
+      script: step.kind === 'browser' ? (step.script ?? null) : null,
+      scriptSweptAt: null,
       actor: fault === null ? ('fleet' as const) : ('human' as const),
       why: fault,
     };
@@ -137,6 +140,45 @@ export function stepArea(steps: readonly ValidationStep[]): string | null {
     if (step.kind === 'suite' && step.area !== null && step.area !== '') return step.area;
   }
   return null;
+}
+
+/**
+ * The check's one-off script: the first `browser` step that carries one. It is the browser-shaped
+ * member of the query column — unreviewed, tenant-scoped, written for this check and never in a pull
+ * request — and it is the reason a check with **no** `area` can still be run by the fleet: a suite
+ * area selects reviewed code, and this is the other instrument entirely.
+ *
+ * It is never folded with the area. A check may declare both, and they are two different pieces of
+ * evidence about the same goal rather than one that stands in for the other.
+ * → docs/spec/36-remote-validation.md#the-one-off-script
+ */
+export function stepScript(steps: readonly ValidationStep[]): string | null {
+  for (const step of steps) {
+    if (step.kind === 'browser' && step.script !== null && step.script !== '') return step.script;
+  }
+  return null;
+}
+
+/**
+ * The steps with every one-off script removed, each stamped where its source was. The stamp is the
+ * whole of what makes this reversible to read: a `browser` step that reads *its script was swept on
+ * the 3rd* is not the same row as one a person always drove, and a sweep that simply nulled the
+ * field would rewrite how a green row was earned. Returns null where there was nothing to remove, so
+ * the caller writes nothing.
+ * → docs/spec/36-remote-validation.md#the-one-off-script
+ */
+export function sweptScripts(steps: readonly ValidationStep[], at: string): ValidationStep[] | null {
+  if (!steps.some((step) => step.script !== null)) return null;
+  return steps.map((step) => (step.script === null ? step : { ...step, script: null, scriptSweptAt: at }));
+}
+
+/**
+ * Whether this check hands a screen back — a `screenshot` step, which captures and asserts nothing.
+ * A check carrying one reaches `captured` rather than `passed`, and it is a person who says which of
+ * the two it becomes. → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+ */
+export function handsBackAScreen(steps: readonly ValidationStep[]): boolean {
+  return steps.some((step) => step.kind === 'screenshot');
 }
 
 /**

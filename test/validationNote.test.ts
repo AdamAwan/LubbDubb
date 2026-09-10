@@ -25,8 +25,18 @@ const FLAGGED: ValidationVerdict = {
   unrun: 3,
   deferred: 0,
   waived: 0,
+  captured: 0,
 };
-const CLEAR: ValidationVerdict = { state: 'clear', total: 4, passed: 4, failed: 0, unrun: 0, deferred: 0, waived: 0 };
+const CLEAR: ValidationVerdict = {
+  state: 'clear',
+  total: 4,
+  passed: 4,
+  failed: 0,
+  unrun: 0,
+  deferred: 0,
+  waived: 0,
+  captured: 0,
+};
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 

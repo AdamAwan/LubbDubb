@@ -449,6 +449,11 @@ body {
   --tone-line: var(--cn-violet-line);
   --tone-fill: var(--cn-violet-fill);
 }
+.t-captured {
+  --tone: var(--cn-captured);
+  --tone-line: var(--cn-captured-line);
+  --tone-fill: var(--cn-captured-fill);
+}
 .t-accent {
   --tone: var(--cn-accent);
   --tone-line: var(--cn-blue-line-hi);
@@ -3690,6 +3695,48 @@ select:disabled {
 }
 .pm-vrow.waived {
   border-left-color: var(--grey);
+}
+/* Captured is drawn at full strength, like `unrun`: the screen is here and the
+   only thing left is somebody's eyes, which is work still owed rather than work
+   done. What it must not read as is passed. */
+.pm-vrow.captured {
+  border-left-color: var(--cn-captured);
+}
+.pm-vrow.captured:not(.open) {
+  background: color-mix(in srgb, var(--cn-captured) 13%, transparent);
+}
+/* The screen itself, on the row. Bounded so a tall page does not push the rest of
+   the card off the screen, and a link out for the full thing. */
+.pm-vcap {
+  margin-top: 6px;
+}
+.pm-vcap img {
+  display: block;
+  max-width: 100%;
+  max-height: 340px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+/* A one-off script's source, beside its reading. It is small and goal-scoped,
+   which is exactly what a suite spec is not, so reading it is cheaper than
+   trusting it — and that only holds if it is actually legible here. */
+.pm-vscript pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+}
+.pm-vsteps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.pm-vsteps li {
+  margin: 2px 0;
 }
 /* An outstanding row is washed in its own hue, so the checks still owed are one
    shape a glance resolves before it resolves a word — the rail and the muted head

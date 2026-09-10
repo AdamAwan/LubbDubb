@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OpenPullRequest, ValidationCheck } from '../web/src/types.js';
+import type { OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
 import type { GoalPageView } from '../web/src/view/goalPage.js';
 import { buildGoalPage, goalTabBadges, goalTabOpening, GOAL_TABS, GOAL_TAB_OF } from '../web/src/view/goalPage.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
@@ -72,7 +72,7 @@ test('a plan, a pull request or an agent moves the landing to the work', () => {
 
 test('a pull request in the operator’s court outranks a running check', () => {
   const page = bare();
-  const checks = [{ ...(buildDemoState().state.validationChecks ?? [])[0] }] as ValidationCheck[];
+  const checks = [{ ...(buildDemoState().state.validationChecks ?? [])[0] }] as ValidationCheckView[];
   const validating: GoalPageView = {
     ...page,
     checks,
@@ -102,7 +102,7 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
     openPullRequests: [openPr()],
     issue: {
       ...page.issue,
-      validation: { state: 'flagged', total: 3, passed: 1, failed: 1, unrun: 1, deferred: 0, waived: 0 },
+      validation: { state: 'flagged', total: 3, passed: 1, failed: 1, unrun: 1, deferred: 0, waived: 0, captured: 0 },
     },
   };
   assert.equal(goalTabOpening(flagged).tab, 'validation');
@@ -111,7 +111,7 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
     ...flagged,
     issue: {
       ...page.issue,
-      validation: { state: 'clear', total: 3, passed: 3, failed: 0, unrun: 0, deferred: 0, waived: 0 },
+      validation: { state: 'clear', total: 3, passed: 3, failed: 0, unrun: 0, deferred: 0, waived: 0, captured: 0 },
     },
   };
   assert.equal(clear.issue.validation?.state, 'clear');

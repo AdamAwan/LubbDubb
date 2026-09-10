@@ -120,6 +120,7 @@ function bench(runner: FakeRemoteRunner, environments: EnvironmentConfig[] = [AC
     observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader: reader() }),
     runner,
+    scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,
     now: () => NOW,
   });
@@ -444,6 +445,7 @@ test('a pre-flight that throws is recorded through errors.record and never fails
           throw new Error('the runner blew up');
         },
       } as never,
+      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: PROBE_MS,
       errors: { record: (e: { message: string }) => logged.push(e.message) } as never,
       now: () => NOW,

@@ -572,7 +572,7 @@ test('the strip quotes the parts and the checks rather than re-reading them', ()
     ...page,
     issue: {
       ...page.issue,
-      validation: { state: 'flagged', total: 4, passed: 1, failed: 1, unrun: 2, deferred: 0, waived: 0 },
+      validation: { state: 'flagged', total: 4, passed: 1, failed: 1, unrun: 2, deferred: 0, waived: 0, captured: 0 },
     },
   };
   const strip = buildGoalStrip(withChecks);

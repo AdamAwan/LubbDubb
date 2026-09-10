@@ -11,6 +11,13 @@ const MAX_RESOURCES = 20;
 
 const MAX_STEPS = 20;
 
+/**
+ * A one-off script is small and goal-scoped — that is what makes reading it cheaper than trusting
+ * it, which is the whole argument for drawing it beside its reading. Past this it is not a one-off,
+ * it is a suite nobody reviewed.
+ */
+const MAX_SCRIPT_LENGTH = 8000;
+
 export const ValidationResourceSchema = z.object({
   name: z
     .string()
@@ -33,8 +40,11 @@ const ValidationStepSchema = z
     do: z.string().min(1),
     area: z.string().min(1).optional(),
     when: z.enum(['inline', 'deferred']).optional(),
+    script: z.string().min(1).max(MAX_SCRIPT_LENGTH).optional(),
   })
-  .strict('a step declares only kind/do/area/when — who carries it is read off the configuration, not yours to say')
+  .strict(
+    'a step declares only kind/do/area/when/script — who carries it is read off the configuration, not yours to say',
+  )
   .superRefine((step, ctx) => {
     const add = (message: string, path: string): void => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
@@ -48,6 +58,15 @@ const ValidationStepSchema = z
     // Inline and deferred are the same word on any other kind: a step that runs, runs where it sits.
     if (step.when !== undefined && step.kind !== 'manual')
       add(`"when" belongs to a "manual" step — a ${step.kind} step is taken where it sits`, 'when');
+    // A one-off script acts on the environment, and `browser` is the only kind that does. On a
+    // `suite` step it would be a second, unreviewed body of code wearing a reviewed step's clothes;
+    // on a `screenshot` step it would be an assertion on the one kind that must never assert.
+    if (step.script !== undefined && step.kind !== 'browser')
+      add(
+        `"script" belongs to a "browser" step — a ${step.kind} step runs nothing of its own, and a one-off ` +
+          'script is the browser-shaped instrument',
+        'script',
+      );
   });
 
 export const ValidationCheckSchema = z

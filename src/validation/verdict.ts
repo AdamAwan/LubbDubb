@@ -14,6 +14,9 @@ export function validationVerdict(checks: readonly ValidationCheck[]): Validatio
     failed: count('failed'),
     unrun: count('unrun'),
     deferred: count('deferred'),
+    // Not folded into `unrun`. A captured row is one somebody has to look at, which is a different
+    // ask from one nobody has started, and the close-out line says so.
+    captured: count('captured'),
     waived,
   };
 }

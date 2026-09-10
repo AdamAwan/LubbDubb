@@ -1,6 +1,7 @@
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
+import { stepScript } from '../validation/steps.js';
 import { remoteValidationKey, remoteValidationOrigin, remoteValidationRunDir } from './origin.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
@@ -41,6 +42,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
 
     const confirmed = confirmedCheckRows(rows, run.goalRef, run.environment);
     const selectors = areasOf(store, run.goalRef, confirmed);
+    const scripts = scriptsOf(store, run.goalRef, confirmed);
     const origin = remoteValidationOrigin(issueNumber, run.id);
     const runDir = remoteValidationRunDir(input.validationRoot, run.goalRef, run.id);
     const tenant = resolveTenant({
@@ -59,7 +61,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
       origin,
       leaseKey: remoteValidationKey(issueNumber, run.id),
       deployedSha: run.startedSha,
-      confirmed: selectors.length,
+      confirmed: selectors.length + scripts.length,
       briefing: briefing({
         environment: environment.name,
         profile: browser.profile ?? null,
@@ -67,6 +69,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
         publish: browser.publishArtefacts ?? null,
         tenant,
         selectors,
+        scripts,
         titles: confirmed.map((row) => row.title),
         reportDir: `${runDir}/report`,
         artefactDir: `${runDir}/artefacts`,
@@ -97,6 +100,24 @@ export function runnableSelectors(
   return areasOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
 }
 
+/**
+ * The one-off scripts this run is for. They are the **other** reason a run owes an agent: a check
+ * carrying a script names no suite area at all, so a press counting only selectors would settle a
+ * run with the script half still owed — the quiet half of the same failure `runnableSelectors`
+ * exists to prevent, one instrument over.
+ *
+ * @public read by `RemoteRunDesk` to decide whether a press still owes an agent
+ */
+export function runnableScripts(
+  store: Store,
+  environment: EnvironmentConfig,
+  goalRef: string,
+  rows: readonly RemoteSheetRow[],
+): RunScript[] {
+  if (environment.validate?.browser?.runner === undefined) return [];
+  return scriptsOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
+}
+
 function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, environment: string): RemoteSheetRow[] {
   return rows.filter(
     (row) =>
@@ -119,6 +140,31 @@ function areasOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[])
   return out;
 }
 
+/** One check's one-off script, and the id it reports under — which is the check's own. */
+interface RunScript {
+  checkId: string;
+  title: string;
+  source: string;
+}
+
+/**
+ * A check's script, where it has one. A check that names an **area** is not here: it runs the
+ * project's reviewed suite, and that is a different instrument with a different worth. Nothing folds
+ * the two.
+ */
+function scriptsOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScript[] {
+  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const out: RunScript[] = [];
+  for (const row of rows) {
+    const check = checks.get(row.sourceId);
+    if (check === undefined || check.area !== null) continue;
+    const source = stepScript(check.steps);
+    if (source === null) continue;
+    out.push({ checkId: check.id, title: check.title, source });
+  }
+  return out;
+}
+
 interface BriefingInput {
   environment: string;
   profile: string | null;
@@ -127,6 +173,7 @@ interface BriefingInput {
   /** The tenant's **name** — for a `tenantEnv` shape, the variable's own name. Never its value. */
   tenant: string | null;
   selectors: readonly string[];
+  scripts: readonly RunScript[];
   titles: readonly string[];
   reportDir: string;
   artefactDir: string;
@@ -185,10 +232,47 @@ function briefing(input: BriefingInput): string {
     '',
     'One row each, and the selector each one is verified against:',
     '',
-    ...(input.selectors.length === 0
+    ...(input.selectors.length === 0 && input.scripts.length === 0
       ? ['- (nothing is confirmed on this sheet)']
       : input.selectors.map((selector, at) => `- \`${selector}\` — ${input.titles[at] ?? 'a confirmed check'}`)),
+    ...(input.scripts.length === 0
+      ? []
+      : input.scripts.map((script) => `- \`${script.checkId}\` — ${script.title}, by the one-off script below`)),
   ];
+
+  if (input.scripts.length > 0) {
+    lines.push(
+      '',
+      '## The one-off scripts',
+      '',
+      'These are **not** part of the project’s suite and there is no selector for them. Each was written for ' +
+        'one check, is run exactly as it stands, and is never committed — so do not add it to the repository, ' +
+        'do not tidy it, and do not fix it if it is wrong. A script you edited is a script nobody wrote and ' +
+        'nobody reviewed, reported as evidence about the goal.',
+      '',
+      '**They act**, which the rest of this run does not: they arrange data into the situation the check is ' +
+        'about. So they run inside this run’s tenant — ' +
+        `${input.tenant === null || input.tenant === '' ? 'and this environment declares none, which is why any such row is blocked rather than run' : `\`${input.tenant}\``} ` +
+        '— and nowhere else. Do not point one at another tenant, and do not invent one.',
+      ...input.scripts.flatMap((script) => [
+        '',
+        `### \`${script.checkId}\` — ${script.title}`,
+        '',
+        '```',
+        script.source,
+        '```',
+      ]),
+      '',
+      '**Each one reports under the check’s own id**, in the same shape and into the same report file as the ' +
+        `suite’s rows — \`{ "selector": "<the check id above>", "status": "passed" | "failed" }\`. One report ` +
+        'file carries every row of this run, the suite’s and the scripts’, and it is the only thing the harness ' +
+        'reads: a script that printed its result to the console and nothing else reported nothing, and the row ' +
+        'blocks rather than passing.',
+      '',
+      'A reading a script produces is recorded as **`script`**, never `spec`, and its source is drawn on the ' +
+        'sheet beside it. Nothing reviewed it, and the sheet says so.',
+    );
+  }
 
   if (input.publish !== null) {
     lines.push(

@@ -625,6 +625,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     observer: environmentObserver,
     queries: stateQueries,
     runner: opts.remoteRunner ?? new CommandRemoteRunner(config.repoRoot, config.remoteValidation.runTimeoutMs),
+    scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,
     errors,
   });

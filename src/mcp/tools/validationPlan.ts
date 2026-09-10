@@ -99,6 +99,19 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
                         'runs with a wait between them. Default is "inline"; say "deferred" when you mean it.',
                     )
                     .optional(),
+                  script: z
+                    .string()
+                    .describe(
+                      'A "browser" step only: a **one-off script** — the source of a small program that drives ' +
+                        'this one journey and asserts on it. It is run as it stands, inside the run’s tenant, and ' +
+                        'it is never committed, never reviewed and never in a pull request: it exists to answer ' +
+                        'this check and is deleted with the goal. So write it self-contained, keep it short enough ' +
+                        'that a person reads it in a minute — its source is drawn on the sheet beside its reading, ' +
+                        'because reading it is cheaper than trusting it — and have it emit the harness’s report ' +
+                        'shape with `selector` set to this check’s own id. A reading it produces is attributed ' +
+                        '"script" and never "spec": nothing reviewed it. Omit it for a browser step a person drives.',
+                    )
+                    .optional(),
                 }),
               )
               .describe(

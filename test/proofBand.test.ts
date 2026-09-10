@@ -243,6 +243,7 @@ function check(over: Partial<ValidationCheck> & { id: string }): ValidationCheck
     uses: [],
     covers: [],
     steps: [],
+    capture: null,
     fleetCandidate: false,
     candidateWhy: null,
     actor: 'human',

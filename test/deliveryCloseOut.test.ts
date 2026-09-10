@@ -20,7 +20,7 @@ import type { GoalValidation } from '../src/validation/goal.js';
 import type { HumanTask, Issue, IssueDelivery, ValidationVerdict } from '../src/types.js';
 
 function verdict(over: Partial<ValidationVerdict> = {}): ValidationVerdict {
-  return { state: 'clear', total: 0, passed: 0, failed: 0, unrun: 0, deferred: 0, waived: 0, ...over };
+  return { state: 'clear', total: 0, passed: 0, failed: 0, unrun: 0, deferred: 0, waived: 0, captured: 0, ...over };
 }
 
 function delivery(number: number, over: Partial<IssueDelivery> = {}): IssueDelivery {

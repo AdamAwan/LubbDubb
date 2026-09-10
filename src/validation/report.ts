@@ -21,18 +21,36 @@ export function validationReportTarget(
   };
 }
 
+/**
+ * A capture is a **file name** in the goal's validation directory, never a path and never a URL. It
+ * is the resource name's own rule, and for the resource name's reason: a name cannot escape the
+ * directory it is resolved against, so nothing downstream has to prove that it did not.
+ */
+const CaptureName = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^/\\]+$/, 'a capture is a file name in the check\u2019s own directory, not a path')
+  .refine((name) => name !== '.' && name !== '..', 'a capture is a file name, not a path');
+
 export const ReportSchema = z
   .object({
     result: z
-      .enum(['passed', 'failed', 'handback'], {
-        required_error: 'result must be "passed", "failed" or "handback"',
-        invalid_type_error: 'result must be "passed", "failed" or "handback"',
+      .enum(['passed', 'failed', 'handback', 'captured'], {
+        required_error: 'result must be "passed", "failed", "captured" or "handback"',
+        invalid_type_error: 'result must be "passed", "failed", "captured" or "handback"',
       })
       .describe(
         '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
-          'not; a real finding about the goal. "handback" — you could not run it, so nothing is recorded and ' +
-          'a person gets it back.',
+          'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you took ' +
+          'the picture and a person judges it, so you state no outcome at all. "handback" — you could not run ' +
+          'it, so nothing is recorded and a person gets it back.',
       ),
+    capture: CaptureName.describe(
+      'The screenshot you wrote into the check’s own directory, by file name. Required with "captured" and ' +
+        'accepted with nothing else — a capture is the whole of what a "captured" report carries, and it ' +
+        'outlives the run because somebody still has to look at it.',
+    ).optional(),
     note: z
       .string({ required_error: 'note is required — say what you saw', invalid_type_error: 'note is required' })
       .trim()
@@ -42,7 +60,29 @@ export const ReportSchema = z
           'instead of running the check again, so "passed" is not a note.',
       ),
   })
-  .strict('a report declares only "result" and "note" — which check is decided by what you were dispatched to run');
+  .strict(
+    'a report declares only "result", "note" and — with "captured" — "capture"; which check is decided by what ' +
+      'you were dispatched to run',
+  )
+  .superRefine((report, ctx) => {
+    // A capture asserts nothing, so it can only ride the one result that asserts nothing either.
+    // Attached to a `passed` it would be the failure this design refuses everywhere else, arrived at
+    // by the one route that looks helpful: an image colouring its own row green.
+    if (report.result === 'captured' && report.capture === undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['capture'],
+        message: 'a "captured" report names the screenshot it took — without one there is nothing to look at',
+      });
+    if (report.result !== 'captured' && report.capture !== undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['capture'],
+        message:
+          '"capture" belongs to a "captured" report. A screenshot asserts nothing, so it never rides a result ' +
+          'that does — an image beside a pass reads as the evidence for it, and nobody looked.',
+      });
+  });
 
 type ParsedReport = z.infer<typeof ReportSchema>;
 

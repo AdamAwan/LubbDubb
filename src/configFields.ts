@@ -131,6 +131,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long an ensureTenant or reseed command may take before it is killed. Provisioning a tenant is a job of tens of minutes by the spec’s own account, so the thirty seconds every other command gets would kill both of them on every invocation.',
   },
   {
+    path: 'remoteValidation.scriptGraceMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a one-off validation script’s source is kept past the goal’s delivery before the sweep removes it. A one-off that outlives its goal is an unreviewed test nobody maintains and nobody can attribute, failing against a product that moved on — a second suite grown by accident.',
+  },
+  {
     path: 'upNextOverrideTtlMs',
     type: 'number',
     ms: true,

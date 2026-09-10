@@ -60,7 +60,24 @@ test('validation_report advertises exactly what validateReport enforces', () => 
   assert.equal(prop(json, 'note').minLength, 1);
   assert.equal(validateReport({ result: 'passed', note: '' }).ok, false, 'an empty note is refused');
 
-  assert.deepEqual(prop(json, 'result').enum, ['passed', 'failed', 'handback']);
+  assert.deepEqual(prop(json, 'result').enum, ['passed', 'failed', 'handback', 'captured']);
   assert.equal(validateReport({ result: 'maybe', note: 'saw it' }).ok, false);
   assert.equal(validateReport({ result: 'passed', note: 'saw it' }).ok, true);
+
+  // A capture asserts nothing, so it rides the one result that asserts nothing either — and the
+  // schema has to advertise the pairing, because a field the validator refuses and the schema
+  // offers is a refusal the model meets only after it has already run the check.
+  assert.equal(prop(json, 'capture').type, 'string');
+  assert.equal(validateReport({ result: 'captured', note: 'the grid', capture: 'grid.png' }).ok, true);
+  assert.equal(validateReport({ result: 'captured', note: 'the grid' }).ok, false, 'a capture is named or nothing');
+  assert.equal(
+    validateReport({ result: 'passed', note: 'saw it', capture: 'grid.png' }).ok,
+    false,
+    'an image beside a pass reads as the evidence for it, and nobody looked',
+  );
+  assert.equal(
+    validateReport({ result: 'captured', note: 'the grid', capture: '../secrets/id_rsa' }).ok,
+    false,
+    'a capture is a file name in the check’s own directory, never a path out of it',
+  );
 });

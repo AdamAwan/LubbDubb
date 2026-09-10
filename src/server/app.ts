@@ -16,6 +16,7 @@ import {
   artifactSignerFor,
   attachmentSignerFor,
   localValidationFileSignerFor,
+  validationCaptureSignerFor,
   register as registerArtifacts,
 } from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
@@ -201,6 +202,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
     attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
     localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
+    validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
   };
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
 

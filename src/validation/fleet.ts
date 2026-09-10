@@ -1,5 +1,5 @@
 import type { ValidationCheck, ValidationStep } from '../types.js';
-import { segmentBoundary } from './steps.js';
+import { handsBackAScreen, segmentBoundary, stepScript } from './steps.js';
 
 // → docs/spec/20-validation.md
 
@@ -60,6 +60,32 @@ function stepPlan(check: ValidationCheck): string | null {
     lines.push(`${index + 1}. ${stepLine(step, boundary !== null && index >= boundary)}`);
   });
   lines.push('');
+  const script = stepScript(steps);
+  if (script !== null) {
+    lines.push(
+      '#### The one-off script\n',
+      'A `browser` step here carries a **one-off script** — written for this check alone, never committed and ' +
+        'never reviewed. **You do not run it from this dispatch.** It acts on the environment, so it runs from ' +
+        'this goal’s validation sheet, inside that run’s tenant and under its lock, where a tenant is ' +
+        'provisioned and reseeded and reaped; there is none of that here, and a script that writes into ' +
+        'somewhere it should not is the thing that machinery exists to prevent. It is printed so you can read ' +
+        'what the check is really asking, and for no other reason.\n',
+      '```',
+      script,
+      '```\n',
+    );
+  }
+  if (handsBackAScreen(steps)) {
+    lines.push(
+      '#### Handing the screen back\n',
+      'A `screenshot` step **asserts nothing**, and neither do you on its account. Write the image into the ' +
+        'directory you were given for this check, then report `captured` and name the file. That records no ' +
+        'outcome: the row says *captured, waiting to be looked at* and a person decides what it shows. Whether ' +
+        'a column reads legibly, whether a truncation is acceptable, whether a number is believable beside the ' +
+        'source it came from — these are judgements, and a run that claimed them would be green about something ' +
+        'else.\n',
+    );
+  }
   if (boundary === null) {
     lines.push('Every step here is yours. Run them all, then record what you saw.\n');
   } else {
@@ -75,6 +101,7 @@ function stepPlan(check: ValidationCheck): string | null {
 
 function stepLine(step: ValidationStep, past: boolean): string {
   const area = step.area === null ? '' : ` \`${step.area}\``;
+  const script = step.script === null ? '' : ' — **a one-off script**, printed below';
   const who =
     step.actor === 'fleet'
       ? past
@@ -82,7 +109,7 @@ function stepLine(step: ValidationStep, past: boolean): string {
         : ''
       : ` — **a person's**${step.when === 'deferred' ? ', deferred: they look afterwards' : ', and inline'}` +
         (step.why === null ? '' : ` (${step.why})`);
-  return `**${step.kind}**${area} — ${step.do}${who}`;
+  return `**${step.kind}**${area} — ${step.do}${script}${who}`;
 }
 
 export function validationFailureOrigin(issueNumber: number, checkId: string): string {

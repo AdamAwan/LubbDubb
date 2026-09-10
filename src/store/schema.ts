@@ -1324,9 +1324,14 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   handback_note TEXT,                 -- why the fleet gave it back; cleared by the next reading
   claimed_by  TEXT,                   -- desktop session holding this check; one live claim harness-wide
   claimed_at  TEXT,                   -- when it was taken; a claim past desktopClaimMinutes holds nothing
-  state       TEXT NOT NULL,          -- unrun | passed | failed | waived | deferred
+  state       TEXT NOT NULL,          -- unrun | passed | failed | waived | deferred | captured. A value
+                                      -- on an existing column, so no ALTER TABLE: "captured" is a
+                                      -- screen waiting to be looked at, and a row from before it
+                                      -- reads "unrun", which is what checkStateOf narrows to
   result_note TEXT,                   -- the one current reading: a result, a deferral's reason, a waiver's
-  result_by   TEXT,                   -- operator | agent | desktop; null while unrun
+  result_by   TEXT,                   -- operator | agent | desktop | spec | script; null while unrun.
+                                      -- "script" is a one-off script's own assertion and is never
+                                      -- folded with "spec", which had a reviewer
   result_at   TEXT,
   defer_until TEXT,                   -- when a deferral says it comes back; null is "not saying"
   superseded_reason TEXT,             -- set when an amendment stopped declaring it; null is live
@@ -1340,6 +1345,10 @@ CREATE TABLE IF NOT EXISTS validation_checks (
                                       -- delivered goal, each step with the actor read off the
                                       -- configuration. NULL is "no steps", which is every row from
                                       -- before the column and stays true, so nothing is backfilled
+  capture     TEXT,                   -- the screen a "screenshot" step handed back: a file NAME in the
+                                      -- goal's validation directory, never a path and never an
+                                      -- artefact URL. NULL is "no capture", true of every row from
+                                      -- before the column, so nothing is backfilled
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (origin_ref, id)
