@@ -37,7 +37,7 @@ export type {
   GoalArrival,
   InsightsWindow,
   InsightsWindowView,
-  GoalEnvironmentReach,
+  GoalEnvironmentReachView,
   GoalReachStatus,
   HumanTask,
   Issue,

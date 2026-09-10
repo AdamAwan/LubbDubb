@@ -62,7 +62,7 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
     'why instead: that records nothing, leaves every row as it was, and is the right answer rather than a ' +
     'last resort.',
   inputSchema: toolSchema(ReportSchema),
-  handler: (args) => {
+  handler: async (args) => {
     const target = remoteValidationOriginParts(task.originRef);
     if (target === null)
       return toolError(
@@ -77,27 +77,20 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
       return toolError(`Report rejected: ${parsed.error.errors[0]?.message ?? 'the report could not be read'}`);
     const { reportPath, artefacts, handback } = parsed.data;
 
-    const run = deps.store.getRemoteRun(target.runId);
-    if (run === null)
+    const desk = deps.remoteReadings?.();
+    if (desk === undefined)
       return toolError(
-        `Run "${target.runId}" is no longer on issue #${String(target.issueNumber)}'s sheet. Nothing was ` +
-          'recorded, and nothing more is needed from you on it.',
-      );
-    if (run.status !== 'pending' && run.status !== 'dispatched')
-      return toolError(
-        `Run "${target.runId}" was already settled as ${run.status}${run.note === null ? '' : ` — ${run.note}`}. ` +
-          'Nothing was recorded a second time.',
+        'This harness has no reader wired for validation reports, so there is nowhere for this one to go. ' +
+          'Nothing was recorded. Say so in your final message rather than trying again.',
       );
 
     if (handback !== undefined) {
-      const ended = deps.store.endRemoteRun(run.id, {
-        status: 'abandoned',
-        note: `The agent could not carry this run out: ${handback}`,
-      });
+      const settled = desk.handback(target.runId, handback);
+      if (!settled.ok) return toolError(settled.error);
       return ok({
         reported: 'handback',
-        run: run.id,
-        state: ended?.status ?? run.status,
+        run: settled.run.id,
+        state: settled.run.status,
         means:
           'no reading was recorded and every row on the sheet is exactly as it was, with your reason on it ' +
           'for the operator. Your run is over.',
@@ -111,21 +104,20 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
           'there is no third answer here: what each row came back as is the report’s to say, not yours.',
       );
 
-    const ended = deps.store.endRemoteRun(run.id, {
-      status: 'ended',
-      reportPath,
-      artefacts: artefacts ?? null,
-    });
+    const settled = await desk.settle(target.runId, { reportPath, artefacts: artefacts ?? null });
+    if (!settled.ok) return toolError(settled.error);
     return ok({
       reported: 'report',
-      run: run.id,
+      run: settled.run.id,
       reportPath,
       artefacts: artefacts ?? null,
-      state: ended?.status ?? run.status,
+      state: settled.run.status,
+      rows: { read: settled.read, blocked: settled.blocked },
+      checks: { written: settled.wrote, kept: settled.kept.length },
       means:
-        'the run is settled and the harness has where the report landed. What each row came back as is read ' +
-        'out of that file — you are not asked, and an opinion from here would be a guess wearing a reading’s ' +
-        'clothes. Your run is over.',
+        'the run is settled and the harness has read that file. Every row’s outcome came out of it and out ' +
+        'of nothing else — you were not asked, and an opinion from here would be a guess wearing a ' +
+        'reading’s clothes. Your run is over.',
     });
   },
 });

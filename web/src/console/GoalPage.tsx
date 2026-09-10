@@ -1303,6 +1303,10 @@ function Environments({
                     operator reading a held goal asks "waiting for what" exactly
                     once, and the answer is configuration they wrote weeks ago. */}
                     {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                    {/* Folded on the server, off the same rows the sheet card above draws. Worked
+                        out here instead it would be a second opinion beside the reading it
+                        describes. → 36-remote-validation.md#the-cockpit */}
+                    {env.sheet !== null && ` · ${env.sheet}`}
                   </span>
                 </span>
                 {(env.status !== 'reached' || env.unplaced > 0) && <i className="cn-n">{reachCount(env)}</i>}

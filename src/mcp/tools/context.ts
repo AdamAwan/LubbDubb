@@ -25,6 +25,7 @@ import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
 import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
+import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
 import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
@@ -141,6 +142,12 @@ export interface McpToolDeps {
   reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
   reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
   localValidations?: () => LocalValidationDesk;
+  /**
+   * The one reader of a run's report. It is a seam here rather than a body in the report tool
+   * because folding a report needs the environment's config and its `at` command, and a tool module
+   * holds neither — the tool stays an origin fence and a parse call.
+   */
+  remoteReadings?: () => RemoteReadingDesk;
   localRun?: () => { runner: LocalRunner; watch: LocalRunWatch };
   repoRoot?: string;
   errors?: ErrorRecorder;

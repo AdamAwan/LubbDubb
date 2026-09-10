@@ -9,6 +9,7 @@ import type {
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button } from './button.js';
+import { ExtLink } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
 
@@ -181,6 +182,7 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
           {!row.selected && <Tag title="Taken out of the next press">not selected</Tag>}
         </HeadRow>
         <p className="cn-sig-read">{said(row)}</p>
+        <Measured row={row} />
       </div>
       <div className="cn-sig-ctrls">
         {row.awaitingApproval && (
@@ -204,6 +206,50 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
       </div>
     </div>
   );
+}
+
+/**
+ * What a browser row is worth reading afterwards: how much of what the pre-flight matched actually
+ * ran, what it cost in retries and minutes, and the report somebody can click into.
+ *
+ * **`matched` is the pre-flight's own count**, off the row, and never derived from the report — that
+ * is the shape that makes a selector matching nothing read as a clean pass. The artefact is drawn as
+ * a link and never as a button: it leaves the cockpit, and the gap between a red row understood in
+ * thirty seconds and one reproduced by hand is the whole reason the publish command exists.
+ */
+function Measured({ row }: { row: RemoteSheetRowView }): JSX.Element | null {
+  const reading = row.reading;
+  const artefacts = reading?.artefacts ?? null;
+  const parts: string[] = [];
+  if (row.matched !== null)
+    parts.push(
+      reading?.executed === null || reading?.executed === undefined
+        ? `${String(row.matched)} matched`
+        : `${String(reading.executed)} of ${String(row.matched)} run`,
+    );
+  if (reading?.retries !== null && reading?.retries !== undefined && reading.retries > 0)
+    parts.push(`${String(reading.retries)} ${reading.retries === 1 ? 'retry' : 'retries'}`);
+  if (reading?.durationMs !== null && reading?.durationMs !== undefined) parts.push(clock(reading.durationMs));
+  if (parts.length === 0 && artefacts === null) return null;
+  return (
+    <div className="cn-sig-add">
+      {parts.length > 0 && <span className="cn-sub">{parts.join(' · ')}</span>}
+      {artefacts !== null && (
+        <span className="cn-refs">
+          <ExtLink href={artefacts} title="The runner’s own report for this run — traces, screenshots and video">
+            the run’s report ↗
+          </ExtLink>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function clock(ms: number): string {
+  if (ms < 1000) return `${String(Math.round(ms))}ms`;
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 90) return `${String(seconds)}s`;
+  return `${String(Math.round(seconds / 60))}m`;
 }
 
 function said(row: RemoteSheetRowView): string {

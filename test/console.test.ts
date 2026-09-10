@@ -1144,6 +1144,7 @@ test('validation and signals are folded on a goal that has not shipped', () => {
           unplaced: 0,
           at: null,
           opens: [],
+          sheet: null,
         },
       ],
     },

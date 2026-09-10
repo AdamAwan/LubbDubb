@@ -42,6 +42,7 @@ interface McpBridgeServerOptions {
   reviewPacks?: () => McpToolDeps['reviewPacks'];
   reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
   localValidations?: McpToolDeps['localValidations'];
+  remoteReadings?: McpToolDeps['remoteReadings'];
   localRun?: McpToolDeps['localRun'];
   repoRoot?: string;
   argsRetentionDays?: number;
@@ -210,6 +211,7 @@ export class McpBridgeServer {
         reviewPacks: this.opts.reviewPacks?.(),
         reviewPackChecker: this.opts.reviewPackChecker?.(),
         localValidations: this.opts.localValidations,
+        remoteReadings: this.opts.remoteReadings,
         localRun: this.opts.localRun,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,

@@ -11,7 +11,7 @@ import type {
   PullRequest,
   EnvironmentGateRelease,
   FeatureSequence,
-  GoalEnvironmentReach,
+  GoalEnvironmentReachView,
   GoalWatch,
   GoalWatchView,
   RemoteSheetView,
@@ -57,7 +57,7 @@ export interface GoalPageView {
   decisions: CockpitDecision[];
   checks: ValidationCheck[];
   checkResources: ValidationResourceView[];
-  environments: GoalEnvironmentReach[];
+  environments: GoalEnvironmentReachView[];
   gateHold: string | null;
   gateRelease: EnvironmentGateRelease | null;
   remoteSheets: RemoteSheetView[];
@@ -364,7 +364,7 @@ function environmentStage(page: GoalPageView): GoalStage {
   return { ...base, reading: 'not shipped', tone: 'grey', done };
 }
 
-export function reachCount(env: GoalEnvironmentReach): string {
+export function reachCount(env: GoalEnvironmentReachView): string {
   const count = `${env.landed}/${env.total}`;
   if (env.unplaced === 0) return count;
   const merges = env.unplaced === 1 ? 'merge' : 'merges';

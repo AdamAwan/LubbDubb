@@ -600,7 +600,9 @@ test('the shipped stage is absent without environments, and never folds unknown 
 
   const unknown = buildGoalStrip({
     ...bare,
-    environments: [{ environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [] }],
+    environments: [
+      { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
   }).find((s) => s.at === 'environments')!;
   assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
   assert.equal(unknown.done, null);
@@ -628,7 +630,9 @@ test('validation and signals stay folded until the work is somewhere', () => {
     ...buildGoalPage(state, `issue:${issue.number}`, [])!,
     checks: [],
     signals: [],
-    environments: [{ environment: 'prod', status: 'absent', landed: 0, total: 2, unplaced: 0, at: null, opens: [] }],
+    environments: [
+      { environment: 'prod', status: 'absent', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
   };
 
   assert.equal(goalSectionsOpen(nowhere).validation, false);
@@ -640,7 +644,9 @@ test('validation and signals stay folded until the work is somewhere', () => {
     ...nowhere,
     checks: page.checks,
     signals: page.signals,
-    environments: [{ environment: 'prod', status: 'partial', landed: 1, total: 2, unplaced: 0, at: null, opens: [] }],
+    environments: [
+      { environment: 'prod', status: 'partial', landed: 1, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
   };
   assert.equal(
     goalSectionsOpen(partial).validation,
@@ -658,7 +664,9 @@ test('validation and signals stay folded until the work is somewhere', () => {
 
   const unknown: GoalPageView = {
     ...nowhere,
-    environments: [{ environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [] }],
+    environments: [
+      { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
   };
   assert.equal(
     goalSectionsOpen(unknown).validation,
@@ -675,7 +683,9 @@ test('a check anyone has ruled on opens validation wherever the work is', () => 
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
   const grounded: GoalPageView = {
     ...page,
-    environments: [{ environment: 'prod', status: 'absent', landed: 0, total: 1, unplaced: 0, at: null, opens: [] }],
+    environments: [
+      { environment: 'prod', status: 'absent', landed: 0, total: 1, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
   };
   const settled = grounded.checks.some((c) => c.state !== 'unrun');
   assert.equal(

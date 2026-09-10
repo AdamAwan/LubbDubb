@@ -914,6 +914,10 @@ class DemoServer {
           detail: null,
           startedSha: null,
           endedSha: null,
+          executed: null,
+          retries: null,
+          durationMs: null,
+          artefacts: null,
           readAt: new Date().toISOString(),
         };
       this.dirty();
@@ -968,6 +972,10 @@ class DemoServer {
           detail: null,
           startedSha: sha,
           endedSha: sha,
+          executed: null,
+          retries: null,
+          durationMs: null,
+          artefacts: null,
           readAt: now,
         };
       }
