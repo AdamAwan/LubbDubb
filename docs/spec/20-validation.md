@@ -9,8 +9,13 @@ still setting `validation.enabled` is warned about and ignored
 A plan says what is wrong, what will be done, and what makes each part done. It does not say **how
 anyone checks the goal was met**. `verification` — one optional narrative field, "how anyone will
 know the whole thing worked" ([08](08-planning.md)) — is read once while deciding whether to approve,
-and nothing ever runs it. This is that field's executable form: an ordered set of **checks**, each
-with a procedure, an expectation and the resources it needs, that a person runs and marks off.
+and nothing ever runs it. This is that field's executable form: an ordered set of **checks**, each a
+**test plan** — a sequence of steps, each step assigned to a person or to the fleet — that ends in a
+reading somebody records.
+
+**The check set is written after the work is delivered, not at plan time.** The plan carries an
+**intent hint** and nothing executable; the check set is authored by a validation planner dispatched
+once the assessor says `delivered`. → [When the check set is written](#when-the-check-set-is-written)
 
 ## What it is not
 
@@ -97,6 +102,70 @@ that two checks share a setup. The bar is about what is worth writing, and worth
 parse. The one half the harness does enforce is the one it can name: an `access` resource files no ask,
 whatever `provided` says.
 
+## When the check set is written
+
+**Not at plan time.** A planner writes against code that does not exist yet, so every check it writes
+is a guess about a screen, a command or a table that the second part may move. That guess used to be
+the design's central problem, and [Amendment](#amendment) is the apparatus built to survive it:
+rewordings, withdrawn readings, the band, a line on the close-out and a note on the ticket. All of it
+exists because the check set arrived too early to be right.
+
+So it arrives late instead. **The check set is authored once, by a validation planner dispatched after
+the assessor writes `delivered`**, against merged code, with every part settled and every pull request
+closed. What the planner contributes is a **hint**: prose saying what it thinks needs checking and
+why, carried on the plan document, read by an operator at the approval gate and handed to the
+validation planner as input. It is not executable, it declares no checks, and nothing runs it.
+
+|            | **The hint** (plan time)                | **The check set** (after `delivered`)      |
+| ---------- | --------------------------------------- | ------------------------------------------ |
+| Written by | The planner, in the plan document       | The validation planner, its own dispatch   |
+| Against    | Code that does not exist yet            | Merged code                                |
+| Shape      | Prose intent                            | Test plans — ordered, assigned, executable |
+| Read by    | An operator deciding whether to approve | The validation planner, then the bench     |
+| Binds      | Nothing                                 | The sheet                                  |
+
+**Why after `delivered` and not at the last merged pull request.** "No open PR" is the assessor's own
+trigger, and the assessor may answer `more_work` — which sends the goal back round, lands more pull
+requests, and moves the code the check set was just written against. `delivered` is the first moment
+nothing further is coming. → [06](06-issue-pickup.md)
+
+**Sheet assembly waits for it.** An arrival assembles a sheet from the check set
+([36](36-remote-validation.md)), and a deployment fast enough to arrive before the validation planner
+has finished would assemble one with no `check` rows on it — an operator meeting a bench that offers
+only the watch-derived rows, which reads as a misconfiguration and is not one. It is the same shape as
+a null `area`, one subsystem over, and the same remedy: the gate is explicit rather than a race
+nobody lost yet.
+
+**The hint is an input, and departures are stated.** A validation planner that does not read the hint
+makes it theatre, and the operator who read it at the approval gate learned nothing. So it is appended
+to the validation-planning prompt, and the planner says where it went a different way and why. An
+operator who approved a goal on the strength of an intent is entitled to see what became of it.
+
+**Declaring no checks stays a legitimate answer, and now it carries a reason.** A goal whose permanent
+suite coverage already settles the question gets an empty check set — which is correct, and
+indistinguishable from a validation planner that did nothing. The per-goal reading is null, "a third
+fact and not a synonym for clear" ([The flag](#the-flag)), and the validation planner's note is what
+tells the difference: _considered; area `Checkout Tests` now asserts the confirmation step and nothing
+else needs a run_. Null with no account of itself is the failure this document keeps meeting.
+
+### A permanent test influences and never dictates
+
+A goal may build or amend a spec in the project's own browser suite. That is buildable work: a
+`coverage` plan part, declared at plan time because post-merge is too late to build anything, reviewed
+and merged like any other part, holding the goal exactly as any other part does
+([36](36-remote-validation.md#browser-coverage-is-a-plan-part-and-it-holds-the-goal)).
+
+**It is a separate mechanism, and the validation planner is told about it rather than bound by it.**
+What the part produced — the area it covers, what it now asserts — is handed over as input. From there
+the validation planner may decide the permanent test settles the question and declare nothing; may
+declare a check whose one step runs that area; or may run it and look at more besides, taking
+screenshots and reading the database after it.
+
+**A coverage part must never emit a check of its own.** The temptation is obvious — the part knows its
+area, the check wants one — and it reinstates precisely what this design removes: a row on the sheet
+that no one chose, coloured by a run nobody asked for. A permanent test earns its keep by running in
+the deployment pipeline on every change, not by appearing on one goal's bench.
+
 ## The check
 
 One row per check, keyed on `(goal, id)` — the goal's `origin_ref` (`issue:<n>`), `src/store/validation.ts`.
@@ -109,20 +178,21 @@ it is a property of the decomposition. Databases written under the old key are r
 one at boot, `id` and `letter` untouched
 ([14](14-persistence.md#rebuilding-a-table-whose-key-changed)).
 
-| Field            | What it is                                                                                                                                                                                                                                                 |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                                                                                                                                                          |
-| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                              |
-| `title`          | One line, the headline.                                                                                                                                                                                                                                    |
-| `do`             | The procedure, markdown.                                                                                                                                                                                                                                   |
-| `expect`         | What a pass looks like.                                                                                                                                                                                                                                    |
-| `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                             |
-| `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                                     |
-| `area`           | The suite area a remote run selects this check by. **Never authored on the check** — inherited from the `coverage` of a test part its `covers` names. Null is a check nothing automates. → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
-| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                                        |
-| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                               |
-| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                           |
-| `state`          | Below.                                                                                                                                                                                                                                                     |
+| Field            | What it is                                                                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                                                                                                                                                 |
+| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                     |
+| `title`          | One line, the headline.                                                                                                                                                                                                                           |
+| `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                            |
+| `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. → [The test plan](#the-test-plan)                                                                                        |
+| `expect`         | What a pass looks like. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy.                                                                                                                              |
+| `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                    |
+| `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                            |
+| `area`           | The suite area a remote run selects this check by, set by a `suite` step naming one. Null is a check no suite area runs — which is now the ordinary case rather than a failure. → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
+| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                               |
+| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                      |
+| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                  |
+| `state`          | Below.                                                                                                                                                                                                                                            |
 
 ### States
 
@@ -161,12 +231,97 @@ in a note yesterday would be a different check today. It is the same failure the
 rule exists to prevent, one layer up, and the same reason `acceptanceCriteria` keys on a criterion's
 text rather than its index ([08](08-planning.md)).
 
+## The test plan
+
+**Not built.** A check's `steps` are one journey through the delivered goal, in order, and each step
+says who carries it out. The ordering is the point: a database or log reading whose subject is _what
+the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
+to anything but a reader.
+
+| Step kind    | What it does                                                                   |
+| ------------ | ------------------------------------------------------------------------------ |
+| `browser`    | Drives the application — navigate, upload, click, wait.                        |
+| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`. |
+| `screenshot` | Captures the screen and attaches it to the row.                                |
+| `state`      | Reads the deployed store through the environment's `state.run`.                |
+| `signal`     | Reads logs and error records.                                                  |
+| `measure`    | Reads a metric.                                                                |
+| `manual`     | A person does something the fleet cannot.                                      |
+
+Everything one journey settles belongs to one check, on the rule
+[One run is one check](#one-run-is-one-check) states: the setup is the expensive part, and a journey
+cut into six checks reads on the sheet as six obligations. So the ordered step list is what replaced
+the argument about whether "the screen renders" and "the row is written" are one check or two — they
+are two steps of one.
+
+**This is why `state`, `signal` and `measure` readings can be sequenced at all.** Taken as sheet rows
+they are read at assembly and again synchronously at the press, both before the agent's browser half
+runs ([36](36-remote-validation.md#the-press)) — which is correct for a row asking whether anything is
+screaming, and wrong for one asking whether the order the browser steps just placed exists. As a step
+it is read where it sits. Rows that belong to no check — the goal's watch-derived `signal` and
+`measure` rows — keep the assembly behaviour they have.
+
+### An inline person and a deferred one are not the same step
+
+A step assigned to a person comes in two shapes, and only one of them can sit in the middle of an
+otherwise automated run:
+
+- **Deferred.** _Take a screenshot for the operator to view._ The run completes; the person looks
+  afterwards. It costs the sequence nothing.
+- **Inline.** _Somebody approves the payment in the finance system, then continue._ The run stops
+  there. No agent can hold a browser session across a person's day, so the check is really two runs
+  with a wait between them.
+
+They read identically in a step list and they are not the same thing. A validation planner that
+writes an inline human step into a run it has otherwise assigned to the fleet has written a check
+that can never execute — dispatched, held, and blocking nothing, which is the quietest way for a
+check to be lost. So a step's assignment carries **when**, not only **who**: an inline person's step
+**segments** the check, and a check with a segment boundary is dispatched only as far as the boundary
+and then hands back with what it has, exactly as [a hand-over](#the-hand-over) already does.
+
+### Who carries a step
+
+The rule at [Who runs a check](#who-runs-a-check) said `actor` is the operator's decision and only
+theirs, because a planner reading a repository cannot know whether the deployment has a browser, a
+login or an account — and a wrong guess is a check sitting dispatched against a login the fleet does
+not have.
+
+**Reading it off the configuration is not a guess.** By the time the validation planner runs, what the
+deployment can drive is declared: an environment's `validate.browser` block, its `state.run`, its
+`observe` command, its tenant. A step whose kind the environment does not permit is a step the fleet
+cannot carry, and that is a fact rather than a nomination. So the validation planner assigns steps
+from the configuration, and the two things that stay the operator's are unchanged: **the hand-over**
+— nothing is dispatched until they press — and the ability to take any step back by hand.
+
+`fleetCandidate` keeps its meaning for a check with no `steps`, where there is still nothing but a
+planner's suggestion to go on.
+
 ## The document block
 
 `src/validation/checkDocument.ts`. Additive and **optional** on the plan document, for the reason
 every post-v1 field is: an older plan, and an operator override that never learned it, must keep
 validating. Read on both verdicts — a goal delivered as one pull request needs validating exactly as
 much as a decomposed one.
+
+**What the plan document carries is the hint**, and the example below is the check set the validation
+planner writes from it, through its own transport. The two shapes are kept apart deliberately: a plan
+document that could declare an executable check set would be a second author for the thing
+[Amendment](#amendment) exists to keep single. A plan document from before this change, carrying a
+full `checks` array, is ingested exactly as it always was — the rows are real and an operator may be
+halfway through them, and re-reading them as a hint would delete a check set somebody is using.
+
+```json
+{
+  "validation": {
+    "hint": "Worth checking end to end: a file uploaded through the new importer should show on the batch page with its row count, and the importer's audit rows should exist. The parser is covered by unit tests; what nothing covers is the upload path against a real store."
+  }
+}
+```
+
+### The check set
+
+**Not built.** The validation planner declares the whole set through its own transport, on the same
+`ValidationSchema` shapes, with `steps` added:
 
 ```json
 {
@@ -214,6 +369,10 @@ ask against it.
   quietly dropped would let a planner believe it had assigned work.
 
 ### Who runs a check
+
+**Where a check carries `steps`, assignment is per step and read off the configuration** —
+[Who carries a step](#who-carries-a-step). What follows is the rule for a check that carries only
+prose, and the argument the step rule had to answer.
 
 **A person, unless a person says otherwise.** `actor` is `human` on every check that has ever been
 written, and exactly one thing sets it to `fleet`: an operator pressing a button. The planner cannot,
@@ -384,20 +543,28 @@ amendment saying `provided: true` out loud.
 
 ## Amendment
 
-A validation plan written at planning time is written by the one agent that has **not done the work
-yet**. A planner reading the repository writes a check against the code it expects to exist, and by
-the second part that check may describe a screen that moved, a command that was renamed, or a
-behaviour the plan decided against. A check set that cannot change is therefore worse than none: a
-stale check that fails reads as a broken goal.
+**Most of what this section defends against is gone.** It was built when the check set was written at
+planning time, by the one agent that had not done the work yet: a check written against the code a
+planner expected to exist, describing by the second part a screen that moved or a command that was
+renamed. Authoring the set after `delivered`
+([When the check set is written](#when-the-check-set-is-written)) removes that whole class, and with
+it the churn of an amendment on every part.
+
+What remains is the narrower case, and it is real enough to keep every mechanism below. A check set
+written against merged code can still be wrong about the **deployed** one; the bench gate exists
+partly to reread checks with the delivered thing in front of you
+([36](36-remote-validation.md)); a failed check gets diagnosed and the diagnosis sometimes says the
+check was mistaken. A check set that cannot change is still worse than none: a stale check that fails
+reads as a broken goal.
 
 Two writers fold a change onto the rows, and the difference between them is load-bearing:
 
-|            | `ingestValidation` (a plan document)              | `amendValidation` (`validation_amend`) |
-| ---------- | ------------------------------------------------- | -------------------------------------- |
-| Speaks for | The **whole** check set                           | Only the checks it names               |
-| Omission   | A withdrawal                                      | Nothing at all                         |
-| Written by | The planner, through `plan_submit` or `plan.json` | Any agent working the goal             |
-| Withdrawal | By silence                                        | Said out loud, with a reason           |
+|            | `ingestValidation` (a plan document)     | `amendValidation` (`validation_amend`) |
+| ---------- | ---------------------------------------- | -------------------------------------- |
+| Speaks for | The **whole** check set                  | Only the checks it names               |
+| Omission   | A withdrawal                             | Nothing at all                         |
+| Written by | The validation planner, its own dispatch | Any agent working the goal             |
+| Withdrawal | By silence                               | Said out loud, with a reason           |
 
 Collapsing them would mean an agent sending a correct two-check correction silently supersedes the
 other six — a validation plan an agent can delete by being terse. That is why `validation_amend` is a
@@ -448,9 +615,12 @@ agent best placed to notice one is wrong is whoever is looking at the code. So t
 a part agent and the assessor all qualify. The fence that matters is unchanged and structural: the
 origin comes off the credential, so an agent working goal A cannot amend goal B by asking.
 
-**The planner is the one refusal, and by name**: it already has a transport that declares the entire
-block, and two ways to say one thing that disagree about what an omission means is the drift the
-split exists to prevent.
+**The validation planner is the one refusal, and by name**: it already has a transport that declares
+the entire check set, and two ways to say one thing that disagree about what an omission means is the
+drift the split exists to prevent. The refusal moved with the authoring — `validationAmendIssue`
+refused the `:plan` origin when the planner wrote checks, and refuses the validation planner's own
+origin now that it does. An ordinary planner has no check-writing transport to be held to, so it is
+not a caller this tool has to think about.
 
 One shape is refused for a reason that is not the caller's fault, and says so plainly: a goal with
 **no plan** — `covers` names live part slugs, which is a property of the plan, and a goal whose
