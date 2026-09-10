@@ -269,7 +269,7 @@ from any of them.
 | `failed`   | Somebody ran it and did not. Rule `validation-failed` is the consumer.                                                                                                                                                             |
 | `waived`   | An operator decided it does not need running.                                                                                                                                                                                      |
 | `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                  |
-| `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. → [36](36-remote-validation.md#handing-a-screen-back-to-look-at) |
+| `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. Written by either channel that can take one — the goal's own validation sheet, and the `validate-check` dispatch where the fleet can reach the screen. → [36](36-remote-validation.md#a-screen-from-the-sheets-own-run) |
 
 **`captured` is a value on the existing column and needs no `ALTER TABLE`**, exactly as `result_by`
 gained `agent`, `desktop` and `spec`. It is counted apart from `unrun` on `ValidationVerdict`: the
@@ -1384,7 +1384,11 @@ a script reporting nothing under its own id is blocked rather than passed, that 
 confirmed check carries a script still owes an agent and briefs it with the source, that the grace
 sweep removes a script past its window and stamps where it was while leaving a fresh goal alone, and
 that a `captured` report attaches the screen without going green while a row from before the state
-reads `unrun`), `test/validationAuthoring.test.ts` (the authoring move: that a legacy plan document's full check set
+reads `unrun`, and — on the sheet's own run — that a `screenshot` check's screen is kept with the goal
+rather than the run, that a check which came back without one is `blocked` and never passed, that a
+capture named as a path or a URL is refused and nothing is moved on the strength of it, that a screen
+beside a suite assertion keeps the `spec` attribution while a red is never withheld for it, and that
+a run whose only confirmed check hands a screen back still owes an agent), `test/validationAuthoring.test.ts` (the authoring move: that a legacy plan document's full check set
 still ingests and is not an authoring, that a hint-only block withdraws nothing where an explicit
 `[]` withdraws everything, when the rule dispatches and the three gates that stop it, that the
 dispatch goes through the candidate list rather than an inline `raw.push`, that the hint, the

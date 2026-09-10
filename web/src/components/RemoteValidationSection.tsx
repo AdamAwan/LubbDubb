@@ -19,6 +19,9 @@ const OUTCOME_TONE: Record<RemoteRowOutcome, TagTone> = {
   passed: 'green',
   failed: 'red',
   blocked: 'grey',
+  // Its own hue, the check row's: not green, which would say the run judged the screen, and not grey,
+  // which would say nothing came back. → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+  captured: 'captured',
 };
 
 interface SheetControls {
@@ -260,6 +263,8 @@ function said(row: RemoteSheetRowView): string {
       ? 'Nothing has run this. A check is yours to run, and its result is recorded on the goal’s own validation row.'
       : 'Nothing has been read on this row yet.';
   if (reading.detail !== null) return reading.detail;
+  if (reading.outcome === 'captured')
+    return `${row.environment} handed a screen back on this row, and it is waiting for somebody to look at it.`;
   return reading.outcome === 'passed'
     ? `${row.environment} answered what this row declared.`
     : `${row.environment} did not answer what this row declared.`;

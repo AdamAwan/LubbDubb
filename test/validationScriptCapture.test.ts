@@ -18,7 +18,7 @@ import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { RemoteReadingDesk } from '../src/remoteValidation/readings.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
-import { remoteRunBriefs, runnableScripts } from '../src/remoteValidation/briefing.js';
+import { remoteRunBriefs, runnableScreens, runnableScripts } from '../src/remoteValidation/briefing.js';
 import { sheetRows } from '../src/remoteValidation/sheet.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
@@ -26,7 +26,7 @@ import { checkBriefing } from '../src/validation/fleet.js';
 import { stepScript, sweptScripts } from '../src/validation/steps.js';
 import { validationVerdict } from '../src/validation/verdict.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Agent, ValidationCheck, ValidationCheckInput } from '../src/types.js';
+import type { Agent, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
  * The two missing readings: the **one-off script** — the browser-shaped member of the query column,
@@ -222,30 +222,45 @@ interface Bench {
   store: Store;
   reading: RemoteReadingDesk;
   runId: string;
+  /** Every capture the desk moved out of the run's artefacts, as `[from, to]`. */
+  kept: [string, string][];
 }
 
-function scriptBench(): Bench {
+const SCRIPT_STEP: ValidationStep = {
+  kind: 'browser',
+  do: 'Place an order',
+  area: null,
+  when: 'inline',
+  script: SCRIPT,
+  scriptSweptAt: null,
+  actor: 'fleet',
+  why: null,
+};
+
+const SCREEN_STEP: ValidationStep = {
+  kind: 'screenshot',
+  do: 'Capture the confirmation screen',
+  area: null,
+  when: 'inline',
+  script: null,
+  scriptSweptAt: null,
+  actor: 'fleet',
+  why: null,
+};
+
+function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = {}): Bench {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vrun-'));
   const store = new Store(join(dir, 'harness.sqlite'));
+  const kept: [string, string][] = [];
   const input: ValidationCheckInput = {
     ...BASE,
+    ...(over.area === undefined ? {} : { area: over.area }),
     seq: 1,
     uses: [],
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
-    steps: [
-      {
-        kind: 'browser',
-        do: 'Place an order',
-        area: null,
-        when: 'inline',
-        script: SCRIPT,
-        scriptSweptAt: null,
-        actor: 'fleet',
-        why: null,
-      },
-    ],
+    steps: over.steps ?? [SCRIPT_STEP],
   };
   store.ingestValidation(GOAL, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
   store.openRemoteSheet({ goalRef: GOAL, environment: 'acceptance' });
@@ -273,9 +288,13 @@ function scriptBench(): Bench {
     store,
     environments: [TENANTED],
     prober: new FakeEnvironmentProber({ acceptance: ['abc1234'] }),
+    validationRoot: dir,
     read: async (path) => (await import('node:fs/promises')).readFile(path, 'utf8'),
+    keep: async (from, to) => {
+      kept.push([from, to]);
+    },
   });
-  return { dir, store, reading, runId: run.id };
+  return { dir, store, reading, runId: run.id, kept };
 }
 
 function report(dir: string, rows: unknown[]): string {
@@ -498,4 +517,112 @@ test('a row written before the state existed reads unrun, not captured', () => {
   );
   store.close();
   rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+});
+
+// ----------------------------------------------- the screen the sheet's own run hands back
+
+test('a screenshot check runs on the sheet, and its screen is kept with the goal rather than the run', async () => {
+  const bench = scriptBench({ steps: [SCREEN_STEP] });
+  const settled = await bench.reading.settle(bench.runId, {
+    reportPath: report(bench.dir, [
+      { selector: BASE.id, status: 'skipped', capture: 'confirmation.png' },
+      { selector: 'Checkout', status: 'passed' },
+    ]),
+    artefacts: 'https://example.test/run',
+  });
+  assert.ok(settled.ok, 'ok' in settled ? '' : String(settled));
+  assert.ok(settled.ok && settled.captured === 1, 'the run handed one screen back');
+
+  const check = bench.store.listValidationChecks(GOAL)[0];
+  assert.equal(check?.state, 'captured', 'a screen never colours its own row — a person judges it');
+  assert.equal(check?.resultBy, 'agent', 'nothing asserted, so there is no instrument to attribute');
+  assert.match(check?.capture ?? '', /^capture-/, 'the harness names what it kept, not the report');
+  assert.doesNotMatch(check?.capture ?? '', /[\\/]/, 'a capture is a file name, never a path');
+
+  const [from, to] = bench.kept[0] ?? ['', ''];
+  assert.match(from, /artefacts[\\/]confirmation\.png$/, 'it is taken out of this run’s artefacts');
+  assert.match(to, /issue-[^\\/]*[\\/]capture-/, 'and kept in the goal’s own validation directory');
+
+  const row = bench.store.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
+  assert.equal(row?.outcome, 'captured', 'the sheet row says the same thing the check does');
+  bench.store.close();
+});
+
+test('a screenshot check that came back without a screen is blocked, never passed', async () => {
+  const bench = scriptBench({ steps: [SCREEN_STEP] });
+  const settled = await bench.reading.settle(bench.runId, {
+    reportPath: report(bench.dir, [{ selector: BASE.id, status: 'passed' }]),
+    artefacts: null,
+  });
+  assert.ok(settled.ok && settled.blocked === 1, 'handing the screen back is the whole of what the step is for');
+  assert.equal(bench.store.listValidationChecks(GOAL)[0]?.state, 'unrun', 'and nothing is written onto the check');
+  assert.deepEqual(bench.kept, [], 'there was nothing to keep');
+  const row = bench.store.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
+  assert.match(row?.detail ?? '', /names none under its id/);
+  bench.store.close();
+});
+
+test('a capture named as a path or a URL is refused, and the row says which', async () => {
+  for (const name of ['../../etc/passwd', 'https://example.test/shot.png']) {
+    const bench = scriptBench({ steps: [SCREEN_STEP] });
+    const settled = await bench.reading.settle(bench.runId, {
+      reportPath: report(bench.dir, [{ selector: BASE.id, status: 'skipped', capture: name }]),
+      artefacts: null,
+    });
+    assert.ok(settled.ok && settled.blocked === 1, `"${name}" is not a file name`);
+    assert.deepEqual(bench.kept, [], 'and nothing is moved on the strength of it');
+    assert.equal(bench.store.listValidationChecks(GOAL)[0]?.capture, null);
+    bench.store.close();
+  }
+});
+
+test('a screen beside a suite assertion keeps the spec attribution, and a red is never withheld for it', async () => {
+  const passing = scriptBench({ steps: [SCREEN_STEP], area: 'Checkout' });
+  await passing.reading.settle(passing.runId, {
+    reportPath: report(passing.dir, [
+      { selector: 'Checkout', status: 'passed' },
+      { selector: BASE.id, status: 'skipped', capture: 'grid.png' },
+    ]),
+    artefacts: null,
+  });
+  const held = passing.store.listValidationChecks(GOAL)[0];
+  assert.equal(held?.state, 'captured', 'the suite passed, but nobody has looked at the screen yet');
+  assert.equal(held?.resultBy, 'spec', 'the reviewed instrument keeps its own word — the two are never folded');
+  passing.store.close();
+
+  const failing = scriptBench({ steps: [SCREEN_STEP], area: 'Checkout' });
+  await failing.reading.settle(failing.runId, {
+    reportPath: report(failing.dir, [
+      { selector: 'Checkout', status: 'failed' },
+      { selector: BASE.id, status: 'skipped', capture: 'grid.png' },
+    ]),
+    artefacts: null,
+  });
+  const red = failing.store.listValidationChecks(GOAL)[0];
+  assert.equal(red?.state, 'failed', 'a red the product earned is not withheld for want of a picture');
+  assert.match(red?.resultNote ?? '', /screen was handed back/, 'and the screen rides it as evidence');
+  assert.match(red?.capture ?? '', /^capture-/);
+  failing.store.close();
+});
+
+test('a run whose only confirmed check hands a screen back still owes an agent, and is told to take it', () => {
+  const bench = scriptBench({ steps: [SCREEN_STEP] });
+  const screens = runnableScreens(bench.store, TENANTED, GOAL, bench.store.listRemoteSheetRows());
+  assert.deepEqual(
+    screens.map((s) => s.checkId),
+    [BASE.id],
+    'it names no selector and carries no script, so counting the two instruments settles a run with its point owed',
+  );
+
+  const brief = remoteRunBriefs({
+    store: bench.store,
+    environments: [TENANTED],
+    validationRoot: join(bench.dir, 'validation'),
+    now: () => NOW,
+  })[0];
+  assert.equal(brief?.confirmed, 1);
+  assert.match(brief?.briefing ?? '', /a screenshot \*\*asserts nothing\*\*/, 'and the agent is told not to judge it');
+  assert.match(brief?.briefing ?? '', /file name only/, 'nor to hand back a path');
+  bench.store.close();
+  rmSync(bench.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
 });

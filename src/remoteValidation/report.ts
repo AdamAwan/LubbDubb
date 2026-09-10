@@ -16,6 +16,12 @@ interface ReportTest {
   durationMs: number | null;
   /** What the runner said about a test that did not run — a failed dependency, most of all. */
   note: string | null;
+  /**
+   * The screen this row handed back, by **file name**, written into the run's artefact directory.
+   * Held raw: a name that is not one is a `blocked` row saying so rather than a row quietly missing
+   * its screen. → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+   */
+  capture: string | null;
 }
 
 /** What a report came back as. **Null tests means it could not be read** — never an empty report. */
@@ -35,6 +41,11 @@ export interface RowOutcome {
   executed: number;
   retries: number;
   durationMs: number | null;
+  /**
+   * The screen this row handed back, under the name the harness kept it as. Absent on every row a
+   * `screenshot` step did not produce, which is almost all of them.
+   */
+  capture?: string;
 }
 
 /**
@@ -102,6 +113,7 @@ export function parseRunReport(text: string): RunReport {
       retries: numberOf(record['retries']) ?? 0,
       durationMs: numberOf(record['durationMs']),
       note: stringOf(record['note']),
+      capture: stringOf(record['capture']),
     });
   }
   return { tests, detail: null };
@@ -278,4 +290,60 @@ function skips(mine: readonly ReportTest[]): string {
 
 function count(n: number, noun: string, plural = `${noun}s`): string {
   return `${String(n)} ${n === 1 ? noun : plural}`;
+}
+
+/**
+ * A capture is a **file name**, never a path and never a URL — the resource name's own rule, and for
+ * its reason: a name cannot escape the directory it is resolved against, so nothing downstream has
+ * to prove that it did not. The run's agent writes the image into the run's artefact directory and
+ * names it here; the desk is what moves it to where a capture lives.
+ */
+function captureFault(name: string): string | null {
+  if (/[\\/]/.test(name)) return 'it is a path rather than a file name';
+  if (name === '.' || name === '..' || name.startsWith('..')) return 'it does not name a file';
+  if (name.startsWith('http://') || name.startsWith('https://')) return 'it is a URL rather than a file name';
+  return null;
+}
+
+/** A screen the run handed back for one check, or why there is nothing to look at. */
+type FoldedCapture = { ok: true; capture: string } | { ok: false; detail: string };
+
+/**
+ * The screen a `screenshot` step handed back, out of the report and out of nothing else — the same
+ * contract every row outcome is read under, and for the same reason: one invocation carries many
+ * rows, so anything the agent said about which is guaranteed to be wrong for some other row.
+ *
+ * It is keyed on the **check's own id**, exactly as a one-off script's row is and never on an
+ * `area`: an area may be named by two checks, and a capture that landed on both would offer one
+ * image, taken once, as the thing two different people have to look at.
+ * → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+ */
+export function foldCapture(checkId: string, report: RunReport): FoldedCapture {
+  if (report.tests === null)
+    return {
+      ok: false,
+      detail:
+        `the runner's report could not be read — ${report.detail ?? 'it said nothing this harness understands'}, ` +
+        'so there is no screen to look at and nothing was learned about this row.',
+    };
+  const named = report.tests.filter((test) => test.selector === checkId && test.capture !== null);
+  if (named.length === 0)
+    return {
+      ok: false,
+      detail:
+        `the test plan for \`${checkId}\` asks for a screen to be handed back and the report names none under ` +
+        'its id. A `screenshot` step is the whole of what this row is for, so a run that came back without one ' +
+        'learned nothing here — it is never read as a pass, and there is nothing yet for anybody to look at.',
+    };
+  const capture = named[0]?.capture as string;
+  const fault = captureFault(capture);
+  if (fault !== null)
+    return {
+      ok: false,
+      detail:
+        `the report names \`${capture}\` as the screen for \`${checkId}\`, and ${fault}. A capture is the name ` +
+        'of a file in the run’s artefact directory, so that the harness rather than the report decides where a ' +
+        'screen is read from.',
+    };
+  return { ok: true, capture };
 }

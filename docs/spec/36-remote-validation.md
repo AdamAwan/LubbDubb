@@ -165,13 +165,14 @@ Rows keep their own downstream consequences. A failed `check` still reaches `val
 
 ### What a row can come back as
 
-| Outcome   | Means                                                                                                       | Writes on the check                                                                              |
-| --------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `passed`  | The run satisfied what was declared. A **retried pass is a pass**, and the row records that it was retried. | `passed`, `resultBy: 'spec'` — see [What a spec reading is worth](#what-a-spec-reading-is-worth) |
-| `failed`  | The run did not satisfy what was declared.                                                                  | `failed`, `resultBy: 'spec'`                                                                     |
-| `blocked` | **No reading was taken.** Nothing was learned about the goal.                                               | Nothing at all                                                                                   |
+| Outcome    | Means                                                                                                       | Writes on the check                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `passed`   | The run satisfied what was declared. A **retried pass is a pass**, and the row records that it was retried. | `passed`, `resultBy: 'spec'` — see [What a spec reading is worth](#what-a-spec-reading-is-worth)                                                                                |
+| `failed`   | The run did not satisfy what was declared.                                                                  | `failed`, `resultBy: 'spec'`                                                                                                                                                    |
+| `blocked`  | **No reading was taken.** Nothing was learned about the goal.                                               | Nothing at all                                                                                                                                                                  |
+| `captured` | A `screenshot` step handed a **screen** back. Nothing was asserted and nothing is green.                    | `captured` plus the image, `resultBy` the assertion's instrument or `agent` where nothing asserted — see [A screen from the sheet's own run](#a-screen-from-the-sheets-own-run) |
 
-Eight things produce `blocked`, and the number of roads into it is the point:
+Ten things produce `blocked`, and the number of roads into it is the point:
 
 - the row's query is **not approved for this environment**;
 - the selector **matched zero tests**, or **matched more than it ran**;
@@ -180,7 +181,9 @@ Eight things produce `blocked`, and the number of roads into it is the point:
 - there is no private network, no credential or no tenant;
 - the goal's work is **no longer in the deployed commit**, or the pin could not say;
 - a **runner-level failure** skipped the tests a dependency was holding up;
-- the environment **moved mid-run and the row failed**.
+- the environment **moved mid-run and the row failed**;
+- a check whose plan asks for a **screen** came back without one;
+- the report named a screen that is **not a file name** — a path, or a URL.
 
 **`blocked` resolves per row, never per run**, and that is the sharpest edge in the document.
 Reachability differs by row kind inside one environment: browser rows reach the app over public
@@ -188,6 +191,10 @@ ingress and `state` rows may need private network access. A machine without that
 produce every browser row and report the `state` rows `blocked`, publishing a useful sheet. `failed`
 on an unreachable store is the most trust-destroying outcome available — it dispatches
 `validation-failed` at code that is fine.
+
+`captured` is the one outcome that asks for something rather than reporting something: a person's
+eyes. It never coexists with `failed` on one row — a red the product earned outranks a screen nobody
+has looked at yet, and the image rides the failure as evidence for it.
 
 `waived` is deliberately not in that table. It is an **operator's disposition**, not something a run
 produces, which is why no run may write it and why it appears on no outcome list here.
@@ -707,6 +714,9 @@ to be wrong for some row. From the report, and from nothing else:
   the contract asks for them explicitly, below, and where they are missing the zero-match arm names a
   failure under another selector rather than a renamed area, because that is the only evidence of a
   dependency the harness has. The harness cannot know a suite's dependency graph and does not try to.
+- a row carrying a **`capture`** hands a screen back rather than asserting: it is `captured`, and a
+  check that asked for one and got none is `blocked`.
+  → [A screen from the sheet's own run](#a-screen-from-the-sheets-own-run)
 - **a retried pass is a pass**, and the row records that it was retried. Retry policy belongs to the
   project's runner config, not to the harness. Repeated retries on one area are a signal about the
   spec, surfaced through [what a row records](#artefacts-and-making-worth-observable) rather than
@@ -1006,44 +1016,61 @@ against, so nothing downstream has to prove that it did not. It is a new column 
 and has its `ALTER TABLE` in `VALIDATION_COLUMNS`; null means _no capture_, true of every row from
 before it, so nothing is backfilled.
 
-**The sheet's own run never hands a screen back, and that asymmetry is deliberate.** A capture
-arrives through `validation_report` on the `validate-check` dispatch and through the desktop tool,
-and through nothing else: `remote_validation_report` takes a report path and artefacts, and gains no
-capture field. Three things say so, and each one is a property this design holds elsewhere.
-
-**A capture belongs to one check, and a run's rows are keyed on a selector rather than on a check.**
-A spec row's selector is the check's `area`, and an area is not unique to a check — two checks may
-name one, which is ordinary and which
-[the join answers](#a-check-is-verified-against-one-area-and-a-covered-area-needs-no-check). A
-capture riding that row would land on every check reading that area: one image, taken once, offered
-as the thing several different people have to look at. `validation_checks.capture` is one file name
-per check because a capture is evidence about one journey.
-
-**A `captured` row asserts nothing, and every row of a sheet run does.** The two browser instruments
-the run carries — a reviewed suite area and a one-off script — both report `passed` or `failed`, and
-`captured` is a state that competes with those on the same column. A capture on a row that also
-asserted would have to either colour the row green and leave the image nobody was asked to look at,
-or downgrade an assertion the product actually earned to _waiting to be looked at_. The first is the
-failure this whole reading exists to refuse; the second discards a real result.
-
-**Nothing in a run may write where a capture has to live.** A capture outlives the run — that is the
-retention argument above — and the run's agent writes into the run's report and artefact directories
-and nowhere else, which is one of the rules of the run. Closing the gap would mean either relaxing
-that rule or having the harness move a file named by a report the agent points at, and a capture
-that arrived as a path in a report is exactly the shape `validation_checks.capture` holding a **name**
-refuses.
-
-What is left is not a gap in capability. A check whose plan wants a screen handed back is carried by
-`validate-check`, which takes its steps in order and has a directory of its own; the sheet's run is
-where a suite invocation is folded, and the screens it takes on the way are **artefacts** — which
-have their own channel, published by the project's own command and swept on its schedule, because
-nobody has to look at them for the row to mean something.
-
 `GET /validation-captures/:originRef/:checkId` serves it, capability-signed like a local run's
 screenshot. **The file name is never a parameter**: it is read off the check's own row, so the only
 thing a caller can name is a check — the goal's validation directory also holds its resources, and a
 route that took a name would serve any of them. The signed URL reaches the cockpit as
 `ValidationCheckView.captureUrl`.
+
+### A screen from the sheet's own run
+
+**Built.** The `validate-check` dispatch is not the channel that can take the picture, and its own
+prompt says so: _the fleet has no interactive login, no browser and no account on whatever
+environment this deployment tests against, and a check that needs one is a check for a person._ The
+sheet's run is where the browser, the login, the provisioned tenant and the deployed build are — so
+that is where a `screenshot` step is carried, and the handback on the step-by-step channel is the
+narrower of the two rather than the whole of it.
+
+A capture rides the **report row**, and nothing about the tool changes: `remote_validation_report`
+still takes a report path and artefacts, the agent still states no outcome, and _the report decides
+every row_ holds exactly as written. The row carries a `capture` beside its `selector` and `status`.
+
+**Keyed on the check's own id, as a one-off script's row is.** An `area` may be named by two checks —
+[the join answers that](#a-check-is-verified-against-one-area-and-a-covered-area-needs-no-check) — and
+a capture landing on both would offer one image, taken once, as the thing two different people have
+to look at. `validation_checks.capture` is one name per check because a capture is evidence about one
+journey.
+
+**A `screenshot` step is not a third instrument.** `spec` and `script` are attributions of what an
+assertion is _worth_, and a screenshot asserts nothing, so it attributes nothing: a check that only
+hands a screen back is recorded `agent` — the fleet took the picture — and a check that _also_
+asserts keeps the assertion's own word. Reading the capture as an instrument would fold the two the
+design keeps apart, by the far door.
+
+Three rules decide what such a row comes back as, and each is one this design already holds:
+
+- **A red the product earned is never withheld.** A row whose assertion failed stays `failed`, and
+  the screen rides it as evidence for the failure.
+- **A screen that never arrived is `blocked`, even where the assertion passed.** Handing the screen
+  back is the whole of what the step is for, so a `passed` there would be green about something else.
+- **Otherwise the row is `captured`** — never `passed`. `RemoteRowOutcome` gains that value beside
+  `passed`, `failed` and `blocked`; it is a value on an existing column, written only by new code, so
+  no database from before it holds one and nothing is migrated. It is counted apart from both on the
+  Environments card's fold line: a captured row is neither a red somebody must act on nor a row
+  nothing was learned from.
+
+**The harness moves the file, and both properties of a capture survive it.** The agent writes the
+image into the run's **artefact** directory — which is what that directory is for — and names it in
+the report **by file name**, never a path and never a URL. `RemoteReadingDesk` copies it out into the
+goal's validation directory under a name the harness composes from the check and the run, because
+that directory also holds the goal's resources and two checks that both handed back `screen.png` must
+not be one file. So the report never decides a directory, the row still holds a name, and the capture
+outlives the run whose artefacts are swept on the project's own schedule.
+
+**A screen is the third thing a run owes an agent.** `runnableScreens` joins `runnableSelectors` and
+`runnableScripts` at the press: a check that only hands a screen back names no selector _and_ carries
+no script, so a press counting the two instruments would settle the run with the whole point of that
+check still owed — leaving it `unrun` for ever with nothing red.
 
 ## The dispatch — rule `remote-validation`
 
