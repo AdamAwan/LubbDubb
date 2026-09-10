@@ -109,20 +109,20 @@ it is a property of the decomposition. Databases written under the old key are r
 one at boot, `id` and `letter` untouched
 ([14](14-persistence.md#rebuilding-a-table-whose-key-changed)).
 
-| Field            | What it is                                                                                                                      |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                               |
-| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                   |
-| `title`          | One line, the headline.                                                                                                         |
-| `do`             | The procedure, markdown.                                                                                                        |
-| `expect`         | What a pass looks like.                                                                                                         |
-| `uses`           | Resource **names**, not paths.                                                                                                  |
-| `covers`         | Part slugs this check exercises. Optional, any number.                                                                          |
-| `area`           | The suite area a remote run selects this check by. Optional; null is a check nothing automates. → [36](36-remote-validation.md) |
-| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                             |
-| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                    |
-| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                |
-| `state`          | Below.                                                                                                                          |
+| Field            | What it is                                                                                                                                                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                                                                                                                                                          |
+| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                              |
+| `title`          | One line, the headline.                                                                                                                                                                                                                                    |
+| `do`             | The procedure, markdown.                                                                                                                                                                                                                                   |
+| `expect`         | What a pass looks like.                                                                                                                                                                                                                                    |
+| `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                             |
+| `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                                     |
+| `area`           | The suite area a remote run selects this check by. **Never authored on the check** — inherited from the `coverage` of a test part its `covers` names. Null is a check nothing automates. → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
+| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                                        |
+| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                               |
+| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                           |
+| `state`          | Below.                                                                                                                                                                                                                                                     |
 
 ### States
 

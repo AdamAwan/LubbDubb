@@ -887,6 +887,12 @@ export interface ValidationCheckInput {
   covers: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
+  /**
+   * The selector this check is verified against, **inherited** from the `coverage` of a test part it
+   * covers. Null is no area declared, which is a check a person carries out — it is never authored on
+   * the check itself, so that declaring coverage stays one deliberate, reviewable act on the plan.
+   */
+  area?: string | null;
 }
 
 export type ValidationCheckAmendment = Omit<ValidationCheckInput, 'seq'>;
@@ -1549,6 +1555,18 @@ export interface RemoteRunBrief {
 }
 
 /** When an environment's tenant was last provisioned and last reseeded. */
+/**
+ * One area an environment's runner said it offers, as of the listing that last answered. It is a
+ * convenience for the planner and never an authority: the pre-flight asks the runner again at
+ * assembly, and a row blocks on that answer rather than on this one.
+ */
+export interface SelectorOffering {
+  environment: string;
+  selector: string;
+  tests: number | null;
+  listedAt: string;
+}
+
 export interface RemoteTenant {
   environment: string;
   tenant: string;

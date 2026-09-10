@@ -382,7 +382,7 @@ const planAmend: DesktopToolFactory = (deps) => ({
       );
     }
 
-    const parsed = validatePlanDocument(submittedPlanDocument(args));
+    const parsed = validatePlanDocument(submittedPlanDocument(args), deps.store.listOfferedAreas());
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
     const result = amendPlanInPlace(

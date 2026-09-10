@@ -33,23 +33,26 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
   handler: async (args) => {
     const planner = plannerIssue(task);
     if (!planner.ok) return toolError(planner.error);
-    const parsed = validatePlanDocument({
-      version: 1,
-      reason: args.reason,
-      diagnosis: args.diagnosis,
-      approach: args.approach,
-      risks: args.risks,
-      outOfScope: args.outOfScope,
-      alternatives: args.alternatives,
-      openQuestions: args.openQuestions,
-      verification: args.verification,
-      evidence: args.evidence ?? [],
-      document: args.document,
-      parts: args.parts ?? [],
-      validation: args.validation,
-      watch: args.watch,
-      state: args.state,
-    });
+    const parsed = validatePlanDocument(
+      {
+        version: 1,
+        reason: args.reason,
+        diagnosis: args.diagnosis,
+        approach: args.approach,
+        risks: args.risks,
+        outOfScope: args.outOfScope,
+        alternatives: args.alternatives,
+        openQuestions: args.openQuestions,
+        verification: args.verification,
+        evidence: args.evidence ?? [],
+        document: args.document,
+        parts: args.parts ?? [],
+        validation: args.validation,
+        watch: args.watch,
+        state: args.state,
+      },
+      deps.store.listOfferedAreas(),
+    );
     if (!parsed.ok) {
       return toolError(`Plan rejected: ${parsed.error}`);
     }

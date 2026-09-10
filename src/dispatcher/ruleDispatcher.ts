@@ -2,7 +2,7 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { PrRefStyle } from '../prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import type { Decision, Issue, ValidationCheck } from '../types.js';
+import type { Decision, Issue, SelectorOffering, ValidationCheck } from '../types.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import {
   effectivePickupStates,
@@ -107,7 +107,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly prRefStyle: PrRefStyle;
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
-  private readonly testPartNote: string;
+  private readonly testPartNote: (areas: readonly SelectorOffering[]) => string;
   private readonly stateDeclareNote: string;
   private readonly planning: PlanningPolicy;
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
@@ -133,7 +133,7 @@ export class RuleDispatcher implements Dispatcher {
     watchNote = '',
     watchDeclareNote = '',
     localValidation: () => LocalValidationPolicy = () => DEFAULT_LOCAL_VALIDATION,
-    testPartNote = '',
+    testPartNote: (areas: readonly SelectorOffering[]) => string = () => '',
     stateDeclareNote = '',
     remoteValidationOn = false,
   ) {
@@ -423,7 +423,7 @@ export class RuleDispatcher implements Dispatcher {
       prRefStyle: this.prRefStyle,
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
-      testPartNote: this.testPartNote,
+      testPartNote: this.testPartNote(ctx.selectorOfferings ?? []),
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,

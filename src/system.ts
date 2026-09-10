@@ -528,7 +528,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watchNote(config.environments),
     watchDeclareNote(config.environments),
     undefined,
-    testPartNote(config.environments),
+    (offerings) => testPartNote(config.environments, offerings),
     stateDeclareNote(config.environments),
     config.environments.some((env) => env.validate !== undefined),
   );

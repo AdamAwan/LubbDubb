@@ -80,8 +80,9 @@ function reader(): FakeStateReader {
 }
 
 /**
- * How an author *declares* an area is not built — the column is, and null means no area declared.
- * A test writes one the way whatever declares it later will: onto the column, on a check that exists.
+ * The column, written directly. An area is really inherited from the `coverage` of a test part the
+ * check covers (`test/planCoverageArea.test.ts`); these tests are about what the pre-flight does with
+ * one, so they set it where the join would have.
  */
 function setArea(file: string, goalRef: string, checkId: string, area: string): void {
   const db = new Database(file);
@@ -393,7 +394,13 @@ test('a check that names no area is a person’s, and the pre-flight asks nothin
     const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.equal(row?.blockedReason, null, 'a check declaring no area is manual, exactly as every check is today');
     assert.equal(row?.matched, null);
-    assert.deepEqual(b.runner.asked, [], 'and no command is spawned to ask about it');
+    assert.equal(
+      b.runner.asked.length,
+      1,
+      'the one listing is the offering refresh, which is about the environment and not about this check',
+    );
+    await b.desk.run();
+    assert.equal(b.runner.asked.length, 1, 'and the pre-flight asks nothing at all about a check naming no area');
   } finally {
     shut(b);
   }
@@ -404,13 +411,17 @@ test('the pre-flight runs on the assembly pass only, and inside the desk’s cap
   try {
     for (let n = 1; n <= 7; n += 1) seed(b, AREA, `issue:${String(n)}`);
     await b.desk.run();
-    assert.equal(b.runner.asked.length, 5, 'a process spawn per sheet, bounded by the cap rather than the watch’s');
+    assert.equal(
+      b.runner.asked.length,
+      6,
+      'a process spawn per sheet, bounded by the cap rather than the watch’s, beside the one offering refresh',
+    );
 
     await b.desk.run();
-    assert.equal(b.runner.asked.length, 7, 'the backlog drains in a fixed order and nothing starves');
+    assert.equal(b.runner.asked.length, 8, 'the backlog drains in a fixed order and nothing starves');
 
     await b.desk.run();
-    assert.equal(b.runner.asked.length, 7, 'and a stamped arrival is never re-listed');
+    assert.equal(b.runner.asked.length, 8, 'and a stamped arrival is never re-listed');
   } finally {
     shut(b);
   }
@@ -440,8 +451,9 @@ test('a pre-flight that throws is recorded through errors.record and never fails
     seed({ store, file });
     await desk.run();
 
-    assert.equal(logged.length, 1);
-    assert.match(logged[0] ?? '', /pre-flight for issue:12 on acceptance failed: the runner blew up/);
+    assert.equal(logged.length, 2, 'the offering refresh and the pre-flight each record their own failure');
+    assert.match(logged[0] ?? '', /listing the selectors acceptance offers failed: the runner blew up/);
+    assert.match(logged[1] ?? '', /pre-flight for issue:12 on acceptance failed: the runner blew up/);
     assert.equal(
       store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
       'passed',
