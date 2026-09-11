@@ -2098,7 +2098,9 @@ select:disabled {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  /* One rhythm for the whole block: the rows inside carry no margins of their
+     own, so a row that is absent leaves no gap behind it. */
+  gap: 8px;
 }
 .origin-title {
   display: flex;
@@ -2118,20 +2120,35 @@ select:disabled {
   overflow-y: auto;
 }
 .dispatch-reason {
-  margin-top: 2px;
-  padding: 6px 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 9px;
   background: var(--amber-fill);
   border: 1px solid var(--amber-line);
   border-radius: var(--r-md);
   color: var(--amber);
   font-size: 12px;
+  line-height: 1.45;
 }
-/* Quieter than the reason above it: what the run launched on is context, not the
-   thing an operator opened the drawer to read. */
-.dispatch-model {
-  margin-top: 4px;
+.dispatch-reason > .dispatch-reason-label {
+  flex: none;
+}
+/* Quieter than the reason above it: how the run was launched is context, not the
+   thing an operator opened the drawer to read. One wrapping row of small facts,
+   each its own label and value, so a third fact joins without a new line. */
+.dispatch-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 14px;
   color: var(--muted);
   font-size: 12px;
+}
+.dispatch-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .dispatch-reason-label {
   opacity: 0.85;

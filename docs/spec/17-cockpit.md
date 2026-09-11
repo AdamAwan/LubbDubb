@@ -5926,13 +5926,20 @@ half-parse — and rendered separately so streaming text is still shown while it
 **No xterm remains anywhere.** The browser-side `@xterm/xterm` and `@xterm/addon-fit` went first, and
 `@xterm/headless` went with the server-side screen-scraping it existed to do.
 
-Under the origin block, the drawer shows **why this run was dispatched** and, when the operator
-configured a model policy, **what it was launched on** — the `agentModels` profile the run's rule
-resolved to at dispatch, read off `task.model` rather than re-derived from config, so what is shown is
-what argv actually carried (issue #321). Drawn quieter than the dispatch reason, because it is context
-rather than the thing the drawer was opened to read, and absent entirely on a deployment that assigns
-no models. The policy itself is visible in the running-config panel, under **Agents** —
-[02](02-configuration.md#model-assignment-by-rule).
+Under the origin block, the drawer shows **why this run was dispatched** and, below it, **how it was
+launched**: one wrapping row of small facts, each a label and a value. It carries the `agentModels`
+profile the run's rule resolved to at dispatch — model, effort and the profile name with its source —
+and the **permission mode** the agent was handed. Every one of them is read off the task row rather
+than re-derived from config, so what is shown is what argv actually carried (issue #321): the policy
+moves, and a finished run must keep saying what it was dispatched under.
+
+The permission mode is stamped on the task at dispatch as the **effective** one — the profile's own
+`permissionMode` where it names one, and `agentPermissionMode` otherwise — because a run whose mode is
+shown only when a profile overrode it reads as if it had none, which is the posture question an
+operator opens a finished run to answer. A row is drawn quieter than the dispatch reason above it,
+because it is context rather than the thing the drawer was opened to read, and the model half is absent
+entirely on a deployment that assigns no models. The policy itself is visible in the running-config
+panel, under **Agents** — [02](02-configuration.md#model-assignment-by-rule).
 
 The drawer also shows the artifact chips, the **files changed** list, and offers respond, interrupt
 and kill.
