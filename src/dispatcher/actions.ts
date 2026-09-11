@@ -127,6 +127,15 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...base,
   }),
   z.object({
+    type: z.literal('propose_validation_plan'),
+    originRef: z.string().min(1),
+    issueNumber: z.number().int(),
+    checks: z.number().int().nonnegative(),
+    detail: z.string().min(1),
+    prompt: z.string().min(1),
+    ...base,
+  }),
+  z.object({
     type: z.literal('propose_plan_amendment'),
     amendmentId: z.string().min(1),
     planId: z.string().min(1),

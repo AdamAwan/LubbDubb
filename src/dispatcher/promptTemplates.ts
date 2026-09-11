@@ -23,6 +23,7 @@ type PromptId =
   | 'feature-summary'
   | 'validation-plan'
   | 'validation-check'
+  | 'validation-plan-approval'
   | 'validation-failed'
   | 'local-validation'
   | 'local-validation-fix'
@@ -369,6 +370,16 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Open the full plan for the parts, what it cites and what it leaves out. If you want a different one, use ' +
       'Replan there: that asks the planner again and comes back here.',
     doc: "Put to a human when a plan has landed, whatever its size (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting do is appended by the rule for the same reason. {list} is the parts in dispatch order; the built-in template no longer uses it (they are one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (how many parts the plan has) {reason} {list}.",
+  },
+  'validation-plan-approval': {
+    placeholders: ['number', 'title', 'checks'],
+    template:
+      'The validation check set for issue #{number} ("{title}") has been written against the delivered code, and ' +
+      'nothing runs it until you accept it — {checks} check(s).\n\n' +
+      'Accepting releases the set: the bench draws it, a sheet can assemble off it, and any check you hand to the ' +
+      'fleet can be dispatched. Rejecting sends it back to be written again — say what is wrong with it and the ' +
+      'next planner is given your words.',
+    doc: "Put to a human when the validation planner has authored a goal's check set (rule `validation-plan-approval`). A proposal, not a question: accepting releases the set and nothing reads it as work before that. The set itself — the planner's note, where it departed from the plan's hint, every check with its journey and who each step falls to — is *not* templated: it is appended by the rule and carried as the escalation's `detail`, so an override that never learned about steps cannot drop the half the operator cannot decide without. Placeholders: {number} {title} {checks} (how many checks the set declares).",
   },
   'plan-amendment': {
     placeholders: ['number', 'title', 'who', 'note'],

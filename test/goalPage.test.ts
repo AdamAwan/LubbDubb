@@ -483,9 +483,17 @@ test('a goal’s validation checks reach its own page, and only its own', () => 
     'every check the goal owns, superseded ones included — the card draws what an amendment withdrew',
   );
 
+  // Every other goal draws its own rows and nobody else's. The demo carries a second check set — one
+  // still waiting on an operator's accept — so "every other goal draws nothing" was an assertion about
+  // the fixture rather than about the lens.
   const elsewhere = state.world.issues.filter((i) => `issue:${i.number}` !== ref);
   for (const issue of elsewhere) {
-    assert.deepEqual(buildGoalPage(state, `issue:${issue.number}`, [])?.checks, [], `#${issue.number} owns no check`);
+    const theirs = `issue:${issue.number}`;
+    assert.deepEqual(
+      buildGoalPage(state, theirs, [])?.checks.map((c) => c.id),
+      checks.filter((c) => c.originRef === theirs).map((c) => c.id),
+      `#${issue.number} draws its own checks and only its own`,
+    );
   }
 });
 

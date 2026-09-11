@@ -3,6 +3,7 @@ import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { claimIsLive } from '../../validation/desktop.js';
 import { checkBriefing, validateBranch, validateOrigin } from '../../validation/fleet.js';
+import { checkSetReleased } from '../../validation/planApproval.js';
 import { fleetCanStart } from '../../validation/steps.js';
 import { validationGoalDir } from '../../validation/resources.js';
 import { liveChecks } from '../../validation/verdict.js';
@@ -17,8 +18,13 @@ export function validateCheck(s: StageContext): void {
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     if (!s.deliveryParked(issue)) continue;
     const origin = issueOrigin(issue.number);
+    const checks = liveChecks(s.validationChecks.get(origin) ?? []);
+    // A set the operator has not accepted is not work yet: the rows exist, the bench draws them as
+    // proposed, and dispatching one would put an agent on a procedure nobody agreed to.
+    // → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+    if (!checkSetReleased({ record: s.validationPlans.get(origin) ?? null, checks })) continue;
 
-    for (const check of liveChecks(s.validationChecks.get(origin) ?? [])) {
+    for (const check of checks) {
       if (check.actor !== 'fleet' || check.state !== 'unrun') continue;
       if (claimIsLive(check, s.now, s.validationClaimMinutes)) continue;
       // A test plan whose *first* step is a person's is a check that can never execute: dispatched,

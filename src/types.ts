@@ -1011,6 +1011,12 @@ export interface ValidationPlanRecord {
   note: string | null;
   emptyReason: string | null;
   authoredAt: string | null;
+  /**
+   * The operator's accept on the authored set. Null is a set that is authored and still a proposal:
+   * the rows exist and nothing reads them as work yet — no sheet assembles off them and rule
+   * `validate-check` dispatches nothing. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+   */
+  releasedAt: string | null;
 }
 
 export interface ValidationResourceInput {
@@ -1224,7 +1230,7 @@ export interface Escalation {
   answeredAt: string | null;
 }
 
-export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment';
+export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment' | 'validation_plan';
 
 type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
@@ -1262,6 +1268,7 @@ type ActionType =
   | 'merge_pr'
   | 'propose_plan'
   | 'propose_plan_amendment'
+  | 'propose_validation_plan'
   | 'propose_shortfall'
   | 'update_pr_branch'
   | 'requeue_ci_check'

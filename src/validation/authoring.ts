@@ -32,7 +32,13 @@ export function checkSetAuthored(input: {
   record: ValidationPlanRecord | null;
   checks: readonly ValidationCheck[];
 }): boolean {
-  return input.record?.authoredAt != null || input.checks.length > 0;
+  if (input.record?.authoredAt != null) return true;
+  // A record carrying the planner's own `note` with no stamp is a set an operator sent back. The rows
+  // it wrote are still there — that is deliberate, so the next planner amends rather than starts over
+  // — and reading them as somebody's live set here would leave the goal with no planner and a refused
+  // check set nobody ever rewrites. → docs/spec/20-validation.md#when-an-operator-sends-a-check-set-back
+  if (input.record?.note != null) return false;
+  return input.checks.length > 0;
 }
 
 /**

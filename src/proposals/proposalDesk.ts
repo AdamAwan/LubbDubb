@@ -102,6 +102,15 @@ export class ProposalDesk {
   }
 
   private settlePlan(proposal: Proposal): string {
+    if (proposal.kind === 'validation_plan') {
+      const read = readProposedAct(proposal);
+      if (!read.ok || read.act.kind !== 'validation_plan')
+        return `; the check set could not be settled (${read.ok ? 'the row names no goal' : read.error})`;
+      const withdrawn = this.store.withdrawValidationAuthoring(read.act.originRef);
+      return withdrawn === null
+        ? `; there was no authored check set left to send back`
+        : `; the check set was sent back to be written again, and the rows it wrote are still there to amend`;
+    }
     if (proposal.kind === 'plan_amendment') {
       const readAmendment = readProposedAct(proposal);
       if (!readAmendment.ok || readAmendment.act.kind !== 'plan_amendment')

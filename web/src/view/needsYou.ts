@@ -256,6 +256,9 @@ const PROPOSAL_KIND: Record<Proposal['kind'], NeedKind> = {
   reply_draft: 'reply',
   merge: 'merge',
   shortfall: 'shortfall',
+  // The check set's own gate is the step *after* a delivery, which is what `validate` already means
+  // here — green, and beside the bench rows it releases rather than apart from them.
+  validation_plan: 'validate',
 };
 
 function isShortfallAsk(originRef: string | null): boolean {

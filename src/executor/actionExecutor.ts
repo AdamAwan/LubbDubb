@@ -26,6 +26,7 @@ import {
   rejectionSignalQuery,
   replyProposalRef,
 } from '../proposals/proposals.js';
+import { validationPlanProposalHold, validationPlanProposalRef } from '../validation/planApproval.js';
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
 import { amendmentWarnings, applyPlanAmendment, describeAmendment } from '../plans/planAmendment.js';
 import { proposedPlanDiff } from '../plans/planDiff.js';
@@ -270,6 +271,37 @@ export class ActionExecutor {
               'executed',
               `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
                 `Accepting releases its parts; nothing is scheduled until then.`,
+            );
+            break;
+          }
+
+          case 'propose_validation_plan': {
+            const ref = validationPlanProposalRef(action.issueNumber);
+            const heldBy = validationPlanProposalHold(ref, store.listProposals());
+            if (heldBy) {
+              record('skipped', `Skipped proposing the validation check set for ${action.originRef}: ${heldBy}.`);
+              break;
+            }
+            const esc = this.deps.escalations.create({
+              type: 'approve_change',
+              prompt: action.prompt,
+              context: {
+                originRef: action.originRef,
+                issueNumber: action.issueNumber,
+                detail: action.detail,
+                detailFrom: 'What the validation planner wrote',
+              },
+            });
+            const proposal = store.createProposal({
+              kind: 'validation_plan',
+              ref,
+              action: action as unknown as Action,
+              escalationId: esc.id,
+            });
+            record(
+              'executed',
+              `Proposed the validation check set for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
+                `Accepting releases its ${action.checks} check(s); nothing runs them until then.`,
             );
             break;
           }
@@ -591,6 +623,15 @@ export class ActionExecutor {
       return settled.ok
         ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
         : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+    }
+    if (act.kind === 'validation_plan') {
+      const released = store.releaseValidationPlan(act.originRef);
+      return released?.releasedAt != null
+        ? audit(
+            'executed',
+            `Released the validation check set for ${act.originRef} — authorized by ${by} (${proposal.id}).`,
+          )
+        : audit('skipped', `Nothing to release for ${act.originRef}: no check set is authored (${proposal.id}).`);
     }
     if (act.kind === 'plan_amendment') {
       const settled = applyPlanAmendment(store, act.amendmentId);
@@ -998,6 +1039,8 @@ function readyingTitle(action: ValidatedAction): string {
       return `Answering agent ${action.agentId}`;
     case 'propose_plan':
       return 'Putting a plan to you';
+    case 'propose_validation_plan':
+      return 'Putting a validation check set to you';
     case 'propose_plan_amendment':
       return 'Putting a change to a plan to you';
     case 'propose_shortfall':

@@ -896,6 +896,7 @@ export type {
   ValidationPlanRecord,
   ValidationResource,
   ValidationResourceKind,
+  ValidationStep,
   ValidationVerdict,
   ViewerAssignment,
   WatchCheckVerdict,

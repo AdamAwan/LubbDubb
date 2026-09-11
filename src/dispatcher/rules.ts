@@ -228,6 +228,14 @@ const RULES = [
   },
 
   {
+    id: 'validation-plan-approval',
+    kind: 'rule',
+    name: 'A written validation check set nobody has accepted',
+    description:
+      "A goal whose validation check set has been authored and not yet accepted is put to an operator as a proposal, and nothing reads the set as work until they answer. It is the plan-approval gate one subsystem over and for the same reason: a check set is a claim about what running the delivered goal would settle, written by an agent, and the operator who read the plan's hint at the approval gate is the one entitled to say whether the set that came back from it is the right one. Accepting releases it — the bench draws it, a sheet may assemble off it, and a check handed to the fleet may be dispatched. Rejecting takes the authoring stamp off and leaves the rows where they are: the next planner amends what it wrote rather than starting from nothing, and is given the operator's words for why the last set came back. It ranks directly below `validation-plan`, which produces its input, and directly above `validate-check`, which reads what it releases — and it proposes an **empty** set as readily as a full one, because a planner declaring nothing worth running is exactly the verdict a second pair of eyes is for, and a set nobody releases is a sheet that waits for ever. What a release does not authorize is any query a check carries: agent-authored SQL against a real store is a per-environment consent answered on its own dry run, and the ask names the checks that carry one rather than spending that consent on a per-goal press.",
+  },
+
+  {
     id: 'validate-check',
     kind: 'rule',
     name: 'Handed-over validation check',
