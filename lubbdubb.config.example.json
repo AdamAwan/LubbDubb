@@ -216,7 +216,7 @@
         "onFailure": "dispatch",
         "guidance": "Run `/pr-agent-review` on this branch. The gate clears when the review posts its status; nothing in the diff is broken."
       },
-      { "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" },
+      { "match": "Example-CI", "states": ["pending"], "onFailure": "ignore" },
       {
         "match": "Work item linking",
         "onFailure": "dispatch",

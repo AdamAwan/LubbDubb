@@ -371,7 +371,7 @@ into an empty list or a zero, which would draw a reading nothing took.
   **Which processes are the run's is decided by the checkout, not by the process tree**, and that is
   the whole correctness of the reading. It was the tree first, and against a real dev environment it
   reported nothing at all: the instruction launches each service in its own shell, that shell exits,
-  and Windows does not reparent an orphan — so every one of the NXG stack's six services recorded a
+  and Windows does not reparent an orphan — so every one of the stack's six services recorded a
   parent pid that no longer existed, and a walk from the session's pid reached none of them. A command
   line naming `LocalRun.dir` survives that, and is the discriminator the operator's own runbook already
   uses to tell one worktree's stack from another's. It is the sharper reading twice over: two checkouts

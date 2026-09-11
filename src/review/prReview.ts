@@ -81,6 +81,14 @@ export function publishNote(publish: PrReviewPolicy['publish']): string {
       "somebody's name.\n"
     );
   }
+  if (publish === 'tooling') {
+    return (
+      "\n\nThis project's own review tooling publishes what it finds on the pull request; let it, and " +
+      "write no comment of your own beside it. Your report through `review_report` is the harness's " +
+      'copy of the same reading, and a second one in your voice is a finding the person merging has to ' +
+      'reconcile against the one already threaded.\n'
+    );
+  }
   return (
     '\n\nAfter you report, post the same findings on the pull request with `reply_to_review` (omit the ' +
     'comment id — this is a comment on the pull request, not a reply to a thread). That tool is the only ' +
