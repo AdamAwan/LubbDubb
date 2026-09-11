@@ -745,6 +745,16 @@ export function buildDemoState(): DemoSeed {
             note: 'architecture.md gained the section; the console warns on one watcher.',
             at: ago(95),
           },
+          validation: {
+            state: 'flagged',
+            total: 3,
+            passed: 0,
+            failed: 0,
+            unrun: 3,
+            deferred: 0,
+            captured: 0,
+            waived: 0,
+          },
           retrospective: {
             summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
             hasDocument: true,

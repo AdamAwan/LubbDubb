@@ -33,6 +33,7 @@ export type NeedKind =
   | 'bench'
   | 'close_out'
   | 'validate'
+  | 'validation_plan'
   | 'watch'
   | 'burn'
   | 'limit'
@@ -70,6 +71,7 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   profile: 'next',
   close_out: 'next',
   validate: 'next',
+  validation_plan: 'next',
   bench: 'next',
   config_gap: 'next',
   supply: 'next',
@@ -256,9 +258,10 @@ const PROPOSAL_KIND: Record<Proposal['kind'], NeedKind> = {
   reply_draft: 'reply',
   merge: 'merge',
   shortfall: 'shortfall',
-  // The check set's own gate is the step *after* a delivery, which is what `validate` already means
-  // here — green, and beside the bench rows it releases rather than apart from them.
-  validation_plan: 'validate',
+  // Its own kind rather than `validate`: that one is a *bench task*, and `needBody` reads it out of
+  // `humanTasks` by the row's id. A proposal routed there finds no task and the card draws nothing —
+  // the ask disappears while the rail still counts it.
+  validation_plan: 'validation_plan',
 };
 
 function isShortfallAsk(originRef: string | null): boolean {
