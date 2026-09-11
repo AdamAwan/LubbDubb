@@ -68,6 +68,7 @@ import { featureSummary } from './rules/featureSummary.js';
 import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';
 import { validationPlan } from './rules/validationPlan.js';
+import { validationPlanApproval } from './rules/validationPlanApproval.js';
 import { remoteValidation } from './rules/remoteValidation.js';
 
 // → docs/spec/05-dispatcher.md
@@ -94,6 +95,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'local-validation': localValidation,
   'local-validation-fix': localValidationFix,
   'validation-plan': validationPlan,
+  'validation-plan-approval': validationPlanApproval,
   'validate-check': validateCheck,
   'remote-validation': remoteValidation,
   'validation-failed': validationFailed,

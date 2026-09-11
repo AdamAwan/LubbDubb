@@ -143,7 +143,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 ### When a null means something
 
 `ensureColumns` returns the columns it **actually added**, as `table.column`, and the composition
-root gates a backfill on that list. Two columns need it so far, and the shape is the same each time. `pets.opened_at` is null on every row
+root gates a backfill on that list. Three columns need it so far, and the shape is the same each time. `pets.opened_at` is null on every row
 that predates it, and null there spells _still an egg_ — so the `ALTER TABLE` alone would turn every
 existing vivarium back into a crate of anonymous shells, with nothing red and no way out but clicking
 through the lot. `openPetsFromBeforeEggs` stamps them with their own `hatched_at`, and runs **only on
@@ -199,6 +199,20 @@ resume judges `interruptedAt ?? lastSeenAt` — and the one live row a database 
 hold is dated by the gated backfill above. Every row written since is stamped by the pulse that holds
 it. Backfilling it as well would be inventing a beat that never happened, on rows nothing will ever
 read it for. → [23](23-local-runs.md#coming-back-after-a-restart)
+
+`validation_plans.released_at` is the newest, and it is `pets.opened_at`'s shape with the sign reversed.
+Null means _authored and still a proposal_, which the running code acts on twice: no sheet assembles off
+the set and rule `validate-check` dispatches nothing for it
+([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Every row written before the gate
+existed is a set an operator has been running for weeks, so the `ALTER TABLE` alone holds all of them at
+once — a bench that stops, dispatches that stop, and nothing red.
+`releaseValidationPlansFromBeforeTheGate` sets `released_at` from each row's own `authored_at`, on the
+boot the column arrives and never again: unconditionally, the same statement would release the set an
+operator is being asked about right now, which is the one thing the column exists to hold. The second
+reader needs no backfill for the reason `goal_watches.baseline_value` did not — `checkSetReleased` treats
+a goal with live checks and _no_ authoring stamp as released, so a set a plan document ingested is
+outside the gate by construction rather than by repair.
+→ [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)
 
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.

@@ -204,7 +204,9 @@ Checked against [`spec/`](README.md), which describes what the code does now.
 **Runs today, as drawn:** intake from a ticket, the watch gate, the information check, planning and
 plan approval, the plan's dependency-chained parts, per-check CI classification and its hold arm,
 the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
-rule, non-code terminals for a part, the "did this deliver the goal" check, and the tracker state
+rule, non-code terminals for a part, the "did this deliver the goal" check, the validation check set
+written against the delivered code and **accepted by an operator** before anything reads it
+([20](spec/20-validation.md#the-check-set-is-proposed-before-it-is-work)), and the tracker state
 update on the way into review. The prompt arm's convergence too: an injected **code brief** with
 a tracker configured is filed as a _watched_ ticket at route time (a desk agent creates it with
 `gh`/`az`, tagged with the effective `-watch` label) and enters the funnel like any picked-up issue,

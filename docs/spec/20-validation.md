@@ -125,7 +125,7 @@ validation planner as input. It is not executable, it declares no checks, and no
 | Against    | Code that does not exist yet            | Merged code                                |
 | Shape      | Prose intent                            | Test plans — ordered, assigned, executable |
 | Read by    | An operator deciding whether to approve | The validation planner, then the bench     |
-| Binds      | Nothing                                 | The sheet                                  |
+| Binds      | Nothing                                 | The sheet, once an operator accepts it     |
 
 The machinery is five pieces and each one is named here so a later change cannot quietly drop one:
 rule `validation-plan` (`src/dispatcher/rules/validationPlan.ts`, a `DISPATCH_PIPELINE` entry
@@ -141,14 +141,18 @@ work.
 **A goal already carrying checks is left alone, whoever wrote them.** A plan document from before
 this change ingested a set an operator may be halfway through, and a validation planner speaks for
 the whole set — dispatching one over those rows would supersede work in progress. So the rule's gate
-is _authored **or** already has live checks_, and only the first is a stamp.
+is _authored **or** already has live checks_, and only the first is a stamp. A set an operator sent back
+is the one exception, and it is read off the record rather than the rows —
+[When an operator sends a check set back](#when-an-operator-sends-a-check-set-back).
 
 **Why after `delivered` and not at the last merged pull request.** "No open PR" is the assessor's own
 trigger, and the assessor may answer `more_work` — which sends the goal back round, lands more pull
 requests, and moves the code the check set was just written against. `delivered` is the first moment
 nothing further is coming. → [06](06-issue-pickup.md)
 
-**Sheet assembly waits for it.** An arrival assembles a sheet from the check set
+**Sheet assembly waits for it — and now for the accept as well.** What it reads is `checkSetReleased`
+rather than the authoring stamp ([The check set is proposed before it is work](#the-check-set-is-proposed-before-it-is-work));
+everything below holds unchanged, with "authored" standing for "authored and accepted". An arrival assembles a sheet from the check set
 ([36](36-remote-validation.md)), and a deployment fast enough to arrive before the validation planner
 has finished would assemble one with no `check` rows on it — an operator meeting a bench that offers
 only the watch-derived rows, which reads as a misconfiguration and is not one. It is the same shape as
@@ -176,6 +180,82 @@ else needs a run_. Null with no account of itself is the failure this document k
 Both are refusals rather than conventions: `validation_plan` requires `note` on every call, and
 requires `emptyReason` on a call declaring no checks. A refused call authors nothing — the stamp is
 not written, so the sheet keeps waiting rather than assembling off a set nobody wrote.
+
+### The check set is proposed before it is work
+
+**Built.** Authoring is not the release. A check set is a claim about what running the delivered goal
+would settle — written by an agent, against code an operator has not read since they approved the plan
+— and the person who read the hint at the plan's approval gate is the one entitled to say whether the
+set that came back from it is the right one. So the authored set is **put to them as a proposal**, and
+until they answer nothing in the harness reads it as work.
+
+The machinery is the plan gate's, one subsystem over: rule `validation-plan-approval`
+(`src/dispatcher/rules/validationPlanApproval.ts`, a `DISPATCH_PIPELINE` entry registered in `STAGES`)
+emits `propose_validation_plan`; the executor raises an `approve_change` escalation and a proposal of
+kind `validation_plan` on ref `issue:<n>:validate-plan` — the planner's own dispatch origin, because
+`issue:<n>:plan` is the code plan's and two proposals on one ref would hold each other; `ProposalDesk.accept`
+→ `ActionExecutor.runAuthorized` → `releaseValidationPlan` writes `validation_plans.released_at`,
+audited under `human:<proposal id>`. It ranks directly below `validation-plan`, which produces its
+input, and directly above `validate-check`, which reads what it releases.
+
+**`released_at` is the gate, and `authored_at` stays what it always was.** Authoring is still the
+stamp that says a planner ran and a set exists; the release is the stamp that says somebody agreed to
+it. Keeping them apart is what lets a rejected set be re-authored without pretending the first one
+never happened, and what lets the cockpit tell _not written yet_ from _written and waiting on you_ —
+two different things to meet on a goal page, and only one of them is yours to act on.
+
+**What the gate holds:**
+
+| Holds                                                                                                                                                    | Does not hold                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Sheet assembly — `sheetableArrivals` reads released, not authored ([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
+| Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
+
+**A set no press ever released reads as released.** `checkSetReleased` (`src/validation/planApproval.ts`)
+answers on the stamp only where the validation planner wrote one: a goal carrying checks a plan document
+ingested, or a record holding nothing but a `hint`, is a set an operator may be halfway through and no
+gate of theirs ever stood in front of. Folding those into "not accepted" would stop every sheet and
+every dispatch on every goal planned before this existed, with nothing red — which is also why the
+column's arrival carries a backfill ([14](14-persistence.md#when-a-null-means-something)).
+
+**An empty set is proposed as readily as a full one.** A planner declaring nothing worth running is
+exactly the verdict a second pair of eyes is for, and the alternative is worse than redundant: an
+unreleased set is a sheet that waits, so a set nobody is asked about is a goal whose arrivals defer for
+ever. The ask carries `emptyReason` as its whole body.
+
+**The ask is drawn as structure, never as prose.** The set rides on the action as one entry per check
+— its journey, who carries each step, the planner's nomination, and whether it reads the store — and
+the cockpit draws rows from that (`CheckSetAsk`, `web/src/components/CheckSetAsk.tsx`). It reached the
+card as markdown first, and a set of any size read as one column of text: no way to compare two checks,
+find the one a person has to carry, or see which one reads the store. A verdict is being asked for on
+the **set**, so the set has to be scannable. What rides on the action is also what is drawn, for
+`planCaveats`' reason one subsystem over: an amendment landing between the ask and the answer must not
+change what the operator is agreeing to.
+
+**A release authorizes no query.** A check carrying a `state` step reads the deployed store with
+agent-authored SQL, and that consent is keyed on `(query digest, environment)` and answered on its own
+dry run ([36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)). Folding
+it into this accept would spend a per-place consent on a per-goal press — the same query arriving
+pre-approved against production because somebody accepted a plan. So the ask **names** the checks that
+carry one and says the accept does not cover them; leaving them off the card is the other failure, where
+an operator accepts four checks and meets a `blocked` row they thought they had cleared.
+
+### When an operator sends a check set back
+
+Rejecting is not a refusal of validation; it is a refusal of _this_ set. `withdrawValidationAuthoring`
+takes `authored_at` off and leaves every row the planner wrote exactly where it is, because the rows are
+the account of what was refused and the next planner's starting point — `ingestValidation` merges on
+`id`, so a re-authored set amends them rather than doubling them. Nothing was ever released, so nobody
+is halfway through the set whose stamp this clears.
+
+**A record carrying the planner's own `note` with no stamp is a set that was sent back**, and
+`checkSetAuthored` reads it as authoring still wanted. Without that arm rule `validation-plan` would see
+live rows, leave the goal alone, and the refused set would sit there for ever with no planner coming
+back for it — the quietest of the failures in this document, because the cockpit would draw a full check
+set and nothing would say it was refused. The operator's words ride to the next planner through
+`rejectionGuidance`, which is why a rejected `validation_plan` is excluded from `rejectionSignalQuery`
+alongside a rejected `plan`: both are settled by the harness re-asking its own author, not by the world
+moving on the goal.
 
 ### Saying nothing was worth running
 
@@ -262,13 +342,13 @@ one at boot, `id` and `letter` untouched
 `unrun` → `passed` | `failed`, plus `waived`, `deferred` and `captured`, and one way back to `unrun`
 from any of them.
 
-| State      | What it means                                                                                                                                                                                                                      |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unrun`    | Nobody has got to it. It is also what a row from before any later state was added reads as — `checkStateOf` narrows anything unrecognised here.                                                                                    |
-| `passed`   | Somebody ran the procedure and saw what it expects.                                                                                                                                                                                |
-| `failed`   | Somebody ran it and did not. Rule `validation-failed` is the consumer.                                                                                                                                                             |
-| `waived`   | An operator decided it does not need running.                                                                                                                                                                                      |
-| `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                  |
+| State      | What it means                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unrun`    | Nobody has got to it. It is also what a row from before any later state was added reads as — `checkStateOf` narrows anything unrecognised here.                                                                                                                                                                                                                                           |
+| `passed`   | Somebody ran the procedure and saw what it expects.                                                                                                                                                                                                                                                                                                                                       |
+| `failed`   | Somebody ran it and did not. Rule `validation-failed` is the consumer.                                                                                                                                                                                                                                                                                                                    |
+| `waived`   | An operator decided it does not need running.                                                                                                                                                                                                                                                                                                                                             |
+| `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                                                                                                                                                                         |
 | `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. Written by either channel that can take one — the goal's own validation sheet, and the `validate-check` dispatch where the fleet can reach the screen. → [36](36-remote-validation.md#a-screen-from-the-sheets-own-run) |
 
 **`captured` is a value on the existing column and needs no `ALTER TABLE`**, exactly as `result_by`

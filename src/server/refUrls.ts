@@ -21,6 +21,7 @@ export function decisionSubjectRef(action: { type: string; [key: string]: unknow
     case 'dispatch_code_agent':
     case 'dispatch_desk_agent':
     case 'propose_plan':
+    case 'propose_validation_plan':
     case 'propose_shortfall':
       return str(action.originRef);
     case 'reply_on_pr':

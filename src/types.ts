@@ -1011,6 +1011,34 @@ export interface ValidationPlanRecord {
   note: string | null;
   emptyReason: string | null;
   authoredAt: string | null;
+  /**
+   * The operator's accept on the authored set. Null is a set that is authored and still a proposal:
+   * the rows exist and nothing reads them as work yet — no sheet assembles off them and rule
+   * `validate-check` dispatches nothing. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+   */
+  releasedAt: string | null;
+}
+
+/**
+ * One check as it was **proposed**, carried on `propose_validation_plan` and drawn by the ask.
+ *
+ * Stored on the action rather than re-read from the rows at draw time, for `planCaveats`' reason one
+ * subsystem over: the verdict is on what was put in front of the operator. An amendment that lands
+ * between the ask and the answer must not silently change what they are agreeing to.
+ * → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+ */
+export interface ProposedCheck {
+  letter: string;
+  title: string;
+  expect: string;
+  steps: { kind: ValidationStepKind; do: string; actor: ValidationCheckActor; why: string | null }[];
+  /** The planner's nomination, with its reason. Advice: the hand-over is still the operator's. */
+  fleetCandidate: boolean;
+  candidateWhy: string | null;
+  /** Its first step is a person's, so the fleet can never start it. */
+  fleetBlocked: boolean;
+  /** It carries a `state` step, whose query this accept does not approve. */
+  carriesQuery: boolean;
 }
 
 export interface ValidationResourceInput {
@@ -1224,7 +1252,7 @@ export interface Escalation {
   answeredAt: string | null;
 }
 
-export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment';
+export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment' | 'validation_plan';
 
 type ProposalStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
@@ -1262,6 +1290,7 @@ type ActionType =
   | 'merge_pr'
   | 'propose_plan'
   | 'propose_plan_amendment'
+  | 'propose_validation_plan'
   | 'propose_shortfall'
   | 'update_pr_branch'
   | 'requeue_ci_check'

@@ -39,7 +39,10 @@ export function rejectionSignalQuery(proposals: Proposal[]): { since: string; re
     const act = `${p.kind}\u0000${p.ref}`;
     if (seen.has(act)) continue;
     seen.add(act);
-    if (p.status !== 'rejected' || p.kind === 'plan' || !p.decidedAt) continue;
+    // `plan` and `validation_plan` are settled by the harness re-asking its own author rather than by
+    // the world moving: a rejected plan is replanned, and a rejected check set is re-authored. A world
+    // event on the goal must not expire either rejection.
+    if (p.status !== 'rejected' || p.kind === 'plan' || p.kind === 'validation_plan' || !p.decidedAt) continue;
     const item = proposalWorldRef(p.ref);
     if (!item) continue;
     refs.add(item);
@@ -127,6 +130,7 @@ function refusedAct(kind: ProposalKind): string {
   if (kind === 'plan') return 'a delivery plan';
   if (kind === 'shortfall') return 'a response to a failed assessment';
   if (kind === 'plan_amendment') return 'a change to the delivery plan';
+  if (kind === 'validation_plan') return 'a validation check set';
   return 'a reply';
 }
 
@@ -166,6 +170,7 @@ type ProposedAct =
       originRef: string | null;
     }
   | { kind: 'plan'; planId: string; originRef: string }
+  | { kind: 'validation_plan'; originRef: string; issueNumber: number }
   | { kind: 'plan_amendment'; amendmentId: string; planId: string; originRef: string }
   | {
       kind: 'shortfall';
@@ -185,6 +190,16 @@ export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAc
     if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
       return { ok: false, error: `proposal ${proposal.id} names no plan` };
     return { ok: true, act: { kind: 'plan', planId, originRef } };
+  }
+
+  if (proposal.kind === 'validation_plan') {
+    const originRef = action.originRef;
+    const issueNumber = action.issueNumber;
+    if (typeof originRef !== 'string' || originRef === '')
+      return { ok: false, error: `proposal ${proposal.id} names no goal` };
+    if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber))
+      return { ok: false, error: `proposal ${proposal.id} names no issue number` };
+    return { ok: true, act: { kind: 'validation_plan', originRef, issueNumber } };
   }
 
   if (proposal.kind === 'plan_amendment') {

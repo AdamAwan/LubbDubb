@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import { nextCheckLetter } from '../validation/checkDocument.js';
 import type {
   ValidationAmendment,
@@ -47,7 +48,11 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
   // it exempt, and `validation_checks` collected that debt one change later.
-  validation_plans: {},
+  // `released_at` arrived with the acceptance gate. Null on a row written before it means "authored
+  // and never proposed", which the gate would read as a set still waiting on an operator — every
+  // deployment's live sets held at once. `releaseValidationPlansFromBeforeTheGate` is the backfill,
+  // gated on this report. → docs/spec/14-persistence.md#when-a-null-means-something
+  validation_plans: { released_at: 'TEXT' },
 };
 
 export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
@@ -276,8 +281,8 @@ export class ValidationStore {
     const ts = this.ctx.now();
     this.ctx.db
       .prepare(
-        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
-         VALUES (?, ?, NULL, NULL, NULL, ?)
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, released_at, updated_at)
+         VALUES (?, ?, NULL, NULL, NULL, NULL, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET hint=excluded.hint, updated_at=excluded.updated_at`,
       )
       .run(originRef, hint, ts);
@@ -298,13 +303,48 @@ export class ValidationStore {
     const ts = this.ctx.now();
     this.ctx.db
       .prepare(
-        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
-         VALUES (?, NULL, ?, ?, ?, ?)
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, released_at, updated_at)
+         VALUES (?, NULL, ?, ?, ?, NULL, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET note=excluded.note, empty_reason=excluded.empty_reason,
-           authored_at=excluded.authored_at, updated_at=excluded.updated_at`,
+           authored_at=excluded.authored_at, released_at=NULL, updated_at=excluded.updated_at`,
       )
       .run(originRef, input.note, input.emptyReason, ts, ts);
     return this.getValidationPlanRecord(originRef) as ValidationPlanRecord;
+  }
+
+  /**
+   * The operator's accept on the authored set: the release stamp, and nothing else. Authoring wrote
+   * the rows and the note; this is the press that lets anything read them as work — sheet assembly,
+   * and rule `validate-check`. A set that is not authored cannot be released, so a call on one
+   * answers null rather than stamping a release over nothing.
+   * → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+   */
+  releaseValidationPlan(originRef: string): ValidationPlanRecord | null {
+    const record = this.getValidationPlanRecord(originRef);
+    if (record === null || record.authoredAt === null) return null;
+    if (record.releasedAt !== null) return record;
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE validation_plans SET released_at=?, updated_at=? WHERE origin_ref=?`)
+      .run(ts, ts, originRef);
+    return this.getValidationPlanRecord(originRef);
+  }
+
+  /**
+   * The operator's reject: the stamp comes off, and the rows the planner wrote stay where they are.
+   * They are the account of what was refused and the next planner's starting point — `ingestValidation`
+   * merges on `id`, so a re-authored set amends them rather than doubling them. Nothing was ever
+   * released, so nobody is halfway through the set this clears the stamp on.
+   * → docs/spec/20-validation.md#when-an-operator-sends-a-check-set-back
+   */
+  withdrawValidationAuthoring(originRef: string): ValidationPlanRecord | null {
+    const record = this.getValidationPlanRecord(originRef);
+    if (record === null || record.authoredAt === null) return null;
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE validation_plans SET authored_at=NULL, released_at=NULL, updated_at=? WHERE origin_ref=?`)
+      .run(ts, originRef);
+    return this.getValidationPlanRecord(originRef);
   }
 
   listValidationPlanRecords(): ValidationPlanRecord[] {
@@ -696,6 +736,7 @@ interface ValidationPlanRow {
   note: string | null;
   empty_reason: string | null;
   authored_at: string | null;
+  released_at: string | null;
 }
 
 function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
@@ -705,5 +746,20 @@ function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
     note: r.note ?? null,
     emptyReason: r.empty_reason ?? null,
     authoredAt: r.authored_at ?? null,
+    releasedAt: r.released_at ?? null,
   };
+}
+
+/**
+ * Every check set authored before the acceptance gate existed is a set an operator has been running
+ * for weeks. Null `released_at` means "still a proposal", so without this the gate holds all of them
+ * at once — sheets stop assembling and `validate-check` stops dispatching, with nothing red. Gated on
+ * `ensureColumns`' report of having just added the column, because a pass on every boot would release
+ * the set an operator is being asked about right now.
+ * → docs/spec/14-persistence.md#when-a-null-means-something
+ */
+export function releaseValidationPlansFromBeforeTheGate(db: Database.Database): void {
+  db.prepare(
+    `UPDATE validation_plans SET released_at=authored_at WHERE authored_at IS NOT NULL AND released_at IS NULL`,
+  ).run();
 }

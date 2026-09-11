@@ -101,6 +101,7 @@ unconditional.
 | `local-validation-fix`     | Fix what a local validation found    | —                    | A local validation was reported `failed` with findings: one writable code agent on the branch that was validated. Once per reading, latched on the row. Never a shortfall. → [32](32-local-validation.md#when-it-fails)                                                                                                                                                                                                         |
 | `plan-part`                | Plan part ready                      | —                    | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                                                                                                                                                                                                              |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                                                                                                                                                                                                   |
+| `validation-plan-approval` | A check set needs your acceptance    | —                    | A delivered goal's validation check set has been authored and not yet accepted. Raises a proposal and dispatches nobody; until it is answered no sheet assembles off the set and `validate-check` dispatches nothing for it. Below `validation-plan`, which writes its input; above `validate-check`, which reads what it releases. → [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)                        |
 | `validate-check`           | Handed-over validation check         | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed             | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed  | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
@@ -1145,9 +1146,34 @@ the dispatcher's half is:
   with **no escalation**. The goal is parked either way and a bench with no checks on it already says
   what happened.
 
+## `validation-plan-approval` — putting the check set to you
+
+`validation-plan-approval` raises a proposal and dispatches nobody. The argument for the gate is
+[20](20-validation.md#the-check-set-is-proposed-before-it-is-work); the dispatcher's half is:
+
+- Emits `propose_validation_plan` for a goal **parked as delivered** whose `validation_plans` row is
+  **authored** and **not released**, unless a `validation_plan` proposal is already pending on the ref.
+  The ref is `issue:<n>:validate-plan` — the planner's own origin, because `issue:<n>:plan` belongs to
+  the code plan and two proposals on one ref would hold each other.
+- Read off the authored record and the live checks, never off a check count: an **empty** set is
+  proposed exactly as readily as a full one, because declaring nothing worth running is the verdict
+  most worth a second pair of eyes, and an unaccepted set is a sheet that waits for ever.
+- What the operator is deciding about — the planner's note, where it departed from the plan's hint, and
+  every check with its journey and who each step falls to — is **appended** to the rendered ask and
+  carried as the escalation's `detail`. An override that never learned about steps cannot drop the half
+  nobody can decide without.
+- The ask **names the checks carrying a `state` step** and says the accept does not approve their
+  queries: that consent is keyed on `(query digest, environment)` and answered on its own dry run
+  ([36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)).
+- Accepting releases the set through `ProposalDesk.accept` → `runAuthorized` → `releaseValidationPlan`,
+  audited under `human:<proposal id>`. Rejecting takes the authoring stamp off and leaves the rows to
+  amend, so rule `validation-plan` comes back for it with the operator's words.
+
 ## `validate-check` — running a handed-over check
 
-`validate-check` puts a code agent on one validation check the operator handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
+`validate-check` puts a code agent on one validation check the operator handed to the fleet, on a check
+set they have **accepted** — an authored set nobody released is not work yet
+([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
 half is:
 
 - A **code** agent — a check runs things — in a **read-only checkout** of `defaultBranch`

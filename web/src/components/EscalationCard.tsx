@@ -5,6 +5,8 @@ import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { CheckSetAsk } from './CheckSetAsk.js';
+import { checkSetOf } from '../checkSet.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { Panel } from './panel.js';
@@ -79,6 +81,9 @@ export function EscalationCard({
   const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
   const body = proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose;
   const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
+  /* A check set is a set, not a paragraph: it rides on the proposal as structure and is drawn as rows
+     rather than through `context.detail`'s markdown. → docs/spec/17-cockpit.md */
+  const checkSet = checkSetOf(proposal);
   /* The goal number, from the escalation's context or from the origin it was
      raised on. Both spell the same goal, and only the first is always set: a card
      that has just the origin was dropping the Claude Code hand-off, which is the
@@ -154,7 +159,9 @@ export function EscalationCard({
           "a `<details>` you have to open first is a step between you and the job"
           — and a 180px window onto a two-thousand-character assessment is the
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
-      {context.detail ? (
+      {checkSet !== null ? <CheckSetAsk set={checkSet} /> : null}
+
+      {context.detail && checkSet === null ? (
         <div className="esc-context">
           <div className="lb lb-sm">{detailLabel(context, escalation.agentId)}</div>
           <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
@@ -409,8 +416,10 @@ const ACCEPT_LABEL: Record<string, string> = {
   merge: 'Approve merge',
   reply_draft: 'Approve & send',
   plan: 'Approve plan',
+  validation_plan: 'Release the set',
 };
 const ACCEPT_HINT: Record<string, string> = {
+  validation_plan: 'Release these checks — the bench draws them and a check you hand to the fleet can be dispatched',
   merge: 'Merge it now',
   reply_draft: 'Send this reply now',
   plan: 'Release the plan — each part gets its own agent, branch and PR',
@@ -419,6 +428,7 @@ const REJECT_HINT: Record<string, string> = {
   merge: "Nothing goes out, and the harness won't ask again",
   reply_draft: "Nothing goes out, and the harness won't ask again",
   plan: 'Sends the plan back to a planner with your note; parts nothing has started for are retired',
+  validation_plan: 'Sends the set back to be written again with your note; the rows stay, to be amended',
 };
 
 function describeSignal(originRef?: string | null, prNumber?: number): string | null {
