@@ -8,7 +8,7 @@ interface PrReviewMode {
 export interface PrReviewPolicy {
   enabled: boolean;
   blocking: boolean;
-  publish: 'none' | 'comment';
+  publish: 'none' | 'comment' | 'tooling';
   publishedThreadProperty: string | null;
   publishedThreadRole: string | null;
   modes: Record<string, PrReviewMode>;

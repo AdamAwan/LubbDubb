@@ -473,7 +473,7 @@ under `pr:<n>:merge`. Nothing but an operator has ever settled either. So a pull
 while the ask is standing — in the provider's own UI, by a colleague, or by the harness on the cycle
 the card went up — leaves both rows behind, and the card is the one in the inbox that **cannot be
 answered**: accepting it runs `mergePr` against a merged pull request, the sink refuses, and the
-failure raises *another* `approve_change` saying the merge failed. The inbox refills with an ask for
+failure raises _another_ `approve_change` saying the merge failed. The inbox refills with an ask for
 work that is already done, and every arm of it renders correctly.
 
 `EscalationInbox.tidySettledMerges` closes that loop on the pulse, beside `tidyDeadAgents` and in the
@@ -1288,7 +1288,7 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | `review.blocking`                | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.                                                                                                                              |
 | `review.allowSkip`               | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                                          |
 | `review.reviewedElsewhere`       | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing.                           |
-| `review.publish`                 | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                                           |
+| `review.publish`                 | `'none'` | Where the findings go: `'none'` keeps them to the harness, `'comment'` has the reviewer post them through `reply_to_review` and only that, `'tooling'` leaves the surface to the project's own review tooling.                            |
 | `review.publishedThreadProperty` | `null`   | The thread property your own review tooling stamps its threads with, so findings it published read as addressed once every stamped thread is resolved. Azure DevOps only. → [A thread the harness stamped](#a-thread-the-harness-stamped) |
 | `review.publishedThreadRole`     | `null`   | Which stamped threads count — the value required on `"<property>.role"`. Null takes every stamped thread, summary threads included.                                                                                                       |
 | `review.modes`                   | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                                                      |
@@ -1326,6 +1326,20 @@ same route a rule-drafted reply takes. It is deliberately not a free channel: wh
 the project's, through the prompt and the charter; where it goes is the harness's. A published finding
 then arrives as an unhandled thread, which rule `pr-review-comment` already answers — so the fix loop for
 a fleet finding is the mature path the fleet already has, and not a second one.
+
+`review.publish: 'tooling'` is the third answer, for a project that owns its own review engine: the mode
+charter tells the agent to run it, and the engine threads the findings and posts the status the branch
+policy waits on. What it adds to the prompt is the absence as much as the instruction — the agent writes
+no comment in its own voice, because a second reading beside the threaded one is something the person
+merging has to reconcile; but nothing in the note forbids posting, because the tooling the charter just
+ordered posts. That is the whole of the value. Under `'none'` the same pair reads as a direct
+contradiction, and an agent that finds one in its own prompt does the careful thing: it runs the tooling
+in dry-run and reports the gate unsatisfied. The status never posts, the policy never goes green, and
+`reviewedElsewhere` — which probes for exactly that status, and is the loop's own way of settling once
+the tooling has spoken — can never fire, because the thing it waits for was never allowed to happen.
+The value is an explicit opt-in and reads nothing else: it is not inferred from `reviewedElsewhere` or
+from `publishedThreadProperty` being set, because a prompt that changes on a key it does not name is a
+prompt nobody can predict from the one they edited.
 
 **Both origins may reply, and for a while only one could.** `replyOrigin` fenced the tool to
 `pr:<n>:comments` — the agent answering a reviewer — while the very prompt above dispatched the

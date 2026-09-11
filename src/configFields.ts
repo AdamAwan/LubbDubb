@@ -487,9 +487,9 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
   {
     path: 'review.publish',
     type: 'enum',
-    options: ['none', 'comment'],
+    options: ['none', 'comment', 'tooling'],
     access: 'plain',
-    why: 'Whether the reviewer posts what it found on the pull request, or keeps it to the harness.',
+    why: 'Where the findings go: "none" keeps them to the harness, "comment" has the reviewer post them itself, "tooling" leaves the pull request to the project\u2019s own review tooling and has the reviewer add nothing beside it.',
   },
   {
     path: 'review.publishedThreadProperty',

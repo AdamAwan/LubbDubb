@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import {
   charterNote,
   defaultReviewMode,
+  publishNote,
   needsFleetReview,
   resolvedReviewMode,
   reviewSatisfied,
@@ -175,6 +176,24 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
 
   assert.equal(charterNote(null, 'Heading'), '');
   assert.equal(charterNote('   ', 'Heading'), '', 'an empty file is no charter, not an empty heading');
+});
+
+test('each publish value gives the reviewer its own note, and tooling forbids no posting', () => {
+  const none = publishNote('none');
+  const comment = publishNote('comment');
+  const tooling = publishNote('tooling');
+
+  assert.notEqual(none, comment);
+  assert.notEqual(none, tooling);
+  assert.notEqual(comment, tooling);
+
+  assert.match(none, /Do not comment on the pull request/);
+  assert.match(comment, /reply_to_review/);
+
+  assert.doesNotMatch(tooling, /Do not comment on the pull request/);
+  assert.doesNotMatch(tooling, /reply_to_review/);
+  assert.match(tooling, /no comment of your own/);
+  assert.match(tooling, /review tooling publishes/);
 });
 
 test('with two modes declared, the triage runs first and the review waits for it', async () => {
