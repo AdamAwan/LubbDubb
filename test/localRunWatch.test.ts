@@ -307,13 +307,13 @@ test('descendants walks parent links from the root, and survives a cycle', () =>
 });
 
 test('owners attributes by the checkout, so a service whose launching shell exited still counts', () => {
-  const dir = String.raw`C:\_git\NXG\.lubbdubb\local-run`;
+  const dir = String.raw`C:\_git\Example\.lubbdubb\local-run`;
   const table = [
     { pid: 100, ppid: 4, args: 'claude --output-format stream-json' },
     { pid: 101, ppid: 100, args: 'bash -c "tail -f log"' },
     { pid: 200, ppid: 25888, args: String.raw`"C:\Program Files\dotnet\dotnet.exe" "${dir}\Products\API\API.dll"` },
     { pid: 201, ppid: 32948, args: String.raw`"C:\Program Files\nodejs\node.exe" "${dir}\UI\vite.js"` },
-    { pid: 300, ppid: 1, args: String.raw`dotnet.exe C:\_git\NXG-other\.lubbdubb\local-run\API.dll` },
+    { pid: 300, ppid: 1, args: String.raw`dotnet.exe C:\_git\Example-other\.lubbdubb\local-run\API.dll` },
     { pid: 301, ppid: 1, args: String.raw`C:\Windows\System32\svchost.exe -k netsvcs` },
   ];
   assert.deepEqual(
@@ -327,12 +327,12 @@ test('owners attributes by the checkout, so a service whose launching shell exit
 });
 
 test('startedIn matches inside the directory, and not one that merely starts the same', () => {
-  const dir = String.raw`C:\_git\NXG\.lubbdubb\local-run`;
+  const dir = String.raw`C:\_git\Example\.lubbdubb\local-run`;
   assert.equal(startedIn(String.raw`"${dir}\UI\vite.js"`, dir), true);
   assert.equal(startedIn(dir, dir), true, 'the directory itself, with nothing after it');
-  assert.equal(startedIn('c:/_GIT/nxg/.lubbdubb/LOCAL-RUN/ui/vite.js', dir), true);
+  assert.equal(startedIn('c:/_GIT/example/.lubbdubb/LOCAL-RUN/ui/vite.js', dir), true);
   assert.equal(startedIn(String.raw`${dir}-2\UI\vite.js`, dir), false);
-  assert.equal(startedIn(String.raw`C:\_git\NXG\UI\vite.js`, dir), false);
+  assert.equal(startedIn(String.raw`C:\_git\Example\UI\vite.js`, dir), false);
   assert.equal(startedIn('', dir), false);
   assert.equal(startedIn('anything at all', ''), false, 'a run with no checkout claims nothing');
 });

@@ -548,7 +548,7 @@ agent to release a gate that was about to release itself. A rule claiming the ch
 a non-dispatch action shadows the default, which is how an operator turns it off:
 
 ```json
-{ "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" }
+{ "match": "Example-CI", "states": ["pending"], "onFailure": "ignore" }
 ```
 
 That is the whole lever for a deployment where required builds expire on **every** push, and the
@@ -608,7 +608,7 @@ reading the file is not the same as knowing the policy.
         "onFailure": "dispatch",
         "guidance": "Run `/pr-agent-review` on this branch; the gate clears when it posts its status."
       },
-      { "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" }
+      { "match": "Example-CI", "states": ["pending"], "onFailure": "ignore" }
     ]
   }
 }

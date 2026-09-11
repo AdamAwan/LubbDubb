@@ -141,7 +141,7 @@ provider stating a fact rather than an operator stating a preference, which is w
 config: the config-only alternative — `states: ["pending"]` on the build checks — also fires on every
 build that is merely mid-flight, dispatching an agent to release a gate that was about to release
 itself. An operator who wants it back can still shadow the default with a rule claiming the check in
-`pending` and ignoring it — `{ "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" }` — which
+`pending` and ignoring it — `{ "match": "Example-CI", "states": ["pending"], "onFailure": "ignore" }` — which
 is the case for a deployment where every push expires the same required build. That rule claims nothing
 when the build genuinely goes red, so its failures keep dispatching; `states: ["failing", "pending"]`
 would mute both. The pending-only `ignore` is legal _because_ of this default, and `validateCiPolicy`
