@@ -92,20 +92,17 @@ function Row({ check }: { check: ProposedCheck }): JSX.Element {
           )
         )}
       </div>
+      {/* Only what the steps beside them do *not* already say. A chip repeating the
+          actor of every step is a second reading of the same fact, stranded at the
+          far edge of a wide card; the nomination has its own line under the steps. */}
       <div className="vp-flags">
         {check.carriesQuery && (
-          <Tag tone="blue" title="This check reads the deployed store; its query is approved on its own dry run">
+          <Tag tone="amber" title="This check reads the deployed store; its query is approved on its own dry run">
             query
           </Tag>
         )}
-        {check.fleetBlocked ? (
+        {check.fleetBlocked && (
           <Tag title="A person carries the first step, so this one can never be dispatched">yours</Tag>
-        ) : (
-          check.fleetCandidate && (
-            <Tag tone="green" title="The planner thinks an agent could run this; handing it over is still yours">
-              fleet?
-            </Tag>
-          )
         )}
       </div>
     </li>

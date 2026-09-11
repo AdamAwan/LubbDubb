@@ -3,7 +3,6 @@ import { issueOrigin } from '../../plans/planning.js';
 import {
   checkSetReleased,
   proposedCheckSet,
-  queryNotice,
   validationPlanProposalHold,
   validationPlanProposalRef,
 } from '../../validation/planApproval.js';
@@ -36,12 +35,11 @@ export function validationPlanApproval(s: StageContext): void {
       note: record.note,
       hint: record.hint,
       set: proposedCheckSet(checks),
-      prompt:
-        s.templates.render('validation-plan-approval', {
-          number: issue.number,
-          title: issue.title,
-          checks: checks.length,
-        }) + queryNotice(checks),
+      prompt: s.templates.render('validation-plan-approval', {
+        number: issue.number,
+        title: issue.title,
+        checks: checks.length,
+      }),
       rule: 'validation-plan-approval',
       reason:
         `Issue #${issue.number} has a validation check set of ${checks.length} check(s) and nothing reads it as ` +

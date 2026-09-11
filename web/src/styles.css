@@ -11212,10 +11212,14 @@ button.pk.pk {
   background: var(--border-lo);
   border: 1px solid var(--border-lo);
 }
+/* The body is held to a reading measure and the flags sit *against* it, not
+   against the card's right edge: this card is as wide as the panel it is in, and
+   a chip pinned 900px from the text it belongs to reads as decoration. */
 .vp-row {
   display: grid;
-  grid-template-columns: 2ch 1fr auto;
-  gap: 10px;
+  grid-template-columns: 2ch minmax(0, 74ch) auto;
+  justify-content: start;
+  gap: 12px;
   align-items: start;
   padding: 9px 10px;
   background: var(--panel-2);
@@ -11292,9 +11296,10 @@ button.pk.pk {
 }
 .vp-flags {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
-  align-items: flex-end;
+  align-items: baseline;
+  padding-top: 1px;
 }
 @media (max-width: 640px) {
   .vp-row {
@@ -11302,7 +11307,6 @@ button.pk.pk {
   }
   .vp-flags {
     grid-column: 2;
-    flex-direction: row;
   }
   .vp-steps li {
     grid-template-columns: 11ch 1fr;

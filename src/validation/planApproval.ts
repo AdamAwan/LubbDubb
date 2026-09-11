@@ -51,12 +51,3 @@ export function proposedCheckSet(checks: readonly ValidationCheck[]): ProposedCh
     carriesQuery: check.steps.some((step) => step.kind === 'state'),
   }));
 }
-
-export function queryNotice(checks: readonly ValidationCheck[]): string {
-  const carrying = checks.filter((check) => check.steps.some((step) => step.kind === 'state'));
-  if (carrying.length === 0) return '';
-  return (
-    `\n\n${carrying.map((c) => c.letter).join(', ')} read the deployed store. Accepting does not approve the ` +
-    'query each reads it with — that is its own dry run, per environment.'
-  );
-}
