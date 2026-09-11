@@ -374,12 +374,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'validation-plan-approval': {
     placeholders: ['number', 'title', 'checks'],
     template:
-      'The validation check set for issue #{number} ("{title}") has been written against the delivered code, and ' +
-      'nothing runs it until you accept it — {checks} check(s).\n\n' +
-      'Accepting releases the set: the bench draws it, a sheet can assemble off it, and any check you hand to the ' +
-      'fleet can be dispatched. Rejecting sends it back to be written again — say what is wrong with it and the ' +
-      'next planner is given your words.',
-    doc: "Put to a human when the validation planner has authored a goal's check set (rule `validation-plan-approval`). A proposal, not a question: accepting releases the set and nothing reads it as work before that. The set itself — the planner's note, where it departed from the plan's hint, every check with its journey and who each step falls to — is *not* templated: it is appended by the rule and carried as the escalation's `detail`, so an override that never learned about steps cannot drop the half the operator cannot decide without. Placeholders: {number} {title} {checks} (how many checks the set declares).",
+      '{checks} check(s) written against the delivered code for issue #{number} ("{title}"), and nothing runs ' +
+      'them until you accept.\n\n' +
+      'Accepting releases the set — the bench draws it and a check you hand to the fleet can be dispatched. ' +
+      'Rejecting sends it back to be written again; say what is wrong and the next planner is given your words.',
+    doc: "Put to a human when the validation planner has authored a goal's check set (rule `validation-plan-approval`). A proposal, not a question: accepting releases the set and nothing reads it as work before that. Deliberately short, because the set is *not* prose: every check, its journey and who each step falls to ride on the action as structure and are drawn as rows, so an override cannot bury the thing the verdict is actually about. The planner's own note is carried beside it as the escalation's `detail`. Placeholders: {number} {title} {checks} (how many checks the set declares).",
   },
   'plan-amendment': {
     placeholders: ['number', 'title', 'who', 'note'],

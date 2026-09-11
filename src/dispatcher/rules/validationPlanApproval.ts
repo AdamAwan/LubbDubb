@@ -2,7 +2,7 @@ import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
 import {
   checkSetReleased,
-  describeCheckSet,
+  proposedCheckSet,
   queryNotice,
   validationPlanProposalHold,
   validationPlanProposalRef,
@@ -33,7 +33,9 @@ export function validationPlanApproval(s: StageContext): void {
       originRef: origin,
       issueNumber: issue.number,
       checks: checks.length,
-      detail: describeCheckSet({ record, checks }),
+      note: record.note,
+      hint: record.hint,
+      set: proposedCheckSet(checks),
       prompt:
         s.templates.render('validation-plan-approval', {
           number: issue.number,

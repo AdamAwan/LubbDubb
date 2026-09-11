@@ -131,7 +131,33 @@ const ActionSchema = z.discriminatedUnion('type', [
     originRef: z.string().min(1),
     issueNumber: z.number().int(),
     checks: z.number().int().nonnegative(),
-    detail: z.string().min(1),
+    note: z.string().min(1).nullable().default(null),
+    hint: z.string().min(1).nullable().default(null),
+    // The set as it was put to the operator. Carried on the action rather than re-read at draw time,
+    // `propose_plan`'s caveats' own rule: the verdict is on what was proposed.
+    set: z
+      .array(
+        z.object({
+          letter: z.string().min(1),
+          title: z.string().min(1),
+          expect: z.string(),
+          steps: z
+            .array(
+              z.object({
+                kind: z.enum(['browser', 'suite', 'screenshot', 'state', 'signal', 'measure', 'manual']),
+                do: z.string(),
+                actor: z.enum(['human', 'fleet']),
+                why: z.string().nullable().default(null),
+              }),
+            )
+            .default([]),
+          fleetCandidate: z.boolean().default(false),
+          candidateWhy: z.string().nullable().default(null),
+          fleetBlocked: z.boolean().default(false),
+          carriesQuery: z.boolean().default(false),
+        }),
+      )
+      .default([]),
     prompt: z.string().min(1),
     ...base,
   }),

@@ -1,5 +1,5 @@
 import { fleetCanStart } from './steps.js';
-import type { Proposal, ValidationCheck, ValidationPlanRecord } from '../types.js';
+import type { ProposedCheck, Proposal, ValidationCheck, ValidationPlanRecord } from '../types.js';
 
 // → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
 
@@ -34,63 +34,29 @@ export function checkSetReleased(input: {
 }
 
 /**
- * What the operator is actually deciding about, **appended** to the rendered ask rather than
- * interpolated into it: the planner's note, and every check with its journey and who each step falls
- * to. A card that says "four checks" and does not show them asks for a verdict on a number.
- * → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+ * The set as it is put to the operator: one entry per check, carried on the action so the ask draws
+ * structure rather than a paragraph. A card that says "three checks" and hands over prose asks for a
+ * verdict on a number; a card that draws the journey and who each step falls to asks for one on the
+ * set. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
  */
-export function describeCheckSet(input: {
-  record: ValidationPlanRecord | null;
-  checks: readonly ValidationCheck[];
-}): string {
-  const lines: string[] = [];
-  if (input.record?.note != null) lines.push(`**What the planner says**\n\n${input.record.note}\n`);
-  if (input.record?.hint != null) lines.push(`**What the plan asked for**\n\n> ${input.record.hint}\n`);
-  if (input.checks.length === 0) {
-    lines.push(
-      '**No checks**\n',
-      input.record?.emptyReason == null
-        ? 'The planner declared none and gave no account of the absence.'
-        : input.record.emptyReason,
-    );
-    return lines.join('\n');
-  }
-  for (const check of input.checks) {
-    lines.push(`**${check.letter} — ${check.title}**\n`);
-    if (check.do.trim() !== '') lines.push(`${check.do}\n`);
-    if (check.expect.trim() !== '') lines.push(`Expects: ${check.expect}\n`);
-    if (check.steps.length > 0) {
-      lines.push(
-        ...check.steps.map(
-          (step, at) =>
-            `${at + 1}. \`${step.kind}\` ${step.do} — ${step.actor === 'fleet' ? 'the fleet' : 'you'}` +
-            (step.actor === 'fleet' || step.why === null ? '' : ` (${step.why})`),
-        ),
-        '',
-      );
-      if (fleetCanStart(check.steps) === false)
-        lines.push('Its first step is a person’s, so the fleet cannot start this one.\n');
-    }
-    if (check.fleetCandidate)
-      lines.push(`The planner nominates the fleet${check.candidateWhy === null ? '' : `: ${check.candidateWhy}`}\n`);
-  }
-  return lines.join('\n');
+export function proposedCheckSet(checks: readonly ValidationCheck[]): ProposedCheck[] {
+  return checks.map((check) => ({
+    letter: check.letter,
+    title: check.title,
+    expect: check.expect,
+    steps: check.steps.map((step) => ({ kind: step.kind, do: step.do, actor: step.actor, why: step.why })),
+    fleetCandidate: check.fleetCandidate,
+    candidateWhy: check.candidateWhy,
+    fleetBlocked: fleetCanStart(check.steps) === false,
+    carriesQuery: check.steps.some((step) => step.kind === 'state'),
+  }));
 }
 
-/**
- * Every check carrying a `state` step, which is the one thing on this card that a release does not
- * authorize. Agent-authored SQL against a real store is approved on its own dry run, keyed on
- * `(query digest, environment)` — a per-place consent, which an accept on one goal must not spend.
- * Naming them here is the other half of that: an operator who accepts four checks and then meets a
- * `blocked` row was not told.
- * → docs/spec/36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run
- */
 export function queryNotice(checks: readonly ValidationCheck[]): string {
   const carrying = checks.filter((check) => check.steps.some((step) => step.kind === 'state'));
   if (carrying.length === 0) return '';
   return (
-    `\n\n${carrying.map((c) => c.letter).join(', ')} read the deployed store, and accepting this set does not ` +
-    'approve what they read it with. A query runs once you have read it beside what it returned, on its own dry ' +
-    'run and per environment; until then the check is `blocked` and says so.'
+    `\n\n${carrying.map((c) => c.letter).join(', ')} read the deployed store. Accepting does not approve the ` +
+    'query each reads it with — that is its own dry run, per environment.'
   );
 }

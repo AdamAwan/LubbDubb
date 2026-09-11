@@ -288,8 +288,7 @@ export class ActionExecutor {
               context: {
                 originRef: action.originRef,
                 issueNumber: action.issueNumber,
-                detail: action.detail,
-                detailFrom: 'What the validation planner wrote',
+                ...(action.note === null ? {} : { detail: action.note, detailFrom: 'What the planner says' }),
               },
             });
             const proposal = store.createProposal({

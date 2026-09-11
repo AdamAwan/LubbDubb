@@ -162,7 +162,21 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-function asks(actions: { type: string }[]): { type: string; checks?: number; detail?: string }[] {
+interface Ask {
+  type: string;
+  checks?: number;
+  note?: string | null;
+  hint?: string | null;
+  set?: {
+    letter: string;
+    title: string;
+    steps: { kind: string; actor: string }[];
+    fleetBlocked: boolean;
+    carriesQuery: boolean;
+  }[];
+}
+
+function asks(actions: { type: string }[]): Ask[] {
   return actions.filter((a) => a.type === 'propose_validation_plan') as never;
 }
 
@@ -178,15 +192,63 @@ test('an authored check set is put to the operator, and nothing runs it until th
   const ask = asks(decided.actions);
   assert.equal(ask.length, 1, 'the set is proposed');
   assert.equal(ask[0]?.checks, 1);
-  assert.match(
-    ask[0]?.detail ?? '',
-    /wrote two checks against the merged importer/,
-    'and the planner’s own note is on the card — a verdict on a number is not a verdict',
+  assert.equal(
+    ask[0]?.note,
+    'wrote two checks against the merged importer',
+    'the planner’s own note rides on the ask — a verdict on a number is not a verdict',
+  );
+  assert.deepEqual(
+    (ask[0]?.set ?? []).map((c) => [c.letter, c.title]),
+    [['A', 'The export opens in Excel']],
+    'and so does the set itself, as structure the card draws rather than a paragraph',
   );
   assert.deepEqual(
     checkDispatches(decided.actions),
     [],
     'a check handed to the fleet on an unaccepted set dispatches nothing',
+  );
+});
+
+test('the ask carries each check’s journey, who carries each step, and which read the store', async () => {
+  const withSteps = check({
+    steps: [
+      {
+        kind: 'manual',
+        do: 'Seed a supplier account',
+        area: null,
+        when: 'inline',
+        script: null,
+        scriptSweptAt: null,
+        actor: 'human',
+        why: null,
+      },
+      {
+        kind: 'state',
+        do: 'Count the audit rows',
+        area: null,
+        when: 'inline',
+        script: null,
+        scriptSweptAt: null,
+        actor: 'fleet',
+        why: null,
+      },
+    ],
+  });
+  const decided = await new RuleDispatcher().decide(ctx({ validationChecks: [withSteps] }));
+  const set = asks(decided.actions)[0]?.set ?? [];
+  assert.deepEqual(
+    set[0]?.steps.map((s) => [s.kind, s.actor]),
+    [
+      ['manual', 'human'],
+      ['state', 'fleet'],
+    ],
+    'the journey is drawn in order, with each step’s actor — prose in a `do` cannot say that to a reader',
+  );
+  assert.equal(set[0]?.fleetBlocked, true, 'a first step that is a person’s is stated, not left to be inferred');
+  assert.equal(
+    set[0]?.carriesQuery,
+    true,
+    'and a check reading the store is flagged: the accept never covers its query',
   );
 });
 
@@ -223,7 +285,7 @@ test('an empty set is proposed too — declaring nothing is the verdict worth a 
   const ask = asks(decided.actions);
   assert.equal(ask.length, 1);
   assert.equal(ask[0]?.checks, 0);
-  assert.match(ask[0]?.detail ?? '', /area Exports asserts the file/);
+  assert.deepEqual(ask[0]?.set, [], 'an empty set is proposed as an empty set');
 });
 
 test('accepting releases the set; rejecting takes the stamp off and leaves the rows to amend', async () => {

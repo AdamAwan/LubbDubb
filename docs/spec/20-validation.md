@@ -223,6 +223,15 @@ exactly the verdict a second pair of eyes is for, and the alternative is worse t
 unreleased set is a sheet that waits, so a set nobody is asked about is a goal whose arrivals defer for
 ever. The ask carries `emptyReason` as its whole body.
 
+**The ask is drawn as structure, never as prose.** The set rides on the action as one entry per check
+— its journey, who carries each step, the planner's nomination, and whether it reads the store — and
+the cockpit draws rows from that (`CheckSetAsk`, `web/src/components/CheckSetAsk.tsx`). It reached the
+card as markdown first, and a set of any size read as one column of text: no way to compare two checks,
+find the one a person has to carry, or see which one reads the store. A verdict is being asked for on
+the **set**, so the set has to be scannable. What rides on the action is also what is drawn, for
+`planCaveats`' reason one subsystem over: an amendment landing between the ask and the answer must not
+change what the operator is agreeing to.
+
 **A release authorizes no query.** A check carrying a `state` step reads the deployed store with
 agent-authored SQL, and that consent is keyed on `(query digest, environment)` and answered on its own
 dry run ([36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)). Folding

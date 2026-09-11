@@ -2846,6 +2846,46 @@ export function buildDemoState(): DemoSeed {
           originRef: 'issue:364',
           issueNumber: 364,
           checks: 3,
+          note:
+            'The hint asked for the console warning and the note to agree; they do, so that is check B rather than ' +
+            'two. Where I went a different way: the deadlock itself is not reachable from outside, so C reads the ' +
+            'audit rows instead of trying to provoke it.',
+          hint: 'Worth checking that a single watcher actually warns, and that the note says what the console says.',
+          set: [
+            {
+              letter: 'A',
+              title: 'A deployment with one watcher warns on the console',
+              expect: 'The warning names the watcher count and links the deadlock note.',
+              steps: [
+                { kind: 'browser', do: 'Open the console with one watcher configured', actor: 'fleet', why: null },
+                { kind: 'screenshot', do: 'The warning as it draws', actor: 'fleet', why: null },
+              ],
+              fleetCandidate: true,
+              candidateWhy: 'drives the console and reads a banner; writes nothing',
+              fleetBlocked: false,
+              carriesQuery: false,
+            },
+            {
+              letter: 'B',
+              title: 'The architecture note and the console warning say the same thing',
+              expect: 'Both say two watchers, and neither describes a retry that does not exist.',
+              steps: [{ kind: 'manual', do: 'Read the two side by side', actor: 'human', why: null }],
+              fleetCandidate: false,
+              candidateWhy: null,
+              fleetBlocked: true,
+              carriesQuery: false,
+            },
+            {
+              letter: 'C',
+              title: 'A starved maintenance job is recorded once, not per retry',
+              expect: 'One row per starved job, with the watcher count on it.',
+              steps: [{ kind: 'state', do: 'Count job_audit rows for the starved job', actor: 'fleet', why: null }],
+              fleetCandidate: true,
+              candidateWhy: 'reads the store and nothing else',
+              fleetBlocked: false,
+              carriesQuery: true,
+            },
+          ],
         },
         note: null,
         decidedBy: null,
@@ -2872,41 +2912,19 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'The validation check set for issue #364 ("Document the two-watcher requirement for maintenance jobs") ' +
-          'has been written against the delivered code, and nothing runs it until you accept it — 3 check(s).\n\n' +
-          'Accepting releases the set: the bench draws it, a sheet can assemble off it, and any check you hand to ' +
-          'the fleet can be dispatched. Rejecting sends it back to be written again — say what is wrong with it ' +
-          'and the next planner is given your words.\n\n' +
-          'C reads the deployed store, and accepting this set does not approve what it reads it with. A query runs ' +
-          'once you have read it beside what it returned, on its own dry run and per environment; until then the ' +
-          'check is `blocked` and says so.',
+          '3 check(s) written against the delivered code for issue #364 ("Document the two-watcher requirement for ' +
+          'maintenance jobs"), and nothing runs them until you accept.\n\n' +
+          'Accepting releases the set — the bench draws it and a check you hand to the fleet can be dispatched. ' +
+          'Rejecting sends it back to be written again; say what is wrong and the next planner is given your ' +
+          'words.',
         context: {
           originRef: 'issue:364',
           issueNumber: 364,
-          detailFrom: 'What the validation planner wrote',
+          detailFrom: 'What the planner says',
           detail:
-            '**What the planner says**\n\n' +
             'The hint asked for the console warning and the note to agree; they do, so that is check B rather ' +
             'than two. Where I went a different way: the deadlock itself is not reachable from outside, so C ' +
-            'reads the audit rows instead of trying to provoke it.\n\n' +
-            '**What the plan asked for**\n\n' +
-            '> Worth checking that a single watcher actually warns, and that the note says what the console ' +
-            'says.\n\n' +
-            '**A — A deployment with one watcher warns on the console**\n\n' +
-            'Bring the stack up with `WATCHERS=1` and open the console.\n\n' +
-            'Expects: The warning names the watcher count and links the deadlock note.\n\n' +
-            '1. `browser` Open the console with one watcher configured — the fleet\n' +
-            '2. `screenshot` The warning as it draws — the fleet\n\n' +
-            'The planner nominates the fleet: drives the console and reads a banner; writes nothing\n\n' +
-            '**B — The architecture note and the console warning say the same thing**\n\n' +
-            'Read the deadlock section against the warning text.\n\n' +
-            'Expects: Both say two watchers, and neither describes a retry that does not exist.\n\n' +
-            '1. `manual` Read the two side by side — you\n\n' +
-            'Its first step is a person’s, so the fleet cannot start this one.\n\n' +
-            '**C — A starved maintenance job is recorded once, not per retry**\n\n' +
-            'Read the audit rows for the job the single watcher starved.\n\n' +
-            'Expects: One row per starved job, with the watcher count on it.\n\n' +
-            '1. `state` Count `job_audit` rows for the starved job — the fleet\n',
+            'reads the audit rows instead of trying to provoke it.',
         },
         agentId: null,
         taskId: null,
