@@ -1806,6 +1806,69 @@ a.cn-qbody {
 .cn-tick li {
   margin-bottom: 5px;
 }
+/* A rendered detail's own subheading. The row the watch files carries one per
+   regressed check, and until it had a heading the check's title, its reading and
+   its query were one undifferentiated run of paragraphs. Ruled rather than merely
+   larger: on a row that exists because something reads wrong, where one check ends
+   and the next begins is the thing to find first. */
+.cn-tick h3 {
+  margin: 16px 0 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cn-line-soft);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cn-fg);
+  text-wrap: balance;
+}
+.cn-tick h3:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* A fence that named a language, drawn by `CodeBlock`. Its own scroller: a Kusto
+   line is long, and a row that scrolls the page sideways to show one is a row
+   nobody reads twice — `.cn-sig-query`'s reason, one surface over. */
+.md-code {
+  margin: 7px 0 0;
+  padding: 8px 11px;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line-soft);
+  border-radius: var(--cn-r-sm);
+  font: 11.5px/1.65 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  overflow-x: auto;
+  white-space: pre;
+}
+/* Inside the `<pre>` rather than in a wrapper around it: several stylesheets reach
+   a fence as a direct child, and a wrapper would unstyle them with nothing red. */
+.md-copy {
+  float: right;
+  margin: -2px -4px 0 10px;
+  padding: 1px 7px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel);
+  color: var(--cn-fg-faint);
+  font: 11px/1.6 var(--cn-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.md-copy:hover {
+  color: var(--cn-fg);
+  border-color: var(--cn-line-hi);
+}
+/* The pipe is the only structure a query has that can be found without a parser,
+   so it is the only thing coloured. */
+.md-kql-op {
+  color: var(--cn-accent);
+}
+.md-link {
+  color: var(--cn-blue-ink);
+}
+.md-link:hover {
+  color: var(--cn-blue-ink-hi);
+}
 .cn-kv {
   display: flex;
   justify-content: space-between;

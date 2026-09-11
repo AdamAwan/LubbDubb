@@ -6751,9 +6751,9 @@ Text an agent wrote for a human to read is drawn by **structure**, not as one ru
 rules, and the split between the first two is the whole of it:
 
 - **Prose is markdown.** `renderMarkdown` (`web/src/components/markdown.ts`) — a hand-written subset
-  (ATX headings, unordered and ordered lists, fenced and inline code, blockquotes, paragraphs, and
-  inline `code`, `**strong**` and `*emphasis*`), returning React nodes and **never**
-  `dangerouslySetInnerHTML`. It does **not** render links: a URL in a write-up appears as literal text.
+  (ATX headings, unordered and ordered lists, fenced and inline code, blockquotes, paragraphs,
+  `[text](url)` links, and inline `code`, `**strong**` and `*emphasis*`), returning React nodes and
+  **never** `dangerouslySetInnerHTML`.
   The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
   sharper reason here: agent-authored text meets a renderer that never interprets HTML, so there is no
   injection surface to reason about at all. Used by the goal page's bench detail, the plan and retro
@@ -6765,6 +6765,43 @@ rules, and the split between the first two is the whole of it:
 - **A field the operator scans is drawn as one line.** An obstacle's claim is one line by the intake's
   own rule ([27](27-obstacles.md#the-intake)) and clamped in CSS regardless, because free text an agent
   wrote is free text however it was asked for.
+
+#### A link's scheme is checked in the pattern, not after it
+
+The link arm matches `https?://` and nothing else, so the refusal is the _match_ rather than a check
+somebody could forget to run downstream: a `javascript:` written into an operator's config, or into
+text an agent wrote, never becomes an `<a>` at all — it falls through and draws as the literal
+`[text](url)` it is. That is the same argument the no-HTML rule makes one line up, made in the one
+place a URL now reaches the DOM. Every link opens in a new tab (`rel="noreferrer"`), because what
+these point at is outside the cockpit by definition.
+
+Links were kept out of this renderer for a long time on the grounds that nothing in it needed to
+navigate; the post-deploy watch's finding is what changed that, because there the destination is the
+operator's own telemetry tool and the alternative is a URL to copy by hand
+([29](29-post-deploy-watch.md#the-bench-row)).
+
+#### A fence that names a language carries a copy control
+
+A bare fence draws the plain `<pre><code>` it always has. A fence carrying an info string — ` ```kql `
+— draws through `CodeBlock` (`web/src/components/CodeBlock.tsx`), which adds a **Copy** button and, for
+`kql`, wraps the query one operator per line with the pipe drawn as the operator it is.
+
+Two things about that are load-bearing:
+
+- **Copy hands over the fence's own text, never the wrapped display.** The wrap is presentation; a
+  query an operator pastes into a portal must be the one the harness put to the environment, character
+  for character, however the row chose to draw it. One is the source and the other is a view of it, and
+  the day those two swap round is the day an operator debugs a query the harness never ran.
+- **The button lives _inside_ the `<pre>`, not in a wrapper around it.** Several stylesheets reach a
+  fence as a direct child (`.rp-rest > pre`, and others), so a wrapper element on every fence in the
+  cockpit would unstyle them — a layout that quietly comes apart on surfaces nobody touched, with
+  nothing red. Which is also why the control is gated on the info string rather than added to every
+  fence: today exactly one caller names a language.
+
+The `kql` wrap finds the pipe and nothing else. There is no parser and no keyword list, because a
+highlighter guessing at a dialect nobody tested it against is confidently wrong in a place an operator
+is reading character by character; a pipe inside a quoted string does not split a line, which is the
+whole of the lexing.
 
 ### Tracker-authored prose
 

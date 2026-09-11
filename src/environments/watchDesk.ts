@@ -43,6 +43,7 @@ export class WatchDesk {
           windows: store.listWatchWindows(),
           checks: store.listGoalWatches(),
           readings: store.listWatchReadings(),
+          environments: this.deps.environments,
         }),
         existing: store.listHumanTasksOfKind('watch'),
       });

@@ -574,6 +574,39 @@ counted. Both are the declaration's own words, written before any reading existe
 summary of the numbers; and `why` is optional on a declaration, so a check that declared none says
 nothing rather than inventing one.
 
+#### Each check is a heading, and its query is a `kql` fence
+
+The detail is markdown and the cockpit's own renderer draws it
+([17](17-cockpit.md#agent-authored-prose)), which is what settles how much of this can be structure
+rather than more prose. A check's **title is an ATX heading** (`### `), not another bold paragraph:
+a window can regress on several checks at once, and until the titles were headings where one check
+ended and the next began was a thing an operator worked out from the wording. The heading is what the
+row's own stylesheet rules between.
+
+The query goes in a fence that **names its language** — ` ```kql ` — which is what earns it the copy
+control and the one-operator-per-line wrap
+([17](17-cockpit.md#a-fence-that-names-a-language-carries-a-copy-control)). The fence body stays the
+declaration's query **verbatim**, and that is the invariant: the wrap is the cockpit's, the copy is
+the fence's, and a fence rewritten here to look nicer would hand an operator a query the harness never
+put to the environment. A dialect other than Kusto is a different info string, not a reflowed body.
+
+#### Running it, where the environment said where
+
+`watch.queryUrl` on the environment is a **URL template** an operator writes once, carrying `{query}`
+(URL-encoded) or `{queryGzip}` (gzipped, base64'd, then URL-encoded — the shape the Azure portal's
+Logs deep link wants). Filled per check by `watchQueryUrl` (`src/environments/watchQueryUrl.ts`), it
+becomes a `Run it on <environment> ↗` link under the fence.
+
+It is **optional and absent by default**, and no template draws **no link** rather than a dead one:
+the harness has no idea where a given deployment's telemetry is read, and a guessed URL is a control
+that goes somewhere wrong. `validateEnvironments` refuses a template carrying neither token, because
+one that carries neither links every check on the deployment to the same page with nothing of its own
+query in it — which reads as configured and is useless, the failure this document's refusals exist
+for.
+
+The tokens are declared once, in `watchQueryUrl.ts`, and the refusal imports them from there: the
+substitution and the check on which substitutions exist cannot come to disagree.
+
 It closes by saying what each of its three answers does — **Raise a bug** hands the fleet these
 numbers as the operator's own report, **Done** says they looked and this is not a regression,
 **Decline** says the same and that they are not acting on it — because the row's whole arm is the
@@ -666,6 +699,7 @@ number in front of a person.
         "observe": "./scripts/telemetry.sh testUk",
         "schema": "Structured logs land in `traces`, properties in `customDimensions`. Roles are orders-api, web, worker. SQL calls are in `dependencies` with type == 'SQL'.",
         "describe": "./scripts/telemetry-schema.sh testUk",
+        "queryUrl": "https://portal.azure.com/#blade/Microsoft_OperationsManagementSuite_Workspace/Logs/query/{queryGzip}",
       },
     },
     { "name": "liveUk", "at": "./scripts/deployed-sha.sh uk", "watch": { "observe": "./scripts/telemetry.sh uk" } },
@@ -694,7 +728,9 @@ can write it; nothing in `src/mcp/` touches config.
 
 - an empty `observe` on a declared `watch`, which leaves every check unanswerable forever;
 - a `holds` naming an obligation the harness does not file, so holding it would hold nothing;
-- a `describe` without an `observe`, which is a schema for a question nothing asks.
+- a `describe` without an `observe`, which is a schema for a question nothing asks;
+- a `queryUrl` carrying neither `{query}` nor `{queryGzip}`, which links every check to the same page
+  with nothing of its own query in it ([running it](#running-it-where-the-environment-said-where)).
 
 ## In the cockpit
 
@@ -771,6 +807,13 @@ bug-filing control beside it (`web/src/view/needsYou.ts`, `web/src/console/Needs
 `human_tasks` row like every other on the rail, so it folds off the reading the desk already took
 rather than computing a second one — which is the disagreement the strip's fold exists to prevent,
 made once for the whole cockpit.
+
+Its detail is the markdown the desk wrote, drawn by `renderMarkdown` like every other bench row, so
+the row's structure — a heading per check, the query in a `kql` fence with **Copy** beside it, and the
+`Run it on …` link where the environment named a `queryUrl` — is authored in one place and read in
+one. Nothing about the row is assembled a second time in the cockpit: a surface that rebuilt the
+reading from the snapshot would be free to disagree with the sentence beside it, which is the whole
+argument for the row being a `human_tasks` row in the first place.
 
 The control opens the bug modal already holding the row's own detail: the check, what it expected and
 what it read. A **seed rather than a payload** — it lands in the editable box every bug is composed

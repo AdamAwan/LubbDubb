@@ -334,6 +334,13 @@ test('validateEnvironments refuses a watch that cannot mean what it says', () =>
   refuse({ observe: '  ' }, /unanswerable forever/);
   refuse({ observe: 'x', holds: ['deploy'] }, /not an obligation the harness files/);
   refuse({ observe: 'x', forMs: 0 }, /positive number of milliseconds/);
+  refuse({ observe: 'x', queryUrl: '  ' }, /non-empty URL template/);
+  refuse({ observe: 'x', queryUrl: 'https://portal.example/logs' }, /carries none of/);
+  assert.doesNotThrow(() =>
+    validateEnvironments([
+      { name: 'testUk', at: 'x', watch: { observe: 'x', queryUrl: 'https://portal.example#q={queryGzip}' } },
+    ]),
+  );
   assert.throws(
     () => validateEnvironments([{ name: 'testUk', at: 'x', describe: 'y' } as unknown as EnvironmentConfig]),
     /belongs inside "watch"/,

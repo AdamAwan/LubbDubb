@@ -13,6 +13,8 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput } from '../src/types.js';
+import { watchQueryUrl } from '../src/environments/watchQueryUrl.js';
+import { gunzipSync } from 'node:zlib';
 
 const PROBE_MS = 5 * 60 * 1000;
 
@@ -334,11 +336,46 @@ test('the row carries the declaration the reading is measured against, so it can
   await system.harness.runCycle();
   const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
 
+  assert.match(detail, /^### Job X stops timing out$/m, 'the check\u2019s title is a heading, not another paragraph');
   assert.match(detail, /Why it was declared:\*\* job X timing out is what the fix was for/);
-  assert.match(detail, /```\ntraces \| where message has 'job X timed out'\n```/, 'the query, verbatim and runnable');
+  assert.match(
+    detail,
+    /```kql\ntraces \| where message has 'job X timed out'\n```/,
+    'the query, verbatim and runnable, in a fence that names what it is',
+  );
   assert.match(detail, /\*\*Raise a bug\*\*/, 'and what each of the row\u2019s three answers says');
   assert.match(detail, /\*\*Decline\*\*/);
   system.store.close();
+});
+
+test('a queryUrl puts a link to run the query on the row, and no template draws no link', async () => {
+  const observer = new FakeEnvironmentObserver(REGRESSED);
+  const linked: EnvironmentConfig = {
+    ...OPEN,
+    watch: { ...OPEN.watch!, queryUrl: 'https://portal.example/logs?q={query}' },
+  };
+  const system = build(observer, [linked]);
+  arrived(system);
+
+  await system.harness.runCycle();
+  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+
+  assert.match(
+    detail,
+    /\[Run it on testUk \u2197\]\(https:\/\/portal\.example\/logs\?q=traces%20%7C%20where%20message%20has%20'job%20X%20timed%20out'\)/,
+    'the declared query, encoded into the operator\u2019s own template',
+  );
+  system.store.close();
+
+  const plain = build(new FakeEnvironmentObserver(REGRESSED), [OPEN]);
+  arrived(plain);
+  await plain.harness.runCycle();
+  assert.doesNotMatch(
+    plain.store.listHumanTasksOfKind('watch')[0]?.detail ?? '',
+    /Run it on/,
+    'an environment that named no template draws no link rather than a dead one',
+  );
+  plain.store.close();
 });
 
 test('a check that declared no why still carries its query, and says nothing where there is nothing to say', async () => {
@@ -352,4 +389,22 @@ test('a check that declared no why still carries its query, and says nothing whe
   assert.doesNotMatch(detail, /Why it was declared/);
   assert.match(detail, /To see the rows yourself/);
   system.store.close();
+});
+
+test('watchQueryUrl fills both substitutions, and a gzipped one round-trips', () => {
+  const query = "traces | where message has 'job X timed out'";
+  assert.equal(watchQueryUrl(undefined, query), null, 'no template is no link');
+  assert.equal(watchQueryUrl('  ', query), null);
+  assert.equal(
+    watchQueryUrl('https://p.example/logs?q={query}', query),
+    `https://p.example/logs?q=${encodeURIComponent(query)}`,
+  );
+
+  const gzipped = watchQueryUrl('https://p.example#q={queryGzip}', query) ?? '';
+  const encoded = decodeURIComponent(gzipped.slice(gzipped.indexOf('#q=') + 3));
+  assert.equal(
+    gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8'),
+    query,
+    'the portal that unpacks it gets the declared query, character for character',
+  );
 });
