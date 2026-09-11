@@ -1,4 +1,5 @@
 import type { EnvironmentGate, RemoteRowKind } from '../types.js';
+import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
 
 // → docs/spec/24-environments.md
 
@@ -37,6 +38,7 @@ interface EnvironmentWatch {
   describe?: string;
   forMs?: number;
   holds?: EnvironmentGate[];
+  queryUrl?: string;
 }
 
 const ENVIRONMENT_GATES: readonly EnvironmentGate[] = ['validate', 'close_out'];
@@ -143,6 +145,7 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
     throw new Error(
       `${where}: "watch.forMs" must be a positive number of milliseconds — how long a window stays open.`,
     );
+  validateWatchQueryUrl(watch.queryUrl, where);
   if (watch.holds === undefined) return;
   if (!Array.isArray(watch.holds))
     throw new Error(`${where}: "watch.holds" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
@@ -152,6 +155,17 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
         `${where}: "${String(gate)}" is not an obligation the harness files, so holding it holds nothing. ` +
           `"watch.holds" names ${ENVIRONMENT_GATES.join(' / ')}.`,
       );
+}
+
+function validateWatchQueryUrl(queryUrl: string | undefined, where: string): void {
+  if (queryUrl === undefined) return;
+  if (typeof queryUrl !== 'string' || queryUrl.trim() === '')
+    throw new Error(`${where}: "watch.queryUrl" must be a non-empty URL template, or be left out.`);
+  if (!QUERY_URL_TOKENS.some((token) => queryUrl.includes(token)))
+    throw new Error(
+      `${where}: "watch.queryUrl" carries none of ${QUERY_URL_TOKENS.join(' / ')}, so every check would link to ` +
+        'the same page with nothing of its own query in it.',
+    );
 }
 
 const TENANT_SHAPES = ['tenant', 'tenantEnv', 'ensureTenant'] as const;

@@ -1,6 +1,7 @@
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchReading, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
+import { watchQueryUrl } from './watchQueryUrl.js';
 
 // → docs/spec/24-environments.md
 
@@ -24,6 +25,7 @@ interface RegressedCheck {
   said: string;
   why: string | null;
   query: string;
+  queryUrl: string | null;
 }
 
 interface WatchWindowReading {
@@ -43,6 +45,7 @@ export function watchWindowReadings(input: {
   windows: readonly WatchWindow[];
   checks: readonly GoalWatch[];
   readings: readonly WatchReading[];
+  environments?: readonly EnvironmentConfig[];
 }): WatchWindowReading[] {
   const newest = new Map<string, WatchReading>();
   for (const r of input.readings) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
@@ -61,6 +64,10 @@ export function watchWindowReadings(input: {
             said: reading.detail ?? 'it read outside what the check declared',
             why: check.why,
             query: check.query,
+            queryUrl: watchQueryUrl(
+              input.environments?.find((e) => e.name === window.environment)?.watch?.queryUrl,
+              check.query,
+            ),
           },
         ];
       }),
@@ -124,17 +131,18 @@ function findingDetail(window: WatchWindow, regressed: RegressedCheck[]): string
 
 function checkBlock(check: RegressedCheck, environment: string): string[] {
   return [
-    `**${check.title}**`,
+    `### ${check.title}`,
     '',
     check.said,
     '',
     ...(check.why === null ? [] : [`**Why it was declared:** ${check.why}`, '']),
     `**To see the rows yourself**, this is the query the watch put to ${environment}, unchanged:`,
     '',
-    '```',
+    '```kql',
     check.query,
     '```',
     '',
+    ...(check.queryUrl === null ? [] : [`[Run it on ${environment} ↗](${check.queryUrl})`, '']),
   ];
 }
 

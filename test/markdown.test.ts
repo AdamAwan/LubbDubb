@@ -67,3 +67,25 @@ test('without refUrls nothing links, and the markup is unchanged', () => {
   assert.doesNotMatch(html('landed in #142 last week'), /<a /);
   assert.match(html('landed in #142 last week'), /<p[^>]*>landed in #142 last week<\/p>/);
 });
+
+test('a fence that names a language carries a copy control; a bare one stays a plain <pre>', () => {
+  const named = html('```kql\ntraces | where a == 1 | count\n```');
+  assert.match(named, /<button[^>]*class="md-copy"[^>]*>Copy<\/button>/);
+  assert.match(named, /class="md-code md-code-kql"/);
+  assert.match(named, /<span class="md-kql-op">\|<\/span>/, 'the pipe is the structure, and the only thing coloured');
+  const bare = html('```\nnpm run check\n```');
+  assert.doesNotMatch(bare, /md-copy/, 'a wrapper on every fence would unstyle the ones reached as a direct child');
+  assert.match(bare, /<pre[^>]*><code[^>]*>npm run check/);
+});
+
+test('a pipe inside a quoted string does not start a new line', () => {
+  const out = html('```kql\ntraces | where m has "a | b"\n```');
+  assert.equal(out.match(/md-kql-op/g)?.length, 1);
+});
+
+test('a link is drawn only for http(s)', () => {
+  assert.match(html('[Run it ↗](https://portal.example/logs?q=x)'), /<a[^>]*href="https:\/\/portal\.example/);
+  const bad = html('[Run it](javascript:alert(1))');
+  assert.doesNotMatch(bad, /<a /);
+  assert.match(bad, /\[Run it\]/, 'and the refused one draws as the text it is');
+});
