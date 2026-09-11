@@ -464,6 +464,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     readying,
     sink: opts.sink ?? connector,
     agentModels: config.agentModels,
+    agentPermissionMode: config.agentPermissionMode,
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,

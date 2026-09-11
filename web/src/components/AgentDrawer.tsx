@@ -159,7 +159,7 @@ export function AgentDrawer({
           <Button onClick={onClose}>Close</Button>
         </div>
       </div>
-      {task && (task.originTitle || task.originSummary || task.dispatchReason || task.model) && (
+      {task && (task.originTitle || task.originSummary || task.dispatchReason || task.model || task.permissionMode) && (
         <div className="origin-context">
           {task.originTitle && (
             <div className="origin-title">
@@ -183,24 +183,40 @@ export function AgentDrawer({
           {task.originSummary && <div className="origin-summary">{task.originSummary}</div>}
           {task.dispatchReason && (
             <div className="dispatch-reason">
-              <span className="dispatch-reason-label">Dispatched because</span> {task.dispatchReason}
+              <span className="dispatch-reason-label">Dispatched because</span>
+              <span>{task.dispatchReason}</span>
             </div>
           )}
-          {/* What this run was launched on — the `agentModels` profile its rule
-                resolved to at dispatch, so reading a run says what it cost on.
-                Model and effort are one profile's two halves and read as one line;
-                an effort with no model is not a state the resolver can produce. */}
-          {task.model && (
-            <div className="dispatch-model">
-              <span className="dispatch-reason-label">Model</span> {task.model}
-              {task.effort && ` · ${task.effort} effort`}
+          {/* How this run was launched — the `agentModels` profile its rule resolved
+                to at dispatch, and the permission posture it was handed — so reading a
+                run says what it cost on and what it was allowed to do unattended. One
+                row of facts: each is a small reading, none is what the operator opened
+                the drawer for. Drawn from the stored values, never recomputed against
+                today's config: the policy moves, and a finished run must keep saying
+                what it was dispatched under. */}
+          {(task.model || task.permissionMode) && (
+            <div className="dispatch-meta">
+              {/* Model and effort are one profile's two halves and read as one fact;
+                    an effort with no model is not a state the resolver can produce. */}
+              {task.model && (
+                <span className="dispatch-fact">
+                  <span className="dispatch-reason-label">Model</span>
+                  <span>
+                    {task.model}
+                    {task.effort && ` · ${task.effort} effort`}
+                  </span>
+                </span>
+              )}
+              {task.permissionMode && (
+                <span className="dispatch-fact">
+                  <span className="dispatch-reason-label">Permission</span>
+                  <span title="The permission mode this agent was launched under">{task.permissionMode}</span>
+                </span>
+              )}
               {/* Which profile, and which level of the chain named it (#342). A
                     pinned run cost what somebody chose for this goal rather than
                     what its rule prices — and a bumped agent that reads as an
-                    ordinary one is the invisible half of pinning. Drawn from the
-                    stored source, never recomputed against today's config: the
-                    policy moves, and a finished run must keep saying what it was
-                    dispatched under. */}
+                    ordinary one is the invisible half of pinning. */}
               {task.profile && (
                 <Tag
                   tone={task.profileSource === 'pin' ? 'amber' : undefined}

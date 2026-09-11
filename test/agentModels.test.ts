@@ -234,12 +234,12 @@ test('a profile that names a permission mode launches under it, in place of the 
 
 test("a profile that names no permission mode launches on the fleet's own, which defaults to auto", async () => {
   const { args, task } = await dispatch({ profiles: PROFILES, default: 'deep' }, 935);
-  assert.equal(task.permissionMode, null);
+  assert.equal(task.permissionMode, 'auto', "the fleet's own is stamped on the row, so the drawer can read it");
   assert.equal(args[args.indexOf('--permission-mode') + 1], 'auto');
 });
 
 test('with no policy at all, every launch carries the fleet-wide permission mode', async () => {
   const { args, task } = await dispatch(undefined, 936);
-  assert.equal(task.permissionMode, null);
+  assert.equal(task.permissionMode, 'auto', 'and records it, with no profile to have named one');
   assert.equal(args[args.indexOf('--permission-mode') + 1], 'auto');
 });
