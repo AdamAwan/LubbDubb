@@ -604,11 +604,19 @@ Behaviour worth knowing:
   case-insensitively and stored under the casing of whichever tag definition the project already
   holds, so a tag the harness wrote as `lubbdubb-watch` can come back as `LubbDubb-Watch`, and an
   exact-match removal drops nothing while the PATCH still returns 200. The **write clears the field
-  rather than blanking it**: Azure reads a `System.Tags` value as the set of tag names to apply, so an
-  `add` of the empty string is accepted and changes nothing — dropping an item's *last* tag has to be
-  `{ op: 'remove', path: '/fields/System.Tags' }`. A write is skipped altogether when the fresh read
+  before it writes the survivors**: Azure reads a `System.Tags` value as the set of tag names to
+  *apply*, a merge rather than a replacement of the field, so an `add` of the tags being kept is a
+  no-op — they are already on the item, and the tag left out of it is never touched. A removal
+  expressed as the survivors alone therefore comes back 200 with the tag still there, for every item
+  that carries another tag; an `add` of the empty string, which is what dropping an item's *last* tag
+  would be, changes nothing for the same reason. So every write is the two-op patch
+  `[{ op: 'remove', path: '/fields/System.Tags' }, { op: 'add', path: '/fields/System.Tags', value:
+  <the tags being kept> }]` — correct whichever semantics Azure applies, and one path rather than a
+  last-tag case beside a general one. A write is skipped altogether when the fresh read
   already says what was asked for, which is also what keeps a `remove` off an item that carries no
-  tags. And the **write is verified**
+  tags. A fake that models the field as *replaced* makes the whole suite pass while the deployment
+  fails, so `test/azureWorkItemTags.test.ts` merges the written value into what it holds. And the
+  **write is verified**
   against the tags on the item Azure returns: a tag write that Azure accepts without applying throws,
   because the alternative is the quietest failure the harness has — dropping a watch tag reports
   success, the cockpit patches its own copy of the labels, the item leaves the tag-narrowed world

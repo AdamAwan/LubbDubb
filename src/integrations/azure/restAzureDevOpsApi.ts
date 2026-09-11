@@ -781,16 +781,16 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     if (current.some((t) => sameTag(t, tag)) === present) return;
     const kept = current.filter((t) => !sameTag(t, tag));
     const tags = present ? [...kept, tag] : kept;
-    const patch =
-      tags.length === 0
-        ? { op: 'remove', path: '/fields/System.Tags' }
-        : { op: 'add', path: '/fields/System.Tags', value: tags.join('; ') };
+    const patch = [
+      { op: 'remove', path: '/fields/System.Tags' },
+      { op: 'add', path: '/fields/System.Tags', value: tags.join('; ') },
+    ];
     const updated = await this.request<{ fields?: Record<string, unknown> }>(
       this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`),
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json-patch+json' },
-        body: JSON.stringify([patch]),
+        body: JSON.stringify(patch),
       },
     );
     const fields = updated?.fields;
