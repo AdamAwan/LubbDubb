@@ -209,7 +209,14 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
 
 - **The allow-list (`agentAllowedTools`).** A `permissions.allow` fragment merged into `--settings`,
   pre-approving the mechanical validate/commit/push commands (the JS toolchain, `git`, `gh`) so the
-  default config takes an issue to an opened PR unattended. It rides in `--settings`, deliberately
+  default config takes an issue to an opened PR unattended. It names the gated **non-Bash** tools too
+  — `Read`, `Glob`, `Grep`, `Skill`, `WebFetch`, `WebSearch` — because the permission mode is not a
+  backstop the allow-list can lean on: what the mode declines reaches `request_permission`, which
+  blocks on a person. `Skill` is the one that shows why the default must be wide. A slash command is
+  a gated tool call, so a deployment whose allow-list predates the CLI growing that tool parks every
+  agent that invokes one, for the 1800s Claude Code waits on an MCP call and then aborts the turn —
+  and a fleet that has always worked stops working on a CLI upgrade nobody connected to it. A tool the CLI
+  gates and the routine path needs belongs here, named, rather than left to the mode. It rides in `--settings`, deliberately
   **not** `--allowedTools`: that flag carries the `mcp__lubbdubb__*` grants, and mixing a Bash rule
   into it risks silently dropping them (the drift `src/mcp/names.ts` guards against). Two flags, two
   concerns — the operator cannot lose the MCP grants by adjusting Bash access, by construction.

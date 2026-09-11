@@ -122,6 +122,13 @@ test('the Bash allowlist never touches --allowedTools (MCP grants stay intact)',
   assert.equal(at.includes('Bash'), false, '--allowedTools must not carry Bash rules');
 });
 
+test('the default allow-list names the gated non-Bash tools an agent routinely needs', () => {
+  const allow = loadConfig({}).agentAllowedTools;
+  for (const tool of ['Skill', 'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch']) {
+    assert.ok(allow.includes(tool), `${tool} must be pre-approved, or every use of it parks on the backstop`);
+  }
+});
+
 test('no allowedTools means no permissions fragment', () => {
   assert.equal(settingsOf(buildClaudeStreamArgs({ allowedTools: [] })), null);
 });
