@@ -522,9 +522,9 @@ would hide the half that is good news — which is the half the ticket was about
 Three outlets, and no fourth. `src/environments/` is a lens: nothing under `src/dispatcher/` may
 import it, which is asserted structurally, so a watch **cannot** spend an agent even by accident.
 
-- **A `human_tasks` row** on the goal, naming the check, what it expected and what it read
-  ([13](13-jobs-and-tickets.md#human-tasks)). One row per watch that settled or is settling
-  regressed, never one per reading.
+- **A `human_tasks` row** on the goal, naming the check, what it expected, what it read, why the
+  check was declared and the query that read it ([13](13-jobs-and-tickets.md#human-tasks)). One row
+  per watch that settled or is settling regressed, never one per reading.
 - **The goal page**, which draws every check on every environment whether or not anything is wrong.
 - **A bug**, through the filing job that already exists (`src/bugFiling.ts`), behind an operator's
   click. The reading rides as the operator's own report, so the fleet is handed the numbers rather
@@ -562,6 +562,23 @@ back invisible.
 The row carries the reading's own words and no summary of them, because no model read the numbers
 and none will: where a number needs interpreting, that is a row on the bench with the number in
 front of a person.
+
+**And it carries the declaration the reading is measured against, because the person it is in front
+of is the interpreter.** A number with nothing beside it is an alarm, not a finding: `7 rows where
+the check declared no more than 3` says an operator must decide whether shipped work has regressed,
+while telling them neither what the check was for nor how to look past the count. So the row draws,
+per regressed check, the declaration's **`why`** — the sentence its author wrote about what the check
+is watching for and why that matters ([the declaration](#the-declaration)) — and its **`query`**,
+verbatim in a fence, which is the thing to run against the environment to see the rows the number
+counted. Both are the declaration's own words, written before any reading existed, so neither is a
+summary of the numbers; and `why` is optional on a declaration, so a check that declared none says
+nothing rather than inventing one.
+
+It closes by saying what each of its three answers does — **Raise a bug** hands the fleet these
+numbers as the operator's own report, **Done** says they looked and this is not a regression,
+**Decline** says the same and that they are not acting on it — because the row's whole arm is the
+click ([what a finding does](#what-a-finding-does)), and a click nobody can tell apart from its
+neighbour is not a bound on anything.
 
 ### It holds nothing, unless asked
 

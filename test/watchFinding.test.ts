@@ -320,3 +320,36 @@ test('nothing a finding does is written as a WorldEvent', async () => {
   );
   system.store.close();
 });
+
+test('the row carries the declaration the reading is measured against, so it can be acted on from the row', async () => {
+  const observer = new FakeEnvironmentObserver(REGRESSED);
+  const system = build(observer, [OPEN]);
+  system.store.ingestGoalWatch('issue:12', [{ ...SIGNAL, why: 'job X timing out is what the fix was for' }]);
+  system.store.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'testUk',
+    arrivedAt: new Date(Date.now() - 60_000).toISOString(),
+  });
+
+  await system.harness.runCycle();
+  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+
+  assert.match(detail, /Why it was declared:\*\* job X timing out is what the fix was for/);
+  assert.match(detail, /```\ntraces \| where message has 'job X timed out'\n```/, 'the query, verbatim and runnable');
+  assert.match(detail, /\*\*Raise a bug\*\*/, 'and what each of the row\u2019s three answers says');
+  assert.match(detail, /\*\*Decline\*\*/);
+  system.store.close();
+});
+
+test('a check that declared no why still carries its query, and says nothing where there is nothing to say', async () => {
+  const observer = new FakeEnvironmentObserver(REGRESSED);
+  const system = build(observer, [OPEN]);
+  arrived(system);
+
+  await system.harness.runCycle();
+  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+
+  assert.doesNotMatch(detail, /Why it was declared/);
+  assert.match(detail, /To see the rows yourself/);
+  system.store.close();
+});

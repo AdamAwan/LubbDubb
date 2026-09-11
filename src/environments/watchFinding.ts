@@ -19,10 +19,17 @@ function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): Wa
   return 'clean';
 }
 
+interface RegressedCheck {
+  title: string;
+  said: string;
+  why: string | null;
+  query: string;
+}
+
 interface WatchWindowReading {
   window: WatchWindow;
   verdict: WatchWindowVerdict;
-  regressed: { title: string; said: string }[];
+  regressed: RegressedCheck[];
 }
 
 /**
@@ -48,7 +55,14 @@ export function watchWindowReadings(input: {
       regressed: checks.flatMap((check, i) => {
         const reading = read[i];
         if (reading?.verdict !== 'regressed') return [];
-        return [{ title: check.title, said: reading.detail ?? 'it read outside what the check declared' }];
+        return [
+          {
+            title: check.title,
+            said: reading.detail ?? 'it read outside what the check declared',
+            why: check.why,
+            query: check.query,
+          },
+        ];
       }),
     };
   });
@@ -87,16 +101,41 @@ function findingTitle(environment: string): string {
   return `The post-deploy watch on ${environment} is reporting a regression`;
 }
 
-function findingDetail(window: WatchWindow, regressed: { title: string; said: string }[]): string {
-  const still = window.settledAt === null ? 'The window is still open' : 'The window has settled';
+function findingDetail(window: WatchWindow, regressed: RegressedCheck[]): string {
+  const env = window.environment;
+  const still =
+    window.settledAt === null
+      ? 'The window is still open, so these numbers are the newest reading and are rewritten on every pass.'
+      : `The window has settled, so these are the last numbers ${env} gave.`;
   return [
-    `**${window.environment}** is answering outside what this goal's watch declared.`,
+    `This goal's work is live on **${env}**, and a check declared to watch it afterwards is reading outside what it ` +
+      `declared. Nothing has interpreted this: the numbers below are ${env}'s own answers, which is why the row is ` +
+      'in front of you rather than a fix in front of the fleet.',
     '',
-    ...regressed.map((c) => `- **${c.title}** — ${c.said}`),
+    ...regressed.flatMap((c) => checkBlock(c, env)),
+    `${still} Nothing is held by it — this row is yours to answer whenever you are ready.`,
     '',
-    `${still}, and nothing is held by it. Raising a bug from this row hands the fleet these numbers as your own ` +
-      'report; marking it done says you have looked and it is not a regression.',
+    '**Raise a bug** hands the fleet these exact numbers as your own report, related back to this goal, and an agent ' +
+      'picks the work up. **Done** says you have looked and this is not a regression. **Decline** says the same and ' +
+      'that you are not acting on it. Either answer stands for good — the harness retracts and re-files its own row, ' +
+      'never yours.',
   ].join('\n');
+}
+
+function checkBlock(check: RegressedCheck, environment: string): string[] {
+  return [
+    `**${check.title}**`,
+    '',
+    check.said,
+    '',
+    ...(check.why === null ? [] : [`**Why it was declared:** ${check.why}`, '']),
+    `**To see the rows yourself**, this is the query the watch put to ${environment}, unchanged:`,
+    '',
+    '```',
+    check.query,
+    '```',
+    '',
+  ];
 }
 
 /**
