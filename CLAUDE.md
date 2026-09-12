@@ -202,8 +202,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 
 - **A new `issue:<n>:…` dispatch origin is a family declared in `src/issueOrigins.ts` and minted
   through it.** The declaration carries the role, so no family lacks one — but a ref built as a template
-  literal elsewhere is in no declaration, reads `unrecognised`, stops expanding under a goal's priority
-  flag and files its spend under "other". Neither is red.
+  literal elsewhere is in no declaration, reads `unrecognised`, and files its spend under "other" with
+  nothing red. It still expands under a goal's priority flag, which cuts on the role being non-null.
   → [05](docs/spec/05-dispatcher.md#the-issue-origin-vocabulary), [18](docs/spec/18-observability.md)
 - **A new agent-dispatch rule must route through the candidate list.** An inline `raw.push` of a
   `dispatch_*` action bypasses both the headroom cut and the Up next queue. Adding a rule is a
