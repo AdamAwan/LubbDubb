@@ -392,7 +392,8 @@ flowchart TD
    writes — and is idempotent by `recordHumanTask`'s refresh, so a pulse over a goal it has already
    asked about writes nothing new.
 
-   Immediately after it, `validationReady.run(world)` files the obligation those resources are _for_:
+   Below it in the same pulse — not adjacent to it, since the graph, the environments and the sheet
+   run between the two — `validationReady.run(world)` files the obligation those resources are _for_:
    a delivered goal with checks a person still has to run says so on the bench
    ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)). It settles itself as
    the results are recorded, the close-out's asymmetry — the check rows are ones the harness reads
