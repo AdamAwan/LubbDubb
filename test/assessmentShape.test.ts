@@ -75,7 +75,7 @@ test('the assessment is quoted whole, headline included', () => {
 test('the rules that quote someone say who, rather than leaving it to be guessed', () => {
   const sources = [
     'src/dispatcher/rules/issueShortfall.ts',
-    'src/dispatcher/rules/prCiFailing.ts',
+    'src/dispatcher/rules/prConcerns.ts',
     'src/executor/actionExecutor.ts',
   ];
   for (const file of sources) {

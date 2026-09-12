@@ -14,7 +14,7 @@ import {
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
-import { DISPATCH_PIPELINE, type DispatchRuleId, type RuleConditions, type StageRuleId } from './rules.js';
+import { DISPATCH_PIPELINE, type DispatchRuleId, type OwnStageRuleId, type RuleConditions } from './rules.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import type { PrReviewCharters } from '../review/prReview.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
@@ -44,7 +44,7 @@ import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } f
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
-import { prCiFailing } from './rules/prCiFailing.js';
+import { prConcerns } from './rules/prConcerns.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { prSplit } from './rules/prSplit.js';
 import { workItemInReview } from './rules/workItemInReview.js';
@@ -72,12 +72,12 @@ import { remoteValidation } from './rules/remoteValidation.js';
 
 // → docs/spec/05-dispatcher.md
 
-const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
+export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'manual-job': manualJob,
   'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
   'pr-split': prSplit,
-  'pr-ci-failing': prCiFailing,
+  'pr-ci-failing': prConcerns,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
@@ -195,8 +195,9 @@ export class RuleDispatcher implements Dispatcher {
       remoteValidation: this.remoteValidationOn,
     };
     for (const rule of DISPATCH_PIPELINE) {
+      if (rule.emittedBy !== undefined) continue;
       if (rule.enabled && !rule.enabled(conditions)) continue;
-      STAGES[rule.id]?.(s);
+      STAGES[rule.id](s);
     }
 
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
