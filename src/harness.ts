@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
 import type { Connector } from './connector/connector.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
+import { buildDispatchInputs } from './dispatcher/dispatchInputs.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
@@ -10,7 +11,6 @@ import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
 import { isPrWatched } from './prHealth.js';
 import { isSomeoneElsesPr } from './prOwnership.js';
 
-import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { retainedRunIssues } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
@@ -24,8 +24,6 @@ import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 
 // → docs/spec/04-harness-cycle.md
-
-const PRIOR_REMEDY_ROWS = 40;
 
 const READ_PLAN_EVENTS = 200;
 
@@ -176,10 +174,7 @@ export class Harness extends EventEmitter {
       await runPulseSweeps('afterTasks', this.deps, { world, tasks }, readWorld);
       const agents = store.agents.listAgents();
       await runPulseSweeps('afterAgents', this.deps, { tasks, agents }, readWorld);
-      const openEscalations = store.escalations.listOpenEscalations();
       const queuedJobs = store.jobs.listQueuedJobs();
-      const standingJobs = store.jobs.listStandingJobs();
-      const ejections = store.ejections.liveEjections();
       const plans = store.plans.listPlans();
       const planParts = store.plans.listAllPlanParts();
       const conclusions = store.verdicts.listIssueConclusions();
@@ -199,13 +194,6 @@ export class Harness extends EventEmitter {
         readWorld,
       );
       const recentDecisions = store.decisions.listDecisions(200);
-      const proposals = store.escalations.listProposals();
-      const signals = rejectionSignalQuery(proposals);
-      const rejectionSignals = signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [];
-      const priorityOverrides = store.priority.listPriorityOverrides();
-      const goalPriorities = store.priority.listGoalPriorities();
-      const goalPauses = store.pauses.listGoalPauses();
-      const profileOverrides = store.profileOverrides.listProfileOverrides();
       const liveAgents = store.agents.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
@@ -225,67 +213,36 @@ export class Harness extends EventEmitter {
           : world;
 
       const featureStandings = this.deps.featureStandings?.() ?? [];
-      const featureSummaryKeys =
-        featureStandings.length === 0
-          ? []
-          : store.tickets.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
       const prReviews = store.prReviews.listPrReviews();
       const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
       await runPulseSweeps('afterReviews', this.deps, { dispatchWorld, prReviews, prReviewRoutes }, readWorld);
 
-      const plan = await this.deps.dispatcher.decide({
-        world: dispatchWorld,
-        retainedIssues: retainedIssues.map((i) => i.number),
-        hiddenPrs,
-        tasks,
-        agents,
-        openEscalations,
-        queuedJobs,
-        standingJobs,
-        ejections,
-        plans,
-        planParts,
-        planAtoms: store.plans.listAllPlanAtoms(),
-        planAmendments: store.plans.listPendingPlanAmendments(),
-        validationChecks: store.validation.listAllValidationChecks(),
-        validationPlans: store.validation.listValidationPlanRecords(),
-        localRun: store.localRuns.liveLocalRun(),
-        localValidations: [
-          ...store.localValidations.listOpenLocalValidations(),
-          ...store.localValidations.listLocalValidationsAwaitingFix(),
-        ],
-        remoteRuns: this.deps.remoteRuns?.() ?? [],
-        selectorOfferings: store.remoteValidation.listSelectorOfferings(),
-        conclusions,
-        deliveries,
-        deliverySignals,
-        shortfalls,
-        appraisals,
-        retrospectiveOrigins,
-        featureStandings,
-        featureSummaryKeys,
-        featureSequences: store.sequences.listFeatureSequences(),
-        recentDecisions,
-        proposals,
-        rejectionSignals,
-        priorityOverrides,
-        goalPriorities,
-        goalPauses,
-        profileOverrides,
-        priorRemedies: [
-          ...store.remedies.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
-          ...store.remedies.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
-        ],
-        prReviews,
-        prReviewRoutes,
-        prSplits: store.prSplits.listPrSplitVerdicts(),
-        prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
-        obstacles: store.obstacles.obstacleBoard(),
-        obstacleBlocks: store.obstacles.listObstacleBlocks(),
-        modelPins: this.deps.modelPins,
-        agentHeadroom: headroom,
-      });
+      const plan = await this.deps.dispatcher.decide(
+        buildDispatchInputs(store, {
+          world: dispatchWorld,
+          retainedIssues: retainedIssues.map((i) => i.number),
+          hiddenPrs,
+          tasks,
+          agents,
+          queuedJobs,
+          plans,
+          planParts,
+          conclusions,
+          deliveries,
+          deliverySignals,
+          shortfalls,
+          appraisals,
+          retrospectiveOrigins,
+          recentDecisions,
+          prReviews,
+          prReviewRoutes,
+          featureStandings,
+          remoteRuns: this.deps.remoteRuns?.() ?? [],
+          modelPins: this.deps.modelPins,
+          agentHeadroom: headroom,
+        }),
+      );
 
       this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
 
