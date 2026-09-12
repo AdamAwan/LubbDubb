@@ -48,10 +48,9 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   which `web/src/types.ts` re-exports. A wire type either **is** a domain type or `extends` it —
   never a re-declaration, never widened. `src/wire.ts` is the only server module `web/src/` may name.
 - **`src/system.ts` is the composition root.** A new component is threaded through it.
-- **`src/store/` is the only directory that touches SQLite.** Writes are synchronous, which is what
-  keeps the harness logic race-free. One module per group of tables, each taking a `StoreContext`
-  and reached as a named member — `store.tasks.getTask(id)`; `Store` forwards nothing.
-  → [14](docs/spec/14-persistence.md#shape)
+- **`src/store/` is the only directory that touches SQLite.** Writes are synchronous, which keeps the
+  harness logic race-free. One module per table group, each taking a `StoreContext` and reached as a
+  named member — `store.tasks.getTask(id)`; `Store` forwards nothing. → [14](docs/spec/14-persistence.md#shape)
 
 ## Sharp edges
 
