@@ -19,7 +19,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     'handed to the fleet. Say "passed" or "failed" only if you actually carried the procedure out; a green ' +
     'build, a merged pull request or code that looks correct are none of them this check, which exists ' +
     'precisely because those had already happened. If you could not run it — no login, no browser, no access ' +
-    'to the environment — say "handback" and why: that records no result and gives the check back to the ' +
+    'to the environment — say "blocked" and why: that records no result and gives the check back to the ' +
     'operator, and it is the right answer rather than a last resort. If the test plan asked you to hand a ' +
     'screen back, say "captured" and name the image you wrote: you state no outcome, and a person judges it.',
   inputSchema: toolSchema(ReportSchema),
@@ -39,14 +39,14 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 
-    if (result !== 'handback' && amendedSinceRunBegan(check, task.createdAt)) {
+    if (result !== 'blocked' && amendedSinceRunBegan(check, task.createdAt)) {
       return toolError(amendedReportReason(check));
     }
 
-    if (result === 'handback') {
+    if (result === 'blocked') {
       const next = deps.store.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
       return ok({
-        reported: 'handback',
+        reported: 'blocked',
         check: `${check.letter}. ${check.id}`,
         state: next?.state ?? check.state,
         means:

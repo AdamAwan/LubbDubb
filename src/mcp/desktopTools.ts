@@ -175,7 +175,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
         'Carry the procedure out for real — open the thing, click the thing, look at what happens. Then call ' +
         'validation_report once with what you saw. Do not change code to make a check pass: this check is the ' +
         'reading, not the work, and a goal it should have flagged is the cost of getting that wrong. If you ' +
-        'cannot run it — no login, no environment, no browser — report "handback" and say why.',
+        'cannot run it — no login, no environment, no browser — report "blocked" and say why.',
     });
   },
 });
@@ -185,16 +185,16 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     'Record what you saw when you ran the check you claimed. Say "passed" or "failed" only if you actually ' +
     'carried the procedure out; a green build, a merged pull request or code that looks correct are none of ' +
     'them this check, which exists precisely because those had already happened. If you could not run it, say ' +
-    '"handback" and why — that records no result and gives the check back, and it is the right answer rather ' +
+    '"blocked" and why — that records no result and gives the check back, and it is the right answer rather ' +
     'than a last resort.',
   inputSchema: toolSchema(
     z.object({
       result: z
-        .enum(['passed', 'failed', 'handback', 'captured'])
+        .enum(['passed', 'failed', 'blocked', 'captured'])
         .describe(
           '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
             'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you ' +
-            'took the picture and somebody else judges it, so you state no outcome. "handback" — you could not ' +
+            'took the picture and somebody else judges it, so you state no outcome. "blocked" — you could not ' +
             'run it, so nothing is recorded.',
         ),
       capture: z
@@ -235,16 +235,16 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 
-    if (result !== 'handback' && amendedSinceRunBegan(check, held.claimedAt)) {
+    if (result !== 'blocked' && amendedSinceRunBegan(check, held.claimedAt)) {
       session.held = null;
       return toolError(amendedReportReason(check));
     }
 
-    if (result === 'handback') {
+    if (result === 'blocked') {
       const next = deps.store.recordValidationHandback(held.originRef, check.id, handbackReason(note, 'desktop'));
       session.held = null;
       return toolJson({
-        reported: 'handback',
+        reported: 'blocked',
         check: `${check.letter}. ${check.id}`,
         state: next?.state ?? check.state,
         means:

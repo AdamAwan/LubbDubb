@@ -30,12 +30,27 @@ operator actually hits, and its reason has to be readable afterwards.
 
 `pending` → `dispatched` → `passed` | `failed` | `blocked` | `abandoned`.
 
-- **`blocked`** is the third answer and the reason there are three, `validation_report`'s hand-back
-  argument exactly: an agent that could not reach or confirm the environment has learned nothing
-  about the goal, and with only `passed` and `failed` available its options are a lie and silence.
-  It dispatches no fix, because it carries no finding about the code.
+- **`blocked`** is the third answer and the reason there are three, and it is the **one word every
+  validation path takes** for the fact: an agent that could not reach or confirm the environment has
+  learned nothing about the goal, and with only `passed` and `failed` available its options are a lie
+  and silence. It dispatches no fix, because it carries no finding about the code. The catalogue path
+  called the same verdict `handback` until this was settled, and answers that word with a refusal
+  naming this one ([20](20-validation.md#validation_report)); what stayed `handback` there is the
+  *record* a check has gone back to a person, which is a different fact from a verdict.
 - **`abandoned`** is the harness's answer rather than the agent's: the environment went away, the
   agent ended without reporting, or the operator called it off. The note says which.
+
+**One column carries both the lifecycle and the verdict, and that is the shape the row wants.** A
+local validation *is* a run: it is opened by one press, ends exactly once, and never runs again, so
+`pending`/`dispatched` and `passed`/`failed`/`blocked` are values of one state machine and no pair of
+them can be true together. `remote_runs.status` is the same shape for the same reason
+([36](36-remote-validation.md#a-runs-status-vocabulary)). What `validation_checks` separates is
+separate because its unit of account differs: a check is a **catalogue row** that outlives any number
+of readings, so its `state` is the current reading and its claim and hand-over columns are about the
+attempt in flight. Splitting this column would buy no expressible state, and would cost a nullable
+verdict column whose null means *not ended yet* — a meaning-bearing null, so a migration with a
+backfill ([14](14-persistence.md#when-a-null-means-something)) — plus every query, the wire type and
+the cockpit's word and tone maps rewritten around it.
 
 ### The pin
 

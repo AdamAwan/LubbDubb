@@ -315,11 +315,11 @@ test('a hand-back records no reading and returns the check with its reason', asy
   system.store.setValidationActor(planId, 'csv-opens', 'fleet');
 
   const res = await callTool(system, spawnAgent(system, 'issue:12:validate:csv-opens'), 'validation_report', {
-    result: 'handback',
+    result: 'blocked',
     note: 'the report screen needs a login and I have no browser',
   });
   assert.equal(res.isError, false);
-  assert.equal(res.json().reported, 'handback');
+  assert.equal(res.json().reported, 'blocked');
 
   const after = byId(system, planId, 'csv-opens');
   assert.equal(after.state, 'unrun');
@@ -339,6 +339,24 @@ test('a report says what it saw, or it is refused', async () => {
   const nonsense = await callTool(system, agent, 'validation_report', { result: 'probably', note: 'fine' });
   assert.equal(nonsense.isError, true);
   assert.equal(byId(system, planId, 'csv-opens').state, 'unrun', 'a refusal writes nothing');
+});
+
+test('the word this verdict used to have is refused by name, pointing at the one that replaced it', async () => {
+  const system = build();
+  const planId = planWith(system, [CHECK]);
+  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  const agent = spawnAgent(system, 'issue:12:validate:csv-opens');
+
+  const res = await callTool(system, agent, 'validation_report', {
+    result: 'handback',
+    note: 'no login for the report screen',
+  });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /"blocked"/, 'the refusal names the word that replaced it');
+  const after = byId(system, planId, 'csv-opens');
+  assert.equal(after.state, 'unrun');
+  assert.equal(after.actor, 'fleet', 'and nothing was given back on a call that recorded nothing');
+  assert.equal(after.handbackNote, null);
 });
 
 test('a check withdrawn while an agent was running it is said plainly, and nothing is written', async () => {

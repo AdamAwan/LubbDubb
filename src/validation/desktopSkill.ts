@@ -477,7 +477,7 @@ which check if more than one is outstanding.
 - **failed** — you followed it and did not. A real finding about the goal, and
   worth being specific about: the note is what somebody reads instead of running
   the check again.
-- **handback** — you could not run it. No login, no environment, the page is
+- **blocked** — you could not run it. No login, no environment, the page is
   gone, the fixture was never provided. This records no reading and gives the
   check back with your reason. **It is the right answer, not a failure**: an
   agent that could not reach the environment has learned nothing about the goal,

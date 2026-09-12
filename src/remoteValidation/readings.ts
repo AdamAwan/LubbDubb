@@ -69,13 +69,13 @@ export class RemoteReadingDesk {
   }
 
   /**
-   * A handback writes **no readings**, leaves every row exactly as it was, and carries the agent's
+   * A blocked run writes **no readings**, leaves every row exactly as it was, and carries the agent's
    * reason to the operator. An agent that could not reach the environment has learned nothing about
    * the goal, and with only a report available its options would be a lie and silence.
    *
    * @public the seam `remote_validation_report` settles a run it could not carry out through
    */
-  handback(runId: string, reason: string): { ok: true; run: RemoteRun } | Refused {
+  blocked(runId: string, reason: string): { ok: true; run: RemoteRun } | Refused {
     const live = this.live(runId);
     if ('error' in live) return live;
     const ended = this.deps.store.endRemoteRun(live.run.id, {

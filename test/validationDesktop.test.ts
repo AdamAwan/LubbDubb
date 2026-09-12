@@ -424,11 +424,11 @@ test('a hand-back records no reading and gives the check back with its reason', 
   try {
     await call(server, 'c1', 'validation_claim', { issue: 12, check: 'B' });
     const handed = await call(server, 'c1', 'validation_report', {
-      result: 'handback',
+      result: 'blocked',
       note: 'the staging login expired and I have no way to renew it from here',
     });
     assert.ok(!handed.isError, handed.text);
-    assert.equal(handed.json().reported, 'handback');
+    assert.equal(handed.json().reported, 'blocked');
     assert.equal(handed.json().state, 'unrun');
 
     const after = byId(system, planId, 'chip-on-mobile');
@@ -669,7 +669,7 @@ test('the skill installs, and says what it is for without restating the procedur
   assert.equal(written, DESKTOP_SKILL);
   assert.match(written, /^---\nname: lubbdubb\n/);
   for (const tool of DESKTOP_TOOL_NAMES) assert.match(written, new RegExp(tool));
-  assert.match(written, /handback/);
+  assert.match(written, /blocked/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
   assert.match(written, /rewritten from scratch every time the harness starts/);
   assert.doesNotMatch(written, /desktopSkill\b/);
