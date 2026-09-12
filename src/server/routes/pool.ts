@@ -17,7 +17,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     } satisfies PoolStatePayload;
   });
 
-  const InsightsQuery = z.object({
+  const PoolInsightsQuery = z.object({
     project: z.string().min(1).optional(),
     since: z
       .string()
@@ -27,7 +27,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   app.get(
     '/api/pool/insights',
-    checked({ query: InsightsQuery }, async ({ query }) => {
+    checked({ query: PoolInsightsQuery }, async ({ query }) => {
       const project = query.project ?? null;
       return {
         rollup: foldPoolDigest(store.listPoolDigestRows(project), { project, since: query.since ?? null }),
