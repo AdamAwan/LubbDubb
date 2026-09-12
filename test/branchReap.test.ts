@@ -168,7 +168,7 @@ test('a merged branch is deleted locally and on the remote, and recorded', async
 
   assert.deepEqual(worktrees.deleted, ['issue/7'], 'the local branch should have been deleted');
   assert.deepEqual(deletedOnRemote, ['issue/7'], 'the remote branch should have been deleted');
-  assert.ok(system.store.reapedPrs().has(7), 'the reap should be recorded');
+  assert.ok(system.store.branchReaps.reapedPrs().has(7), 'the reap should be recorded');
 });
 
 test('a second pulse does not re-delete a branch already reaped', async () => {
@@ -209,5 +209,5 @@ test('an abandoned PR keeps its branch on both sides', async () => {
 
   assert.deepEqual(worktrees.deleted, []);
   assert.deepEqual(deletedOnRemote, []);
-  assert.equal(system.store.reapedPrs().has(7), false);
+  assert.equal(system.store.branchReaps.reapedPrs().has(7), false);
 });

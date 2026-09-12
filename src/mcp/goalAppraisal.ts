@@ -1,3 +1,4 @@
+import { inIssueOriginFamily, issueOriginNumber, issueOriginRef, issueSubtreeNumber } from '../issueOrigins.js';
 import { normalizeAreaPath } from '../intake/placement.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -185,37 +186,37 @@ export function appraiserOrigin(
   originRef: string | null,
 ): { ok: true; originRef: string; issueOrigin: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const match = /^issue:(\d+):appraisal$/.exec(ref);
-  if (match) return { ok: true, originRef: ref, issueOrigin: `issue:${match[1]}` };
+  const appraising = issueOriginNumber('appraisal', ref);
+  if (appraising !== null) return { ok: true, originRef: ref, issueOrigin: issueOriginRef('root', appraising) };
 
-  const assessor = /^issue:(\d+):assess$/.exec(ref);
-  if (assessor) {
+  const assessor = issueOriginNumber('assess', ref);
+  if (assessor !== null) {
     return {
       ok: false,
       error:
-        `appraise_issue says whether issue #${assessor[1]}'s goal can be worked from at all, and you were ` +
+        `appraise_issue says whether issue #${assessor}'s goal can be worked from at all, and you were ` +
         `dispatched to judge whether it was delivered. Cast your verdict with assess_issue instead.`,
     };
   }
 
-  const planner = /^issue:(\d+):plan$/.exec(ref);
-  if (planner) {
+  const planner = issueOriginNumber('plan', ref);
+  if (planner !== null) {
     return {
       ok: false,
       error:
-        `appraise_issue is for an agent dispatched to judge whether issue #${planner[1]}'s goal can be acted ` +
+        `appraise_issue is for an agent dispatched to judge whether issue #${planner}'s goal can be acted ` +
         `on at all, before any work starts, and you were dispatched to decompose it — which the harness ` +
         `only asks for once the goal has been read as workable. If it is unclear to you now that you are ` +
         `in it, escalate — that reaches a human who can answer you, where this would only park an issue ` +
         `already under way.`,
     };
   }
-  const working = /^issue:(\d+)(?::part:.+)?$/.exec(ref);
-  if (working) {
+  const working = issueOriginNumber('root', ref) ?? (inIssueOriginFamily('part', ref) ? issueSubtreeNumber(ref) : null);
+  if (working !== null) {
     return {
       ok: false,
       error:
-        `appraise_issue is for an agent dispatched to judge whether issue #${working[1]}'s goal can be acted ` +
+        `appraise_issue is for an agent dispatched to judge whether issue #${working}'s goal can be acted ` +
         `on, before any work starts, and you were dispatched to do the work. If the goal is unclear to ` +
         `you now that you are in it, escalate — that reaches a human who can answer you, where this would ` +
         `only park the issue you are already working.`,

@@ -19,7 +19,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     'handed to the fleet. Say "passed" or "failed" only if you actually carried the procedure out; a green ' +
     'build, a merged pull request or code that looks correct are none of them this check, which exists ' +
     'precisely because those had already happened. If you could not run it — no login, no browser, no access ' +
-    'to the environment — say "handback" and why: that records no result and gives the check back to the ' +
+    'to the environment — say "blocked" and why: that records no result and gives the check back to the ' +
     'operator, and it is the right answer rather than a last resort. If the test plan asked you to hand a ' +
     'screen back, say "captured" and name the image you wrote: you state no outcome, and a person judges it.',
   inputSchema: toolSchema(ReportSchema),
@@ -27,7 +27,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);
     const origin = issueOrigin(target.issueNumber);
-    const check = deps.store.getValidationCheck(origin, target.checkId);
+    const check = deps.store.validation.getValidationCheck(origin, target.checkId);
     if (!check) {
       return toolError(
         `Check "${target.checkId}" is no longer part of issue #${target.issueNumber}'s validation plan — an ` +
@@ -39,14 +39,14 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 
-    if (result !== 'handback' && amendedSinceRunBegan(check, task.createdAt)) {
+    if (result !== 'blocked' && amendedSinceRunBegan(check, task.createdAt)) {
       return toolError(amendedReportReason(check));
     }
 
-    if (result === 'handback') {
-      const next = deps.store.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
+    if (result === 'blocked') {
+      const next = deps.store.validation.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
       return ok({
-        reported: 'handback',
+        reported: 'blocked',
         check: `${check.letter}. ${check.id}`,
         state: next?.state ?? check.state,
         means:
@@ -59,7 +59,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     // to be looked at*, carrying the image, and becomes passed or failed only when a person records
     // a reading. A result is declared, never derived, and an image is not a declaration.
     // → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
-    const next = deps.store.recordValidationResult(origin, check.id, {
+    const next = deps.store.validation.recordValidationResult(origin, check.id, {
       state: result,
       note,
       by: 'agent',

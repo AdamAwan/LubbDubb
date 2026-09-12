@@ -28,9 +28,9 @@ function build() {
 async function withTranscript(chunks: string[]) {
   const system = build();
   const { app } = await buildApp(system);
-  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  for (const c of chunks) system.store.appendTranscript(agent.id, c);
+  const task = system.store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  for (const c of chunks) system.store.transcripts.appendTranscript(agent.id, c);
   const read = async (from?: number): Promise<AgentTranscript> => {
     const url = `/api/agents/${agent.id}/transcript${from === undefined ? '' : `?from=${from}`}`;
     const res = await app.inject({ method: 'GET', url });
@@ -93,7 +93,7 @@ test('successive ranged reads reassemble exactly the whole transcript', async ()
   let built = '';
   const whole: string[] = [];
   for (const c of chunks) {
-    system.store.appendTranscript(system.store.listAgents()[0]!.id, c);
+    system.store.transcripts.appendTranscript(system.store.agents.listAgents()[0]!.id, c);
     whole.push(c);
     const r = await read(held);
     assert.equal(r.from, held, 'a growing transcript never moves the offset the caller named');

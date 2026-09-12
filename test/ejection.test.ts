@@ -39,13 +39,13 @@ async function codeAgent(system: System, issueNumber: number): Promise<TaskSumma
   system.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
   failPlanningOpen(system.store, issueNumber);
   await system.harness.runCycle('manual');
-  const task = system.store.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
+  const task = system.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
   assert.ok(task, 'a code task should have been dispatched');
   return task;
 }
 
 function liveAgentId(system: System): string {
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0];
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0];
   assert.ok(agent, 'an agent should be live');
   return agent.id;
 }
@@ -64,11 +64,11 @@ test('an ejection holds its origin: nothing is dispatched for it until it is set
   const ejected = system.ejections.eject(liveAgentId(system), 'it is rewriting the store');
   assert.ok(ejected.ok, ejected.ok ? '' : ejected.error);
 
-  assert.equal(system.store.getTask(task.id)!.status, 'interrupted', 'the kill still settles the task');
+  assert.equal(system.store.tasks.getTask(task.id)!.status, 'interrupted', 'the kill still settles the task');
   await system.harness.runCycle('manual');
   assert.equal(queued(system, origin), false, 'the origin is held: the rules cannot propose work an operator took');
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === origin && t.id !== task.id),
+    system.store.tasks.listTasks().some((t) => t.originRef === origin && t.id !== task.id),
     false,
     'and nothing was dispatched for it',
   );
@@ -85,14 +85,14 @@ test('an ejection holds its branch and its worktree slot', async () => {
   const task = await codeAgent(system, 22);
   const branch = task.branch;
   assert.ok(branch);
-  const agent = system.store.getAgent(liveAgentId(system))!;
+  const agent = system.store.agents.getAgent(liveAgentId(system))!;
   const held = agent.cwd;
 
   const ejected = system.ejections.eject(agent.id, 'wrong direction');
   assert.ok(ejected.ok, ejected.ok ? '' : ejected.error);
 
-  assert.equal(system.store.ejectionOnBranch(branch)?.id, ejected.ejection.id);
-  assert.equal(system.store.findActiveTaskByBranch(branch), null, 'no task holds it — the claim is what does');
+  assert.equal(system.store.ejections.ejectionOnBranch(branch)?.id, ejected.ejection.id);
+  assert.equal(system.store.tasks.findActiveTaskByBranch(branch), null, 'no task holds it — the claim is what does');
 
   // The pool grew by the held slot, so the next branch takes a directory of its own
   // rather than being handed the one the operator is sitting in.
@@ -100,7 +100,7 @@ test('an ejection holds its branch and its worktree slot', async () => {
   assert.notEqual(other, held, 'a held slot must never be handed to another branch');
 
   system.ejections.settle(ejected.ejection.id, 'handed_back', null);
-  assert.equal(system.store.ejectionOnBranch(branch), null);
+  assert.equal(system.store.ejections.ejectionOnBranch(branch), null);
   system.store.close();
 });
 
@@ -114,10 +114,10 @@ test('the hold survives a restart, because it is a row rather than a lease', asy
   first.system.store.close();
 
   const second = build({ dbPath, repoRoot: first.system.config.repoRoot });
-  const live = second.system.store.liveEjections();
+  const live = second.system.store.ejections.liveEjections();
   assert.equal(live.length, 1, 'the claim is still standing after a restart');
   assert.equal(live[0]!.originRef, task.originRef);
-  assert.equal(second.system.store.ejectionOnBranch(task.branch!)?.id, ejected.ejection.id);
+  assert.equal(second.system.store.ejections.ejectionOnBranch(task.branch!)?.id, ejected.ejection.id);
   second.system.store.close();
 });
 
@@ -133,7 +133,7 @@ test('requeueing files a job that stands in for the ejected origin', async () =>
 
   const settled = system.ejections.settle(ejected.ejection.id, 'requeued', 'I added the column; finish the backfill.');
   assert.ok(settled.ok, settled.ok ? '' : settled.error);
-  const job = system.store.listJobs().find((j) => j.id === settled.jobId);
+  const job = system.store.jobs.listJobs().find((j) => j.id === settled.jobId);
   assert.ok(job, 'a job should carry the work');
   assert.equal(job.originRef, origin, 'the job stands in for the origin, so nothing races it');
   assert.match(job.prompt, /I added the column/);
@@ -154,9 +154,9 @@ test('a claim older than the window is expired by the pulse, and said out loud',
   const gone = system.ejections.sweepExpiries();
   assert.equal(gone.length, 1);
   assert.equal(gone[0]!.outcome, 'expired');
-  assert.equal(system.store.ejectionOnBranch(task.branch!), null, 'the slot goes back to the pool');
+  assert.equal(system.store.ejections.ejectionOnBranch(task.branch!), null, 'the slot goes back to the pool');
   assert.ok(
-    system.store.listDecisions(20).some((d) => d.action.reason.includes('expired')),
+    system.store.decisions.listDecisions(20).some((d) => d.action.reason.includes('expired')),
     'an expiry is the harness taking work back from a person, and is announced',
   );
 
@@ -172,8 +172,8 @@ test('never contacted is its own state, not a stale timestamp', async () => {
   assert.ok(ejected.ok, ejected.ok ? '' : ejected.error);
   assert.equal(ejected.ejection.lastSeenAt, null, 'nothing has contacted the harness about it yet');
 
-  system.store.noteEjection(ejected.ejection.id, 'reverting the store extraction');
-  const seen = system.store.getEjection(ejected.ejection.id)!;
+  system.store.ejections.noteEjection(ejected.ejection.id, 'reverting the store extraction');
+  const seen = system.store.ejections.getEjection(ejected.ejection.id)!;
   assert.notEqual(seen.lastSeenAt, null);
   assert.equal(seen.lastNote, 'reverting the store extraction');
   system.store.close();

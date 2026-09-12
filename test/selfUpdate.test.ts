@@ -176,11 +176,11 @@ test('a drain pauses dispatch, and cancelling it un-pauses', async () => {
   assert.equal(system.runtimeControl.paused, false);
   assert.ok(desk.request('drain').ok);
   assert.equal(system.runtimeControl.paused, true, 'a drain stops new dispatch');
-  assert.equal(system.store.readUpgradeIntent().state, 'ready');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'ready');
 
   assert.ok(desk.request('cancel').ok);
   assert.equal(system.runtimeControl.paused, false);
-  assert.equal(system.store.readUpgradeIntent().state, 'idle');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'idle');
   system.store.close();
 });
 
@@ -208,19 +208,19 @@ test('a drain becomes ready on the pulse that finds the fleet clear', async () =
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
 
   const desk = deskFor(system);
   await desk.check(true);
   assert.ok(desk.request('drain').ok);
-  assert.equal(system.store.readUpgradeIntent().state, 'draining', 'an agent is still live');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'draining', 'an agent is still live');
 
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'draining', 'and still is');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'draining', 'and still is');
 
-  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString() });
+  system.store.agents.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString() });
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'ready');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'ready');
   system.store.close();
 });
 
@@ -251,7 +251,7 @@ test('apply hands off only once the intent is durable', async () => {
 
   let stateAtHandoff: string | null = null;
   desk.onHandoff = () => {
-    stateAtHandoff = system.store.readUpgradeIntent().state;
+    stateAtHandoff = system.store.upgrades.readUpgradeIntent().state;
   };
   assert.ok(desk.request('apply').ok);
   assert.equal(stateAtHandoff, 'applying');
@@ -266,9 +266,9 @@ test('an upgrade restores the agents it interrupted, without asking', async () =
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
-  system.store.writeUpgradeIntent({
+  system.store.upgrades.writeUpgradeIntent({
     state: 'applying',
     targetSha: 'bbbbbbb',
     requestedAt: new Date().toISOString(),
@@ -283,7 +283,7 @@ test('an upgrade restores the agents it interrupted, without asking', async () =
   assert.equal(settled.restored[0]!.agentId, agentId);
   assert.equal(settled.left.length, 0);
   assert.equal(system.recovery.pendingCount(), 0, 'and the pulse is not held');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
   system.store.close();
 });
 
@@ -314,7 +314,7 @@ test('a genuine crash inside the upgrade window is left to the operator', async 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
 
-  system.store.writeUpgradeIntent({
+  system.store.upgrades.writeUpgradeIntent({
     state: 'applying',
     targetSha: 'bbbbbbb',
     requestedAt: new Date().toISOString(),
@@ -496,7 +496,7 @@ test('auto-pull leaves a checkout it cannot fast-forward alone, and records no f
   await desk.run();
   await new Promise((r) => setImmediate(r));
 
-  assert.equal(system.store.listErrors().length, 0);
+  assert.equal(system.store.errors.listErrors().length, 0);
   assert.equal(desk.reading().projectPull.can, false);
   assert.match(desk.reading().projectPull.blocked ?? '', /uncommitted changes/);
 
@@ -702,7 +702,7 @@ test('an automatic upgrade reaches the handoff on one pulse when the fleet is cl
   };
 
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'applying');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'applying');
   assert.equal(handed, 1);
   system.store.close();
 });
@@ -715,7 +715,7 @@ test('an automatic upgrade waits for a live agent rather than interrupting it', 
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
 
   const desk = deskFor(system, {}, { autoUpdate: true });
   let handed = 0;
@@ -724,13 +724,13 @@ test('an automatic upgrade waits for a live agent rather than interrupting it', 
   };
 
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'draining');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'draining');
   assert.equal(handed, 0, 'nobody is interrupted for an update that landed mid-run');
   assert.equal(system.runtimeControl.paused, true);
 
-  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString() });
+  system.store.agents.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString() });
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'applying');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'applying');
   assert.equal(handed, 1);
   system.store.close();
 });
@@ -752,11 +752,11 @@ test('the desk stops waiting once an automatic drain outruns its deadline', asyn
   };
 
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'draining');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'draining');
 
   clock = '2026-08-17T02:00:00.000Z';
   await desk.run();
-  assert.equal(system.store.readUpgradeIntent().state, 'applying', 'the drain stopped waiting');
+  assert.equal(system.store.upgrades.readUpgradeIntent().state, 'applying', 'the drain stopped waiting');
   assert.equal(handed, 1);
   system.store.close();
 });

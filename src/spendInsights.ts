@@ -9,7 +9,7 @@ import type {
   WorkNode,
   WorldEvent,
 } from './types.js';
-import { issueOriginRole, obstacleOriginId } from './issueOrigins.js';
+import { issueOriginRole, issueSubtreeNumber, obstacleOriginId } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd, unmeasured } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 import {
@@ -154,9 +154,9 @@ export function phaseOf(originRef: string | null): SpendPhase {
   if (originRef.startsWith('pr:')) return CI_CONCERN.test(originRef) ? 'ci' : 'landing';
   if (originRef.startsWith('job:')) return 'job';
   if (obstacleOriginId(originRef) !== null) return 'obstacle';
-  const issueNumber = /^issue:(\d+)(?::|$)/.exec(originRef)?.[1];
-  if (issueNumber === undefined) return 'other';
-  switch (issueOriginRole(Number(issueNumber), originRef)) {
+  const issueNumber = issueSubtreeNumber(originRef);
+  if (issueNumber === null) return 'other';
+  switch (issueOriginRole(issueNumber, originRef)) {
     case 'work':
       return 'build';
     case 'deliberation':

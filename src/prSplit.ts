@@ -1,3 +1,4 @@
+import { issueOriginId, issueOriginRef } from './issueOrigins.js';
 import type { PullRequest } from './types.js';
 
 // → docs/spec/07-pull-requests.md#how-wide-a-pull-request-is
@@ -14,7 +15,7 @@ export function prBreadth(pr: PullRequest, budget: number): PrBreadth | null {
 }
 
 export function splitOrigin(issueNumber: number, prNumber: number): string {
-  return `issue:${issueNumber}:split:${prNumber}`;
+  return issueOriginRef('split', issueNumber, prNumber);
 }
 
 export function splitBranch(prNumber: number): string {
@@ -22,8 +23,8 @@ export function splitBranch(prNumber: number): string {
 }
 
 export function splitTargetPr(originRef: string | null): number | null {
-  const match = /^issue:\d+:split:(\d+)$/.exec(originRef ?? '');
-  return match ? Number(match[1]) : null;
+  const split = issueOriginId('split', originRef);
+  return split === null ? null : Number(split.id);
 }
 
 export function budgetNote(budget: number): string {

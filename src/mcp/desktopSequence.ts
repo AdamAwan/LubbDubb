@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginRef } from '../issueOrigins.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import { toolSchema } from './schema.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
@@ -26,7 +27,7 @@ const sequenceRead: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     const found = featureFor(deps, ref.issue);
     if (!found.ok) return toolError(found.error);
-    const sequence = deps.store.getFeatureSequence(found.originRef);
+    const sequence = deps.store.sequences.getFeatureSequence(found.originRef);
     return toolJson({
       feature: found.number,
       stories: found.stories.map((s) => ({ number: s.number, title: s.title, state: s.workItemState ?? s.state })),
@@ -90,7 +91,7 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
     if (!parsed.ok) return toolError(`Order rejected: ${parsed.error}`);
 
     const standing = standingFor(deps, found.number);
-    const stored = deps.store.recordFeatureSequence({
+    const stored = deps.store.sequences.recordFeatureSequence({
       originRef: found.originRef,
       status: 'accepted',
       reason: String(args.reason ?? '').trim(),
@@ -101,7 +102,7 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
       agentId: null,
       taskId: null,
     });
-    const answered = deps.store.answerFeatureSequence(found.originRef, 'accepted', session.label) ?? stored;
+    const answered = deps.store.sequences.answerFeatureSequence(found.originRef, 'accepted', session.label) ?? stored;
     return toolJson({
       feature: found.number,
       accepted: true,
@@ -118,7 +119,7 @@ function featureFor(
   deps: DesktopToolDeps,
   issue: number,
 ): { ok: true; number: number; originRef: string; stories: Issue[] } | { ok: false; error: string } {
-  const issues = deps.store.getWorldBaseline()?.issues ?? [];
+  const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
   const self = issues.find((i) => i.number === issue);
   const number = self?.parent?.number ?? issue;
   const stories = issues.filter((i) => i.parent?.number === number);
@@ -131,7 +132,7 @@ function featureFor(
         'that the stories carry the watch tag.',
     };
   }
-  return { ok: true, number, originRef: `issue:${number}`, stories };
+  return { ok: true, number, originRef: issueOriginRef('root', number), stories };
 }
 
 function standingFor(deps: DesktopToolDeps, feature: number): { key: string; members: number[] } {
@@ -143,7 +144,7 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
     defaultPriority: 0,
   };
   const found = sequenceableFeatures(
-    deps.store.getWorldBaseline()?.issues ?? [],
+    deps.store.world.getWorldBaseline()?.issues ?? [],
     config.issueContainerTypes,
     (issue) => issueWatchGateReason(issue, policy) === null,
     config.issueSequenceMaxChildren,
@@ -152,7 +153,7 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
     key: found?.key ?? '',
     members:
       found?.members ??
-      (deps.store.getWorldBaseline()?.issues ?? [])
+      (deps.store.world.getWorldBaseline()?.issues ?? [])
         .filter((i) => i.parent?.number === feature)
         .map((i) => i.number)
         .sort((a, b) => a - b),

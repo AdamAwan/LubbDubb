@@ -1,3 +1,4 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { prState } from '../prHealth.js';
 import { prRef, type PrRefStyle } from '../prRef.js';
 import type { PartOutcomeKind, Plan, PlanAtom, PlanPart, PullRequest } from '../types.js';
@@ -5,7 +6,7 @@ import type { PartOutcomeKind, Plan, PlanAtom, PlanPart, PullRequest } from '../
 // → docs/spec/08-planning.md
 
 export function partOrigin(issueNumber: number, slug: string): string {
-  return `issue:${issueNumber}:part:${slug}`;
+  return issueOriginRef('part', issueNumber, slug);
 }
 
 export function partBranch(issueNumber: number, slug: string): string {
@@ -13,8 +14,7 @@ export function partBranch(issueNumber: number, slug: string): string {
 }
 
 export function planIssueNumber(originRef: string): number | null {
-  const match = /^issue:(\d+)$/.exec(originRef);
-  return match ? Number(match[1]) : null;
+  return issueOriginNumber('root', originRef);
 }
 
 export function bySlug(parts: PlanPart[]): Map<string, PlanPart> {

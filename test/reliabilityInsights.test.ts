@@ -346,7 +346,7 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
   await system.harness.runCycle('manual');
 
   const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-  const events = system.store.listWorldEventsOfKindsSince(since, ['pr_ci']);
+  const events = system.store.world.listWorldEventsOfKindsSince(since, ['pr_ci']);
   assert.ok(events.length >= 2, 'both CI transitions are recorded');
   assert.ok(
     events.every((e) => e.kind === 'pr_ci'),
@@ -358,7 +358,7 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
     ['failing', 'passing'],
     'oldest first: the failure comes back before the recovery it was fixed by',
   );
-  assert.deepEqual(system.store.listWorldEventsOfKindsSince(since, []), [], 'no kinds, no query');
+  assert.deepEqual(system.store.world.listWorldEventsOfKindsSince(since, []), [], 'no kinds, no query');
 });
 
 test('the run half obeys the window, in every table and not only the headline', () => {

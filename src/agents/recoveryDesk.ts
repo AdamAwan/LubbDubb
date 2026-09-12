@@ -44,11 +44,11 @@ export class RecoveryDesk {
 
   detect(): OrphanedWork[] {
     const at = new Date().toISOString();
-    for (const agent of this.deps.store.listAgents()) {
-      const task = this.deps.store.getTask(agent.taskId);
+    for (const agent of this.deps.store.agents.listAgents()) {
+      const task = this.deps.store.tasks.getTask(agent.taskId);
       if (!isRecoveryCandidate(agent, task)) continue;
       if (agent.status === 'crashed' || agent.status === 'interrupted') continue;
-      this.deps.store.updateAgent(agent.id, { status: 'crashed', endedAt: agent.endedAt ?? at, pid: null });
+      this.deps.store.agents.updateAgent(agent.id, { status: 'crashed', endedAt: agent.endedAt ?? at, pid: null });
       this.deps.errors?.record({
         source: 'boot',
         message: `Agent ${agent.id} did not survive the last run (was ${agent.status}); awaiting a recovery decision`,
@@ -66,7 +66,7 @@ export class RecoveryDesk {
           detail: item.originRef ?? null,
         });
     if (pending.length > 0)
-      this.deps.store.recordDecision({
+      this.deps.store.decisions.recordDecision({
         cycleId: RECOVERY_CYCLE,
         action: { type: 'no_op', reason: 'crash recovery' },
         outcome: 'skipped',
@@ -91,7 +91,7 @@ export class RecoveryDesk {
   settleUpgrade(): { restored: OrphanedWork[]; left: OrphanedWork[] } {
     const restored: OrphanedWork[] = [];
     const left: OrphanedWork[] = [];
-    if (this.deps.store.readUpgradeIntent().state !== 'applying') return { restored, left: this.pending() };
+    if (this.deps.store.upgrades.readUpgradeIntent().state !== 'applying') return { restored, left: this.pending() };
     for (const item of this.pending()) {
       if (item.died !== 'interrupted' || !item.restorable) {
         left.push(item);
@@ -115,9 +115,9 @@ export class RecoveryDesk {
   pending(): OrphanedWork[] {
     const out: OrphanedWork[] = [];
     const staffed = new Set<string>();
-    for (const agent of this.deps.store.listAgents()) staffed.add(agent.taskId);
-    for (const agent of this.deps.store.listAgentsByStatus('crashed', 'interrupted')) {
-      const task = this.deps.store.getTask(agent.taskId);
+    for (const agent of this.deps.store.agents.listAgents()) staffed.add(agent.taskId);
+    for (const agent of this.deps.store.agents.listAgentsByStatus('crashed', 'interrupted')) {
+      const task = this.deps.store.tasks.getTask(agent.taskId);
       if (!isRecoveryCandidate(agent, task) || !task) continue;
       out.push(
         describeOrphan(
@@ -127,7 +127,7 @@ export class RecoveryDesk {
         ),
       );
     }
-    for (const task of this.deps.store.listOutstandingTasks()) {
+    for (const task of this.deps.store.tasks.listOutstandingTasks()) {
       if (!isAgentlessCandidate(task, { hasAgent: staffed.has(task.id), bootedAt: this.bootedAt })) continue;
       out.push(describeOrphan(null, task, restorability(null, { resumable: false, worktreeExists: false })));
     }
@@ -146,8 +146,8 @@ export class RecoveryDesk {
     const item = this.pending().find((p) => p.taskId === taskId);
     if (!item) return { ok: false, error: 'no orphaned work awaiting a recovery decision for this task id' };
     const agentId = item.agentId;
-    const agent = agentId ? this.deps.store.getAgent(agentId) : null;
-    const task = this.deps.store.getTask(item.taskId);
+    const agent = agentId ? this.deps.store.agents.getAgent(agentId) : null;
+    const task = this.deps.store.tasks.getTask(item.taskId);
     if (!task || (agentId && !agent)) return { ok: false, error: 'agent or task no longer exists' };
 
     if (verdict === 'restore') {
@@ -171,13 +171,13 @@ export class RecoveryDesk {
 
     const at = new Date().toISOString();
     if (agent) {
-      this.deps.store.updateAgent(agent.id, { status: 'interrupted', endedAt: agent.endedAt ?? at, pid: null });
+      this.deps.store.agents.updateAgent(agent.id, { status: 'interrupted', endedAt: agent.endedAt ?? at, pid: null });
       this.deps.escalations.dismissEscalationsForAgent(
         agent.id,
         verdict === 'requeue' ? 'agent crashed; work requeued' : 'agent crashed; work dropped',
       );
     }
-    this.deps.store.updateTask(task.id, { status: 'interrupted' });
+    this.deps.store.tasks.updateTask(task.id, { status: 'interrupted' });
 
     if (verdict === 'remove')
       return this.settled({
@@ -202,7 +202,7 @@ export class RecoveryDesk {
       });
 
     const request = requeueJobRequest(task, agent ? { note: agent.note } : null);
-    const job = this.deps.store.createJob({
+    const job = this.deps.store.jobs.createJob({
       title: request.title,
       prompt: request.prompt,
       kind: task.kind,
@@ -221,7 +221,7 @@ export class RecoveryDesk {
   }
 
   private settled(outcome: RecoveryOutcome): RecoveryResult {
-    this.deps.store.recordDecision({
+    this.deps.store.decisions.recordDecision({
       cycleId: RECOVERY_CYCLE,
       action: { type: 'no_op', reason: `crash recovery: ${outcome.verdict}` },
       outcome: 'executed',
@@ -234,7 +234,7 @@ export class RecoveryDesk {
 function stillQueuedJobBehind(task: Task, store: Store): Job | null {
   const id = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
   if (!id) return null;
-  const job = store.getJob(id);
+  const job = store.jobs.getJob(id);
   return job && job.status === 'queued' ? job : null;
 }
 

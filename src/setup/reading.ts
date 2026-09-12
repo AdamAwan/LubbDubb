@@ -335,7 +335,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
       },
     ];
   }
-  const world = store.getWorldBaseline();
+  const world = store.world.getWorldBaseline();
   if (world === null) {
     return [
       {
@@ -375,7 +375,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
 
   if (tagged > 0) return [];
 
-  if (store.listIssueRuns().length > 0) return [];
+  if (store.floor.listIssueRuns().length > 0) return [];
   const open = world.issues.length + world.pullRequests.length;
   return [
     {

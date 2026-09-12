@@ -433,7 +433,7 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
     labels: ['lubbdubb-watch'],
   });
   system.connector.inject({ kind: 'ci_failed', prNumber: 11 });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snapshot = await buildStateSnapshot(system);
   const shipped = snapshot.world.pullRequests.find((p) => p.number === 11)!;
@@ -461,7 +461,7 @@ test('a pending proposal and a standing rejection read differently through the w
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 12, mergeable: true, mergeableState: 'clean' });
 
   await system.harness.runCycle('manual');
-  const [pending] = system.store.listProposals();
+  const [pending] = system.store.escalations.listProposals();
   assert.equal(pending!.status, 'pending');
   const asked = await buildStateSnapshot(system);
   assert.equal(asked.world.pullRequests.find((p) => p.number === 12)!.attention.status, 'you');
@@ -493,7 +493,7 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
     system.connector.inject({ kind: 'pr_mergeable', prNumber: 22, mergeable: true, mergeableState: 'clean' });
   };
   const plan = (system: ReturnType<typeof buildSystem>): string[] =>
-    system.store
+    system.store.decisions
       .listDecisions(100)
       .map((d) => `${d.action.type}:${d.outcome}`)
       .sort();
@@ -585,28 +585,28 @@ test('an arm above waiting-on-review never carries a wait', () => {
 test('the wait is a watermark: it survives a pulse, and clears when the wait ends', () => {
   let tick = 0;
   const store = new Store(':memory:', () => new Date(Date.parse(NOW) + tick++ * 60_000).toISOString());
-  store.foldReviewWaits([7]);
-  const first = store.reviewWaits().get(7);
+  store.reviewWaits.foldReviewWaits([7]);
+  const first = store.reviewWaits.reviewWaits().get(7);
   assert.ok(first);
-  store.foldReviewWaits([7]);
-  assert.equal(store.reviewWaits().get(7), first);
+  store.reviewWaits.foldReviewWaits([7]);
+  assert.equal(store.reviewWaits.reviewWaits().get(7), first);
 
-  store.foldReviewWaits([]);
-  assert.equal(store.reviewWaits().get(7), undefined);
+  store.reviewWaits.foldReviewWaits([]);
+  assert.equal(store.reviewWaits.reviewWaits().get(7), undefined);
 
-  store.foldReviewWaits([7]);
-  assert.notEqual(store.reviewWaits().get(7), first);
+  store.reviewWaits.foldReviewWaits([7]);
+  assert.notEqual(store.reviewWaits.reviewWaits().get(7), first);
   store.close();
 });
 
 test('folding one PR does not disturb another still waiting', () => {
   let tick = 0;
   const store = new Store(':memory:', () => new Date(Date.parse(NOW) + tick++ * 60_000).toISOString());
-  store.foldReviewWaits([7, 8]);
-  const seven = store.reviewWaits().get(7);
-  store.foldReviewWaits([7]);
-  assert.equal(store.reviewWaits().get(7), seven);
-  assert.equal(store.reviewWaits().get(8), undefined);
+  store.reviewWaits.foldReviewWaits([7, 8]);
+  const seven = store.reviewWaits.reviewWaits().get(7);
+  store.reviewWaits.foldReviewWaits([7]);
+  assert.equal(store.reviewWaits.reviewWaits().get(7), seven);
+  assert.equal(store.reviewWaits.reviewWaits().get(8), undefined);
   store.close();
 });
 

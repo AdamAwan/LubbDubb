@@ -33,7 +33,7 @@ export class ObstacleOwnershipDesk {
     this.running = true;
     try {
       this.releaseGoals();
-      const board = this.deps.store.obstacleBoard();
+      const board = this.deps.store.obstacles.obstacleBoard();
       this.recoverStaleClaims(board);
       this.recordRepairs(board);
       await this.fileTickets(board, redBaseChecks(world.pullRequests));
@@ -48,21 +48,21 @@ export class ObstacleOwnershipDesk {
   }
 
   private releaseGoals(): void {
-    const blocks = this.deps.store.listObstacleBlocks();
+    const blocks = this.deps.store.obstacles.listObstacleBlocks();
     if (blocks.length === 0) return;
-    for (const block of releasedBlocks(blocks, this.deps.store.obstacleBoard()))
-      this.deps.store.clearObstacleBlock(block.originRef);
+    for (const block of releasedBlocks(blocks, this.deps.store.obstacles.obstacleBoard()))
+      this.deps.store.obstacles.clearObstacleBlock(block.originRef);
   }
 
   private recoverStaleClaims(board: readonly ObstacleStanding[]): void {
     for (const row of board)
       if (row.obstacle.state === 'owned' && row.obstacle.ownerRef === null)
-        this.deps.store.releaseObstacle(row.obstacle.id);
+        this.deps.store.obstacles.releaseObstacle(row.obstacle.id);
   }
 
   private recordRepairs(board: readonly ObstacleStanding[]): void {
     const live = new Set(
-      this.deps.store
+      this.deps.store.tasks
         .listTasks()
         .filter((task) => task.status === 'queued' || task.status === 'running' || task.status === 'waiting')
         .map((task) => task.originRef ?? ''),
@@ -71,7 +71,8 @@ export class ObstacleOwnershipDesk {
       if (row.obstacle.state !== 'standing' || row.obstacle.ownerRef !== null) continue;
       const origin = obstacleRepairOrigin(row.obstacle.id);
       if (!live.has(origin)) continue;
-      if (this.deps.store.claimObstacle(row.obstacle.id)) this.deps.store.setObstacleOwner(row.obstacle.id, origin);
+      if (this.deps.store.obstacles.claimObstacle(row.obstacle.id))
+        this.deps.store.obstacles.setObstacleOwner(row.obstacle.id, origin);
     }
   }
 
@@ -80,10 +81,10 @@ export class ObstacleOwnershipDesk {
     if (!filing) return;
     const row = board.find((candidate) => ownershipDoor(candidate, red) === 'ticket');
     if (!row) return;
-    if (!this.deps.store.claimObstacle(row.obstacle.id)) return;
-    const sightings = this.deps.store.listObstacleSightings(row.obstacle.id);
+    if (!this.deps.store.obstacles.claimObstacle(row.obstacle.id)) return;
+    const sightings = this.deps.store.obstacles.listObstacleSightings(row.obstacle.id);
     const fields = obstacleTicketFields(row, sightings);
-    const written = this.deps.store.obstacleReading(row.obstacle.id);
+    const written = this.deps.store.obstacles.obstacleReading(row.obstacle.id);
     try {
       const ref = await filing({
         title: written?.title ?? fields.title,
@@ -92,9 +93,9 @@ export class ObstacleOwnershipDesk {
         bug: true,
         relatedTo: obstacleTicketGoal(row) ?? undefined,
       });
-      this.deps.store.setObstacleOwner(row.obstacle.id, ref);
+      this.deps.store.obstacles.setObstacleOwner(row.obstacle.id, ref);
     } catch (err) {
-      this.deps.store.releaseObstacle(row.obstacle.id);
+      this.deps.store.obstacles.releaseObstacle(row.obstacle.id);
       this.deps.errors?.record({
         source: 'provider',
         message: `Filing a ticket for obstacle ${row.obstacle.id} failed: ${(err as Error).message}`,

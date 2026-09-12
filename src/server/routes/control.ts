@@ -16,7 +16,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   });
 
   app.post('/api/errors/clear', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async () => {
-    const cleared = store.clearErrors();
+    const cleared = store.errors.clearErrors();
     hub.broadcast({ type: 'dirty' });
     return { ok: true, cleared };
   });
@@ -47,9 +47,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { watched } = body;
       try {
         const result = await connector.setPrLabel({ prNumber, label: watchLabel, present: watched });
-        const branch = store.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.branch ?? '';
-        store.recordPrWatchSeed(prNumber, branch);
-        store.patchWorldLabels({ pullRequests: [prNumber], label: watchLabel, present: watched });
+        const branch = store.world.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.branch ?? '';
+        store.prWatchSeeds.recordPrWatchSeed(prNumber, branch);
+        store.world.patchWorldLabels({ pullRequests: [prNumber], label: watchLabel, present: watched });
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, ref: result.ref, watched };

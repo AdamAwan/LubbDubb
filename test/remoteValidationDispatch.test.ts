@@ -115,11 +115,16 @@ function setArea(file: string, area: string): void {
 
 /** A goal delivered, landed and sheeted with one `check` row the pre-flight matched. */
 function seedSheet(store: Store, environment = 'acceptance'): void {
-  store.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
-  store.openRemoteSheet({ goalRef: 'issue:12', environment });
-  store.saveRemoteSheetRows('issue:12', environment, [
+  store.validation.ingestValidation('issue:12', {
+    checks: [CHECK],
+    resources: [],
+    supersededReason: '',
+    amendNote: '',
+  });
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment });
+  store.remoteValidation.saveRemoteSheetRows('issue:12', environment, [
     {
       rowId: `check:${CHECK.id}`,
       kind: 'check',
@@ -141,7 +146,7 @@ function seed(b: Pick<Bench, 'store' | 'file'>, environment = 'acceptance'): voi
 }
 
 function press(store: Store, environment = 'acceptance', tenant = 'validation-customer-1'): string {
-  const { run } = store.beginRemoteRun({
+  const { run } = store.remoteValidation.beginRemoteRun({
     goalRef: 'issue:12',
     environment,
     tenant,
@@ -315,16 +320,16 @@ test('one agent per run: the dispatched flip is the store’s conditional update
     seed(first);
     runId = press(first.store);
     assert.equal(briefs(first.store).length, 1, 'the open run is proposed');
-    assert.ok(first.store.claimRemoteRun(runId, 'task-1'), 'the first dispatch claims it');
-    assert.equal(first.store.claimRemoteRun(runId, 'task-2'), null, 'and a second changes no row');
-    assert.equal(first.store.getRemoteRun(runId)?.taskId, 'task-1');
+    assert.ok(first.store.remoteValidation.claimRemoteRun(runId, 'task-1'), 'the first dispatch claims it');
+    assert.equal(first.store.remoteValidation.claimRemoteRun(runId, 'task-2'), null, 'and a second changes no row');
+    assert.equal(first.store.remoteValidation.getRemoteRun(runId)?.taskId, 'task-1');
   } finally {
     first.close();
   }
 
   const restarted = new Store(first.file);
   try {
-    const run = restarted.getRemoteRun(runId);
+    const run = restarted.remoteValidation.getRemoteRun(runId);
     assert.equal(run?.status, 'dispatched', 'the claim is a column value and survives the restart');
     assert.equal(run?.taskId, 'task-1');
     assert.deepEqual(
@@ -332,7 +337,11 @@ test('one agent per run: the dispatched flip is the store’s conditional update
       ['dispatched'],
       'the run is still live, so the lock still holds over it',
     );
-    assert.equal(restarted.claimRemoteRun(runId, 'task-3'), null, 'and no second agent is ever proposed for it');
+    assert.equal(
+      restarted.remoteValidation.claimRemoteRun(runId, 'task-3'),
+      null,
+      'and no second agent is ever proposed for it',
+    );
   } finally {
     restarted.close();
   }
@@ -343,7 +352,7 @@ test('the rule proposes nothing for a run something already claimed', async () =
   try {
     seed(b);
     const runId = press(b.store);
-    b.store.claimRemoteRun(runId, 'task-1');
+    b.store.remoteValidation.claimRemoteRun(runId, 'task-1');
     const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(b.store) }));
     assert.equal(
       actions.some((a) => a.rule === 'remote-validation'),
@@ -447,7 +456,7 @@ test('everything the agent must read is appended, and an override that names no 
       assert.match(prompt, new RegExp(`/srv/validation/issue-12/remote/${runId}/artefacts`), 'the artefact directory');
       assert.match(prompt, /LUBBDUBB_SELECTORS=/, 'the parameters ride in the environment, never in the command');
       assert.match(prompt, /remote_validation_report/, 'and the one way it may answer');
-      assert.match(prompt, /handback/, 'including that a handback is a right answer');
+      assert.match(prompt, /blocked/, 'including that a blocked run is a right answer');
       assert.match(prompt, /exit code decides nothing|exit code is never/i, 'and that the exit code decides nothing');
       assert.match(prompt, /read-only checkout/, 'and the rules of the run');
       assert.match(prompt, /Do not edit the suite/, 'not a selector, not a timeout, not a skip');
@@ -527,7 +536,7 @@ function system(dbPath = ':memory:'): System {
 }
 
 function agentOn(sys: System, originRef: string, branch: string): Agent {
-  const task = sys.store.createTask({
+  const task = sys.store.tasks.createTask({
     kind: 'code',
     title: 'Run the sheet',
     prompt: 'run it',
@@ -539,7 +548,7 @@ function agentOn(sys: System, originRef: string, branch: string): Agent {
 }
 
 function schemaOf(sys: System, agent: Agent, name: string): Record<string, unknown> {
-  const task = sys.store.getTask(agent.taskId)!;
+  const task = sys.store.tasks.getTask(agent.taskId)!;
   const tool = buildTools({ store: sys.store, agents: sys.agents }, { agent, task }).find((t) => t.name === name);
   assert.ok(tool, `${name} is built, so the name and the module agree`);
   return tool.inputSchema as Record<string, unknown>;
@@ -555,7 +564,7 @@ test('the advertised schema has no field an agent could state an outcome in', ()
 
     assert.deepEqual(
       Object.keys((schema['properties'] ?? {}) as Record<string, unknown>).sort(),
-      ['artefacts', 'handback', 'reportPath'],
+      ['artefacts', 'blocked', 'reportPath'],
       'where the report landed, where the artefacts went, or why there is neither — and nothing else',
     );
     assert.equal(schema['additionalProperties'], false, 'and an extra key is rejected rather than ignored');
@@ -592,12 +601,12 @@ test('a report records where things landed and settles the run, readably afterwa
     })) as ToolResultText;
     assert.equal(result.isError, undefined);
 
-    const run = sys.store.getRemoteRun(runId);
+    const run = sys.store.remoteValidation.getRemoteRun(runId);
     assert.equal(run?.status, 'ended');
     assert.equal(run?.reportPath, `/srv/validation/issue-12/remote/${runId}/report/results.json`);
     assert.equal(run?.artefacts, 'https://reports.example.com/run/9f2c');
     assert.deepEqual(
-      sys.store.listRemoteReadings(),
+      sys.store.remoteValidation.listRemoteReadings(),
       [],
       'this check declares no area, so it was never a runner’s question and the fold has no row to read',
     );
@@ -612,25 +621,46 @@ test('a report records where things landed and settles the run, readably afterwa
   }
 });
 
-test('a handback settles the run with the reason, writes no readings and leaves every row as it was', async () => {
+test('the field this answer used to have is refused by name, pointing at the one that replaced it', async () => {
   const sys = system();
   try {
     seedSheet(sys.store);
     const runId = press(sys.store);
-    const before = sys.store.listRemoteSheetRows();
     const agent = agentOn(sys, `issue:12:validate-remote:${runId}`, `validate-remote/issue/12/${runId}`);
     const result = (await sys.mcp.session(agent.id)!.call('remote_validation_report', {
-      handback: 'the acceptance environment refused every login, so nothing was driven',
+      handback: 'the acceptance environment refused every login',
+    })) as ToolResultText;
+    assert.equal(result.isError, true);
+    assert.match(result.content[0]?.text ?? '', /"blocked"/, 'the refusal names the word that replaced it');
+    assert.equal(sys.store.remoteValidation.getRemoteRun(runId)?.status, 'pending', 'and the run is untouched');
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a blocked run settles with the reason, writes no readings and leaves every row as it was', async () => {
+  const sys = system();
+  try {
+    seedSheet(sys.store);
+    const runId = press(sys.store);
+    const before = sys.store.remoteValidation.listRemoteSheetRows();
+    const agent = agentOn(sys, `issue:12:validate-remote:${runId}`, `validate-remote/issue/12/${runId}`);
+    const result = (await sys.mcp.session(agent.id)!.call('remote_validation_report', {
+      blocked: 'the acceptance environment refused every login, so nothing was driven',
     })) as ToolResultText;
     assert.equal(result.isError, undefined);
 
-    const run = sys.store.getRemoteRun(runId);
+    const run = sys.store.remoteValidation.getRemoteRun(runId);
     assert.equal(run?.status, 'abandoned');
     assert.match(run?.note ?? '', /refused every login/, 'the agent’s reason reaches the operator');
-    assert.deepEqual(sys.store.listRemoteReadings(), [], 'a handback writes no readings');
-    assert.deepEqual(sys.store.listRemoteSheetRows(), before, 'and leaves every row exactly as it was');
+    assert.deepEqual(sys.store.remoteValidation.listRemoteReadings(), [], 'a blocked run writes no readings');
+    assert.deepEqual(
+      sys.store.remoteValidation.listRemoteSheetRows(),
+      before,
+      'and leaves every row exactly as it was',
+    );
     assert.equal(
-      sys.store.listValidationChecks('issue:12').find((c) => c.id === CHECK.id)?.state,
+      sys.store.validation.listValidationChecks('issue:12').find((c) => c.id === CHECK.id)?.state,
       'unrun',
       'an agent that could not reach the environment has learned nothing about the goal',
     );
@@ -657,7 +687,7 @@ test('every other caller is refused by name, and this run’s own agent is refus
       assert.equal(refused.isError, true, `${origin} is refused`);
       assert.match(refused.content[0]?.text ?? '', /issue:<n>:validate-remote:<runId>/);
     }
-    assert.equal(sys.store.getRemoteRun(runId)?.status, 'pending', 'and none of them settled the run');
+    assert.equal(sys.store.remoteValidation.getRemoteRun(runId)?.status, 'pending', 'and none of them settled the run');
 
     const mine = agentOn(sys, `issue:12:validate-remote:${runId}`, `validate-remote/issue/12/${runId}`);
     const crossed = (await sys.mcp
@@ -705,7 +735,7 @@ function swept(): { sys: System; file: string } {
 
 /** The dispatched flip, with the task the run's fate is read off left in the status it ended in. */
 function claimedBy(sys: System, runId: string, status: 'running' | 'failed'): string {
-  const task = sys.store.createTask({
+  const task = sys.store.tasks.createTask({
     kind: 'code',
     title: 'Run the sheet',
     prompt: 'run it',
@@ -713,8 +743,11 @@ function claimedBy(sys: System, runId: string, status: 'running' | 'failed'): st
     originRef: `issue:12:validate-remote:${runId}`,
     originTitle: 'Ship the channel',
   });
-  sys.store.updateTask(task.id, { status });
-  assert.ok(sys.store.claimRemoteRun(runId, task.id), 'the conditional flip claimed it for exactly one task');
+  sys.store.tasks.updateTask(task.id, { status });
+  assert.ok(
+    sys.store.remoteValidation.claimRemoteRun(runId, task.id),
+    'the conditional flip claimed it for exactly one task',
+  );
   return task.id;
 }
 
@@ -741,11 +774,15 @@ test('a dispatched run whose task ended is swept, and one whose task is still wo
 
     await sys.remoteValidation.run();
 
-    const settled = sys.store.getRemoteRun(gone);
+    const settled = sys.store.remoteValidation.getRemoteRun(gone);
     assert.equal(settled?.status, 'abandoned', 'an agent that crashed leaves a run nobody will ever report against');
     assert.match(settled?.note ?? '', /ended without reporting/, 'and the reason is readable afterwards');
-    assert.equal(sys.store.liveRemoteRun('acceptance', 'tenant-gone'), null, 'so the lock it held is released');
-    const again = sys.store.beginRemoteRun({
+    assert.equal(
+      sys.store.remoteValidation.liveRemoteRun('acceptance', 'tenant-gone'),
+      null,
+      'so the lock it held is released',
+    );
+    const again = sys.store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
       tenant: 'tenant-gone',
@@ -754,11 +791,11 @@ test('a dispatched run whose task ended is swept, and one whose task is still wo
     assert.ok(again.run, 'and a second press opens a new run rather than being refused for ever');
     assert.notEqual(again.run.id, gone);
 
-    const alive = sys.store.getRemoteRun(working);
+    const alive = sys.store.remoteValidation.getRemoteRun(working);
     assert.equal(alive?.status, 'dispatched', 'the bias is to leave a run alone — this agent is still working');
     assert.equal(alive?.note, null, 'nothing was written about it');
     assert.equal(
-      sys.store.liveRemoteRun('acceptance', 'tenant-working')?.id,
+      sys.store.remoteValidation.liveRemoteRun('acceptance', 'tenant-working')?.id,
       working,
       'and the lock under it still holds, so nothing opens a second run against a tenant somebody is driving',
     );
@@ -774,7 +811,7 @@ test('a pending run is never swept, however long it has sat, and is still propos
     await sys.remoteValidation.run();
     await sys.remoteValidation.run();
 
-    const run = sys.store.getRemoteRun(runId);
+    const run = sys.store.remoteValidation.getRemoteRun(runId);
     assert.equal(run?.status, 'pending', 'the rule has not claimed it yet, so there is no task to read it off');
     assert.equal(run?.note, null);
     const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(sys.store) }));
@@ -802,10 +839,10 @@ test('a dispatched run the sweep cannot say about is left standing, in both its 
       [unnamed, 'tenant-unnamed', 'a run naming no task is one the sweep cannot say about'],
       [stranger, 'tenant-stranger', 'and so is one naming a task this build cannot resolve'],
     ] as const) {
-      assert.equal(sys.store.getRemoteRun(runId)?.status, 'dispatched', why);
-      assert.equal(sys.store.getRemoteRun(runId)?.note, null);
+      assert.equal(sys.store.remoteValidation.getRemoteRun(runId)?.status, 'dispatched', why);
+      assert.equal(sys.store.remoteValidation.getRemoteRun(runId)?.note, null);
       assert.equal(
-        sys.store.liveRemoteRun('acceptance', tenant)?.id,
+        sys.store.remoteValidation.liveRemoteRun('acceptance', tenant)?.id,
         runId,
         'unknown is folded into neither arm, so the lock stays held rather than being freed on a guess',
       );
@@ -820,27 +857,35 @@ test('a swept run writes no reading, no check result, no shortfall, no verdict a
   try {
     const runId = press(sys.store);
     claimedBy(sys, runId, 'failed');
-    const rows = sys.store.listRemoteSheetRows();
-    const events = sys.store.listWorldEvents(50).length;
+    const rows = sys.store.remoteValidation.listRemoteSheetRows();
+    const events = sys.store.world.listWorldEvents(50).length;
 
     await sys.remoteValidation.run();
 
-    assert.equal(sys.store.getRemoteRun(runId)?.status, 'abandoned', 'the run is settled');
-    assert.deepEqual(sys.store.listRemoteReadings(), [], 'a run nobody reported against learned nothing');
-    assert.deepEqual(sys.store.listRemoteSheetRows(), rows, 'and leaves every row exactly as it was');
-    const check = sys.store.listValidationChecks('issue:12').find((c) => c.id === CHECK.id);
+    assert.equal(sys.store.remoteValidation.getRemoteRun(runId)?.status, 'abandoned', 'the run is settled');
+    assert.deepEqual(
+      sys.store.remoteValidation.listRemoteReadings(),
+      [],
+      'a run nobody reported against learned nothing',
+    );
+    assert.deepEqual(sys.store.remoteValidation.listRemoteSheetRows(), rows, 'and leaves every row exactly as it was');
+    const check = sys.store.validation.listValidationChecks('issue:12').find((c) => c.id === CHECK.id);
     assert.equal(check?.state, 'unrun', 'no spec result is written on the check');
     assert.equal(check?.resultBy, null);
     assert.equal(
-      sys.store.listWorldEvents(50).length,
+      sys.store.world.listWorldEvents(50).length,
       events,
       'a sweep written as a WorldEvent would un-park the goal it just gave up on',
     );
-    assert.deepEqual(sys.store.listWatchReadings(), [], 'and a window’s evidence is on the window’s clock');
-    assert.equal(sys.store.getShortfall('issue:12'), null, 'a shortfall would clear the delivery row that parks it');
-    assert.notEqual(sys.store.getDelivery('issue:12'), null, 'so the goal stays delivered, and parked');
-    assert.equal(sys.store.getIssueConclusion('issue:12'), null);
-    assert.equal(sys.store.getAppraisal('issue:12'), null);
+    assert.deepEqual(sys.store.watches.listWatchReadings(), [], 'and a window’s evidence is on the window’s clock');
+    assert.equal(
+      sys.store.verdicts.getShortfall('issue:12'),
+      null,
+      'a shortfall would clear the delivery row that parks it',
+    );
+    assert.notEqual(sys.store.verdicts.getDelivery('issue:12'), null, 'so the goal stays delivered, and parked');
+    assert.equal(sys.store.verdicts.getIssueConclusion('issue:12'), null);
+    assert.equal(sys.store.verdicts.getAppraisal('issue:12'), null);
   } finally {
     sys.store.close();
   }

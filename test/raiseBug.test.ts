@@ -48,12 +48,12 @@ async function seedWorld(system: System, number = 12): Promise<number> {
     title: 'Export the ledger as CSV',
     body: 'the ledger should download as a CSV',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
   return number;
 }
 
 function filingAgent(system: System, job: { id: string; title: string; prompt: string }): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'desk',
     title: job.title,
     prompt: job.prompt,
@@ -122,11 +122,11 @@ test('the story’s own verdict is left exactly where it was', async () => {
   const { app } = await buildApp(system);
   const number = await seedWorld(system);
 
-  const before = system.store.getIssueConclusion(`issue:${number}`);
+  const before = system.store.verdicts.getIssueConclusion(`issue:${number}`);
   await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload: { summary: 'Still broken.' } });
 
-  assert.deepEqual(system.store.getIssueConclusion(`issue:${number}`), before);
-  assert.equal(system.store.getShortfall(`issue:${number}`), null);
+  assert.deepEqual(system.store.verdicts.getIssueConclusion(`issue:${number}`), before);
+  assert.equal(system.store.verdicts.getShortfall(`issue:${number}`), null);
 });
 
 test('a story can carry several bugs, because it can be wrong in several ways', async () => {
@@ -138,7 +138,7 @@ test('a story can carry several bugs, because it can be wrong in several ways', 
     const res = await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload: { summary } });
     assert.equal(res.statusCode, 200);
   }
-  const filings = system.store.listBugFilings().filter((b) => b.originRef === `issue:${number}`);
+  const filings = system.store.bugFilings.listBugFilings().filter((b) => b.originRef === `issue:${number}`);
   assert.equal(filings.length, 2);
   assert.equal(new Set(filings.map((f) => f.jobId)).size, 2, 'each raise gets its own job');
 });
@@ -154,7 +154,7 @@ test('an empty report asks for nothing, and an unseen issue is a 404', async () 
   }
   const unseen = await app.inject({ method: 'POST', url: '/api/issues/98765/bug', payload: { summary: 'x' } });
   assert.equal(unseen.statusCode, 404);
-  assert.equal(system.store.listBugFilings().length, 0, 'a refused raise files nothing');
+  assert.equal(system.store.bugFilings.listBugFilings().length, 0, 'a refused raise files nothing');
 });
 
 test('with no tracker configured there is nothing to file into, and the cockpit is told so', async () => {
@@ -165,7 +165,7 @@ test('with no tracker configured there is nothing to file into, and the cockpit 
   const res = await app.inject({ method: 'POST', url: `/api/issues/${number}/bug`, payload: { summary: 'Broken.' } });
   assert.equal(res.statusCode, 409);
   assert.match((res.json() as { error: string }).error, /no issue tracker/);
-  assert.equal(system.store.listBugFilings().length, 0);
+  assert.equal(system.store.bugFilings.listBugFilings().length, 0);
 
   const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
     config: { canFileTickets: boolean };
@@ -189,23 +189,23 @@ test('link_ticket completes the raise, once, and only with an issue ref', async 
   const wrong = await callTool(system, agent, 'link_ticket', { ref: 'pr:42' });
   assert.equal(wrong.isError, true);
   assert.match(wrong.text, /issue:314|must be an issue ref/);
-  assert.equal(system.store.findBugFilingByJobId(job.id)!.status, 'filing');
+  assert.equal(system.store.bugFilings.findBugFilingByJobId(job.id)!.status, 'filing');
 
   const ok = await callTool(system, agent, 'link_ticket', { ref: 'issue:314' });
   assert.equal(ok.isError, false);
-  const filed = system.store.findBugFilingByJobId(job.id)!;
+  const filed = system.store.bugFilings.findBugFilingByJobId(job.id)!;
   assert.equal(filed.status, 'filed');
   assert.equal(filed.ticketRef, 'issue:314');
 
   const again = await callTool(system, agent, 'link_ticket', { ref: 'issue:999' });
   assert.equal(again.isError, true);
-  assert.equal(system.store.findBugFilingByJobId(job.id)!.ticketRef, 'issue:314');
+  assert.equal(system.store.bugFilings.findBugFilingByJobId(job.id)!.ticketRef, 'issue:314');
 });
 
 test('an agent on any other task has no bug to link', async () => {
   const system = build();
   await buildApp(system);
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Fix CI',
     prompt: 'do it',
@@ -238,7 +238,7 @@ test('link_ticket files the bug the agent wrote, related to the story, without b
   });
   assert.equal(ok.isError, false);
 
-  const filed = system.store.findBugFilingByJobId(job.id)!;
+  const filed = system.store.bugFilings.findBugFilingByJobId(job.id)!;
   assert.equal(filed.status, 'filed');
   assert.ok(filed.ticketRef?.startsWith('issue:'), 'the harness reports back the ref it created');
 
@@ -268,5 +268,5 @@ test('link_ticket refuses a call that both names an existing item and writes a n
   const neither = await callTool(system, agent, 'link_ticket', { title: 'only a title' });
   assert.equal(neither.isError, true);
   assert.match(neither.text, /needs `title` and `body`/);
-  assert.equal(system.store.findBugFilingByJobId(job.id)!.status, 'filing');
+  assert.equal(system.store.bugFilings.findBugFilingByJobId(job.id)!.status, 'filing');
 });

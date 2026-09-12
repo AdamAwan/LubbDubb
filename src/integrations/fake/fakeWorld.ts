@@ -17,13 +17,13 @@ export class FakeWorldStore {
   constructor(private readonly store: Store) {}
 
   read(): FakeWorld {
-    const raw = this.store.getConnectorState(STATE_KEY);
+    const raw = this.store.world.getConnectorState(STATE_KEY);
     if (!raw) return clone(EMPTY_WORLD);
     return { ...clone(EMPTY_WORLD), ...(JSON.parse(raw) as Partial<FakeWorld>) };
   }
 
   write(world: FakeWorld): void {
-    this.store.setConnectorState(STATE_KEY, JSON.stringify(world));
+    this.store.world.setConnectorState(STATE_KEY, JSON.stringify(world));
   }
 
   mutate(fn: (world: FakeWorld) => void): void {

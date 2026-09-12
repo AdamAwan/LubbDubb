@@ -212,7 +212,7 @@ test('atoms are stored with the plan, and an amended plan that drops one drops t
     title: 'Issue 390',
   });
 
-  const stored = system.store.listAllPlanAtoms();
+  const stored = system.store.plans.listAllPlanAtoms();
   assert.deepEqual(
     stored.map((a) => a.slug),
     ['catalog-module', 'move-schemas'],
@@ -221,7 +221,7 @@ test('atoms are stored with the plan, and an amended plan that drops one drops t
   assert.deepEqual(first?.rejected, CATALOG.rejected);
   assert.deepEqual(first?.touches, CATALOG.touches);
   assert.equal(second?.acceptance, null, 'an atom that states no acceptance reads back as stating none');
-  assert.deepEqual(system.store.listPlanParts(plan.id)[0]?.atoms, ['catalog-module', 'move-schemas']);
+  assert.deepEqual(system.store.plans.listPlanParts(plan.id)[0]?.atoms, ['catalog-module', 'move-schemas']);
 
   const amended = parsePlanDocument(
     doc({
@@ -236,7 +236,7 @@ test('atoms are stored with the plan, and an amended plan that drops one drops t
     title: 'Issue 390',
   });
   assert.deepEqual(
-    system.store.listAllPlanAtoms().map((a) => a.slug),
+    system.store.plans.listAllPlanAtoms().map((a) => a.slug),
     ['catalog-module'],
   );
 
@@ -267,11 +267,11 @@ test('a database from before atoms gains the column, reads null, and keeps every
   assert.equal(row.atoms, null, 'nothing was written into the column for a plan that predates atoms');
   raw.close();
 
-  const part = store.listAllPlanParts().find((p) => p.id === 'plan-1:whole');
+  const part = store.plans.listAllPlanParts().find((p) => p.id === 'plan-1:whole');
   assert.ok(part, 'the pre-atoms part is still readable');
   assert.equal(part.atoms, undefined, 'null means this plan predates atoms — nothing is invented for it');
   assert.deepEqual(part.touches, ['src/'], 'and it keeps everything it did declare');
-  assert.deepEqual(store.listAllPlanAtoms(), []);
+  assert.deepEqual(store.plans.listAllPlanAtoms(), []);
   assert.ok(PLAN_COLUMNS.plan_atoms, 'plan_atoms carries its ColumnMigrations entry from day one');
 
   store.close();
@@ -512,8 +512,9 @@ test('a dispatched part carries its atoms in its prompt, and an atomless one car
 });
 
 async function partPrompt(system: System, planId: string): Promise<string> {
-  system.store.upsertPlan({ originRef: 'issue:390', title: 'Issue 390', status: 'active' });
-  for (const p of system.store.listPlanParts(planId)) system.store.updatePlanPart(p.id, { status: 'ready' });
+  system.store.plans.upsertPlan({ originRef: 'issue:390', title: 'Issue 390', status: 'active' });
+  for (const p of system.store.plans.listPlanParts(planId))
+    system.store.plans.updatePlanPart(p.id, { status: 'ready' });
   const issue: Issue = {
     id: 'issue_390',
     number: 390,
@@ -530,9 +531,9 @@ async function partPrompt(system: System, planId: string): Promise<string> {
     openEscalations: [],
     queuedJobs: [],
     agentHeadroom: 5,
-    plans: system.store.listPlans().filter((p) => p.id === planId),
-    planParts: system.store.listAllPlanParts(),
-    planAtoms: system.store.listAllPlanAtoms(),
+    plans: system.store.plans.listPlans().filter((p) => p.id === planId),
+    planParts: system.store.plans.listAllPlanParts(),
+    planAtoms: system.store.plans.listAllPlanAtoms(),
     recentDecisions: pastTheFunnel(390),
   });
   const action = result.actions.find((a) => a.type === 'dispatch_code_agent' && a.rule === 'plan-part');

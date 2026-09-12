@@ -180,16 +180,16 @@ test('a paused Feature keeps its place on the board and sinks below the rest', (
 
 test('a pause is a row of the fleet’s own, and survives a restart', () => {
   const store = new Store(':memory:');
-  assert.deepEqual(store.listGoalPauses(), []);
+  assert.deepEqual(store.pauses.listGoalPauses(), []);
 
-  store.setGoalPause('issue:900', true);
-  const since = store.listGoalPauses()[0]?.since;
-  assert.equal(store.listGoalPauses().length, 1);
+  store.pauses.setGoalPause('issue:900', true);
+  const since = store.pauses.listGoalPauses()[0]?.since;
+  assert.equal(store.pauses.listGoalPauses().length, 1);
 
-  store.setGoalPause('issue:900', true);
-  assert.equal(store.listGoalPauses()[0]?.since, since, 'pausing twice is one statement, not a reset clock');
+  store.pauses.setGoalPause('issue:900', true);
+  assert.equal(store.pauses.listGoalPauses()[0]?.since, since, 'pausing twice is one statement, not a reset clock');
 
-  store.setGoalPause('issue:900', false);
-  assert.deepEqual(store.listGoalPauses(), []);
+  store.pauses.setGoalPause('issue:900', false);
+  assert.deepEqual(store.pauses.listGoalPauses(), []);
   store.close?.();
 });

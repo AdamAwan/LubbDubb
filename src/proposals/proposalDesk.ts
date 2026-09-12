@@ -39,13 +39,13 @@ export class ProposalDesk {
     acknowledged: readonly string[] = [],
     answers: readonly CaveatAnswerInput[] = [],
   ): Promise<DecideResult | UnacknowledgedCaveats | null> {
-    const standing = this.store.getProposal(id);
+    const standing = this.store.escalations.getProposal(id);
     const raised = standing ? proposedCaveats(standing) : [];
     if (standing && standing.status === 'pending') {
       const unacknowledged = unacknowledgedCaveats(raised, acknowledged);
       if (unacknowledged.length > 0) return { unacknowledged };
     }
-    const proposal = this.store.decideProposal(id, 'accepted', note?.trim() || null, 'human');
+    const proposal = this.store.escalations.decideProposal(id, 'accepted', note?.trim() || null, 'human');
     if (!proposal) return null;
     this.recordAnswers(proposal, raised, answers);
     this.closeEscalation(proposal, `Accepted${proposal.note ? `: ${proposal.note}` : '.'}`);
@@ -54,12 +54,12 @@ export class ProposalDesk {
   }
 
   reject(id: string, note?: string): DecideResult | null {
-    const proposal = this.store.decideProposal(id, 'rejected', note?.trim() || null, 'human');
+    const proposal = this.store.escalations.decideProposal(id, 'rejected', note?.trim() || null, 'human');
     if (!proposal) return null;
     this.closeEscalation(proposal, `Rejected${proposal.note ? `: ${proposal.note}` : '.'}`);
     const consequence = this.settlePlan(proposal);
     const detail = `Rejected by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was sent${consequence} (${proposal.id}).`;
-    this.store.recordDecision({
+    this.store.decisions.recordDecision({
       cycleId: `human:${proposal.id}`,
       action: proposal.action,
       outcome: 'skipped',
@@ -69,11 +69,11 @@ export class ProposalDesk {
   }
 
   async backOut(id: string, verdict: BackOutVerdict, note?: string): Promise<DecideResult | null> {
-    const standing = this.store.getProposal(id);
+    const standing = this.store.escalations.getProposal(id);
     if (!standing || standing.status !== 'pending') return null;
     if (standing.kind !== 'plan') return null;
 
-    const proposal = this.store.decideProposal(id, 'rejected', note?.trim() || null, 'human');
+    const proposal = this.store.escalations.decideProposal(id, 'rejected', note?.trim() || null, 'human');
     if (!proposal) return null;
     const what = verdict === 'close' ? 'Closed the ticket' : 'Put the ticket on hold';
     this.closeEscalation(proposal, `${what}${proposal.note ? `: ${proposal.note}` : '.'}`);
@@ -84,7 +84,7 @@ export class ProposalDesk {
         ? (await backOutOfPlan({ ...this.backOutCtx, store: this.store }, read.act, verdict, proposal.note)).detail
         : `the plan could not be settled (${read.ok ? 'the row names no plan' : read.error})`;
     const detail = `${what} by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was scheduled; ${consequence} (${proposal.id}).`;
-    this.store.recordDecision({
+    this.store.decisions.recordDecision({
       cycleId: `human:${proposal.id}`,
       action: proposal.action,
       outcome: 'skipped',
@@ -98,7 +98,7 @@ export class ProposalDesk {
     if (kept.length === 0) return;
     const read = readProposedAct(proposal);
     if (!read.ok || read.act.kind !== 'plan') return;
-    this.store.recordPlanCaveatAnswers(read.act.planId, kept);
+    this.store.plans.recordPlanCaveatAnswers(read.act.planId, kept);
   }
 
   private settlePlan(proposal: Proposal): string {
@@ -116,7 +116,7 @@ export class ProposalDesk {
 
   private closeEscalation(proposal: Proposal, verdict: string): void {
     if (!proposal.escalationId) return;
-    const esc = this.store.getEscalation(proposal.escalationId);
+    const esc = this.store.escalations.getEscalation(proposal.escalationId);
     if (esc?.status === 'open') this.escalations.answer(esc.id, verdict);
   }
 }

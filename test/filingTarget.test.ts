@@ -101,7 +101,7 @@ test('a probe the CLI refuses is a 200 saying why, and lands in the error log', 
     'the CLI’s own words are the half that says what to do about it',
   );
   assert.match(
-    built.store.listErrors(10)[0]?.message ?? '',
+    built.store.errors.listErrors(10)[0]?.message ?? '',
     /filing-target probe failed: gh: To get started/,
     'a lapsed login belongs in the Errors panel too, not only in a modal that was closed',
   );
@@ -136,7 +136,7 @@ test('POST /api/issues files onto LubbDubb’s tracker and answers its address',
     'unwatched by default — the fleet is not handed a half-formed thought',
   );
   assert.deepEqual(
-    built.store.getWorldBaseline()?.issues ?? [],
+    built.store.world.getWorldBaseline()?.issues ?? [],
     [],
     'and nothing was filed into the tracker this fleet works, which is the whole of #449',
   );
@@ -203,7 +203,7 @@ test('a CLI that refuses the create is a 502 carrying its own words', async () =
   assert.equal(res.statusCode, 502);
   assert.deepEqual(res.json(), { error: `${UPSTREAM_REPO} refused the issue: HTTP 403: Resource not accessible` });
   assert.match(
-    built.store.listErrors(10)[0]?.message ?? '',
+    built.store.errors.listErrors(10)[0]?.message ?? '',
     /filing an issue from the cockpit failed: HTTP 403/,
     'and the modal is not the only place it is recorded',
   );

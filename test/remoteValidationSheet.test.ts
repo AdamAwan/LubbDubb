@@ -14,7 +14,7 @@ import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput, StateQueryInput, ValidationCheckInput } from '../src/types.js';
-import { repoText } from './support/paths.js';
+import { PULSE_PIPELINE, type PulseDeskId } from '../src/pulseDesks.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -114,9 +114,9 @@ function bench(
 }
 
 function seedGoal(store: Store, goalRef = 'issue:12'): void {
-  store.ingestValidation(goalRef, { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-  store.ingestGoalWatch(goalRef, [SIGNAL]);
-  store.saveStateQueries(goalRef, [QUERY], 'agent');
+  store.validation.ingestValidation(goalRef, { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
+  store.watches.ingestGoalWatch(goalRef, [SIGNAL]);
+  store.remoteValidation.saveStateQueries(goalRef, [QUERY], 'agent');
 }
 
 function arrive(
@@ -125,11 +125,11 @@ function arrive(
   goalRef = 'issue:12',
   at = new Date(NOW - 1000).toISOString(),
 ): void {
-  store.recordGoalArrival({ goalRef, environment, arrivedAt: at });
+  store.environments.recordGoalArrival({ goalRef, environment, arrivedAt: at });
 }
 
 function approve(store: Store, goalRef: string, environment: string, query: string, presence: string): void {
-  store.approveStateQuery({
+  store.remoteValidation.approveStateQuery({
     digest: queryDigest(query, presence),
     environment,
     originRef: goalRef,
@@ -147,14 +147,14 @@ test('an arrival assembles one sheet, of the goal’s checks, watches and state 
     await desk.run();
 
     assert.deepEqual(
-      store.listRemoteSheets().map((s) => `${s.goalRef} ${s.environment}`),
+      store.remoteValidation.listRemoteSheets().map((s) => `${s.goalRef} ${s.environment}`),
       ['issue:12 acceptance'],
     );
     assert.deepEqual(
-      store.listRemoteSheetRows().map((r) => `${r.kind}:${r.sourceId}`),
+      store.remoteValidation.listRemoteSheetRows().map((r) => `${r.kind}:${r.sourceId}`),
       ['check:an-order-places', 'state:orders-carry-a-channel', 'signal:checkout-throws'],
     );
-    assert.notEqual(store.listGoalArrivals()[0]?.sheetedAt, null, 'the arrival is stamped');
+    assert.notEqual(store.environments.listGoalArrivals()[0]?.sheetedAt, null, 'the arrival is stamped');
   } finally {
     store.close();
   }
@@ -166,16 +166,20 @@ test('a second arrival re-runs the sheet that exists rather than opening a secon
     seedGoal(store);
     arrive(store, 'acceptance');
     await desk.run();
-    const first = store.listRemoteSheets()[0]!;
+    const first = store.remoteValidation.listRemoteSheets()[0]!;
 
     // The same pair arrives again: the guard has stamped it, so the desk leaves it alone; and where
     // it is considered again the sheet it finds is the one that exists.
-    store.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+    store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
     await desk.run();
 
-    assert.equal(store.listRemoteSheets().length, 1, 'one sheet per (goal, environment), for good');
-    assert.equal(store.listRemoteSheets()[0]?.assembledAt, first.assembledAt, 'a sheet does not expire');
-    assert.equal(store.listRemoteSheetRows().length, 3, 'and its rows are replaced, never duplicated');
+    assert.equal(store.remoteValidation.listRemoteSheets().length, 1, 'one sheet per (goal, environment), for good');
+    assert.equal(
+      store.remoteValidation.listRemoteSheets()[0]?.assembledAt,
+      first.assembledAt,
+      'a sheet does not expire',
+    );
+    assert.equal(store.remoteValidation.listRemoteSheetRows().length, 3, 'and its rows are replaced, never duplicated');
   } finally {
     store.close();
   }
@@ -189,11 +193,11 @@ test('an approved state row carries a reading, and neither the world nor the wat
     arrive(store, 'acceptance');
     await desk.run();
 
-    const reading = store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`);
+    const reading = store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`);
     assert.equal(reading?.outcome, 'passed', 'the query matched nothing, which is the shape of correct data');
     assert.equal(reading?.rows, 0);
-    assert.deepEqual(store.listWorldEvents(50), [], 'a reading is never a WorldEvent — deliveryHold reads those');
-    assert.deepEqual(store.listWatchReadings(), [], 'and never a watch reading: different clocks');
+    assert.deepEqual(store.world.listWorldEvents(50), [], 'a reading is never a WorldEvent — deliveryHold reads those');
+    assert.deepEqual(store.watches.listWatchReadings(), [], 'and never a watch reading: different clocks');
   } finally {
     store.close();
   }
@@ -211,7 +215,7 @@ test('a state query that matches rows fails the row, and says what it answered',
     arrive(store, 'acceptance');
     await desk.run();
 
-    const reading = store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`);
+    const reading = store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`);
     assert.equal(reading?.outcome, 'failed');
     assert.match(reading?.detail ?? '', /answered 2 rows/);
   } finally {
@@ -226,13 +230,13 @@ test('an unapproved query is blocked, never run and never failed — a state que
     arrive(store, 'acceptance');
     await desk.run();
 
-    const rows = store.listRemoteSheetRows();
+    const rows = store.remoteValidation.listRemoteSheetRows();
     for (const rowId of [`state:${QUERY.id}`, `watch:${SIGNAL.id}`]) {
       const row = rows.find((r) => r.rowId === rowId);
       assert.equal(row?.awaitingApproval, true, `${rowId} says what it waits for`);
       assert.match(row?.blockedReason ?? '', /waiting for an operator to read it and accept it against acceptance/);
     }
-    assert.deepEqual(store.listRemoteReadings(), [], 'nothing unapproved was run');
+    assert.deepEqual(store.remoteValidation.listRemoteReadings(), [], 'nothing unapproved was run');
     assert.deepEqual(asked.asked, [], 'and no command was put to the store');
     assert.deepEqual(watched.asked, [], 'nor to the telemetry');
   } finally {
@@ -249,7 +253,7 @@ test('a query approved against one environment is still blocked on another', asy
     arrive(store, 'production');
     await desk.run();
 
-    const rows = store.listRemoteSheetRows().filter((r) => r.rowId === `state:${QUERY.id}`);
+    const rows = store.remoteValidation.listRemoteSheetRows().filter((r) => r.rowId === `state:${QUERY.id}`);
     assert.equal(rows.find((r) => r.environment === 'acceptance')?.blockedReason, null);
     assert.match(
       rows.find((r) => r.environment === 'production')?.blockedReason ?? '',
@@ -271,15 +275,15 @@ test('a state row on a store nothing can reach is blocked while every other row 
     arrive(store, 'acceptance');
     await desk.run();
 
-    const state = store.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
+    const state = store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
     assert.notEqual(state?.blockedReason, null, 'blocked, never failed: failed here dispatches at code that is fine');
     assert.equal(
-      store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`),
+      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`),
       undefined,
       'and an observation that fails is never a reading',
     );
     assert.equal(
-      store.listRemoteReadings().find((r) => r.rowId === `watch:${SIGNAL.id}`)?.outcome,
+      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `watch:${SIGNAL.id}`)?.outcome,
       'passed',
       'blocked resolves per row, never per run',
     );
@@ -299,9 +303,13 @@ test('an observation that answers without the id echo is blocked, never a readin
     arrive(store, 'acceptance');
     await desk.run();
 
-    const row = store.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
+    const row = store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
     assert.match(row?.blockedReason ?? '', /answered without the query it was given/);
-    assert.deepEqual(store.listRemoteReadings(), [], 'a result that does not carry the id back is not an answer');
+    assert.deepEqual(
+      store.remoteValidation.listRemoteReadings(),
+      [],
+      'a result that does not carry the id back is not an answer',
+    );
   } finally {
     store.close();
   }
@@ -315,7 +323,7 @@ test('a row of a kind the environment does not permit is blocked, saying so', as
     arrive(store, 'acceptance');
     await desk.run();
 
-    const rows = store.listRemoteSheetRows();
+    const rows = store.remoteValidation.listRemoteSheetRows();
     assert.match(rows.find((r) => r.kind === 'check')?.blockedReason ?? '', /does not permit check rows/);
     assert.match(rows.find((r) => r.kind === 'signal')?.blockedReason ?? '', /does not permit signal rows/);
     assert.equal(
@@ -335,8 +343,16 @@ test('a sheet is not assembled for an arrival older than two probe intervals, an
     arrive(store, 'acceptance', 'issue:12', new Date(NOW - PROBE_MS * 3).toISOString());
     await desk.run();
 
-    assert.deepEqual(store.listRemoteSheets(), [], 'work that shipped in March gets no sheet and no bench row');
-    assert.notEqual(store.listGoalArrivals()[0]?.sheetedAt, null, 'stamped, so the next arrival is the first sheeted');
+    assert.deepEqual(
+      store.remoteValidation.listRemoteSheets(),
+      [],
+      'work that shipped in March gets no sheet and no bench row',
+    );
+    assert.notEqual(
+      store.environments.listGoalArrivals()[0]?.sheetedAt,
+      null,
+      'stamped, so the next arrival is the first sheeted',
+    );
   } finally {
     store.close();
   }
@@ -351,7 +367,7 @@ test('an arrival on an environment with no validate block is left unstamped', as
     await desk.run();
 
     assert.equal(
-      store.listGoalArrivals().find((a) => a.environment === 'hallway')?.sheetedAt,
+      store.environments.listGoalArrivals().find((a) => a.environment === 'hallway')?.sheetedAt,
       null,
       'stamping where the feature is off burns the guard that makes turning it on next month safe',
     );
@@ -368,9 +384,9 @@ test('the desk returns immediately where no environment declares a validate bloc
     arrive(store, 'hallway');
     await desk.run();
 
-    assert.deepEqual(store.listRemoteSheets(), []);
-    assert.deepEqual(store.listRemoteSheetRows(), []);
-    assert.equal(store.listGoalArrivals()[0]?.sheetedAt, null);
+    assert.deepEqual(store.remoteValidation.listRemoteSheets(), []);
+    assert.deepEqual(store.remoteValidation.listRemoteSheetRows(), []);
+    assert.equal(store.environments.listGoalArrivals()[0]?.sheetedAt, null);
     assert.deepEqual(asked.asked, [], 'no command is spawned');
   } finally {
     store.close();
@@ -385,7 +401,7 @@ test('the per-pulse cap defers rather than drops, oldest arrival first', async (
       arrive(store, 'acceptance', `issue:${n}`, new Date(NOW - PROBE_MS - n).toISOString());
     }
     await desk.run();
-    const first = store
+    const first = store.remoteValidation
       .listRemoteSheets()
       .map((s) => s.goalRef)
       .sort();
@@ -393,7 +409,7 @@ test('the per-pulse cap defers rather than drops, oldest arrival first', async (
     assert.deepEqual(first, ['issue:3', 'issue:4', 'issue:5', 'issue:6', 'issue:7'], 'oldest arrival first');
 
     await desk.run();
-    assert.equal(store.listRemoteSheets().length, 7, 'the backlog drains rather than being dropped');
+    assert.equal(store.remoteValidation.listRemoteSheets().length, 7, 'the backlog drains rather than being dropped');
   } finally {
     store.close();
   }
@@ -447,7 +463,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
   const file = join(dir, 'before-the-column.sqlite');
   try {
     const before = new Store(file);
-    before.recordGoalArrival({
+    before.environments.recordGoalArrival({
       goalRef: 'issue:12',
       environment: 'acceptance',
       arrivedAt: new Date(NOW - 1000).toISOString(),
@@ -468,7 +484,11 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
 
     const store = new Store(file);
     try {
-      assert.equal(store.listGoalArrivals()[0]?.sheetedAt, null, 'the column is present, readable, and not backfilled');
+      assert.equal(
+        store.environments.listGoalArrivals()[0]?.sheetedAt,
+        null,
+        'the column is present, readable, and not backfilled',
+      );
       const desk = new RemoteValidationDesk({
         store,
         environments: [ACCEPTANCE],
@@ -482,11 +502,11 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
       seedGoal(store);
       await desk.run();
       assert.deepEqual(
-        store.listRemoteSheets(),
+        store.remoteValidation.listRemoteSheets(),
         [],
         'an upgraded database assembles nothing for work that predates the column',
       );
-      assert.notEqual(store.listGoalArrivals()[0]?.sheetedAt, null, 'it is walked once and stamped');
+      assert.notEqual(store.environments.listGoalArrivals()[0]?.sheetedAt, null, 'it is walked once and stamped');
     } finally {
       store.close();
     }
@@ -496,17 +516,16 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
 });
 
 test('the desk assembles below EnvironmentDesk and above ValidationReadyDesk', () => {
-  const text = repoText('src/harness.ts');
-  const at = (needle: string): number => {
-    const found = text.indexOf(needle);
-    assert.ok(found > 0, `${needle} is in the pulse`);
+  const at = (id: PulseDeskId): number => {
+    const found = PULSE_PIPELINE.indexOf(id);
+    assert.ok(found >= 0, `${id} takes a position in the pulse`);
     return found;
   };
-  const graph = at('graph?.record(world)');
-  const environments = at('environments?.run(world)');
-  const sheets = at('remoteValidation?.run()');
-  const ready = at('validationReady?.run(world)');
-  const closeOuts = at('closeOuts?.run(world)');
+  const graph = at('graph');
+  const environments = at('environments');
+  const sheets = at('remoteValidation');
+  const ready = at('validationReady');
+  const closeOuts = at('closeOuts');
   assert.ok(graph < environments, 'attribution walks the graph the arrivals are read off');
   assert.ok(environments < sheets, 'above it, every sheet would be one pulse late forever, with nothing red');
   assert.ok(sheets < ready, 'below it, the bench row would state the pulse before the readings landed');

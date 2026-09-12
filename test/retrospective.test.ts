@@ -40,7 +40,7 @@ function build(overrides: Record<string, unknown> = {}): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'desk',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -60,17 +60,17 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 
 test('a retrospective upserts on the issue and lists as an origin', () => {
   const store = new Store(':memory:');
-  assert.equal(store.getRetrospective('issue:12'), null);
-  assert.deepEqual(store.listRetrospectiveOrigins(), []);
+  assert.equal(store.scratch.getRetrospective('issue:12'), null);
+  assert.deepEqual(store.scratch.listRetrospectiveOrigins(), []);
 
-  const first = store.recordRetrospective({
+  const first = store.scratch.recordRetrospective({
     originRef: 'issue:12',
     summary: 'Delivered in three parts; two agents were spent on a red base.',
     document: '# What shipped\n\n...',
     agentId: 'a1',
     taskId: 't1',
   });
-  const second = store.recordRetrospective({
+  const second = store.scratch.recordRetrospective({
     originRef: 'issue:12',
     summary: 'Revised summary.',
     document: '# What shipped\n\nrevised',
@@ -78,8 +78,8 @@ test('a retrospective upserts on the issue and lists as an origin', () => {
     taskId: 't1',
   });
 
-  assert.deepEqual(store.listRetrospectiveOrigins(), ['issue:12'], 'a second submission revises one row');
-  assert.equal(store.getRetrospective('issue:12')?.summary, 'Revised summary.');
+  assert.deepEqual(store.scratch.listRetrospectiveOrigins(), ['issue:12'], 'a second submission revises one row');
+  assert.equal(store.scratch.getRetrospective('issue:12')?.summary, 'Revised summary.');
   assert.equal(second.createdAt, first.createdAt, 'the row still dates when the run was first written up');
   assert.ok(second.updatedAt >= first.updatedAt);
   store.close();
@@ -115,15 +115,15 @@ test('only the retro agent may submit, and a second call revises one row', async
     document: '# What shipped\n\nThe schema part and the dispatcher part.',
   });
   assert.equal(first.isError, false);
-  assert.match(system.store.getRetrospective('issue:12')?.document ?? '', /schema part/);
+  assert.match(system.store.scratch.getRetrospective('issue:12')?.document ?? '', /schema part/);
 
   const again = await callTool(system, retro, 'retro_submit', {
     summary: 'Revised.',
     document: '# What shipped\n\nRevised.',
   });
   assert.equal(again.isError, false);
-  assert.deepEqual(system.store.listRetrospectiveOrigins(), ['issue:12'], 'a revision is one row, not two');
-  assert.equal(system.store.getRetrospective('issue:12')?.summary, 'Revised.');
+  assert.deepEqual(system.store.scratch.listRetrospectiveOrigins(), ['issue:12'], 'a revision is one row, not two');
+  assert.equal(system.store.scratch.getRetrospective('issue:12')?.summary, 'Revised.');
 
   const worker = spawnAgent(system, 'issue:12');
   const refused = await callTool(system, worker, 'retro_submit', { summary: 'mine', document: 'mine' });
@@ -138,7 +138,7 @@ test('a submission with no summary is refused, and an over-long document is kept
 
   const noSummary = await callTool(system, retro, 'retro_submit', { document: 'the whole story' });
   assert.equal(noSummary.isError, true);
-  assert.equal(system.store.getRetrospective('issue:9'), null, 'a refused submission lands nowhere');
+  assert.equal(system.store.scratch.getRetrospective('issue:9'), null, 'a refused submission lands nowhere');
 
   const long = await callTool(system, retro, 'retro_submit', {
     summary: 'ok',
@@ -146,7 +146,7 @@ test('a submission with no summary is refused, and an over-long document is kept
   });
   assert.equal(long.isError, false);
   assert.match(long.text, /"trimmed":\s*true/);
-  assert.equal(system.store.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
+  assert.equal(system.store.scratch.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
   system.store.close();
 });
 
@@ -254,7 +254,7 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
 
-  store.appendScratchEntry({
+  store.scratch.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:schema',
     agentId: 'a1',
@@ -263,7 +263,7 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
     note: 'the ALTER needed a PRAGMA check first',
     decision: null,
   });
-  store.recordDelivery({
+  store.verdicts.recordDelivery({
     originRef: 'issue:12',
     summary: 'PR #41 delivered it',
     by: 'assessor',
@@ -291,20 +291,20 @@ test('the dossier’s proposals stop at the goal’s ref boundary, not its prefi
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
   system.connector.inject({ kind: 'new_issue', number: 19, title: 'Somebody else’s goal' });
 
-  store.createProposal({
+  store.escalations.createProposal({
     kind: 'plan',
     ref: 'issue:1:plan:plan',
     action: { type: 'propose_plan', reason: 'test', originRef: 'issue:1', planId: 'plan_one' },
     escalationId: null,
   });
-  store.createProposal({
+  store.escalations.createProposal({
     kind: 'plan',
     ref: 'issue:19:plan:plan',
     action: { type: 'propose_plan', reason: 'test', originRef: 'issue:19', planId: 'plan_nineteen' },
     escalationId: null,
   });
 
-  store.recordDelivery({
+  store.verdicts.recordDelivery({
     originRef: 'issue:1',
     summary: 'PR #41 delivered it',
     by: 'assessor',
@@ -326,7 +326,7 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
   await system.harness.runCycle('manual');
-  system.store.recordRetrospective({
+  system.store.scratch.recordRetrospective({
     originRef: 'issue:12',
     summary: 'Three parts; two agents on somebody else’s red CI.',
     document: '# What shipped\n\nA long write-up nobody needs on every poll.',
@@ -341,7 +341,7 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
   assert.deepEqual(issues.find((i) => i.number === 12)?.retrospective, {
     summary: 'Three parts; two agents on somebody else’s red CI.',
     hasDocument: true,
-    updatedAt: system.store.getRetrospective('issue:12')?.updatedAt,
+    updatedAt: system.store.scratch.getRetrospective('issue:12')?.updatedAt,
   });
   assert.doesNotMatch(state.body, /A long write-up nobody needs/);
 
@@ -358,7 +358,7 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
 
 function busyFleet(system: System, rows: number): void {
   for (let i = 0; i < rows; i++) {
-    system.store.recordDecision({
+    system.store.decisions.recordDecision({
       cycleId: `cycle_other_${i}`,
       action: { type: 'dispatch_code_agent', reason: 'test', originRef: 'issue:19' } as never,
       outcome: 'executed',
@@ -378,14 +378,14 @@ test('the harness’s own asks reach the dossier, and stop at the goal’s ref b
     prompt: 'Approve this plan? It splits the work three ways.',
     context: { originRef: 'issue:1', planId: 'plan_one' },
   });
-  store.answerEscalation(mine.id, 'Rejected: the split is wrong — one part, not three');
+  store.escalations.answerEscalation(mine.id, 'Rejected: the split is wrong — one part, not three');
   system.escalations.create({
     type: 'approve_change',
     prompt: 'Approve somebody else’s plan?',
     context: { originRef: 'issue:19', planId: 'plan_nineteen' },
   });
 
-  store.recordDelivery({
+  store.verdicts.recordDelivery({
     originRef: 'issue:1',
     summary: 'PR #41 delivered it',
     by: 'assessor',
@@ -410,7 +410,7 @@ test('a busy fleet does not erase a goal’s decisions', async () => {
   system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
   system.connector.inject({ kind: 'new_issue', number: 19, title: 'Somebody else’s goal' });
 
-  store.recordDecision({
+  store.decisions.recordDecision({
     cycleId: 'cycle_mine',
     action: { type: 'dispatch_code_agent', reason: 'test', originRef: 'issue:1' } as never,
     outcome: 'deferred',
@@ -418,7 +418,7 @@ test('a busy fleet does not erase a goal’s decisions', async () => {
   });
   busyFleet(system, 250);
 
-  store.recordDelivery({
+  store.verdicts.recordDelivery({
     originRef: 'issue:1',
     summary: 'PR #41 delivered it',
     by: 'assessor',
@@ -448,7 +448,7 @@ test('the dossier’s caps keep the newest rows of every list it bounds', async 
       prompt: `ESCALATION-${String(i).padStart(2, '0')}`,
       context: { originRef: 'issue:1' },
     });
-    store.createProposal({
+    store.escalations.createProposal({
       kind: 'plan',
       ref: `issue:1:plan:p${String(i).padStart(2, '0')}`,
       action: { type: 'propose_plan', reason: 'test', originRef: 'issue:1', planId: `plan_${i}` },
@@ -456,7 +456,7 @@ test('the dossier’s caps keep the newest rows of every list it bounds', async 
     });
   }
 
-  store.recordDelivery({
+  store.verdicts.recordDelivery({
     originRef: 'issue:1',
     summary: 'PR #41 delivered it',
     by: 'assessor',

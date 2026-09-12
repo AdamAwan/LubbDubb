@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { inIssueOriginFamily, issueOriginRef } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
@@ -104,7 +105,7 @@ export class ActionExecutor {
     const summary: ExecutionSummary = { cycleId, executed: 0, deferred: 0, rejected: 0 };
 
     for (const bad of plan.rejected) {
-      store.recordDecision({
+      store.decisions.recordDecision({
         cycleId,
         action: { type: 'no_op', reason: 'rejected malformed action' } as Action,
         outcome: 'rejected',
@@ -113,7 +114,7 @@ export class ActionExecutor {
       summary.rejected += 1;
     }
 
-    let liveCount = store.countLiveAgents();
+    let liveCount = store.agents.countLiveAgents();
 
     for (const action of plan.actions) {
       const tally = (outcome: DecisionOutcome): void => {
@@ -122,7 +123,7 @@ export class ActionExecutor {
         else if (outcome === 'rejected') summary.rejected += 1;
       };
       const record = (outcome: DecisionOutcome, detail: string): void => {
-        store.recordDecision({ cycleId, action: action as unknown as Action, outcome, detail });
+        store.decisions.recordDecision({ cycleId, action: action as unknown as Action, outcome, detail });
         tally(outcome);
       };
 
@@ -137,16 +138,16 @@ export class ActionExecutor {
           case 'dispatch_code_agent':
           case 'dispatch_desk_agent': {
             const origin = action.originRef;
-            if (origin && (store.findActiveTaskByOrigin(origin) || store.findStandingJobByOrigin(origin))) {
+            if (origin && (store.tasks.findActiveTaskByOrigin(origin) || store.jobs.findStandingJobByOrigin(origin))) {
               record('skipped', `Skipped: work for ${origin} is already in flight.`);
               break;
             }
-            if (origin && store.liveEjectionForOrigin(origin)) {
+            if (origin && store.ejections.liveEjectionForOrigin(origin)) {
               record('skipped', `Skipped: an operator holds ${origin} at their own keyboard.`);
               break;
             }
             if (action.type === 'dispatch_code_agent') {
-              const ejected = store.ejectionOnBranch(action.branch);
+              const ejected = store.ejections.ejectionOnBranch(action.branch);
               if (ejected) {
                 record(
                   'deferred',
@@ -155,7 +156,7 @@ export class ActionExecutor {
                 );
                 break;
               }
-              const held = store.findActiveTaskByBranch(action.branch);
+              const held = store.tasks.findActiveTaskByBranch(action.branch);
               if (held) {
                 record(
                   'deferred',
@@ -188,18 +189,18 @@ export class ActionExecutor {
               const agent = this.deps.agents.spawn(task, cwd, inherit);
               const resumed = inherit !== null && agent.sessionId === inherit;
               liveCount += 1;
-              if (action.jobId) store.markJobDispatched(action.jobId, task.id);
+              if (action.jobId) store.jobs.markJobDispatched(action.jobId, task.id);
               if (action.type === 'dispatch_code_agent' && action.partId)
-                store.markPartDispatched(action.partId, task.id, action.branch);
+                store.plans.markPartDispatched(action.partId, task.id, action.branch);
               if (action.type === 'dispatch_code_agent' && action.localValidation) {
                 if (action.localValidation.as === 'fix')
-                  store.markLocalValidationFix(action.localValidation.id, task.id);
-                else store.markLocalValidationDispatched(action.localValidation.id, task.id);
+                  store.localValidations.markLocalValidationFix(action.localValidation.id, task.id);
+                else store.localValidations.markLocalValidationDispatched(action.localValidation.id, task.id);
               }
               // One agent per run, across a restart: the conditional `WHERE status = 'pending'` is
               // the store's own and never a check made here first.
               if (action.type === 'dispatch_code_agent' && action.remoteRun)
-                store.claimRemoteRun(action.remoteRun.id, task.id);
+                store.remoteValidation.claimRemoteRun(action.remoteRun.id, task.id);
               const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
               record(
                 'executed',
@@ -246,7 +247,7 @@ export class ActionExecutor {
 
           case 'propose_plan': {
             const ref = planProposalRef(action.originRef);
-            const heldBy = planProposalHold(ref, store.listProposals());
+            const heldBy = planProposalHold(ref, store.escalations.listProposals());
             if (heldBy) {
               record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
               break;
@@ -260,7 +261,7 @@ export class ActionExecutor {
                 ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
               },
             });
-            const proposal = store.createProposal({
+            const proposal = store.escalations.createProposal({
               kind: 'plan',
               ref,
               action: action as unknown as Action,
@@ -276,12 +277,12 @@ export class ActionExecutor {
 
           case 'propose_plan_amendment': {
             const ref = planAmendmentProposalRef(action.amendmentId);
-            const heldBy = planAmendmentHold(ref, store.listProposals());
+            const heldBy = planAmendmentHold(ref, store.escalations.listProposals());
             if (heldBy) {
               record('skipped', `Skipped proposing the amendment to the plan for ${action.originRef}: ${heldBy}.`);
               break;
             }
-            const amendment = store.getPlanAmendment(action.amendmentId);
+            const amendment = store.plans.getPlanAmendment(action.amendmentId);
             if (!amendment || amendment.status !== 'pending') {
               record(
                 'skipped',
@@ -301,7 +302,7 @@ export class ActionExecutor {
                 detailFrom: 'What the amendment changes',
               },
             });
-            const proposal = store.createProposal({
+            const proposal = store.escalations.createProposal({
               kind: 'plan_amendment',
               ref,
               action: action as unknown as Action,
@@ -317,7 +318,7 @@ export class ActionExecutor {
 
           case 'propose_shortfall': {
             const ref = shortfallRef(action.issueNumber);
-            const proposals = store.listProposals();
+            const proposals = store.escalations.listProposals();
             const signals = this.rejectionSignals(proposals);
             const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
             if (heldBy) {
@@ -336,7 +337,7 @@ export class ActionExecutor {
                 detailFrom: 'What the assessor found',
               },
             });
-            const proposal = store.createProposal({
+            const proposal = store.escalations.createProposal({
               kind: 'shortfall',
               ref,
               action: action as unknown as Action,
@@ -351,7 +352,7 @@ export class ActionExecutor {
           }
 
           case 'update_pr_branch': {
-            const ejected = store.ejectionOnBranch(action.branch);
+            const ejected = store.ejections.ejectionOnBranch(action.branch);
             if (ejected) {
               record(
                 'deferred',
@@ -361,7 +362,7 @@ export class ActionExecutor {
               );
               break;
             }
-            const staffed = store.findActiveTaskByBranch(action.branch);
+            const staffed = store.tasks.findActiveTaskByBranch(action.branch);
             if (staffed) {
               record(
                 'deferred',
@@ -476,17 +477,17 @@ export class ActionExecutor {
     const ref = merge ? mergeProposalRef(action.prNumber) : replyProposalRef(action.prNumber, action.commentId);
     const subject = merge ? `merge of PR #${action.prNumber}` : `reply on PR #${action.prNumber}`;
 
-    const proposals = store.listProposals();
+    const proposals = store.escalations.listProposals();
     const signals = this.rejectionSignals(proposals);
     const heldBy = proposalHold(kind, ref, proposals, { rejectionSignals: signals });
     if (heldBy) return { outcome: 'skipped', detail: `Skipped ${subject}: ${heldBy}.`, recorded: false };
 
-    const landing = merge ? store.standingLandingForPr(action.prNumber) : null;
+    const landing = merge ? store.landings.standingLandingForPr(action.prNumber) : null;
 
     const autoSend = !merge && (this.deps.autoSendReplies?.() ?? false);
 
     if (landing || autoSend) {
-      const proposal = store.createProposal({
+      const proposal = store.escalations.createProposal({
         kind,
         ref,
         action: action as unknown as Action,
@@ -496,7 +497,8 @@ export class ActionExecutor {
         ? `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`
         : 'you set "sendPrRepliesWithoutApproval", which sends a drafted reply without asking';
       const accepted =
-        store.decideProposal(proposal.id, 'accepted', note, landing ? 'stack_landing' : 'auto_send') ?? proposal;
+        store.escalations.decideProposal(proposal.id, 'accepted', note, landing ? 'stack_landing' : 'auto_send') ??
+        proposal;
       const run = await this.runAuthorized(accepted, cycleId);
       return { ...run, recorded: true };
     }
@@ -516,7 +518,12 @@ export class ActionExecutor {
             context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft },
           },
     );
-    const proposal = store.createProposal({ kind, ref, action: action as unknown as Action, escalationId: esc.id });
+    const proposal = store.escalations.createProposal({
+      kind,
+      ref,
+      action: action as unknown as Action,
+      escalationId: esc.id,
+    });
     return {
       outcome: 'executed',
       detail: merge
@@ -562,7 +569,7 @@ export class ActionExecutor {
     };
     const outbound = await this.authorize(cycleId, action);
     if (!outbound.recorded) {
-      this.deps.store.recordDecision({
+      this.deps.store.decisions.recordDecision({
         cycleId,
         action: action as unknown as Action,
         outcome: outbound.outcome,
@@ -579,7 +586,7 @@ export class ActionExecutor {
     const { store } = this.deps;
     const { cycleId, by, approved } = authorityOf(proposal, pulseCycleId ?? null);
     const audit = (outcome: DecisionOutcome, detail: string): { outcome: DecisionOutcome; detail: string } => {
-      store.recordDecision({ cycleId, action: proposal.action, outcome, detail });
+      store.decisions.recordDecision({ cycleId, action: proposal.action, outcome, detail });
       return { outcome, detail };
     };
 
@@ -603,7 +610,7 @@ export class ActionExecutor {
     }
     if (act.kind === 'shortfall') {
       const settled = actOnShortfall(store, act);
-      if (settled.ok) store.clearShortfall(act.originRef);
+      if (settled.ok) store.verdicts.clearShortfall(act.originRef);
       return settled.ok
         ? audit(
             'executed',
@@ -627,7 +634,7 @@ export class ActionExecutor {
         body: act.body,
       });
       if (act.commentId !== null) {
-        this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
+        this.deps.store.threadReopens.setPrThreadReopened(act.prNumber, act.commentId, false);
         this.recordReplySent(act.prNumber, act.commentId, res.commentRef);
       }
       this.recordReviewPublished(act, res.threadRef);
@@ -660,7 +667,7 @@ export class ActionExecutor {
 
   private recordReplySent(prNumber: number, threadId: string, commentRef: string | undefined): void {
     if (commentRef !== undefined && commentRef !== '') {
-      this.deps.store.recordPrReplySent(prNumber, threadId, commentRef);
+      this.deps.store.prReplies.recordPrReplySent(prNumber, threadId, commentRef);
       return;
     }
     this.deps.errors.record({
@@ -680,7 +687,7 @@ export class ActionExecutor {
   ): void {
     if (act.commentId !== null || threadRef === undefined || threadRef === '') return;
     if (act.originRef !== reviewOrigin(act.prNumber)) return;
-    this.deps.store.recordPrReviewPublished(act.prNumber, threadRef);
+    this.deps.store.prReviews.recordPrReviewPublished(act.prNumber, threadRef);
   }
 
   private async resolveAnswered(act: {
@@ -708,12 +715,12 @@ export class ActionExecutor {
 
   private rejectionSignals(proposals: Proposal[]): WorldEvent[] {
     const query = rejectionSignalQuery(proposals);
-    return query ? this.deps.store.listWorldEventsSince(query.since, query.refs) : [];
+    return query ? this.deps.store.world.listWorldEventsSince(query.since, query.refs) : [];
   }
 
   private abandonUnstarted(task: Task): void {
-    const current = this.deps.store.getTask(task.id);
-    if (current && isActiveTask(current)) this.deps.store.updateTask(task.id, { status: 'interrupted' });
+    const current = this.deps.store.tasks.getTask(task.id);
+    if (current && isActiveTask(current)) this.deps.store.tasks.updateTask(task.id, { status: 'interrupted' });
     if (task.branch) void this.deps.worktrees.remove(task.branch).catch(() => {});
   }
 
@@ -725,7 +732,7 @@ export class ActionExecutor {
     const prNumber = Number(/^pr:(\d+):/.exec(action.originRef ?? '')?.[1]);
     if (!Number.isInteger(prNumber)) return '';
 
-    const pr = this.deps.store.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber);
+    const pr = this.deps.store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber);
     const targets: CiEvidenceTarget[] = (pr?.ciChecks ?? [])
       .filter((c) => c.evidenceRef !== undefined && names.includes(c.name))
       .map((c) => ({ name: c.name, evidenceRef: c.evidenceRef! }));
@@ -751,7 +758,7 @@ export class ActionExecutor {
     const { store } = this.deps;
     const guidance = rejectionGuidance(
       [action.originRef, ...(action.type === 'dispatch_code_agent' ? (action.signalRefs ?? []) : [])],
-      store.listProposals(),
+      store.escalations.listProposals(),
     );
     const outstanding = outstandingForOrigin(action.originRef, store);
     const prior = priorWorkFor(action.originRef, store, outstanding !== null);
@@ -760,7 +767,7 @@ export class ActionExecutor {
     const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
     const sequence = sequenceBriefing(
       action.originRef,
-      store.getWorldBaseline()?.issues ?? [],
+      store.world.getWorldBaseline()?.issues ?? [],
       sequenceFeatureOrigin(action.originRef, store),
     );
     const attachments = attachmentsFor(action.originRef, store);
@@ -788,7 +795,7 @@ export class ActionExecutor {
       .join('\n\n');
     const profile = resolveAgentProfile(this.deps.agentModels, action.rule, action.profile);
     if (action.type === 'dispatch_code_agent')
-      return store.createTask({
+      return store.tasks.createTask({
         kind: 'code',
         title: action.title,
         prompt,
@@ -806,7 +813,7 @@ export class ActionExecutor {
         profile: profile?.name ?? null,
         profileSource: profile?.source ?? null,
       });
-    return store.createTask({
+    return store.tasks.createTask({
       kind: 'desk',
       title: action.title,
       prompt,
@@ -842,7 +849,7 @@ export class ActionExecutor {
 
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
-  return attachmentsNote(store.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
+  return attachmentsNote(store.jobs.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
 }
 
 function obstaclesFor(
@@ -854,9 +861,11 @@ function obstaclesFor(
     action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
   );
   const goal = corroborationGoal(action.originRef ?? null);
-  const paths = goal === null ? [] : store.listGoalFiles(goal).map((file) => file.path);
+  const paths = goal === null ? [] : store.agents.listGoalFiles(goal).map((file) => file.path);
   if (scopes.length === 0 && paths.length === 0) return null;
-  const rows = store.listObstacles().map((obstacle) => ({ obstacle, keys: store.listObstacleKeys(obstacle.id) }));
+  const rows = store.obstacles
+    .listObstacles()
+    .map((obstacle) => ({ obstacle, keys: store.obstacles.listObstacleKeys(obstacle.id) }));
   return renderObstacleNote(obstaclesForDispatch({ rows, scopes, paths })) || null;
 }
 
@@ -867,7 +876,7 @@ function instructionsFor(
 ): string | null {
   const goal = goalOriginFor(originRef ?? null);
   if (!goal) return null;
-  const standing = store.listStandingInstructions(goal);
+  const standing = store.instructions.listStandingInstructions(goal);
   if (standing.length === 0) return null;
   const number = Number(goal.slice('issue:'.length));
   return operatorInstructionsNote(standing, tracker?.(number) ?? null) || null;
@@ -875,7 +884,7 @@ function instructionsFor(
 
 function outstandingForOrigin(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
-  const stored = store.getIssueConclusion(originRef);
+  const stored = store.verdicts.getIssueConclusion(originRef);
   if (!stored || stored.verdict !== 'more_work' || stored.by !== 'agent') return null;
   return outstandingWorkNote(stored.note, stored.updatedAt);
 }
@@ -885,20 +894,20 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
   const issueOriginRef = goalOriginFor(ref);
   if (!issueOriginRef) return null;
   if (retroSubmitOrigin(ref).ok) return null;
-  const plan = store.getPlanByOrigin(issueOriginRef);
-  const files = store.listGoalFiles(issueOriginRef);
+  const plan = store.plans.getPlanByOrigin(issueOriginRef);
+  const files = store.agents.listGoalFiles(issueOriginRef);
   const briefing = priorWorkBriefing({
     plan,
-    caveatAnswers: plan ? store.listPlanCaveatAnswers(plan.id) : [],
-    parts: plan ? store.listPlanParts(plan.id) : [],
-    appraisal: store.getAppraisal(issueOriginRef),
-    conclusion: outstandingShown ? null : store.getIssueConclusion(issueOriginRef),
-    delivery: store.getDelivery(issueOriginRef),
-    shortfall: store.getShortfall(issueOriginRef),
-    entries: store.listScratchEntries(issueOriginRef),
+    caveatAnswers: plan ? store.plans.listPlanCaveatAnswers(plan.id) : [],
+    parts: plan ? store.plans.listPlanParts(plan.id) : [],
+    appraisal: store.verdicts.getAppraisal(issueOriginRef),
+    conclusion: outstandingShown ? null : store.verdicts.getIssueConclusion(issueOriginRef),
+    delivery: store.verdicts.getDelivery(issueOriginRef),
+    shortfall: store.verdicts.getShortfall(issueOriginRef),
+    entries: store.scratch.listScratchEntries(issueOriginRef),
     files,
-    neighbours: store.listGoalNeighbours(issueOriginRef, neighbourSeedPaths(files, plan)),
-    forPart: /^issue:\d+:part:/.test(ref),
+    neighbours: store.agents.listGoalNeighbours(issueOriginRef, neighbourSeedPaths(files, plan)),
+    forPart: inIssueOriginFamily('part', ref),
   });
   return briefing || null;
 }
@@ -906,13 +915,15 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
 function deliveredWorkFor(originRef: string | null | undefined, store: Store): string | null {
   const issueNumber = assessIssueNumber(originRef ?? '');
   if (issueNumber === null) return null;
-  const baseline = store.getWorldBaseline();
-  const plan = store.getPlanByOrigin(`issue:${issueNumber}`);
+  const baseline = store.world.getWorldBaseline();
+  const plan = store.plans.getPlanByOrigin(issueOriginRef('root', issueNumber));
   const partPrs = new Set(
-    (plan ? liveParts(store.listPlanParts(plan.id)) : []).flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
+    (plan ? liveParts(store.plans.listPlanParts(plan.id)) : []).flatMap((p) =>
+      p.prNumber === null ? [] : [p.prNumber],
+    ),
   );
   const byNumber = new Map<number, PullRequest>();
-  for (const pr of store.listArchivedPrs()) byNumber.set(pr.number, pr);
+  for (const pr of store.prArchive.listArchivedPrs()) byNumber.set(pr.number, pr);
   for (const pr of baseline?.closedPullRequests ?? []) byNumber.set(pr.number, pr);
   const issues = baseline?.issues ?? [];
   const prs = [...byNumber.values()]
@@ -930,7 +941,7 @@ function featureBriefing(
   if (!target.ok || !board) return null;
   const record = featureRecords(store, board).find((f) => f.number === target.featureNumber);
   if (!record) return null;
-  const previous = store.getFeatureSummary(target.featureOrigin);
+  const previous = store.tickets.getFeatureSummary(target.featureOrigin);
   return renderFeatureDossier(
     record,
     featureReach(store, board),
@@ -952,7 +963,7 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
   if (!target.ok) return null;
   const issueOriginRef = target.issueOrigin;
   const dossier = retroDossier(goalRecord(store, issueOriginRef));
-  return [retroPad(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
+  return [retroPad(store.scratch.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }
 
 function safeJson(v: unknown): string {
@@ -975,11 +986,11 @@ function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
   const declared = planPartInputs(parsed.document);
   return describeAmendment({
     note: amendment.note,
-    diff: proposedPlanDiff(store.listPlanRevisions(amendment.planId), {
+    diff: proposedPlanDiff(store.plans.listPlanRevisions(amendment.planId), {
       narrative: planNarrative(parsed.document),
       parts: declared,
     }),
-    warnings: amendmentWarnings(store.listPlanParts(amendment.planId), declared),
+    warnings: amendmentWarnings(store.plans.listPlanParts(amendment.planId), declared),
   });
 }
 
@@ -1009,5 +1020,5 @@ function readyingTitle(action: ValidatedAction): string {
 
 function sequenceFeatureOrigin(originRef: string | null | undefined, store: Store): FeatureSequence | null {
   const target = originRef ? featureSequenceSubmitOrigin(originRef) : { ok: false as const, error: '' };
-  return target.ok ? store.getFeatureSequence(target.featureOrigin) : null;
+  return target.ok ? store.sequences.getFeatureSequence(target.featureOrigin) : null;
 }

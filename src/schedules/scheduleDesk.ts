@@ -10,24 +10,24 @@ export class ScheduleDesk {
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(now: Date = new Date()): void {
     const { store, errors } = this.deps;
-    const schedules = store.listJobSchedules();
+    const schedules = store.schedules.listJobSchedules();
     if (schedules.length === 0) return;
     for (const firing of schedulePass({
       schedules,
       now,
       inFlight: (schedule) => {
-        const job = schedule.lastJobId ? store.getJob(schedule.lastJobId) : null;
-        return jobStillGoing(job, job?.taskId ? store.getTask(job.taskId) : null);
+        const job = schedule.lastJobId ? store.jobs.getJob(schedule.lastJobId) : null;
+        return jobStillGoing(job, job?.taskId ? store.tasks.getTask(job.taskId) : null);
       },
     })) {
       const { schedule } = firing;
       try {
         if (firing.heldFor !== null) {
-          store.updateJobSchedule(schedule.id, { nextRunAt: firing.nextRunAt });
+          store.schedules.updateJobSchedule(schedule.id, { nextRunAt: firing.nextRunAt });
           continue;
         }
-        const job = store.createJob(scheduleJobRequest(schedule));
-        store.recordJobScheduleRun(schedule.id, {
+        const job = store.jobs.createJob(scheduleJobRequest(schedule));
+        store.schedules.recordJobScheduleRun(schedule.id, {
           firedAt: firing.firedAt,
           jobId: job.id,
           nextRunAt: firing.nextRunAt,

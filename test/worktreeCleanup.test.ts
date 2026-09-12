@@ -76,7 +76,7 @@ async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: n
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
   failPlanningOpen(sys.store, issueNumber);
   await sys.harness.runCycle('manual');
-  const task = sys.store.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
+  const task = sys.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
   assert.ok(task, 'a code task should have been dispatched');
   return task!;
 }
@@ -92,12 +92,12 @@ async function reissued(sys: ReturnType<typeof build>['system'], cwd: string, br
 test('a finished code agent has its worktree slot released once the process exits', async () => {
   const { system, backend } = build();
   const task = await codeAgent(system, 7);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   const cwd = agent.cwd;
   assert.ok(existsSync(cwd), 'the slot should exist while the agent runs');
 
   backend.last().emit('@@LUBBDUBB_DONE@@\r\n');
-  assert.equal(system.store.getTask(task.id)!.status, 'done');
+  assert.equal(system.store.tasks.getTask(task.id)!.status, 'done');
   await tick(50);
   assert.equal(await reissued(system, cwd, 'someone/else'), false, 'held until the process is reaped');
   await system.worktrees.remove('someone/else');
@@ -115,7 +115,7 @@ test('a finished code agent has its worktree slot released once the process exit
 test('a failed agent keeps its worktree for debugging, but not its lease', async () => {
   const { system, backend } = build();
   await codeAgent(system, 8);
-  const cwd = system.store.listAgentsByStatus('starting', 'running')[0]!.cwd;
+  const cwd = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.cwd;
 
   backend.last().emitExit(1);
   await tick(100);
@@ -128,11 +128,11 @@ test('a failed agent keeps its worktree for debugging, but not its lease', async
 test('a killed agent keeps its worktree, and its lease releases once the process exits', async () => {
   const { system, children } = buildStream();
   await codeAgent(system, 10);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   const cwd = agent.cwd;
 
   assert.equal(system.agents.kill(agent.id), true);
-  assert.equal(system.store.getAgent(agent.id)!.status, 'killed');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'killed');
   assert.equal(
     await reissued(system, cwd, 'someone/else'),
     false,
@@ -152,9 +152,9 @@ test('a killed agent keeps its worktree, and its lease releases once the process
 test('a shared-branch slot is not released while another task on the branch is active', async () => {
   const { system, backend } = build();
   const task = await codeAgent(system, 9);
-  const cwd = system.store.listAgentsByStatus('starting', 'running')[0]!.cwd;
+  const cwd = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.cwd;
 
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'follow-up on same branch',
     prompt: 'x',

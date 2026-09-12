@@ -41,6 +41,62 @@ became of it, and both are lifted into their own decision columns (see
 `parseActions(raw)` validates an array, partitioning into `actions` and `rejected` (each rejected item
 keeps its raw value and a joined zod error path/message).
 
+## The issue-origin vocabulary
+
+A dispatch origin under an issue is `issue:<n>`, or `issue:<n>:<suffix>` with an optional id —
+`issue:412`, `issue:412:plan`, `issue:412:part:schema`, `issue:412:validate:some-check`. The strings
+are **persisted**: `tasks.origin_ref`, `decisions.rule`, a plan's part refs, an escalation's own
+origin, a bench row's ref, and the keys `agentModels.byRule` prices work under. A string that changes
+shape silently orphans every row already written in the old one.
+
+`src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
+`issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `assess`, `retro`,
+`validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
+`validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall` — and the entry carries
+three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
+family whose suffix is the whole of it), and its **role**.
+
+Both halves come off that one entry. `issueOriginRef(family, n, id?)` mints; `parseIssueOrigin`,
+`issueOriginId`, `issueOriginNumber`, `inIssueOriginFamily` and `issueSubtreeNumber` read; and
+`issueOriginRole` classifies. **A family cannot exist without a role**: the table is a
+`Record<IssueOriginFamily, …>` over the family union and `role` is a required field, so a new family
+without one does not compile, and `test/issueOriginVocabulary.test.ts` holds every family to the exact
+string it mints.
+
+`validate-plan` carries no id where `validate:<check>` does, and that is the shape of the thing rather
+than an inconsistency: there is one check set per goal and it is written once, so there is nothing to
+name — `assess` and `retro`'s shape.
+
+### The three roles
+
+The `issue:<n>:*` subtree holds materially different things, and `issueOriginRole(n, ref)` is what
+tells them apart — `null` for an origin that is not under issue `n` at all, and one of:
+
+- **`work`** — the pickup root and a plan's parts, plus `validate-local-fix:<id>`. Something was built.
+- **`evidence`** — `assess`, `retro`, `validate-plan`, `validate:<check>`,
+  `validate-failure:<check>`, `validate-local:<id>` and `validate-remote:<run>`. Not work, but only
+  ever downstream of some.
+- **`deliberation`** — `plan`, `appraisal`, `sequence` and `split:<pr>`. The harness thinking about the
+  issue; a task on one says it has been thought about, never that anything was built.
+
+Matching the whole subtree instead was a real defect: the planner's own task made every issue that
+reached pickup look worked, so it was assessed instead of picked up, the assessor honestly reported
+nothing delivered, rule `issue-shortfall` replanned, and the issue cycled the funnel without a line of
+its work ever being written.
+
+An **unrecognised** suffix is its own answer rather than a silent default — that is exactly how
+`:plan` slipped through. It is also a role a family may be **declared** with, which is what `summary`
+and `shortfall` carry today: both are read as unrecognised by every consumer, and both are suspected
+defects rather than a decision the vocabulary endorses — `issue:<n>:summary` in particular is a real
+dispatch origin (rule `feature-summary`), so it does not expand under a goal's priority flag and its
+spend files under "other". Declaring the role, rather than leaving the family out of the table, is
+what makes that visible instead of invisible.
+
+A role is judged on the **suffix**, never on the id: `issue:<n>:validate-local:` with no id is still
+that family and still `evidence`, because a role that fell back to `unrecognised` on a malformed id
+would lose exactly the origin an operator needs to see. The stricter parsers — the ones that hand a
+caller the id — are the ones that refuse it.
+
 ## The rule book
 
 `src/dispatcher/rules.ts` holds the registry as data. Every action the `RuleDispatcher` emits carries
@@ -66,6 +122,20 @@ and three claimed positions that were not positions (`1–2b`, `1–4`). Order l
 The registry keeps all three because `decisions.rule` is **persisted**: a row naming
 `cooldown-escalate` must still resolve years later. So the registry is the display vocabulary and the
 pipeline is the ordered subset that runs.
+
+`emittedBy` is the fourth field, and it is what makes the pipeline's coverage checkable. A rule of
+kind `rule` either has a **stage of its own** — a module under `src/dispatcher/rules/` registered in
+`STAGES` under its id — or it names, in `emittedBy`, the rule whose stage produces it. Nothing else is
+a legal third state, and that is carried by the types rather than by a convention: `OwnStageRuleId` is
+the rule ids with no `emittedBy`, `STAGES` is a **total** `Record<OwnStageRuleId, …>` so a rule with
+neither fails `typecheck`, and `DISPATCH_PIPELINE`'s element type declares `emittedBy` as an
+`OwnStageRuleId` so an `emittedBy` naming a rule that is itself emitted — or naming nothing — fails
+there. Both arms matter: `STAGES` was `Partial` for as long as the PR pass was the only shared one, and
+under a `Partial` map a rule added to `DISPATCH_PIPELINE` with no stage is **silently inert** — walked
+every cycle, proposing nothing, with nothing red and nothing to read. The walk skips an `emittedBy`
+entry outright, which is why a shared pass runs once per cycle rather than once per id it can emit;
+pointing all of them at the same function instead would run it seven times over. `test/dispatchPipeline.test.ts`
+asserts the same shape at runtime, against the loosening of the type rather than against the types.
 
 ### The rules, in evaluation order
 
@@ -119,11 +189,20 @@ has not turned the feature on, rather than as a rule that looks live and never f
 
 The seven PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than eight,
 because at most one agent works a branch and the fold that picks the top concern has to see them
-together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
-The pass is registered in `STAGES` under `pr-ci-failing` and stays there whatever the order inside the
-group: the seven are contiguous, so nothing runs between them and the pass contributes at the same
-point in the walk whichever id carries it. Moving the registration to track "the first of them" would
-be a second copy of the ordering.
+together. That pass is `src/dispatcher/rules/prConcerns.ts` — it gathers every concern on a watched
+pull request, collapses them to one per pull request, and ranks across pull requests. Its relative
+urgency inside the group is still the pipeline order: `concernUrgency` looks up the index.
+
+The pass is registered in `STAGES` under `pr-ci-failing`, and the other seven ids declare
+`emittedBy: 'pr-ci-failing'`. It stays under that id whatever the order inside the group: the eight are
+contiguous, so nothing runs between them and the pass contributes at the same point in the walk
+whichever id carries it. Moving the registration to track "the first of them" would be a second copy of
+the ordering. The module is named for what it does rather than for the id it is registered under — it
+was `prCiFailing.ts` while `pr-ci-failing` was the only one of the eight anybody could find from the
+`STAGES` map, and that name read as "the failing-CI rule" to every later reader. The **rule ids** did
+not move with it: they are persisted in `decisions.rule`, matched as origin patterns in
+`src/store/tasks.ts`, and priced in `agentModels.byRule`, so a rename there is a data migration and not
+a tidy-up.
 
 `pr-review-triage` is deliberately **not** in that group: it dispatches a desk agent rather than a branch
 agent, so the one-agent-per-branch fold does not apply to it, and it runs as its own stage above the
@@ -294,8 +373,9 @@ verdict to act on, prior work, a plan row, a spent attempt cap — writes nothin
 the issue to the funnel rather than holding it.
 
 Adding a rule is still two things and not three: a registry entry in the position it should run, and a
-module registered in `STAGES` under that id. An id with no entry was covered by an earlier pass (the
-PR pass above), and nothing anywhere renders a position.
+module registered in `STAGES` under that id — or, where an earlier pass already produces it, an
+`emittedBy` naming that pass instead of a module. There is no third option: a rule with neither does
+not compile. Nothing anywhere renders a position.
 
 ### Not rules
 
@@ -855,19 +935,12 @@ otherwise claim: no prior tasks means the work has not started, so rule `issue-p
 with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
 this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it — one judging, one redoing.
 
-**Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
-the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
-the **work**; `issue:N:assess`, `issue:N:retro` and `issue:N:validate-plan` are not work but only
-ever happen downstream of some, so they count as **evidence**; `issue:N:plan`, `issue:N:appraisal` and `issue:N:split:<pr>` are the harness
-**deliberating**, and a task on one of those says the issue has been thought about, never that anything
-was built. Matching the whole
-subtree was a real defect: the planner's own task made every issue that reached pickup look worked, so
-it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
-replanned, and the issue cycled the funnel without a line of its work ever being written. An
-**unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
-slipped through — and `hasPriorWork` does not count it, failing toward a redundant pickup an operator
-can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the whole known
-vocabulary, so the next origin added has to be classified rather than inherited.
+**Which origins count is decided in one place**, `issueOriginRole` — and it answers off the same
+declaration that mints them, so a family cannot reach the dispatcher unclassified
+([The issue-origin vocabulary](#the-issue-origin-vocabulary)). `hasPriorWork` counts **work** and
+**evidence**, and does not count an **unrecognised** suffix, failing toward a redundant pickup an
+operator can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the
+vocabulary from the assessor's side and `test/issueOriginVocabulary.test.ts` from the vocabulary's.
 
 It is answered from `ctx.tasks`, **never from the work graph**. The graph is keyed on these same
 origin strings, which is why it reads like a graph query; it is the same question asked of the source
@@ -1180,7 +1253,7 @@ The check's own procedure, expectation and resource names are **appended** to th
 `validation-check` prompt rather than interpolated — the half the agent cannot act without, and an
 override that predates the rule would silently drop a new `{token}`.
 
-The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
+The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `blocked` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
 

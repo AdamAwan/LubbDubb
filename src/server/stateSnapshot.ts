@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system.js';
 import type { Config } from '../config.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
@@ -132,47 +133,47 @@ export function buildStateSections(
 ): Partial<CockpitState> {
   const { store, connector, config, runtimeControl, harness, recovery, updates, readying, agents: fleet } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
-  const stored = store.getWorldBaseline();
-  const baseline = stored === null ? null : applyThreadReopens(stored, store.prThreadReopens());
+  const stored = store.world.getWorldBaseline();
+  const baseline = stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
   const world: WorldSnapshot = baseline ?? {
     takenAt: new Date().toISOString(),
     pullRequests: [],
     closedPullRequests: [],
     issues: [],
   };
-  const archivedPullRequests = store.listArchivedPrs();
-  const tasks = store.listTasks();
-  const agents = store.listAgents();
+  const archivedPullRequests = store.prArchive.listArchivedPrs();
+  const tasks = store.tasks.listTasks();
+  const agents = store.agents.listAgents();
   const history = once(() => fleetHistory(agents, tasks));
   const control = runtimeControl.snapshot();
-  const flags = store.listAllFlags();
-  const attachments = store.listAllAttachments();
-  const humanTasks = store.listHumanTasks();
+  const flags = store.agents.listAllFlags();
+  const attachments = store.jobs.listAllAttachments();
+  const humanTasks = store.humanTasks.listHumanTasks();
   const ejectionViews = (): EjectionView[] =>
-    store.listEjections(EJECTION_ROWS).map((row) => ({
+    store.ejections.listEjections(EJECTION_ROWS).map((row) => ({
       ...row,
       expiresAt: expiresAt(row.ejectedAt, config.ejection),
       neverContacted:
         row.lastSeenAt === null &&
         Date.now() - Date.parse(row.ejectedAt) >= config.ejection.contactGraceMinutes * 60_000,
     }));
-  const allHumanTasks = store.listAllHumanTasks();
-  const proposals = store.listProposals();
-  const bugFilings = store.listBugFilings();
+  const allHumanTasks = store.humanTasks.listAllHumanTasks();
+  const proposals = store.escalations.listProposals();
+  const bugFilings = store.bugFilings.listBugFilings();
   const overlapAgents = agents.slice(0, OVERLAP_AGENT_WINDOW);
   const overlaps = once(() =>
     detectFileOverlaps({
-      files: store.listFilesForAgents(overlapAgents.map((a) => a.id)),
+      files: store.agents.listFilesForAgents(overlapAgents.map((a) => a.id)),
       agents: overlapAgents,
       tasks,
     }),
   );
-  const plans = store.listPlans();
-  const planParts = store.listAllPlanParts();
+  const plans = store.plans.listPlans();
+  const planParts = store.plans.listAllPlanParts();
   const stacks = buildStacks(world.pullRequests, plans, planParts, config.defaultBranch);
   const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
-  const mergedPrs = store.mergedPrs();
-  const landings = store.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
+  const mergedPrs = store.graph.mergedPrs();
+  const landings = store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
   const planPartsOf = (origin: string): PlanPart[] => {
     const plan = plans.find((p) => p.originRef === origin);
     return plan ? planParts.filter((p) => p.planId === plan.id) : [];
@@ -185,7 +186,7 @@ export function buildStateSections(
       return planParts.filter((p) => p.planId === plan.id).map((p) => partOrigin(issueNumber, p.slug));
     }),
   );
-  const driftFiles = store.listFilesForAgents([
+  const driftFiles = store.agents.listFilesForAgents([
     ...new Set(
       tasks.flatMap((t) =>
         t.originRef !== null && partOrigins.has(t.originRef) && t.agentId !== null ? [t.agentId] : [],
@@ -213,7 +214,7 @@ export function buildStateSections(
     outsideScope: drift.get(part.id) ?? [],
   }));
   const claimNow = new Date().toISOString();
-  const validationChecks: ValidationCheckView[] = store
+  const validationChecks: ValidationCheckView[] = store.validation
     .listAllValidationChecks()
     .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes))
     .map((check) => ({ ...check, captureUrl: captureUrl(check, opts?.validationCaptureSigner) }));
@@ -223,28 +224,30 @@ export function buildStateSections(
     if (list) list.push(check);
     else checksByGoal.set(check.originRef, [check]);
   }
-  const wireValidationResources: ValidationResourceView[] = store.listAllValidationResources().map((resource) => {
-    const path = validationResourcePath(config.validationRoot, resource.originRef, resource.name);
-    return { ...resource, path, present: existsSync(path) };
-  });
-  const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
-  const deliveries = store.listDeliveries();
+  const wireValidationResources: ValidationResourceView[] = store.validation
+    .listAllValidationResources()
+    .map((resource) => {
+      const path = validationResourcePath(config.validationRoot, resource.originRef, resource.name);
+      return { ...resource, path, present: existsSync(path) };
+    });
+  const conclusions = new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c]));
+  const deliveries = store.verdicts.listDeliveries();
   const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
   const deliveryWindow = deliverySignalQuery(deliveries);
-  const issueRuns = store.listIssueRuns();
+  const issueRuns = store.floor.listIssueRuns();
   const runByOrigin = new Map(issueRuns.map((r) => [r.originRef, r]));
-  const shortfalls = store.listShortfalls();
+  const shortfalls = store.verdicts.listShortfalls();
   const shortfallsByOrigin = new Map(shortfalls.map((s) => [s.originRef, s]));
-  const padsByOrigin = new Map(store.listScratchPadSummaries().map((p) => [p.padRef, p]));
+  const padsByOrigin = new Map(store.scratch.listScratchPadSummaries().map((p) => [p.padRef, p]));
   const instructionsByOrigin = new Map<string, IssueInstruction[]>();
-  for (const instruction of store.listAllStandingInstructions()) {
+  for (const instruction of store.instructions.listAllStandingInstructions()) {
     const held = instructionsByOrigin.get(instruction.originRef);
     if (held) held.push(instruction);
     else instructionsByOrigin.set(instruction.originRef, [instruction]);
   }
-  const appraisals = store.listAppraisals();
+  const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = new Map(appraisals.map((a) => [a.originRef, a]));
-  const goalPauses = store.listGoalPauses();
+  const goalPauses = store.pauses.listGoalPauses();
   const pickupCtx: IssuePickupContext = {
     policy: {
       ...system.issuePickup,
@@ -253,23 +256,23 @@ export function buildStateSections(
     cooldown: DEFAULT_COOLDOWN,
     now: world.takenAt,
     tasks,
-    recentDecisions: store.listDecisions(200),
+    recentDecisions: store.decisions.listDecisions(200),
     openPrs: world.pullRequests,
     plans,
     planParts,
     deliveries,
-    deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
+    deliverySignals: deliveryWindow ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
     appraisals,
-    obstacleBlocks: store.listObstacleBlocks(),
-    obstacles: store.obstacleBoard(),
+    obstacleBlocks: store.obstacles.listObstacleBlocks(),
+    obstacles: store.obstacles.obstacleBoard(),
     runs: issueRuns,
-    headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
+    headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
     paused: control.paused,
   };
   const reviewRows = {
-    prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
-    prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
-    prReviewedElsewhere: store.prsReviewedElsewhere(),
+    prReviews: new Map(store.prReviews.listPrReviews().map((review) => [review.prNumber, review])),
+    prReviewRoutes: new Map(store.prReviewRoutes.listPrReviewRoutes().map((route) => [route.prNumber, route])),
+    prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
   };
   const signals = rejectionSignalQuery(proposals);
   const attentionCtx: PrAttentionContext = {
@@ -278,17 +281,17 @@ export function buildStateSections(
     watchLabel,
     tasks,
     proposals,
-    rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
+    rejectionSignals: signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [],
     recentDecisions: pickupCtx.recentDecisions,
     cooldown: DEFAULT_COOLDOWN,
     ci: config.ci,
     now: world.takenAt,
-    reviewWaits: store.reviewWaits(),
+    reviewWaits: store.reviewWaits.reviewWaits(),
     review: config.review,
     ...reviewRows,
   };
-  const worldEvents = store.listWorldEvents(100);
-  const shiftLog = store.listDecisions(100).map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
+  const worldEvents = store.world.listWorldEvents(100);
+  const shiftLog = store.decisions.listDecisions(100).map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
   const refUrls = buildRefUrls({
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
     issues: world.issues,
@@ -302,7 +305,7 @@ export function buildStateSections(
       ...appraisals.map((a) => issueCommentRef(a.originRef, a.commentRef)),
       ...worldEvents.map((e) => e.ref),
       ...tasks.map((t) => t.originRef),
-      ...world.issues.map((i) => `issue:${i.number}`),
+      ...world.issues.map((i) => issueOriginRef('root', i.number)),
       ...issueRuns.map((r) => r.originRef),
       ...shiftLog.map((d) => d.subjectRef),
     ],
@@ -312,13 +315,15 @@ export function buildStateSections(
     rollUpIssueSpend({
       agents,
       tasks,
-      nodes: store.listWorkNodes(),
-      localRuns: store.listLocalRuns(),
+      nodes: store.graph.listWorkNodes(),
+      localRuns: store.localRuns.listLocalRuns(),
     }),
   );
-  const goalPriorities = new Map(store.listGoalPriorities().map((g) => [g.originRef, { since: g.since }]));
-  const localValidations = once(() => new Map(store.listLatestLocalValidations().map((v) => [v.originRef, v])));
-  const liveLocalRun = once(() => store.liveLocalRun());
+  const goalPriorities = new Map(store.priority.listGoalPriorities().map((g) => [g.originRef, { since: g.since }]));
+  const localValidations = once(
+    () => new Map(store.localValidations.listLatestLocalValidations().map((v) => [v.originRef, v])),
+  );
+  const liveLocalRun = once(() => store.localRuns.liveLocalRun());
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
     const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
@@ -330,7 +335,7 @@ export function buildStateSections(
   };
   const retainedRuns = () => {
     const retained = retainedRunIssues(issueRuns, world.issues);
-    const mirrored = new Map(store.readTrackerItems(retained.map((i) => i.number)).map((t) => [t.number, t]));
+    const mirrored = new Map(store.tickets.readTrackerItems(retained.map((i) => i.number)).map((t) => [t.number, t]));
     return retained.flatMap((issue) => {
       const run = runByOrigin.get(issueConclusionOrigin(issue.number));
       if (run === undefined) return [];
@@ -368,7 +373,7 @@ export function buildStateSections(
         resolveModelTag(issue.labels, config.labelPrefix, config.agentModels),
       ),
       priority: goalPriorities.get(origin) ?? null,
-      retrospective: retroReading(store.getRetrospective(origin)),
+      retrospective: retroReading(store.scratch.getRetrospective(origin)),
       scratchpad: padReading(padsByOrigin.get(origin)),
       instructions: instructionsByOrigin.get(origin) ?? [],
       run: run
@@ -392,11 +397,11 @@ export function buildStateSections(
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
     prReviewState(pr.number, reviewReading(reviewRows, pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
-  const packHeads = once(() => new Map(store.listReviewPackHeads().map((head) => [head.prNumber, head])));
+  const packHeads = once(() => new Map(store.reviewPacks.listReviewPackHeads().map((head) => [head.prNumber, head])));
   const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
     packStandingOf(packHeads().get(pr.number), pr.headSha, system.reviewPacks.writing(pr.number));
 
-  const splitVerdicts = once(() => new Map(store.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
+  const splitVerdicts = once(() => new Map(store.prSplits.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
   const openPullRequests = once((): OpenPullRequest[] =>
     world.pullRequests.map((pr) => ({
       ...pr,
@@ -498,10 +503,10 @@ export function buildStateSections(
     archivedPullRequests: archivedPullRequests.map(withReview),
     stacks,
     environmentReach: buildEnvironmentReach(store, config.environments, remoteSheets),
-    featureSequences: store.listFeatureSequences(),
+    featureSequences: store.sequences.listFeatureSequences(),
     environmentHealth: buildEnvironmentHealth(store, config.environments),
     goalWatchWindows: buildGoalWatchWindows(store, config.environments),
-    environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
+    environmentArrivals: config.environments.length === 0 ? [] : store.environments.listGoalArrivals().slice(0, 50),
     remoteSheets,
     stackLandings: [
       ...stacks.map((stack) => {
@@ -549,13 +554,13 @@ export function buildStateSections(
   > => ({
     plans: wirePlans,
     planParts: wirePlanParts,
-    planAtoms: store.listAllPlanAtoms(),
-    planCaveatAnswers: store.listAllPlanCaveatAnswers(),
+    planAtoms: store.plans.listAllPlanAtoms(),
+    planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks,
-    validationPlans: store.listValidationPlanRecords(),
+    validationPlans: store.validation.listValidationPlanRecords(),
     validationResources: wireValidationResources,
-    goalWatches: [...store.listGoalWatches(), ...store.listProposedGoalWatches()],
-    stateQueries: store.listStateQueries(),
+    goalWatches: [...store.watches.listGoalWatches(), ...store.watches.listProposedGoalWatches()],
+    stateQueries: store.remoteValidation.listStateQueries(),
   });
 
   const fleetSection = (): Pick<
@@ -592,8 +597,8 @@ export function buildStateSections(
   });
 
   const queueSection = (): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> => ({
-    jobs: store.listJobs(),
-    schedules: store.listJobSchedules(),
+    jobs: store.jobs.listJobs(),
+    schedules: store.schedules.listJobSchedules(),
     upcoming: harness.upcoming,
     runway: readRunway({
       policy: config.runway,
@@ -601,7 +606,7 @@ export function buildStateSections(
       pickup: pickupCtx,
       runs: issueRuns,
       humanTasks: allHumanTasks,
-      escalations: store.listEscalationSpans(),
+      escalations: store.escalations.listEscalationSpans(),
       cap: control.cap,
       standing: allHumanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
     }),
@@ -610,14 +615,14 @@ export function buildStateSections(
   const inboxSection = (): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> => ({
     bugFilings,
     humanTasks,
-    escalations: store.listOpenEscalations(),
+    escalations: store.escalations.listOpenEscalations(),
     proposals,
   });
 
   const activitySection = (): Pick<CockpitState, 'decisions' | 'worldEvents' | 'errors'> => ({
     decisions: shiftLog,
     worldEvents,
-    errors: store.listErrors(100),
+    errors: store.errors.listErrors(100),
   });
 
   const out: Partial<CockpitState> = {
@@ -705,13 +710,13 @@ function buildUsage(system: System, unattributedCostUsd: number) {
       fiveHourCostUsd: system.store.sumUsageCostSince(iso(5 * 60 * 60 * 1000)),
       sevenDayCostUsd: system.store.sumUsageCostSince(iso(7 * 24 * 60 * 60 * 1000)),
     },
-    rateLimits: system.store.readRateLimits(),
+    rateLimits: system.store.rateLimits.readRateLimits(),
     unattributedCostUsd,
   };
 }
 
 function buildEnvironmentHealth(store: System['store'], environments: EnvironmentConfig[]): EnvironmentHealthReading[] {
-  const readings = store.listEnvironmentHealth();
+  const readings = store.environments.listEnvironmentHealth();
   return environments
     .filter((env) => env.health !== undefined)
     .flatMap((env) => readings.filter((r) => r.environment === env.name));
@@ -723,11 +728,11 @@ function buildEnvironmentReach(
   sheets: readonly RemoteSheetView[],
 ): GoalReachView[] {
   if (environments.length === 0) return [];
-  const arrivals = store.listGoalArrivals();
-  const releases = store.listEnvironmentGateReleases();
+  const arrivals = store.environments.listGoalArrivals();
+  const releases = store.environments.listEnvironmentGateReleases();
   const released = new Map(releases.map((r) => [r.goalRef, r]));
-  const delivered = new Set(store.listDeliveries().map((d) => d.originRef));
-  const shortfalls = new Set(store.listShortfalls().map((sf) => sf.originRef));
+  const delivered = new Set(store.verdicts.listDeliveries().map((d) => d.originRef));
+  const shortfalls = new Set(store.verdicts.listShortfalls().map((sf) => sf.originRef));
   const holds = new Map<string, string>();
   const gated = new Set<string>();
   for (const goalRef of delivered) {
@@ -738,12 +743,12 @@ function buildEnvironmentReach(
   }
   return allGoalReach({
     held: gated,
-    landings: store.listGoalLandings(),
-    readings: store.listEnvironmentReach(),
-    nodes: store.listWorkNodes(),
-    landed: store.landedPrs(),
-    plans: store.listPlans(),
-    parts: store.listAllPlanParts(),
+    landings: store.environments.listGoalLandings(),
+    readings: store.environments.listEnvironmentReach(),
+    nodes: store.graph.listWorkNodes(),
+    landed: store.environments.landedPrs(),
+    plans: store.plans.listPlans(),
+    parts: store.plans.listAllPlanParts(),
     environments,
   }).map((goal) => ({
     ...goal,
@@ -768,11 +773,11 @@ function sheetFold(sheets: readonly RemoteSheetView[], goalRef: string, environm
 
 function buildGoalWatchWindows(store: System['store'], environments: EnvironmentConfig[]): GoalWatchView[] {
   if (!environments.some((e) => e.watch !== undefined)) return [];
-  const windows = store.listWatchWindows();
+  const windows = store.watches.listWatchWindows();
   if (windows.length === 0) return [];
   const newest = new Map<string, WatchReading>();
-  for (const r of store.listWatchReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
-  const checks = store.listGoalWatches();
+  for (const r of store.watches.listWatchReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
+  const checks = store.watches.listGoalWatches();
   return windows.map((window) => ({
     ...window,
     checks: checks
@@ -800,13 +805,14 @@ function buildGoalWatchWindows(store: System['store'], environments: Environment
  */
 function buildRemoteSheets(store: System['store'], environments: EnvironmentConfig[]): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
-  const sheets = store.listRemoteSheets();
+  const sheets = store.remoteValidation.listRemoteSheets();
   if (sheets.length === 0) return [];
   const newest = new Map<string, RemoteReading>();
-  for (const r of store.listRemoteReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
-  const rows = store.listRemoteSheetRows();
-  const runs = store.listRemoteRuns();
-  const tenants = store.listRemoteTenants();
+  for (const r of store.remoteValidation.listRemoteReadings())
+    newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
+  const rows = store.remoteValidation.listRemoteSheetRows();
+  const runs = store.remoteValidation.listRemoteRuns();
+  const tenants = store.remoteValidation.listRemoteTenants();
   const now = Date.now();
   return sheets.map((sheet) => {
     const environment = environments.find((e) => e.name === sheet.environment);
@@ -932,9 +938,9 @@ function localValidationView(
   if (row === undefined) return null;
   const agentOf = (taskId: string | null): LocalValidationAgentView | null => {
     if (taskId === null) return null;
-    const task = store.getTask(taskId);
+    const task = store.tasks.getTask(taskId);
     if (!task?.agentId) return null;
-    const agent = store.getAgent(task.agentId);
+    const agent = store.agents.getAgent(task.agentId);
     return agent ? { id: agent.id, status: agent.status } : null;
   };
   return {

@@ -62,7 +62,7 @@ function bodyGuidance(system: System, agent: Agent, style: '#' | '!'): string {
         prRefStyle: style,
       },
     },
-    { agent, task: system.store.getTask(agent.taskId)! },
+    { agent, task: system.store.tasks.getTask(agent.taskId)! },
   ).find((t) => t.name === 'open_pr');
   assert.ok(tool, 'open_pr is built');
   const schema = tool.inputSchema as { properties: { body: { description: string } } };
@@ -86,7 +86,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Work issue:12',
     prompt: 'do it',

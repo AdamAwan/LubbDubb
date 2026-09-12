@@ -31,7 +31,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ body: CreateBody }, async ({ body, reply }) => {
       const parsed = parseCron(body.cron);
       if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
-      const schedule = store.createJobSchedule({
+      const schedule = store.schedules.createJobSchedule({
         title: body.title ?? deriveJobTitle(body.prompt),
         prompt: body.prompt,
         kind: body.kind,
@@ -53,7 +53,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/schedules/:id',
     checked({ params: IdParams, body: UpdateBody }, async ({ params, body, reply }) => {
-      const existing = store.getJobSchedule(params.id);
+      const existing = store.schedules.getJobSchedule(params.id);
       if (!existing) return reply.code(404).send({ error: 'schedule not found' });
       if (body.cron !== undefined) {
         const parsed = parseCron(body.cron);
@@ -62,7 +62,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const cron = body.cron ?? existing.cron;
       const enabled = body.enabled ?? existing.enabled;
       const reschedule = body.cron !== undefined || enabled !== existing.enabled;
-      const schedule = store.updateJobSchedule(params.id, {
+      const schedule = store.schedules.updateJobSchedule(params.id, {
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.prompt !== undefined ? { prompt: body.prompt } : {}),
         ...(body.kind !== undefined ? { kind: body.kind } : {}),
@@ -78,10 +78,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/schedules/:id/run',
     checked({ params: IdParams }, async ({ params, reply }) => {
-      const schedule = store.getJobSchedule(params.id);
+      const schedule = store.schedules.getJobSchedule(params.id);
       if (!schedule) return reply.code(404).send({ error: 'schedule not found' });
-      const job = store.createJob(scheduleJobRequest(schedule));
-      store.recordJobScheduleRun(schedule.id, {
+      const job = store.jobs.createJob(scheduleJobRequest(schedule));
+      store.schedules.recordJobScheduleRun(schedule.id, {
         firedAt: new Date().toISOString(),
         jobId: job.id,
         nextRunAt: schedule.nextRunAt,
@@ -95,7 +95,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.delete(
     '/api/schedules/:id',
     checked({ params: IdParams }, async ({ params, reply }) => {
-      if (!store.deleteJobSchedule(params.id)) return reply.code(404).send({ error: 'schedule not found' });
+      if (!store.schedules.deleteJobSchedule(params.id)) return reply.code(404).send({ error: 'schedule not found' });
       hub.broadcast({ type: 'dirty' });
       return { ok: true };
     }),

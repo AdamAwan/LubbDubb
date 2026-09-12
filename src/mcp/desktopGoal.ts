@@ -74,17 +74,17 @@ export const goalGate: DesktopToolFactory = (deps) => ({
       if (verdict !== 'workable' && verdict !== 'unclear' && verdict !== 'clear')
         return toolError('appraisal must be "workable", "unclear" or "clear".');
       if (verdict === 'clear') {
-        deps.store.clearAppraisal(originRef);
+        deps.store.verdicts.clearAppraisal(originRef);
         out.appraisal = null;
       } else {
-        const issue = deps.store.getWorldBaseline()?.issues.find((i) => i.number === ref.issue);
+        const issue = deps.store.world.getWorldBaseline()?.issues.find((i) => i.number === ref.issue);
         if (!issue)
           return toolError(
             `Issue #${ref.issue} is not in the last world snapshot, so there is no goal text to fingerprint a ` +
               'verdict against. Nothing was changed.',
           );
         const summary = typeof args.summary === 'string' && args.summary.trim() ? args.summary.trim() : null;
-        const appraisal = deps.store.recordAppraisal({
+        const appraisal = deps.store.verdicts.recordAppraisal({
           originRef,
           verdict,
           summary: summary ?? 'Set by the operator from the desktop channel.',
@@ -115,10 +115,10 @@ export const goalGate: DesktopToolFactory = (deps) => ({
         const note = typeof args.note === 'string' ? args.note.trim() : '';
         if (!note)
           return toolError('A release needs a `note` — it is the only account of why this goal stopped waiting.');
-        deps.store.releaseEnvironmentGate(originRef, note);
+        deps.store.environments.releaseEnvironmentGate(originRef, note);
         out.environmentGate = { released: true, note };
       } else {
-        deps.store.clearEnvironmentGateRelease(originRef);
+        deps.store.environments.clearEnvironmentGateRelease(originRef);
         out.environmentGate = { released: false };
       }
     }

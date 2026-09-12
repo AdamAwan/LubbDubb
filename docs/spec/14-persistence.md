@@ -9,8 +9,23 @@ The rule above is about **SQLite access, not about one class** (issue #221). `st
 2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
 depended on the surface of all of them. It is now a **composition root**: one domain module per
 group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
-thin `Store` that instantiates them and delegates. Every public method name and signature is
-unchanged, so no call site anywhere knows.
+`Store` that instantiates them, holds the database handle, and runs the schema and migration pass.
+
+**`Store` forwards nothing.** Each domain module hangs off it as a public named member and callers
+reach the method on the module that owns it — `store.tasks.getTask(id)`, `store.jobs.createJob(…)`,
+`store.pool.replaceFleetDigest(…)`. For a while the split kept a flat façade over the top: 434
+hand-written one-line forwarders, so that no call site had to know the split had happened. They are
+gone. A forwarder is a second copy of a signature that nothing keeps true — every new store method
+had to be written twice, five of the pool ones had already drifted to a different name at the
+façade, and the only thing that caught a forgotten one was the call site failing. Adding a method to
+a domain module is now the whole change.
+
+What stays on `Store` is what is not a forward: `close()` (it asks `TranscriptStore` to flush before
+the handle goes), and the three reads that genuinely span two modules —
+`sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's, and
+`writeUpObstacle`, which opens a job and records the write-up against the obstacle in one
+transaction. A composite belongs here because it is the caller that holds both modules; a method
+that only names one belongs on that one.
 
 | Module                | Tables                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |

@@ -26,7 +26,7 @@ export class ObstacleVoiceDesk {
         });
         const keys = gateKeys([{ kind: 'check', value: seen.checkName }], world);
         if (!keys.some((key) => key.kind === 'check' && key.binds)) continue;
-        this.deps.store.recordObstacleSighting(
+        this.deps.store.obstacles.recordObstacleSighting(
           { what: seen.what, kind: 'obstacle', keys, untilHours: null },
           {
             agentId: null,
@@ -50,8 +50,9 @@ export class ObstacleVoiceDesk {
 
   private checkKeysHeld(): Set<string> {
     const out = new Set<string>();
-    for (const obstacle of this.deps.store.listObstacles())
-      for (const key of this.deps.store.listObstacleKeys(obstacle.id)) if (key.kind === 'check') out.add(key.value);
+    for (const obstacle of this.deps.store.obstacles.listObstacles())
+      for (const key of this.deps.store.obstacles.listObstacleKeys(obstacle.id))
+        if (key.kind === 'check') out.add(key.value);
     return out;
   }
 }

@@ -40,9 +40,9 @@ import {
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 
-// → docs/spec/05-dispatcher.md (rule `pr-review`)
+// → docs/spec/05-dispatcher.md (the PR concern pass)
 
-export function prCiFailing(s: StageContext): void {
+export function prConcerns(s: StageContext): void {
   const { ctx } = s;
   const prCandidates: Array<{ pr: PullRequest; top: PrConcern; urgent: boolean }> = [];
   for (const pr of ctx.world.pullRequests) {

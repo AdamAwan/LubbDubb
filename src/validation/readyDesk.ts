@@ -19,32 +19,32 @@ export class ValidationReadyDesk {
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: ValidationReadyWorld): void {
-    const deliveries = this.store.listDeliveries();
-    const existing = this.store.listHumanTasksOfKind('validate');
+    const deliveries = this.store.verdicts.listDeliveries();
+    const existing = this.store.humanTasks.listHumanTasksOfKind('validate');
     if (deliveries.length === 0 && existing.length === 0) return;
     const steps = validationReadyPass({
       issues: world.issues,
       deliveries,
-      shortfalls: this.store.listShortfalls(),
+      shortfalls: this.store.verdicts.listShortfalls(),
       existing,
       checks: this.checksByOrigin(deliveries.map((d) => d.originRef)),
       sheetRows: this.sheetRowsByOrigin(),
       watchCleared: watchClearedGoals(
         'validate',
         this.environments,
-        this.store.listWatchWindows(),
-        this.store.listEnvironmentGateReleases(),
+        this.store.watches.listWatchWindows(),
+        this.store.environments.listEnvironmentGateReleases(),
       ),
       opened: openedGoals(
         'validate',
         this.environments,
-        this.store.listGoalArrivals(),
-        this.store.listEnvironmentGateReleases(),
+        this.store.environments.listGoalArrivals(),
+        this.store.environments.listEnvironmentGateReleases(),
       ),
     });
     for (const step of steps) {
       if (step.kind === 'file')
-        this.store.recordHumanTask({
+        this.store.humanTasks.recordHumanTask({
           title: step.title,
           detail: step.detail,
           originRef: step.originRef,
@@ -52,15 +52,15 @@ export class ValidationReadyDesk {
           agentId: null,
           taskId: null,
         });
-      else if (step.kind === 'reopen') this.store.reopenHumanTask(step.taskId, step.detail);
-      else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
+      else if (step.kind === 'reopen') this.store.humanTasks.reopenHumanTask(step.taskId, step.detail);
+      else this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
     }
   }
 
   private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {
     const out = new Map<string, RemoteSheetRow[]>();
     if (!this.environments.some((e) => e.validate !== undefined)) return out;
-    for (const row of this.store.listRemoteSheetRows()) {
+    for (const row of this.store.remoteValidation.listRemoteSheetRows()) {
       const held = out.get(row.goalRef);
       if (held === undefined) out.set(row.goalRef, [row]);
       else held.push(row);
@@ -70,7 +70,7 @@ export class ValidationReadyDesk {
 
   private checksByOrigin(origins: readonly string[]): Map<string, ValidationCheck[]> {
     const out = new Map<string, ValidationCheck[]>();
-    for (const originRef of origins) out.set(originRef, this.store.listValidationChecks(originRef));
+    for (const originRef of origins) out.set(originRef, this.store.validation.listValidationChecks(originRef));
     return out;
   }
 }

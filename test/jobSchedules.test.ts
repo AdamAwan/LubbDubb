@@ -181,7 +181,7 @@ test("a firing's job carries the operator's own text, and no branch of its own",
 test('the desk queues a job for a due schedule and records what it created', () => {
   const store = new Store(':memory:');
   const desk = new ScheduleDesk({ store, errors: SILENT });
-  const created = store.createJobSchedule({
+  const created = store.schedules.createJobSchedule({
     title: 'Nightly sweep',
     prompt: 'Sweep it.',
     kind: 'desk',
@@ -190,29 +190,29 @@ test('the desk queues a job for a due schedule and records what it created', () 
   });
 
   desk.run(new Date('2026-08-12T02:59:00.000Z'));
-  assert.equal(store.listQueuedJobs().length, 0, 'nothing fires before its slot');
+  assert.equal(store.jobs.listQueuedJobs().length, 0, 'nothing fires before its slot');
 
   desk.run(new Date('2026-08-12T03:00:10.000Z'));
-  const queued = store.listQueuedJobs();
+  const queued = store.jobs.listQueuedJobs();
   assert.equal(queued.length, 1);
   assert.equal(queued[0]!.title, 'Nightly sweep');
   assert.equal(queued[0]!.prompt, 'Sweep it.');
   assert.equal(queued[0]!.kind, 'desk');
 
-  const after = store.getJobSchedule(created.id)!;
+  const after = store.schedules.getJobSchedule(created.id)!;
   assert.equal(after.lastJobId, queued[0]!.id, 'the schedule remembers the job it made');
   assert.ok(after.lastFiredAt);
   assert.ok(after.nextRunAt! > '2026-08-12T03:00:10.000Z', 'it is rescheduled ahead of the firing');
 
   desk.run(new Date('2026-08-12T03:00:20.000Z'));
-  assert.equal(store.listQueuedJobs().length, 1);
+  assert.equal(store.jobs.listQueuedJobs().length, 1);
   store.close();
 });
 
 test('a schedule whose previous job is still queued does not queue a second one', () => {
   const store = new Store(':memory:');
   const desk = new ScheduleDesk({ store, errors: SILENT });
-  store.createJobSchedule({
+  store.schedules.createJobSchedule({
     title: 'Nightly sweep',
     prompt: 'Sweep it.',
     kind: 'desk',
@@ -220,16 +220,16 @@ test('a schedule whose previous job is still queued does not queue a second one'
     cron: '0 3 * * *',
   });
   desk.run(new Date('2026-08-12T03:00:10.000Z'));
-  assert.equal(store.listQueuedJobs().length, 1);
+  assert.equal(store.jobs.listQueuedJobs().length, 1);
 
   desk.run(new Date('2026-08-13T03:00:10.000Z'));
-  assert.equal(store.listQueuedJobs().length, 1, 'the second firing is held, not stacked');
+  assert.equal(store.jobs.listQueuedJobs().length, 1, 'the second firing is held, not stacked');
   store.close();
 });
 
 test('a due schedule dispatches an agent on the pulse it fires', async () => {
   const system = build();
-  system.store.createJobSchedule({
+  system.store.schedules.createJobSchedule({
     title: 'Nightly sweep',
     prompt: 'Sweep it.',
     kind: 'desk',
@@ -239,9 +239,9 @@ test('a due schedule dispatches an agent on the pulse it fires', async () => {
 
   await system.harness.runCycle('manual');
 
-  const live = system.store.listAgentsByStatus('starting', 'running');
+  const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(live.length, 1, 'the firing became an agent');
-  const task = system.store.getTask(live[0]!.taskId)!;
+  const task = system.store.tasks.getTask(live[0]!.taskId)!;
   assert.equal(task.prompt, 'Sweep it.');
   assert.match(task.originRef ?? '', /^job:/, 'a firing is an ordinary job, keyed on its own job origin');
   system.store.close();
@@ -250,7 +250,7 @@ test('a due schedule dispatches an agent on the pulse it fires', async () => {
 test('a paused fleet holds a firing in the queue, exactly as it holds a hand-launched job', async () => {
   const system = build();
   system.runtimeControl.apply({ paused: true });
-  system.store.createJobSchedule({
+  system.store.schedules.createJobSchedule({
     title: 'Nightly sweep',
     prompt: 'Sweep it.',
     kind: 'desk',
@@ -260,8 +260,8 @@ test('a paused fleet holds a firing in the queue, exactly as it holds a hand-lau
 
   await system.harness.runCycle('manual');
 
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 0, 'nothing spawns while paused');
-  assert.equal(system.store.listQueuedJobs().length, 1, 'the firing waits in the queue');
+  assert.equal(system.store.agents.listAgentsByStatus('starting', 'running').length, 0, 'nothing spawns while paused');
+  assert.equal(system.store.jobs.listQueuedJobs().length, 1, 'the firing waits in the queue');
   system.store.close();
 });
 
@@ -283,7 +283,7 @@ test('the routes write, edit, run and end a schedule', async () => {
   const bad = await app.inject({ method: 'POST', url: '/api/schedules', payload: { cron: 'every day', prompt: 'x' } });
   assert.equal(bad.statusCode, 400);
   assert.match(bad.json<{ error: string }>().error, /five fields/);
-  assert.equal(system.store.listJobSchedules().length, 1, 'the refusal left nothing behind');
+  assert.equal(system.store.schedules.listJobSchedules().length, 1, 'the refusal left nothing behind');
 
   const paused = await app.inject({
     method: 'POST',
@@ -299,7 +299,7 @@ test('the routes write, edit, run and end a schedule', async () => {
   });
   assert.ok(resumed.json<{ schedule: JobSchedule }>().schedule.nextRunAt! > new Date().toISOString());
 
-  const before = system.store.getJobSchedule(schedule.id)!.nextRunAt;
+  const before = system.store.schedules.getJobSchedule(schedule.id)!.nextRunAt;
   const reworded = await app.inject({
     method: 'POST',
     url: `/api/schedules/${schedule.id}`,
@@ -311,13 +311,17 @@ test('the routes write, edit, run and end a schedule', async () => {
   const ran = await app.inject({ method: 'POST', url: `/api/schedules/${schedule.id}/run` });
   assert.equal(ran.statusCode, 200);
   assert.equal(ran.json<{ job: Job }>().job.prompt, 'Review the open PRs and comment.');
-  assert.equal(system.store.getJobSchedule(schedule.id)!.nextRunAt, before, 'running early is not a change of cadence');
-  assert.ok(system.store.getJobSchedule(schedule.id)!.lastFiredAt);
+  assert.equal(
+    system.store.schedules.getJobSchedule(schedule.id)!.nextRunAt,
+    before,
+    'running early is not a change of cadence',
+  );
+  assert.ok(system.store.schedules.getJobSchedule(schedule.id)!.lastFiredAt);
 
   const deleted = await app.inject({ method: 'DELETE', url: `/api/schedules/${schedule.id}` });
   assert.equal(deleted.statusCode, 200);
-  assert.equal(system.store.listJobSchedules().length, 0);
-  assert.equal(system.store.listJobs().length, 1, 'the job it queued is its history, not part of it');
+  assert.equal(system.store.schedules.listJobSchedules().length, 0);
+  assert.equal(system.store.jobs.listJobs().length, 1, 'the job it queued is its history, not part of it');
 
   const gone = await app.inject({ method: 'POST', url: `/api/schedules/${schedule.id}/run` });
   assert.equal(gone.statusCode, 404);

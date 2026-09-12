@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
@@ -28,13 +29,15 @@ interface BriefInput {
  */
 export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const { store } = input;
-  const runs = store.listRemoteRuns().filter((run) => run.status === 'pending' || run.status === 'dispatched');
+  const runs = store.remoteValidation
+    .listRemoteRuns()
+    .filter((run) => run.status === 'pending' || run.status === 'dispatched');
   if (runs.length === 0) return [];
-  const rows = store.listRemoteSheetRows();
+  const rows = store.remoteValidation.listRemoteSheetRows();
   const out: RemoteRunBrief[] = [];
   for (const run of runs) {
-    const issueNumber = Number(/^issue:(\d+)$/.exec(run.goalRef)?.[1] ?? NaN);
-    if (!Number.isInteger(issueNumber)) continue;
+    const issueNumber = issueOriginNumber('root', run.goalRef);
+    if (issueNumber === null) continue;
     const environment = input.environments.find((e) => e.name === run.environment);
     const browser = environment?.validate?.browser;
     if (environment === undefined || browser?.runner === undefined) continue;
@@ -48,7 +51,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
     const runDir = remoteValidationRunDir(input.validationRoot, run.goalRef, run.id);
     const tenant = resolveTenant({
       environment,
-      stamped: store.listRemoteTenants(),
+      stamped: store.remoteValidation.listRemoteTenants(),
       now: input.now?.() ?? Date.now(),
       env: input.env,
     }).standing.tenant;
@@ -151,7 +154,7 @@ function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, en
 
 /** A selector names an **area**, never a file path, and it is the check's own `area` and nothing else. */
 function areasOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): string[] {
-  const areas = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check.area]));
+  const areas = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check.area]));
   const out: string[] = [];
   for (const row of rows) {
     const area = areas.get(row.sourceId) ?? null;
@@ -173,7 +176,7 @@ interface RunScript {
  * the two.
  */
 function scriptsOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScript[] {
-  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const checks = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check]));
   const out: RunScript[] = [];
   for (const row of rows) {
     const check = checks.get(row.sourceId);
@@ -199,7 +202,7 @@ interface RunScreen {
  * → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
  */
 function screensOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScreen[] {
-  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const checks = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check]));
   const out: RunScreen[] = [];
   for (const row of rows) {
     const check = checks.get(row.sourceId);
@@ -402,7 +405,7 @@ function briefing(input: BriefingInput): string {
     '',
     `- \`reportPath\` — the runner’s machine-readable report, inside \`${input.reportDir}\`.`,
     ...(input.publish === null ? [] : ['- `artefacts` — the URL the publish command printed.']),
-    '- `handback` — a reason, **instead of** a report: the run could not be carried out at all. It records ' +
+    '- `blocked` — a reason, **instead of** a report: the run could not be carried out at all. It records ' +
       'nothing, leaves every row exactly as it was, and carries your reason to the operator. It is a right ' +
       'answer rather than a last resort — an agent that could not reach the environment has learned nothing ' +
       'about the goal, and with only a report available its options would be a lie and silence.',

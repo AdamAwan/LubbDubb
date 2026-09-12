@@ -24,7 +24,7 @@ function oldShape(): string {
 
 test('a verdict cast before the rename is still held after it', () => {
   const store = new Store(oldShape());
-  const appraisal = store.getAppraisal('issue:12');
+  const appraisal = store.verdicts.getAppraisal('issue:12');
   assert.equal(appraisal?.verdict, 'unclear', 'the row came across, not an empty new table');
   assert.equal(appraisal?.summary, 'which of the two panels?');
   assert.equal(appraisal?.proposedProfile, 'deep');
@@ -41,11 +41,11 @@ test('the old table is gone, so a second boot has nothing to do', () => {
   inspect.close();
   assert.ok(names.includes('issue_appraisals'));
   assert.ok(!names.includes('issue_assays'), 'renamed, not copied — the old name is what says the rename is due');
-  assert.equal(new Store(path).listAppraisals().length, 1, 'and one row, not two');
+  assert.equal(new Store(path).verdicts.listAppraisals().length, 1, 'and one row, not two');
 });
 
 test('a fresh database is never renamed', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-rename-'));
   const store = new Store(join(dir, 'fresh.db'));
-  assert.equal(store.listAppraisals().length, 0);
+  assert.equal(store.verdicts.listAppraisals().length, 0);
 });

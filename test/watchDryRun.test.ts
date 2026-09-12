@@ -55,7 +55,7 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
 }
 
 function spawnPlanner(system: System): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Plan issue #12',
     prompt: 'plan it',
@@ -89,7 +89,7 @@ test('a signal whose presence query answers zero is unknown, not clean', async (
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
   assert.equal(res.isError, false);
 
-  const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
   assert.equal(check.dryRunPresence, 'zero');
   assert.equal(check.dryRunVerdict, 'unknown', 'zero presence is unknown, never a clean reading');
   assert.match(check.dryRunDetail!, /never heard of this code path/);
@@ -107,7 +107,7 @@ test('a dry run that cannot resolve is returned to the author, not swallowed', a
   });
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
-  assert.ok(system.store.getPlanByOrigin('issue:12'), 'the plan landed');
+  assert.ok(system.store.plans.getPlanByOrigin('issue:12'), 'the plan landed');
   const refusals = res.payload['watchDryRun'] as string[];
   assert.equal(refusals.length, 1);
   assert.match(refusals[0]!, /^no-timeouts: /);
@@ -121,7 +121,7 @@ test('a result that omits the id echo is unknown, not clean', async () => {
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
 
-  const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
   assert.equal(check.dryRunVerdict, 'unknown');
   assert.match(check.dryRunDetail!, /without the query it was given/);
   assert.equal((res.payload['watchDryRun'] as string[]).length, 1);
@@ -131,7 +131,7 @@ test('a result that omits the id echo is unknown, not clean', async () => {
 test('an observation that answers nothing at all is unknown', async () => {
   const system = build(new FakeEnvironmentObserver());
   await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
-  const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
   assert.equal(check.dryRunVerdict, 'unknown');
   assert.match(check.dryRunDetail!, /could not read testUk/);
   system.store.close();
@@ -145,7 +145,7 @@ test('presence firing and the signal firing is the reading with nothing to hand 
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
 
-  const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
   assert.equal(check.dryRunPresence, 'fires');
   assert.equal(check.dryRunVerdict, 'fires');
   assert.equal(check.dryRunRows, 2);
@@ -163,7 +163,7 @@ test('a firing presence over a silent signal is handed back — the query is wro
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
 
-  const check = system.store.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'no-timeouts')!;
   assert.equal(check.dryRunVerdict, 'zero');
   assert.equal(check.dryRunRows, 0);
   assert.match(check.dryRunDetail!, /Either the query is wrong or the ticket is/);
@@ -176,7 +176,7 @@ test('a goal that declares no watch reads null and asks nothing', async () => {
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), undefined);
   assert.equal(res.isError, false);
-  assert.deepEqual(system.store.listGoalWatches(), []);
+  assert.deepEqual(system.store.watches.listGoalWatches(), []);
   assert.deepEqual(observer.asked, [], 'nothing is asked about a goal with nothing to watch');
   system.store.close();
 });
@@ -185,8 +185,8 @@ test('no environment declares telemetry, so nothing is asked and nothing is refu
   const observer = new FakeEnvironmentObserver();
   const system = build(observer, [{ name: 'testUk', at: 'echo unused' }]);
   const res = await submit(system, spawnPlanner(system), { signals: [SIGNAL] });
-  assert.equal(system.store.listGoalWatches().length, 1);
-  assert.equal(system.store.listGoalWatches()[0]!.dryRunVerdict, null);
+  assert.equal(system.store.watches.listGoalWatches().length, 1);
+  assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunVerdict, null);
   assert.deepEqual(observer.asked, []);
   assert.equal(res.payload['watchDryRun'], undefined);
   system.store.close();
@@ -200,10 +200,10 @@ test('an amendment merges on the id and clears the reading it replaced', async (
   const system = build(observer);
   const agent = spawnPlanner(system);
   await submit(system, agent, { signals: [SIGNAL] });
-  assert.equal(system.store.listGoalWatches()[0]!.dryRunRows, 1);
+  assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
 
   await submit(system, agent, { signals: [{ ...SIGNAL, id: 'no-timeouts', query: 'traces | where 1 == 2' }] });
-  const rows = system.store.listGoalWatches();
+  const rows = system.store.watches.listGoalWatches();
   assert.equal(rows.length, 1, 'merged on the id rather than filed beside it');
   assert.equal(rows[0]!.query, 'traces | where 1 == 2');
   assert.deepEqual(
@@ -218,10 +218,10 @@ test('a check an amendment stopped declaring stops being asked about', async () 
   const system = build(new FakeEnvironmentObserver());
   const agent = spawnPlanner(system);
   await submit(system, agent, { signals: [SIGNAL, { ...SIGNAL, id: 'no-retries' }] });
-  assert.equal(system.store.listGoalWatches().length, 2);
+  assert.equal(system.store.watches.listGoalWatches().length, 2);
   await submit(system, agent, { signals: [SIGNAL] });
   assert.deepEqual(
-    system.store.listGoalWatches().map((w) => w.id),
+    system.store.watches.listGoalWatches().map((w) => w.id),
     ['no-timeouts'],
   );
   system.store.close();
@@ -243,7 +243,7 @@ test('a measure captures its baseline on the dry run it already rides', async ()
   const res = await submit(system, spawnPlanner(system), { measures: [MEASURE] });
   assert.equal(res.isError, false);
 
-  const check = system.store.listGoalWatches().find((w) => w.id === 'orders-p95')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'orders-p95')!;
   assert.equal(check.kind, 'measure');
   assert.equal(check.baselineValue, 8400, 'the number the work has to beat, kept rather than discarded');
   assert.ok(check.baselineAt !== null);
@@ -265,7 +265,7 @@ test('a measure that answers two rows takes no baseline and is handed back', asy
   });
   const system = build(observer);
   const res = await submit(system, spawnPlanner(system), { measures: [MEASURE] });
-  const check = system.store.listGoalWatches().find((w) => w.id === 'orders-p95')!;
+  const check = system.store.watches.listGoalWatches().find((w) => w.id === 'orders-p95')!;
   assert.equal(check.dryRunVerdict, 'unknown');
   assert.equal(check.baselineValue, null, 'nothing answered, so there is no before');
   assert.match((res.payload['watchDryRun'] as string[])[0]!, /exactly one row/);
@@ -279,10 +279,10 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
   const system = build(observer);
   const agent = spawnPlanner(system);
   await submit(system, agent, { measures: [MEASURE] });
-  assert.equal(system.store.listGoalWatches()[0]!.baselineValue, 8400);
+  assert.equal(system.store.watches.listGoalWatches()[0]!.baselineValue, 8400);
 
   await submit(system, agent, { measures: [{ ...MEASURE, query: 'requests | summarize value = avg(duration)' }] });
-  const after = system.store.listGoalWatches()[0]!;
+  const after = system.store.watches.listGoalWatches()[0]!;
   assert.equal(after.query, 'requests | summarize value = avg(duration)');
   assert.deepEqual(
     observer.asked.filter((a) => a.kind === 'measure').map((a) => a.query),
@@ -296,7 +296,7 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
 test('a measure whose dry run never answered carries no baseline at all', async () => {
   const system = build(new FakeEnvironmentObserver());
   await submit(system, spawnPlanner(system), { measures: [MEASURE] });
-  const check = system.store.listGoalWatches()[0]!;
+  const check = system.store.watches.listGoalWatches()[0]!;
   assert.equal(check.baselineValue, null);
   assert.equal(check.baselineAt, null);
   assert.equal(check.dryRunVerdict, 'unknown');

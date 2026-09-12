@@ -256,7 +256,7 @@ export function register(
             'Restart it the way you started it — the pending changes are what it will come back on.',
         });
       }
-      const live = store.countLiveAgents();
+      const live = store.agents.countLiveAgents();
       if (live > 0 && !body.interrupt) {
         return reply.code(409).send({
           error: `${live} agent(s) are still running — wait for the fleet to drain, or restart with interrupt to stop them now (they come back on the next boot).`,

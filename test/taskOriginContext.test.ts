@@ -11,7 +11,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 test('createTask persists origin context and round-trips through the store', () => {
   const store = new Store(':memory:');
-  const task = store.createTask({
+  const task = store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #13',
     prompt: 'GitHub issue #13 …',
@@ -23,19 +23,19 @@ test('createTask persists origin context and round-trips through the store', () 
   });
   assert.equal(task.originTitle, 'Login broken');
 
-  const fetched = store.getTask(task.id)!;
+  const fetched = store.tasks.getTask(task.id)!;
   assert.equal(fetched.originTitle, 'Login broken');
   assert.equal(fetched.originSummary, 'Users cannot sign in with SSO.');
   assert.equal(fetched.dispatchReason, 'Open issue #13 has no linked PR and no agent is on it.');
 
-  const listed = store.listTasks().find((t) => t.id === task.id)!;
+  const listed = store.tasks.listTasks().find((t) => t.id === task.id)!;
   assert.equal(listed.originSummary, 'Users cannot sign in with SSO.');
   store.close();
 });
 
 test('origin context defaults to null when not supplied', () => {
   const store = new Store(':memory:');
-  const task = store.createTask({
+  const task = store.tasks.createTask({
     kind: 'desk',
     title: 'x',
     prompt: 'x',
@@ -45,7 +45,7 @@ test('origin context defaults to null when not supplied', () => {
     originSummary: null,
     dispatchReason: null,
   });
-  const fetched = store.getTask(task.id)!;
+  const fetched = store.tasks.getTask(task.id)!;
   assert.equal(fetched.originTitle, null);
   assert.equal(fetched.originSummary, null);
   assert.equal(fetched.dispatchReason, null);
@@ -78,8 +78,8 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   });
   await system.harness.runCycle('manual');
 
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
-  const task = system.store.getTask(agent.taskId)!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
+  const task = system.store.tasks.getTask(agent.taskId)!;
   assert.equal(task.originTitle, 'Add login', 'source item title should be captured');
   assert.equal(task.originSummary, 'Let users sign in with email and password.');
   assert.match(task.dispatchReason!, /issue #901/, 'the dispatch reason should be persisted');

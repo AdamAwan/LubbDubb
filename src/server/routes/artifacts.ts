@@ -25,11 +25,11 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
         if (typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, id, Date.now()))
           return reply.code(401).send({ error: 'missing or invalid artifact capability' });
       }
-      const flag = store.getFlag(id);
+      const flag = store.agents.getFlag(id);
       if (!flag) return reply.code(404).send({ error: 'artifact not found' });
       if (/^https?:\/\//i.test(flag.ref))
         return reply.code(400).send({ error: 'url refs are linked directly, not served' });
-      const agent = store.getAgent(flag.agentId);
+      const agent = store.agents.getAgent(flag.agentId);
       if (!agent) return reply.code(404).send({ error: 'agent not found' });
       const file = resolveConfinedArtifact(agent.cwd, flag.ref, artifactRoots);
       if (!file) return reply.code(404).send({ error: 'artifact not found' });
@@ -51,7 +51,7 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
         if (typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, attachmentSubject(id), Date.now()))
           return reply.code(401).send({ error: 'missing or invalid attachment capability' });
       }
-      const attachment = store.getAttachment(id);
+      const attachment = store.jobs.getAttachment(id);
       if (!attachment) return reply.code(404).send({ error: 'attachment not found' });
       const file = confinedTo(config.attachmentRoot, attachment.path);
       if (!file) return reply.code(404).send({ error: 'attachment not found' });
@@ -77,7 +77,7 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
         )
           return reply.code(401).send({ error: 'missing or invalid screenshot capability' });
       }
-      const row = store.getLocalValidation(id);
+      const row = store.localValidations.getLocalValidation(id);
       if (!row) return reply.code(404).send({ error: 'validation not found' });
       const dir = localValidationOutputDir(config.validationRoot, row.originRef, row.id);
       const file = confinedTo(dir, resolve(dir, name));
@@ -110,7 +110,7 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
         )
           return reply.code(401).send({ error: 'missing or invalid capture capability' });
       }
-      const check = store.getValidationCheck(originRef, checkId);
+      const check = store.validation.getValidationCheck(originRef, checkId);
       if (!check?.capture) return reply.code(404).send({ error: 'capture not found' });
       const file = confinedTo(
         validationGoalDir(config.validationRoot, originRef),

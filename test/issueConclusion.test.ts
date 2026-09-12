@@ -192,7 +192,7 @@ function build(overrides: Record<string, unknown> = {}): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -204,29 +204,29 @@ function spawnAgent(system: System, originRef: string): Agent {
 
 test('a conclusion is latest-wins per issue and keeps its original createdAt', () => {
   const system = build();
-  const first = system.store.recordIssueConclusion({
+  const first = system.store.verdicts.recordIssueConclusion({
     originRef: 'issue:12',
     verdict: 'more_work',
     note: 'half of it',
     by: 'agent',
   });
-  const second = system.store.recordIssueConclusion({
+  const second = system.store.verdicts.recordIssueConclusion({
     originRef: 'issue:12',
     verdict: 'done',
     note: 'the rest',
     by: 'agent',
   });
-  assert.equal(system.store.listIssueConclusions().length, 1, 'one row per issue, not an append log');
-  assert.equal(system.store.getIssueConclusion('issue:12')?.verdict, 'done');
+  assert.equal(system.store.verdicts.listIssueConclusions().length, 1, 'one row per issue, not an append log');
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12')?.verdict, 'done');
   assert.equal(second.createdAt, first.createdAt, 'still dates the first time anyone concluded it');
   system.store.close?.();
 });
 
 test('clearing a conclusion deletes the row rather than storing a third verdict', () => {
   const system = build();
-  system.store.recordIssueConclusion({ originRef: 'issue:12', verdict: 'done', note: 'n', by: 'operator' });
-  assert.equal(system.store.clearIssueConclusion('issue:12'), true);
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  system.store.verdicts.recordIssueConclusion({ originRef: 'issue:12', verdict: 'done', note: 'n', by: 'operator' });
+  assert.equal(system.store.verdicts.clearIssueConclusion('issue:12'), true);
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null);
   assert.equal(resolve(null, null).verdict, 'undeclared');
   system.store.close?.();
 });
@@ -248,7 +248,7 @@ test('conclude_work records the verdict against the issue the credential names',
   const res = await callTool(system, agent, 'conclude_work', { status: 'done', note: 'all three acceptance criteria' });
   assert.equal(res.isError, false);
 
-  const conclusion = system.store.getIssueConclusion('issue:12');
+  const conclusion = system.store.verdicts.getIssueConclusion('issue:12');
   assert.equal(conclusion?.verdict, 'done');
   assert.equal(conclusion?.by, 'agent');
   assert.equal(conclusion?.agentId, agent.id, 'attribution is structural, from the credential');
@@ -261,7 +261,7 @@ test('a part agent cannot conclude its parent issue', async () => {
   const agent = spawnAgent(system, 'issue:12:part:schema');
   const res = await callTool(system, agent, 'conclude_work', { status: 'done', note: 'my part is done' });
   assert.equal(res.isError, true, 'refused rather than silently scoped to the part');
-  assert.equal(system.store.getIssueConclusion('issue:12'), null, 'and nothing is written');
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null, 'and nothing is written');
   system.store.close?.();
 });
 
@@ -278,7 +278,7 @@ test('a rejected conclusion writes nothing', async () => {
   const agent = spawnAgent(system, 'issue:12');
   const res = await callTool(system, agent, 'conclude_work', { status: 'done', note: '' });
   assert.equal(res.isError, true);
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null);
   system.store.close?.();
 });
 
@@ -292,11 +292,11 @@ test('the cockpit can set, flip and clear an issue conclusion', async () => {
     payload: { verdict: 'done', note: 'looks finished to me' },
   });
   assert.equal(set.statusCode, 200);
-  assert.equal(system.store.getIssueConclusion(issueConclusionOrigin(12))?.by, 'operator');
+  assert.equal(system.store.verdicts.getIssueConclusion(issueConclusionOrigin(12))?.by, 'operator');
 
   const clear = await app.inject({ method: 'POST', url: '/api/issues/12/conclusion', payload: { verdict: null } });
   assert.equal(clear.statusCode, 200);
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null);
 
   const bad = await app.inject({ method: 'POST', url: '/api/issues/12/conclusion', payload: { verdict: 'maybe' } });
   assert.equal(bad.statusCode, 400);

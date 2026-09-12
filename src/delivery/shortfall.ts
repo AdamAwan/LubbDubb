@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginRef } from '../issueOrigins.js';
 import { optionalText } from '../server/validation.js';
 import type { PlanPart, PlanPartInput, ShortfallCause } from '../types.js';
 import { partHasWork } from '../plans/parts.js';
@@ -38,7 +39,7 @@ export const SHORTFALL_CAUSE_HELP: Record<ShortfallCause, string> = {
 };
 
 export function shortfallRef(issueNumber: number): string {
-  return `issue:${issueNumber}:shortfall`;
+  return issueOriginRef('shortfall', issueNumber);
 }
 
 export function shortfallArm(

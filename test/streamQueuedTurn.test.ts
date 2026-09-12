@@ -55,7 +55,7 @@ async function dispatched() {
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   return { system, child: children[0]!, agentId };
 }
 
@@ -64,25 +64,25 @@ test('answering a mid-turn park does not park the agent again when the interrupt
 
   const asked = system.agents.ask(agentId, { question: 'Which auth provider?' });
   assert.ok(asked.ok && asked.escalationId);
-  const escalation = system.store.listOpenEscalations()[0]!;
+  const escalation = system.store.escalations.listOpenEscalations()[0]!;
 
   system.escalations.answer(escalation.id, 'Azure AD');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
 
   child.emitLine({ type: 'result', subtype: 'success' });
   assert.deepEqual(
-    system.store.listOpenEscalations().map((e) => e.prompt),
+    system.store.escalations.listOpenEscalations().map((e) => e.prompt),
     [],
     'a queued answer means the agent is working, not waiting',
   );
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: 'Wired up Azure AD. @@LUBBDUBB_DONE@@' }] },
   });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'done');
 
   system.store.close();
 });

@@ -28,7 +28,7 @@ function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref
 
 test('records nodes, reads a subtree and lists roots', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph([
+  store.graph.recordWorkGraph([
     obs({ ref: 'issue:12', kind: 'issue', title: 'Widget' }),
     obs({ ref: 'pr:40', kind: 'pr', parentRef: 'issue:12', title: 'PR #40' }),
     obs({ ref: 'pr:40:ci', kind: 'concern', parentRef: 'pr:40', title: 'CI fix', status: 'live' }),
@@ -36,12 +36,12 @@ test('records nodes, reads a subtree and lists roots', () => {
   ]);
 
   assert.deepEqual(
-    store.listWorkSubtree('issue:12').map((n) => n.ref),
+    store.graph.listWorkSubtree('issue:12').map((n) => n.ref),
     ['issue:12', 'pr:40', 'pr:40:ci'],
     'the subtree walks parent_ref down from the root',
   );
   assert.deepEqual(
-    store
+    store.graph
       .listWorkRoots()
       .map((n) => n.ref)
       .sort(),
@@ -52,23 +52,23 @@ test('records nodes, reads a subtree and lists roots', () => {
 
 test('a parent is written once and never rewritten, but a null one can be filled', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', title: 'Stray PR' })]);
-  store.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', parentRef: 'issue:12', title: 'Stray PR' })]);
-  assert.equal(store.listWorkSubtree('pr:50')[0]?.parentRef, 'issue:12', 'a null parent is adopted');
+  store.graph.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', title: 'Stray PR' })]);
+  store.graph.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', parentRef: 'issue:12', title: 'Stray PR' })]);
+  assert.equal(store.graph.listWorkSubtree('pr:50')[0]?.parentRef, 'issue:12', 'a null parent is adopted');
 
-  store.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', parentRef: 'issue:99', title: 'Stray PR' })]);
-  assert.equal(store.listWorkSubtree('pr:50')[0]?.parentRef, 'issue:12', 'an existing parent is never rewritten');
+  store.graph.recordWorkGraph([obs({ ref: 'pr:50', kind: 'pr', parentRef: 'issue:99', title: 'Stray PR' })]);
+  assert.equal(store.graph.listWorkSubtree('pr:50')[0]?.parentRef, 'issue:12', 'an existing parent is never rewritten');
 });
 
 test('a node not observed is left exactly as it was', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph([
+  store.graph.recordWorkGraph([
     obs({ ref: 'issue:12', kind: 'issue', title: 'Widget' }),
     obs({ ref: 'pr:40', kind: 'pr', parentRef: 'issue:12', title: 'PR #40', status: 'merged', terminal: true }),
   ]);
-  store.recordWorkGraph([obs({ ref: 'issue:12', kind: 'issue', title: 'Widget' })]);
+  store.graph.recordWorkGraph([obs({ ref: 'issue:12', kind: 'issue', title: 'Widget' })]);
 
-  const pr = store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  const pr = store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
   assert.equal(pr?.status, 'merged', 'an unobserved node keeps its status');
   assert.equal(pr?.terminal, true, 'and its terminal flag');
 });
@@ -294,10 +294,10 @@ test('a parent resolved from the closed window survives the window expiring', ()
   assert.equal(node(first, 'pr:41').parentRef, 'issue:12');
 
   const store = new Store(':memory:');
-  store.recordWorkGraph(first);
-  store.recordWorkGraph(foldWorkGraph(input({ world: world({ issues: [issue()] }) })));
+  store.graph.recordWorkGraph(first);
+  store.graph.recordWorkGraph(foldWorkGraph(input({ world: world({ issues: [issue()] }) })));
   assert.equal(
-    store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:41')?.parentRef,
+    store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:41')?.parentRef,
     'issue:12',
     'the edge is durable once the one shot at it landed',
   );
@@ -515,13 +515,13 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   system.connector.inject({ kind: 'new_pr', number: 40, title: 'Add the widget', branch: 'issue/12' });
   await system.harness.runCycle('manual');
 
-  const open = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  const open = system.store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
   assert.equal(open?.status, 'open');
   assert.equal(open?.parentRef, 'issue:12');
 
   system.connector.inject({ kind: 'pr_closed', prNumber: 40, merged: true });
   await system.harness.runCycle('manual');
-  const merged = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  const merged = system.store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
   assert.equal(merged?.status, 'merged', 'the merge is observed while it is still in the world');
   assert.equal(merged?.terminal, true);
   assert.equal(merged?.provenance, 'observed');
@@ -532,7 +532,7 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  const after = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  const after = system.store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
   assert.equal(after?.status, 'merged', 'the graph still knows PR #40 merged');
   assert.equal(after?.terminal, true);
   assert.equal(after?.provenance, 'observed', 'the record was kept, not re-guessed');
@@ -594,8 +594,8 @@ test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
     .filter((f) => readFileSync(f, 'utf8').includes('graph/workGraph'));
   assert.deepEqual(
     readers,
-    ['src/harness.ts', 'src/system.ts'],
-    'only the pulse and the composition root may reach the graph in stage 1',
+    ['src/pulseDesks.ts', 'src/system.ts'],
+    "only the pulse's registry and the composition root may reach the graph in stage 1",
   );
 });
 

@@ -77,7 +77,7 @@ function build(reader: FakeStateReader, environments: EnvironmentConfig[] = [ACC
 }
 
 function spawnWorker(system: System, originRef = 'issue:12'): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #12',
     prompt: 'fix it',
@@ -180,8 +180,8 @@ test('a command that fails, times out or answers nothing is an observation failu
   ] as const) {
     const reader = new FakeStateReader({ [`${QUERY.id}:state`]: stdout, [`${QUERY.id}:presence`]: stdout });
     const system = build(reader);
-    system.store.saveStateQueries('issue:12', [{ ...QUERY, seq: 1, why: null }], 'agent');
-    const reading = await system.stateQueries.read(ACCEPTANCE, system.store.listStateQueries()[0]!);
+    system.store.remoteValidation.saveStateQueries('issue:12', [{ ...QUERY, seq: 1, why: null }], 'agent');
+    const reading = await system.stateQueries.read(ACCEPTANCE, system.store.remoteValidation.listStateQueries()[0]!);
     assert.equal(reading.verdict, 'unknown', label);
     assert.ok(reading.blocked !== null, `${label} is blocked — no reading was taken`);
     assert.equal(reading.rows, null, `${label} carries no reading anybody could act on`);
@@ -238,7 +238,7 @@ test('the planner is refused state_declare by name, and a part agent is not', as
   const part = await callTool(system, spawnWorker(system, 'issue:12:part:fix'), 'state_declare', { queries: [QUERY] });
   assert.equal(part.isError, false, part.text);
   assert.deepEqual(
-    system.store.listStateQueries().map((q) => q.originRef),
+    system.store.remoteValidation.listStateQueries().map((q) => q.originRef),
     ['issue:12'],
   );
   system.store.close();
@@ -252,7 +252,7 @@ test('the origin comes off the credential — an agent working goal A cannot dec
     goal: 99,
   });
   assert.deepEqual(
-    system.store.listStateQueries().map((q) => q.originRef),
+    system.store.remoteValidation.listStateQueries().map((q) => q.originRef),
     ['issue:12'],
   );
   system.store.close();
@@ -265,7 +265,7 @@ test('with no validate.state anywhere, state_declare is named to no agent and re
   const res = await callTool(off, spawnWorker(off), 'state_declare', { queries: [QUERY] });
   assert.equal(res.isError, true);
   assert.match(res.text, /validate\.state\.run/);
-  assert.deepEqual(off.store.listStateQueries(), [], 'and nothing nothing can ever run is stored');
+  assert.deepEqual(off.store.remoteValidation.listStateQueries(), [], 'and nothing nothing can ever run is stored');
   off.store.close();
 
   const on = build(answering());
@@ -282,7 +282,7 @@ test('declaring runs the dry run in the same call and keeps what it returned bes
   const system = build(reader);
   await callTool(system, spawnWorker(system), 'state_declare', { queries: [QUERY] });
 
-  const [stored] = system.store.listStateQueries();
+  const [stored] = system.store.remoteValidation.listStateQueries();
   assert.ok(stored);
   assert.equal(stored!.query, QUERY.query, 'the query text itself');
   assert.equal(stored!.dryRunEnvironment, 'acceptance');
@@ -298,13 +298,13 @@ test('approval keys on (digest, environment): approved here is still blocked the
   const reader = answering();
   const system = build(reader, [ACCEPTANCE, PRODUCTION]);
   await callTool(system, spawnWorker(system), 'state_declare', { queries: [QUERY] });
-  const query = system.store.listStateQueries()[0]!;
+  const query = system.store.remoteValidation.listStateQueries()[0]!;
 
   const ruled = await system.stateQueries.rule('issue:12', QUERY.id, 'acceptance', true);
   assert.ok(ruled?.approval);
   assert.equal(ruled!.approval!.environment, 'acceptance');
 
-  const approvals = system.store.listStateQueryApprovals();
+  const approvals = system.store.remoteValidation.listStateQueryApprovals();
   assert.equal(approvals.length, 1);
   assert.ok(
     approvals.some((a) => a.digest === query.digest && a.environment === 'acceptance'),
@@ -324,11 +324,11 @@ test('editing a query clears its approval everywhere; a re-declaration word for 
   await callTool(system, agent, 'state_declare', { queries: [QUERY] });
   await system.stateQueries.rule('issue:12', QUERY.id, 'acceptance', true);
   await system.stateQueries.rule('issue:12', QUERY.id, 'production', true);
-  assert.equal(system.store.listStateQueryApprovals().length, 2);
+  assert.equal(system.store.remoteValidation.listStateQueryApprovals().length, 2);
 
   await callTool(system, agent, 'state_declare', { queries: [QUERY] });
   assert.equal(
-    system.store.listStateQueryApprovals().length,
+    system.store.remoteValidation.listStateQueryApprovals().length,
     2,
     'a re-declaration word for word is the same question and keeps its consent',
   );
@@ -337,7 +337,7 @@ test('editing a query clears its approval everywhere; a re-declaration word for 
     queries: [{ ...QUERY, query: `${QUERY.query} and tenant_id = 4` }],
   });
   assert.deepEqual(
-    system.store.listStateQueryApprovals(),
+    system.store.remoteValidation.listStateQueryApprovals(),
     [],
     'an edited one is a new question everywhere, on every environment',
   );
@@ -349,13 +349,13 @@ test('presence is approved on the same terms as the query it belongs to', async 
   const agent = spawnWorker(system);
   await callTool(system, agent, 'state_declare', { queries: [QUERY] });
   await system.stateQueries.rule('issue:12', QUERY.id, 'acceptance', true);
-  assert.equal(system.store.listStateQueryApprovals().length, 1);
+  assert.equal(system.store.remoteValidation.listStateQueryApprovals().length, 1);
 
   await callTool(system, agent, 'state_declare', {
     queries: [{ ...QUERY, presence: 'select id from orders limit 50' }],
   });
   assert.deepEqual(
-    system.store.listStateQueryApprovals(),
+    system.store.remoteValidation.listStateQueryApprovals(),
     [],
     'an edited presence query is an edited question — the digest covers both',
   );
@@ -368,28 +368,28 @@ test('a query the operator declines is unapproved, and one it cannot read is nev
   const agent = spawnWorker(system);
   await callTool(system, agent, 'state_declare', { queries: [QUERY] });
   await system.stateQueries.rule('issue:12', QUERY.id, 'acceptance', true);
-  assert.equal(system.store.listStateQueryApprovals().length, 1);
+  assert.equal(system.store.remoteValidation.listStateQueryApprovals().length, 1);
   await system.stateQueries.rule('issue:12', QUERY.id, 'acceptance', false);
-  assert.deepEqual(system.store.listStateQueryApprovals(), []);
+  assert.deepEqual(system.store.remoteValidation.listStateQueryApprovals(), []);
   system.store.close();
 
   const silent = build(new FakeStateReader({ [`${QUERY.id}:presence`]: JSON.stringify([]) }));
-  silent.store.saveStateQueries('issue:12', [{ ...QUERY, seq: 1, why: null }], 'agent');
+  silent.store.remoteValidation.saveStateQueries('issue:12', [{ ...QUERY, seq: 1, why: null }], 'agent');
   const ruled = await silent.stateQueries.rule('issue:12', QUERY.id, 'acceptance', true);
   assert.ok(ruled?.reading?.blocked);
   assert.equal(ruled!.approval, null, 'a query that answered nothing is not something to consent to');
-  assert.deepEqual(silent.store.listStateQueryApprovals(), []);
+  assert.deepEqual(silent.store.remoteValidation.listStateQueryApprovals(), []);
   silent.store.close();
 });
 
 test("state_declare merges on the slug, withdraws nothing, and leaves an operator's own row alone", async () => {
   const system = build(answering());
   const agent = spawnWorker(system);
-  system.store.saveStateQueries('issue:12', [{ ...QUERY, id: 'mine', seq: 1, why: null }], 'operator');
+  system.store.remoteValidation.saveStateQueries('issue:12', [{ ...QUERY, id: 'mine', seq: 1, why: null }], 'operator');
   await callTool(system, agent, 'state_declare', { queries: [{ ...QUERY, id: 'theirs' }] });
   await callTool(system, agent, 'state_declare', { queries: [{ ...QUERY, id: 'mine', title: 'Overwritten' }] });
 
-  const held = system.store.listStateQueries();
+  const held = system.store.remoteValidation.listStateQueries();
   assert.deepEqual(
     held.map((q) => q.id).sort(),
     ['mine', 'theirs'],
@@ -403,7 +403,7 @@ test("state_declare merges on the slug, withdraws nothing, and leaves an operato
 test('a declared query is never written to any file — the store is the only writer', async () => {
   const system = build(answering());
   await callTool(system, spawnWorker(system), 'state_declare', { queries: [QUERY] });
-  assert.equal(system.store.listStateQueries().length, 1);
+  assert.equal(system.store.remoteValidation.listStateQueries().length, 1);
   assert.equal(filesMentioning(system.dir, 'channel is null').length, 0);
   system.store.close();
 });

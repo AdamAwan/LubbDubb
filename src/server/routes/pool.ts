@@ -13,11 +13,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   app.get('/api/pool', async () => {
     return {
       status: system.pool?.status() ?? null,
-      fleets: store.listPoolFleets(),
+      fleets: store.pool.listPoolFleets(),
     } satisfies PoolStatePayload;
   });
 
-  const InsightsQuery = z.object({
+  const PoolInsightsQuery = z.object({
     project: z.string().min(1).optional(),
     since: z
       .string()
@@ -27,12 +27,14 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   app.get(
     '/api/pool/insights',
-    checked({ query: InsightsQuery }, async ({ query }) => {
+    checked({ query: PoolInsightsQuery }, async ({ query }) => {
       const project = query.project ?? null;
       return {
-        rollup: foldPoolDigest(store.listPoolDigestRows(project), { project, since: query.since ?? null }),
-        projects: [...new Set(store.listPoolFleets().flatMap((f) => (f.project === null ? [] : [f.project])))].sort(),
-        fleets: store.listPoolFleets(),
+        rollup: foldPoolDigest(store.pool.listDigestRows(project), { project, since: query.since ?? null }),
+        projects: [
+          ...new Set(store.pool.listPoolFleets().flatMap((f) => (f.project === null ? [] : [f.project]))),
+        ].sort(),
+        fleets: store.pool.listPoolFleets(),
       } satisfies PoolInsightsPayload;
     }),
   );

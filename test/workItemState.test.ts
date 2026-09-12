@@ -108,11 +108,11 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
   await system.executor.execute('cyc', statePlan(101, 'In Review'));
 
   assert.deepEqual(states, [{ number: 101, state: 'In Review' }]);
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'set_work_item_state');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'set_work_item_state');
   assert.ok(decision, 'the transition is recorded');
   assert.equal(decision!.outcome, 'executed');
   assert.match(decision!.detail, /Set work item #101 to "In Review"/);
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
   system.store.close();
 });
 
@@ -185,10 +185,10 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
   });
   await system.executor.execute('cyc', statePlan(7, 'In Review'));
 
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'set_work_item_state');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'set_work_item_state');
   assert.equal(decision!.outcome, 'rejected');
   assert.match(decision!.detail, /Failed to set work item #7 state: boom/);
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
   system.store.close();
 });
 
@@ -222,7 +222,7 @@ async function trackedIssue(system: System, number: number, state: string): Prom
 
 function transitions(system: System): { number: number; state: string; rule: string | null; cycleId: string }[] {
   const moves: { number: number; state: string; rule: string | null; cycleId: string }[] = [];
-  for (const d of system.store.listDecisions()) {
+  for (const d of system.store.decisions.listDecisions()) {
     if (d.action.type !== 'set_work_item_state') continue;
     const { number, state } = d.action;
     assert.equal(typeof number, 'number');
@@ -244,7 +244,7 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
   await system.harness.runCycle('manual');
   assert.deepEqual(transitions(system), [], 'nothing moves on the cycle that dispatches');
   assert.ok(
-    system.store.listTasks().some((t) => t.originRef === 'issue:20'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'issue:20'),
     'a work agent was dispatched for the issue',
   );
 
@@ -266,7 +266,7 @@ test('in-progress: a deliberation agent — a planner or an appraiser — moves 
   failAppraisalOpen(system.store, 22);
 
   await system.harness.runCycle('manual');
-  const origins = system.store.listTasks().map((t) => t.originRef);
+  const origins = system.store.tasks.listTasks().map((t) => t.originRef);
   assert.ok(origins.includes('issue:21:appraisal'), 'an appraiser is on #21');
   assert.ok(origins.includes('issue:22:plan'), 'a planner is on #22');
 

@@ -201,7 +201,7 @@ test('a captured write records a file for every path and an artifact chip only f
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Write a report' });
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0];
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0];
   assert.ok(agent, 'an agent was dispatched');
 
   const flags: unknown[] = [];
@@ -214,13 +214,13 @@ test('a captured write records a file for every path and an artifact chip only f
 
   system.agents.drainFileEvents(agent!.id);
 
-  const files = system.store.listFiles(agent!.id);
+  const files = system.store.agents.listFiles(agent!.id);
   assert.equal(files.length, 2, 'both writes tracked');
   assert.deepEqual(files.map((f) => f.path).sort(), ['out/summary.md', 'src/index.ts']);
   assert.equal(files.find((f) => f.path === 'out/summary.md')?.promoted, true);
   assert.equal(files.find((f) => f.path === 'src/index.ts')?.promoted, false);
 
-  const allFlags = system.store.listFlags(agent!.id);
+  const allFlags = system.store.agents.listFlags(agent!.id);
   assert.equal(allFlags.length, 1);
   assert.equal(allFlags[0]?.ref, 'out/summary.md');
   assert.equal(flags.length, 1, 'flag event emitted for the report only');
@@ -231,7 +231,7 @@ test('a captured write records a file for every path and an artifact chip only f
 async function spawnedPtyAgent(): Promise<{
   system: ReturnType<typeof buildSystem>;
   backend: FakePtyBackend;
-  agent: NonNullable<ReturnType<Store['getAgent']>>;
+  agent: NonNullable<ReturnType<Store['agents']['getAgent']>>;
 }> {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), {
@@ -241,7 +241,7 @@ async function spawnedPtyAgent(): Promise<{
   });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Write a report' });
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0];
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0];
   assert.ok(agent, 'an agent was dispatched');
   return { system, backend, agent };
 }
@@ -255,9 +255,9 @@ test('a captured write surfaces when the agent parks on a human', async () => {
   backend.last().emit('@@LUBBDUBB_WAITING:Review reports/x.md@@\r\n');
   await tick(300);
 
-  assert.equal(system.store.getAgent(agent.id)?.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'waiting');
   assert.deepEqual(
-    system.store.listFlags(agent.id).map((f) => f.ref),
+    system.store.agents.listFlags(agent.id).map((f) => f.ref),
     ['reports/x.md'],
   );
   system.store.close();

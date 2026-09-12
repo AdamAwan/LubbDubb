@@ -228,7 +228,7 @@ test('the appraisal tool takes a parent freely and an area path only from the of
 test('a placement proposal round-trips, is settled per field, and is re-asked after a re-appraisal', () => {
   const store = new Store(':memory:');
   try {
-    store.recordAppraisal({
+    store.verdicts.recordAppraisal({
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 's',
@@ -237,19 +237,23 @@ test('a placement proposal round-trips, is settled per field, and is re-asked af
       proposedParent: 345,
       proposedAreaPath: 'Contoso\\Web',
     });
-    const stored = store.getAppraisal('issue:12');
+    const stored = store.verdicts.getAppraisal('issue:12');
     assert.equal(stored?.proposedParent, 345);
     assert.equal(stored?.proposedAreaPath, 'Contoso\\Web');
     assert.equal(stored?.parentSettledAt, null);
 
-    assert.equal(store.settleAppraisalPlacement('issue:12', 'not-the-text-they-read', 'parent'), false);
-    assert.equal(store.settleAppraisalPlacement('issue:12', 'abc123', 'parent'), true);
-    assert.equal(store.settleAppraisalPlacement('issue:12', 'abc123', 'parent'), false, 'settling twice settles once');
-    const half = store.getAppraisal('issue:12');
+    assert.equal(store.verdicts.settleAppraisalPlacement('issue:12', 'not-the-text-they-read', 'parent'), false);
+    assert.equal(store.verdicts.settleAppraisalPlacement('issue:12', 'abc123', 'parent'), true);
+    assert.equal(
+      store.verdicts.settleAppraisalPlacement('issue:12', 'abc123', 'parent'),
+      false,
+      'settling twice settles once',
+    );
+    const half = store.verdicts.getAppraisal('issue:12');
     assert.notEqual(half?.parentSettledAt, null);
     assert.equal(half?.areaPathSettledAt, null, 'the other question is untouched');
 
-    store.recordAppraisal({
+    store.verdicts.recordAppraisal({
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 's',
@@ -257,7 +261,7 @@ test('a placement proposal round-trips, is settled per field, and is re-asked af
       by: 'appraiser',
       proposedParent: 777,
     });
-    const again = store.getAppraisal('issue:12');
+    const again = store.verdicts.getAppraisal('issue:12');
     assert.equal(again?.parentSettledAt, null);
     assert.equal(again?.proposedParent, 777);
   } finally {
@@ -354,7 +358,7 @@ function build(): System {
 }
 
 function worldWith(system: System, over: Partial<Issue> = {}): void {
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: '2026-08-01T00:00:00.000Z',
     pullRequests: [],
     closedPullRequests: [],
@@ -367,7 +371,7 @@ test('a proposal reaches the cockpit only while it stands, and one click settles
   const placed = (system as System & { placed: string[] }).placed;
   await system.areaPaths.refresh();
   worldWith(system);
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Reconcile the statement totals.',
@@ -395,12 +399,12 @@ test('a proposal reaches the cockpit only while it stands, and one click settles
     const answered = await app.inject({ method: 'POST', url: '/api/issues/12/parent', payload: { parent: 345 } });
     assert.equal(answered.statusCode, 200);
     assert.deepEqual(placed, ['parent:12->345'], 'the write is the harness’s, through the sink');
-    assert.notEqual(system.store.getAppraisal('issue:12')?.parentSettledAt, null);
+    assert.notEqual(system.store.verdicts.getAppraisal('issue:12')?.parentSettledAt, null);
 
     const dismissed = await app.inject({ method: 'POST', url: '/api/issues/12/area-path', payload: {} });
     assert.equal(dismissed.statusCode, 200);
     assert.deepEqual(placed, ['parent:12->345'], 'and "not applicable" writes nothing to the tracker at all');
-    assert.notEqual(system.store.getAppraisal('issue:12')?.areaPathSettledAt, null);
+    assert.notEqual(system.store.verdicts.getAppraisal('issue:12')?.areaPathSettledAt, null);
 
     worldWith(system);
     const after = buildStateSnapshot(system);
@@ -416,7 +420,7 @@ test('nothing is drawn where nothing can write it', async () => {
   system.connector.canPlaceWorkItem = () => false;
   await system.areaPaths.refresh();
   worldWith(system);
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 's',
@@ -442,6 +446,6 @@ test('nothing is drawn where nothing can write it', async () => {
 });
 
 function goalRefOf(system: System): string {
-  const live = system.store.getWorldBaseline()?.issues.find((i) => i.number === 12);
+  const live = system.store.world.getWorldBaseline()?.issues.find((i) => i.number === 12);
   return goalFingerprint(live?.title ?? null, live?.body ?? null);
 }

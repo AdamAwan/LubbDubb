@@ -46,8 +46,8 @@ async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  const taskId = system.store.getAgent(agentId)!.taskId;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
+  const taskId = system.store.agents.getAgent(agentId)!.taskId;
   system.recovery.detect();
   return { system, backend, agentId, taskId };
 }
@@ -60,7 +60,7 @@ function systemWithOrphanedTask(): { system: System; taskId: string; origin: str
     errorMirror: () => {},
     bootedAt: '2999-01-01T00:00:00.000Z',
   });
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Work issue #35377',
     prompt: 'Do the thing.',
@@ -78,22 +78,22 @@ test('the pulse is held while a crashed agent awaits a decision, and resumes onc
   assert.equal(held.cycleId, 'held');
   assert.match(held.rationale, /await a recovery decision/);
   assert.deepEqual(held.summary, { cycleId: 'held', executed: 0, deferred: 0, rejected: 0 });
-  assert.equal(system.store.listTasks().length, 1, 'nothing new is dispatched in front of the decision');
+  assert.equal(system.store.tasks.listTasks().length, 1, 'nothing new is dispatched in front of the decision');
 
   system.recovery.decide(taskId, 'remove');
   assert.equal(system.recovery.pendingCount(), 0);
 
   const ran = await system.harness.runCycle('timer');
   assert.notEqual(ran.cycleId, 'held', 'the hold lifts on its own — no restart, nothing to un-pause');
-  assert.ok(system.store.listTasks().length > 1, 'work flows again once the fleet is honestly described');
+  assert.ok(system.store.tasks.listTasks().length > 1, 'work flows again once the fleet is honestly described');
   system.store.close();
 });
 
 test('a crashed agent stops counting against the concurrency cap', async () => {
   const { system, agentId } = await systemWithCrashedAgent();
-  assert.equal(system.store.getAgent(agentId)!.status, 'crashed');
-  assert.equal(system.store.countLiveAgents(), 0, 'a row with no process behind it is not headroom');
-  assert.ok(system.store.getAgent(agentId)!.endedAt, 'the run is closed off so overlap detection sees it end');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'crashed');
+  assert.equal(system.store.agents.countLiveAgents(), 0, 'a row with no process behind it is not headroom');
+  assert.ok(system.store.agents.getAgent(agentId)!.endedAt, 'the run is closed off so overlap detection sees it end');
   system.store.close();
 });
 
@@ -124,14 +124,14 @@ test('restore is refused (leaving the decision open) when the runtime cannot res
 
 test('requeue retires the task and files a job that carries the work forward', async () => {
   const { system, agentId, taskId } = await systemWithCrashedAgent();
-  const original = system.store.getTask(taskId)!;
+  const original = system.store.tasks.getTask(taskId)!;
 
   const result = system.recovery.decide(taskId, 'requeue');
   assert.equal(result.ok, true);
-  assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
-  assert.equal(system.store.getTask(taskId)!.status, 'interrupted', 'the old task is retired, never left queued');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'interrupted');
+  assert.equal(system.store.tasks.getTask(taskId)!.status, 'interrupted', 'the old task is retired, never left queued');
 
-  const job = system.store.listQueuedJobs()[0]!;
+  const job = system.store.jobs.listQueuedJobs()[0]!;
   assert.equal(job.kind, original.kind);
   assert.equal(job.branch, original.branch);
   assert.match(job.prompt, /did not survive a harness restart/);
@@ -143,7 +143,7 @@ test('requeue retires the task and files a job that carries the work forward', a
 
 test('the rule that produced the original does not dispatch it again while a requeue redoes it', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
-  const origin = system.store.getTask(taskId)!.originRef!;
+  const origin = system.store.tasks.getTask(taskId)!.originRef!;
   system.recovery.decide(taskId, 'requeue');
 
   await system.harness.runCycle('manual');
@@ -153,21 +153,25 @@ test('the rule that produced the original does not dispatch it again while a req
     !(system.harness.upcoming?.items ?? []).some((c) => c.origin === origin),
     'the work is in flight, so it is not even a candidate',
   );
-  const live = system.store.listTasks().filter((t) => t.originRef === origin && t.status !== 'interrupted');
+  const live = system.store.tasks.listTasks().filter((t) => t.originRef === origin && t.status !== 'interrupted');
   assert.deepEqual(live, [], 'and no second task is dispatched onto it');
   system.store.close();
 });
 
 test('the origin is claimable again once the requeued job is over', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
-  const origin = system.store.getTask(taskId)!.originRef!;
+  const origin = system.store.tasks.getTask(taskId)!.originRef!;
   system.recovery.decide(taskId, 'requeue');
   await system.harness.runCycle('manual');
 
-  const job = system.store.listJobs()[0]!;
-  assert.equal(system.store.findStandingJobByOrigin(origin)?.id, job.id);
-  system.store.updateTask(job.taskId!, { status: 'done' });
-  assert.equal(system.store.findStandingJobByOrigin(origin), null, 'a job holds the origin only while its task runs');
+  const job = system.store.jobs.listJobs()[0]!;
+  assert.equal(system.store.jobs.findStandingJobByOrigin(origin)?.id, job.id);
+  system.store.tasks.updateTask(job.taskId!, { status: 'done' });
+  assert.equal(
+    system.store.jobs.findStandingJobByOrigin(origin),
+    null,
+    'a job holds the origin only while its task runs',
+  );
   system.store.close();
 });
 
@@ -176,9 +180,9 @@ test('a requeued job is dispatched by the next pulse, once the hold lifts', asyn
   system.recovery.decide(taskId, 'requeue');
 
   await system.harness.runCycle('manual');
-  const job = system.store.listJobs()[0]!;
+  const job = system.store.jobs.listJobs()[0]!;
   assert.equal(job.status, 'dispatched', 'rule `manual-job` takes it ahead of world-driven work');
-  const task = system.store.getTask(job.taskId!)!;
+  const task = system.store.tasks.getTask(job.taskId!)!;
   assert.equal(task.status, 'running');
   system.store.close();
 });
@@ -188,7 +192,7 @@ test('remove settles the work and is not re-offered on the next boot', async () 
   system.recovery.decide(taskId, 'remove');
 
   assert.equal(system.recovery.pendingCount(), 0);
-  assert.equal(system.store.listQueuedJobs().length, 0, 'nothing is queued in its place');
+  assert.equal(system.store.jobs.listQueuedJobs().length, 0, 'nothing is queued in its place');
   assert.equal(system.recovery.detect().length, 0);
   system.store.close();
 });
@@ -196,7 +200,7 @@ test('remove settles the work and is not re-offered on the next boot', async () 
 test('every verdict lands in the decision log', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
   system.recovery.decide(taskId, 'remove');
-  const detail = system.store
+  const detail = system.store.decisions
     .listDecisions(50)
     .filter((d) => d.cycleId === 'crash-recovery')
     .map((d) => d.detail);
@@ -219,7 +223,11 @@ test('a task the last run left with no agent is parked for a decision', () => {
   assert.equal(pending[0]!.taskId, taskId);
   assert.equal(pending[0]!.agentId, null, 'there is no agent to name');
   assert.equal(pending[0]!.died, 'never_started');
-  assert.equal(system.store.getTask(taskId)!.status, 'queued', 'detection decides nothing — the row is untouched');
+  assert.equal(
+    system.store.tasks.getTask(taskId)!.status,
+    'queued',
+    'detection decides nothing — the row is untouched',
+  );
   system.store.close();
 });
 
@@ -257,11 +265,11 @@ test('requeue settles the task, freeing the origin and the branch, and files a j
 
   const result = system.recovery.decide(taskId, 'requeue');
   assert.equal(result.ok, true);
-  assert.equal(system.store.getTask(taskId)!.status, 'interrupted');
-  assert.equal(system.store.findActiveTaskByOrigin(origin), null);
-  assert.equal(system.store.findActiveTaskByBranch(branch), null);
+  assert.equal(system.store.tasks.getTask(taskId)!.status, 'interrupted');
+  assert.equal(system.store.tasks.findActiveTaskByOrigin(origin), null);
+  assert.equal(system.store.tasks.findActiveTaskByBranch(branch), null);
 
-  const job = system.store.listQueuedJobs()[0]!;
+  const job = system.store.jobs.listQueuedJobs()[0]!;
   assert.equal(job.branch, branch);
   assert.match(job.prompt, /before its agent was ever started/);
   assert.ok(job.prompt.includes('Do the thing.'), 'the original instruction is carried verbatim');
@@ -274,10 +282,10 @@ test('remove settles an agentless orphan and queues nothing in its place', () =>
   system.recovery.detect();
 
   assert.equal(system.recovery.decide(taskId, 'remove').ok, true);
-  assert.equal(system.store.getTask(taskId)!.status, 'interrupted');
-  assert.equal(system.store.findActiveTaskByOrigin(origin), null);
-  assert.equal(system.store.findActiveTaskByBranch(branch), null);
-  assert.equal(system.store.listQueuedJobs().length, 0);
+  assert.equal(system.store.tasks.getTask(taskId)!.status, 'interrupted');
+  assert.equal(system.store.tasks.findActiveTaskByOrigin(origin), null);
+  assert.equal(system.store.tasks.findActiveTaskByBranch(branch), null);
+  assert.equal(system.store.jobs.listQueuedJobs().length, 0);
   system.store.close();
 });
 
@@ -298,7 +306,7 @@ test('detection of an agentless orphan is idempotent, and a settled one never re
 
 test('a task that has already reached a terminal status is not a candidate', () => {
   const { system, taskId } = systemWithOrphanedTask();
-  system.store.updateTask(taskId, { status: 'done' });
+  system.store.tasks.updateTask(taskId, { status: 'done' });
   assert.equal(system.recovery.detect().length, 0);
   system.store.close();
 });
@@ -309,7 +317,7 @@ test('a task dispatched by this run is not mistaken for an orphan of the last on
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add login' });
   await system.harness.runCycle('manual');
 
-  assert.ok(system.store.listOutstandingTasks().length > 0, 'there is live work to be wrong about');
+  assert.ok(system.store.tasks.listOutstandingTasks().length > 0, 'there is live work to be wrong about');
   assert.equal(system.recovery.pendingCount(), 0);
   system.store.close();
 });
@@ -355,10 +363,10 @@ test("answering a crashed agent's escalation is refused, pointing at the recover
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  const taskId = system.store.getAgent(agentId)!.taskId;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
+  const taskId = system.store.agents.getAgent(agentId)!.taskId;
   backend.last().emit('@@LUBBDUBB_WAITING:Which database?@@');
-  const escalationId = system.store.listOpenEscalations()[0]!.id;
+  const escalationId = system.store.escalations.listOpenEscalations()[0]!.id;
   system.recovery.detect();
 
   const { app } = await buildApp(system);
@@ -373,7 +381,11 @@ test("answering a crashed agent's escalation is refused, pointing at the recover
     new RegExp(`/api/recovery/${taskId}`),
     'the refusal names the task, which is what the route takes',
   );
-  assert.equal(system.store.getEscalation(escalationId)!.status, 'open', 'the question is kept for a restore');
+  assert.equal(
+    system.store.escalations.getEscalation(escalationId)!.status,
+    'open',
+    'the question is kept for a restore',
+  );
 
   await app.close();
   system.store.close();

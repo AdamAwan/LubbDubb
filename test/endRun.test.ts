@@ -16,9 +16,9 @@ function store(): Store {
 }
 
 function liveAgent(s: Store, originRef: string, status: 'running' | 'done' = 'running'): string {
-  const task = s.createTask({ kind: 'code', title: originRef, prompt: 'go', branch: null, originRef });
-  const agent = s.createAgent({ taskId: task.id, cwd: '/tmp', pid: 1 });
-  s.updateAgent(agent.id, { status });
+  const task = s.tasks.createTask({ kind: 'code', title: originRef, prompt: 'go', branch: null, originRef });
+  const agent = s.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: 1 });
+  s.agents.updateAgent(agent.id, { status });
   return agent.id;
 }
 
@@ -38,13 +38,13 @@ test('ending a run kills the goal’s agents, cancels its jobs and settles its i
   const neighbour = liveAgent(s, 'issue:1');
   const review = liveAgent(s, 'pr:42');
 
-  const mine = s.createJob({ title: 'redo the retro', prompt: 'x', kind: 'desk', originRef: 'issue:12:retro' });
-  const theirs = s.createJob({ title: 'someone else', prompt: 'x', kind: 'desk', originRef: 'issue:1' });
-  const loose = s.createJob({ title: 'no origin', prompt: 'x', kind: 'desk' });
+  const mine = s.jobs.createJob({ title: 'redo the retro', prompt: 'x', kind: 'desk', originRef: 'issue:12:retro' });
+  const theirs = s.jobs.createJob({ title: 'someone else', prompt: 'x', kind: 'desk', originRef: 'issue:1' });
+  const loose = s.jobs.createJob({ title: 'no origin', prompt: 'x', kind: 'desk' });
 
-  s.addIssueInstruction({ originRef: 'issue:12', text: 'also do the migration' });
-  s.addIssueInstruction({ originRef: 'issue:12', text: 'and rename the flag' });
-  s.addIssueInstruction({ originRef: 'issue:1', text: 'not this goal' });
+  s.instructions.addIssueInstruction({ originRef: 'issue:12', text: 'also do the migration' });
+  s.instructions.addIssueInstruction({ originRef: 'issue:12', text: 'and rename the flag' });
+  s.instructions.addIssueInstruction({ originRef: 'issue:1', text: 'not this goal' });
 
   const cleared = clearGoalWork(s, agents, 12);
 
@@ -52,12 +52,12 @@ test('ending a run kills the goal’s agents, cancels its jobs and settles its i
   assert.deepEqual(killed.sort(), [pickup, part].sort(), 'the goal’s live agents, and only those');
   for (const spared of [settled, neighbour, review]) assert.ok(!killed.includes(spared));
 
-  assert.equal(s.getJob(mine.id)?.status, 'cancelled');
-  assert.equal(s.getJob(theirs.id)?.status, 'queued', 'issue:1 is not under issue:12');
-  assert.equal(s.getJob(loose.id)?.status, 'queued', 'a job standing in for nothing is nobody’s');
+  assert.equal(s.jobs.getJob(mine.id)?.status, 'cancelled');
+  assert.equal(s.jobs.getJob(theirs.id)?.status, 'queued', 'issue:1 is not under issue:12');
+  assert.equal(s.jobs.getJob(loose.id)?.status, 'queued', 'a job standing in for nothing is nobody’s');
 
-  assert.equal(s.listStandingInstructions('issue:12').length, 0);
-  assert.equal(s.listStandingInstructions('issue:1').length, 1);
+  assert.equal(s.instructions.listStandingInstructions('issue:12').length, 0);
+  assert.equal(s.instructions.listStandingInstructions('issue:1').length, 1);
 });
 
 test('ending a run at a quiet goal clears nothing and says so', () => {
@@ -81,7 +81,7 @@ test('the dismiss-run route does the clearing, and reports what it cleared', asy
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
   const { store } = system;
-  store.recordIssueRun({
+  store.floor.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Add the thing',
@@ -91,15 +91,15 @@ test('the dismiss-run route does the clearing, and reports what it cleared', asy
     workItemState: null,
     complete: false,
   });
-  const job = store.createJob({ title: 'redo it', prompt: 'x', kind: 'desk', originRef: 'issue:12' });
-  store.addIssueInstruction({ originRef: 'issue:12', text: 'also do the migration' });
+  const job = store.jobs.createJob({ title: 'redo it', prompt: 'x', kind: 'desk', originRef: 'issue:12' });
+  store.instructions.addIssueInstruction({ originRef: 'issue:12', text: 'also do the migration' });
 
   const { app } = await buildApp(system);
   const ended = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run' });
   assert.equal(ended.statusCode, 200);
   assert.deepEqual(ended.json().cleared, { agents: 0, jobs: 1, instructions: 1 });
-  assert.equal(store.getJob(job.id)?.status, 'cancelled');
-  assert.equal(store.listStandingInstructions('issue:12').length, 0);
+  assert.equal(store.jobs.getJob(job.id)?.status, 'cancelled');
+  assert.equal(store.instructions.listStandingInstructions('issue:12').length, 0);
 
   const again = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run' });
   assert.equal(again.statusCode, 409);

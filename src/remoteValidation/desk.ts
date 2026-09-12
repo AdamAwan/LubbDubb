@@ -83,7 +83,9 @@ export class RemoteValidationDesk {
    * would be the harness reporting on a listing nobody took.
    */
   private async refreshSelectorOfferings(): Promise<void> {
-    const listed = new Map(this.deps.store.listSelectorOfferings().map((o) => [o.environment, o.listedAt]));
+    const listed = new Map(
+      this.deps.store.remoteValidation.listSelectorOfferings().map((o) => [o.environment, o.listedAt]),
+    );
     for (const environment of this.deps.environments) {
       const command = environment.validate?.browser?.listSelectors;
       if (command === undefined) continue;
@@ -112,7 +114,7 @@ export class RemoteValidationDesk {
       profile: environment.validate?.browser?.profile ?? null,
       tenant: resolveTenant({
         environment,
-        stamped: this.deps.store.listRemoteTenants(),
+        stamped: this.deps.store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
       }).value,
@@ -120,7 +122,11 @@ export class RemoteValidationDesk {
       reportDir: null,
     });
     if (listing.offers !== null)
-      this.deps.store.recordSelectorOffering(environment.name, listing.offers, new Date(this.now()).toISOString());
+      this.deps.store.remoteValidation.recordSelectorOffering(
+        environment.name,
+        listing.offers,
+        new Date(this.now()).toISOString(),
+      );
     return listing;
   }
 
@@ -129,10 +135,11 @@ export class RemoteValidationDesk {
     let considered: { arrival: GoalArrival; assemble: boolean }[];
     try {
       considered = sheetableArrivals({
-        arrivals: store.listGoalArrivals(),
+        arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
         authored: (goalRef) =>
-          store.getValidationPlanRecord(goalRef)?.authoredAt != null || store.listValidationChecks(goalRef).length > 0,
+          store.validation.getValidationPlanRecord(goalRef)?.authoredAt != null ||
+          store.validation.listValidationChecks(goalRef).length > 0,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });
@@ -143,7 +150,7 @@ export class RemoteValidationDesk {
     for (const { arrival, assemble } of considered) {
       try {
         if (assemble) await this.assemble(arrival);
-        store.markArrivalSheeted(arrival.goalRef, arrival.environment);
+        store.environments.markArrivalSheeted(arrival.goalRef, arrival.environment);
       } catch (err) {
         errors?.record({
           source: 'cycle',
@@ -169,16 +176,16 @@ export class RemoteValidationDesk {
    * folded into neither arm here, as it is nowhere else in this subsystem.
    *
    * It writes no reading, no check result and nothing on a row: a run nobody reported against
-   * learned nothing about the goal, `handback`'s rule.
+   * learned nothing about the goal, a `blocked` run's rule.
    */
   private sweep(): void {
     const { store, errors } = this.deps;
     try {
-      for (const run of store.listRemoteRuns()) {
+      for (const run of store.remoteValidation.listRemoteRuns()) {
         if (run.status !== 'dispatched' || run.taskId === null) continue;
-        const task = store.getTask(run.taskId);
+        const task = store.tasks.getTask(run.taskId);
         if (task === null || isActiveTask(task)) continue;
-        store.endRemoteRun(run.id, { status: 'abandoned', note: SWEPT });
+        store.remoteValidation.endRemoteRun(run.id, { status: 'abandoned', note: SWEPT });
       }
     } catch (err) {
       errors?.record({
@@ -212,12 +219,12 @@ export class RemoteValidationDesk {
     try {
       const at = new Date(this.now()).toISOString();
       const cutoff = this.now() - this.deps.scriptGraceMs;
-      for (const delivery of store.listDeliveries()) {
+      for (const delivery of store.verdicts.listDeliveries()) {
         if (Date.parse(delivery.decidedAt) > cutoff) continue;
-        for (const check of store.listValidationChecks(delivery.originRef)) {
+        for (const check of store.validation.listValidationChecks(delivery.originRef)) {
           const swept = sweptScripts(check.steps, at);
           if (swept === null) continue;
-          store.sweepValidationScripts(delivery.originRef, check.id, swept);
+          store.validation.sweepValidationScripts(delivery.originRef, check.id, swept);
         }
       }
     } catch (err) {
@@ -242,18 +249,18 @@ export class RemoteValidationDesk {
     environmentName: string,
     accept: boolean,
   ): Promise<{ check: GoalWatch; reading: RowReading | null; approved: boolean } | null> {
-    const check = this.deps.store.listGoalWatches().find((c) => c.originRef === originRef && c.id === checkId);
+    const check = this.deps.store.watches.listGoalWatches().find((c) => c.originRef === originRef && c.id === checkId);
     if (check === undefined) return null;
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     if (environment === undefined) return null;
     const digest = queryDigest(check.query, check.presence ?? '');
     if (!accept) {
-      this.deps.store.declineStateQuery(digest, environment.name);
+      this.deps.store.remoteValidation.declineStateQuery(digest, environment.name);
       return { check, reading: null, approved: false };
     }
     const reading = await this.readWatch(environment, originRef, checkId);
     if (reading === null || reading.outcome === 'blocked') return { check, reading, approved: false };
-    this.deps.store.approveStateQuery({
+    this.deps.store.remoteValidation.approveStateQuery({
       digest,
       environment: environment.name,
       originRef,
@@ -271,21 +278,21 @@ export class RemoteValidationDesk {
     const goalRef = arrival.goalRef;
     const rows = sheetRows({
       environment,
-      checks: store.listValidationChecks(goalRef),
-      watches: store.listGoalWatches().filter((w) => w.originRef === goalRef),
-      queries: store.listStateQueries().filter((q) => q.originRef === goalRef),
-      approvals: new Set(store.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
+      checks: store.validation.listValidationChecks(goalRef),
+      watches: store.watches.listGoalWatches().filter((w) => w.originRef === goalRef),
+      queries: store.remoteValidation.listStateQueries().filter((q) => q.originRef === goalRef),
+      approvals: new Set(store.remoteValidation.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
       // Resolved here rather than in `sheetRows`: the sheet is a pure fold, and where a tenant comes
       // from is a question about stamped rows, the machine's environment and the clock.
       tenant: resolveTenant({
         environment,
-        stamped: store.listRemoteTenants(),
+        stamped: store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
       }).standing,
     });
-    store.openRemoteSheet({ goalRef, environment: environment.name });
-    store.saveRemoteSheetRows(
+    store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });
+    store.remoteValidation.saveRemoteSheetRows(
       goalRef,
       environment.name,
       rows.map(({ run: _run, ...row }) => row),
@@ -312,11 +319,11 @@ export class RemoteValidationDesk {
     if (command === undefined) return;
     const asks = rows.filter((row) => row.kind === 'check' && row.blockedReason === null);
     if (asks.length === 0) return;
-    const checks = this.deps.store.listValidationChecks(goalRef);
+    const checks = this.deps.store.validation.listValidationChecks(goalRef);
     if (!checks.some((check) => check.area !== null && asks.some((row) => row.sourceId === check.id))) return;
     try {
       const listing = await this.listSelectors(environment, command);
-      this.deps.store.recordRemotePreflight(
+      this.deps.store.remoteValidation.recordRemotePreflight(
         goalRef,
         environment.name,
         preflightRows({ environment: environment.name, rows: asks, checks, listing }),
@@ -339,7 +346,7 @@ export class RemoteValidationDesk {
     const reading = await this.readRow(environment, goalRef, row.run, row.sourceId);
     if (reading === null) return;
     if (reading.outcome === 'blocked') {
-      this.deps.store.blockRemoteSheetRow(
+      this.deps.store.remoteValidation.blockRemoteSheetRow(
         goalRef,
         environment.name,
         row.rowId,
@@ -347,7 +354,7 @@ export class RemoteValidationDesk {
       );
       return;
     }
-    this.deps.store.recordRemoteReading({
+    this.deps.store.remoteValidation.recordRemoteReading({
       goalRef,
       environment: environment.name,
       rowId: row.rowId,
@@ -389,7 +396,7 @@ export class RemoteValidationDesk {
     goalRef: string,
     queryId: string,
   ): Promise<RowReading | null> {
-    const query: StateQuery | undefined = this.deps.store
+    const query: StateQuery | undefined = this.deps.store.remoteValidation
       .listStateQueries()
       .find((q) => q.originRef === goalRef && q.id === queryId);
     if (query === undefined) return null;
@@ -412,7 +419,7 @@ export class RemoteValidationDesk {
     goalRef: string,
     checkId: string,
   ): Promise<RowReading | null> {
-    const check: GoalWatch | undefined = this.deps.store
+    const check: GoalWatch | undefined = this.deps.store.watches
       .listGoalWatches()
       .find((c) => c.originRef === goalRef && c.id === checkId);
     if (check === undefined) return null;

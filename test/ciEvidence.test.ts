@@ -312,7 +312,7 @@ test('a fetch that fails leaves the prompt exactly as it was, and records the fa
   assert.ok(task, 'the dispatch still happens — evidence is an enrichment, not a precondition');
   assert.doesNotMatch(task.prompt, /What the failing checks actually reported/);
 
-  const errors = system.store.listErrors();
+  const errors = system.store.errors.listErrors();
   assert.ok(
     errors.some((e) => e.source === 'provider' && /could not read CI evidence for "CI" on PR #42/.test(e.message)),
     `expected a recorded provider failure, got: ${errors.map((e) => e.message).join(' | ')}`,

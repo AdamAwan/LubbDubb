@@ -1028,7 +1028,7 @@ route that took a name would serve any of them. The signed URL reaches the cockp
 prompt says so: _the fleet has no interactive login, no browser and no account on whatever
 environment this deployment tests against, and a check that needs one is a check for a person._ The
 sheet's run is where the browser, the login, the provisioned tenant and the deployed build are — so
-that is where a `screenshot` step is carried, and the handback on the step-by-step channel is the
+that is where a `screenshot` step is carried, and the hand-back on the step-by-step channel is the
 narrower of the two rather than the whole of it.
 
 A capture rides the **report row**, and nothing about the tool changes: `remote_validation_report`
@@ -1119,8 +1119,9 @@ report landed. **It states no outcome** — → [The report tool](#the-report-to
   looks live and never fires. An operator reading the book to find out why nothing happened is
   entitled to the difference.
 
-**A new `issue:<n>:…` origin is classified in `src/issueOrigins.ts`**, and `validate-remote:` joins
-`EVIDENCE_SUFFIX_PREFIXES` beside `validate:`, `validate-failure:` and `validate-local:`. A run is
+**A new `issue:<n>:…` origin is declared, with its role, in `src/issueOrigins.ts`**, and
+`validate-remote:<run>` is declared **evidence** beside `validate:`, `validate-failure:` and
+`validate-local:` ([05](05-dispatcher.md#the-issue-origin-vocabulary)). A run is
 evidence about delivered work, not work. Left out it reads as `unrecognised`: it stops expanding under
 a goal's priority flag ([05](05-dispatcher.md#marking-a-goal-a-priority)) and its spend files under
 "other" rather than the phase it belongs to ([18](18-observability.md)). Neither is red.
@@ -1157,7 +1158,7 @@ report against.
 | `pending`    | The press opened it and no agent has claimed it. **Live.**                                          |
 | `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                     |
 | `ended`      | Settled with a report recorded against it.                                                          |
-| `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or a handback. |
+| `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or `blocked`. |
 
 The pair is what the design needs and one status could not carry. `pending` is a run the rule may
 claim and `dispatched` is one it may not, which is the whole of one-agent-per-run across a restart —
@@ -1185,7 +1186,7 @@ artefacts were published, and nothing else:
 | ------------ | ----------------------------------------------------------------------------- |
 | `reportPath` | Path to the runner's machine-readable report, inside the run's own directory. |
 | `artefacts`  | The URL the publish command printed, if it ran.                               |
-| `handback`   | A reason, **instead of** a report: the run could not be carried out at all.   |
+| `blocked`    | A reason, **instead of** a report: the run could not be carried out at all.   |
 
 The call **records where the report and the artefacts landed on the run row, folds the report into a
 reading per confirmed row, and settles the run** — `remote_runs.report_path` and
@@ -1202,8 +1203,14 @@ have watched a spec run. The three fields are asserted on the **derived** `input
 the handler ([11](11-mcp-tools.md#the-advertised-schema-is-derived-never-written)), because what an
 agent can say is what it was advertised, and an extra key is rejected rather than ignored.
 
-A `handback` writes **no readings**, leaves every row exactly as it was, and carries the agent's reason
-to the operator — `validation_report`'s third answer, for its reason: an agent that could not reach
+The field was called `handback` until the three validation paths were given one word for the fact, and
+the old name is **refused by name** rather than ignored as an unrecognised key: the handler answers a
+call carrying it with a message naming `blocked`, `RETIRED_TOOL_NAMES`' rule one layer down
+([11](11-mcp-tools.md#retired-tools)). `.strict()` would already reject it, but as _unrecognized key_ —
+which reads to an agent as a tool it does not understand rather than as a word that moved.
+
+A `blocked` answer writes **no readings**, leaves every row exactly as it was, and carries the agent's
+reason to the operator — `validation_report`'s third answer, and the same word for it, for its reason: an agent that could not reach
 the environment has learned nothing about the goal, and with only pass and fail available its options
 are a lie and silence.
 
@@ -1241,7 +1248,7 @@ against a claimed check, which is the right door for a person's own run.
 ([05](05-dispatcher.md#prompt-templates)): the environment's name and its profile alias, the declared
 runner command, the selectors for the confirmed rows, the tenant, the report and artefact directories,
 the deployed commit, and the rules of the run — that the report is the only thing that decides
-anything, that it must not edit the suite, and that a handback is a right answer. Templates are
+anything, that it must not edit the suite, and that `blocked` is a right answer. Templates are
 operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
 that never learned a new `{token}` silently drops it, on exactly the deployments that customised most.
 The appending is `briefing` in `src/remoteValidation/briefing.ts`, computed with the brief and never
@@ -1304,7 +1311,7 @@ implementation would get wrong quietly:
   with a spec's is the harness deciding it knows better than the person who watched the thing happen.
   Where the check is settled by somebody else, the row still runs and the reading still lands **on the
   sheet**, and the sheet says whose reading it is not replacing.
-- **A `blocked` row writes nothing at all**, `handback`'s rule: no reading was taken.
+- **A `blocked` row writes nothing at all**, a `blocked` run's rule one level up: no reading was taken.
 
 This is the one place [20](20-validation.md#states)'s "a result is declared, never derived" is worth
 restating rather than assuming. A spec reading **is** declared — by a report, about a run of the
@@ -1442,7 +1449,7 @@ throws goes through `errors.record` and never fails the cycle or the pass beside
   `(environment, tenant)` lock underneath it, so a second press opens a run against a tenant somebody
   is already driving — a silent wrong answer rather than the visible 409 a held lock gives.
 - **A settled run writes nothing about the goal.** No reading, no `spec` result on a check, no
-  shortfall, no issue verdict, no `WorldEvent` and nothing in `watch_readings` — `handback`'s rule
+  shortfall, no issue verdict, no `WorldEvent` and nothing in `watch_readings` — a `blocked` run's rule
   exactly ([What a finding does](#what-a-finding-does-and-what-it-must-never-do)), because a run
   nobody reported against learned nothing. `deliveryHold` expires a standing delivery verdict on
   **any** world event matching the goal's issue ref, so a sweep written as one would un-park the goal
@@ -1862,11 +1869,12 @@ runner and publish commands, the profile alias, the selectors, the tenant, the d
 report and artefact directories and the rules of the run — asserted **under an operator override that
 declares no tokens at all**; a `tenantEnv`'s value reaching neither the prompt nor the brief while its
 variable's name does; the report tool's **derived `inputSchema`** carrying exactly `reportPath`,
-`artefacts` and `handback` with an extra key rejected, and the name absent from
+`artefacts` and `blocked` with an extra key rejected, and the name absent from
 `MCP_PROTOCOL_ADDENDUM` and `DESKTOP_TOOL_NAMES`; a report recording both locations on the run row and
-settling it, readably afterwards; a **handback** settling it with the agent's reason, writing no
-readings and leaving every sheet row and every check exactly as it was; and a withdrawn name answered
-from `RETIRED_TOOL_NAMES` rather than as an unknown method.
+settling it, readably afterwards; a **`blocked`** answer settling it with the agent's reason, writing no
+readings and leaving every sheet row and every check exactly as it was; the field's own withdrawn name,
+`handback`, refused with a message naming `blocked` rather than as an unrecognised key; and a withdrawn
+tool name answered from `RETIRED_TOOL_NAMES` rather than as an unknown method.
 
 The reading half is built and its tests are in `test/remoteValidationReadings.test.ts` and
 `test/remoteValidationCockpit.test.ts`, with `test/remoteValidationOff.test.ts` extended a fourth

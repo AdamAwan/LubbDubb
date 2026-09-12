@@ -98,12 +98,12 @@ test('raising the cap at runtime lets more agents spawn on the next execute', as
   const first = await system.executor.execute('cyc_1', deskPlan('A', 'B'));
   assert.equal(first.executed, 1);
   assert.equal(first.deferred, 1);
-  assert.equal(system.store.countLiveAgents(), 1);
+  assert.equal(system.store.agents.countLiveAgents(), 1);
 
   system.runtimeControl.apply({ cap: 2 });
   const second = await system.executor.execute('cyc_2', deskPlan('A', 'B'));
   assert.equal(second.executed, 1, 'B now fits under the raised cap');
-  assert.equal(system.store.countLiveAgents(), 2);
+  assert.equal(system.store.agents.countLiveAgents(), 2);
   system.store.close();
 });
 
@@ -112,13 +112,13 @@ test('lowering the cap below live count defers new dispatch but kills nothing', 
   const system = buildSystem(testConfig({ maxConcurrentAgents: 2 }), { worktrees: new FakeWorktreeManager(), backend });
 
   await system.executor.execute('cyc_1', deskPlan('A', 'B'));
-  assert.equal(system.store.countLiveAgents(), 2);
+  assert.equal(system.store.agents.countLiveAgents(), 2);
 
   system.runtimeControl.apply({ cap: 1 });
   const summary = await system.executor.execute('cyc_2', deskPlan('C'));
   assert.equal(summary.executed, 0, 'no new spawn while over the lowered cap');
   assert.equal(summary.deferred, 1);
-  assert.equal(system.store.countLiveAgents(), 2, 'live agents are not killed by scale-down');
+  assert.equal(system.store.agents.countLiveAgents(), 2, 'live agents are not killed by scale-down');
   system.store.close();
 });
 
@@ -127,15 +127,15 @@ test('pausing stops new dispatch while leaving live agents running', async () =>
   const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { worktrees: new FakeWorktreeManager(), backend });
 
   await system.executor.execute('cyc_1', deskPlan('A'));
-  assert.equal(system.store.countLiveAgents(), 1);
+  assert.equal(system.store.agents.countLiveAgents(), 1);
 
   system.runtimeControl.apply({ paused: true });
   const summary = await system.executor.execute('cyc_2', deskPlan('B'));
   assert.equal(summary.executed, 0, 'no new spawn while paused');
   assert.equal(summary.deferred, 1);
-  assert.equal(system.store.countLiveAgents(), 1, 'the live agent keeps running while paused');
+  assert.equal(system.store.agents.countLiveAgents(), 1, 'the live agent keeps running while paused');
 
-  const deferral = system.store.listDecisions(50).find((d) => d.outcome === 'deferred');
+  const deferral = system.store.decisions.listDecisions(50).find((d) => d.outcome === 'deferred');
   assert.ok(deferral, 'a deferred decision is recorded');
   assert.match(deferral.detail, /paus/i);
   system.store.close();
@@ -152,7 +152,7 @@ test('unpausing resumes dispatch at the previously chosen cap', async () => {
   system.runtimeControl.apply({ paused: false });
   summary = await system.executor.execute('cyc_2', deskPlan('A'));
   assert.equal(summary.executed, 1, 'dispatch resumes once unpaused');
-  assert.equal(system.store.countLiveAgents(), 1);
+  assert.equal(system.store.agents.countLiveAgents(), 1);
   system.store.close();
 });
 
@@ -173,22 +173,22 @@ test('while paused the harness keeps cycling: audit, escalations and answers sti
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   system.runtimeControl.apply({ paused: true });
-  const decisionsBefore = system.store.listDecisions(200).length;
-  const liveBefore = system.store.countLiveAgents();
+  const decisionsBefore = system.store.decisions.listDecisions(200).length;
+  const liveBefore = system.store.agents.countLiveAgents();
   await system.harness.runCycle('manual');
-  assert.equal(system.store.countLiveAgents(), liveBefore, 'no new spawn; the live agent keeps running');
-  assert.ok(system.store.listDecisions(200).length > decisionsBefore, 'the paused cycle still audits');
+  assert.equal(system.store.agents.countLiveAgents(), liveBefore, 'no new spawn; the live agent keeps running');
+  assert.ok(system.store.decisions.listDecisions(200).length > decisionsBefore, 'the paused cycle still audits');
 
   backend.last().emit('@@LUBBDUBB_WAITING:Which auth provider?@@');
-  const open = system.store.listOpenEscalations();
+  const open = system.store.escalations.listOpenEscalations();
   assert.equal(open.length, 1, 'a waiting agent escalates while paused');
 
   const result = system.escalations.answer(open[0]!.id, 'Use OAuth');
   assert.equal(result.routing, 'typed_into_agent');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
 
   system.store.close();
 });

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, resolve, sep } from 'node:path';
+import { issueOriginRef } from '../issueOrigins.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -65,10 +66,10 @@ export class ReviewPackAuthor extends EventEmitter {
       };
     }
     const originRef = packOrigin(prNumber);
-    if (this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(originRef)) {
+    if (this.composing.has(prNumber) || this.deps.store.tasks.findActiveTaskByOrigin(originRef)) {
       return { ok: false, status: 409, error: `a pack for #${prNumber} is already being written` };
     }
-    if (this.deps.store.findActiveTaskByOrigin(checkOrigin(prNumber))) {
+    if (this.deps.store.tasks.findActiveTaskByOrigin(checkOrigin(prNumber))) {
       return { ok: false, status: 409, error: `the pack for #${prNumber} is being checked` };
     }
     if (this.deps.runtime.paused) {
@@ -88,7 +89,7 @@ export class ReviewPackAuthor extends EventEmitter {
   }
 
   writing(prNumber: number): boolean {
-    return this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(packOrigin(prNumber)) !== null;
+    return this.composing.has(prNumber) || this.deps.store.tasks.findActiveTaskByOrigin(packOrigin(prNumber)) !== null;
   }
 
   async submit(
@@ -110,7 +111,7 @@ export class ReviewPackAuthor extends EventEmitter {
     if (!facts.ok) return facts;
     const assembled = assemblePack(facts.commission, args);
     if (!assembled.ok) return assembled;
-    const record = this.deps.store.recordReviewPack(assembled.pack);
+    const record = this.deps.store.reviewPacks.recordReviewPack(assembled.pack);
     this.emit('written', { record });
     return { ok: true, record };
   }
@@ -119,7 +120,7 @@ export class ReviewPackAuthor extends EventEmitter {
     prNumber: number,
     packHead: string,
   ): Promise<{ head: string | null; stale: { headSha: string; commitsBehind: number | null } | null }> {
-    const world = this.deps.store.getWorldBaseline();
+    const world = this.deps.store.world.getWorldBaseline();
     const pr =
       world?.pullRequests.find((p) => p.number === prNumber) ??
       world?.closedPullRequests?.find((p) => p.number === prNumber);
@@ -130,11 +131,11 @@ export class ReviewPackAuthor extends EventEmitter {
   }
 
   private openPr(prNumber: number): PullRequest | null {
-    return this.deps.store.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber) ?? null;
+    return this.deps.store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber) ?? null;
   }
 
   private atoms(prNumber: number): PlanAtom[] {
-    return atomsForPr(prNumber, this.deps.store.listAllPlanParts(), this.deps.store.listAllPlanAtoms());
+    return atomsForPr(prNumber, this.deps.store.plans.listAllPlanParts(), this.deps.store.plans.listAllPlanAtoms());
   }
 
   private baseOf(prNumber: number): string {
@@ -143,11 +144,11 @@ export class ReviewPackAuthor extends EventEmitter {
 
   private pads(pr: PullRequest): { goal: string | null; own: string; entries: ScratchEntry[] } {
     const { store } = this.deps;
-    const world = store.getWorldBaseline();
+    const world = store.world.getWorldBaseline();
     const issue = world ? issueForPr(pr, world.issues) : null;
-    const goal = issue ? goalOriginFor(`issue:${issue.number}`) : null;
+    const goal = issue ? goalOriginFor(issueOriginRef('root', issue.number)) : null;
     const own = padOriginFor(packOrigin(pr.number))!;
-    const entries = [...(goal ? store.listScratchEntries(goal) : []), ...store.listScratchEntries(own)];
+    const entries = [...(goal ? store.scratch.listScratchEntries(goal) : []), ...store.scratch.listScratchEntries(own)];
     return { goal, own, entries };
   }
 
@@ -166,7 +167,7 @@ export class ReviewPackAuthor extends EventEmitter {
     const pr = this.openPr(prNumber);
     const entries = pr
       ? this.pads(pr).entries
-      : this.deps.store.listScratchEntries(padOriginFor(packOrigin(prNumber))!);
+      : this.deps.store.scratch.listScratchEntries(padOriginFor(packOrigin(prNumber))!);
     return {
       ok: true,
       commission: {
@@ -192,7 +193,7 @@ export class ReviewPackAuthor extends EventEmitter {
       const hunks = parseDiffHunks(diff);
       const pads = this.pads(pr);
       const key = packLeaseKey(pr.number, headSha);
-      task = store.createTask({
+      task = store.tasks.createTask({
         kind: 'code',
         title: `Review pack for PR #${pr.number}`,
         prompt: this.prompt(pr, headSha, hunks, pads, this.atoms(pr.number)),
@@ -205,9 +206,9 @@ export class ReviewPackAuthor extends EventEmitter {
       this.deps.agents.spawn(task, cwd);
     } catch (err) {
       if (task) {
-        const current = store.getTask(task.id);
+        const current = store.tasks.getTask(task.id);
         if (current && (current.status === 'queued' || current.status === 'running'))
-          store.updateTask(task.id, { status: 'interrupted' });
+          store.tasks.updateTask(task.id, { status: 'interrupted' });
         void this.deps.worktrees.remove(task.branch!).catch(() => {});
       }
       errors.record({

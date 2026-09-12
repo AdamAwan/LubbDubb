@@ -35,7 +35,7 @@ const ReportSchema = z
           'reproduces by hand.',
       )
       .optional(),
-    handback: z
+    blocked: z
       .string()
       .trim()
       .min(1)
@@ -58,7 +58,7 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
     'no outcome**: the report file is the only source of row outcomes and the harness reads it, so give ' +
     '"reportPath" (and "artefacts", where a publish command printed a URL) and nothing else. The exit code ' +
     'decides nothing — one invocation carries many rows and one code — so a non-zero exit with a report ' +
-    'beside it is still a run that answered. If you could not carry the run out at all, give "handback" and ' +
+    'beside it is still a run that answered. If you could not carry the run out at all, give "blocked" and ' +
     'why instead: that records nothing, leaves every row as it was, and is the right answer rather than a ' +
     'last resort.',
   inputSchema: toolSchema(ReportSchema),
@@ -72,10 +72,16 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
           'rather than by it, so there is no run here for you to report against — and a reading of a run you ' +
           'were not sent on is not a reading.',
       );
+    if (typeof args === 'object' && args !== null && 'handback' in args)
+      return toolError(
+        'name that field "blocked" rather than "handback" — the word was renamed, and "blocked" is now the one ' +
+          'word every validation path takes for a run an agent could not carry out. Nothing was recorded. Call ' +
+          'again with the same reason under "blocked".',
+      );
     const parsed = ReportSchema.safeParse(args);
     if (!parsed.success)
       return toolError(`Report rejected: ${parsed.error.errors[0]?.message ?? 'the report could not be read'}`);
-    const { reportPath, artefacts, handback } = parsed.data;
+    const { reportPath, artefacts, blocked } = parsed.data;
 
     const desk = deps.remoteReadings?.();
     if (desk === undefined)
@@ -84,11 +90,11 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
           'Nothing was recorded. Say so in your final message rather than trying again.',
       );
 
-    if (handback !== undefined) {
-      const settled = desk.handback(target.runId, handback);
+    if (blocked !== undefined) {
+      const settled = desk.blocked(target.runId, blocked);
       if (!settled.ok) return toolError(settled.error);
       return ok({
-        reported: 'handback',
+        reported: 'blocked',
         run: settled.run.id,
         state: settled.run.status,
         means:
@@ -99,7 +105,7 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
 
     if (reportPath === undefined)
       return toolError(
-        'Give either "reportPath" — where the runner’s machine-readable report landed — or "handback" with ' +
+        'Give either "reportPath" — where the runner’s machine-readable report landed — or "blocked" with ' +
           'the reason the run could not be carried out. A call that gives neither says nothing at all, and ' +
           'there is no third answer here: what each row came back as is the report’s to say, not yours.',
       );

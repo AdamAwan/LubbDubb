@@ -351,7 +351,7 @@ test('a priority override holds after the next pulse and after a restart', async
     ['issue:8101', 'issue:8102'],
   );
 
-  system.store.setPriorityOverrides(['issue:8102']);
+  system.store.priority.setPriorityOverrides(['issue:8102']);
   await system.harness.runCycle('manual');
   snap = await buildStateSnapshot(system);
   assert.deepEqual(
@@ -374,36 +374,36 @@ test('a priority override holds after the next pulse and after a restart', async
 
 test('setPriorityOverrides replaces the whole set and ranks by position', () => {
   const store = new Store(':memory:');
-  store.setPriorityOverrides(['issue:1', 'pr:2:ci', 'issue:3']);
-  assert.deepEqual(store.listPriorityOverrides(), [
+  store.priority.setPriorityOverrides(['issue:1', 'pr:2:ci', 'issue:3']);
+  assert.deepEqual(store.priority.listPriorityOverrides(), [
     { origin: 'issue:1', rank: 0 },
     { origin: 'pr:2:ci', rank: 1 },
     { origin: 'issue:3', rank: 2 },
   ]);
-  store.setPriorityOverrides(['issue:3']);
-  assert.deepEqual(store.listPriorityOverrides(), [{ origin: 'issue:3', rank: 0 }]);
-  store.setPriorityOverrides([]);
-  assert.deepEqual(store.listPriorityOverrides(), []);
+  store.priority.setPriorityOverrides(['issue:3']);
+  assert.deepEqual(store.priority.listPriorityOverrides(), [{ origin: 'issue:3', rank: 0 }]);
+  store.priority.setPriorityOverrides([]);
+  assert.deepEqual(store.priority.listPriorityOverrides(), []);
   store.close();
 });
 
 test('a stale override is pruned once its origin stops being tracked', () => {
   let t = Date.parse('2026-07-01T00:00:00Z');
   const store = new Store(':memory:', () => new Date(t).toISOString());
-  store.setPriorityOverrides(['issue:1', 'issue:2']);
+  store.priority.setPriorityOverrides(['issue:1', 'issue:2']);
 
-  store.reconcilePriorityOverrides(['issue:1', 'issue:2'], 1000);
+  store.priority.reconcilePriorityOverrides(['issue:1', 'issue:2'], 1000);
   t += 500;
-  store.reconcilePriorityOverrides(['issue:2'], 1000);
+  store.priority.reconcilePriorityOverrides(['issue:2'], 1000);
   assert.deepEqual(
-    store.listPriorityOverrides().map((o) => o.origin),
+    store.priority.listPriorityOverrides().map((o) => o.origin),
     ['issue:1', 'issue:2'],
   );
 
   t += 2000;
-  store.reconcilePriorityOverrides(['issue:2'], 1000);
+  store.priority.reconcilePriorityOverrides(['issue:2'], 1000);
   assert.deepEqual(
-    store.listPriorityOverrides().map((o) => o.origin),
+    store.priority.listPriorityOverrides().map((o) => o.origin),
     ['issue:2'],
   );
   store.close();
@@ -412,11 +412,11 @@ test('a stale override is pruned once its origin stops being tracked', () => {
 test('a zero TTL disables pruning entirely', () => {
   let t = Date.parse('2026-07-01T00:00:00Z');
   const store = new Store(':memory:', () => new Date(t).toISOString());
-  store.setPriorityOverrides(['issue:1']);
+  store.priority.setPriorityOverrides(['issue:1']);
   t += 10_000_000;
-  store.reconcilePriorityOverrides([], 0);
+  store.priority.reconcilePriorityOverrides([], 0);
   assert.deepEqual(
-    store.listPriorityOverrides().map((o) => o.origin),
+    store.priority.listPriorityOverrides().map((o) => o.origin),
     ['issue:1'],
     'nothing is pruned when the TTL is disabled',
   );

@@ -181,7 +181,7 @@ async function server(system: System) {
 test('ending a run on a flagged goal costs a sentence, and a clear one costs nothing', async () => {
   const system = build();
   plan(system, [CHECK]);
-  system.store.recordIssueRun({
+  system.store.floor.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Ship it',
@@ -196,7 +196,7 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
   const refused = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run', payload: {} });
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /note is required/);
-  assert.equal(system.store.listIssueRuns()[0]!.dismissedAt, null);
+  assert.equal(system.store.floor.listIssueRuns()[0]!.dismissedAt, null);
 
   const withNote = await app.inject({
     method: 'POST',
@@ -204,15 +204,15 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
     payload: { note: 'shipping it anyway, checking A on Monday' },
   });
   assert.equal(withNote.statusCode, 200);
-  const ended = system.store.listIssueRuns()[0]!;
+  const ended = system.store.floor.listIssueRuns()[0]!;
   assert.ok(ended.dismissedAt);
   assert.equal(ended.dismissNote, 'shipping it anyway, checking A on Monday');
   await app.close();
 
   const clear = build();
   const clearPlan = plan(clear, [CHECK]);
-  clear.store.recordValidationResult(clearPlan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
-  clear.store.recordIssueRun({
+  clear.store.validation.recordValidationResult(clearPlan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
+  clear.store.floor.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Ship it',
@@ -231,7 +231,7 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
 test('marking a close-out done on a flagged goal costs a sentence; an ordinary ask does not', async () => {
   const system = build();
   plan(system, [CHECK]);
-  const { task: closeOut } = system.store.recordHumanTask({
+  const { task: closeOut } = system.store.humanTasks.recordHumanTask({
     title: 'Close issue #12 in the tracker',
     detail: 'still open',
     originRef: 'issue:12',
@@ -239,7 +239,7 @@ test('marking a close-out done on a flagged goal costs a sentence; an ordinary a
     agentId: null,
     taskId: null,
   });
-  const { task: ask } = system.store.recordHumanTask({
+  const { task: ask } = system.store.humanTasks.recordHumanTask({
     title: 'Plug the cable in',
     detail: 'rack 4',
     originRef: 'issue:12',
@@ -251,7 +251,7 @@ test('marking a close-out done on a flagged goal costs a sentence; an ordinary a
   const refused = await app.inject({ method: 'POST', url: `/api/human-tasks/${closeOut.id}/done`, payload: {} });
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /note is required/);
-  assert.equal(system.store.getHumanTask(closeOut.id)!.status, 'open');
+  assert.equal(system.store.humanTasks.getHumanTask(closeOut.id)!.status, 'open');
 
   const plain = await app.inject({ method: 'POST', url: `/api/human-tasks/${ask.id}/done`, payload: {} });
   assert.equal(plain.statusCode, 200);
@@ -262,14 +262,14 @@ test('marking a close-out done on a flagged goal costs a sentence; an ordinary a
     payload: { note: 'closed it; A is on Monday' },
   });
   assert.equal(withNote.statusCode, 200);
-  assert.equal(system.store.getHumanTask(closeOut.id)!.resolution, 'closed it; A is on Monday');
+  assert.equal(system.store.humanTasks.getHumanTask(closeOut.id)!.resolution, 'closed it; A is on Monday');
   await app.close();
 });
 
 test('closing the ticket from the row costs the same sentence marking it done does', async () => {
   const system = build();
   plan(system, [CHECK]);
-  const { task: closeOut } = system.store.recordHumanTask({
+  const { task: closeOut } = system.store.humanTasks.recordHumanTask({
     title: 'Close issue #12 in the tracker',
     detail: 'still open',
     originRef: 'issue:12',
@@ -286,7 +286,7 @@ test('closing the ticket from the row costs the same sentence marking it done do
   });
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /note is required/);
-  assert.equal(system.store.getHumanTask(closeOut.id)!.status, 'open');
+  assert.equal(system.store.humanTasks.getHumanTask(closeOut.id)!.status, 'open');
 
   const withNote = await app.inject({
     method: 'POST',
@@ -294,7 +294,7 @@ test('closing the ticket from the row costs the same sentence marking it done do
     payload: { note: 'A is on Monday' },
   });
   assert.equal(withNote.statusCode, 200);
-  assert.match(system.store.getHumanTask(closeOut.id)!.resolution ?? '', /Closed #12 .* A is on Monday/);
+  assert.match(system.store.humanTasks.getHumanTask(closeOut.id)!.resolution ?? '', /Closed #12 .* A is on Monday/);
   await app.close();
 });
 
@@ -302,12 +302,12 @@ test('a flagged goal blocks nothing: the cycle runs and the conclusion is untouc
   const system = build();
   plan(system, [CHECK]);
   const world: WorldSnapshot = { takenAt: new Date().toISOString(), pullRequests: [], issues: [issue(12)] };
-  system.store.setWorldBaseline(world);
+  system.store.world.setWorldBaseline(world);
 
   const report = await system.harness.runCycle('manual');
   assert.ok(report, 'a cycle runs with an unrun validation plan on the books');
 
-  system.store.recordIssueConclusion({
+  system.store.verdicts.recordIssueConclusion({
     originRef: 'issue:12',
     verdict: 'done',
     note: 'the agent says so',
@@ -315,5 +315,5 @@ test('a flagged goal blocks nothing: the cycle runs and the conclusion is untouc
     agentId: null,
     taskId: null,
   });
-  assert.equal(system.store.getIssueConclusion('issue:12')!.verdict, 'done');
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12')!.verdict, 'done');
 });

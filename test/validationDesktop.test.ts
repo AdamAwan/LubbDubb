@@ -131,7 +131,7 @@ async function call(
 }
 
 function byId(system: System, goal: string, id: string): ValidationCheck {
-  const found = system.store.listValidationChecks(goal).find((c) => c.id === id);
+  const found = system.store.validation.listValidationChecks(goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }
@@ -250,7 +250,7 @@ test('local_run starts the environment on a goal, and reports what it knows', as
     assert.equal(started.json().freshness, null);
     assert.match(started.json().caveat as string, /does not exercise the application/);
 
-    const live = system.store.liveLocalRun();
+    const live = system.store.localRuns.liveLocalRun();
     assert.equal(live?.originRef, 'issue:12');
     assert.ok(live !== null && live.dir !== '');
   } finally {
@@ -289,15 +289,15 @@ test('starting a second goal locally stops the first — there is one environmen
   const { server } = await desk(system);
   try {
     await call(server, 'c1', 'local_run', { issue: 12 });
-    const first = system.store.liveLocalRun();
+    const first = system.store.localRuns.liveLocalRun();
     assert.equal(first?.originRef, 'issue:12');
 
     await call(server, 'c1', 'local_run', { issue: 13 });
-    const second = system.store.liveLocalRun();
+    const second = system.store.localRuns.liveLocalRun();
     assert.equal(second?.originRef, 'issue:13');
     assert.notEqual(second?.id, first?.id);
-    assert.equal(system.store.currentLocalRun()?.originRef, 'issue:13');
-    assert.equal(system.store.liveLocalRun()?.id, second?.id);
+    assert.equal(system.store.localRuns.currentLocalRun()?.originRef, 'issue:13');
+    assert.equal(system.store.localRuns.liveLocalRun()?.id, second?.id);
   } finally {
     await server.close();
     system.store.close();
@@ -312,7 +312,7 @@ test('local_run refuses with the reason when nothing is configured to start', as
     const refused = await call(server, 'c1', 'local_run', { issue: 12 });
     assert.ok(refused.isError);
     assert.match(refused.text, /localRun\.instruction/);
-    assert.equal(system.store.liveLocalRun(), null, 'a refusal starts nothing and records nothing');
+    assert.equal(system.store.localRuns.liveLocalRun(), null, 'a refusal starts nothing and records nothing');
   } finally {
     await server.close();
     system.store.close();
@@ -347,7 +347,11 @@ test('one check is claimed at a time, and the refusal names what holds it', asyn
 test('a settled check is not claimable — a reading is somebody’s answer', async () => {
   const system = build();
   const planId = planWith(system);
-  system.store.recordValidationResult(planId, 'csv-opens', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(planId, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  });
   const { server } = await desk(system);
   try {
     const refused = await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A' });
@@ -424,11 +428,11 @@ test('a hand-back records no reading and gives the check back with its reason', 
   try {
     await call(server, 'c1', 'validation_claim', { issue: 12, check: 'B' });
     const handed = await call(server, 'c1', 'validation_report', {
-      result: 'handback',
+      result: 'blocked',
       note: 'the staging login expired and I have no way to renew it from here',
     });
     assert.ok(!handed.isError, handed.text);
-    assert.equal(handed.json().reported, 'handback');
+    assert.equal(handed.json().reported, 'blocked');
     assert.equal(handed.json().state, 'unrun');
 
     const after = byId(system, planId, 'chip-on-mobile');
@@ -449,7 +453,7 @@ test('an amendment that withdraws a claimed check ends the run rather than half-
   const { server } = await desk(system);
   try {
     await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A' });
-    system.store.amendValidation(planId, {
+    system.store.validation.amendValidation(planId, {
       note: 'the export screen was removed',
       checks: [],
       withdraw: [{ id: 'csv-opens', reason: 'there is no export screen any more' }],
@@ -474,7 +478,7 @@ test('a reworded claimed check refuses a result, clears the session, and keeps t
     const claimedAt = byId(system, planId, 'csv-opens').claimedAt;
     assert.ok(claimedAt);
     while (new Date().toISOString() <= claimedAt) await new Promise((resolve) => setTimeout(resolve, 1));
-    system.store.amendValidation(planId, {
+    system.store.validation.amendValidation(planId, {
       note: 'the export moved to the Downloads page',
       checks: [
         {
@@ -634,7 +638,7 @@ test('a rewording releases the claim with the hand-over and the reading', async 
   const { server } = await desk(system);
   try {
     await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A' });
-    system.store.amendValidation(planId, {
+    system.store.validation.amendValidation(planId, {
       note: 'the export is a download now, not a file on disk',
       checks: [
         {
@@ -669,7 +673,7 @@ test('the skill installs, and says what it is for without restating the procedur
   assert.equal(written, DESKTOP_SKILL);
   assert.match(written, /^---\nname: lubbdubb\n/);
   for (const tool of DESKTOP_TOOL_NAMES) assert.match(written, new RegExp(tool));
-  assert.match(written, /handback/);
+  assert.match(written, /blocked/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
   assert.match(written, /rewritten from scratch every time the harness starts/);
   assert.doesNotMatch(written, /desktopSkill\b/);
@@ -694,7 +698,7 @@ test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one'
   const system = build();
   const goal = planWith(system);
   const now = new Date().toISOString();
-  system.store.claimValidationCheck(goal, 'csv-opens', 'desktop (studio)', claimStaleBefore(now, 60));
+  system.store.validation.claimValidationCheck(goal, 'csv-opens', 'desktop (studio)', claimStaleBefore(now, 60));
 
   const shipped = buildStateSnapshot(system).validationChecks.find((c) => c.id === 'csv-opens')!;
   assert.equal(shipped.claimedBy, 'desktop (studio)', 'a live claim reaches the cockpit');
@@ -754,7 +758,7 @@ test('the registration command quotes a path with spaces', () => {
 
 function goalWith(system: System): string {
   const goal = planWith(system);
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: NOW,
     pullRequests: [],
     closedPullRequests: [],
@@ -775,7 +779,7 @@ function goalWith(system: System): string {
 test('goal_read answers with the record, and with the four things the record does not carry', async () => {
   const system = build();
   const goal = goalWith(system);
-  system.store.recordRetrospective({
+  system.store.scratch.recordRetrospective({
     originRef: goal,
     summary: 'Two goes at the export.',
     document: '# What happened\n\nThe first attempt read the wrong column.',
@@ -836,8 +840,13 @@ test('goal_read passes an environment verdict through three-valued', async () =>
     { name: 'production', at: 'echo nothing' },
   ]);
   try {
-    system.store.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31' });
-    system.store.recordEnvironmentReach({ sha: 'sha-31', environment: 'hallway', status: 'reached', detail: null });
+    system.store.environments.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31' });
+    system.store.environments.recordEnvironmentReach({
+      sha: 'sha-31',
+      environment: 'hallway',
+      status: 'reached',
+      detail: null,
+    });
 
     const rows = (await call(server, 'c1', 'goal_read', { issue: 12 })).json().environments as {
       environment: string;

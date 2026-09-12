@@ -268,15 +268,15 @@ test('an injected issue routes through the planner, and its verdict hands the is
   on.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
   failAppraisalOpen(on.store, 1);
   await on.harness.runCycle('manual');
-  const planTask = on.store.getTask(on.store.listTasks()[0]!.id);
+  const planTask = on.store.tasks.getTask(on.store.tasks.listTasks()[0]!.id);
   assert.equal(planTask?.branch, planBranch(1));
   assert.equal(planTask?.originRef, planOrigin(1));
 
   planWithOnePart(on.store, 1, 'Ship the thing');
-  on.store.updateTask(planTask!.id, { status: 'done' });
+  on.store.tasks.updateTask(planTask!.id, { status: 'done' });
   await on.harness.runCycle('manual');
   assert.deepEqual(
-    on.store
+    on.store.tasks
       .listTasks()
       .map((t) => t.branch)
       .sort(),

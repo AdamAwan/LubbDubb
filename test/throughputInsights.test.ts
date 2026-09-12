@@ -217,14 +217,14 @@ test('the route counts the rows the store actually holds, replies included', asy
     }),
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
-  system.store.recordWorldEvents([
+  system.store.world.recordWorldEvents([
     { kind: 'pr_opened', ref: 'pr:5', summary: 'PR #5 opened: a change' },
     { kind: 'pr_comment', ref: 'pr:5', summary: 'PR #5: someone commented' },
     { kind: 'pr_merged', ref: 'pr:5', summary: 'PR #5 merged' },
     { kind: 'issue_closed', ref: 'issue:5', summary: 'Issue #5 closed' },
     { kind: 'pr_mergeable', ref: 'pr:5', summary: 'PR #5 is mergeable' },
   ]);
-  system.store.recordPrReplySent(5, 'thread-1', 'comment-1');
+  system.store.prReplies.recordPrReplySent(5, 'thread-1', 'comment-1');
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/throughput?window=24h' });

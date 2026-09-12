@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import { RuleDispatcher, STAGES } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_PIPELINE, DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { askedAlready } from '../src/dispatcher/admission.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
@@ -46,6 +46,50 @@ test('the pipeline holds every rule, and nothing that is not one', () => {
   }
   const rules = Object.entries(DISPATCH_RULES).filter(([, r]) => r.kind === 'rule');
   assert.equal(DISPATCH_PIPELINE.length, rules.length, 'every rule has a position — none is declared and never walked');
+});
+
+test('every rule in the pipeline has a body, its own or a named one', () => {
+  for (const entry of DISPATCH_PIPELINE) {
+    const owner = entry.emittedBy ?? entry.id;
+    assert.ok(
+      owner in STAGES,
+      `${entry.id} is walked but nothing produces it — give it a stage, or declare the stage that emits it`,
+    );
+    if (entry.emittedBy) {
+      assert.ok(
+        !(entry.id in STAGES),
+        `${entry.id} is emitted by ${entry.emittedBy}; a stage of its own would run twice`,
+      );
+      assert.equal(
+        DISPATCH_RULES[entry.emittedBy as keyof typeof DISPATCH_RULES]?.kind,
+        'rule',
+        `${entry.id} names ${entry.emittedBy}, which must itself be a rule in the pipeline`,
+      );
+    }
+  }
+});
+
+test('no stage is registered for a rule the pipeline does not walk', () => {
+  const walked = new Set<string>(DISPATCH_PIPELINE.map((e) => e.id));
+  for (const id of Object.keys(STAGES)) assert.ok(walked.has(id), `${id} has a body but no position`);
+});
+
+test('the PR concern pass owns the concerns, and is the only stage that does', () => {
+  const emitted = DISPATCH_PIPELINE.filter((e) => e.emittedBy).map((e) => e.id);
+  assert.deepEqual(
+    emitted,
+    [
+      'pr-review',
+      'pr-review-comment',
+      'pr-ci-blocked',
+      'pr-ci-gate',
+      'pr-base-update',
+      'pr-base-update-conflict',
+      'pr-merge-ready',
+    ],
+    'one pass over the open PRs, because at most one agent works a branch',
+  );
+  for (const e of DISPATCH_PIPELINE) if (e.emittedBy) assert.equal(e.emittedBy, 'pr-ci-failing');
 });
 
 test('the non-rules stay in the registry but take no position', () => {

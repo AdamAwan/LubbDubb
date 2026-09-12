@@ -21,22 +21,22 @@ export class DeliveryCloseOutDesk {
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: CloseOutWorld): void {
-    const deliveries = this.store.listDeliveries();
-    const existing = this.store.listHumanTasksOfKind('close_out');
+    const deliveries = this.store.verdicts.listDeliveries();
+    const existing = this.store.humanTasks.listHumanTasksOfKind('close_out');
     if (deliveries.length === 0 && existing.length === 0) return;
     const readings = watchWindowReadings({
-      windows: this.store.listWatchWindows(),
-      checks: this.store.listGoalWatches(),
-      readings: this.store.listWatchReadings(),
+      windows: this.store.watches.listWatchWindows(),
+      checks: this.store.watches.listGoalWatches(),
+      readings: this.store.watches.listWatchReadings(),
     });
     const steps = closeOutPass({
       issues: world.issues,
       deliveries,
-      shortfalls: this.store.listShortfalls(),
+      shortfalls: this.store.verdicts.listShortfalls(),
       existing,
       validation: this.validationByOrigin(),
       validating: new Set(
-        this.store
+        this.store.humanTasks
           .listHumanTasksOfKind('validate')
           .filter((t) => t.status === 'open' && t.originRef !== null)
           .map((t) => t.originRef!),
@@ -50,20 +50,20 @@ export class DeliveryCloseOutDesk {
       watchCleared: watchClearedGoals(
         'close_out',
         this.environments,
-        this.store.listWatchWindows(),
-        this.store.listEnvironmentGateReleases(),
+        this.store.watches.listWatchWindows(),
+        this.store.environments.listEnvironmentGateReleases(),
       ),
       canClose: this.canClose(),
       opened: openedGoals(
         'close_out',
         this.environments,
-        this.store.listGoalArrivals(),
-        this.store.listEnvironmentGateReleases(),
+        this.store.environments.listGoalArrivals(),
+        this.store.environments.listEnvironmentGateReleases(),
       ),
     });
     for (const step of steps) {
       if (step.kind === 'file')
-        this.store.recordHumanTask({
+        this.store.humanTasks.recordHumanTask({
           title: step.title,
           detail: step.detail,
           originRef: step.originRef,
@@ -71,14 +71,14 @@ export class DeliveryCloseOutDesk {
           agentId: null,
           taskId: null,
         });
-      else if (step.kind === 'reopen') this.store.reopenHumanTask(step.taskId, step.detail);
-      else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
+      else if (step.kind === 'reopen') this.store.humanTasks.reopenHumanTask(step.taskId, step.detail);
+      else this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
     }
   }
 
   private validationByOrigin(): Map<string, GoalValidation> {
     const out = new Map<string, GoalValidation>();
-    for (const plan of this.store.listPlans()) {
+    for (const plan of this.store.plans.listPlans()) {
       const validation = goalValidation(this.store, plan.originRef);
       if (validation) out.set(plan.originRef, validation);
     }

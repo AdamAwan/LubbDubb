@@ -107,7 +107,7 @@ function build(environments: EnvironmentConfig[]): { system: System; dir: string
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -134,7 +134,7 @@ const BASE = {
 };
 
 function only(system: System): ValidationCheck {
-  const check = system.store.listValidationChecks(GOAL)[0];
+  const check = system.store.validation.listValidationChecks(GOAL)[0];
   assert.ok(check !== undefined, 'the goal carries exactly one check');
   return check;
 }
@@ -262,9 +262,9 @@ function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = 
     candidateWhy: null,
     steps: over.steps ?? [SCRIPT_STEP],
   };
-  store.ingestValidation(GOAL, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
-  store.openRemoteSheet({ goalRef: GOAL, environment: 'acceptance' });
-  store.saveRemoteSheetRows(GOAL, 'acceptance', [
+  store.validation.ingestValidation(GOAL, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
+  store.remoteValidation.openRemoteSheet({ goalRef: GOAL, environment: 'acceptance' });
+  store.remoteValidation.saveRemoteSheetRows(GOAL, 'acceptance', [
     {
       rowId: `check:${BASE.id}`,
       kind: 'check',
@@ -277,7 +277,7 @@ function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = 
       matched: null,
     },
   ]);
-  const { run } = store.beginRemoteRun({
+  const { run } = store.remoteValidation.beginRemoteRun({
     goalRef: GOAL,
     environment: 'acceptance',
     tenant: 'validation-customer-1',
@@ -312,7 +312,7 @@ test('a script’s reading is attributed script, never spec, and the two never o
   assert.ok(settled.ok, 'ok' in settled ? '' : String(settled));
   assert.ok(settled.ok && settled.wrote === 1, 'the script wrote its reading onto the check');
 
-  const check = bench.store.listValidationChecks(GOAL)[0];
+  const check = bench.store.validation.listValidationChecks(GOAL)[0];
   assert.equal(check?.state, 'passed', 'a one-off script may assert and go green on its own');
   assert.equal(check?.resultBy, 'script', 'never `spec` — nothing reviewed it');
   assert.match(check?.resultNote ?? '', /one-off script/, 'the sheet says which instrument earned the green');
@@ -329,8 +329,12 @@ test('a script that reported nothing under its own id is blocked, never passed',
   });
   assert.ok(settled.ok, 'ok' in settled ? '' : String(settled));
   assert.ok(settled.ok && settled.blocked === 1 && settled.wrote === 0);
-  assert.equal(bench.store.listValidationChecks(GOAL)[0]?.state, 'unrun', 'nothing was learned, so nothing is written');
-  const row = bench.store.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
+  assert.equal(
+    bench.store.validation.listValidationChecks(GOAL)[0]?.state,
+    'unrun',
+    'nothing was learned, so nothing is written',
+  );
+  const row = bench.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
   assert.match(row?.detail ?? '', /reported nothing under its own id/);
   bench.store.close();
   rmSync(bench.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
@@ -338,7 +342,7 @@ test('a script that reported nothing under its own id is blocked, never passed',
 
 test('a run whose only confirmed check carries a script still owes an agent, and briefs it with the source', () => {
   const bench = scriptBench();
-  const scripts = runnableScripts(bench.store, TENANTED, GOAL, bench.store.listRemoteSheetRows());
+  const scripts = runnableScripts(bench.store, TENANTED, GOAL, bench.store.remoteValidation.listRemoteSheetRows());
   assert.deepEqual(
     scripts.map((s) => s.checkId),
     [BASE.id],
@@ -385,11 +389,11 @@ test('the grace sweep removes a script past its window, names where it was, and 
     ],
   };
   for (const goal of ['issue:12', 'issue:13'])
-    store.ingestValidation(goal, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
+    store.validation.ingestValidation(goal, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
   const delivery = (originRef: string, at: number): void => {
     const db = new Database(join(dir, 'harness.sqlite'));
     try {
-      store.recordDelivery({ originRef, summary: 'every part merged', detail: null, by: 'assessor' });
+      store.verdicts.recordDelivery({ originRef, summary: 'every part merged', detail: null, by: 'assessor' });
       db.prepare(`UPDATE issue_deliveries SET decided_at=? WHERE origin_ref=?`).run(
         new Date(at).toISOString(),
         originRef,
@@ -413,7 +417,7 @@ test('the grace sweep removes a script past its window, names where it was, and 
   });
   await desk.run();
 
-  const swept = store.listValidationChecks('issue:12')[0]?.steps[0];
+  const swept = store.validation.listValidationChecks('issue:12')[0]?.steps[0];
   assert.equal(swept?.script, null, 'a one-off that survives its goal is a second suite grown by accident');
   assert.equal(
     swept?.scriptSweptAt,
@@ -421,12 +425,12 @@ test('the grace sweep removes a script past its window, names where it was, and 
     'and the sweep names what it removed, where the source was',
   );
 
-  const fresh = store.listValidationChecks('issue:13')[0]?.steps[0];
+  const fresh = store.validation.listValidationChecks('issue:13')[0]?.steps[0];
   assert.equal(fresh?.script, SCRIPT, 'a goal inside its grace period keeps its script');
   assert.equal(fresh?.scriptSweptAt, null);
 
   // Nothing else on the row moved: removing a source says nothing about whether the check passed.
-  assert.equal(store.listValidationChecks('issue:12')[0]?.state, 'unrun');
+  assert.equal(store.validation.listValidationChecks('issue:12')[0]?.state, 'unrun');
   store.close();
   rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
 });
@@ -453,7 +457,7 @@ test('a captured report attaches the screen, states no outcome, and never goes g
     { ...BASE, steps: [{ kind: 'screenshot', do: 'Capture the orders grid at 1280px' }] },
   ]);
   assert.equal(res.isError, false, res.text);
-  system.store.setValidationActor(GOAL, BASE.id, 'fleet');
+  system.store.validation.setValidationActor(GOAL, BASE.id, 'fleet');
 
   const agent = spawnAgent(system, `issue:12:validate:${BASE.id}`);
   const session = system.mcp.session(agent.id);
@@ -474,7 +478,7 @@ test('a captured report attaches the screen, states no outcome, and never goes g
 
   // A person judges it, and their reading keeps the image they judged: clearing the capture there
   // would delete the evidence at the exact moment somebody is acting on it.
-  const judged = system.store.recordValidationResult(GOAL, BASE.id, {
+  const judged = system.store.validation.recordValidationResult(GOAL, BASE.id, {
     state: 'passed',
     note: 'The truncation is fine.',
     by: 'operator',
@@ -483,7 +487,7 @@ test('a captured report attaches the screen, states no outcome, and never goes g
   assert.equal(judged?.resultBy, 'operator');
   assert.equal(judged?.capture, 'orders-grid.png');
 
-  const reset = system.store.recordValidationResult(GOAL, BASE.id, { state: 'unrun', note: null, by: null });
+  const reset = system.store.validation.recordValidationResult(GOAL, BASE.id, { state: 'unrun', note: null, by: null });
   assert.equal(reset?.capture, null, 'a reset means nothing to attribute, and that includes the image');
   system.store.close();
   rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
@@ -493,7 +497,7 @@ test('a row written before the state existed reads unrun, not captured', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vstate-'));
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
-  store.ingestValidation(GOAL, {
+  store.validation.ingestValidation(GOAL, {
     checks: [{ ...BASE, seq: 1, uses: [], covers: [], fleetCandidate: false, candidateWhy: null }],
     resources: [],
     supersededReason: '',
@@ -506,10 +510,14 @@ test('a row written before the state existed reads unrun, not captured', () => {
   } finally {
     db.close();
   }
-  assert.equal(store.listValidationChecks(GOAL)[0]?.state, 'unrun', 'unrecognised narrows to unrun, never to captured');
+  assert.equal(
+    store.validation.listValidationChecks(GOAL)[0]?.state,
+    'unrun',
+    'unrecognised narrows to unrun, never to captured',
+  );
   assert.deepEqual(
     (() => {
-      const check = store.getValidationCheck(GOAL, BASE.id);
+      const check = store.validation.getValidationCheck(GOAL, BASE.id);
       return [check?.state, check?.capture];
     })(),
     ['unrun', null],
@@ -533,7 +541,7 @@ test('a screenshot check runs on the sheet, and its screen is kept with the goal
   assert.ok(settled.ok, 'ok' in settled ? '' : String(settled));
   assert.ok(settled.ok && settled.captured === 1, 'the run handed one screen back');
 
-  const check = bench.store.listValidationChecks(GOAL)[0];
+  const check = bench.store.validation.listValidationChecks(GOAL)[0];
   assert.equal(check?.state, 'captured', 'a screen never colours its own row — a person judges it');
   assert.equal(check?.resultBy, 'agent', 'nothing asserted, so there is no instrument to attribute');
   assert.match(check?.capture ?? '', /^capture-/, 'the harness names what it kept, not the report');
@@ -543,7 +551,7 @@ test('a screenshot check runs on the sheet, and its screen is kept with the goal
   assert.match(from, /artefacts[\\/]confirmation\.png$/, 'it is taken out of this run’s artefacts');
   assert.match(to, /issue-[^\\/]*[\\/]capture-/, 'and kept in the goal’s own validation directory');
 
-  const row = bench.store.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
+  const row = bench.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
   assert.equal(row?.outcome, 'captured', 'the sheet row says the same thing the check does');
   bench.store.close();
 });
@@ -555,9 +563,13 @@ test('a screenshot check that came back without a screen is blocked, never passe
     artefacts: null,
   });
   assert.ok(settled.ok && settled.blocked === 1, 'handing the screen back is the whole of what the step is for');
-  assert.equal(bench.store.listValidationChecks(GOAL)[0]?.state, 'unrun', 'and nothing is written onto the check');
+  assert.equal(
+    bench.store.validation.listValidationChecks(GOAL)[0]?.state,
+    'unrun',
+    'and nothing is written onto the check',
+  );
   assert.deepEqual(bench.kept, [], 'there was nothing to keep');
-  const row = bench.store.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
+  const row = bench.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `check:${BASE.id}`);
   assert.match(row?.detail ?? '', /names none under its id/);
   bench.store.close();
 });
@@ -571,7 +583,7 @@ test('a capture named as a path or a URL is refused, and the row says which', as
     });
     assert.ok(settled.ok && settled.blocked === 1, `"${name}" is not a file name`);
     assert.deepEqual(bench.kept, [], 'and nothing is moved on the strength of it');
-    assert.equal(bench.store.listValidationChecks(GOAL)[0]?.capture, null);
+    assert.equal(bench.store.validation.listValidationChecks(GOAL)[0]?.capture, null);
     bench.store.close();
   }
 });
@@ -585,7 +597,7 @@ test('a screen beside a suite assertion keeps the spec attribution, and a red is
     ]),
     artefacts: null,
   });
-  const held = passing.store.listValidationChecks(GOAL)[0];
+  const held = passing.store.validation.listValidationChecks(GOAL)[0];
   assert.equal(held?.state, 'captured', 'the suite passed, but nobody has looked at the screen yet');
   assert.equal(held?.resultBy, 'spec', 'the reviewed instrument keeps its own word — the two are never folded');
   passing.store.close();
@@ -598,7 +610,7 @@ test('a screen beside a suite assertion keeps the spec attribution, and a red is
     ]),
     artefacts: null,
   });
-  const red = failing.store.listValidationChecks(GOAL)[0];
+  const red = failing.store.validation.listValidationChecks(GOAL)[0];
   assert.equal(red?.state, 'failed', 'a red the product earned is not withheld for want of a picture');
   assert.match(red?.resultNote ?? '', /screen was handed back/, 'and the screen rides it as evidence');
   assert.match(red?.capture ?? '', /^capture-/);
@@ -607,7 +619,7 @@ test('a screen beside a suite assertion keeps the spec attribution, and a red is
 
 test('a run whose only confirmed check hands a screen back still owes an agent, and is told to take it', () => {
   const bench = scriptBench({ steps: [SCREEN_STEP] });
-  const screens = runnableScreens(bench.store, TENANTED, GOAL, bench.store.listRemoteSheetRows());
+  const screens = runnableScreens(bench.store, TENANTED, GOAL, bench.store.remoteValidation.listRemoteSheetRows());
   assert.deepEqual(
     screens.map((s) => s.checkId),
     [BASE.id],

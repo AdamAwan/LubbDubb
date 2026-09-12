@@ -32,14 +32,14 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
   failPlanningOpen(system.store, 13);
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #13',
     prompt: 'p',
     branch: 'issue/13',
     originRef: 'issue:13',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -53,11 +53,11 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
 test('buildStateSnapshot keys world-event refs so the activity feed can link them', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
-  system.store.recordWorldEvents([
+  system.store.world.recordWorldEvents([
     { kind: 'pr_merged', ref: 'pr:91', summary: 'PR #91 merged' },
     { kind: 'issue_linked', ref: 'issue:88', summary: 'Issue #88 linked to PR #91' },
   ]);
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -69,14 +69,14 @@ test('buildStateSnapshot keys world-event refs so the activity feed can link the
 test('buildStateSnapshot keys each task origin ref so agent/overlap/recovery cards can link it', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'Fix CI on PR #142',
     prompt: 'p',
     branch: 'feature/rate-limit',
     originRef: 'pr:142:ci',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -89,7 +89,7 @@ test('buildStateSnapshot keys every goal by its canonical ref, so the cockpit ca
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
   failPlanningOpen(system.store, 13);
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -100,19 +100,19 @@ test('buildStateSnapshot keys every goal by its canonical ref, so the cockpit ca
 test('buildStateSnapshot gives each decision the ref it is about, and keys it', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
-  system.store.recordDecision({
+  system.store.decisions.recordDecision({
     cycleId: 'cycle-1',
     action: { type: 'merge_pr', reason: 'merge-ready', prNumber: 42 },
     outcome: 'executed',
     detail: 'squashed it',
   });
-  system.store.recordDecision({
+  system.store.decisions.recordDecision({
     cycleId: 'cycle-1',
     action: { type: 'no_op', reason: 'nothing to do' },
     outcome: 'executed',
     detail: 'nothing to dispatch this cycle',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
   const bySubject = snap.decisions.map((d) => d.subjectRef);
@@ -129,14 +129,14 @@ test('buildStateSnapshot attaches a pickup verdict to every issue', async () => 
   failPlanningOpen(system.store, 7);
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Staffed' });
   failPlanningOpen(system.store, 8);
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #8',
     prompt: 'p',
     branch: 'issue/8',
     originRef: 'issue:8',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -151,7 +151,7 @@ test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
   system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
   failPlanningOpen(system.store, 9);
   system.runtimeControl.apply({ paused: true });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
@@ -212,16 +212,16 @@ test('buildStateSnapshot puts a local run’s spend on the goal it ran', async (
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 31, title: 'A goal somebody looked at' });
   failPlanningOpen(system.store, 31);
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
-  const run = system.store.beginLocalRun({
+  const run = system.store.localRuns.beginLocalRun({
     originRef: 'issue:31',
     ref: 'issue/31',
     dir: '/preview',
     commit: 'abc123',
     url: null,
   });
-  system.store.addLocalRunUsage(run.id, {
+  system.store.localRuns.addLocalRunUsage(run.id, {
     costUsd: 0.8,
     inputTokens: 4000,
     outputTokens: 200,
@@ -250,16 +250,16 @@ test('buildStateSnapshot ships the watch’s readings on a live run, and nothing
     portLister: ports,
   });
   system.connector.inject({ kind: 'new_issue', number: 31, title: 'A goal somebody looked at' });
-  system.store.setWorldBaseline(await system.connector.getState());
-  const run = system.store.beginLocalRun({
+  system.store.world.setWorldBaseline(await system.connector.getState());
+  const run = system.store.localRuns.beginLocalRun({
     originRef: 'issue:31',
     ref: 'issue/31',
     dir: '/preview',
     commit: 'abc123',
     url: null,
   });
-  system.store.markLocalRunPid(run.id, 777);
-  system.store.setLocalRunStatus(run.id, 'running');
+  system.store.localRuns.markLocalRunPid(run.id, 777);
+  system.store.localRuns.setLocalRunStatus(run.id, 'running');
   await system.localRunWatch.tick();
 
   const live = (await buildStateSnapshot(system)).localRun;
@@ -271,7 +271,7 @@ test('buildStateSnapshot ships the watch’s readings on a live run, and nothing
   assert.equal(live?.holdsSession, false, 'nothing in this process spawned the session');
   assert.equal(live?.commit, 'abc123');
 
-  system.store.setLocalRunStatus(run.id, 'stopped', 'done');
+  system.store.localRuns.setLocalRunStatus(run.id, 'stopped', 'done');
   const settled = (await buildStateSnapshot(system)).localRun;
   assert.equal(settled?.ports, null);
   assert.equal(settled?.freshness, null);
@@ -284,13 +284,13 @@ test('buildStateSnapshot ships the local run’s targets, matched by branch', as
   system.connector.inject({ kind: 'new_issue', number: 22, title: 'Nothing started' });
   failPlanningOpen(system.store, 21);
   failPlanningOpen(system.store, 22);
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: 'issue:21',
     title: 'Stacked goal',
     status: 'active',
     reason: 'Two rungs.',
   });
-  system.store.upsertPlanParts(
+  system.store.plans.upsertPlanParts(
     plan.id,
     ['first', 'second'].map((slug, i) => ({
       slug,
@@ -305,12 +305,16 @@ test('buildStateSnapshot ships the local run’s targets, matched by branch', as
       expectedKind: 'code' as const,
     })),
   );
-  const parts = system.store.listPlanParts(plan.id);
-  system.store.updatePlanPart(parts[0]?.id ?? '', { status: 'merged', branch: 'issue/21/first', prNumber: 61 });
-  system.store.updatePlanPart(parts[1]?.id ?? '', { status: 'in_review', branch: 'issue/21/second', prNumber: 62 });
+  const parts = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(parts[0]?.id ?? '', { status: 'merged', branch: 'issue/21/first', prNumber: 61 });
+  system.store.plans.updatePlanPart(parts[1]?.id ?? '', {
+    status: 'in_review',
+    branch: 'issue/21/second',
+    prNumber: 62,
+  });
   system.connector.inject({ kind: 'new_pr', number: 61, title: '[1/2]', branch: 'issue/21/first' });
   system.connector.inject({ kind: 'new_pr', number: 62, title: '[2/2]', branch: 'issue/21/second' });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
   const stacked = snap.localRunTargets.find((t) => t.issueNumber === 21);

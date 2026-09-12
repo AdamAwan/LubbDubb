@@ -41,10 +41,16 @@ test('the allowance route ships a tracker url for every goal it names', async ()
     sevenDay: { usedPercentage: used / 2, resetsAt: null },
     capturedAt: at(minsAgo),
   });
-  store.recordRateLimits(reading(20, 10));
-  const task = store.createTask({ kind: 'code', title: 'a', prompt: 'p', branch: 'issue/412', originRef: 'issue:412' });
-  const agent = store.createAgent({ taskId: task.id, cwd: '/wt/a', pid: null });
-  store.recordAgentUsage(agent.id, {
+  store.rateLimits.recordRateLimits(reading(20, 10));
+  const task = store.tasks.createTask({
+    kind: 'code',
+    title: 'a',
+    prompt: 'p',
+    branch: 'issue/412',
+    originRef: 'issue:412',
+  });
+  const agent = store.agents.createAgent({ taskId: task.id, cwd: '/wt/a', pid: null });
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 3,
     inputTokens: 1000,
     outputTokens: 100,
@@ -52,7 +58,7 @@ test('the allowance route ships a tracker url for every goal it names', async ()
     cacheCreationTokens: null,
     numTurns: 2,
   });
-  store.recordRateLimits({ ...reading(40, 0), capturedAt: new Date().toISOString() });
+  store.rateLimits.recordRateLimits({ ...reading(40, 0), capturedAt: new Date().toISOString() });
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/allowance?window=session' });

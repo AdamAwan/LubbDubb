@@ -30,13 +30,13 @@ test('proposing against a running plan writes a row and schedules nothing', asyn
   });
   assert.ok(proposed.ok, proposed.ok ? '' : proposed.error);
 
-  const rows = system.store.listPlanAmendments(plan.id);
+  const rows = system.store.plans.listPlanAmendments(plan.id);
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.status, 'pending');
   assert.equal(rows[0]!.author, 'agent');
 
-  assert.equal(system.store.getPlan(plan.id)!.status, 'active');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 1, 'nothing is ingested until it is accepted');
+  assert.equal(system.store.plans.getPlan(plan.id)!.status, 'active');
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 1, 'nothing is ingested until it is accepted');
   assert.deepEqual(snapshotParts(system, plan), before);
 
   const moved = proposed.proposed.diff!.parts.filter((p) => p.kind !== 'unchanged');
@@ -53,17 +53,17 @@ test('rule `plan-amendment` proposes once, and the hold suppresses the second', 
   propose(system, plan);
 
   await system.harness.runCycle('manual');
-  const cards = system.store.listProposals().filter((p) => p.kind === 'plan_amendment');
+  const cards = system.store.escalations.listProposals().filter((p) => p.kind === 'plan_amendment');
   assert.equal(cards.length, 1, 'the change is put to the operator once');
   assert.equal(cards[0]!.status, 'pending');
-  assert.equal(cards[0]!.ref, planAmendmentProposalRef(system.store.listPlanAmendments(plan.id)[0]!.id));
+  assert.equal(cards[0]!.ref, planAmendmentProposalRef(system.store.plans.listPlanAmendments(plan.id)[0]!.id));
 
-  const escalation = system.store.listEscalations().find((e) => e.id === cards[0]!.escalationId)!;
+  const escalation = system.store.escalations.listEscalations().find((e) => e.id === cards[0]!.escalationId)!;
   assert.match(String(escalation.context.detail), /the column is already there/);
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().filter((p) => p.kind === 'plan_amendment').length, 1);
+  assert.equal(system.store.escalations.listProposals().filter((p) => p.kind === 'plan_amendment').length, 1);
   await close();
 });
 
@@ -72,16 +72,21 @@ test('accepting ingests over the running plan, and work in flight keeps its bran
   const plan = seedRunningPlan(system);
   propose(system, plan);
   await system.harness.runCycle('manual');
-  const card = system.store.listProposals().find((p) => p.kind === 'plan_amendment')!;
-  const api = system.store.listPlanParts(plan.id).find((p) => p.slug === 'api')!;
-  system.store.updatePlanPart(api.id, { status: 'in_review', branch: 'issue/12/api', prNumber: 77, taskId: 'task-9' });
+  const card = system.store.escalations.listProposals().find((p) => p.kind === 'plan_amendment')!;
+  const api = system.store.plans.listPlanParts(plan.id).find((p) => p.slug === 'api')!;
+  system.store.plans.updatePlanPart(api.id, {
+    status: 'in_review',
+    branch: 'issue/12/api',
+    prNumber: 77,
+    taskId: 'task-9',
+  });
   await system.proposals.accept(card.id, 'yes, fold the console in');
 
-  const after = system.store.getPlan(plan.id)!;
+  const after = system.store.plans.getPlan(plan.id)!;
   assert.equal(after.status, 'active', 'the plan stays released — it is not sent back through the gate');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 2, 'applying is the ordinary ingestion');
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 2, 'applying is the ordinary ingestion');
 
-  const parts = system.store.listPlanParts(plan.id);
+  const parts = system.store.plans.listPlanParts(plan.id);
   const amended = parts.find((p) => p.slug === 'api')!;
   assert.equal(amended.branch, 'issue/12/api');
   assert.equal(amended.prNumber, 77);
@@ -89,7 +94,7 @@ test('accepting ingests over the running plan, and work in flight keeps its bran
   assert.equal(amended.status, 'in_review');
   assert.equal(amended.scope, 'src/api, no longer stacked on the schema');
   assert.ok(parts.find((p) => p.slug === 'console'));
-  assert.equal(system.store.listPlanAmendments(plan.id)[0]!.status, 'applied');
+  assert.equal(system.store.plans.listPlanAmendments(plan.id)[0]!.status, 'applied');
   await close();
 });
 
@@ -98,19 +103,20 @@ test('rejecting changes the plan not at all', async () => {
   const plan = seedRunningPlan(system);
   propose(system, plan);
   await system.harness.runCycle('manual');
-  const card = system.store.listProposals().find((p) => p.kind === 'plan_amendment')!;
+  const card = system.store.escalations.listProposals().find((p) => p.kind === 'plan_amendment')!;
   const before = snapshotParts(system, plan);
 
   system.proposals.reject(card.id, 'the split is right, leave it');
 
-  assert.equal(system.store.getPlan(plan.id)!.status, 'active');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+  assert.equal(system.store.plans.getPlan(plan.id)!.status, 'active');
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 1);
   assert.deepEqual(snapshotParts(system, plan), before);
-  assert.equal(system.store.listPlanAmendments(plan.id)[0]!.status, 'declined');
+  assert.equal(system.store.plans.listPlanAmendments(plan.id)[0]!.status, 'declined');
 
   await system.harness.runCycle('manual');
   assert.equal(
-    system.store.listProposals().filter((p) => p.kind === 'plan_amendment' && p.status === 'pending').length,
+    system.store.escalations.listProposals().filter((p) => p.kind === 'plan_amendment' && p.status === 'pending')
+      .length,
     0,
   );
   await close();
@@ -121,14 +127,14 @@ test('a replan supersedes a pending amendment and withdraws its card', async () 
   const plan = seedRunningPlan(system);
   propose(system, plan);
   await system.harness.runCycle('manual');
-  const card = system.store.listProposals().find((p) => p.kind === 'plan_amendment')!;
+  const card = system.store.escalations.listProposals().find((p) => p.kind === 'plan_amendment')!;
   assert.equal(card.status, 'pending');
 
   const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
   assert.equal(res.statusCode, 200);
 
-  assert.equal(system.store.listPlanAmendments(plan.id)[0]!.status, 'superseded');
-  assert.equal(system.store.listProposals().find((p) => p.id === card.id)!.status, 'rejected');
+  assert.equal(system.store.plans.listPlanAmendments(plan.id)[0]!.status, 'superseded');
+  assert.equal(system.store.escalations.listProposals().find((p) => p.id === card.id)!.status, 'rejected');
   await close();
 });
 
@@ -142,9 +148,9 @@ test('proposePlanAmendment refuses on every status but active, and names the rou
     ['abandoned', /stopped deliberately/],
   ];
   for (const [status, why] of statuses) {
-    system.store.setPlanStatus(plan.id, status);
+    system.store.plans.setPlanStatus(plan.id, status);
     const res = proposePlanAmendment(system.store, {
-      plan: system.store.getPlan(plan.id)!,
+      plan: system.store.plans.getPlan(plan.id)!,
       document: amendedDocument(),
       note: 'the api part does not need the schema first',
       author: 'agent',
@@ -152,7 +158,7 @@ test('proposePlanAmendment refuses on every status but active, and names the rou
     });
     assert.ok(!res.ok, `${status} must not accept an amendment`);
     assert.match(res.error, why);
-    assert.deepEqual(system.store.listPlanAmendments(plan.id), []);
+    assert.deepEqual(system.store.plans.listPlanAmendments(plan.id), []);
   }
   await close();
 });
@@ -172,7 +178,7 @@ test('one pending amendment per plan, and a settled one clears the way for the n
   assert.ok(!second.ok);
   assert.match(second.error, /already has an amendment waiting/);
   assert.match(second.error, /the column is already there/);
-  assert.equal(system.store.listPlanAmendments(plan.id).length, 1);
+  assert.equal(system.store.plans.listPlanAmendments(plan.id).length, 1);
 
   declinePlanAmendment(system.store, first.id);
   const third = proposePlanAmendment(system.store, {
@@ -198,25 +204,25 @@ test('an amendment with no reason on it is refused before anything is written', 
   });
   assert.ok(!res.ok);
   assert.match(res.error, /needs a reason/);
-  assert.deepEqual(system.store.listPlanAmendments(plan.id), []);
+  assert.deepEqual(system.store.plans.listPlanAmendments(plan.id), []);
   await close();
 });
 
 test('the warnings say what applying it would leave standing', async () => {
   const { system, close } = await build();
   const plan = seedRunningPlan(system);
-  const parts = system.store.listPlanParts(plan.id);
-  system.store.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
+  const parts = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
     status: 'in_review',
     branch: 'issue/12/schema',
     prNumber: 4,
   });
-  system.store.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, { status: 'merged' });
+  system.store.plans.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, { status: 'merged' });
 
   const dropping = amendedDocument() as { parts: { slug: string }[] };
   dropping.parts = dropping.parts.filter((p) => p.slug !== 'schema');
 
-  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(dropping));
+  const warnings = amendmentWarnings(system.store.plans.listPlanParts(plan.id), declaredParts(dropping));
   assert.equal(warnings.length, 2);
   assert.match(warnings[0]!, /"schema" is dropped[\s\S]*PR #4[\s\S]*keeps running/);
   assert.match(warnings[1]!, /"api" has already finished[\s\S]*does not change what was delivered/);
@@ -226,14 +232,14 @@ test('the warnings say what applying it would leave standing', async () => {
 test('a re-declared part with work in flight warns, and names its pull request', async () => {
   const { system, close } = await build();
   const plan = seedRunningPlan(system);
-  const parts = system.store.listPlanParts(plan.id);
-  system.store.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, {
+  const parts = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, {
     status: 'in_review',
     branch: 'issue/12/api',
     prNumber: 7,
   });
 
-  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(amendedDocument()));
+  const warnings = amendmentWarnings(system.store.plans.listPlanParts(plan.id), declaredParts(amendedDocument()));
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /"api" is being worked right now \(in_review\), PR #7/);
   assert.match(warnings[0]!, /rewrites its scope, dependencies/);
@@ -244,33 +250,33 @@ test('a re-declared part with work in flight warns, and names its pull request',
 test('a re-declared part in flight whose declaration did not move says nothing', async () => {
   const { system, close } = await build();
   const plan = seedRunningPlan(system);
-  const parts = system.store.listPlanParts(plan.id);
-  system.store.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
+  const parts = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
     status: 'in_review',
     branch: 'issue/12/schema',
     prNumber: 9,
   });
 
-  assert.deepEqual(amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(amendedDocument())), []);
+  assert.deepEqual(amendmentWarnings(system.store.plans.listPlanParts(plan.id), declaredParts(amendedDocument())), []);
 
   const rewrapped = amendedDocument() as { parts: { slug: string; scope: string }[] };
   rewrapped.parts.find((p) => p.slug === 'schema')!.scope = '  src/store\n';
-  assert.deepEqual(amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(rewrapped)), []);
+  assert.deepEqual(amendmentWarnings(system.store.plans.listPlanParts(plan.id), declaredParts(rewrapped)), []);
   await close();
 });
 
 test('a dispatched part whose acceptance is rewritten warns before anybody has a PR', async () => {
   const { system, close } = await build();
   const plan = seedRunningPlan(system);
-  const parts = system.store.listPlanParts(plan.id);
-  system.store.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
+  const parts = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
     status: 'dispatched',
     branch: 'issue/12/schema',
   });
 
   const doc = amendedDocument() as { parts: { slug: string; acceptance?: string }[] };
   doc.parts.find((p) => p.slug === 'schema')!.acceptance = 'The column is nullable and backfilled.';
-  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(doc));
+  const warnings = amendmentWarnings(system.store.plans.listPlanParts(plan.id), declaredParts(doc));
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /"schema" is being worked right now \(dispatched\) and this amendment rewrites its /);
   assert.match(warnings[0]!, /acceptance/);
@@ -346,8 +352,8 @@ function seedRunningPlan(system: System): Plan {
   );
   assert.ok(doc.ok);
   const { plan } = ingestPlanDocument(system.store, { doc: doc.document, originRef: 'issue:12', title: 'Big thing' });
-  system.store.setPlanStatus(plan.id, 'active');
-  return system.store.getPlan(plan.id)!;
+  system.store.plans.setPlanStatus(plan.id, 'active');
+  return system.store.plans.getPlan(plan.id)!;
 }
 
 function amendedDocument(): unknown {
@@ -381,7 +387,7 @@ function propose(system: System, plan: Plan): PlanAmendment {
 }
 
 function snapshotParts(system: System, plan: Plan): unknown {
-  return system.store
+  return system.store.plans
     .listPlanParts(plan.id)
     .map((p) => ({ slug: p.slug, status: p.status, branch: p.branch, prNumber: p.prNumber, taskId: p.taskId }));
 }

@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { DeliveryAuthor, Issue, IssueDelivery, WorldEvent } from '../types.js';
 
 // → docs/spec/24-environments.md
@@ -8,7 +9,7 @@ interface DeliveryHoldContext {
 }
 
 function deliveryWorldRef(originRef: string): string | null {
-  return /^issue:\d+$/.test(originRef) ? originRef : null;
+  return issueOriginNumber('root', originRef) === null ? null : originRef;
 }
 
 export const DELIVERY_AUTHOR: Record<DeliveryAuthor, string> = {

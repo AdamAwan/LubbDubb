@@ -233,18 +233,22 @@ test('the route flags a goal, clears it, and is idempotent both ways', async () 
   try {
     const on = await app.inject({ method: 'POST', url: '/api/issues/4/priority', payload: { priority: true } });
     assert.equal(on.statusCode, 200);
-    const [first] = system.store.listGoalPriorities();
+    const [first] = system.store.priority.listGoalPriorities();
     assert.equal(first?.originRef, 'issue:4');
 
     await app.inject({ method: 'POST', url: '/api/issues/4/priority', payload: { priority: true } });
-    const [again] = system.store.listGoalPriorities();
-    assert.equal(system.store.listGoalPriorities().length, 1, 'one row, however many times the button is clicked');
+    const [again] = system.store.priority.listGoalPriorities();
+    assert.equal(
+      system.store.priority.listGoalPriorities().length,
+      1,
+      'one row, however many times the button is clicked',
+    );
     assert.equal(again?.since, first?.since, 'and it still records when the operator decided');
 
     await app.inject({ method: 'POST', url: '/api/issues/4/priority', payload: { priority: false } });
-    assert.deepEqual(system.store.listGoalPriorities(), []);
+    assert.deepEqual(system.store.priority.listGoalPriorities(), []);
     await app.inject({ method: 'POST', url: '/api/issues/4/priority', payload: { priority: false } });
-    assert.deepEqual(system.store.listGoalPriorities(), [], 'clearing what is already clear is not an error');
+    assert.deepEqual(system.store.priority.listGoalPriorities(), [], 'clearing what is already clear is not an error');
 
     const bad = await app.inject({ method: 'POST', url: '/api/issues/4/priority', payload: {} });
     assert.equal(bad.statusCode, 400, 'a body that names nothing asks for nothing');
@@ -257,9 +261,9 @@ test('the route flags a goal, clears it, and is idempotent both ways', async () 
 test('a flag survives the pulse that prunes stale queue arrangements', () => {
   const system = build();
   try {
-    system.store.setGoalPriority('issue:4', true);
-    system.store.reconcilePriorityOverrides([], 1);
-    assert.equal(system.store.listGoalPriorities().length, 1, 'the pruner has nothing to say about a flag');
+    system.store.priority.setGoalPriority('issue:4', true);
+    system.store.priority.reconcilePriorityOverrides([], 1);
+    assert.equal(system.store.priority.listGoalPriorities().length, 1, 'the pruner has nothing to say about a flag');
   } finally {
     system.store.close();
   }
@@ -268,8 +272,8 @@ test('a flag survives the pulse that prunes stale queue arrangements', () => {
 test('the snapshot ships the flag on the goal it was set against', () => {
   const system = build();
   try {
-    system.store.setGoalPriority('issue:4', true);
-    system.store.setWorldBaseline({
+    system.store.priority.setGoalPriority('issue:4', true);
+    system.store.world.setWorldBaseline({
       takenAt: '2026-08-17T00:00:00Z',
       pullRequests: [],
       issues: [issue(4), issue(5)],

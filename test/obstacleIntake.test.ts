@@ -27,7 +27,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['test (windows)']): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -79,11 +79,11 @@ test('one report is not evidence: it lands sighted, reaches nobody, and is told 
   assert.match(answer.directive, /may be your own change/);
   assert.deepEqual(answer.what_others_saw, []);
 
-  const [row, ...rest] = system.store.listObstacles();
+  const [row, ...rest] = system.store.obstacles.listObstacles();
   assert.equal(rest.length, 0);
   assert.equal(row!.state, 'sighted');
   assert.deepEqual(
-    system.store
+    system.store.obstacles
       .listObstacleKeys(row!.id)
       .map((k) => `${k.kind}:${k.value}`)
       .sort(),
@@ -108,7 +108,7 @@ test('a second goal carries it to standing, and only then are the first words ha
   });
   const answer = JSON.parse(res.text) as Lookup;
 
-  assert.equal(system.store.listObstacles().length, 1);
+  assert.equal(system.store.obstacles.listObstacles().length, 1);
   assert.equal(answer.status, 'standing');
   assert.equal(answer.seen_by, 2);
   assert.match(answer.directive, /Two independent voices/);
@@ -133,7 +133,7 @@ test('one goal saying it twice is one voice', async () => {
 test('an agent may not report its own breakage, and nothing is recorded when it tries', async () => {
   const system = build();
   const agent = spawnAgent(system, 'pr:412:ci');
-  system.store.recordFile(agent.id, { path: 'test/obstacleMatch.test.ts', tool: 'Edit', promoted: false });
+  system.store.agents.recordFile(agent.id, { path: 'test/obstacleMatch.test.ts', tool: 'Edit', promoted: false });
 
   const res = await callTool(system, agent, 'raise', {
     what: WHAT,
@@ -142,7 +142,7 @@ test('an agent may not report its own breakage, and nothing is recorded when it 
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /test\/obstacleMatch\.test\.ts/);
-  assert.deepEqual(system.store.listObstacles(), []);
+  assert.deepEqual(system.store.obstacles.listObstacles(), []);
   system.store.close();
 });
 
@@ -161,8 +161,8 @@ test('why_not_mine is required, and a key that names nothing is dropped rather t
     keys: ['check:nightly-smoke', 'path:src/does/not/exist.ts', 'nonsense'],
   });
   assert.equal(res.isError, false);
-  const row = system.store.listObstacles()[0]!;
-  const values = system.store.listObstacleKeys(row.id).map((k) => k.value);
+  const row = system.store.obstacles.listObstacles()[0]!;
+  const values = system.store.obstacles.listObstacleKeys(row.id).map((k) => k.value);
   assert.ok(!values.includes('nightly-smoke'));
   assert.ok(!values.includes('src/does/not/exist.ts'));
   assert.ok(values.includes('test/obstacleMatch.test.ts'));
@@ -178,7 +178,7 @@ test('a note lands on the board like an obstacle, and is marked as one', async (
     fix_makes_it_go_away: false,
   });
   assert.equal(res.isError, false);
-  const rows = system.store.listObstacles();
+  const rows = system.store.obstacles.listObstacles();
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.kind, 'note');
   system.store.close();

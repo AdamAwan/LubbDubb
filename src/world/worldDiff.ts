@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../issueOrigins.js';
 import { prState } from '../prHealth.js';
 import type { CiStatus, Issue, PullRequest, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
 
@@ -88,4 +89,4 @@ function byId<T extends { id: string }>(items: T[]): Map<string, T> {
 }
 
 const prRef = (pr: PullRequest): string => `pr:${pr.number}`;
-const issueRef = (issue: Issue): string => `issue:${issue.number}`;
+const issueRef = (issue: Issue): string => issueOriginRef('root', issue.number);

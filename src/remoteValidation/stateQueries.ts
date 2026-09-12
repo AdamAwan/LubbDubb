@@ -46,7 +46,7 @@ export class StateQueryDesk {
     queries: readonly StateQueryInput[],
     authored: StateQueryAuthor,
   ): Promise<{ declared: string[]; refusals: string[] }> {
-    const declared = this.deps.store.saveStateQueries(originRef, queries, authored);
+    const declared = this.deps.store.remoteValidation.saveStateQueries(originRef, queries, authored);
     return { declared, refusals: await this.dryRun(originRef, declared) };
   }
 
@@ -121,18 +121,20 @@ export class StateQueryDesk {
     environmentName: string,
     accept: boolean,
   ): Promise<{ query: StateQuery; reading: StateReading | null; approval: StateQueryApproval | null } | null> {
-    const query = this.deps.store.listStateQueries().find((q) => q.originRef === originRef && q.id === queryId);
+    const query = this.deps.store.remoteValidation
+      .listStateQueries()
+      .find((q) => q.originRef === originRef && q.id === queryId);
     if (query === undefined) return null;
     const environment = stateExecutor(this.deps.environments, environmentName);
     if (environment === null) return null;
     if (!accept) {
-      this.deps.store.declineStateQuery(query.digest, environment.name);
+      this.deps.store.remoteValidation.declineStateQuery(query.digest, environment.name);
       return { query, reading: null, approval: null };
     }
     const reading = await this.read(environment, query);
-    this.deps.store.recordStateQueryDryRun(originRef, queryId, reading);
+    this.deps.store.remoteValidation.recordStateQueryDryRun(originRef, queryId, reading);
     if (reading.blocked !== null) return { query, reading, approval: null };
-    this.deps.store.approveStateQuery({
+    this.deps.store.remoteValidation.approveStateQuery({
       digest: query.digest,
       environment: environment.name,
       originRef,
@@ -141,7 +143,7 @@ export class StateQueryDesk {
       detail: reading.detail,
     });
     const approval =
-      this.deps.store
+      this.deps.store.remoteValidation
         .listStateQueryApprovals()
         .find((a) => a.digest === query.digest && a.environment === environment.name) ?? null;
     return { query, reading, approval };
@@ -149,11 +151,11 @@ export class StateQueryDesk {
 
   private async putTo(environment: EnvironmentConfig, originRef: string, only?: readonly string[]): Promise<string[]> {
     const refusals: string[] = [];
-    for (const query of this.deps.store.listStateQueries()) {
+    for (const query of this.deps.store.remoteValidation.listStateQueries()) {
       if (query.originRef !== originRef) continue;
       if (only !== undefined && !only.includes(query.id)) continue;
       const reading = await this.read(environment, query);
-      this.deps.store.recordStateQueryDryRun(originRef, query.id, reading);
+      this.deps.store.remoteValidation.recordStateQueryDryRun(originRef, query.id, reading);
       if (reading.detail !== null) refusals.push(`${query.id}: ${reading.detail}`);
     }
     return refusals;

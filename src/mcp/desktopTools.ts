@@ -47,7 +47,7 @@ function planFor(
   issue: number,
 ): { ok: true; originRef: string; root: string } | { ok: false; error: string } {
   const origin = issueOrigin(issue);
-  if (deps.store.listValidationChecks(origin).length === 0) {
+  if (deps.store.validation.listValidationChecks(origin).length === 0) {
     return {
       ok: false,
       error:
@@ -82,7 +82,7 @@ const validationRead: DesktopToolFactory = (deps) => ({
     if (!plan.ok) return toolError(plan.error);
 
     const now = deps.now();
-    const checks = liveChecks(deps.store.listValidationChecks(plan.originRef));
+    const checks = liveChecks(deps.store.validation.listValidationChecks(plan.originRef));
     const summaries = checks.map((c) => desktopCheckSummary(c, now, deps.claimMinutes));
     if (typeof args.check !== 'string') {
       return toolJson({ issue: ref.issue, resourceRoot: plan.root, checks: summaries, next: READ_NEXT });
@@ -129,7 +129,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
     const plan = planFor(deps, ref.ref.issue);
     if (!plan.ok) return toolError(plan.error);
 
-    const checks = liveChecks(deps.store.listValidationChecks(plan.originRef));
+    const checks = liveChecks(deps.store.validation.listValidationChecks(plan.originRef));
     const wanted = findCheckByRef(checks, ref.ref.check);
     if (!wanted) {
       return toolError(
@@ -148,7 +148,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
 
     const label = typeof args.as === 'string' && args.as.trim() ? args.as.trim() : session.label;
     const staleBefore = claimStaleBefore(deps.now(), deps.claimMinutes);
-    const claim = deps.store.claimValidationCheck(plan.originRef, wanted.id, label, staleBefore);
+    const claim = deps.store.validation.claimValidationCheck(plan.originRef, wanted.id, label, staleBefore);
     if (!claim.ok) {
       if (claim.reason === 'gone') {
         return toolError(
@@ -175,7 +175,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
         'Carry the procedure out for real — open the thing, click the thing, look at what happens. Then call ' +
         'validation_report once with what you saw. Do not change code to make a check pass: this check is the ' +
         'reading, not the work, and a goal it should have flagged is the cost of getting that wrong. If you ' +
-        'cannot run it — no login, no environment, no browser — report "handback" and say why.',
+        'cannot run it — no login, no environment, no browser — report "blocked" and say why.',
     });
   },
 });
@@ -185,16 +185,16 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     'Record what you saw when you ran the check you claimed. Say "passed" or "failed" only if you actually ' +
     'carried the procedure out; a green build, a merged pull request or code that looks correct are none of ' +
     'them this check, which exists precisely because those had already happened. If you could not run it, say ' +
-    '"handback" and why — that records no result and gives the check back, and it is the right answer rather ' +
+    '"blocked" and why — that records no result and gives the check back, and it is the right answer rather ' +
     'than a last resort.',
   inputSchema: toolSchema(
     z.object({
       result: z
-        .enum(['passed', 'failed', 'handback', 'captured'])
+        .enum(['passed', 'failed', 'blocked', 'captured'])
         .describe(
           '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
             'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you ' +
-            'took the picture and somebody else judges it, so you state no outcome. "handback" — you could not ' +
+            'took the picture and somebody else judges it, so you state no outcome. "blocked" — you could not ' +
             'run it, so nothing is recorded.',
         ),
       capture: z
@@ -223,7 +223,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
           'already hold is not a conflict.',
       );
     }
-    const check = deps.store.getValidationCheck(held.originRef, held.checkId);
+    const check = deps.store.validation.getValidationCheck(held.originRef, held.checkId);
     if (!check) {
       session.held = null;
       return toolError(
@@ -235,16 +235,20 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 
-    if (result !== 'handback' && amendedSinceRunBegan(check, held.claimedAt)) {
+    if (result !== 'blocked' && amendedSinceRunBegan(check, held.claimedAt)) {
       session.held = null;
       return toolError(amendedReportReason(check));
     }
 
-    if (result === 'handback') {
-      const next = deps.store.recordValidationHandback(held.originRef, check.id, handbackReason(note, 'desktop'));
+    if (result === 'blocked') {
+      const next = deps.store.validation.recordValidationHandback(
+        held.originRef,
+        check.id,
+        handbackReason(note, 'desktop'),
+      );
       session.held = null;
       return toolJson({
-        reported: 'handback',
+        reported: 'blocked',
         check: `${check.letter}. ${check.id}`,
         state: next?.state ?? check.state,
         means:
@@ -253,7 +257,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
       });
     }
 
-    const next = deps.store.recordValidationResult(held.originRef, check.id, {
+    const next = deps.store.validation.recordValidationResult(held.originRef, check.id, {
       state: result,
       note,
       by: 'desktop',
@@ -294,7 +298,7 @@ function decompositionFor(
   issue: number,
 ): { ok: true; originRef: string; plan: Plan } | { ok: false; error: string } {
   const originRef = issueOrigin(issue);
-  const plan = deps.store.getPlanByOrigin(originRef);
+  const plan = deps.store.plans.getPlanByOrigin(originRef);
   if (!plan) {
     return {
       ok: false,
@@ -321,13 +325,13 @@ const planRead: DesktopToolFactory = (deps) => ({
     if (!found.ok) return toolError(found.error);
     const { plan, originRef } = found;
 
-    const parts = deps.store.listPlanParts(plan.id);
-    const checks = liveChecks(deps.store.listValidationChecks(originRef));
+    const parts = deps.store.plans.listPlanParts(plan.id);
+    const checks = liveChecks(deps.store.validation.listValidationChecks(originRef));
     return toolJson({
       issue: ref.issue,
       title: plan.title,
       status: plan.status,
-      revisions: deps.store.listPlanRevisions(plan.id).length,
+      revisions: deps.store.plans.listPlanRevisions(plan.id).length,
       reason: plan.reason,
       diagnosis: plan.diagnosis,
       approach: plan.approach,
@@ -356,7 +360,7 @@ const planRead: DesktopToolFactory = (deps) => ({
  * → docs/spec/08-planning.md#discussing-a-plan
  */
 function testPartSection(deps: DesktopToolDeps): { testPart?: string } {
-  const note = testPartNote(deps.environments, deps.store.listSelectorOfferings()).trim();
+  const note = testPartNote(deps.environments, deps.store.remoteValidation.listSelectorOfferings()).trim();
   return note === '' ? {} : { testPart: note };
 }
 
@@ -419,7 +423,7 @@ const planAmend: DesktopToolFactory = (deps) => ({
       );
     }
 
-    const parsed = validatePlanDocument(submittedPlanDocument(args), deps.store.listOfferedAreas());
+    const parsed = validatePlanDocument(submittedPlanDocument(args), deps.store.remoteValidation.listOfferedAreas());
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
     const result = amendPlanInPlace(
@@ -555,7 +559,7 @@ const goalRead: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     const originRef = issueOrigin(ref.issue);
     const record = goalRecord(deps.store, originRef);
-    const world = deps.store.getWorldBaseline();
+    const world = deps.store.world.getWorldBaseline();
     const issue = world?.issues.find((i) => i.number === ref.issue) ?? null;
     if (issue === null && record.plan === null && record.decisions.length === 0) {
       return toolError(
@@ -565,10 +569,10 @@ const goalRead: DesktopToolFactory = (deps) => ({
       );
     }
 
-    const checks = liveChecks(deps.store.listValidationChecks(originRef));
-    const retro = deps.store.getRetrospective(originRef);
-    const pad = deps.store.listScratchEntries(originRef);
-    const appraisal = deps.store.getAppraisal(originRef);
+    const checks = liveChecks(deps.store.validation.listValidationChecks(originRef));
+    const retro = deps.store.scratch.getRetrospective(originRef);
+    const pad = deps.store.scratch.listScratchEntries(originRef);
+    const appraisal = deps.store.verdicts.getAppraisal(originRef);
     return toolJson({
       issue: {
         number: ref.issue,
@@ -614,12 +618,12 @@ const goalRead: DesktopToolFactory = (deps) => ({
 function goalEnvironments(deps: DesktopToolDeps, originRef: string): Record<string, unknown>[] {
   if (deps.environments.length === 0) return [];
   const reach = allGoalReach({
-    landings: deps.store.listGoalLandings(),
-    readings: deps.store.listEnvironmentReach(),
-    nodes: deps.store.listWorkNodes(),
-    landed: deps.store.landedPrs(),
-    plans: deps.store.listPlans(),
-    parts: deps.store.listAllPlanParts(),
+    landings: deps.store.environments.listGoalLandings(),
+    readings: deps.store.environments.listEnvironmentReach(),
+    nodes: deps.store.graph.listWorkNodes(),
+    landed: deps.store.environments.landedPrs(),
+    plans: deps.store.plans.listPlans(),
+    parts: deps.store.plans.listAllPlanParts(),
     environments: deps.environments,
   }).find((g) => g.goalRef === originRef);
   return (reach?.environments ?? []).map((e) => ({

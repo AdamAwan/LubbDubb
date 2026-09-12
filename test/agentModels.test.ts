@@ -191,7 +191,7 @@ async function dispatch(agentModels: Config['agentModels'], n: number) {
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
   failPlanningOpen(system.store, n);
   await system.harness.runCycle('manual');
-  const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
+  const task = system.store.tasks.getTask(system.store.agents.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   system.store.close();
   return { args: launches[0]!, task };
 }

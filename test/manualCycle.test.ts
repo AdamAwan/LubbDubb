@@ -71,10 +71,10 @@ test("an operator's cycle refused mid-flight is run again once the flight ends",
 
   release();
   await inFlight;
-  assert.equal(system.store.listTasks().length, 0, 'the cycle that was already running could not see it');
+  assert.equal(system.store.tasks.listTasks().length, 0, 'the cycle that was already running could not see it');
 
-  await waitFor(() => system.store.listTasks().length > 0);
-  assert.equal(system.store.listTasks().length, 1, "the operator's cycle is run again rather than dropped");
+  await waitFor(() => system.store.tasks.listTasks().length > 0);
+  assert.equal(system.store.tasks.listTasks().length, 1, "the operator's cycle is run again rather than dropped");
   system.store.close();
 });
 
@@ -120,7 +120,7 @@ test('a harness on its way down does not fire a trailing cycle into a closing st
   release();
   await inFlight;
   await tick(100);
-  assert.equal(system.store.listTasks().length, 0, 'nothing is dispatched after the harness is stopped');
+  assert.equal(system.store.tasks.listTasks().length, 0, 'nothing is dispatched after the harness is stopped');
   system.store.close();
 });
 
@@ -128,7 +128,7 @@ test('the trailing cycle puts no second agent on work already in flight', async 
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 905, title: 'Already in hand' });
   await system.harness.runCycle('manual');
-  const before = system.store.listTasks();
+  const before = system.store.tasks.listTasks();
   assert.ok(before.length > 0, 'the goal is staffed');
 
   const release = gateAfterRead(system);
@@ -140,7 +140,7 @@ test('the trailing cycle puts no second agent on work already in flight', async 
   await inFlight;
   await tick(150);
 
-  const active = system.store.listTasks().filter(isActiveTask);
+  const active = system.store.tasks.listTasks().filter(isActiveTask);
   const origins = active.map((t) => t.originRef).filter((o): o is string => o !== null);
   assert.equal(new Set(origins).size, origins.length, 'no origin is staffed twice');
   const branches = active.map((t) => t.branch);

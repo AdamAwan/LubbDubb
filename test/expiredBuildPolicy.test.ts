@@ -276,10 +276,10 @@ test('the harness clears the expired build with one write and no agent, through 
   const system = build(await azurePullRequests([EXPIRED]), { checks: [] }, azureSink([EXPIRED], requeue));
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listTasks(), [], 'no agent is spent on a gate whose cause is known');
+  assert.deepEqual(system.store.tasks.listTasks(), [], 'no agent is spent on a gate whose cause is known');
   assert.deepEqual(requeue.asked, ['eval-31702-ci']);
 
-  const decision = system.store
+  const decision = system.store.decisions
     .listDecisions()
     .find((d) => d.action.type === 'requeue_ci_check' && d.action.originRef === 'pr:31702:ci-gate');
   assert.equal(decision?.outcome, 'executed');
@@ -294,8 +294,8 @@ test('a requeue the provider will not perform falls back to the dispatch it alwa
   await system.harness.runCycle('manual');
 
   assert.deepEqual(requeue.asked, ['eval-31702-ci']);
-  assert.deepEqual(system.store.listTasks(), [], 'the write is tried before the agent, not beside it');
-  const refused = system.store.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
+  assert.deepEqual(system.store.tasks.listTasks(), [], 'the write is tried before the agent, not beside it');
+  const refused = system.store.decisions.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
   assert.equal(refused?.outcome, 'skipped', 'a provider that would not do it is a configuration, not an error');
 
   await system.harness.runCycle('manual');
@@ -315,13 +315,13 @@ test('a requeue that fails is recorded as an error and falls back the same way',
   system.errors.on('logged', (e) => errors.push(e.message));
   await system.harness.runCycle('manual');
 
-  const rejected = system.store.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
+  const rejected = system.store.decisions.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
   assert.equal(rejected?.outcome, 'rejected');
   assert.equal(errors.length, 1);
   assert.match(errors[0]!, /Requeueing the expired check\(s\) on PR #31702 failed/);
 
   await system.harness.runCycle('manual');
-  assert.ok(system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'));
+  assert.ok(system.store.tasks.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'));
   system.store.close();
 });
 
@@ -358,13 +358,13 @@ test('with the expiry muted, the same world dispatches no gate agent', async () 
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'),
+    system.store.tasks.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'),
     undefined,
     'the muted expiry must not reach rule `pr-ci-gate`',
   );
-  assert.deepEqual(system.store.listTasks(), []);
+  assert.deepEqual(system.store.tasks.listTasks(), []);
   assert.equal(
-    system.store.listDecisions().find((d) => d.action.type === 'dispatch_code_agent'),
+    system.store.decisions.listDecisions().find((d) => d.action.type === 'dispatch_code_agent'),
     undefined,
   );
   system.store.close();
@@ -374,7 +374,7 @@ test('the same world with the build merely running dispatches nothing', async ()
   const system = build(await azurePullRequests([RUNNING]));
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listTasks(), []);
+  assert.deepEqual(system.store.tasks.listTasks(), []);
   system.store.close();
 });
 

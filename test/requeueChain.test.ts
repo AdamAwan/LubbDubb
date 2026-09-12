@@ -66,13 +66,13 @@ test('a dispatch whose worktree is wedged costs a cycle, not the branch', async 
   const first = await system.harness.runCycle('manual');
 
   assert.equal(first.summary.rejected, 1, 'the dispatch is audited as rejected');
-  const rejection = system.store.listDecisions().find((d) => d.outcome === 'rejected');
+  const rejection = system.store.decisions.listDecisions().find((d) => d.outcome === 'rejected');
   assert.match(rejection!.detail, /held open by another process/, 'and says why, in the operator’s terms');
 
-  const task = system.store.listTasks()[0]!;
+  const task = system.store.tasks.listTasks()[0]!;
   assert.equal(task.status, 'interrupted');
-  assert.equal(system.store.findActiveTaskByOrigin('issue:35174'), null, 'the origin is free again');
-  assert.equal(system.store.findActiveTaskByBranch(task.branch!), null, 'and so is the branch');
+  assert.equal(system.store.tasks.findActiveTaskByOrigin('issue:35174'), null, 'the origin is free again');
+  assert.equal(system.store.tasks.findActiveTaskByBranch(task.branch!), null, 'and so is the branch');
 
   assert.deepEqual(system.recovery.pending(), [], 'a failed dispatch is not orphaned work awaiting a decision');
   assert.equal(system.recovery.pendingCount(), 0, 'so the next pulse is not held either');
@@ -91,8 +91,8 @@ test('requeuing work behind a still-queued job releases that job instead of stac
     bootedAt: '2999-01-01T00:00:00.000Z',
   });
 
-  const job = system.store.createJob({ title: 'Remove the scan-check pollers', prompt: 'Do it.', kind: 'code' });
-  const task = system.store.createTask({
+  const job = system.store.jobs.createJob({ title: 'Remove the scan-check pollers', prompt: 'Do it.', kind: 'code' });
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: job.title,
     prompt: job.prompt,
@@ -110,21 +110,21 @@ test('requeuing work behind a still-queued job releases that job instead of stac
   const result = system.recovery.decide(task.id, 'requeue');
 
   assert.ok(result.ok);
-  assert.equal(system.store.listJobs().length, 1, 'no second job: the queued one *is* the requeue');
+  assert.equal(system.store.jobs.listJobs().length, 1, 'no second job: the queued one *is* the requeue');
   assert.equal(result.outcome.job?.id, job.id, 'and it is the one handed back to the cockpit');
   assert.match(result.outcome.detail, /never left the queue/);
-  assert.equal(system.store.getJob(job.id)!.status, 'queued');
-  assert.equal(system.store.getTask(task.id)!.status, 'interrupted', 'the orphan is still settled');
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'queued');
+  assert.equal(system.store.tasks.getTask(task.id)!.status, 'interrupted', 'the orphan is still settled');
 
   assert.equal(
-    system.store.findStandingJobByOrigin(`job:${job.id}`),
+    system.store.jobs.findStandingJobByOrigin(`job:${job.id}`),
     null,
     'nothing stands in for the job, so nothing skips it',
   );
 
   const cycle = await system.harness.runCycle('manual');
   assert.equal(cycle.summary.executed, 1, 'and it dispatches on the next cycle');
-  assert.equal(system.store.getJob(job.id)!.status, 'dispatched');
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'dispatched');
   system.store.close();
 });
 
@@ -136,23 +136,23 @@ test('requeuing work whose job already dispatched still files a fresh one', asyn
     bootedAt: '2999-01-01T00:00:00.000Z',
   });
 
-  const job = system.store.createJob({ title: 'Ship the thing', prompt: 'Do it.', kind: 'code' });
-  const task = system.store.createTask({
+  const job = system.store.jobs.createJob({ title: 'Ship the thing', prompt: 'Do it.', kind: 'code' });
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: job.title,
     prompt: job.prompt,
     branch: 'job/ship',
     originRef: `job:${job.id}`,
   });
-  system.store.markJobDispatched(job.id, task.id);
+  system.store.jobs.markJobDispatched(job.id, task.id);
 
   const result = system.recovery.decide(task.id, 'requeue');
 
   assert.ok(result.ok);
-  assert.equal(system.store.listJobs().length, 2, 'a dispatched predecessor gets a real requeue');
+  assert.equal(system.store.jobs.listJobs().length, 2, 'a dispatched predecessor gets a real requeue');
   assert.match(result.outcome.job!.title, /^Requeued: /);
-  assert.equal(system.store.findStandingJobByOrigin(`job:${job.id}`)?.id, result.outcome.job!.id);
-  assert.equal(system.store.findStandingJobByOrigin(`job:${result.outcome.job!.id}`), null);
-  assert.equal(system.store.getJob(job.id)!.status, 'dispatched');
+  assert.equal(system.store.jobs.findStandingJobByOrigin(`job:${job.id}`)?.id, result.outcome.job!.id);
+  assert.equal(system.store.jobs.findStandingJobByOrigin(`job:${result.outcome.job!.id}`), null);
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'dispatched');
   system.store.close();
 });

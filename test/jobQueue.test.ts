@@ -36,23 +36,23 @@ test('a launched job dispatches an agent when there is headroom', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(2), { backend });
 
-  const job = system.store.createJob({
+  const job = system.store.jobs.createJob({
     title: 'Investigate flake',
     prompt: 'Investigate the flaky test.',
     kind: 'desk',
   });
   await system.harness.runCycle('manual');
 
-  const live = system.store.listAgentsByStatus('starting', 'running');
+  const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(live.length, 1, 'the job spawns one agent');
-  const task = system.store.getTask(live[0]!.taskId)!;
+  const task = system.store.tasks.getTask(live[0]!.taskId)!;
   assert.equal(task.originRef, `job:${job.id}`, 'the task is linked to the job origin');
   assert.equal(task.prompt, 'Investigate the flaky test.');
 
-  const stored = system.store.getJob(job.id)!;
+  const stored = system.store.jobs.getJob(job.id)!;
   assert.equal(stored.status, 'dispatched');
   assert.equal(stored.taskId, task.id);
-  assert.equal(system.store.listQueuedJobs().length, 0);
+  assert.equal(system.store.jobs.listQueuedJobs().length, 0);
 
   system.store.close();
 });
@@ -61,29 +61,29 @@ test('a job launched while the fleet is at capacity waits in the queue, then dis
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(1), { backend });
 
-  const first = system.store.createJob({ title: 'First', prompt: 'Do the first thing.', kind: 'desk' });
+  const first = system.store.jobs.createJob({ title: 'First', prompt: 'Do the first thing.', kind: 'desk' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 1);
-  const firstAgent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  assert.equal(system.store.agents.listAgentsByStatus('starting', 'running').length, 1);
+  const firstAgent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
 
-  const second = system.store.createJob({ title: 'Second', prompt: 'Do the second thing.', kind: 'desk' });
+  const second = system.store.jobs.createJob({ title: 'Second', prompt: 'Do the second thing.', kind: 'desk' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.getJob(second.id)!.status, 'queued', 'the over-cap job waits');
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 1, 'no second agent yet');
+  assert.equal(system.store.jobs.getJob(second.id)!.status, 'queued', 'the over-cap job waits');
+  assert.equal(system.store.agents.listAgentsByStatus('starting', 'running').length, 1, 'no second agent yet');
   assert.ok(
-    !system.store.listTasks().some((t) => t.originRef === `job:${second.id}`),
+    !system.store.tasks.listTasks().some((t) => t.originRef === `job:${second.id}`),
     'the over-cap job has not been dispatched into a task',
   );
 
   backend.last().emit('all done @@LUBBDUBB_DONE@@');
-  assert.equal(system.store.getAgent(firstAgent.id)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(firstAgent.id)!.status, 'done');
   await system.harness.runCycle('manual');
 
-  const stored = system.store.getJob(second.id)!;
+  const stored = system.store.jobs.getJob(second.id)!;
   assert.equal(stored.status, 'dispatched', 'the queued job dispatches once there is room');
-  assert.equal(system.store.getTask(stored.taskId!)!.originRef, `job:${second.id}`);
+  assert.equal(system.store.tasks.getTask(stored.taskId!)!.originRef, `job:${second.id}`);
   assert.equal(first.status, 'queued');
-  assert.equal(system.store.getJob(first.id)!.status, 'dispatched');
+  assert.equal(system.store.jobs.getJob(first.id)!.status, 'dispatched');
 
   system.store.close();
 });
@@ -93,17 +93,17 @@ test('a launched job takes priority over world-driven issue pickup for the last 
   const system = buildSystem(testConfig(1), { backend });
 
   system.connector.inject({ kind: 'new_issue', number: 301, title: 'A bug', labels: ['bug'] });
-  const job = system.store.createJob({ title: 'Urgent chore', prompt: 'Handle the urgent chore.', kind: 'desk' });
+  const job = system.store.jobs.createJob({ title: 'Urgent chore', prompt: 'Handle the urgent chore.', kind: 'desk' });
   await system.harness.runCycle('manual');
 
-  const live = system.store.listAgentsByStatus('starting', 'running');
+  const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(live.length, 1, 'only one agent fits');
-  const task = system.store.getTask(live[0]!.taskId)!;
+  const task = system.store.tasks.getTask(live[0]!.taskId)!;
   assert.equal(task.originRef, `job:${job.id}`, 'the operator job — not the issue — takes the slot');
-  assert.equal(system.store.getJob(job.id)!.status, 'dispatched');
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'dispatched');
 
   assert.ok(
-    !system.store.listTasks().some((t) => t.originRef === 'issue:301'),
+    !system.store.tasks.listTasks().some((t) => t.originRef === 'issue:301'),
     'the issue dispatch was deferred behind the job',
   );
 
@@ -114,26 +114,26 @@ test('a queued job can be cancelled and is then never dispatched', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(1), { backend });
 
-  system.store.createJob({ title: 'Occupier', prompt: 'Occupy the slot.', kind: 'desk' });
+  system.store.jobs.createJob({ title: 'Occupier', prompt: 'Occupy the slot.', kind: 'desk' });
   await system.harness.runCycle('manual');
 
-  const doomed = system.store.createJob({ title: 'Never runs', prompt: 'Should be cancelled.', kind: 'desk' });
+  const doomed = system.store.jobs.createJob({ title: 'Never runs', prompt: 'Should be cancelled.', kind: 'desk' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.getJob(doomed.id)!.status, 'queued');
+  assert.equal(system.store.jobs.getJob(doomed.id)!.status, 'queued');
 
-  const cancelled = system.store.cancelJob(doomed.id);
+  const cancelled = system.store.jobs.cancelJob(doomed.id);
   assert.ok(cancelled, 'a queued job is cancellable');
-  assert.equal(system.store.getJob(doomed.id)!.status, 'cancelled');
-  assert.equal(system.store.listQueuedJobs().length, 0, 'it has left the queue');
+  assert.equal(system.store.jobs.getJob(doomed.id)!.status, 'cancelled');
+  assert.equal(system.store.jobs.listQueuedJobs().length, 0, 'it has left the queue');
 
-  assert.equal(system.store.cancelJob(doomed.id), null);
+  assert.equal(system.store.jobs.cancelJob(doomed.id), null);
 
-  const occupier = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const occupier = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   backend.last().emit('done @@LUBBDUBB_DONE@@');
-  assert.equal(system.store.getAgent(occupier.id)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(occupier.id)!.status, 'done');
   await system.harness.runCycle('manual');
   assert.ok(
-    !system.store.listTasks().some((t) => t.originRef === `job:${doomed.id}`),
+    !system.store.tasks.listTasks().some((t) => t.originRef === `job:${doomed.id}`),
     'a cancelled job never dispatches',
   );
 
@@ -144,18 +144,18 @@ test('a code job naming a branch a live task holds is deferred, then dispatches 
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(3, gitRepo('lubbdubb-jobs-repo-')), { backend });
 
-  const holder = system.store.createJob({
+  const holder = system.store.jobs.createJob({
     title: 'Holder',
     prompt: 'Work the shared branch.',
     kind: 'code',
     branch: 'shared/work',
   });
   await system.harness.runCycle('manual');
-  const holderTask = system.store.listTasks().find((t) => t.originRef === `job:${holder.id}`);
+  const holderTask = system.store.tasks.listTasks().find((t) => t.originRef === `job:${holder.id}`);
   assert.ok(holderTask, 'the first job dispatches normally');
   assert.equal(holderTask.branch, 'shared/work');
 
-  const second = system.store.createJob({
+  const second = system.store.jobs.createJob({
     title: 'Collider',
     prompt: 'Also work the shared branch.',
     kind: 'code',
@@ -163,31 +163,35 @@ test('a code job naming a branch a live task holds is deferred, then dispatches 
   });
   await system.harness.runCycle('manual');
 
-  assert.equal(system.store.getJob(second.id)!.status, 'queued', 'the colliding job stays queued');
+  assert.equal(system.store.jobs.getJob(second.id)!.status, 'queued', 'the colliding job stays queued');
   assert.equal(
-    system.store.listTasks().filter((t) => t.branch === 'shared/work').length,
+    system.store.tasks.listTasks().filter((t) => t.branch === 'shared/work').length,
     1,
     'no second task is materialised on the busy branch',
   );
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 1, 'no second agent in that worktree');
+  assert.equal(
+    system.store.agents.listAgentsByStatus('starting', 'running').length,
+    1,
+    'no second agent in that worktree',
+  );
 
-  const collision = branchCollisions(system.store.listDecisions())[0];
+  const collision = branchCollisions(system.store.decisions.listDecisions())[0];
   assert.ok(collision, 'the deferral is audited with a reason, like every other executor outcome');
   assert.ok(collision.detail.includes('shared/work'), 'the reason names the branch');
   assert.ok(collision.detail.includes(holderTask.id), 'and the task holding it');
 
   assert.equal(collision.outcome, 'deferred');
 
-  const holderAgent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const holderAgent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   backend.last().emit('@@LUBBDUBB_DONE@@\r\n');
   backend.last().emitExit(0);
-  assert.equal(system.store.getAgent(holderAgent.id)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(holderAgent.id)!.status, 'done');
   await tick(100);
 
   await system.harness.runCycle('manual');
-  const stored = system.store.getJob(second.id)!;
+  const stored = system.store.jobs.getJob(second.id)!;
   assert.equal(stored.status, 'dispatched', 'the queued job dispatches once the branch frees');
-  assert.equal(system.store.getTask(stored.taskId!)!.branch, 'shared/work');
+  assert.equal(system.store.tasks.getTask(stored.taskId!)!.branch, 'shared/work');
 
   system.store.close();
 });
@@ -202,12 +206,12 @@ test('POST /api/jobs refuses a colliding branch at queue time', async () => {
 
   const first = await post({ prompt: 'Work the shared branch.', kind: 'code', branch: 'shared/work' });
   assert.equal(first.statusCode, 200, 'a free branch is accepted');
-  assert.ok(system.store.listTasks().some((t) => t.branch === 'shared/work'));
+  assert.ok(system.store.tasks.listTasks().some((t) => t.branch === 'shared/work'));
 
   const collide = await post({ prompt: 'Also work it.', kind: 'code', branch: 'shared/work' });
   assert.equal(collide.statusCode, 409);
   assert.match(collide.json().error, /shared\/work is held by active task/);
-  assert.equal(system.store.listJobs().length, 1, 'the refused job was never queued');
+  assert.equal(system.store.jobs.listJobs().length, 1, 'the refused job was never queued');
 
   const desk = await post({ prompt: 'Read the shared branch.', kind: 'desk', branch: 'shared/work' });
   assert.equal(desk.statusCode, 200);
@@ -234,7 +238,7 @@ test('the branch gate is a no-op for world-driven rules, whose origins already d
   system.connector.inject({ kind: 'ci_failed', prNumber: 503 });
   await system.harness.runCycle('manual');
 
-  const decisions = system.store.listDecisions();
+  const decisions = system.store.decisions.listDecisions();
   const worldDriven = decisions.filter((d) => d.action.type === 'dispatch_code_agent' && d.rule !== 'manual-job');
   assert.ok(worldDriven.length >= 4, 'the scenario actually exercised the world-driven dispatch rules');
 
@@ -245,7 +249,7 @@ test('the branch gate is a no-op for world-driven rules, whose origins already d
   );
 
   const owners = new Map<string, string>();
-  for (const t of system.store.listTasks()) {
+  for (const t of system.store.tasks.listTasks()) {
     if (!t.branch || !['queued', 'running', 'waiting'].includes(t.status)) continue;
     const owner = owners.get(t.branch);
     assert.equal(owner, undefined, `branch ${t.branch} is held by two live tasks (${owner}, ${t.id})`);

@@ -105,7 +105,7 @@ test('a goal’s state queries reach the cockpit beside its watches', () => {
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() },
   );
 
-  system.store.saveStateQueries(
+  system.store.remoteValidation.saveStateQueries(
     'issue:395',
     [
       {

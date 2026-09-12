@@ -74,7 +74,7 @@ test('a local cycle takes no snapshot and still dispatches from store state', as
   system.runtimeControl.apply({ paused: true });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listTasks().length, 0, 'nothing is dispatched while paused');
+  assert.equal(system.store.tasks.listTasks().length, 0, 'nothing is dispatched while paused');
 
   const reads = countWorldReads(system);
   system.runtimeControl.apply({ paused: false });
@@ -84,8 +84,8 @@ test('a local cycle takes no snapshot and still dispatches from store state', as
   assert.equal(report.readWorld, false, 'and must say so on the report');
   assert.equal(report.source, 'local');
   assert.ok(report.cycleId.startsWith('cyc_'), 'it is a real cycle, with a real id and an audit row');
-  assert.equal(system.store.listTasks().length, 1, 'the issue in the cached world is dispatched');
-  const rationale = system.store
+  assert.equal(system.store.tasks.listTasks().length, 1, 'the issue in the cached world is dispatched');
+  const rationale = system.store.decisions
     .listDecisions(50)
     .find((d) => d.cycleId === report.cycleId && d.action.type === 'no_op');
   assert.ok(rationale, 'the rationale is audited, exactly as a real cycle audits its own');
@@ -122,7 +122,7 @@ test('a local cycle is held while a crashed agent awaits a recovery decision', a
   const { system } = build();
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add logout' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listTasks().length, 1);
+  assert.equal(system.store.tasks.listTasks().length, 1);
   system.recovery.detect();
   assert.ok(system.recovery.pendingCount() > 0);
 
@@ -142,14 +142,14 @@ test('an agent finishing fires a local cycle, and the slot it freed is filled', 
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Add login' });
   system.connector.inject({ kind: 'new_issue', number: 905, title: 'Add logout' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listTasks().length, 1, 'the cap admits one');
+  assert.equal(system.store.tasks.listTasks().length, 1, 'the cap admits one');
 
   const reads = countWorldReads(system);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   assert.equal(system.agents.complete(agent.id), true);
 
-  await waitFor(() => system.store.listTasks().length > 1);
-  assert.equal(system.store.listTasks().length, 2, 'the freed slot is refilled without waiting for a heartbeat');
+  await waitFor(() => system.store.tasks.listTasks().length > 1);
+  assert.equal(system.store.tasks.listTasks().length, 2, 'the freed slot is refilled without waiting for a heartbeat');
   assert.ok(sources.includes('local'), `the refill came from a local cycle, not a timer (saw ${sources.join(', ')})`);
   assert.equal(reads(), 0, 'and it cost no provider traffic');
   system.localCycles.stop();
@@ -166,7 +166,7 @@ test('a burst of endings is one cycle, not one each', async () => {
   system.connector.inject({ kind: 'new_issue', number: 907, title: 'Two' });
   system.connector.inject({ kind: 'new_issue', number: 908, title: 'Three' });
   await system.harness.runCycle('manual');
-  const agents = system.store.listAgentsByStatus('starting', 'running');
+  const agents = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(agents.length, 3, 'three agents, so three endings arrive together');
 
   for (const a of agents) system.agents.complete(a.id);

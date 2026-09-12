@@ -1,16 +1,16 @@
+import { issueOriginId, issueOriginRef } from '../issueOrigins.js';
 import type { ValidationCheck, ValidationStep } from '../types.js';
 import { handsBackAScreen, segmentBoundary, stepScript } from './steps.js';
 
 // → docs/spec/20-validation.md
 
 export function validateOrigin(issueNumber: number, checkId: string): string {
-  return `issue:${issueNumber}:validate:${checkId}`;
+  return issueOriginRef('validate', issueNumber, checkId);
 }
 
 export function validateOriginParts(originRef: string | null): { issueNumber: number; checkId: string } | null {
-  const match = /^issue:(\d+):validate:(.+)$/.exec(originRef ?? '');
-  if (!match) return null;
-  return { issueNumber: Number(match[1]), checkId: match[2] as string };
+  const parts = issueOriginId('validate', originRef);
+  return parts === null ? null : { issueNumber: parts.issueNumber, checkId: parts.id };
 }
 
 export function validateBranch(issueNumber: number, checkId: string): string {
@@ -113,7 +113,7 @@ function stepLine(step: ValidationStep, past: boolean): string {
 }
 
 export function validationFailureOrigin(issueNumber: number, checkId: string): string {
-  return `issue:${issueNumber}:validate-failure:${checkId}`;
+  return issueOriginRef('validateFailure', issueNumber, checkId);
 }
 
 export function validationFailureBranch(issueNumber: number, checkId: string): string {

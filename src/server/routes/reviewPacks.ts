@@ -46,7 +46,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   const sharing = (prNumber: number): ReviewPackSharing => ({
     available: system.pool !== undefined,
-    share: store.getReviewPackShare(prNumber),
+    share: store.reviewPacks.getReviewPackShare(prNumber),
   });
 
   app.post(
@@ -61,7 +61,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   app.get(
     '/api/prs/:number/review-pack',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
-      const record = store.getCurrentReviewPack(params.number);
+      const record = store.reviewPacks.getCurrentReviewPack(params.number);
       if (!record) {
         const writing = reviewPacks.writing(params.number);
         return reply.code(404).send({
@@ -74,7 +74,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       const { head, stale } = await reviewPacks.staleness(params.number, record.pack.headSha);
       return {
         ...record,
-        marks: store.listReviewMarks(params.number),
+        marks: store.reviewPacks.listReviewMarks(params.number),
         head,
         stale,
         checking: reviewPackChecker.checking(params.number),
@@ -112,8 +112,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/review-calibration',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
-      const packs = store.listCurrentReviewPacks();
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
+      const packs = store.reviewPacks.listCurrentReviewPacks();
       const earliest = packs.reduce<number | null>(
         (oldest, record) => Math.min(oldest ?? Infinity, new Date(record.writtenAt).getTime()),
         null,
@@ -121,9 +121,9 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       return {
         calibration: buildReviewCalibration({
           packs,
-          marks: store.listAllReviewMarks(),
+          marks: store.reviewPacks.listAllReviewMarks(),
           merged: new Set(
-            store
+            store.graph
               .listWorkNodes()
               .filter((node) => node.status === 'merged' && node.ref.startsWith('pr:'))
               .map((node) => Number(node.ref.slice('pr:'.length)))
@@ -141,7 +141,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   }):
     | { ok: true; prNumber: number; headSha: string; hunks: ReviewRange[] }
     | { ok: false; status: 404 | 409; error: string } => {
-    const record = store.getCurrentReviewPack(params.number);
+    const record = store.reviewPacks.getCurrentReviewPack(params.number);
     if (!record) return { ok: false, status: 404, error: `no review pack for #${params.number}` };
     const idea = record.pack.ideas.find((i) => i.id === params.id);
     if (!idea) {
@@ -167,13 +167,13 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     checked({ params: IdeaParams, body: ReadBody }, async ({ params, body, reply }) => {
       const target = resolve(params);
       if (!target.ok) return reply.code(target.status).send({ error: target.error });
-      store.markReviewIdeaRead({
+      store.reviewPacks.markReviewIdeaRead({
         prNumber: target.prNumber,
         headSha: target.headSha,
         hunks: target.hunks,
         read: body.read,
       });
-      return { marks: store.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
+      return { marks: store.reviewPacks.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
     }),
   );
 
@@ -182,13 +182,13 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     checked({ params: IdeaParams, body: SeenBody }, async ({ params, body, reply }) => {
       const target = resolve(params);
       if (!target.ok) return reply.code(target.status).send({ error: target.error });
-      store.markReviewFindingSeen({
+      store.reviewPacks.markReviewFindingSeen({
         prNumber: target.prNumber,
         headSha: target.headSha,
         hunks: target.hunks,
         seen: body.seen,
       });
-      return { marks: store.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
+      return { marks: store.reviewPacks.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
     }),
   );
 
@@ -197,13 +197,13 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     checked({ params: IdeaParams, body: AttentionBody }, async ({ params, body, reply }) => {
       const target = resolve(params);
       if (!target.ok) return reply.code(target.status).send({ error: target.error });
-      store.overrideReviewAttention({
+      store.reviewPacks.overrideReviewAttention({
         prNumber: target.prNumber,
         headSha: target.headSha,
         hunks: target.hunks,
         attention: body.attention,
       });
-      return { marks: store.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
+      return { marks: store.reviewPacks.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
     }),
   );
 }

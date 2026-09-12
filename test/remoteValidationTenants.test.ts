@@ -113,10 +113,10 @@ function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | und
 }
 
 function seed(store: Store): void {
-  store.saveStateQueries('issue:12', [QUERY], 'agent');
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
-  store.approveStateQuery({
+  store.remoteValidation.saveStateQueries('issue:12', [QUERY], 'agent');
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.remoteValidation.approveStateQuery({
     digest: queryDigest(QUERY.query, QUERY.presence),
     environment: 'acceptance',
     originRef: 'issue:12',
@@ -124,8 +124,8 @@ function seed(store: Store): void {
     rows: 0,
     detail: null,
   });
-  store.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
-  store.saveRemoteSheetRows('issue:12', 'acceptance', [
+  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+  store.remoteValidation.saveRemoteSheetRows('issue:12', 'acceptance', [
     {
       rowId: `state:${QUERY.id}`,
       kind: 'state',
@@ -168,9 +168,9 @@ test('a tenantEnv nobody set blocks the press, naming the variable rather than i
     assert.equal(pressed.ok, false);
     assert.match(!pressed.ok ? pressed.error : '', /VALIDATION_TENANT/);
     assert.match(!pressed.ok ? pressed.error : '', /never invents a tenant name/);
-    assert.deepEqual(b.store.listRemoteRuns(), [], 'no run opened');
+    assert.deepEqual(b.store.remoteValidation.listRemoteRuns(), [], 'no run opened');
     assert.match(
-      b.store.listRemoteSheetRows()[0]?.blockedReason ?? '',
+      b.store.remoteValidation.listRemoteSheetRows()[0]?.blockedReason ?? '',
       /VALIDATION_TENANT/,
       'and the sheet says so in its own words',
     );
@@ -206,13 +206,13 @@ test('an operator invokes ensureTenant, and whatever it names is what is stamped
       b.tenants.asked.map((a) => `${a.call}:${a.command}`),
       ['ensure:./scripts/ensure-validation-tenant.sh', 'reseed:./scripts/reseed.sh'],
     );
-    assert.equal(b.store.listRemoteTenants()[0]?.tenant, 'reaper-safe-customer-9');
-    assert.notEqual(b.store.listRemoteTenants()[0]?.ensuredAt, null);
-    assert.notEqual(b.store.listRemoteTenants()[0]?.reseededAt, null);
+    assert.equal(b.store.remoteValidation.listRemoteTenants()[0]?.tenant, 'reaper-safe-customer-9');
+    assert.notEqual(b.store.remoteValidation.listRemoteTenants()[0]?.ensuredAt, null);
+    assert.notEqual(b.store.remoteValidation.listRemoteTenants()[0]?.reseededAt, null);
 
     const pressed = await b.runs.press('issue:12', 'acceptance');
     assert.equal(pressed.ok, true);
-    assert.equal(b.store.listRemoteRuns()[0]?.tenant, 'reaper-safe-customer-9');
+    assert.equal(b.store.remoteValidation.listRemoteRuns()[0]?.tenant, 'reaper-safe-customer-9');
   } finally {
     b.close();
   }
@@ -223,7 +223,8 @@ test('a reseed stamps the tenant and clears its age; no process is spawned, on t
   try {
     seed(b.store);
     assert.equal(
-      resolveTenant({ environment: LITERAL, stamped: b.store.listRemoteTenants(), now: NOW }).standing.stale,
+      resolveTenant({ environment: LITERAL, stamped: b.store.remoteValidation.listRemoteTenants(), now: NOW }).standing
+        .stale,
       true,
       'a tenant with a declared window and no reseed behind it is stale',
     );
@@ -235,12 +236,12 @@ test('a reseed stamps the tenant and clears its age; no process is spawned, on t
       ['reseed:validation-customer-1'],
       'the command reached its fake and nothing was spawned',
     );
-    assert.equal(b.store.listRemoteTenants()[0]?.tenant, 'validation-customer-1');
+    assert.equal(b.store.remoteValidation.listRemoteTenants()[0]?.tenant, 'validation-customer-1');
     assert.equal(
       resolveTenant({
         environment: LITERAL,
-        stamped: b.store.listRemoteTenants(),
-        now: Date.parse(b.store.listRemoteTenants()[0]!.reseededAt!),
+        stamped: b.store.remoteValidation.listRemoteTenants(),
+        now: Date.parse(b.store.remoteValidation.listRemoteTenants()[0]!.reseededAt!),
       }).standing.stale,
       false,
       'and the age is cleared',
@@ -258,8 +259,12 @@ test('an environment declaring no tenant of any shape presses anyway, on no tena
     const pressed = await b.runs.press('issue:12', 'acceptance');
 
     assert.equal(pressed.ok, true);
-    assert.equal(b.store.listRemoteRuns()[0]?.tenant, '', 'the absence, never a name the harness made up');
-    assert.equal(b.store.listRemoteReadings().length, 1);
+    assert.equal(
+      b.store.remoteValidation.listRemoteRuns()[0]?.tenant,
+      '',
+      'the absence, never a name the harness made up',
+    );
+    assert.equal(b.store.remoteValidation.listRemoteReadings().length, 1);
   } finally {
     b.close();
   }

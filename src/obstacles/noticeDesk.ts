@@ -20,7 +20,7 @@ export class ObstacleNoticeDesk {
       const rows = this.board();
       if (rows.length === 0) return;
       for (const notice of obstacleNotices(rows, this.liveAgents(rows))) {
-        if (!this.deps.store.claimObstacleNotice(notice.obstacleId, notice.agentId, notice.reason)) continue;
+        if (!this.deps.store.obstacles.claimObstacleNotice(notice.obstacleId, notice.agentId, notice.reason)) continue;
         this.deps.fleet.notify(notice.agentId, notice.text);
       }
     } catch (err) {
@@ -32,22 +32,22 @@ export class ObstacleNoticeDesk {
   }
 
   private board(): DeliverableObstacle[] {
-    return this.deps.store
+    return this.deps.store.obstacles
       .listObstacles()
-      .map((obstacle) => ({ obstacle, keys: this.deps.store.listObstacleKeys(obstacle.id) }));
+      .map((obstacle) => ({ obstacle, keys: this.deps.store.obstacles.listObstacleKeys(obstacle.id) }));
   }
 
   private liveAgents(rows: readonly DeliverableObstacle[]): NoticeAgent[] {
     const out: NoticeAgent[] = [];
-    for (const agent of this.deps.store.listAgents()) {
+    for (const agent of this.deps.store.agents.listAgents()) {
       if (!this.deps.fleet.isLive(agent.id)) continue;
-      const task = this.deps.store.getTask(agent.taskId);
+      const task = this.deps.store.tasks.getTask(agent.taskId);
       if (!task) continue;
       const goalRef = corroborationGoal(task.originRef);
       const reported = new Set(
         rows
           .filter((row) =>
-            this.deps.store
+            this.deps.store.obstacles
               .listObstacleSightings(row.obstacle.id)
               .some((s) => s.agentId === agent.id || (goalRef !== null && s.goalRef === goalRef)),
           )
@@ -58,7 +58,7 @@ export class ObstacleNoticeDesk {
         goalRef,
         scopes: dispatchFactScopes(task.originRef, task.ciChecks ?? null),
         reported,
-        notified: this.deps.store.obstaclesNoticedBy(agent.id),
+        notified: this.deps.store.obstacles.obstaclesNoticedBy(agent.id),
       });
     }
     return out;

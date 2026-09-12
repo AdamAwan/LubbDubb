@@ -87,27 +87,27 @@ test('a bare pair of enums is not a reading', () => {
 
 test('a repeat of the same claim on the same task revises one row', () => {
   const { store } = build();
-  const first = store.recordRemedy(input());
-  const again = store.recordRemedy(input());
+  const first = store.remedies.recordRemedy(input());
+  const again = store.remedies.recordRemedy(input());
   assert.equal(again.id, first.id);
-  assert.equal(store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
+  assert.equal(store.remedies.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
 });
 
 test('the same pull request coming back twice is two accounts, not one', () => {
   const { store } = build();
-  store.recordRemedy(input({ taskId: 't_1' }));
-  store.recordRemedy(input({ taskId: 't_2', summary: 'and again, on the same branch' }));
-  assert.equal(store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 2);
+  store.remedies.recordRemedy(input({ taskId: 't_1' }));
+  store.remedies.recordRemedy(input({ taskId: 't_2', summary: 'and again, on the same branch' }));
+  assert.equal(store.remedies.listRemediesSince('2000-01-01T00:00:00.000Z').length, 2);
 });
 
 test('the recent read is scoped to a kind and capped in SQL', () => {
   const { store } = build();
-  for (let i = 0; i < 5; i += 1) store.recordRemedy(input({ taskId: `t_${i}`, summary: `ci ${i}` }));
-  store.recordRemedy(
+  for (let i = 0; i < 5; i += 1) store.remedies.recordRemedy(input({ taskId: `t_${i}`, summary: `ci ${i}` }));
+  store.remedies.recordRemedy(
     input({ kind: 'review', originRef: 'pr:12:comments', taskId: 't_r', summary: 'review', checks: [] }),
   );
-  assert.equal(store.listRecentRemedies('ci', 3).length, 3);
-  assert.equal(store.listRecentRemedies('review', 10).length, 1);
+  assert.equal(store.remedies.listRecentRemedies('ci', 3).length, 3);
+  assert.equal(store.remedies.listRecentRemedies('review', 10).length, 1);
 });
 
 test('an empty record is an empty block, so every prompt is byte-identical to a build without this', () => {
@@ -187,7 +187,7 @@ interface ToolResultText {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -215,14 +215,14 @@ test('a remedy records the return and files nothing beside it', async () => {
     claim: 'knip runs every rule at error.',
   });
   assert.equal(res.isError, false);
-  assert.equal(system.store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
-  assert.deepEqual(system.store.listObstacles(), [], 'the one door is `raise`, and this is not it');
+  assert.equal(system.store.remedies.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
+  assert.deepEqual(system.store.obstacles.listObstacles(), [], 'the one door is `raise`, and this is not it');
   system.store.close();
 });
 
 test('the Causes reading rides on the panel it is a section of', async () => {
   const system = build();
-  system.store.recordRemedy(input());
+  system.store.remedies.recordRemedy(input());
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/reliability' });
   assert.equal(res.statusCode, 200);

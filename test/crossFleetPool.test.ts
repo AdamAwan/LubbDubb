@@ -130,7 +130,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     byFault: [{ day: '2026-08-23', key: 'provider', count: 5, costUsd: null, partial: false }],
   });
   const s = store();
-  s.replacePoolFleetDigest(
+  s.pool.replaceFleetDigest(
     'alice@acme-api',
     'acme-api',
     digest('alice@acme-api', [
@@ -138,13 +138,13 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
       { day: '2026-08-24', key: 'build', count: 1, costUsd: 2, partial: true },
     ]),
   );
-  s.replacePoolFleetDigest(
+  s.pool.replaceFleetDigest(
     'bob@acme-api',
     'acme-api',
     digest('bob@acme-api', [{ day: '2026-08-22', key: 'build', count: 4, costUsd: 30, partial: false }]),
   );
 
-  const rollup = foldPoolDigest(s.listPoolDigestRows('acme-api'), { project: 'acme-api' });
+  const rollup = foldPoolDigest(s.pool.listDigestRows('acme-api'), { project: 'acme-api' });
   const build = rollup.byPhase.find((r) => r.key === 'build')!;
   assert.equal(build.count, 7);
   assert.equal(build.costUsd, 42, 'a partial day counts in a total');
@@ -152,14 +152,14 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
   assert.equal(build.dailyMeanCostUsd, 20, '(10 + 30) over two whole fleet-days — the partial one is out');
 
   assert.equal(rollup.byCheck?.length, 1);
-  assert.equal(foldPoolDigest(s.listPoolDigestRows(null), { project: null }).byCheck, null);
+  assert.equal(foldPoolDigest(s.pool.listDigestRows(null), { project: null }).byCheck, null);
 });
 
 test('the digest counts faults by source per day, and carries no cost for one', () => {
   const s = store();
-  s.recordError({ source: 'provider', message: 'github snapshot failed' });
-  s.recordError({ source: 'provider', message: 'github snapshot failed again' });
-  s.recordError({ source: 'agent', message: 'spawn failed' });
+  s.errors.recordError({ source: 'provider', message: 'github snapshot failed' });
+  s.errors.recordError({ source: 'provider', message: 'github snapshot failed again' });
+  s.errors.recordError({ source: 'agent', message: 'spawn failed' });
 
   const document = buildDigestDocument(s, {
     fleetId: 'alice@acme-api',
@@ -178,7 +178,7 @@ test('the digest counts faults by source per day, and carries no cost for one', 
   );
   assert.ok(document.byFault.every((r) => r.day === utcDay(NOW) && r.partial));
 
-  s.clearErrors();
+  s.errors.clearErrors();
   assert.deepEqual(
     buildDigestDocument(s, {
       fleetId: 'alice@acme-api',
@@ -193,7 +193,7 @@ test('the digest counts faults by source per day, and carries no cost for one', 
 
 test('a fleet’s faults are never mirrored, whatever its document carries', () => {
   const s = store();
-  s.replacePoolFleetDigest('bob@acme-api', 'acme-api', {
+  s.pool.replaceFleetDigest('bob@acme-api', 'acme-api', {
     pool: POOL_SCHEMA_VERSION,
     kind: 'digest',
     fleetId: 'bob@acme-api',
@@ -211,7 +211,7 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
     byFault: [{ day: '2026-08-23', key: 'provider', count: 40, costUsd: null, partial: false }],
   });
 
-  const mirrored = s.listPoolDigestRows('acme-api');
+  const mirrored = s.pool.listDigestRows('acme-api');
   assert.ok(mirrored.length > 0, 'the rest of the document did land');
   assert.deepEqual(
     mirrored.filter((r) => r.key === 'provider'),
@@ -269,8 +269,8 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
   });
 
   await d.run();
-  assert.equal(s.getPoolPublication('digest').dirty, true, 'there is nothing to queue — it simply stays dirty');
-  assert.equal(s.getPoolPublication('digest').contentHash, null);
+  assert.equal(s.pool.getPublication('digest').dirty, true, 'there is nothing to queue — it simply stays dirty');
+  assert.equal(s.pool.getPublication('digest').contentHash, null);
   assert.ok(
     errors.some((m) => /Could not publish/.test(m)),
     'recorded, never swallowed',
@@ -278,7 +278,7 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
 
   transport.publishError = null;
   await d.run();
-  assert.equal(s.getPoolPublication('digest').dirty, false);
+  assert.equal(s.pool.getPublication('digest').dirty, false);
 });
 
 test('a failed fetch leaves the last-known-good mirror in place', async () => {
@@ -287,16 +287,16 @@ test('a failed fetch leaves the last-known-good mirror in place', async () => {
   transport.seed(envelopeDoc({ byPhase: [{ day: '2026-08-24', key: 'code', count: 2, costUsd: 3, partial: false }] }));
   const d = desk(s, transport);
   await d.run();
-  assert.equal(s.listPoolDigestRows('acme-api').length, 1);
+  assert.equal(s.pool.listDigestRows('acme-api').length, 1);
 
   transport.fetchError = new Error('the pool is unreachable');
   await d.run();
   assert.equal(
-    s.listPoolDigestRows('acme-api').length,
+    s.pool.listDigestRows('acme-api').length,
     1,
     'an outage is never folded into "nobody has published anything"',
   );
-  assert.equal(s.listPoolFleets().length, 1);
+  assert.equal(s.pool.listPoolFleets().length, 1);
 });
 
 test('a publish-only substrate runs no poller and holds no mirror', async () => {
@@ -305,7 +305,7 @@ test('a publish-only substrate runs no poller and holds no mirror', async () => 
   transport.seed(envelopeDoc({ byPhase: [{ day: '2026-08-24', key: 'code', count: 2, costUsd: 3, partial: false }] }));
   await desk(s, transport).run();
   assert.equal(
-    s.listPoolDigestRows(null).length,
+    s.pool.listDigestRows(null).length,
     0,
     'degraded explicitly, and never a fleet that believes it is reading',
   );

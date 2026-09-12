@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { AllowancePayload } from '../../wire.js';
 import { buildAllowanceInsights } from '../../allowanceInsights.js';
 import { buildSpendGoals } from '../../spendInsights.js';
@@ -24,33 +25,33 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/allowance',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
       const since = sinceOrEpoch(window.since);
-      const world = store.getWorldBaseline();
-      const agents = store.listAgents().filter((agent) => runInWindow(window, agent));
-      const localRuns = store.listLocalRuns().filter((run) => runInWindow(window, run));
-      const tasks = store.listTasks();
-      const nodes = store.listWorkNodes();
+      const world = store.world.getWorldBaseline();
+      const agents = store.agents.listAgents().filter((agent) => runInWindow(window, agent));
+      const localRuns = store.localRuns.listLocalRuns().filter((run) => runInWindow(window, run));
+      const tasks = store.tasks.listTasks();
+      const nodes = store.graph.listWorkNodes();
       const rollup = buildSpendGoals({
         agents,
         localRuns,
         tasks,
         nodes,
         issues: world?.issues ?? [],
-        runs: store.listIssueRuns(),
+        runs: store.floor.listIssueRuns(),
       });
-      const readings = store.listRateLimitReadingsSince(since);
+      const readings = store.rateLimits.listRateLimitReadingsSince(since);
       const allowance = buildAllowanceInsights({
         readings,
-        weekReadings: store.listRateLimitReadingsSince(new Date(now - PROJECTION_LOOKBACK_MS).toISOString()),
-        usageEvents: store.listUsageEventsSince(since),
+        weekReadings: store.rateLimits.listRateLimitReadingsSince(new Date(now - PROJECTION_LOOKBACK_MS).toISOString()),
+        usageEvents: store.agents.listUsageEventsSince(since),
         costDeltas: store.listCostDeltasSince(since),
         agents,
         tasks,
         nodes,
         goals: rollup.goals,
         attribution: rollup.attribution,
-        mergeEvents: store.listWorldEventsOfKindsSince(since, ['pr_merged']),
+        mergeEvents: store.world.listWorldEventsOfKindsSince(since, ['pr_merged']),
         window: windowView(
           window,
           timelineSpan(
@@ -71,7 +72,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       }
       for (const lane of allowance.lanes) {
         if (lane.issueNumber === null) continue;
-        const ref = `issue:${lane.issueNumber}`;
+        const ref = issueOriginRef('root', lane.issueNumber);
         if (ref in refUrls) continue;
         const url = connector.resolveRefUrl(ref);
         if (url) refUrls[ref] = url;

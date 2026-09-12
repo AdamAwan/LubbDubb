@@ -73,8 +73,8 @@ function build(
 }
 
 function arrived(system: System, environment: string, agoMs = 60_000, checks: GoalWatchInput[] = [SIGNAL]): void {
-  system.store.ingestGoalWatch('issue:12', checks);
-  system.store.recordGoalArrival({
+  system.store.watches.ingestGoalWatch('issue:12', checks);
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment,
     arrivedAt: new Date(Date.now() - agoMs).toISOString(),
@@ -93,13 +93,13 @@ test('an arrival opens a window, and the harness reads it', async () => {
 
   await system.harness.runCycle();
 
-  const [window] = system.store.listWatchWindows();
+  const [window] = system.store.watches.listWatchWindows();
   assert.equal(window?.environment, 'testUk');
   assert.equal(window?.settledAt, null, 'still watching');
-  const [reading] = system.store.listWatchReadings();
+  const [reading] = system.store.watches.listWatchReadings();
   assert.equal(reading?.verdict, 'clean');
   assert.equal(reading?.rows, 0);
-  assert.notEqual(system.store.listGoalArrivals()[0]?.watchedAt, null, 'considered, and stamped');
+  assert.notEqual(system.store.environments.listGoalArrivals()[0]?.watchedAt, null, 'considered, and stamped');
   system.store.close();
 });
 
@@ -111,10 +111,10 @@ test('an arrival three probe intervals old opens no window, and is stamped anywa
   await system.harness.runCycle();
   await system.harness.runCycle();
 
-  assert.deepEqual(system.store.listWatchWindows(), []);
+  assert.deepEqual(system.store.watches.listWatchWindows(), []);
   assert.deepEqual(observer.asked, [], 'nothing is asked about work that shipped in March');
   assert.notEqual(
-    system.store.listGoalArrivals()[0]?.watchedAt,
+    system.store.environments.listGoalArrivals()[0]?.watchedAt,
     null,
     'stamped anyway, so the next arrival is the first one watched rather than the whole history at once',
   );
@@ -128,12 +128,12 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
     git: new FakeGitObserver().setContains('head-testUk', 'abc', true),
   });
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
-  system.store.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'abc' });
-  system.store.ingestGoalWatch('issue:12', [SIGNAL]);
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'abc' });
+  system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
 
   await system.harness.runCycle();
 
-  assert.equal(system.store.listWatchReadings()[0]?.verdict, 'unknown', 'never folded into clean');
+  assert.equal(system.store.watches.listWatchReadings()[0]?.verdict, 'unknown', 'never folded into clean');
   const page = buildGoalPage(buildStateSnapshot(system) as unknown as AppState, 'issue:12', []);
   const check = page?.watches[0]?.checks[0];
   assert.equal(check?.reading?.verdict, 'unknown');
@@ -151,7 +151,7 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
 test('a goal with no declared checks reads null and draws nothing', async () => {
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer);
-  system.store.recordGoalArrival({
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'testUk',
     arrivedAt: new Date().toISOString(),
@@ -159,7 +159,7 @@ test('a goal with no declared checks reads null and draws nothing', async () => 
 
   await system.harness.runCycle();
 
-  assert.deepEqual(system.store.listWatchWindows(), [], 'not an empty card, not a row of question marks');
+  assert.deepEqual(system.store.watches.listWatchWindows(), [], 'not an empty card, not a row of question marks');
   assert.deepEqual(buildStateSnapshot(system).goalWatchWindows, []);
   assert.deepEqual(observer.asked, []);
   system.store.close();
@@ -172,9 +172,9 @@ test('nothing is asked where no environment declares a watch, and no arrival is 
 
   await system.harness.runCycle();
 
-  assert.deepEqual(system.store.listWatchWindows(), []);
+  assert.deepEqual(system.store.watches.listWatchWindows(), []);
   assert.equal(
-    system.store.listGoalArrivals()[0]?.watchedAt,
+    system.store.environments.listGoalArrivals()[0]?.watchedAt,
     null,
     'the stamp is the one guard that makes turning the feature on later safe — it is not spent while it is off',
   );
@@ -189,7 +189,7 @@ test('a watch opens per environment, so a goal travelling is watched twice with 
   });
   const system = build(observer, [TEST_UK, LIVE_UK]);
   arrived(system, 'testUk');
-  system.store.recordGoalArrival({
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'liveUk',
     arrivedAt: new Date().toISOString(),
@@ -198,14 +198,14 @@ test('a watch opens per environment, so a goal travelling is watched twice with 
   await system.harness.runCycle();
 
   assert.deepEqual(
-    system.store
+    system.store.watches
       .listWatchWindows()
       .map((w) => w.environment)
       .sort(),
     ['liveUk', 'testUk'],
   );
   assert.deepEqual(
-    system.store
+    system.store.watches
       .listWatchReadings()
       .map((r) => r.environment)
       .sort(),
@@ -226,7 +226,7 @@ test('a regressed reading says what it expected and what it read, and does not r
 
   await system.harness.runCycle();
 
-  const readings = new Map(system.store.listWatchReadings().map((r) => [r.checkId, r]));
+  const readings = new Map(system.store.watches.listWatchReadings().map((r) => [r.checkId, r]));
   assert.equal(readings.get('no-timeouts')?.verdict, 'regressed');
   assert.match(readings.get('no-timeouts')!.detail!, /answered 1 row where the check declared none at all/);
   assert.equal(readings.get('no-retries')?.verdict, 'unknown');
@@ -244,13 +244,13 @@ test('a settled watch is not re-opened by a later reading', async () => {
   arrived(system, 'testUk');
 
   await system.harness.runCycle();
-  const settledAt = system.store.listWatchWindows()[0]?.settledAt;
+  const settledAt = system.store.watches.listWatchWindows()[0]?.settledAt;
   assert.notEqual(settledAt, null, 'settled at `for`');
   assert.deepEqual(observer.asked, [], 'settling runs before the readings, so nothing is read past the end');
 
   await system.harness.runCycle();
-  assert.equal(system.store.listWatchWindows()[0]?.settledAt, settledAt, 'a record, not a monitor');
-  assert.deepEqual(system.store.listWatchReadings(), []);
+  assert.equal(system.store.watches.listWatchWindows()[0]?.settledAt, settledAt, 'a record, not a monitor');
+  assert.deepEqual(system.store.watches.listWatchReadings(), []);
   system.store.close();
 });
 
@@ -260,15 +260,15 @@ test('an extended window is read again and settles at its new end', async () => 
   arrived(system, 'testUk');
 
   await system.harness.runCycle();
-  assert.notEqual(system.store.listWatchWindows()[0]?.settledAt, null, 'settled before anything was read');
+  assert.notEqual(system.store.watches.listWatchWindows()[0]?.settledAt, null, 'settled before anything was read');
   assert.deepEqual(observer.asked, []);
 
-  system.store.extendWatchWindow('issue:12', 'testUk', new Date(Date.now() + 60 * 60 * 1000).toISOString());
+  system.store.watches.extendWatchWindow('issue:12', 'testUk', new Date(Date.now() + 60 * 60 * 1000).toISOString());
   await system.harness.runCycle();
 
-  assert.equal(system.store.listWatchWindows().length, 1, 'one window, not two');
-  assert.equal(system.store.listWatchWindows()[0]?.settledAt, null, 'watching again');
-  assert.equal(system.store.listWatchReadings().length, 1, 'and read on its own schedule from now');
+  assert.equal(system.store.watches.listWatchWindows().length, 1, 'one window, not two');
+  assert.equal(system.store.watches.listWatchWindows()[0]?.settledAt, null, 'watching again');
+  assert.equal(system.store.watches.listWatchReadings().length, 1, 'and read on its own schedule from now');
   system.store.close();
 });
 
@@ -280,8 +280,8 @@ test('a window is not read again inside watchIntervalMs, and the arrival opens o
   await system.harness.runCycle();
   await system.harness.runCycle();
 
-  assert.equal(system.store.listWatchWindows().length, 1, 'arriving again is not a second window');
-  assert.equal(system.store.listWatchReadings().length, 1, 'nothing is asked when nothing is due');
+  assert.equal(system.store.watches.listWatchWindows().length, 1, 'arriving again is not a second window');
+  assert.equal(system.store.watches.listWatchReadings().length, 1, 'nothing is asked when nothing is due');
   system.store.close();
 });
 
@@ -291,11 +291,11 @@ test('a check an amendment stopped declaring takes its readings with it', async 
   arrived(system, 'testUk', 60_000, [SIGNAL, { ...SIGNAL, id: 'no-retries', seq: 2 }]);
 
   await system.harness.runCycle();
-  assert.equal(system.store.listWatchReadings().length, 2);
+  assert.equal(system.store.watches.listWatchReadings().length, 2);
 
-  system.store.ingestGoalWatch('issue:12', [SIGNAL]);
+  system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
   assert.deepEqual(
-    system.store.listWatchReadings().map((r) => r.checkId),
+    system.store.watches.listWatchReadings().map((r) => r.checkId),
     ['no-timeouts'],
   );
   system.store.close();

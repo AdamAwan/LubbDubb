@@ -101,7 +101,7 @@ function ingest(system: System): void {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -224,7 +224,7 @@ test('a step is the fleet’s where the configuration declares what carries it, 
   ]);
   assert.equal(res.isError, false, res.text);
 
-  const check = system.store.listValidationChecks(GOAL)[0];
+  const check = system.store.validation.listValidationChecks(GOAL)[0];
   assert.deepEqual(
     check?.steps.map((s) => [s.kind, s.actor]),
     [
@@ -259,7 +259,7 @@ test('a step nothing declares comes back to a person, naming the configuration t
   ]);
   assert.equal(res.isError, false, res.text);
 
-  const steps = system.store.listValidationChecks(GOAL)[0]?.steps ?? [];
+  const steps = system.store.validation.listValidationChecks(GOAL)[0]?.steps ?? [];
   assert.deepEqual(
     steps.map((s) => [s.kind, s.actor]),
     [
@@ -495,7 +495,11 @@ test('a database from before the column reads as no steps, and nothing is backfi
     db.close();
 
     store = new Store(file);
-    assert.deepEqual(store.listValidationChecks(GOAL)[0]?.steps, [], 'null is "no steps", which stays true forever');
+    assert.deepEqual(
+      store.validation.listValidationChecks(GOAL)[0]?.steps,
+      [],
+      'null is "no steps", which stays true forever',
+    );
   } finally {
     store.close();
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });

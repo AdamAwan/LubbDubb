@@ -15,18 +15,18 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/spend',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
       const since = sinceOrEpoch(window.since);
       return {
         insights: buildSpendInsights({
-          agents: store.listAgents(),
-          localRuns: store.listLocalRuns(),
-          tasks: store.listTasks(),
-          nodes: store.listWorkNodes(),
-          issues: store.getWorldBaseline()?.issues ?? [],
-          runs: store.listIssueRuns(),
+          agents: store.agents.listAgents(),
+          localRuns: store.localRuns.listLocalRuns(),
+          tasks: store.tasks.listTasks(),
+          nodes: store.graph.listWorkNodes(),
+          issues: store.world.getWorldBaseline()?.issues ?? [],
+          runs: store.floor.listIssueRuns(),
           costDeltas: store.listCostDeltasSince(since),
-          mergeEvents: store.listWorldEventsOfKindsSince(since, ['pr_merged']),
+          mergeEvents: store.world.listWorldEventsOfKindsSince(since, ['pr_merged']),
           window,
           now,
         }),
@@ -38,24 +38,24 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/spend/trend',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
       const since = sinceOrEpoch(trendSince(window));
-      const world = store.getWorldBaseline();
-      const agents = store.listAgents();
+      const world = store.world.getWorldBaseline();
+      const agents = store.agents.listAgents();
       return {
         trend: buildSpendTrend({
           goals: buildSpendGoals({
             agents,
-            localRuns: store.listLocalRuns(),
-            tasks: store.listTasks(),
-            nodes: store.listWorkNodes(),
+            localRuns: store.localRuns.listLocalRuns(),
+            tasks: store.tasks.listTasks(),
+            nodes: store.graph.listWorkNodes(),
             issues: world?.issues ?? [],
-            runs: store.listIssueRuns(),
+            runs: store.floor.listIssueRuns(),
           }).goals,
-          closures: store.listTicketsClosedSince(since),
+          closures: store.tickets.listTicketsClosedSince(since),
           issues: world?.issues ?? [],
           agents,
-          ciEvents: store.listWorldEventsOfKindsSince(since, ['pr_ci']),
+          ciEvents: store.world.listWorldEventsOfKindsSince(since, ['pr_ci']),
           window,
           now,
         }),

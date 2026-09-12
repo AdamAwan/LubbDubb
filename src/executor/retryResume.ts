@@ -10,7 +10,7 @@ export interface RetryResume {
 
 export function retryResumeFor(originRef: string | null | undefined, store: Store): RetryResume | null {
   if (!originRef) return null;
-  const onOrigin = store.listAgents().filter((a) => store.getTask(a.taskId)?.originRef === originRef);
+  const onOrigin = store.agents.listAgents().filter((a) => store.tasks.getTask(a.taskId)?.originRef === originRef);
   const previous = onOrigin[0];
   if (!previous || previous.status !== 'done' || !previous.sessionId) return null;
   if (onOrigin.filter((a) => a.sessionId === previous.sessionId).length > 1) return null;

@@ -60,7 +60,7 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
 }
 
 function spawnWorker(system: System, originRef = 'issue:12'): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #12',
     prompt: 'fix it',
@@ -84,7 +84,7 @@ async function declare(system: System, agent: Agent, args: Record<string, unknow
 }
 
 function sheet(system: System) {
-  return [...system.store.listGoalWatches(), ...system.store.listProposedGoalWatches()];
+  return [...system.store.watches.listGoalWatches(), ...system.store.watches.listProposedGoalWatches()];
 }
 
 test('a declaration is pending, and nothing is put to an environment until it is accepted', async () => {
@@ -102,8 +102,8 @@ test('a declaration is pending, and nothing is put to an environment until it is
   assert.deepEqual(res.payload['declared'], ['no-timeouts']);
   assert.equal(res.payload['pending'], true);
   assert.deepEqual(observer.asked, [], 'an unapproved query is never put to an environment');
-  assert.deepEqual(system.store.listGoalWatches(), [], 'and it is not live');
-  const pending = system.store.listProposedGoalWatches();
+  assert.deepEqual(system.store.watches.listGoalWatches(), [], 'and it is not live');
+  const pending = system.store.watches.listProposedGoalWatches();
   assert.equal(pending.length, 1);
   assert.equal(pending[0]!.live, false);
   assert.match(pending[0]!.proposal!.note, /retry-exhausted/);
@@ -118,13 +118,13 @@ test('accepting makes it live and runs it once — which is where a measure gets
   await declare(system, spawnWorker(system), { note: 'p95 is the number that would move.', measures: [MEASURE] });
   assert.equal(observer.asked.length, 0, 'a declaration nobody has ruled on is put to nothing');
 
-  const ruled = system.store.ruleOnWatchProposal('issue:12', 'orders-p95', true);
+  const ruled = system.store.watches.ruleOnWatchProposal('issue:12', 'orders-p95', true);
   assert.ok(ruled);
   assert.equal(ruled!.live, true);
   assert.equal(ruled!.proposal, null);
   const refusals = await system.watch.run('issue:12');
   assert.deepEqual(refusals, []);
-  const live = system.store.listGoalWatches();
+  const live = system.store.watches.listGoalWatches();
   assert.equal(live.length, 1);
   assert.equal(live[0]!.baselineValue, 8400, 'the before the work has to beat, taken at declaration');
   assert.deepEqual(
@@ -137,7 +137,7 @@ test('accepting makes it live and runs it once — which is where a measure gets
 test('declining drops a declaration that was never anything but a proposal', async () => {
   const system = build(new FakeEnvironmentObserver());
   await declare(system, spawnWorker(system), { note: 'reads the new log line.', signals: [SIGNAL] });
-  system.store.ruleOnWatchProposal('issue:12', 'no-timeouts', false);
+  system.store.watches.ruleOnWatchProposal('issue:12', 'no-timeouts', false);
   assert.deepEqual(sheet(system), [], 'nothing is left standing for a query nobody authorised');
   system.store.close();
 });
@@ -155,7 +155,7 @@ test('it merges on the slug, and a live check is untouched until the amendment i
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
     watch: { signals: [{ ...SIGNAL, tolerate: 0 }] },
   });
-  assert.equal(system.store.listGoalWatches()[0]!.dryRunRows, 1);
+  assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
 
   const amended = { ...SIGNAL, query: "traces | where message has 'job X failed after retries'" };
   const res = await declare(system, spawnWorker(system), {
@@ -164,7 +164,7 @@ test('it merges on the slug, and a live check is untouched until the amendment i
   });
   assert.equal(res.isError, false);
 
-  const live = system.store.listGoalWatches();
+  const live = system.store.watches.listGoalWatches();
   assert.equal(live.length, 1, 'merged on the slug rather than filed beside it');
   assert.equal(live[0]!.query, SIGNAL.query, 'the live check is untouched while the amendment is pending');
   assert.equal(live[0]!.proposal!.declaration.query, amended.query);
@@ -184,7 +184,7 @@ test("an accepted amendment clears the reading it replaced, as a planner's amend
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
     watch: { signals: [SIGNAL] },
   });
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -193,18 +193,18 @@ test("an accepted amendment clears the reading it replaced, as a planner's amend
     value: null,
     detail: null,
   });
-  assert.equal(system.store.listWatchReadings().length, 1);
+  assert.equal(system.store.watches.listWatchReadings().length, 1);
 
   await declare(system, spawnWorker(system), {
     note: 'The right question changed with the fix.',
     signals: [{ ...SIGNAL, query: "traces | where message has 'job X failed after retries'" }],
   });
-  system.store.ruleOnWatchProposal('issue:12', 'no-timeouts', true);
+  system.store.watches.ruleOnWatchProposal('issue:12', 'no-timeouts', true);
 
-  const live = system.store.listGoalWatches()[0]!;
+  const live = system.store.watches.listGoalWatches()[0]!;
   assert.match(live.query, /failed after retries/);
   assert.equal(live.dryRunVerdict, null, 'a reading is a reading of *that* query');
-  assert.deepEqual(system.store.listWatchReadings(), [], 'and so is every reading the window took of it');
+  assert.deepEqual(system.store.watches.listWatchReadings(), [], 'and so is every reading the window took of it');
   system.store.close();
 });
 

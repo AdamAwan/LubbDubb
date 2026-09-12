@@ -324,7 +324,7 @@ function systemFor(): System {
 }
 
 function agentThatWrote(store: Store, originRef: string, paths: string[], kind: 'code' | 'desk' = 'code'): void {
-  const task = store.createTask({
+  const task = store.tasks.createTask({
     kind,
     title: `work on ${originRef}`,
     prompt: 'do it',
@@ -332,8 +332,8 @@ function agentThatWrote(store: Store, originRef: string, paths: string[], kind: 
     originRef,
     status: 'done',
   });
-  const agent = store.createAgent({ taskId: task.id, cwd: '/tmp/wt', pid: null, status: 'done' });
-  for (const path of paths) store.recordFile(agent.id, { path, tool: 'Edit', promoted: false });
+  const agent = store.agents.createAgent({ taskId: task.id, cwd: '/tmp/wt', pid: null, status: 'done' });
+  for (const path of paths) store.agents.recordFile(agent.id, { path, tool: 'Edit', promoted: false });
 }
 
 test('the goal file join folds the whole subtree to one row per path, newest write first', () => {
@@ -347,7 +347,7 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
     agentThatWrote(store, 'issue:12:part:other', ['src/elsewhere.ts']);
     agentThatWrote(store, 'issue:1:retro', ['write-up.md'], 'desk');
 
-    const files = store.listGoalFiles('issue:1');
+    const files = store.agents.listGoalFiles('issue:1');
     assert.deepEqual(
       files.map((f) => f.path),
       ['src/b.ts', 'src/a.ts'],
@@ -358,7 +358,7 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
       'issue:1:part:schema',
       'a path written twice is dated and attributed by its last write',
     );
-    assert.equal(store.listGoalFiles('issue:3').length, 0, 'a goal nobody has worked has nothing to say');
+    assert.equal(store.agents.listGoalFiles('issue:3').length, 0, 'a goal nobody has worked has nothing to say');
   } finally {
     store.close();
   }
@@ -366,7 +366,7 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
 
 function goalWithRetro(store: Store, originRef: string, paths: string[], summary: string): void {
   agentThatWrote(store, `${originRef}:part:whole`, paths);
-  store.recordRetrospective({ originRef, summary, document: '# how it went', agentId: 'a_r', taskId: 't_r' });
+  store.scratch.recordRetrospective({ originRef, summary, document: '# how it went', agentId: 'a_r', taskId: 't_r' });
 }
 
 test('the neighbour join finds written-up goals in the same paths, and only those', () => {
@@ -380,7 +380,7 @@ test('the neighbour join finds written-up goals in the same paths, and only thos
     agentThatWrote(store, 'issue:302:part:whole', ['src/a.ts']);
     goalWithRetro(store, 'issue:303', ['src/elsewhere.ts'], 'somewhere else entirely');
     agentThatWrote(store, 'issue:304:retro', ['src/a.ts'], 'desk');
-    store.recordRetrospective({
+    store.scratch.recordRetrospective({
       originRef: 'issue:304',
       summary: 'a desk agent wrote this path in a scratch directory',
       document: '# d',
@@ -389,7 +389,7 @@ test('the neighbour join finds written-up goals in the same paths, and only thos
     });
     goalWithRetro(store, 'issue:1', ['src/a.ts'], 'this goal itself');
 
-    const neighbours = store.listGoalNeighbours('issue:1', ['src/a.ts', 'src/b.ts']);
+    const neighbours = store.agents.listGoalNeighbours('issue:1', ['src/a.ts', 'src/b.ts']);
     assert.deepEqual(
       neighbours.map((n) => n.goalRef),
       ['issue:301', 'issue:300'],
@@ -401,7 +401,7 @@ test('the neighbour join finds written-up goals in the same paths, and only thos
       'the paths in common, newest write first — and never a path this goal never asked about',
     );
     assert.equal(neighbours[0]?.retroSummary, 'three oh one was harder', 'the summary comes back with it');
-    assert.deepEqual(store.listGoalNeighbours('issue:1', []), [], 'a goal with no paths asks nothing');
+    assert.deepEqual(store.agents.listGoalNeighbours('issue:1', []), [], 'a goal with no paths asks nothing');
   } finally {
     store.close();
   }
@@ -411,14 +411,14 @@ test('the neighbour join scopes a goal by prefix, so issue:1 never reaches issue
   const store = new Store(':memory:');
   try {
     goalWithRetro(store, 'issue:12', ['src/a.ts'], 'twelve');
-    store.recordRetrospective({
+    store.scratch.recordRetrospective({
       originRef: 'issue:1',
       summary: 'one',
       document: '# one',
       agentId: 'a_1',
       taskId: 't_1',
     });
-    const neighbours = store.listGoalNeighbours('issue:9', ['src/a.ts']);
+    const neighbours = store.agents.listGoalNeighbours('issue:9', ['src/a.ts']);
     assert.deepEqual(
       neighbours.map((n) => n.goalRef),
       ['issue:12'],
@@ -433,7 +433,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
   const system = systemFor();
   try {
     const plan = planWithOnePart(system.store, 1, 'Ship the thing');
-    system.store.upsertPlan({
+    system.store.plans.upsertPlan({
       originRef: 'issue:1',
       title: 'Ship the thing',
       status: 'active',
@@ -441,7 +441,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
       document: 'The registry is the only place that knows about the tag.',
     });
     assert.ok(plan);
-    system.store.appendScratchEntry({
+    system.store.scratch.appendScratchEntry({
       padRef: 'issue:1',
       authorOriginRef: 'issue:1:plan',
       agentId: 'a_prior',
@@ -471,7 +471,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
 test('an agent on a different goal is handed none of it', async () => {
   const system = systemFor();
   try {
-    system.store.appendScratchEntry({
+    system.store.scratch.appendScratchEntry({
       padRef: 'issue:1',
       authorOriginRef: 'issue:1',
       agentId: 'a_prior',

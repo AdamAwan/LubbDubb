@@ -19,7 +19,7 @@ reason, so "why did (or didn't) this happen" is always answerable.
 
 1. **Rejected items first.** Everything `parseActions` refused is audited as `rejected` with the zod
    error and the raw JSON, and never run.
-2. `liveCount` is read once from `store.countLiveAgents()` and incremented locally as agents spawn, so
+2. `liveCount` is read once from `store.agents.countLiveAgents()` and incremented locally as agents spawn, so
    the cap holds within a single cycle's plan.
 3. Each validated action is handled by type.
 
@@ -77,12 +77,12 @@ For `dispatch_code_agent` and `dispatch_desk_agent`, in this exact order:
 
 ### 1. Origin gate — `skipped`
 
-`store.findActiveTaskByOrigin(originRef)`. If an active task already holds the origin, the action is
+`store.tasks.findActiveTaskByOrigin(originRef)`. If an active task already holds the origin, the action is
 skipped: _this work is already being done._
 
 ### 2. Branch gate — `deferred` (code dispatches only)
 
-`store.findActiveTaskByBranch(action.branch)`. If a live task holds the branch, the dispatch is
+`store.tasks.findActiveTaskByBranch(action.branch)`. If a live task holds the branch, the dispatch is
 deferred with the holding task's id and origin in the detail.
 
 For every world-driven rule origin and branch are 1:1, so the origin check above already **is** a
@@ -121,8 +121,8 @@ with the readying board moved to `ci-evidence` and then `slot-handover` as the t
 entered, so the wait is visible while it is happening. On success:
 
 - `liveCount` increments.
-- `if (action.jobId) store.markJobDispatched(jobId, task.id)`.
-- `if (action.partId) store.markPartDispatched(partId, task.id, branch)`.
+- `if (action.jobId) store.jobs.markJobDispatched(jobId, task.id)`.
+- `if (action.partId) store.plans.markPartDispatched(partId, task.id, branch)`.
 
 Both marks happen **only after the agent actually spawns**, so a dispatch the cap or pause gate held
 leaves the job `queued` and the part `ready` for a later cycle.
@@ -198,10 +198,10 @@ hundred rows an hour of one fact, in the one place shape means "something threw 
 The row and the directory are separate steps, so the executor holds the created task when the
 directory step throws and can settle it:
 
-- **Code** — `store.createTask({kind:'code', …, branch})`, then
+- **Code** — `store.tasks.createTask({kind:'code', …, branch})`, then
   `worktrees.ensure(action.branch, action.base ?? defaultBranch)`. A stacked plan part names the branch
   it forks from; everything else takes the configured integration branch.
-- **Desk** — `store.createTask({kind:'desk', branch:null})`, then `mkdirSync(resolve(deskRoot, task.id))`.
+- **Desk** — `store.tasks.createTask({kind:'desk', branch:null})`, then `mkdirSync(resolve(deskRoot, task.id))`.
 
 The task carries `originTitle`, `originSummary` and `dispatchReason` from the action, so the cockpit
 can explain a running agent without re-fetching from the provider. Its **prompt** is the action's plus
@@ -299,7 +299,7 @@ pending proposal already says.
 
 ### 3. Either the standing authority or an ask
 
-- **Covered by a standing authority** → `store.createProposal(…)`, then
+- **Covered by a standing authority** → `store.escalations.createProposal(…)`, then
   `decideProposal(id, 'accepted', note, 'stack_landing' | 'auto_send')`, then
   `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of anyone. One appears only
   if the act then fails. The proposal row is written **either way** — it is the audit trail, and a send

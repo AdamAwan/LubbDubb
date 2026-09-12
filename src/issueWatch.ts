@@ -7,7 +7,7 @@ import { watchLabelFor } from './watchLabels.js';
 // → docs/spec/06-issue-pickup.md
 
 export interface IssueWatchContext {
-  store: Pick<Store, 'getWorldBaseline' | 'patchWorldLabels' | 'patchTicketLabels'>;
+  store: Pick<Store, 'world' | 'tickets'>;
   sink: { setIssueLabel(input: IssueLabelInput): Promise<SendResult> };
   errors?: ErrorRecorder;
   labelPrefix: string;
@@ -30,7 +30,7 @@ export async function applyIssueWatch(
   const label = watchLabelFor(ctx.labelPrefix);
   if (!label) return { label, targets: [], landed: [], failed: [] };
 
-  const world = ctx.store.getWorldBaseline();
+  const world = ctx.store.world.getWorldBaseline();
   const issue = world?.issues.find((i) => i.number === issueNumber);
   const targets =
     issue === undefined ? [issueNumber] : watchCascadeTargets(issue, world?.issues ?? [], ctx.issueContainerTypes);
@@ -51,7 +51,7 @@ export async function applyIssueWatch(
     }
   }
 
-  ctx.store.patchWorldLabels({ issues: landed, label, present: watched });
-  ctx.store.patchTicketLabels({ numbers: landed, label, present: watched });
+  ctx.store.world.patchWorldLabels({ issues: landed, label, present: watched });
+  ctx.store.tickets.patchTicketLabels({ numbers: landed, label, present: watched });
   return { label, targets, landed, failed };
 }

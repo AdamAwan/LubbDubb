@@ -87,7 +87,7 @@ function build(sink: ActionSink, overrides: Record<string, unknown> = {}): Syste
 }
 
 function reviewAgent(system: System, originRef = 'pr:42:comments'): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Address review comments on PR #42',
     prompt: 'answer them',
@@ -120,11 +120,11 @@ test('with sendPrRepliesWithoutApproval off, the reply is proposed — and accep
   assert.equal(res.isError, false);
   assert.equal(sink.replies.length, 0, 'the tool sends nothing itself');
 
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.kind, 'reply_draft');
   assert.equal(proposal!.ref, 'pr:42:comment:c-1', 'the draft keys on the thread it answers');
   assert.equal(proposal!.status, 'pending');
-  assert.equal(system.store.listOpenEscalations().length, 1, 'and it is put to the operator');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1, 'and it is put to the operator');
 
   await system.proposals.accept(proposal!.id);
   assert.equal(sink.replies.length, 1);
@@ -143,7 +143,7 @@ test('the pull request comes from the origin, so an agent cannot answer another 
   assert.equal(res.isError, true);
   assert.match(res.text, /only for an agent dispatched to answer/);
   assert.match(res.text, /do not post to the thread yourself/i);
-  assert.equal(system.store.listProposals().length, 0);
+  assert.equal(system.store.escalations.listProposals().length, 0);
   system.store.close();
 });
 
@@ -155,7 +155,7 @@ test('an empty reply is refused, and nothing is proposed for it', async () => {
   const res = await callReply(system, agent, { body: '   ', thread: 'c-1' });
   assert.equal(res.isError, true);
   assert.match(res.text, /body is required/);
-  assert.equal(system.store.listProposals().length, 0);
+  assert.equal(system.store.escalations.listProposals().length, 0);
   system.store.close();
 });
 
@@ -167,14 +167,14 @@ test('on the default the reply goes out, and the row says which authority sent i
   const res = await callReply(system, agent, { body: 'Fixed in the latest commit.', thread: 'c-1' });
   assert.equal(res.isError, false);
   assert.equal(sink.replies.length, 1, 'the operator authorized this class of act in advance');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'nothing is being asked of anyone');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'nothing is being asked of anyone');
 
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.status, 'accepted', 'the row is still written — it is the audit trail');
   assert.equal(proposal!.decidedBy, 'auto_send');
   assert.equal(proposal!.escalationId, null);
   assert.match(proposal!.note ?? '', /sendPrRepliesWithoutApproval/);
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /authorized by auto-send/);
   system.store.close();
 });
@@ -183,11 +183,11 @@ test("the reply the fleet sends spends the operator's reopen of that thread", as
   const sink = countingSink();
   const system = build(sink);
   const agent = reviewAgent(system);
-  system.store.setPrThreadReopened(42, 'c-1', true);
+  system.store.threadReopens.setPrThreadReopened(42, 'c-1', true);
 
   await callReply(system, agent, { body: 'Answered properly this time.', thread: 'c-1' });
   assert.equal(sink.replies.length, 1);
-  assert.deepEqual(system.store.prThreadReopens(), [], 'the ask was answered, so the ask is over');
+  assert.deepEqual(system.store.threadReopens.prThreadReopens(), [], 'the ask was answered, so the ask is over');
   system.store.close();
 });
 
@@ -195,12 +195,12 @@ test('a reopen on another thread survives a reply to this one', async () => {
   const sink = countingSink();
   const system = build(sink);
   const agent = reviewAgent(system);
-  system.store.setPrThreadReopened(42, 'c-1', true);
-  system.store.setPrThreadReopened(42, 'c-2', true);
+  system.store.threadReopens.setPrThreadReopened(42, 'c-1', true);
+  system.store.threadReopens.setPrThreadReopened(42, 'c-2', true);
 
   await callReply(system, agent, { body: 'This one is done.', thread: 'c-1' });
   assert.deepEqual(
-    system.store.prThreadReopens().map((r) => r.threadId),
+    system.store.threadReopens.prThreadReopens().map((r) => r.threadId),
     ['c-2'],
     'one reply answers one thread — the rest of the review is still owed',
   );
@@ -212,13 +212,13 @@ test('auto-send never overrides a rejection the operator already gave', async ()
   const system = build(sink);
   const agent = reviewAgent(system);
 
-  const refused = system.store.createProposal({
+  const refused = system.store.escalations.createProposal({
     kind: 'reply_draft',
     ref: 'pr:42:comment:c-1',
     action: { type: 'reply_on_pr', reason: 'earlier draft', prNumber: 42, commentId: 'c-1', draft: 'Nope.' },
     escalationId: null,
   });
-  system.store.decideProposal(refused.id, 'rejected', 'too defensive', 'human');
+  system.store.escalations.decideProposal(refused.id, 'rejected', 'too defensive', 'human');
 
   const res = await callReply(system, agent, { body: 'Still keeping it.', thread: 'c-1' });
   assert.equal(res.isError, false, 'a held reply is not the agent’s fault');
@@ -236,7 +236,7 @@ test('and it authorizes replies only — a merge still waits for the operator', 
     actions: [{ type: 'merge_pr', prNumber: 42, method: 'squash', reason: 'green' }],
   } as never);
 
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.kind, 'merge');
   assert.equal(proposal!.status, 'pending', 'a merge is authorized per pull request, by landing a stack');
   system.store.close();
@@ -273,7 +273,7 @@ test('resolved: true closes the thread as the reply goes out', async () => {
     'the harness resolves what the agent says it dealt with',
   );
   assert.match(res.text, /"resolveRequested": true/);
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /Resolved thread c-1/);
   system.store.close();
 });
@@ -300,7 +300,7 @@ test('the resolution rides on the act, so it waits for the operator with the rep
   await callReply(system, agent, { body: 'Done — extracted the helper.', thread: 'c-1', resolved: true });
   assert.equal(sink.resolved.length, 0, 'nothing is resolved before the reply it justifies is authorized');
 
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   await system.proposals.accept(proposal!.id);
   assert.equal(sink.replies.length, 1);
   assert.deepEqual(
@@ -331,12 +331,16 @@ test('a failed resolve never costs the reply: it is not escalated and not re-pro
   const res = await callReply(system, agent, { body: 'Fixed.', thread: 'c-1', resolved: true });
   assert.equal(res.isError, false);
   assert.equal(sink.replies.length, 1, 'the reply went out');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'and nothing asks the operator to send it again');
+  assert.equal(
+    system.store.escalations.listOpenEscalations().length,
+    0,
+    'and nothing asks the operator to send it again',
+  );
 
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.equal(decision!.outcome, 'executed');
   assert.match(decision!.detail, /still open/, 'the line says the thread was left open');
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.status, 'accepted');
   system.store.close();
 });
@@ -348,7 +352,7 @@ test('a provider that cannot resolve says so rather than reporting a closed thre
 
   await callReply(system, agent, { body: 'Fixed.', thread: 'c-1', resolved: true });
   assert.equal(sink.replies.length, 1);
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /cannot resolve one/);
   system.store.close();
 });
@@ -359,7 +363,7 @@ test('a thread the provider no longer carries is reported, not guessed at', asyn
   const agent = reviewAgent(system);
 
   await callReply(system, agent, { body: 'Fixed.', thread: 'c-9', resolved: true });
-  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  const decision = system.store.decisions.listDecisions().find((d) => d.action.type === 'reply_on_pr');
   assert.match(decision!.detail, /carries no thread c-9/);
   system.store.close();
 });

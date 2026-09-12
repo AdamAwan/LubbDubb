@@ -115,7 +115,7 @@ export class WorldStore {
   }
 }
 
-export interface WorldLabelPatch {
+interface WorldLabelPatch {
   issues?: readonly number[];
   pullRequests?: readonly number[];
   label: string;

@@ -1,9 +1,10 @@
+import type { SentPrReplies } from '../prThreads.js';
 import type { PrReplySent } from '../types.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
-export class PrReplyStore {
+export class PrReplyStore implements SentPrReplies {
   constructor(private readonly ctx: StoreContext) {}
 
   recordPrReplySent(prNumber: number, threadId: string, commentRef: string): void {

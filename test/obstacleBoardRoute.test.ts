@@ -28,7 +28,7 @@ function build(): System {
 }
 
 function say(system: System, what: string, goalRef: string | null, keys: { kind: 'test'; value: string }[]) {
-  return system.store.recordObstacleSighting(
+  return system.store.obstacles.recordObstacleSighting(
     { what, kind: 'obstacle', keys: keys.map((key) => ({ ...key, binds: true })), untilHours: null },
     {
       agentId: null,
@@ -86,7 +86,7 @@ test('muting is a person and only a person, and it goes both ways', async () => 
     payload: { muted: true },
   });
   assert.equal(muted.statusCode, 200);
-  assert.equal(system.store.getObstacle(obstacle.id)?.state, 'muted');
+  assert.equal(system.store.obstacles.getObstacle(obstacle.id)?.state, 'muted');
 
   const back = await app.inject({
     method: 'POST',
@@ -94,7 +94,7 @@ test('muting is a person and only a person, and it goes both ways', async () => 
     payload: { muted: false },
   });
   assert.equal(back.statusCode, 200);
-  assert.equal(system.store.getObstacle(obstacle.id)?.state, 'standing');
+  assert.equal(system.store.obstacles.getObstacle(obstacle.id)?.state, 'standing');
 
   const bare = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/mute`, payload: {} });
   assert.equal(bare.statusCode, 400);
@@ -117,7 +117,7 @@ test('owning takes the row through the same claim the pulse takes, and a second 
     payload: { ownerRef: 'issue:412' },
   });
   assert.equal(took.statusCode, 200);
-  const owned = system.store.getObstacle(obstacle.id);
+  const owned = system.store.obstacles.getObstacle(obstacle.id);
   assert.equal(owned?.state, 'owned');
   assert.equal(owned?.ownerRef, 'issue:412');
 
@@ -128,7 +128,7 @@ test('owning takes the row through the same claim the pulse takes, and a second 
   });
   assert.equal(again.statusCode, 409);
   assert.match(String(again.json().error), /issue:412/);
-  assert.equal(system.store.getObstacle(obstacle.id)?.ownerRef, 'issue:412');
+  assert.equal(system.store.obstacles.getObstacle(obstacle.id)?.ownerRef, 'issue:412');
 
   await app.close();
   system.store.close();
@@ -142,7 +142,7 @@ test('retiring is not rejecting: the row keeps what it said, and a matching repo
 
   const retired = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/retire` });
   assert.equal(retired.statusCode, 200);
-  const after = system.store.getObstacle(obstacle.id);
+  const after = system.store.obstacles.getObstacle(obstacle.id);
   assert.equal(after?.state, 'resolved');
   assert.equal(after?.endedBy, 'retired');
   assert.equal(after?.what, 'e.test.ts is slow', 'it goes on saying what it said');
@@ -151,7 +151,7 @@ test('retiring is not rejecting: the row keeps what it said, and a matching repo
   assert.equal(reopened.obstacle.id, obstacle.id);
   assert.equal(reopened.obstacle.state, 'standing');
   assert.equal(reopened.obstacle.endedBy, null);
-  assert.equal(system.store.listObstacleSightings(obstacle.id).length, 2);
+  assert.equal(system.store.obstacles.listObstacleSightings(obstacle.id).length, 2);
 
   const twice = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/retire` });
   assert.equal(twice.statusCode, 200);
@@ -172,7 +172,7 @@ test('write it down is a note’s door and refuses an obstacle', async () => {
   const res = await app.inject({ method: 'POST', url: `/api/obstacles/${obstacle.id}/write-up` });
   assert.equal(res.statusCode, 409);
   assert.match(String(res.json().error), /only a note/);
-  assert.equal(system.store.obstaclesWrittenUp().size, 0);
+  assert.equal(system.store.obstacles.obstaclesWrittenUp().size, 0);
 
   await app.close();
   system.store.close();

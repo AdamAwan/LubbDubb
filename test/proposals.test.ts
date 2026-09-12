@@ -160,22 +160,22 @@ test('a gated merge becomes a pending proposal, and accepting it merges — once
 
   await system.executor.execute('cyc', mergePlan());
 
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.ok(proposal, 'the gated merge should be recorded as a proposal, not just an escalation');
   assert.equal(proposal.kind, 'merge');
   assert.equal(proposal.ref, 'pr:42:merge');
   assert.equal(proposal.status, 'pending');
   assert.equal(sink.merges.length, 0, 'nothing merges before a human says so');
-  assert.equal(system.store.getEscalation(proposal.escalationId!)!.type, 'approve_change');
+  assert.equal(system.store.escalations.getEscalation(proposal.escalationId!)!.type, 'approve_change');
 
   const accepted = await system.proposals.accept(proposal.id, 'looks good');
   assert.ok(accepted && 'outcome' in accepted, 'a merge raises no caveats, so nothing gates the accept');
   assert.equal(accepted.outcome, 'performed');
   assert.deepEqual(sink.merges, [42], 'accepting is what performs the act');
-  assert.equal(system.store.getProposal(proposal.id)!.status, 'accepted');
-  assert.equal(system.store.getProposal(proposal.id)!.decidedBy, 'human');
-  assert.equal(system.store.getEscalation(proposal.escalationId!)!.status, 'answered');
-  const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal.id}`);
+  assert.equal(system.store.escalations.getProposal(proposal.id)!.status, 'accepted');
+  assert.equal(system.store.escalations.getProposal(proposal.id)!.decidedBy, 'human');
+  assert.equal(system.store.escalations.getEscalation(proposal.escalationId!)!.status, 'answered');
+  const audited = system.store.decisions.listDecisions().find((d) => d.cycleId === `human:${proposal.id}`);
   assert.match(audited!.detail, /Merged PR #42 via squash — authorized by you/);
 
   assert.equal(await system.proposals.accept(proposal.id), null);
@@ -187,18 +187,18 @@ test('a rejected proposal posts nothing and records the reason', async () => {
   const sink = countingSink();
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', mergePlan());
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
 
   const rejected = system.proposals.reject(proposal!.id, 'wait for the release branch');
   assert.equal(rejected!.outcome, 'none');
   assert.equal(sink.merges.length, 0, 'a rejection sends nothing');
 
-  const stored = system.store.getProposal(proposal!.id)!;
+  const stored = system.store.escalations.getProposal(proposal!.id)!;
   assert.equal(stored.status, 'rejected');
   assert.equal(stored.note, 'wait for the release branch');
-  const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`);
+  const audited = system.store.decisions.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`);
   assert.match(audited!.detail, /Rejected by you: wait for the release branch/);
-  assert.equal(system.store.getEscalation(proposal!.escalationId!)!.status, 'answered');
+  assert.equal(system.store.escalations.getEscalation(proposal!.escalationId!)!.status, 'answered');
   assert.equal(system.proposals.reject(proposal!.id), null);
   system.store.close();
 });
@@ -207,18 +207,18 @@ test('an accepted act whose send fails re-escalates rather than dropping', async
   const sink = countingSink(true);
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', mergePlan());
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
 
   const accepted = await system.proposals.accept(proposal!.id);
   assert.ok(accepted && 'outcome' in accepted, 'a merge raises no caveats, so nothing gates the accept');
   assert.equal(accepted.outcome, 'failed');
   assert.deepEqual(sink.merges, [42], 'it was attempted');
 
-  const open = system.store.listOpenEscalations();
+  const open = system.store.escalations.listOpenEscalations();
   assert.equal(open.length, 1);
   assert.equal(open[0]!.context.autoMergeFailed, true);
   assert.match(open[0]!.prompt, /You approved merging PR #42, but the merge failed \(merge conflict\)/);
-  const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`);
+  const audited = system.store.decisions.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`);
   assert.equal(audited!.outcome, 'rejected');
   assert.match(audited!.detail, /escalated so it isn't dropped/);
   system.store.close();
@@ -240,19 +240,23 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 7, mergeable: true, mergeableState: 'clean' });
 
   await system.harness.runCycle('manual');
-  const first = system.store.listProposals();
+  const first = system.store.escalations.listProposals();
   assert.equal(first.length, 1, 'rule `pr-merge-ready` should propose the merge once');
   assert.equal(first[0]!.ref, 'pr:7:merge');
-  const escalationsAfterOne = system.store.listOpenEscalations().length;
+  const escalationsAfterOne = system.store.escalations.listOpenEscalations().length;
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1, 'the pending verdict holds rule `pr-merge-ready` off that PR');
-  assert.equal(system.store.listOpenEscalations().length, escalationsAfterOne);
+  assert.equal(
+    system.store.escalations.listProposals().length,
+    1,
+    'the pending verdict holds rule `pr-merge-ready` off that PR',
+  );
+  assert.equal(system.store.escalations.listOpenEscalations().length, escalationsAfterOne);
 
   system.proposals.reject(first[0]!.id, 'not yet');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1);
+  assert.equal(system.store.escalations.listProposals().length, 1);
   assert.equal(sink.merges.length, 0);
   system.store.close();
 });
@@ -267,26 +271,26 @@ test('a merge that lands while the ask is standing withdraws it, and the card cl
   mergeReadyPr(system, 7);
 
   await system.harness.runCycle('manual');
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.ref, 'pr:7:merge');
   const cardId = proposal!.escalationId!;
-  assert.equal(system.store.getEscalation(cardId)!.status, 'open');
+  assert.equal(system.store.escalations.getEscalation(cardId)!.status, 'open');
 
   system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
   await system.harness.runCycle('manual');
 
-  const settled = system.store.getProposal(proposal!.id)!;
+  const settled = system.store.escalations.getProposal(proposal!.id)!;
   assert.equal(settled.status, 'withdrawn', 'the ask is withdrawn, not rejected — a rejection would stand');
   assert.equal(settled.decidedBy, null, 'nobody decided it');
-  const card = system.store.getEscalation(cardId)!;
+  const card = system.store.escalations.getEscalation(cardId)!;
   assert.equal(card.status, 'answered');
   assert.match(card.response!, /PR #7 merged/);
-  assert.equal(system.store.listOpenEscalations().length, 0, 'nothing is left on "Needs you"');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'nothing is left on "Needs you"');
   assert.equal(sink.merges.length, 0, 'and nothing is merged a second time');
 
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1, 'a merged PR is not proposed again');
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.listProposals().length, 1, 'a merged PR is not proposed again');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
   system.store.close();
 });
 
@@ -299,18 +303,18 @@ test('a merge that failed because the PR was already merged stops re-asking', as
   });
   mergeReadyPr(system, 7);
   await system.harness.runCycle('manual');
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
 
   const accepted = await system.proposals.accept(proposal!.id);
   assert.ok(accepted && 'outcome' in accepted && accepted.outcome === 'failed');
-  const raised = system.store.listOpenEscalations().filter((e) => e.context.autoMergeFailed === true);
+  const raised = system.store.escalations.listOpenEscalations().filter((e) => e.context.autoMergeFailed === true);
   assert.equal(raised.length, 1, 'the failed merge re-escalates');
 
   system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
   await system.harness.runCycle('manual');
 
-  assert.equal(system.store.getEscalation(raised[0]!.id)!.status, 'answered');
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.getEscalation(raised[0]!.id)!.status, 'answered');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
   system.store.close();
 });
 
@@ -380,33 +384,37 @@ test('a rejection stands while nothing happens to the PR, and stops standing whe
   mergeReadyPr(system, 7);
 
   await system.harness.runCycle('manual');
-  const proposal = system.store.listProposals()[0]!;
+  const proposal = system.store.escalations.listProposals()[0]!;
   assert.equal(proposal.ref, 'pr:7:merge');
   system.proposals.reject(proposal.id, 'needs one more commit');
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1, 'a "no" is not re-asked every heartbeat');
+  assert.equal(system.store.escalations.listProposals().length, 1, 'a "no" is not re-asked every heartbeat');
   assert.equal(sink.merges.length, 0);
 
   await sleep(5);
   system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1, 'a red PR is not merge-ready — the rule still says no');
+  assert.equal(
+    system.store.escalations.listProposals().length,
+    1,
+    'a red PR is not merge-ready — the rule still says no',
+  );
 
   system.connector.inject({ kind: 'ci_passed', prNumber: 7 });
   await system.harness.runCycle('manual');
-  const proposals = system.store.listProposals();
+  const proposals = system.store.escalations.listProposals();
   assert.equal(proposals.length, 2, 'the verdict was about a PR that has since changed — so it is asked again');
   assert.equal(proposals[0]!.status, 'pending');
   assert.equal(proposals[1]!.id, proposal.id, 'the rejection is not retracted, only overtaken');
-  const esc = system.store.getEscalation(proposals[0]!.escalationId!)!;
+  const esc = system.store.escalations.getEscalation(proposals[0]!.escalationId!)!;
   assert.match(esc.prompt, /You rejected this on .* — "needs one more commit"\. Since then: PR #7 CI passing\./);
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 2);
+  assert.equal(system.store.escalations.listProposals().length, 2);
   assert.equal(sink.merges.length, 0, 'and still nothing has been merged without you');
   system.store.close();
 });
@@ -435,12 +443,12 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
   const withoutNote = await commented(2, 'feat/two', 'Same question here.');
   await system.executor.execute('cyc', draftPlan(1, withNote));
   await system.executor.execute('cyc', draftPlan(2, withoutNote));
-  const [second, first] = system.store.listProposals();
+  const [second, first] = system.store.escalations.listProposals();
   system.proposals.reject(first!.id, 'too defensive — just fix the lint');
   system.proposals.reject(second!.id, '   ');
 
   await system.harness.runCycle('manual');
-  const tasks = new Map(system.store.listTasks().map((t) => [t.originRef, system.store.getTask(t.id)!]));
+  const tasks = new Map(system.store.tasks.listTasks().map((t) => [t.originRef, system.store.tasks.getTask(t.id)!]));
 
   const told = tasks.get('pr:1:comments')!;
   assert.match(told.prompt, /An operator refused a reply the harness proposed for this exact item/);
@@ -463,9 +471,11 @@ test('the executor refuses a duplicate proposal even when the dispatcher gate is
   await system.executor.execute('cyc-1', mergePlan());
   await system.executor.execute('cyc-2', mergePlan());
 
-  assert.equal(system.store.listProposals().length, 1);
-  assert.equal(system.store.listOpenEscalations().length, 1);
-  const skipped = system.store.listDecisions().find((d) => d.outcome === 'skipped' && d.action.type === 'merge_pr');
+  assert.equal(system.store.escalations.listProposals().length, 1);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1);
+  const skipped = system.store.decisions
+    .listDecisions()
+    .find((d) => d.outcome === 'skipped' && d.action.type === 'merge_pr');
   assert.match(skipped!.detail, /Skipped merge of PR #42: awaiting your accept\/reject/);
   system.store.close();
 });
@@ -492,7 +502,7 @@ test('a drafted reply is proposed, and accepting it sends that draft', async () 
   } as unknown as DispatchResult;
 
   await system.executor.execute('cyc', plan);
-  const [proposal] = system.store.listProposals();
+  const [proposal] = system.store.escalations.listProposals();
   assert.equal(proposal!.kind, 'reply_draft');
   assert.equal(proposal!.ref, 'pr:42:comment:c-1', 'a threaded draft keys on the comment it answers');
 
@@ -513,14 +523,14 @@ test('a database created before proposals existed opens and works after them', (
   old.close();
 
   const store = new Store(dbPath);
-  assert.equal(store.listOpenEscalations().length, 1);
-  const proposal = store.createProposal({
+  assert.equal(store.escalations.listOpenEscalations().length, 1);
+  const proposal = store.escalations.createProposal({
     kind: 'merge',
     ref: 'pr:1:merge',
     action: { type: 'merge_pr', reason: 'test', prNumber: 1, method: 'squash' },
     escalationId: 'esc_old',
   });
-  assert.equal(store.listProposals().length, 1);
-  assert.equal(store.decideProposal(proposal.id, 'accepted', null, 'human')!.status, 'accepted');
+  assert.equal(store.escalations.listProposals().length, 1);
+  assert.equal(store.escalations.decideProposal(proposal.id, 'accepted', null, 'human')!.status, 'accepted');
   store.close();
 });

@@ -17,30 +17,25 @@ import { deliverySignalQuery } from './delivery/delivery.js';
 import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
 import type { LimitResumeFailure } from './agents/agentManager.js';
-import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AppraisalDesk } from './intake/appraisalDesk.js';
 import type { AreaPathDirectory } from './intake/areaPaths.js';
-import type { PrNamingDesk } from './prNamingDesk.js';
-import type { PrWatchDesk } from './prWatchDesk.js';
-import type { PrWorkItemDesk } from './prWorkItemDesk.js';
-import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
-import type { ValidationAskDesk } from './validation/askDesk.js';
-import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
-import type { BranchReapDesk } from './branchReapDesk.js';
-import type { EnvironmentDesk } from './environments/environmentDesk.js';
-import type { RemoteValidationDesk } from './remoteValidation/desk.js';
-import type { ScheduleDesk } from './schedules/scheduleDesk.js';
-import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
+import type {
+  Action,
+  PrReview,
+  PrReviewRoute,
+  PullRequest,
+  RemoteRunBrief,
+  WorldEvent,
+  WorldSnapshot,
+} from './types.js';
 import { applyThreadReopens } from './prThreads.js';
+import { runPulseDesks, type PulseDeskDeps } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
-import type { StackLandingDesk } from './stacks/landingDesk.js';
-import type { PoolDesk } from './pool/poolDesk.js';
 import type { PrReviewPolicy } from './review/policy.js';
 import { needsFleetReview, reviewReading } from './review/prReview.js';
 import type { ReviewProber } from './review/reviewedElsewhere.js';
@@ -51,7 +46,7 @@ const PRIOR_REMEDY_ROWS = 40;
 
 const READ_PLAN_EVENTS = 200;
 
-interface HarnessDeps {
+interface HarnessDeps extends PulseDeskDeps {
   store: Store;
   connector: Connector;
   dispatcher: Dispatcher;
@@ -67,40 +62,17 @@ interface HarnessDeps {
   modelPins?: { labelPrefix: string; models: AgentModels };
   featureStandings?: () => { number: number; title: string; key: string }[];
   upNextOverrideTtlMs: number;
-  plans?: PlanReconciler;
   appraisals?: AppraisalDesk;
   areaPaths?: AreaPathDirectory;
-  naming?: PrNamingDesk;
-  prWatch?: PrWatchDesk;
-  prWorkItems?: PrWorkItemDesk;
-  closeOuts?: DeliveryCloseOutDesk;
-  validationAsks?: ValidationAskDesk;
-  validationReady?: ValidationReadyDesk;
   burn?: SpendBurnDesk;
   runway?: RunwayDesk;
   issuePickup?: IssuePickupPolicy;
-  branchReaps?: BranchReapDesk;
-  environments?: EnvironmentDesk;
-  remoteValidation?: RemoteValidationDesk;
-  schedules?: ScheduleDesk;
-  landings?: StackLandingDesk;
-  graph?: WorkGraphRecorder;
   tickets?: { run(): Promise<void> };
   localRun?: { noteAlive(): void };
   localValidations?: { sweep(): void };
   remoteRuns?: () => RemoteRunBrief[];
-  updates?: { run(): Promise<void> };
   recovery?: { pendingCount(): number };
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
-  notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  graduations?: { run(): void };
-  clusters?: { run(): void };
-  obstacleNotices?: { run(): void };
-  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  obstacleDesk?: { run(): Promise<void> };
-  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
-  obstacleEndings?: { run(world: WorldSnapshot): void };
-  pool?: PoolDesk;
   ejections?: { sweepExpiries(): unknown[] };
   escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
   freshReads?: { drain(): string[] };
@@ -194,7 +166,7 @@ export class Harness extends EventEmitter {
         at: new Date().toISOString(),
       };
     }
-    const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.getWorldBaseline()) : null;
+    const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.world.getWorldBaseline()) : null;
     if (source === 'local' && cached === null) {
       return {
         cycleId: 'unbaselined',
@@ -215,41 +187,19 @@ export class Harness extends EventEmitter {
       const { store } = this.deps;
       const readPlan = readWorld
         ? buildReadPlan({
-            previous: this.prevWorld ?? store.getWorldBaseline(),
-            tasks: store.listTasks(),
-            events: store.listWorldEvents(READ_PLAN_EVENTS),
+            previous: this.prevWorld ?? store.world.getWorldBaseline(),
+            tasks: store.tasks.listTasks(),
+            events: store.world.listWorldEvents(READ_PLAN_EVENTS),
             now: Date.now(),
             lanes: this.deps.readLanes,
             fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
       const observed = cached ?? (await this.deps.connector.getState(readPlan));
-      const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : observed;
+      const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
-      const world = applyThreadReopens(observed, store.prThreadReopens());
-      if (readWorld) await this.deps.plans?.reconcile(world);
-      if (readWorld) await this.deps.prWatch?.run(world);
-      if (readWorld) await this.deps.prWorkItems?.run(world);
-      if (readWorld) await this.deps.naming?.run(world);
-      if (readWorld) await this.deps.branchReaps?.run(world);
-      this.deps.landings?.settle(world);
-      this.deps.validationAsks?.run();
-      this.deps.schedules?.run();
-      if (readWorld) await this.deps.updates?.run();
-      this.deps.graph?.record(world);
-      if (readWorld) await this.deps.environments?.run(world);
-      if (readWorld) await this.deps.remoteValidation?.run();
-      this.deps.validationReady?.run(world);
-      this.deps.closeOuts?.run(world);
-      if (readWorld) this.deps.notices?.run(previousWorld, world);
-      this.deps.graduations?.run();
-      this.deps.clusters?.run();
-      if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
-      void this.deps.obstacleDesk?.run();
-      this.deps.obstacleNotices?.run();
-      await this.deps.obstacleOwnership?.run(world);
-      if (readWorld) this.deps.obstacleEndings?.run(world);
-      if (readWorld) await this.deps.pool?.run();
+      const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
+      await runPulseDesks(this.deps, { world, previousWorld }, readWorld);
       for (const { agentId, error } of this.deps.fleet?.resumeExpiredParks() ?? [])
         this.deps.errors.record({
           source: 'agent',
@@ -258,8 +208,8 @@ export class Harness extends EventEmitter {
         });
       this.deps.fleet?.completeExpiredStalls();
       this.deps.ejections?.sweepExpiries();
-      const tasks = store.listTasks();
-      store.foldReviewWaits(
+      const tasks = store.tasks.listTasks();
+      store.reviewWaits.foldReviewWaits(
         world.pullRequests
           .filter((pr) =>
             awaitingReview(
@@ -269,27 +219,27 @@ export class Harness extends EventEmitter {
           )
           .map((pr) => pr.number),
       );
-      const agents = store.listAgents();
+      const agents = store.agents.listAgents();
       this.deps.burn?.run({ agents, tasks });
       this.deps.escalations?.tidyDeadAgents();
       this.deps.escalations?.tidySettledMerges();
-      const openEscalations = store.listOpenEscalations();
-      const queuedJobs = store.listQueuedJobs();
-      const standingJobs = store.listStandingJobs();
-      const ejections = store.liveEjections();
-      const plans = store.listPlans();
-      const planParts = store.listAllPlanParts();
-      const conclusions = store.listIssueConclusions();
-      const deliveries = store.listDeliveries();
+      const openEscalations = store.escalations.listOpenEscalations();
+      const queuedJobs = store.jobs.listQueuedJobs();
+      const standingJobs = store.jobs.listStandingJobs();
+      const ejections = store.ejections.liveEjections();
+      const plans = store.plans.listPlans();
+      const planParts = store.plans.listAllPlanParts();
+      const conclusions = store.verdicts.listIssueConclusions();
+      const deliveries = store.verdicts.listDeliveries();
       const deliveryWindow = deliverySignalQuery(deliveries);
-      const shortfalls = store.listShortfalls();
+      const shortfalls = store.verdicts.listShortfalls();
       const deliverySignals = deliveryWindow
-        ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
+        ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
-      const appraisals = store.listAppraisals();
+      const appraisals = store.verdicts.listAppraisals();
       if (readWorld) await this.deps.appraisals?.announce(world);
       if (readWorld) await this.deps.areaPaths?.refresh();
-      const retrospectiveOrigins = store.listRetrospectiveOrigins();
+      const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
       try {
         for (const r of runsToRecord(world.issues, tasks, {
           retrospectiveOrigins,
@@ -297,9 +247,9 @@ export class Harness extends EventEmitter {
           deliveries,
           shortfalls,
           plans,
-          planParts: store.listAllPlanParts(),
+          planParts,
         }))
-          store.recordIssueRun(r);
+          store.floor.recordIssueRun(r);
       } catch (err) {
         this.deps.errors.record({
           source: 'cycle',
@@ -307,22 +257,23 @@ export class Harness extends EventEmitter {
           detail: (err as Error).stack ?? null,
         });
       }
-      const recentDecisions = store.listDecisions(200);
-      const proposals = store.listProposals();
+      const recentDecisions = store.decisions.listDecisions(200);
+      const proposals = store.escalations.listProposals();
       const signals = rejectionSignalQuery(proposals);
-      const rejectionSignals = signals ? store.listWorldEventsSince(signals.since, signals.refs) : [];
-      const priorityOverrides = store.listPriorityOverrides();
-      const goalPriorities = store.listGoalPriorities();
-      const goalPauses = store.listGoalPauses();
-      const profileOverrides = store.listProfileOverrides();
-      const liveAgents = store.countLiveAgents();
+      const rejectionSignals = signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [];
+      const priorityOverrides = store.priority.listPriorityOverrides();
+      const goalPriorities = store.priority.listGoalPriorities();
+      const goalPauses = store.pauses.listGoalPauses();
+      const profileOverrides = store.profileOverrides.listProfileOverrides();
+      const liveAgents = store.agents.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
       const label = this.deps.prWatchLabel;
       const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
       const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
 
-      const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
+      const issueRuns = store.floor.listIssueRuns();
+      const retainedIssues = retainedRunIssues(issueRuns, world.issues);
       const dispatchWorld: WorldSnapshot =
         hiddenPrs.length > 0 || retainedIssues.length > 0
           ? {
@@ -336,9 +287,11 @@ export class Harness extends EventEmitter {
       const featureSummaryKeys =
         featureStandings.length === 0
           ? []
-          : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
+          : store.tickets.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
-      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld);
+      const prReviews = store.prReviews.listPrReviews();
+      const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
+      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld, { prReviews, prReviewRoutes });
 
       this.deps.localValidations?.sweep();
 
@@ -354,14 +307,17 @@ export class Harness extends EventEmitter {
         ejections,
         plans,
         planParts,
-        planAtoms: store.listAllPlanAtoms(),
-        planAmendments: store.listPendingPlanAmendments(),
-        validationChecks: store.listAllValidationChecks(),
-        validationPlans: store.listValidationPlanRecords(),
-        localRun: store.liveLocalRun(),
-        localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
+        planAtoms: store.plans.listAllPlanAtoms(),
+        planAmendments: store.plans.listPendingPlanAmendments(),
+        validationChecks: store.validation.listAllValidationChecks(),
+        validationPlans: store.validation.listValidationPlanRecords(),
+        localRun: store.localRuns.liveLocalRun(),
+        localValidations: [
+          ...store.localValidations.listOpenLocalValidations(),
+          ...store.localValidations.listLocalValidationsAwaitingFix(),
+        ],
         remoteRuns: this.deps.remoteRuns?.() ?? [],
-        selectorOfferings: store.listSelectorOfferings(),
+        selectorOfferings: store.remoteValidation.listSelectorOfferings(),
         conclusions,
         deliveries,
         deliverySignals,
@@ -370,7 +326,7 @@ export class Harness extends EventEmitter {
         retrospectiveOrigins,
         featureStandings,
         featureSummaryKeys,
-        featureSequences: store.listFeatureSequences(),
+        featureSequences: store.sequences.listFeatureSequences(),
         recentDecisions,
         proposals,
         rejectionSignals,
@@ -379,15 +335,15 @@ export class Harness extends EventEmitter {
         goalPauses,
         profileOverrides,
         priorRemedies: [
-          ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
-          ...store.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
+          ...store.remedies.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
+          ...store.remedies.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
         ],
-        prReviews: store.listPrReviews(),
-        prReviewRoutes: store.listPrReviewRoutes(),
-        prSplits: store.listPrSplitVerdicts(),
-        prReviewedElsewhere: store.prsReviewedElsewhere(),
-        obstacles: store.obstacleBoard(),
-        obstacleBlocks: store.listObstacleBlocks(),
+        prReviews,
+        prReviewRoutes,
+        prSplits: store.prSplits.listPrSplitVerdicts(),
+        prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
+        obstacles: store.obstacles.obstacleBoard(),
+        obstacleBlocks: store.obstacles.listObstacleBlocks(),
         modelPins: this.deps.modelPins,
         agentHeadroom: headroom,
       });
@@ -405,8 +361,8 @@ export class Harness extends EventEmitter {
 
       const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
-      store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
-      store.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      store.priority.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      store.profileOverrides.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
       if (this.deps.runway && this.deps.issuePickup)
         this.deps.runway.run({
@@ -423,7 +379,7 @@ export class Harness extends EventEmitter {
             deliveries,
             deliverySignals,
             appraisals,
-            runs: store.listIssueRuns(),
+            runs: issueRuns,
             headroom,
             paused: this.deps.runtime.paused,
           },
@@ -432,7 +388,7 @@ export class Harness extends EventEmitter {
 
       const stale = world.staleSources ?? [];
       const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
-      store.recordDecision({
+      store.decisions.recordDecision({
         cycleId,
         action: { type: 'no_op', reason: 'cycle rationale' } as Action,
         outcome: 'skipped',
@@ -478,20 +434,24 @@ export class Harness extends EventEmitter {
     }
   }
 
-  private async askReviewedElsewhere(store: HarnessDeps['store'], world: WorldSnapshot): Promise<void> {
+  private async askReviewedElsewhere(
+    store: HarnessDeps['store'],
+    world: WorldSnapshot,
+    read: { prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] },
+  ): Promise<void> {
     const prober = this.deps.reviewProber;
     const command = this.deps.review.reviewedElsewhere;
     if (prober === undefined || command === null || command.trim() === '') return;
     const rows = {
-      prReviews: new Map(store.listPrReviews().map((r) => [r.prNumber, r])),
-      prReviewRoutes: new Map(store.listPrReviewRoutes().map((r) => [r.prNumber, r])),
-      prReviewedElsewhere: store.prsReviewedElsewhere(),
+      prReviews: new Map(read.prReviews.map((r) => [r.prNumber, r])),
+      prReviewRoutes: new Map(read.prReviewRoutes.map((r) => [r.prNumber, r])),
+      prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     };
     for (const pr of world.pullRequests) {
       if (!needsFleetReview(pr, reviewReading(rows, pr.number), this.deps.review)) continue;
       const report = await prober.check(pr.number, command);
       if (report.verdict === 'reviewed') {
-        store.recordPrReviewedElsewhere(pr.number, command);
+        store.prReviewExternals.recordPrReviewedElsewhere(pr.number, command);
         continue;
       }
       if (report.verdict === 'unknown') {
@@ -508,13 +468,13 @@ export class Harness extends EventEmitter {
     if (prev) {
       const changes = diffWorlds(prev, world);
       if (changes.length) {
-        const events = store.recordWorldEvents(changes);
+        const events = store.world.recordWorldEvents(changes);
         this.emit('world:events', { events });
       }
     }
     this.prevWorld = world;
-    store.setWorldBaseline(world);
-    store.archiveClosedPrs(world.closedPullRequests ?? []);
+    store.world.setWorldBaseline(world);
+    store.prArchive.archiveClosedPrs(world.closedPullRequests ?? []);
   }
 
   override emit<K extends keyof HarnessEvents>(event: K, ...args: HarnessEvents[K]): boolean {
