@@ -608,7 +608,11 @@ function ctx(checks: ValidationCheck[]): DispatchContext {
 }
 
 function runner(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, { desktopClaimMinutes: 60 }, '/srv/validation');
+  return new RuleDispatcher({
+    defaultBranch: 'main',
+    validation: { desktopClaimMinutes: 60 },
+    validationRoot: '/srv/validation',
+  });
 }
 
 function validateDispatches(actions: { type: string }[]): string[] {

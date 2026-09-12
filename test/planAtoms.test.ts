@@ -524,7 +524,7 @@ async function partPrompt(system: System, planId: string): Promise<string> {
     labels: [],
     linkedPrNumber: null,
   };
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', DEFAULT_PLANNING).decide({
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: DEFAULT_PLANNING }).decide({
     world: { takenAt: '2026-07-25T12:00:00.000Z', pullRequests: [], issues: [issue] },
     tasks: [],
     agents: [],

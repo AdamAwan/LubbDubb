@@ -239,9 +239,13 @@ test('a conflict on an inheriting PR is still notified to its running agent', as
 });
 
 test('a part held by the per-plan cap is queued as `capped`, not skipped', async () => {
-  const dispatcher = new RuleDispatcher({ priorityLabels: {}, defaultPriority: 0 }, {}, undefined, 'main', {
-    ...enabled,
-    maxConcurrentPartsPerIssue: 2,
+  const dispatcher = new RuleDispatcher({
+    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    defaultBranch: 'main',
+    planning: {
+      ...enabled,
+      maxConcurrentPartsPerIssue: 2,
+    },
   });
   const parts = [part('a', 1), part('b', 2), part('c', 3)];
   const result = await dispatcher.decide(context([issue(12)], { plans: [plan()], planParts: parts }));
@@ -293,7 +297,11 @@ test('a replan carries the current plan into the prompt, slugs included', async 
     part('a', 1, { status: 'merged', prNumber: 40, branch: 'issue/12/a' }),
     part('b', 2, { status: 'ready', dependsOn: ['a'] }),
   ];
-  const dispatcher = new RuleDispatcher({ priorityLabels: {}, defaultPriority: 0 }, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({
+    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    defaultBranch: 'main',
+    planning: enabled,
+  });
   const result = await dispatcher.decide(
     context([issue(12)], { plans: [plan({ status: 'planning' })], planParts: parts }),
   );

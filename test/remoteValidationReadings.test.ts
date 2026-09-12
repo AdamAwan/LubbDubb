@@ -620,7 +620,7 @@ test('a failed row reaches rule validation-failed through the ordinary failed re
       deliveries: [delivered()],
       validationChecks: b.sys.store.validation.listValidationChecks('issue:12'),
     };
-    const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(ctx);
+    const { actions } = await new RuleDispatcher({ defaultBranch: 'main' }).decide(ctx);
     assert.equal(
       actions.some((a) => a.rule === 'validation-failed' && a.type === 'dispatch_code_agent'),
       true,

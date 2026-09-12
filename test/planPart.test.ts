@@ -208,7 +208,7 @@ test('rule `plan-part` dispatches a ready part on its own branch, based on its d
     part('schema', 1, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 }),
     part('dispatcher', 2, { dependsOn: ['schema'], status: 'ready' }),
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: parts }),
   );
   assert.equal(result.actions.length, 1);
@@ -230,7 +230,7 @@ test('a part stacks on its dependency while that dependency is still open', asyn
     part('schema', 1, { status: 'in_review', branch: 'issue/12/schema', prNumber: 40 }),
     part('dispatcher', 2, { dependsOn: ['schema'], status: 'ready' }),
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: parts }),
   );
   const action = result.actions[0]!;
@@ -248,7 +248,7 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },
     { ...part('a', 1), id: 'plan_9:a', planId: 'plan_9' },
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(7), issue(9), issue(14)], {
       plans,
       planParts: parts,
@@ -269,7 +269,10 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
 
 test('maxConcurrentPartsPerIssue caps how many parts of one plan get agents', async () => {
   const parts = [part('a', 1), part('b', 2), part('c', 3)];
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', { ...enabled, maxConcurrentPartsPerIssue: 2 });
+  const dispatcher = new RuleDispatcher({
+    defaultBranch: 'main',
+    planning: { ...enabled, maxConcurrentPartsPerIssue: 2 },
+  });
   const result = await dispatcher.decide(context([issue(12)], { plans: [plan()], planParts: parts }));
   assert.deepEqual(
     result.actions.map((a) => (a.type === 'dispatch_code_agent' ? a.branch : a.type)),
@@ -307,7 +310,10 @@ test('a cooling part does not consume a concurrency slot', async () => {
     admission: null,
     createdAt: '2026-07-25T11:50:00.000Z',
   };
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', { ...enabled, maxConcurrentPartsPerIssue: 2 });
+  const dispatcher = new RuleDispatcher({
+    defaultBranch: 'main',
+    planning: { ...enabled, maxConcurrentPartsPerIssue: 2 },
+  });
   const result = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -333,7 +339,7 @@ test('each part gets its own throttle, and a repeatedly failing one escalates', 
     admission: null,
     createdAt: '2026-07-25T00:00:00.000Z',
   }));
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: [part('a', 1), part('b', 2)], recentDecisions: attempts }),
   );
   assert.deepEqual(
@@ -359,7 +365,7 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
     priorityLabels: {},
     defaultPriority: 0,
   };
-  const dispatcher = new RuleDispatcher(pickup, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({ pickup, defaultBranch: 'main', planning: enabled });
   const watched = issue(12, { labels: ['lubbdubb-watch'] });
 
   const linked = { ...watched, linkedPrNumber: 41 };
@@ -680,7 +686,7 @@ function wedgedParts(): PlanPart[] {
 }
 
 test('every part blocked asks a human once, and dispatches nobody', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: wedgedParts() }),
   );
   assert.deepEqual(
@@ -696,7 +702,7 @@ test('every part blocked asks a human once, and dispatches nobody', async () => 
 });
 
 test('the wedge is asked once — an open item or a recent one both settle it', async () => {
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({ defaultBranch: 'main', planning: enabled });
   const open = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -730,7 +736,7 @@ test('the wedge is asked once — an open item or a recent one both settle it', 
 });
 
 test('an unapproved wedged plan is not escalated — the ask already carries it', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
   );
   assert.deepEqual(

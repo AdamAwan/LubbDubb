@@ -283,7 +283,7 @@ test('a standing verdict is not re-assessed', async () => {
 });
 
 test('the watch gate applies, evaluated once on the issue', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
+  const d = new RuleDispatcher({ pickup: { watchLabel: 'agent-ready' } });
 
   const unwatched = await d.decide(ctx());
   assert.deepEqual(origins(unwatched.actions), [], 'opt-in: an untagged issue is left alone');

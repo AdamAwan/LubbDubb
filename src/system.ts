@@ -520,26 +520,24 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sequencing: config.issueSequencing,
     sequenceMaxChildren: config.issueSequenceMaxChildren,
   };
-  const rules = new RuleDispatcher(
-    issuePickup,
-    {},
-    prompts,
-    config.defaultBranch,
-    config.planning,
-    config.ci,
-    config.validation,
-    config.validationRoot,
-    prRefStyle(config.integrations.sourceControl),
-    config.review,
+  const rules = new RuleDispatcher({
+    pickup: issuePickup,
+    templates: prompts,
+    defaultBranch: config.defaultBranch,
+    planning: config.planning,
+    ci: config.ci,
+    validation: config.validation,
+    validationRoot: config.validationRoot,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
+    review: config.review,
     reviewCharters,
-    watchNote(config.environments),
-    watchDeclareNote(config.environments),
-    undefined,
-    (offerings) => testPartNote(config.environments, offerings),
-    stateDeclareNote(config.environments),
-    config.environments.some((env) => env.validate !== undefined),
-    (offerings) => validationPlanNote(config.environments, offerings),
-  );
+    watchNote: watchNote(config.environments),
+    watchDeclareNote: watchDeclareNote(config.environments),
+    testPartNote: (offerings) => testPartNote(config.environments, offerings),
+    stateDeclareNote: stateDeclareNote(config.environments),
+    remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
+    validationPlanNote: (offerings) => validationPlanNote(config.environments, offerings),
+  });
   const dispatcher: Dispatcher = rules;
 
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });

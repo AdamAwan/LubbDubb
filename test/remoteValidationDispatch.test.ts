@@ -175,25 +175,17 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function dispatcher(on = true, templates?: PromptTemplates): RuleDispatcher {
-  return new RuleDispatcher(
-    {},
-    {},
+  return new RuleDispatcher({
     templates,
-    'main',
-    {},
-    {},
-    {},
-    '/srv/validation',
-    '#',
-    {},
-    undefined,
-    '',
-    '',
-    undefined,
-    () => '',
-    '',
-    on,
-  );
+    defaultBranch: 'main',
+    validationRoot: '/srv/validation',
+    prRefStyle: '#',
+    watchNote: '',
+    watchDeclareNote: '',
+    testPartNote: () => '',
+    stateDeclareNote: '',
+    remoteValidationOn: on,
+  });
 }
 
 interface Bench {

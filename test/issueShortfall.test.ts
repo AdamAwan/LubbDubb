@@ -216,7 +216,7 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
 });
 
 test('with no plan row both plan-shaped arms degrade rather than parking the issue', async () => {
-  const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(
+  const { actions } = await new RuleDispatcher({ defaultBranch: 'main' }).decide(
     ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [] }),
   );
   assert.equal(actions.filter((a) => a.type === 'propose_shortfall').length, 0);
@@ -592,7 +592,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function dispatcher(): RuleDispatcher {
-  return new RuleDispatcher({ watchLabel: 'lubbdubb-watch' }, {}, undefined, 'main');
+  return new RuleDispatcher({ pickup: { watchLabel: 'lubbdubb-watch' }, defaultBranch: 'main' });
 }
 
 async function decide(context: DispatchContext): Promise<{ actions: { type: string; [k: string]: unknown }[] }> {

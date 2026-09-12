@@ -211,7 +211,7 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
   const dir = tmpDir();
   try {
     writeFileSync(join(dir, 'issue-pickup.md'), 'Handle #{number} on {branch}.');
-    const d = new RuleDispatcher({}, {}, loadPromptTemplates(dir));
+    const d = new RuleDispatcher({ templates: loadPromptTemplates(dir) });
     const { actions } = await d.decide(
       ctx(
         { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },

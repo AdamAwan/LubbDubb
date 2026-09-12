@@ -193,7 +193,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 test('the delivery an overrule writes is what stops the assessor re-deriving the shortfall', async () => {
-  const dispatcher = (): RuleDispatcher => new RuleDispatcher({}, {}, undefined, 'main');
+  const dispatcher = (): RuleDispatcher => new RuleDispatcher({ defaultBranch: 'main' });
   const assessments = (actions: { rule?: unknown }[]): number =>
     actions.filter((a) => a.rule === 'issue-assess').length;
 

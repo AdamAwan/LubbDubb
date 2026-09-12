@@ -241,22 +241,15 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function rules(policy = DEFAULT_LOCAL_VALIDATION): RuleDispatcher {
-  return new RuleDispatcher(
-    {},
-    {},
-    undefined,
-    'main',
-    {},
-    {},
-    {},
-    '/srv/validation',
-    '#',
-    {},
-    { routing: null, modes: {} },
-    '',
-    '',
-    () => policy,
-  );
+  return new RuleDispatcher({
+    defaultBranch: 'main',
+    validationRoot: '/srv/validation',
+    prRefStyle: '#',
+    reviewCharters: { routing: null, modes: {} },
+    watchNote: '',
+    watchDeclareNote: '',
+    localValidation: () => policy,
+  });
 }
 
 function dispatchesOn(actions: { type: string }[], marker: string): string[] {

@@ -191,7 +191,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function runner(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, '/srv/validation');
+  return new RuleDispatcher({ defaultBranch: 'main', validationRoot: '/srv/validation' });
 }
 
 function validateDispatches(actions: { type: string }[]): string[] {

@@ -655,7 +655,7 @@ test('the lens names the concern the dispatcher acts on, and the court it acts i
           ]);
           const subject = pr({ ...arm.over, baseBranch: 'main', mergeableState, unresolvedComments: comments });
           const lens = prAttentionStatus(subject, ctx({ ci: arm.policy, recentDecisions }));
-          const dispatcher = new RuleDispatcher({}, DEFAULT_COOLDOWN, undefined, 'main', {}, arm.policy);
+          const dispatcher = new RuleDispatcher({ cooldown: DEFAULT_COOLDOWN, defaultBranch: 'main', ci: arm.policy });
           const result = await dispatcher.decide({
             world: { takenAt: NOW, pullRequests: [subject], issues: [] },
             tasks: [],

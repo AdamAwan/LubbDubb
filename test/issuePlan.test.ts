@@ -127,7 +127,7 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
 }
 
 test('rule `issue-plan` dispatches a planner instead of a pickup, on its own branch', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(context([issue(12)]));
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(context([issue(12)]));
   assert.equal(result.actions.length, 1, 'the planner replaces the pickup, it does not join it');
   const action = result.actions[0]!;
   assert.equal(action.type, 'dispatch_code_agent');
@@ -140,7 +140,7 @@ test('rule `issue-plan` dispatches a planner instead of a pickup, on its own bra
 });
 
 test('planners rank ahead of pickups for scarce headroom', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(7), issue(12)], { recentDecisions: pastTheFunnel(7), agentHeadroom: 1 }),
   );
   assert.deepEqual(
@@ -153,7 +153,7 @@ test('planners rank ahead of pickups for scarce headroom', async () => {
 });
 
 test('rule `issue-pickup` fires only for the unplanned arm, and is unchanged for it', async () => {
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({ defaultBranch: 'main', planning: enabled });
   const plans: Plan[] = [{ ...plan('active'), id: 'plan_9', originRef: 'issue:9' }];
   const planParts = [{ ...part('a', 1, { status: 'in_review', prNumber: 21 }), id: 'plan_9:a', planId: 'plan_9' }];
   const planned = await dispatcher.decide(
@@ -180,7 +180,7 @@ test('a spent planner attempt cap lets pickup run as it does today', async () =>
     admission: null,
     createdAt: '2026-07-25T00:00:00.000Z',
   }));
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { recentDecisions: attempts }),
   );
   assert.deepEqual(

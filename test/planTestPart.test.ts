@@ -318,23 +318,17 @@ async function plannerPrompt(
     plans: replan ? [planRow('planning')] : [],
     recentDecisions: spentAppraisalAttempts(12),
   };
-  const dispatcher = new RuleDispatcher(
-    {},
-    {},
+  const dispatcher = new RuleDispatcher({
     templates,
-    'main',
-    DEFAULT_PLANNING,
-    {},
-    {},
-    '.lubbdubb/validation',
-    '#',
-    {},
-    { routing: null, modes: {} },
-    '',
-    '',
-    undefined,
-    (offerings) => testPartNote(environments, offerings),
-  );
+    defaultBranch: 'main',
+    planning: DEFAULT_PLANNING,
+    validationRoot: '.lubbdubb/validation',
+    prRefStyle: '#',
+    reviewCharters: { routing: null, modes: {} },
+    watchNote: '',
+    watchDeclareNote: '',
+    testPartNote: (offerings) => testPartNote(environments, offerings),
+  });
   const { actions } = await dispatcher.decide(context);
   const action = actions.find((a) => a.rule === 'issue-plan');
   assert.ok(action && action.type === 'dispatch_code_agent', `no ${which} was dispatched`);

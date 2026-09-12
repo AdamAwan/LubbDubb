@@ -57,7 +57,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function dispatcher(): RuleDispatcher {
-  return new RuleDispatcher({ watchLabel: WATCH, containerTypes: ['Feature', 'Epic'] });
+  return new RuleDispatcher({ pickup: { watchLabel: WATCH, containerTypes: ['Feature', 'Epic'] } });
 }
 
 function origins(actions: { type: string; originRef?: string | null }[]): string[] {
