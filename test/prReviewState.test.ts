@@ -109,7 +109,7 @@ test('the snapshot ships the reading on the pull request’s row', async () => {
   });
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'A change', branch: 'feature-7' });
   await system.harness.runCycle('manual');
-  system.store.recordPrReview({ ...REVIEW, verdict: 'clear', findings: [] });
+  system.store.prReviews.recordPrReview({ ...REVIEW, verdict: 'clear', findings: [] });
 
   const pr = buildStateSnapshot(system).world.pullRequests.find((p) => p.number === 7);
   assert.equal(pr?.review?.status, 'clear');

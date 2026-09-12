@@ -274,10 +274,10 @@ test('a pulse files the close-out, and the next one settles it once the ticket g
   world.mutate((w) => {
     w.issues.push(issue(12, { title: 'Ship the thing' }), issue(13));
   });
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
 
   await system.harness.runCycle('manual');
-  const filed = system.store.listHumanTasksOfKind('close_out');
+  const filed = system.store.humanTasks.listHumanTasksOfKind('close_out');
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.status, 'open');
   assert.equal(filed[0]!.originRef, 'issue:12');
@@ -286,23 +286,23 @@ test('a pulse files the close-out, and the next one settles it once the ticket g
 
   await system.harness.runCycle('manual');
   assert.deepEqual(
-    system.store.listHumanTasksOfKind('close_out').map((t) => t.id),
+    system.store.humanTasks.listHumanTasksOfKind('close_out').map((t) => t.id),
     [filed[0]!.id],
   );
-  assert.equal(system.store.getHumanTask(filed[0]!.id)!.status, 'open');
+  assert.equal(system.store.humanTasks.getHumanTask(filed[0]!.id)!.status, 'open');
 
   world.mutate((w) => {
     w.issues = w.issues.filter((i) => i.number !== 12);
   });
   await system.harness.runCycle('manual');
-  const settled = system.store.getHumanTask(filed[0]!.id)!;
+  const settled = system.store.humanTasks.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /no longer lists it open/);
 });
 
 test('a database written before the sweep existed reads its rows as asks', () => {
   const store = new Store(':memory:');
-  const { task: ask } = store.recordHumanTask({
+  const { task: ask } = store.humanTasks.recordHumanTask({
     title: 'Rotate the deploy key',
     detail: null,
     originRef: 'issue:12',
@@ -310,23 +310,23 @@ test('a database written before the sweep existed reads its rows as asks', () =>
     taskId: 'task-1',
   });
   assert.equal(ask.kind, 'ask');
-  assert.deepEqual(store.listHumanTasksOfKind('close_out'), []);
+  assert.deepEqual(store.humanTasks.listHumanTasksOfKind('close_out'), []);
   new DeliveryCloseOutDesk(store).run({ issues: [] });
-  assert.equal(store.getHumanTask(ask.id)!.status, 'open');
+  assert.equal(store.humanTasks.getHumanTask(ask.id)!.status, 'open');
 });
 
 test('clearing the last delivery retracts the row, with nothing else on the board', () => {
   const store = new Store(':memory:');
   const desk = new DeliveryCloseOutDesk(store);
 
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
   desk.run({ issues: [issue(12)] });
-  const filed = store.listHumanTasksOfKind('close_out');
+  const filed = store.humanTasks.listHumanTasksOfKind('close_out');
   assert.equal(filed.length, 1);
 
-  store.clearDelivery('issue:12');
+  store.verdicts.clearDelivery('issue:12');
   desk.run({ issues: [issue(12)] });
-  const settled = store.getHumanTask(filed[0]!.id)!;
+  const settled = store.humanTasks.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'declined');
   assert.match(settled.resolution ?? '', /back into production/);
 });
@@ -380,16 +380,16 @@ test("through a real store, the standing row's warning follows the goal's checks
   });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
-  store.recordValidationResult('issue:12', 'a', { state: 'passed', note: 'it works', by: 'operator' });
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.validation.recordValidationResult('issue:12', 'a', { state: 'passed', note: 'it works', by: 'operator' });
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
 
   const desk = new DeliveryCloseOutDesk(store);
   desk.run(world);
-  const filed = store.listHumanTasksOfKind('close_out');
+  const filed = store.humanTasks.listHumanTasksOfKind('close_out');
   assert.equal(filed.length, 1);
   assert.doesNotMatch(filed[0]!.detail ?? '', /Validation is not clear/);
 
-  store.amendValidation('issue:12', {
+  store.validation.amendValidation('issue:12', {
     checks: [
       {
         id: 'b',
@@ -408,15 +408,15 @@ test("through a real store, the standing row's warning follows the goal's checks
   });
   desk.run(world);
   assert.deepEqual(
-    store.listHumanTasksOfKind('close_out').map((t) => t.id),
+    store.humanTasks.listHumanTasksOfKind('close_out').map((t) => t.id),
     [filed[0]!.id],
     'one row under one id — the refresh is a repeat, not a second obligation',
   );
-  assert.match(store.getHumanTask(filed[0]!.id)!.detail ?? '', /1 never run, of 2/);
+  assert.match(store.humanTasks.getHumanTask(filed[0]!.id)!.detail ?? '', /1 never run, of 2/);
 
-  store.recordValidationResult('issue:12', 'b', { state: 'passed', note: 'it works', by: 'operator' });
+  store.validation.recordValidationResult('issue:12', 'b', { state: 'passed', note: 'it works', by: 'operator' });
   desk.run(world);
-  assert.doesNotMatch(store.getHumanTask(filed[0]!.id)!.detail ?? '', /Validation is not clear/);
+  assert.doesNotMatch(store.humanTasks.getHumanTask(filed[0]!.id)!.detail ?? '', /Validation is not clear/);
 });
 
 test('the row states the way out the deployment actually has', () => {
@@ -435,23 +435,23 @@ test('the close-out row closes its own ticket, and the close is an operator’s 
   world.mutate((w) => {
     w.issues.push(issue(12, { title: 'Ship the thing' }), issue(13));
   });
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
   await system.harness.runCycle('manual');
-  const filed = system.store.listHumanTasksOfKind('close_out')[0]!;
+  const filed = system.store.humanTasks.listHumanTasksOfKind('close_out')[0]!;
 
   const { app } = await buildApp(system);
   const closed = await app.inject({ method: 'POST', url: `/api/human-tasks/${filed.id}/close-ticket` });
   assert.equal(closed.statusCode, 200);
 
-  assert.equal(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'closed');
+  assert.equal(system.store.world.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'closed');
 
-  const settled = system.store.getHumanTask(filed.id)!;
+  const settled = system.store.humanTasks.getHumanTask(filed.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /Closed #12 in the tracker from the cockpit/);
   assert.equal(deskSettled(settled), false);
 
   await system.harness.runCycle('manual');
-  assert.equal(system.store.getHumanTask(filed.id)!.status, 'done');
+  assert.equal(system.store.humanTasks.getHumanTask(filed.id)!.status, 'done');
 
   const again = await app.inject({ method: 'POST', url: `/api/human-tasks/${filed.id}/close-ticket` });
   assert.equal(again.statusCode, 409);
@@ -460,7 +460,7 @@ test('the close-out row closes its own ticket, and the close is an operator’s 
 
 test('an ordinary ask has no ticket to close', async () => {
   const system = build();
-  const { task: ask } = system.store.recordHumanTask({
+  const { task: ask } = system.store.humanTasks.recordHumanTask({
     title: 'Plug the cable in',
     detail: null,
     originRef: null,

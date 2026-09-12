@@ -37,7 +37,7 @@ test('an overrule records the verdict and the correction, in the operator’s wo
   const system = build();
   const { app } = await buildApp(system);
   try {
-    system.store.recordShortfall({
+    system.store.verdicts.recordShortfall({
       originRef: 'issue:1',
       cause: 'part',
       partSlug: 'remove-scan-check-pollers',
@@ -48,13 +48,17 @@ test('an overrule records the verdict and the correction, in the operator’s wo
     const res = await app.inject({ method: 'POST', url: '/api/issues/1/shortfall/overrule', payload: { text: WHY } });
     assert.equal(res.statusCode, 200);
 
-    assert.equal(system.store.getShortfall('issue:1'), null, 'the assessment it overrules does not stand as well');
-    const delivery = system.store.getDelivery('issue:1');
+    assert.equal(
+      system.store.verdicts.getShortfall('issue:1'),
+      null,
+      'the assessment it overrules does not stand as well',
+    );
+    const delivery = system.store.verdicts.getDelivery('issue:1');
     assert.equal(delivery?.summary, WHY, 'the operator’s reason is the delivery’s reason');
     assert.equal(delivery?.by, 'operator');
 
     assert.deepEqual(
-      system.store.listStandingInstructions('issue:1').map((i) => i.text),
+      system.store.instructions.listStandingInstructions('issue:1').map((i) => i.text),
       [WHY],
     );
   } finally {
@@ -67,7 +71,7 @@ test('an overrule writes no conclusion, because one would clear the delivery it 
   const system = build();
   const { app } = await buildApp(system);
   try {
-    system.store.recordShortfall({
+    system.store.verdicts.recordShortfall({
       originRef: 'issue:1',
       cause: null,
       partSlug: null,
@@ -75,8 +79,8 @@ test('an overrule writes no conclusion, because one would clear the delivery it 
       by: 'assessor',
     });
     await app.inject({ method: 'POST', url: '/api/issues/1/shortfall/overrule', payload: { text: WHY } });
-    assert.equal(system.store.getIssueConclusion('issue:1'), null);
-    assert.ok(system.store.getDelivery('issue:1'), 'so the delivery is still standing after the words landed');
+    assert.equal(system.store.verdicts.getIssueConclusion('issue:1'), null);
+    assert.ok(system.store.verdicts.getDelivery('issue:1'), 'so the delivery is still standing after the words landed');
   } finally {
     await app.close();
     system.store.close();
@@ -87,16 +91,20 @@ test('an ordinary instruction on a delivered goal retracts the delivery, where a
   const system = build();
   const { app } = await buildApp(system);
   try {
-    system.store.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
+    system.store.verdicts.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
     const res = await app.inject({
       method: 'POST',
       url: '/api/issues/1/instruction',
       payload: { text: 'the cleanup is automatic' },
     });
     assert.equal(res.statusCode, 200);
-    assert.equal(system.store.listStandingInstructions('issue:1').length, 1, 'the words still reach the next agent');
-    assert.equal(system.store.getDelivery('issue:1'), null, 'and the goal is no longer parked as delivered');
-    const conclusion = system.store.getIssueConclusion('issue:1');
+    assert.equal(
+      system.store.instructions.listStandingInstructions('issue:1').length,
+      1,
+      'the words still reach the next agent',
+    );
+    assert.equal(system.store.verdicts.getDelivery('issue:1'), null, 'and the goal is no longer parked as delivered');
+    const conclusion = system.store.verdicts.getIssueConclusion('issue:1');
     assert.equal(conclusion?.verdict, 'more_work');
     assert.equal(conclusion?.by, 'operator');
   } finally {
@@ -111,8 +119,8 @@ test('an overrule with nothing standing is refused, and writes nothing', async (
   try {
     const res = await app.inject({ method: 'POST', url: '/api/issues/1/shortfall/overrule', payload: { text: WHY } });
     assert.equal(res.statusCode, 409);
-    assert.equal(system.store.getDelivery('issue:1'), null);
-    assert.equal(system.store.listStandingInstructions('issue:1').length, 0);
+    assert.equal(system.store.verdicts.getDelivery('issue:1'), null);
+    assert.equal(system.store.instructions.listStandingInstructions('issue:1').length, 0);
   } finally {
     await app.close();
     system.store.close();
@@ -123,7 +131,7 @@ test('an overrule with no words is refused, and the shortfall is left where it w
   const system = build();
   const { app } = await buildApp(system);
   try {
-    system.store.recordShortfall({
+    system.store.verdicts.recordShortfall({
       originRef: 'issue:1',
       cause: null,
       partSlug: null,
@@ -132,8 +140,8 @@ test('an overrule with no words is refused, and the shortfall is left where it w
     });
     const res = await app.inject({ method: 'POST', url: '/api/issues/1/shortfall/overrule', payload: { text: '  ' } });
     assert.equal(res.statusCode, 400);
-    assert.ok(system.store.getShortfall('issue:1'), 'nothing is overruled by a blank box');
-    assert.equal(system.store.getDelivery('issue:1'), null);
+    assert.ok(system.store.verdicts.getShortfall('issue:1'), 'nothing is overruled by a blank box');
+    assert.equal(system.store.verdicts.getDelivery('issue:1'), null);
   } finally {
     await app.close();
     system.store.close();

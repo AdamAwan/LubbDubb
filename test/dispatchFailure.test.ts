@@ -41,7 +41,7 @@ test('a dispatch whose worktree fails leaves no active task, and the same origin
   const worktrees = new FlakyWorktrees();
   const system = buildSystem(testConfig('raw'), { worktrees, backend: new FakePtyBackend() });
 
-  const job = system.store.createJob({
+  const job = system.store.jobs.createJob({
     title: 'Remove the scan-check pollers',
     prompt: 'Remove them.',
     kind: 'code',
@@ -50,27 +50,27 @@ test('a dispatch whose worktree fails leaves no active task, and the same origin
   });
   await system.harness.runCycle('manual');
 
-  const rejected = system.store.listDecisions().filter((d) => d.outcome === 'rejected');
+  const rejected = system.store.decisions.listDecisions().filter((d) => d.outcome === 'rejected');
   assert.equal(rejected.length, 1);
   assert.match(rejected[0]!.detail, /Failed to start agent: EBUSY/);
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 0, 'nothing spawned');
+  assert.equal(system.store.agents.listAgentsByStatus('starting', 'running').length, 0, 'nothing spawned');
 
-  const task = system.store.listTasks()[0];
+  const task = system.store.tasks.listTasks()[0];
   assert.ok(task, 'the dispatch did write a task row');
   assert.equal(task.status, 'interrupted');
-  assert.equal(system.store.listOutstandingTasks().length, 0, 'no active task survives the failed dispatch');
-  assert.equal(system.store.findActiveTaskByOrigin(`job:${job.id}`), null, 'the origin is claimable again');
-  assert.equal(system.store.findActiveTaskByBranch(task.branch!), null, 'and so is the branch');
+  assert.equal(system.store.tasks.listOutstandingTasks().length, 0, 'no active task survives the failed dispatch');
+  assert.equal(system.store.tasks.findActiveTaskByOrigin(`job:${job.id}`), null, 'the origin is claimable again');
+  assert.equal(system.store.tasks.findActiveTaskByBranch(task.branch!), null, 'and so is the branch');
 
-  assert.equal(system.store.getJob(job.id)!.status, 'queued');
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'queued');
 
   await system.harness.runCycle('manual');
-  const live = system.store.listAgentsByStatus('starting', 'running');
+  const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(live.length, 1, 'the same origin dispatches on the next cycle');
-  const started = system.store.getTask(live[0]!.taskId)!;
+  const started = system.store.tasks.getTask(live[0]!.taskId)!;
   assert.equal(started.originRef, `job:${job.id}`);
   assert.equal(started.branch, 'issue/35174/remove-scan-check-pollers');
-  assert.equal(system.store.getJob(job.id)!.status, 'dispatched');
+  assert.equal(system.store.jobs.getJob(job.id)!.status, 'dispatched');
 
   system.store.close();
 });
@@ -81,16 +81,16 @@ test('a dispatch whose spawn throws keeps the manager’s own settlement, and st
   };
   const system = buildSystem(streamConfig(), { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
 
-  const job = system.store.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'desk' });
+  const job = system.store.jobs.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'desk' });
   await system.harness.runCycle('manual');
 
-  const task = system.store.listTasks()[0];
+  const task = system.store.tasks.listTasks()[0];
   assert.ok(task);
   assert.equal(task.status, 'failed');
-  assert.equal(system.store.listOutstandingTasks().length, 0, 'no active task survives the failed dispatch');
-  assert.equal(system.store.findActiveTaskByOrigin(`job:${job.id}`), null, 'the origin is claimable again');
+  assert.equal(system.store.tasks.listOutstandingTasks().length, 0, 'no active task survives the failed dispatch');
+  assert.equal(system.store.tasks.findActiveTaskByOrigin(`job:${job.id}`), null, 'the origin is claimable again');
   assert.match(
-    system.store.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
+    system.store.decisions.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
     /Failed to start agent: Agent command/,
   );
 

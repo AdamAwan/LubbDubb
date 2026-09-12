@@ -467,13 +467,13 @@ function systemWithParts(): { system: System; repoRoot: string } {
 test('a persisted plan turns into real part branches, and the rows record it', async () => {
   const { system, repoRoot } = systemWithParts();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.' });
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -501,7 +501,7 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   ]);
   await system.harness.runCycle('manual');
 
-  const parts = system.store.listPlanParts(stored.id);
+  const parts = system.store.plans.listPlanParts(stored.id);
   assert.deepEqual(
     parts.map((p) => [p.slug, p.status, p.branch]),
     [
@@ -516,8 +516,8 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
-  assert.deepEqual(system.store.listProposals(), []);
-  assert.deepEqual(system.store.listOpenEscalations(), []);
+  assert.deepEqual(system.store.escalations.listProposals(), []);
+  assert.deepEqual(system.store.escalations.listOpenEscalations(), []);
   system.store.close();
 });
 
@@ -560,13 +560,13 @@ test('a part planned to produce no code is told how to finish, appended not inte
 
 test('a part concludes without a PR, its plan completes, and a second call changes nothing', () => {
   const { system } = systemWithParts();
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Investigate',
     status: 'active',
     reason: 'Measure before building.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'probe',
       seq: 1,
@@ -580,12 +580,12 @@ test('a part concludes without a PR, its plan completes, and a second call chang
       expectedKind: 'report',
     },
   ]);
-  const row = system.store.listPlanParts(stored.id)[0]!;
+  const row = system.store.plans.listPlanParts(stored.id)[0]!;
   assert.equal(row.expectedKind, 'report');
   assert.equal(row.outcomeKind, null);
 
-  system.store.updatePlanPart(row.id, { status: 'dispatched' });
-  const done = system.store.concludePlanPart(row.id, {
+  system.store.plans.updatePlanPart(row.id, { status: 'dispatched' });
+  const done = system.store.plans.concludePlanPart(row.id, {
     kind: 'determination',
     ref: 'finding:f_1',
     summary: 'Already fixed by #98.',
@@ -595,17 +595,17 @@ test('a part concludes without a PR, its plan completes, and a second call chang
   assert.equal(done?.outcomeRef, 'finding:f_1');
   assert.equal(done?.outcomeSummary, 'Already fixed by #98.');
 
-  assert.equal(system.store.rollUpPlanStatus(stored.id)?.status, 'complete');
+  assert.equal(system.store.plans.rollUpPlanStatus(stored.id)?.status, 'complete');
 
-  assert.equal(system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'again' }), null);
+  assert.equal(system.store.plans.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'again' }), null);
   system.store.close();
 });
 
 test('an amendment re-declaring a concluded part leaves what it produced alone', () => {
   const { system } = systemWithParts();
-  const stored = system.store.upsertPlan({ originRef: 'issue:12', title: 'T', status: 'active', reason: 'r' });
+  const stored = system.store.plans.upsertPlan({ originRef: 'issue:12', title: 'T', status: 'active', reason: 'r' });
   const declare = (expectedKind: 'code' | 'report' | null) =>
-    system.store.upsertPlanParts(stored.id, [
+    system.store.plans.upsertPlanParts(stored.id, [
       {
         slug: 'probe',
         seq: 1,
@@ -620,12 +620,12 @@ test('an amendment re-declaring a concluded part leaves what it produced alone',
       },
     ]);
   declare('report');
-  const row = system.store.listPlanParts(stored.id)[0]!;
-  system.store.updatePlanPart(row.id, { status: 'dispatched' });
-  system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
+  const row = system.store.plans.listPlanParts(stored.id)[0]!;
+  system.store.plans.updatePlanPart(row.id, { status: 'dispatched' });
+  system.store.plans.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
 
   declare('code');
-  const after = system.store.listPlanParts(stored.id)[0]!;
+  const after = system.store.plans.listPlanParts(stored.id)[0]!;
   assert.equal(after.expectedKind, 'code');
   assert.equal(after.outcomeKind, 'report');
   assert.equal(after.outcomeSummary, 'Findings in docs/perf.md');

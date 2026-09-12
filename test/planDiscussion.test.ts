@@ -48,7 +48,7 @@ test('plan_amend records the amendment and withdraws the card it supersedes', as
   const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
   await system.harness.runCycle('manual');
-  const stale = system.store.listProposals().find((p) => p.kind === 'plan')!;
+  const stale = system.store.escalations.listProposals().find((p) => p.kind === 'plan')!;
   assert.equal(stale.status, 'pending');
 
   const res = await session.call('plan_amend', {
@@ -66,15 +66,19 @@ test('plan_amend records the amendment and withdraws the card it supersedes', as
   assert.equal(body.status, 'awaiting_approval');
   assert.match(body.next as string, /cockpit/i);
 
-  const after = system.store.getPlan(plan.id)!;
+  const after = system.store.plans.getPlan(plan.id)!;
   assert.equal(after.status, 'awaiting_approval');
   assert.equal(after.reason, 'The API part does not need the schema first after all.');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 2, 'the amendment is a second revision, not a rewrite');
+  assert.equal(
+    system.store.plans.listPlanRevisions(plan.id).length,
+    2,
+    'the amendment is a second revision, not a rewrite',
+  );
 
-  assert.equal(system.store.listProposals().find((p) => p.id === stale.id)!.status, 'rejected');
-  assert.ok(system.store.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
+  assert.equal(system.store.escalations.listProposals().find((p) => p.id === stale.id)!.status, 'rejected');
+  assert.ok(system.store.plans.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
 
-  const pending = system.store.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
+  const pending = system.store.escalations.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
   assert.equal(pending.length, 1);
   assert.notEqual(pending[0]!.id, stale.id);
   await close();
@@ -83,7 +87,7 @@ test('plan_amend records the amendment and withdraws the card it supersedes', as
 test('plan_amend on a released plan proposes, and writes nothing over it', async () => {
   const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
-  system.store.setPlanStatus(plan.id, 'active');
+  system.store.plans.setPlanStatus(plan.id, 'active');
 
   const res = await session.call('plan_amend', {
     issue: 231,
@@ -102,12 +106,12 @@ test('plan_amend on a released plan proposes, and writes nothing over it', async
   assert.match(body.means as string, /has not changed/i);
   assert.match(body.next as string, /cockpit/i);
 
-  const after = system.store.getPlan(plan.id)!;
+  const after = system.store.plans.getPlan(plan.id)!;
   assert.equal(after.status, 'active', 'the plan keeps scheduling while the question is open');
   assert.equal(after.reason, 'Schema first.', 'and nothing is written over it');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 1);
 
-  const amendments = system.store.listPlanAmendments(plan.id);
+  const amendments = system.store.plans.listPlanAmendments(plan.id);
   assert.equal(amendments.length, 1);
   assert.equal(amendments[0]!.status, 'pending');
   assert.equal(amendments[0]!.author, 'operator', 'proposed at the operator’s own keyboard, not by an agent');
@@ -117,7 +121,7 @@ test('plan_amend on a released plan proposes, and writes nothing over it', async
 test('plan_amend on a released plan refuses without a reason, and writes nothing', async () => {
   const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
-  system.store.setPlanStatus(plan.id, 'active');
+  system.store.plans.setPlanStatus(plan.id, 'active');
 
   const res = await session.call('plan_amend', {
     issue: 231,
@@ -126,14 +130,14 @@ test('plan_amend on a released plan refuses without a reason, and writes nothing
   });
   assert.ok(res.isError);
   assert.match(res.content[0]!.text, /needs a reason/i);
-  assert.deepEqual(system.store.listPlanAmendments(plan.id), []);
+  assert.deepEqual(system.store.plans.listPlanAmendments(plan.id), []);
   await close();
 });
 
 test('plan_amend refuses a plan that is neither awaiting approval nor running', async () => {
   const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
-  system.store.setPlanStatus(plan.id, 'complete');
+  system.store.plans.setPlanStatus(plan.id, 'complete');
 
   const res = await session.call('plan_amend', {
     issue: 231,
@@ -142,8 +146,8 @@ test('plan_amend refuses a plan that is neither awaiting approval nor running', 
   });
   assert.ok(res.isError);
   assert.match(res.content[0]!.text, /"complete"/);
-  assert.equal(system.store.getPlan(plan.id)!.status, 'complete', 'a refused call must not move the plan at all');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+  assert.equal(system.store.plans.getPlan(plan.id)!.status, 'complete', 'a refused call must not move the plan at all');
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 1);
   await close();
 });
 
@@ -155,10 +159,10 @@ test('a rejected document writes nothing, so the retry is against an unchanged p
   assert.ok(res.isError);
   assert.match(res.content[0]!.text, /Plan rejected/);
 
-  const after = system.store.getPlan(plan.id)!;
+  const after = system.store.plans.getPlan(plan.id)!;
   assert.equal(after.reason, 'Schema first.', 'the plan is exactly as it was');
-  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
-  assert.ok(system.store.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
+  assert.equal(system.store.plans.listPlanRevisions(plan.id).length, 1);
+  assert.ok(system.store.plans.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
   await close();
 });
 
@@ -169,9 +173,9 @@ test('discussing a plan dispatches nothing', async () => {
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  const planners = system.store.listTasks().filter((t) => t.originRef === 'issue:231:plan');
+  const planners = system.store.tasks.listTasks().filter((t) => t.originRef === 'issue:231:plan');
   assert.deepEqual(planners, [], 'Discuss is a link now; nothing is put on the planner origin');
-  const partTasks = system.store.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
+  const partTasks = system.store.tasks.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
   assert.deepEqual(partTasks, [], 'and an unapproved plan still schedules no parts');
   await close();
 });
@@ -187,7 +191,7 @@ const WITH_BROWSER: EnvironmentConfig[] = [
 test('plan_read hands the discussion the same test-part bar the planning prompts carry', async () => {
   const { system, session, close } = await buildDesk(WITH_BROWSER);
   seedAwaitingApprovalPlan(system);
-  system.store.recordSelectorOffering('acceptance', [
+  system.store.remoteValidation.recordSelectorOffering('acceptance', [
     { selector: 'Checkout Tests', tests: 4 },
     { selector: 'Login Tests', tests: 2 },
   ]);
@@ -197,7 +201,11 @@ test('plan_read hands the discussion the same test-part bar the planning prompts
   const body = JSON.parse(read.content[0]!.text) as Record<string, unknown>;
   const bar = body.testPart as string;
   assert.ok(typeof bar === 'string' && bar !== '', 'the bar reaches the operator’s own keyboard, not only the fleet');
-  assert.equal(bar, testPartNote(WITH_BROWSER, system.store.listSelectorOfferings()).trim(), 'and it is that string');
+  assert.equal(
+    bar,
+    testPartNote(WITH_BROWSER, system.store.remoteValidation.listSelectorOfferings()).trim(),
+    'and it is that string',
+  );
   assert.match(bar, /`Checkout Tests`, `Login Tests`/, 'enumerated from the offering cache, so nothing is invented');
   assert.match(bar, /silent and consequential/, 'the bar comes with it rather than the areas alone');
   await close();

@@ -68,14 +68,14 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   }
 
   if (kind === 'code' && branch) {
-    const ejected = store.ejectionOnBranch(branch);
+    const ejected = store.ejections.ejectionOnBranch(branch);
     if (ejected)
       return {
         ok: false,
         reason: 'branch_busy',
         error: `branch ${branch} is held by an ejection (${ejected.id}) — an operator has it at their own keyboard`,
       };
-    const held = store.findActiveTaskByBranch(branch);
+    const held = store.tasks.findActiveTaskByBranch(branch);
     if (held)
       return {
         ok: false,
@@ -84,11 +84,11 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
       };
   }
 
-  const job = store.createJob({ title: providedTitle ?? deriveJobTitle(prompt), prompt, kind, branch });
+  const job = store.jobs.createJob({ title: providedTitle ?? deriveJobTitle(prompt), prompt, kind, branch });
   try {
     ctx.attach?.(`job:${job.id}`);
   } catch (err) {
-    store.cancelJob(job.id);
+    store.jobs.cancelJob(job.id);
     throw err;
   }
   return { ok: true, kind: 'job', job };

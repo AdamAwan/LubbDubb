@@ -86,13 +86,13 @@ function setup(): Harness {
   const git = new FakeGitObserver();
   const { sink, comments } = recordingSink();
   const errors: ErrorLogInput[] = [];
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -130,7 +130,7 @@ function setup(): Harness {
 }
 
 function statuses(h: Harness): [string, string][] {
-  return h.store.listPlanParts(h.planId).map((p) => [p.slug, p.status]);
+  return h.store.plans.listPlanParts(h.planId).map((p) => [p.slug, p.status]);
 }
 
 test('a part with no dependency is ready; its dependent waits until the branch carries work', async () => {
@@ -141,15 +141,15 @@ test('a part with no dependency is ready; its dependent waits until the branch c
     ['api', 'pending'],
   ]);
 
-  const schema = h.store.listPlanParts(h.planId)[0]!;
-  const agentTask = h.store.createTask({
+  const schema = h.store.plans.listPlanParts(h.planId)[0]!;
+  const agentTask = h.store.tasks.createTask({
     kind: 'code',
     title: 'Schema',
     prompt: 'p',
     branch: 'issue/12/schema',
     originRef: 'issue:12:part:schema',
   });
-  h.store.markPartDispatched(schema.id, agentTask.id, 'issue/12/schema');
+  h.store.plans.markPartDispatched(schema.id, agentTask.id, 'issue/12/schema');
   await h.reconciler.reconcile(world());
   assert.deepEqual(
     statuses(h).find(([slug]) => slug === 'api'),
@@ -168,43 +168,43 @@ test('the provider decides PR and merge state; git never claims a merge', async 
   const h = setup();
   h.git.setDivergence('issue/12/schema', 'main', { ahead: 1, behind: 0 });
   await h.reconciler.reconcile(world([pr(40, 'issue/12/schema')]));
-  const [schema] = h.store.listPlanParts(h.planId);
+  const [schema] = h.store.plans.listPlanParts(h.planId);
   assert.equal(schema?.status, 'in_review');
   assert.equal(schema?.prNumber, 40);
   assert.equal(schema?.branch, 'issue/12/schema', 'the branch is backfilled from the PR that appeared on it');
 
   await h.reconciler.reconcile(world([pr(40, 'issue/12/schema', { merged: true })]));
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.status, 'merged');
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.status, 'merged');
 });
 
 test('a PR that has left the open list is read as merged', async () => {
   const h = setup();
   await h.reconciler.reconcile(world([pr(40, 'issue/12/schema')]));
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.status, 'in_review');
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.status, 'in_review');
   await h.reconciler.reconcile(world());
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.status, 'merged');
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.status, 'merged');
 });
 
 test('a dispatched part whose agent is gone without a PR goes back to ready', async () => {
   const h = setup();
   await h.reconciler.reconcile(world());
-  const schema = h.store.listPlanParts(h.planId)[0]!;
-  const task = h.store.createTask({
+  const schema = h.store.plans.listPlanParts(h.planId)[0]!;
+  const task = h.store.tasks.createTask({
     kind: 'code',
     title: 'part',
     prompt: 'p',
     branch: 'issue/12/schema',
     originRef: 'issue:12:part:schema',
   });
-  h.store.markPartDispatched(schema.id, task.id, 'issue/12/schema');
+  h.store.plans.markPartDispatched(schema.id, task.id, 'issue/12/schema');
 
   await h.reconciler.reconcile(world());
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.status, 'dispatched', 'a live task keeps the part staffed');
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.status, 'dispatched', 'a live task keeps the part staffed');
 
-  h.store.updateTask(task.id, { status: 'done' });
+  h.store.tasks.updateTask(task.id, { status: 'done' });
   await h.reconciler.reconcile(world());
   assert.equal(
-    h.store.listPlanParts(h.planId)[0]?.status,
+    h.store.plans.listPlanParts(h.planId)[0]?.status,
     'ready',
     'so the per-part cooldown governs the retry, and the attempt cap eventually escalates',
   );
@@ -212,14 +212,14 @@ test('a dispatched part whose agent is gone without a PR goes back to ready', as
 
 test('every part merged rolls the plan up to complete', async () => {
   const h = setup();
-  const [schema, api] = h.store.listPlanParts(h.planId);
-  h.store.updatePlanPart(schema!.id, { status: 'merged' });
+  const [schema, api] = h.store.plans.listPlanParts(h.planId);
+  h.store.plans.updatePlanPart(schema!.id, { status: 'merged' });
   await h.reconciler.reconcile(world());
-  assert.equal(h.store.getPlanByOrigin('issue:12')?.status, 'active');
+  assert.equal(h.store.plans.getPlanByOrigin('issue:12')?.status, 'active');
 
-  h.store.updatePlanPart(api!.id, { status: 'merged' });
+  h.store.plans.updatePlanPart(api!.id, { status: 'merged' });
   await h.reconciler.reconcile(world());
-  assert.equal(h.store.getPlanByOrigin('issue:12')?.status, 'complete');
+  assert.equal(h.store.plans.getPlanByOrigin('issue:12')?.status, 'complete');
   const body = h.comments.at(-1)?.body ?? '';
   assert.match(body, /Plan complete/);
   assert.match(body, /Closing it is a human decision/);
@@ -237,19 +237,19 @@ test('the status comment is written once and then edited in place, only when the
   await h.reconciler.reconcile(world([pr(40, 'issue/12/schema')]));
   assert.equal(h.comments.length, 2, 'a part moving is news');
   assert.equal(h.comments[1]?.commentRef, 'comment_1', 'edited in place — one living comment, not a stream');
-  assert.equal(h.store.getPlanByOrigin('issue:12')?.statusCommentRef, 'comment_1');
+  assert.equal(h.store.plans.getPlanByOrigin('issue:12')?.statusCommentRef, 'comment_1');
 });
 
 test('a one-part plan writes its status comment like any other', async () => {
   const store = new Store(':memory:');
   const { sink, comments } = recordingSink();
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'One PR is the right shape here.',
   });
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'whole',
       seq: 1,
@@ -277,7 +277,7 @@ test('a one-part plan writes its status comment like any other', async () => {
   assert.match(comments[0]?.body ?? '', /0\/1 part done/);
   assert.match(comments[0]?.body ?? '', /One PR is the right shape here\./);
   assert.doesNotMatch(comments[0]?.body ?? '', /One pull request/);
-  assert.equal(store.getPlan(plan.id)?.statusCommentRef, 'comment_1');
+  assert.equal(store.plans.getPlan(plan.id)?.statusCommentRef, 'comment_1');
 
   await reconciler.reconcile(world());
   assert.equal(comments.length, 1);
@@ -287,7 +287,7 @@ test('a one-part plan writes its status comment like any other', async () => {
 test('an unapproved plan announces nothing, on either shape', async () => {
   const store = new Store(':memory:');
   const { sink, comments } = recordingSink();
-  store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'awaiting_approval', reason: 'One PR.' });
+  store.plans.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'awaiting_approval', reason: 'One PR.' });
   const reconciler = new PlanReconciler({
     store,
     git: new FakeGitObserver(),
@@ -315,13 +315,13 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
   const reason = refCollisionReason(12, { local: true, remote: false });
   assert.ok(h.errors[0]?.message.includes(reason), 'the feed quotes the row');
   assert.deepEqual(
-    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    h.store.plans.listPlanParts(h.planId).map((p) => p.blockedReason),
     [reason, reason],
   );
 
   await h.reconciler.reconcile(world());
   assert.equal(h.errors.length, 1, 'still silent');
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.blockedReason, reason, 'still explained');
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.blockedReason, reason, 'still explained');
 
   h.git.setPresence('issue/12', { local: false });
   await h.reconciler.reconcile(world());
@@ -330,7 +330,7 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
     ['api', 'pending'],
   ]);
   assert.deepEqual(
-    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    h.store.plans.listPlanParts(h.planId).map((p) => p.blockedReason),
     [null, null],
     'and stops claiming a collision that has been resolved',
   );
@@ -344,7 +344,7 @@ test('the collision guard is scoped to the parts git is actually asked to cut', 
     ['flip', 'ready'],
     ['code', 'blocked'],
   ]);
-  const reasons = new Map(h.store.listPlanParts(h.planId).map((p) => [p.slug, p.blockedReason]));
+  const reasons = new Map(h.store.plans.listPlanParts(h.planId).map((p) => [p.slug, p.blockedReason]));
   assert.equal(reasons.get('flip'), null);
   assert.equal(reasons.get('code'), refCollisionReason(12, { local: true, remote: false }));
 });
@@ -352,8 +352,8 @@ test('the collision guard is scoped to the parts git is actually asked to cut', 
 const PLANNING_ON = { ...DEFAULT_PLANNING, enabled: true };
 
 function decline(h: Harness, slug: string): void {
-  const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
-  const { task } = h.store.recordHumanTask({
+  const part = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+  const { task } = h.store.humanTasks.recordHumanTask({
     title: `Do ${slug}`,
     detail: null,
     agentId: null,
@@ -362,7 +362,7 @@ function decline(h: Harness, slug: string): void {
     partId: part.id,
     kind: 'ask',
   });
-  h.store.settleHumanTask(task.id, 'declined', 'not doing this');
+  h.store.humanTasks.settleHumanTask(task.id, 'declined', 'not doing this');
 }
 
 test('a declined step blocks its part without wedging the plan', async () => {
@@ -370,7 +370,7 @@ test('a declined step blocks its part without wedging the plan', async () => {
   decline(h, 'flip');
   await h.reconciler.reconcile(world());
 
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   assert.deepEqual(statuses(h), [['flip', 'blocked']], 'the decline still stops the part');
   assert.equal(parts[0]?.blockedBy, 'declined');
   assert.match(parts[0]?.blockedReason ?? '', /is a step for a person, and it was declined/);
@@ -388,7 +388,7 @@ test('a declined step blocks its part without wedging the plan', async () => {
     queuedJobs: [],
     agentHeadroom: 5,
     recentDecisions: [],
-    plans: [h.store.getPlan(h.planId)!],
+    plans: [h.store.plans.getPlan(h.planId)!],
     planParts: parts,
   });
   assert.deepEqual(
@@ -404,7 +404,7 @@ test('a decline beside a collision is still a wedge — the branch is what clear
   decline(h, 'flip');
   await h.reconciler.reconcile(world());
 
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   const by = new Map(parts.map((p) => [p.slug, p.blockedBy]));
   assert.deepEqual(statuses(h), [
     ['flip', 'blocked'],
@@ -421,7 +421,7 @@ test('a plan of nothing but human steps records no collision and is not wedged',
   await h.reconciler.reconcile(world());
   assert.deepEqual(statuses(h), [['flip', 'ready']]);
   assert.equal(h.errors.length, 0, 'nothing collided, so nothing was recorded');
-  assert.equal(h.store.listPlanParts(h.planId)[0]?.blockedReason, null);
+  assert.equal(h.store.plans.listPlanParts(h.planId)[0]?.blockedReason, null);
 });
 
 test('the reason names where the branch is, and which delete actually works', () => {
@@ -450,7 +450,7 @@ test('a remote-only collision blocks the parts and says the remote delete', asyn
   ]);
   const reason = refCollisionReason(12, { local: false, remote: true });
   assert.deepEqual(
-    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    h.store.plans.listPlanParts(h.planId).map((p) => p.blockedReason),
     [reason, reason],
   );
   assert.ok(h.errors[0]?.message.includes(reason), 'one string in the feed and on the row');
@@ -458,7 +458,7 @@ test('a remote-only collision blocks the parts and says the remote delete', asyn
   h.git.setPresence('issue/12', { local: true, remote: false });
   await h.reconciler.reconcile(world());
   assert.deepEqual(
-    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    h.store.plans.listPlanParts(h.planId).map((p) => p.blockedReason),
     [refCollisionReason(12, { local: true, remote: false }), refCollisionReason(12, { local: true, remote: false })],
   );
   assert.equal(h.errors.length, 2, 'and the feed carries the change, since the row moved');
@@ -466,13 +466,13 @@ test('a remote-only collision blocks the parts and says the remote delete', asyn
 
 test('the rendered comment reports progress and the PR numbers', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  const parts = store.upsertPlanParts(plan.id, [
+  const parts = store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -498,8 +498,8 @@ test('the rendered comment reports progress and the PR numbers', () => {
       expectedKind: null,
     },
   ]);
-  store.updatePlanPart(parts[0]!.id, { status: 'merged', prNumber: 40 });
-  const body = renderPlanComment(plan, store.listPlanParts(plan.id), '#');
+  store.plans.updatePlanPart(parts[0]!.id, { status: 'merged', prNumber: 40 });
+  const body = renderPlanComment(plan, store.plans.listPlanParts(plan.id), '#');
   assert.match(body, /1\/2 parts done/);
   assert.match(body, /Schema first\./);
   assert.match(body, /\[x\] \*\*Schema\*\* \(`schema`\) — merged · PR #40/);
@@ -509,32 +509,32 @@ test('the rendered comment reports progress and the PR numbers', () => {
 
 test('a concluded part is finished, and the fold never brings it back', async () => {
   const h = setup();
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   const schema = parts.find((p) => p.slug === 'schema')!;
-  h.store.updatePlanPart(schema.id, { status: 'dispatched', branch: 'issue/12/schema' });
-  h.store.concludePlanPart(schema.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
+  h.store.plans.updatePlanPart(schema.id, { status: 'dispatched', branch: 'issue/12/schema' });
+  h.store.plans.concludePlanPart(schema.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
 
   await h.reconciler.reconcile(world([pr(40, 'issue/12/schema')]));
-  const after = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  const after = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
   assert.equal(after.status, 'concluded');
   assert.equal(after.outcomeKind, 'report');
   assert.equal(after.prNumber, null);
 
-  assert.equal(h.store.listPlanParts(h.planId).find((p) => p.slug === 'api')?.status, 'ready');
+  assert.equal(h.store.plans.listPlanParts(h.planId).find((p) => p.slug === 'api')?.status, 'ready');
   h.store.close();
 });
 
 test('a plan finishing on a mix of terminals completes and says so without claiming a merge', async () => {
   const h = setup();
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   const schema = parts.find((p) => p.slug === 'schema')!;
   const api = parts.find((p) => p.slug === 'api')!;
-  h.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
-  h.store.updatePlanPart(api.id, { status: 'dispatched', branch: 'issue/12/api' });
-  h.store.concludePlanPart(api.id, { kind: 'determination', ref: null, summary: 'Already covered by #98' });
+  h.store.plans.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
+  h.store.plans.updatePlanPart(api.id, { status: 'dispatched', branch: 'issue/12/api' });
+  h.store.plans.concludePlanPart(api.id, { kind: 'determination', ref: null, summary: 'Already covered by #98' });
 
   await h.reconciler.reconcile(world());
-  assert.equal(h.store.getPlan(h.planId)?.status, 'complete');
+  assert.equal(h.store.plans.getPlan(h.planId)?.status, 'complete');
   const body = h.comments.at(-1)?.body ?? '';
   assert.match(body, /all 2 parts finished/);
   assert.match(body, /determination.*Already covered by #98/);
@@ -574,8 +574,8 @@ function planOf(parts: PlanPartInput[], title: string): Harness {
   const git = new FakeGitObserver();
   const { sink, comments } = recordingSink();
   const errors: ErrorLogInput[] = [];
-  const plan = store.upsertPlan({ originRef: 'issue:12', title, status: 'active', reason: null });
-  store.upsertPlanParts(plan.id, parts);
+  const plan = store.plans.upsertPlan({ originRef: 'issue:12', title, status: 'active', reason: null });
+  store.plans.upsertPlanParts(plan.id, parts);
   const reconciler = new PlanReconciler({
     store,
     git,
@@ -592,13 +592,13 @@ function rejoinSetup(): Harness {
   const git = new FakeGitObserver();
   const { sink, comments } = recordingSink();
   const errors: ErrorLogInput[] = [];
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Two lanes, then a merger',
     status: 'active',
     reason: 'Schema and API are independent; wiring them needs both.',
   });
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     partInput('schema', 1, []),
     partInput('api', 2, []),
     partInput('wire', 3, ['schema', 'api']),
@@ -615,15 +615,15 @@ function rejoinSetup(): Harness {
 }
 
 function inReview(h: Harness, slug: string, prNumber: number): PullRequest {
-  const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+  const part = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === slug)!;
   const branch = `issue/12/${slug}`;
-  h.store.updatePlanPart(part.id, { status: 'in_review', branch, prNumber });
+  h.store.plans.updatePlanPart(part.id, { status: 'in_review', branch, prNumber });
   h.git.setDivergence(branch, 'main', { ahead: 2, behind: 0 });
   return pr(prNumber, branch);
 }
 
 function statusOf(h: Harness, slug: string): string {
-  return h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!.status;
+  return h.store.plans.listPlanParts(h.planId).find((p) => p.slug === slug)!.status;
 }
 
 test('a part with two dependencies still open stays pending — the arity rule, dynamically', async () => {
@@ -639,13 +639,13 @@ test('a part with two dependencies still open stays pending — the arity rule, 
 test('one dependency merged and one open readies the rejoin, based on the one still open', async () => {
   const h = rejoinSetup();
   const open = inReview(h, 'api', 41);
-  const schema = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
-  h.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
+  const schema = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  h.store.plans.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
 
   await h.reconciler.reconcile(world([open]));
   assert.equal(statusOf(h, 'wire'), 'ready', 'one unsettled dependency is the ordinary stack');
 
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   const wire = parts.find((p) => p.slug === 'wire')!;
   assert.equal(partBase(wire, bySlug(parts), 12, 'main'), 'issue/12/api', 'it stacks on the one still in flight');
   h.store.close();
@@ -657,14 +657,14 @@ test('both dependencies merged readies the rejoin on the integration branch', as
     ['schema', 40],
     ['api', 41],
   ] as const) {
-    const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
-    h.store.updatePlanPart(part.id, { status: 'merged', branch: `issue/12/${slug}`, prNumber: number });
+    const part = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+    h.store.plans.updatePlanPart(part.id, { status: 'merged', branch: `issue/12/${slug}`, prNumber: number });
   }
 
   await h.reconciler.reconcile(world());
   assert.equal(statusOf(h, 'wire'), 'ready');
 
-  const parts = h.store.listPlanParts(h.planId);
+  const parts = h.store.plans.listPlanParts(h.planId);
   const wire = parts.find((p) => p.slug === 'wire')!;
   assert.equal(partBase(wire, bySlug(parts), 12, 'main'), 'main');
   h.store.close();
@@ -672,17 +672,17 @@ test('both dependencies merged readies the rejoin on the integration branch', as
 
 test('a rejoin waits on every dependency, not just the ones that have settled', async () => {
   const h = rejoinSetup();
-  const api = h.store.listPlanParts(h.planId).find((p) => p.slug === 'api')!;
-  h.store.updatePlanPart(api.id, { status: 'merged', branch: 'issue/12/api', prNumber: 41 });
-  const schema = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
-  const task = h.store.createTask({
+  const api = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === 'api')!;
+  h.store.plans.updatePlanPart(api.id, { status: 'merged', branch: 'issue/12/api', prNumber: 41 });
+  const schema = h.store.plans.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  const task = h.store.tasks.createTask({
     kind: 'code',
     title: 'Schema',
     prompt: 'p',
     branch: 'issue/12/schema',
     originRef: 'issue:12:part:schema',
   });
-  h.store.markPartDispatched(schema.id, task.id, 'issue/12/schema');
+  h.store.plans.markPartDispatched(schema.id, task.id, 'issue/12/schema');
 
   await h.reconciler.reconcile(world());
   assert.equal(statusOf(h, 'wire'), 'pending', 'basing on an empty branch gains nothing');

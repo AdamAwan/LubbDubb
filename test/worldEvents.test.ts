@@ -38,20 +38,20 @@ test('injected world changes are recorded as world events across cycles', async 
   system.connector.inject({ kind: 'pr_approved', prNumber: 42 });
   await system.harness.runCycle('manual');
 
-  const kinds = system.store.listWorldEvents().map((e) => e.kind);
+  const kinds = system.store.world.listWorldEvents().map((e) => e.kind);
   assert.ok(kinds.includes('pr_opened'), 'the new PR should record pr_opened');
   assert.ok(kinds.includes('pr_ci'), 'CI going green should record pr_ci');
   assert.ok(kinds.includes('pr_approved'), 'approval should record pr_approved');
 
   assert.deepEqual(
     emitted.map((e) => e.id).sort(),
-    system.store
+    system.store.world
       .listWorldEvents()
       .map((e) => e.id)
       .sort(),
   );
 
-  const ci = system.store.listWorldEvents().find((e) => e.kind === 'pr_ci')!;
+  const ci = system.store.world.listWorldEvents().find((e) => e.kind === 'pr_ci')!;
   assert.match(ci.summary, /#42/);
   assert.match(ci.summary, /passing/);
 
@@ -65,12 +65,12 @@ test('the first cycle over a fresh store only sets the baseline (no spurious eve
   system.connector.inject({ kind: 'new_pr', number: 1, title: 'Seed', branch: 'seed' });
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listWorldEvents(), []);
+  assert.deepEqual(system.store.world.listWorldEvents(), []);
 
   system.connector.inject({ kind: 'ci_passed', prNumber: 1 });
   await system.harness.runCycle('manual');
   assert.deepEqual(
-    system.store.listWorldEvents().map((e) => e.kind),
+    system.store.world.listWorldEvents().map((e) => e.kind),
     ['pr_ci'],
   );
 
@@ -86,11 +86,11 @@ test('the persisted baseline survives a restart, so no re-flood on the next boot
   const first = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   first.connector.inject({ kind: 'new_pr', number: 7, title: 'Persist', branch: 'p' });
   await first.harness.runCycle('manual');
-  assert.deepEqual(first.store.listWorldEvents(), []);
+  assert.deepEqual(first.store.world.listWorldEvents(), []);
   first.store.close();
 
   const second = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   await second.harness.runCycle('manual');
-  assert.deepEqual(second.store.listWorldEvents(), [], 'restart must not re-flood the feed');
+  assert.deepEqual(second.store.world.listWorldEvents(), [], 'restart must not re-flood the feed');
   second.store.close();
 });

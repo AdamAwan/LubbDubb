@@ -66,7 +66,7 @@ function ingest(system: System, validation: Record<string, unknown> | undefined)
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -159,18 +159,18 @@ test('a plan document carrying a full check set is ingested exactly as it always
   const system = build();
   ingest(system, { checks: [CHECK], resources: [{ name: 'fixture.tar.gz', kind: 'fixture' }] });
 
-  const checks = system.store.listValidationChecks(GOAL);
+  const checks = system.store.validation.listValidationChecks(GOAL);
   assert.deepEqual(
     checks.map((c) => [c.letter, c.id, c.state]),
     [['A', 'csv-opens', 'unrun']],
     'the rows are real and an operator may be halfway through them',
   );
   assert.deepEqual(
-    system.store.listValidationResources(GOAL).map((r) => r.name),
+    system.store.validation.listValidationResources(GOAL).map((r) => r.name),
     ['fixture.tar.gz'],
   );
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.authoredAt,
+    system.store.validation.getValidationPlanRecord(GOAL)?.authoredAt,
     null,
     'and a legacy plan is not an authoring — nothing pretends the validation planner ran',
   );
@@ -183,12 +183,12 @@ test('a hint-only block writes the hint and withdraws nothing', () => {
   ingest(system, { hint: 'worth checking: the upload path against a real store' });
 
   assert.deepEqual(
-    system.store.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
+    system.store.validation.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
     [['csv-opens', null]],
     'a hint is not an empty check set — re-reading it as one would delete a set somebody is using',
   );
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.hint,
+    system.store.validation.getValidationPlanRecord(GOAL)?.hint,
     'worth checking: the upload path against a real store',
   );
   system.store.close();
@@ -200,7 +200,7 @@ test('an explicit empty check set still withdraws every check, said out loud', (
   ingest(system, { checks: [] });
 
   assert.equal(
-    system.store.listValidationChecks(GOAL)[0]?.supersededReason !== null,
+    system.store.validation.listValidationChecks(GOAL)[0]?.supersededReason !== null,
     true,
     'withdrawing every check is "checks": [], which is the one reading of it that is honest',
   );
@@ -356,10 +356,10 @@ test('validation_plan writes the whole set, with a note, and stamps the goal as 
   });
   assert.equal(res.isError, false, res.text);
   assert.deepEqual(
-    system.store.listValidationChecks(GOAL).map((c) => [c.letter, c.id]),
+    system.store.validation.listValidationChecks(GOAL).map((c) => [c.letter, c.id]),
     [['A', 'csv-opens']],
   );
-  const record = system.store.getValidationPlanRecord(GOAL);
+  const record = system.store.validation.getValidationPlanRecord(GOAL);
   assert.match(record?.note ?? '', /the suite already asserts them/, 'the departure from the hint is on the record');
   assert.notEqual(record?.authoredAt, null);
   assert.equal(record?.hint, 'the upload path', 'and writing the set does not un-write the plan’s intent');
@@ -375,7 +375,7 @@ test('an empty check set is refused without a reason and accepted with one', asy
   assert.equal(bare.isError, true);
   assert.match(bare.text, /carries a reason/);
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.authoredAt,
+    system.store.validation.getValidationPlanRecord(GOAL)?.authoredAt,
     null,
     'a refused call authors nothing, so the sheet keeps waiting',
   );
@@ -385,7 +385,7 @@ test('an empty check set is refused without a reason and accepted with one', asy
     emptyReason: 'area `Checkout Tests` now asserts the confirmation step and nothing else needs a run',
   });
   assert.equal(reasoned.isError, false, reasoned.text);
-  const record = system.store.getValidationPlanRecord(GOAL);
+  const record = system.store.validation.getValidationPlanRecord(GOAL);
   assert.match(record?.emptyReason ?? '', /Checkout Tests/, 'null with no account of itself is the failure');
   assert.notEqual(record?.authoredAt, null, 'and declaring nothing is a complete answer');
   system.store.close();

@@ -111,7 +111,7 @@ function build(): System {
 
 function stand(system: System, voices = ['issue:900', 'issue:901']): string {
   for (const goal of voices) {
-    system.store.recordObstacleSighting(
+    system.store.obstacles.recordObstacleSighting(
       {
         what: 'the windows runner wedges before the suite starts',
         kind: 'obstacle',
@@ -132,7 +132,7 @@ function stand(system: System, voices = ['issue:900', 'issue:901']): string {
       },
     );
   }
-  return system.store.listObstacles()[0]!.id;
+  return system.store.obstacles.listObstacles()[0]!.id;
 }
 
 const EMPTY_WORLD = { takenAt: NOW, pullRequests: [], issues: [] };
@@ -159,7 +159,7 @@ test('the ticket door files once, with the watch label, and cannot be walked thr
   assert.equal(filed[0]!.relatedTo, 900, 'related to the goal that hit it first');
   assert.match(filed[0]!.title, /windows runner wedges/);
 
-  const owned = system.store.getObstacle(id)!;
+  const owned = system.store.obstacles.getObstacle(id)!;
   assert.equal(owned.state, 'owned');
   assert.equal(owned.ownerRef, 'issue:841');
   system.store.close();
@@ -182,12 +182,12 @@ test('a tracker that refuses hands the row back, rather than owning it with noth
   });
 
   await desk.run(EMPTY_WORLD);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing');
-  assert.equal(system.store.getObstacle(id)!.ownerRef, null);
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
+  assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, null);
   assert.equal(errors.length, 1);
 
   await desk.run(EMPTY_WORLD);
-  assert.equal(system.store.getObstacle(id)!.ownerRef, 'issue:842');
+  assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:842');
   system.store.close();
 });
 
@@ -197,9 +197,9 @@ test('the repair door is recorded, never taken: the desk owns a row the rule act
   const desk = new ObstacleOwnershipDesk({ store: system.store, watchLabel: '' });
 
   await desk.run(EMPTY_WORLD);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
 
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'Repair it',
     prompt: 'fix',
@@ -208,7 +208,7 @@ test('the repair door is recorded, never taken: the desk owns a row the rule act
   });
   await desk.run(EMPTY_WORLD);
 
-  const owned = system.store.getObstacle(id)!;
+  const owned = system.store.obstacles.getObstacle(id)!;
   assert.equal(owned.state, 'owned');
   assert.equal(owned.ownerRef, `obstacle:${id}`);
   system.store.close();
@@ -307,7 +307,7 @@ test('a block holds while its obstacle reaches agents, and releases the moment i
 test('conclude_work blocked parks the goal, and the desk brings it back', async () => {
   const system = build();
   const id = stand(system);
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Resolve issue #12',
     prompt: 'do it',
@@ -321,10 +321,10 @@ test('conclude_work blocked parks the goal, and the desk brings it back', async 
   const blocked = system.agents.recordBlocked(agent.id, id, 'the base will not build');
   assert.ok(blocked.ok);
   assert.deepEqual(
-    system.store.listObstacleBlocks().map((b) => [b.originRef, b.obstacleId]),
+    system.store.obstacles.listObstacleBlocks().map((b) => [b.originRef, b.obstacleId]),
     [['issue:12', id]],
   );
-  assert.equal(system.store.listIssueConclusions().length, 0);
+  assert.equal(system.store.verdicts.listIssueConclusions().length, 0);
 
   const issue: Issue = {
     id: 'i12',
@@ -336,9 +336,9 @@ test('conclude_work blocked parks the goal, and the desk brings it back', async 
     linkedPrNumber: null,
   };
   const world = { takenAt: NOW, pullRequests: [], issues: [issue] };
-  const board = () => system.store.obstacleBoard();
+  const board = () => system.store.obstacles.obstacleBoard();
   const parked = await new RuleDispatcher().decide(
-    ctx({ world, obstacles: board(), obstacleBlocks: system.store.listObstacleBlocks() }),
+    ctx({ world, obstacles: board(), obstacleBlocks: system.store.obstacles.listObstacleBlocks() }),
   );
   assert.deepEqual(
     (parked.upcoming ?? []).filter((q) => q.origin === 'issue:12'),
@@ -346,10 +346,10 @@ test('conclude_work blocked parks the goal, and the desk brings it back', async 
     'the goal does not return to pickup while the obstacle stands',
   );
 
-  system.store.claimObstacle(id);
-  system.store.setObstacleOwner(id, 'issue:841');
+  system.store.obstacles.claimObstacle(id);
+  system.store.obstacles.setObstacleOwner(id, 'issue:841');
   const desk = new ObstacleOwnershipDesk({ store: system.store, watchLabel: '' });
   await desk.run(world);
-  assert.equal(system.store.listObstacleBlocks().length, 1);
+  assert.equal(system.store.obstacles.listObstacleBlocks().length, 1);
   system.store.close();
 });

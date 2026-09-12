@@ -91,7 +91,7 @@ test('the trend draws eight periods of the chosen window', async () => {
 test('the session window is anchored off the store\u2019s own reading, on every route', async () => {
   const system = build();
   const resetsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-  system.store.recordRateLimits({
+  system.store.rateLimits.recordRateLimits({
     fiveHour: { usedPercentage: 74, resetsAt },
     sevenDay: { usedPercentage: 31, resetsAt: null },
     capturedAt: new Date().toISOString(),

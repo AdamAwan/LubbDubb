@@ -56,8 +56,9 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
     if (verdict === 'findings' && findings.length === 0) {
       return toolError('Review rejected: a "findings" verdict has to list at least one finding.');
     }
-    const headSha = deps.store.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.headSha ?? null;
-    const review = deps.store.recordPrReview({
+    const headSha =
+      deps.store.world.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.headSha ?? null;
+    const review = deps.store.prReviews.recordPrReview({
       prNumber,
       headSha,
       verdict,

@@ -35,7 +35,7 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
 
 test('the usage section is keyed on subject and verb, bucketed by UTC day, and the current day is partial', () => {
   const store = new Store(':memory:', () => NOW);
-  store.recordSurfaceReach([
+  store.surfaceReach.recordSurfaceReach([
     { subject: 'plan', verb: 'view', place: 'plan', arrival: 'linked' },
     { subject: 'plan', verb: 'view', place: 'overview', arrival: 'direct' },
     { subject: 'plan', verb: 'expand', place: 'plan', arrival: 'linked' },
@@ -64,7 +64,7 @@ test('the usage section is keyed on subject and verb, bucketed by UTC day, and t
 
 test('a usage row carries no cost, and a document from a build without the section reads as empty', () => {
   const store = new Store(':memory:', () => NOW);
-  store.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
+  store.surfaceReach.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
   const document = buildDigestDocument(store, {
     fleetId: 'alice@acme-api',
     project: 'acme-api',
@@ -86,7 +86,7 @@ test('a usage row carries no cost, and a document from a build without the secti
 
 test('the mirror stores the usage section and the aggregator ships the event count beside the fleet count', () => {
   const store = new Store(':memory:', () => NOW);
-  store.replacePoolFleetDigest(
+  store.pool.replaceFleetDigest(
     'busy@acme-api',
     'acme-api',
     digestDoc({
@@ -95,7 +95,7 @@ test('the mirror stores the usage section and the aggregator ships the event cou
     }),
   );
   for (const id of ['a', 'b', 'c', 'd']) {
-    store.replacePoolFleetDigest(
+    store.pool.replaceFleetDigest(
       `${id}@acme-api`,
       'acme-api',
       digestDoc({
@@ -105,7 +105,7 @@ test('the mirror stores the usage section and the aggregator ships the event cou
     );
   }
 
-  const rollup = foldPoolDigest(store.listPoolDigestRows('acme-api'), { project: 'acme-api', since: null });
+  const rollup = foldPoolDigest(store.pool.listDigestRows('acme-api'), { project: 'acme-api', since: null });
   const expand = rollup.byUsage.find((r) => r.key === 'plan.expand');
   const view = rollup.byUsage.find((r) => r.key === 'plan.view');
   assert.deepEqual(
@@ -126,7 +126,7 @@ test('the usage section sums across projects: both its axes are the harness’s 
     ['a@one', 'one'],
     ['b@two', 'two'],
   ] as const) {
-    store.replacePoolFleetDigest(
+    store.pool.replaceFleetDigest(
       fleet,
       project,
       digestDoc({
@@ -136,7 +136,7 @@ test('the usage section sums across projects: both its axes are the harness’s 
       }),
     );
   }
-  const all = foldPoolDigest(store.listPoolDigestRows(null), { project: null, since: null });
+  const all = foldPoolDigest(store.pool.listDigestRows(null), { project: null, since: null });
   const row = all.byUsage.find((r) => r.key === 'validation.expand');
   assert.deepEqual([row?.count, row?.fleets], [6, 2]);
   assert.equal(all.byCheck, null);
@@ -144,7 +144,7 @@ test('the usage section sums across projects: both its axes are the harness’s 
 
 test('a pair the registry does not have is dropped rather than published', () => {
   const store = new Store(':memory:', () => NOW);
-  store.recordSurfaceReach([
+  store.surfaceReach.recordSurfaceReach([
     { subject: 'pr', verb: 'expand', place: 'pr', arrival: 'linked' },
     { subject: 'pr', verb: 'view', place: 'pr', arrival: 'linked' },
   ] as never);

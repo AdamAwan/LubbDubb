@@ -92,21 +92,21 @@ async function dispatch(system: System, originRef: string): Promise<string> {
     ],
   } as unknown as DispatchResult;
   await system.executor.execute('cyc', plan);
-  const task = system.store.listTasks().find((t) => t.originRef === originRef);
+  const task = system.store.tasks.listTasks().find((t) => t.originRef === originRef);
   assert.ok(task, 'nothing was dispatched, so there is no prompt to read');
-  return system.store.getTask(task.id)?.prompt ?? '';
+  return system.store.tasks.getTask(task.id)?.prompt ?? '';
 }
 
 function partOnPr(system: System, prNumber: number): PlanPart {
   const plan = planWithOnePart(system.store, 12);
-  const part = system.store.listPlanParts(plan.id)[0]!;
-  return system.store.updatePlanPart(part.id, { status: 'merged', prNumber, branch: 'issue/12' })!;
+  const part = system.store.plans.listPlanParts(plan.id)[0]!;
+  return system.store.plans.updatePlanPart(part.id, { status: 'merged', prNumber, branch: 'issue/12' })!;
 }
 
 test('an assessor is told where the goal’s merges are, and only this goal’s', async () => {
   const system = build();
   try {
-    system.store.archiveClosedPrs([
+    system.store.prArchive.archiveClosedPrs([
       pr(),
       pr({ id: 'pr41', number: 41, title: 'Somebody else', branch: 'issue/99', mergeCommitSha: 'dddd999' }),
     ]);
@@ -126,7 +126,7 @@ test('an assessor is told where the goal’s merges are, and only this goal’s'
 test('a part’s pull request is the goal’s even where the branch convention does not say so', async () => {
   const system = build();
   try {
-    system.store.archiveClosedPrs([
+    system.store.prArchive.archiveClosedPrs([
       pr({ id: 'pr77', number: 77, branch: 'spike/whatever', mergeCommitSha: 'ee55f00' }),
     ]);
     partOnPr(system, 77);
@@ -141,7 +141,7 @@ test('a part’s pull request is the goal’s even where the branch convention d
 test('an agent still building the goal is handed none of it', async () => {
   const system = build();
   try {
-    system.store.archiveClosedPrs([pr()]);
+    system.store.prArchive.archiveClosedPrs([pr()]);
     const prompt = await dispatch(system, 'issue:12:part:whole');
     assert.doesNotMatch(prompt, /abc1234/);
     assert.doesNotMatch(prompt, /Where this goal’s pull requests are/);

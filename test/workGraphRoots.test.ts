@@ -238,60 +238,60 @@ test('an adopted job is not unrecorded, and an origin-less one still is', () => 
 
 test('a filing is claimed once per node — a second click is refused by the write', () => {
   const store = new Store(':memory:');
-  const first = store.createWorkItemFiling({ targetRef: 'job:j7' });
+  const first = store.graph.createWorkItemFiling({ targetRef: 'job:j7' });
   assert.equal(first?.status, 'filing');
   assert.equal(first?.ticketRef, null, 'the ticket does not exist yet — that is what filing means');
 
   assert.equal(
-    store.createWorkItemFiling({ targetRef: 'job:j7' }),
+    store.graph.createWorkItemFiling({ targetRef: 'job:j7' }),
     null,
     'the refusal is the primary key, not a caller remembering to look',
   );
-  assert.equal(store.listWorkItemFilings().length, 1);
+  assert.equal(store.graph.listWorkItemFilings().length, 1);
   store.close();
 });
 
 test('linking settles a filing exactly once', () => {
   const store = new Store(':memory:');
-  store.createWorkItemFiling({ targetRef: 'job:j7' });
+  store.graph.createWorkItemFiling({ targetRef: 'job:j7' });
 
-  const linked = store.linkWorkItemFiling('job:j7', 'issue:314');
+  const linked = store.graph.linkWorkItemFiling('job:j7', 'issue:314');
   assert.equal(linked?.status, 'filed');
   assert.equal(linked?.ticketRef, 'issue:314');
 
-  assert.equal(store.linkWorkItemFiling('job:j7', 'issue:999'), null, 'a settled filing is not re-settled');
-  assert.equal(store.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
+  assert.equal(store.graph.linkWorkItemFiling('job:j7', 'issue:999'), null, 'a settled filing is not re-settled');
+  assert.equal(store.graph.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
   store.close();
 });
 
 test('a claim whose create failed is released, so the button comes back', () => {
   const store = new Store(':memory:');
-  store.createWorkItemFiling({ targetRef: 'job:j7' });
-  store.dropWorkItemFiling('job:j7');
-  assert.equal(store.listWorkItemFilings().length, 0, 'no filing stands for a ticket that was never created');
-  assert.equal(store.createWorkItemFiling({ targetRef: 'job:j7' })?.status, 'filing');
+  store.graph.createWorkItemFiling({ targetRef: 'job:j7' });
+  store.graph.dropWorkItemFiling('job:j7');
+  assert.equal(store.graph.listWorkItemFilings().length, 0, 'no filing stands for a ticket that was never created');
+  assert.equal(store.graph.createWorkItemFiling({ targetRef: 'job:j7' })?.status, 'filing');
 
-  store.linkWorkItemFiling('job:j7', 'issue:314');
-  store.dropWorkItemFiling('job:j7');
-  assert.equal(store.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
+  store.graph.linkWorkItemFiling('job:j7', 'issue:314');
+  store.graph.dropWorkItemFiling('job:j7');
+  assert.equal(store.graph.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
   store.close();
 });
 
 test('a node that is filing nothing resolves to no filing', () => {
   const store = new Store(':memory:');
-  assert.equal(store.linkWorkItemFiling('job:unrelated', 'issue:314'), null);
+  assert.equal(store.graph.linkWorkItemFiling('job:unrelated', 'issue:314'), null);
   store.close();
 });
 
 test('listWorkNodes reads the whole table, roots and descendants alike', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph(
+  store.graph.recordWorkGraph(
     foldWorkGraph(
       input({ world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }), jobs: [job()] }),
     ),
   );
   assert.deepEqual(
-    store
+    store.graph
       .listWorkNodes()
       .map((n) => n.ref)
       .sort(),
@@ -303,8 +303,8 @@ test('listWorkNodes reads the whole table, roots and descendants alike', () => {
 
 function recorded(over: Partial<WorkGraphInput> = {}): { store: Store; nodes: WorkNode[] } {
   const store = new Store(':memory:');
-  store.recordWorkGraph(foldWorkGraph(input(over)));
-  return { store, nodes: store.listWorkNodes() };
+  store.graph.recordWorkGraph(foldWorkGraph(input(over)));
+  return { store, nodes: store.graph.listWorkNodes() };
 }
 
 test('a dispatched code job with no work item behind it is unrecorded', () => {
@@ -352,24 +352,24 @@ test('the narrowings: desk, queued, cancelled and adopted jobs are not unrecorde
 
 test('a filing in flight keeps the node listed, carrying its status', () => {
   const { store, nodes } = recorded({ jobs: [job()] });
-  const filing = store.createWorkItemFiling({ targetRef: 'job:j7' });
+  const filing = store.graph.createWorkItemFiling({ targetRef: 'job:j7' });
   assert.ok(filing);
-  const found = unrecordedWork(nodes, [job()], store.listWorkItemFilings());
+  const found = unrecordedWork(nodes, [job()], store.graph.listWorkItemFilings());
   assert.equal(found[0]?.filing, 'filing', 'dropping it would make the click look like it did nothing');
   store.close();
 });
 
 test('an ignored node stays in the set, carrying the verdict rather than being filtered out', () => {
   const { store, nodes } = recorded({ jobs: [job()] });
-  store.ignoreWorkItem('job:j7');
-  const found = unrecordedWork(nodes, [job()], [], store.listWorkItemIgnores());
+  store.graph.ignoreWorkItem('job:j7');
+  const found = unrecordedWork(nodes, [job()], [], store.graph.listWorkItemIgnores());
   assert.equal(found.length, 1, 'filtering here would leave the panel and the file route disagreeing');
   assert.equal(found[0]?.ignored, true);
   assert.equal(found[0]?.title, 'Bump the linter', 'the row keeps its title, so the un-ignore has something to offer');
 
-  store.unignoreWorkItem('job:j7');
+  store.graph.unignoreWorkItem('job:j7');
   assert.equal(
-    unrecordedWork(nodes, [job()], [], store.listWorkItemIgnores())[0]?.ignored,
+    unrecordedWork(nodes, [job()], [], store.graph.listWorkItemIgnores())[0]?.ignored,
     false,
     'the undo is a delete — one representation of "not ignored"',
   );
@@ -378,28 +378,28 @@ test('an ignored node stays in the set, carrying the verdict rather than being f
 
 test('ignoring twice is one row, and un-ignoring what was never ignored is silent', () => {
   const store = new Store(':memory:');
-  store.ignoreWorkItem('job:j7');
-  store.ignoreWorkItem('job:j7');
-  assert.deepEqual(store.listWorkItemIgnores(), ['job:j7'], 'the refusal lives in the write');
-  store.unignoreWorkItem('job:nope');
-  assert.deepEqual(store.listWorkItemIgnores(), ['job:j7']);
+  store.graph.ignoreWorkItem('job:j7');
+  store.graph.ignoreWorkItem('job:j7');
+  assert.deepEqual(store.graph.listWorkItemIgnores(), ['job:j7'], 'the refusal lives in the write');
+  store.graph.unignoreWorkItem('job:nope');
+  assert.deepEqual(store.graph.listWorkItemIgnores(), ['job:j7']);
   store.close();
 });
 
 test('the ticket prompt names the tracker, the ref and what the work produced', () => {
   const { store } = recorded({ world: world({ pullRequests: [pr()] }), jobs: [job()] });
-  store.recordWorkGraph(
+  store.graph.recordWorkGraph(
     foldWorkGraph(
       input({
         world: world({ closedPullRequests: [pr({ merged: true, state: 'merged' })] }),
         jobs: [job()],
-        existing: store.listWorkNodes(),
+        existing: store.graph.listWorkNodes(),
       }),
     ),
   );
-  const node = store.listWorkNodes().find((n) => n.ref === 'job:j7');
+  const node = store.graph.listWorkNodes().find((n) => n.ref === 'job:j7');
   assert.ok(node);
-  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'));
+  const fields = workItemTicketFields(node, store.graph.listWorkSubtree('job:j7'));
   assert.match(fields.title, /Bump the linter/);
   assert.equal(fields.vars.ref, 'job:j7');
   assert.match(fields.vars.produced ?? '', /pr:41/, 'the PR it produced is in the body');
@@ -415,7 +415,7 @@ test('a job that produced nothing says so in the prompt rather than leaving a bl
   const { store, nodes } = recorded({ jobs: [job()] });
   const node = nodes.find((n) => n.ref === 'job:j7');
   assert.ok(node);
-  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'));
+  const fields = workItemTicketFields(node, store.graph.listWorkSubtree('job:j7'));
   assert.match(fields.vars.produced ?? '', /no pull request/i);
   store.close();
 });
@@ -443,10 +443,10 @@ test('a filing still in flight attaches nothing', () => {
 
 test('a ticket the world never lists still leaves its work reachable', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
+  store.graph.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
 
   assert.deepEqual(
-    store
+    store.graph
       .listWorkRoots()
       .map((n) => n.ref)
       .sort(),
@@ -454,7 +454,7 @@ test('a ticket the world never lists still leaves its work reachable', () => {
     'the ticket is the root, and the job is no longer one',
   );
   assert.deepEqual(
-    store.listWorkSubtree('issue:314').map((n) => n.ref),
+    store.graph.listWorkSubtree('issue:314').map((n) => n.ref),
     ['issue:314', 'job:j7'],
     'the whole tree hangs off the filed work item',
   );
@@ -477,8 +477,8 @@ test('the placeholder is first sight only: a stored ticket node is never overwri
   const store = new Store(':memory:');
   const listed = issue({ id: 'i314', number: 314, title: 'Bump the linter' });
   const pulse = (over: Partial<WorkGraphInput> = {}) =>
-    store.recordWorkGraph(
-      foldWorkGraph(input({ jobs: [job()], filings: [filing()], existing: store.listWorkNodes(), ...over })),
+    store.graph.recordWorkGraph(
+      foldWorkGraph(input({ jobs: [job()], filings: [filing()], existing: store.graph.listWorkNodes(), ...over })),
     );
 
   pulse({ world: world({ issues: [listed] }) });
@@ -486,7 +486,7 @@ test('the placeholder is first sight only: a stored ticket node is never overwri
   pulse();
   pulse();
 
-  const node314 = store.listWorkNodes().find((n) => n.ref === 'issue:314');
+  const node314 = store.graph.listWorkNodes().find((n) => n.ref === 'issue:314');
   assert.equal(node314?.title, 'Bump the linter', 'the observed title survives every later absence');
   assert.equal(node314?.status, 'closed', 'as does the tracker status the harness read and never computes');
   assert.equal(node314?.terminal, true);
@@ -513,10 +513,10 @@ test('a linked filing re-emits a node whose job has aged out of the fold', () =>
 
 test('the fold is the only writer: a second filing cannot re-parent an adopted node', () => {
   const store = new Store(':memory:');
-  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
-  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing({ ticketRef: 'issue:999' })] })));
+  store.graph.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
+  store.graph.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing({ ticketRef: 'issue:999' })] })));
   assert.equal(
-    store.listWorkNodes().find((n) => n.ref === 'job:j7')?.parentRef,
+    store.graph.listWorkNodes().find((n) => n.ref === 'job:j7')?.parentRef,
     'issue:314',
     'parent_ref is write-once once non-null, which is what stops this ever being redone',
   );
@@ -549,8 +549,8 @@ function buildWithTracker(): ReturnType<typeof buildSystem> {
 }
 
 async function dispatchedJob(system: ReturnType<typeof buildSystem>) {
-  const job = system.store.createJob({ title: 'Bump the linter', prompt: 'bump it', kind: 'code' });
-  system.store.markJobDispatched(job.id, 't-stub');
+  const job = system.store.jobs.createJob({ title: 'Bump the linter', prompt: 'bump it', kind: 'code' });
+  system.store.jobs.markJobDispatched(job.id, 't-stub');
   await system.harness.runCycle('manual');
   return job;
 }
@@ -583,7 +583,7 @@ test('filing creates the work item there and then, and a second click is refused
   const filed = res.json() as { job?: unknown; filing: { status: string; ticketRef: string | null } };
 
   assert.equal(filed.job, undefined);
-  assert.equal(system.store.listJobs().filter((j) => j.kind === 'desk').length, 0);
+  assert.equal(system.store.jobs.listJobs().filter((j) => j.kind === 'desk').length, 0);
   assert.equal(filed.filing.status, 'filed');
   assert.ok(filed.filing.ticketRef?.startsWith('issue:'));
 
@@ -592,7 +592,7 @@ test('filing creates the work item there and then, and a second click is refused
 
   const listed = await app.inject({ method: 'GET', url: '/api/work' });
   assert.deepEqual((listed.json() as { unrecorded: { ref: string }[] }).unrecorded, []);
-  assert.equal(system.store.listWorkNodes().find((n) => n.ref === ref)?.parentRef, filed.filing.ticketRef);
+  assert.equal(system.store.graph.listWorkNodes().find((n) => n.ref === ref)?.parentRef, filed.filing.ticketRef);
   await app.close();
   system.store.close();
 });
@@ -654,7 +654,7 @@ test('filing parents the work to its new item on the next pulse', async () => {
 
   await system.harness.runCycle('manual');
   assert.equal(
-    system.store.listWorkNodes().find((n) => n.ref === `job:${worked.id}`)?.parentRef,
+    system.store.graph.listWorkNodes().find((n) => n.ref === `job:${worked.id}`)?.parentRef,
     filing.ticketRef,
     'the fold writes the edge, not the route',
   );
@@ -664,7 +664,7 @@ test('filing parents the work to its new item on the next pulse', async () => {
 
 test('an agent on an unrelated job can link nothing, and is told which jobs can', () => {
   const system = buildServed();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Something else',
     prompt: 'do it',
@@ -684,12 +684,12 @@ test('adoption is write-once: a later fold never re-parents a job', () => {
   const adopted = foldWorkGraph(
     input({ world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }), jobs: [job()] }),
   );
-  store.recordWorkGraph(adopted);
-  assert.equal(store.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef, 'issue:12');
+  store.graph.recordWorkGraph(adopted);
+  assert.equal(store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef, 'issue:12');
 
-  store.recordWorkGraph(foldWorkGraph(input({ world: world({ pullRequests: [pr()] }), jobs: [job()] })));
+  store.graph.recordWorkGraph(foldWorkGraph(input({ world: world({ pullRequests: [pr()] }), jobs: [job()] })));
   assert.equal(
-    store.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef,
+    store.graph.listWorkSubtree('issue:12').find((n) => n.ref === 'job:j7')?.parentRef,
     'issue:12',
     'a null parent from the fold never undoes an adoption',
   );

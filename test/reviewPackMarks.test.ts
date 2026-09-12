@@ -66,12 +66,12 @@ function build(): System {
 
 function agentOn(system: System, originRef: string): Agent | undefined {
   const tasks = new Set(
-    system.store
+    system.store.tasks
       .listTasks()
       .filter((t) => t.originRef === originRef)
       .map((t) => t.id),
   );
-  return system.store.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
+  return system.store.agents.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
 }
 
 async function authored(
@@ -119,7 +119,7 @@ async function authored(
     ],
   })) as ToolResultText;
   assert.equal(submitted.isError, undefined, submitted.content[0]?.text);
-  return { author: author!, pack: system.store.getCurrentReviewPack(7)!.pack };
+  return { author: author!, pack: system.store.reviewPacks.getCurrentReviewPack(7)!.pack };
 }
 
 test('a mark rides the hunks an idea owns, each column its own, and the read lays it back on the idea', async () => {
@@ -216,7 +216,7 @@ test('the mark routes refuse by name: a bad body, no pack, no such idea, and an 
   const noHunk = await refusal(`/api/prs/7/review-pack/ideas/${contextOnly!.id}/read`, { read: true });
   assert.equal(noHunk.status, 409);
   assert.match(noHunk.error, /owns no changed code/);
-  assert.equal(system.store.listReviewMarks(7).length, 0, 'nothing was written');
+  assert.equal(system.store.reviewPacks.listReviewMarks(7).length, 0, 'nothing was written');
   await app.close();
   system.store.close();
 });

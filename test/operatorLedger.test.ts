@@ -147,31 +147,31 @@ test('the two halves stay apart, and every row names a subject from the registry
 test('GET /api/usage sweeps the records and answers for the window it was asked with', async () => {
   const system = build();
   const { store } = system;
-  const escalation = store.createEscalation({
+  const escalation = store.escalations.createEscalation({
     type: 'answer_question',
     prompt: 'which environment is this against?',
     context: {},
     agentId: null,
     taskId: null,
   });
-  store.answerEscalation(escalation.id, 'staging');
-  const dismissed = store.createEscalation({
+  store.escalations.answerEscalation(escalation.id, 'staging');
+  const dismissed = store.escalations.createEscalation({
     type: 'answer_question',
     prompt: 'should this ship?',
     context: {},
     agentId: null,
     taskId: null,
   });
-  store.dismissEscalation(dismissed.id, {});
-  const { task: bench } = store.recordHumanTask({
+  store.escalations.dismissEscalation(dismissed.id, {});
+  const { task: bench } = store.humanTasks.recordHumanTask({
     title: 'rotate the staging credential',
     detail: null,
     agentId: null,
     taskId: null,
     originRef: null,
   });
-  store.settleHumanTask(bench.id, 'done', 'rotated');
-  store.recordStackLanding('stack:41', [41, 42]);
+  store.humanTasks.settleHumanTask(bench.id, 'done', 'rotated');
+  store.landings.recordStackLanding('stack:41', [41, 42]);
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/usage?window=24h' });

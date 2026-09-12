@@ -29,7 +29,7 @@ export interface LiveTicketFacts {
   parent?: { number: number; title: string } | null;
 }
 
-export interface TrackerSweepMark {
+interface TrackerSweepMark {
   anchorAt: string;
   sweptTo: string | null;
   restatedAt: string | null;
@@ -244,7 +244,7 @@ export class TicketStore {
   }
 }
 
-export interface TicketLabelPatch {
+interface TicketLabelPatch {
   numbers: readonly number[];
   label: string;
   present: boolean;

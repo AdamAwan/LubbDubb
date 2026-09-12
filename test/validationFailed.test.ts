@@ -257,7 +257,7 @@ test('the agent it sends may not record a reading on the check', async () => {
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
 
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Look into check A',
     prompt: 'diagnose it',
@@ -275,6 +275,6 @@ test('the agent it sends may not record a reading on the check', async () => {
 
   assert.equal(result.isError, true);
   assert.match(result.content[0]?.text ?? '', /validation_amend/);
-  const after = system.store.listValidationChecks('issue:12').find((c) => c.id === 'csv-opens');
+  const after = system.store.validation.listValidationChecks('issue:12').find((c) => c.id === 'csv-opens');
   assert.equal(after?.state, 'unrun', 'nothing was recorded');
 });

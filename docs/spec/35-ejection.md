@@ -117,7 +117,7 @@ The worktree is **not** returned to the pool, and the hold is **not** a lease. B
 line in the composition root:
 
 ```ts
-held: (branch) => store.findActiveTaskByBranch(branch) !== null || store.ejectionOnBranch(branch) !== null,
+held: (branch) => store.tasks.findActiveTaskByBranch(branch) !== null || store.ejections.ejectionOnBranch(branch) !== null,
 ```
 
 `WorktreeManager.holder` asks `pool.held` about a slot's occupant before anything else, so a branch an

@@ -154,7 +154,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       );
     }
     const origin = issueOrigin(issueNumber);
-    const plan = deps.store.getPlanByOrigin(origin);
+    const plan = deps.store.plans.getPlanByOrigin(origin);
     if (!plan) {
       return toolError(
         `Issue #${issueNumber} has no plan, so a check set has nothing to hang off: "covers" names live part ` +
@@ -164,7 +164,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateCheckSet(args);
     if (!parsed.ok) return toolError(`Check set rejected: ${parsed.error}`);
     const set = parsed.set;
-    const slugs = deps.store.listPlanParts(plan.id).map((p) => p.slug);
+    const slugs = deps.store.plans.listPlanParts(plan.id).map((p) => p.slug);
 
     const resources = validationResourceInputs(set.resources);
     withdrawResourceAsks(
@@ -172,13 +172,13 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       origin,
       resources.filter((r) => !r.provided).map((r) => r.name),
     );
-    const written = deps.store.ingestValidation(origin, {
+    const written = deps.store.validation.ingestValidation(origin, {
       checks: validationCheckSetInputs(set.checks, set.resources, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
       resources,
       supersededReason: AUTHORED_SUPERSEDED_REASON,
       amendNote: AUTHORED_AMEND_NOTE,
     });
-    deps.store.recordValidationAuthoring(origin, {
+    deps.store.validation.recordValidationAuthoring(origin, {
       note: set.note,
       emptyReason: set.checks.length === 0 ? (set.emptyReason ?? null) : null,
     });

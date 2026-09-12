@@ -82,7 +82,7 @@ function build(sink: ActionSink): System {
 }
 
 function agentAt(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Review PR #42',
     prompt: 'read it',
@@ -103,7 +103,7 @@ async function publish(system: System, agent: Agent): Promise<{ isError: boolean
 }
 
 function recordReview(system: System, prNumber = 42): PrReview {
-  return system.store.recordPrReview({
+  return system.store.prReviews.recordPrReview({
     prNumber,
     headSha: 'sha42',
     verdict: 'findings',
@@ -123,7 +123,7 @@ test('the reviewer may publish through the harness, and the thread it opens is r
   assert.equal(result.isError, false, 'the origin the prompt dispatches a reviewer at may use the tool');
   assert.equal(sink.replies.length, 1, 'and the body went out through the sink rather than the agent shell');
   assert.equal(sink.replies[0]?.commentId, null, 'as a comment on the pull request, not a reply into a thread');
-  assert.equal(system.store.listPrReviews()[0]?.publishedThread, 'thread-9');
+  assert.equal(system.store.prReviews.listPrReviews()[0]?.publishedThread, 'thread-9');
   system.store.close();
 });
 
@@ -134,7 +134,7 @@ test('a reply from the comment origin publishes nothing against the review', asy
   await publish(system, agentAt(system, 'pr:42:comments'));
 
   assert.equal(
-    system.store.listPrReviews()[0]?.publishedThread,
+    system.store.prReviews.listPrReviews()[0]?.publishedThread,
     null,
     'attribution is the origin that asked, never whatever reply happened to go out',
   );
@@ -147,19 +147,19 @@ test('a provider that will not name the thread records nothing rather than guess
 
   await publish(system, agentAt(system, 'pr:42:review'));
 
-  assert.equal(system.store.listPrReviews()[0]?.publishedThread, null);
+  assert.equal(system.store.prReviews.listPrReviews()[0]?.publishedThread, null);
   system.store.close();
 });
 
 test('a re-review clears the thread the last one was published into', () => {
   const system = build(replySink());
   recordReview(system);
-  system.store.recordPrReviewPublished(42, 'thread-9');
+  system.store.prReviews.recordPrReviewPublished(42, 'thread-9');
 
   recordReview(system);
 
   assert.equal(
-    system.store.listPrReviews()[0]?.publishedThread,
+    system.store.prReviews.listPrReviews()[0]?.publishedThread,
     null,
     'the old thread answers findings this row no longer carries',
   );
@@ -169,7 +169,7 @@ test('a re-review clears the thread the last one was published into', () => {
 test('a database from before the column reads its reviews as unpublished', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'lubbdubb-review-db-')), 'db.sqlite');
   const store = new Store(file, () => '2026-01-01T00:00:00.000Z');
-  store.recordPrReview({
+  store.prReviews.recordPrReview({
     prNumber: 42,
     headSha: 'sha42',
     verdict: 'findings',
@@ -187,9 +187,13 @@ test('a database from before the column reads its reviews as unpublished', () =>
   raw.close();
 
   const migrated = new Store(file, () => '2026-01-02T00:00:00.000Z');
-  assert.equal(migrated.listPrReviews()[0]?.publishedThread, null, 'and null is what those rows meant');
-  migrated.recordPrReviewPublished(42, 'thread-9');
-  assert.equal(migrated.listPrReviews()[0]?.publishedThread, 'thread-9', 'the column is writable, not just present');
+  assert.equal(migrated.prReviews.listPrReviews()[0]?.publishedThread, null, 'and null is what those rows meant');
+  migrated.prReviews.recordPrReviewPublished(42, 'thread-9');
+  assert.equal(
+    migrated.prReviews.listPrReviews()[0]?.publishedThread,
+    'thread-9',
+    'the column is writable, not just present',
+  );
   migrated.close();
 });
 

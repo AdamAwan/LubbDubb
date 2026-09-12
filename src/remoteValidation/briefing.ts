@@ -29,9 +29,11 @@ interface BriefInput {
  */
 export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const { store } = input;
-  const runs = store.listRemoteRuns().filter((run) => run.status === 'pending' || run.status === 'dispatched');
+  const runs = store.remoteValidation
+    .listRemoteRuns()
+    .filter((run) => run.status === 'pending' || run.status === 'dispatched');
   if (runs.length === 0) return [];
-  const rows = store.listRemoteSheetRows();
+  const rows = store.remoteValidation.listRemoteSheetRows();
   const out: RemoteRunBrief[] = [];
   for (const run of runs) {
     const issueNumber = issueOriginNumber('root', run.goalRef);
@@ -49,7 +51,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
     const runDir = remoteValidationRunDir(input.validationRoot, run.goalRef, run.id);
     const tenant = resolveTenant({
       environment,
-      stamped: store.listRemoteTenants(),
+      stamped: store.remoteValidation.listRemoteTenants(),
       now: input.now?.() ?? Date.now(),
       env: input.env,
     }).standing.tenant;
@@ -152,7 +154,7 @@ function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, en
 
 /** A selector names an **area**, never a file path, and it is the check's own `area` and nothing else. */
 function areasOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): string[] {
-  const areas = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check.area]));
+  const areas = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check.area]));
   const out: string[] = [];
   for (const row of rows) {
     const area = areas.get(row.sourceId) ?? null;
@@ -174,7 +176,7 @@ interface RunScript {
  * the two.
  */
 function scriptsOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScript[] {
-  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const checks = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check]));
   const out: RunScript[] = [];
   for (const row of rows) {
     const check = checks.get(row.sourceId);
@@ -200,7 +202,7 @@ interface RunScreen {
  * → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
  */
 function screensOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunScreen[] {
-  const checks = new Map(store.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const checks = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check]));
   const out: RunScreen[] = [];
   for (const row of rows) {
     const check = checks.get(row.sourceId);

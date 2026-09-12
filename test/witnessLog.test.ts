@@ -45,7 +45,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -166,7 +166,7 @@ test('a fork is stored and read back whole, and a note is unaffected', async () 
   assert.equal(plain.isError, false);
   assert.match(plain.text, /"fork":\s*false/);
 
-  const entries = system.store.listScratchEntries('issue:12');
+  const entries = system.store.scratch.listScratchEntries('issue:12');
   assert.equal(entries.length, 2);
   assert.deepEqual(entries[0]?.decision, FORK, 'the store hands the decision back exactly as written');
   assert.equal(entries[0]?.note, 'the migration is where the guard has to go');
@@ -198,7 +198,7 @@ test('a malformed decision is refused by name through the tool, and lands nowher
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /decision\.because is required/);
-  assert.equal(system.store.listScratchEntries('issue:12').length, 0, 'a refused fork is not stored as a note');
+  assert.equal(system.store.scratch.listScratchEntries('issue:12').length, 0, 'a refused fork is not stored as a note');
   system.store.close();
 });
 
@@ -223,11 +223,11 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   assert.match(onPr.text, /"pad":\s*"pr:42"/);
 
   assert.deepEqual(
-    system.store.listScratchEntries('pr:42').map((e) => e.note),
+    system.store.scratch.listScratchEntries('pr:42').map((e) => e.note),
     ['the failing check was the base branch'],
   );
   assert.deepEqual(
-    system.store.listScratchEntries('issue:12').map((e) => e.note),
+    system.store.scratch.listScratchEntries('issue:12').map((e) => e.note),
     ['the issue side of things'],
   );
 
@@ -282,12 +282,12 @@ test('a database created before the column reads every old row as a note', () =>
   );
   assert.ok(columns.has('decision'), 'the column was added rather than the table recreated');
 
-  const [row] = store.listScratchEntries('issue:12');
+  const [row] = store.scratch.listScratchEntries('issue:12');
   assert.equal(row?.id, 'scr_old', 'the pre-existing row is still there');
   assert.equal(row?.note, 'from before forks');
   assert.equal(row?.decision, null, 'an old row is a note');
 
-  store.appendScratchEntry({
+  store.scratch.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:schema',
     agentId: 'a2',
@@ -297,7 +297,7 @@ test('a database created before the column reads every old row as a note', () =>
     decision: FORK,
   });
   assert.deepEqual(
-    store.listScratchEntries('issue:12').map((e) => e.decision),
+    store.scratch.listScratchEntries('issue:12').map((e) => e.decision),
     [null, FORK],
   );
   store.close();
@@ -307,7 +307,7 @@ test('the instruction to record forks is appended for a code agent and absent fo
   const system = build();
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'Something', branch: 'feature/x' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
-  system.store.appendScratchEntry({
+  system.store.scratch.appendScratchEntry({
     padRef: 'pr:7',
     authorOriginRef: 'pr:7:review',
     agentId: 'a0',
@@ -316,12 +316,12 @@ test('the instruction to record forks is appended for a code agent and absent fo
     note: 'a note already on the pull request pad',
     decision: null,
   });
-  system.store.createJob({ title: 'Write a report', prompt: 'Report on X.', kind: 'desk' });
+  system.store.jobs.createJob({ title: 'Write a report', prompt: 'Report on X.', kind: 'desk' });
   await system.harness.runCycle('manual');
 
-  const tasks = system.store
+  const tasks = system.store.tasks
     .listTasks()
-    .map((t) => system.store.getTask(t.id))
+    .map((t) => system.store.tasks.getTask(t.id))
     .filter((t) => t !== null);
   const code = tasks.filter((t) => t.kind === 'code');
   const desk = tasks.filter((t) => t.kind === 'desk');

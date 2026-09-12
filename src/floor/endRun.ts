@@ -19,16 +19,16 @@ export function clearGoalWork(
   issueNumber: number,
 ): RunClearOut {
   let killed = 0;
-  for (const agent of store.listAgentsByStatus(...LIVE)) {
-    const task = store.getTask(agent.taskId);
+  for (const agent of store.agents.listAgentsByStatus(...LIVE)) {
+    const task = store.tasks.getTask(agent.taskId);
     if (issueSubtreeNumber(task?.originRef ?? null) !== issueNumber) continue;
     if (agents.kill(agent.id)) killed += 1;
   }
   let cancelled = 0;
-  for (const job of store.listQueuedJobs()) {
+  for (const job of store.jobs.listQueuedJobs()) {
     if (issueSubtreeNumber(job.originRef) !== issueNumber) continue;
-    if (store.cancelJob(job.id)) cancelled += 1;
+    if (store.jobs.cancelJob(job.id)) cancelled += 1;
   }
-  const instructions = store.settleInstructions(issueConclusionOrigin(issueNumber));
+  const instructions = store.instructions.settleInstructions(issueConclusionOrigin(issueNumber));
   return { agents: killed, jobs: cancelled, instructions };
 }

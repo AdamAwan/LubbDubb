@@ -209,9 +209,9 @@ async function packPrompt(withAtoms: boolean): Promise<string> {
       originRef: 'issue:390',
       title: 'Issue 390',
     });
-    const stored = system.store.listPlanParts(ingested.plan.id);
+    const stored = system.store.plans.listPlanParts(ingested.plan.id);
     assert.equal(stored.length, 1);
-    system.store.updatePlanPart(stored[0]!.id, { prNumber: 7, status: 'in_review' });
+    system.store.plans.updatePlanPart(stored[0]!.id, { prNumber: 7, status: 'in_review' });
   }
 
   const { app } = await buildApp(system);

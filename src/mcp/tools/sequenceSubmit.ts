@@ -48,7 +48,7 @@ export const sequenceSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
   handler: (args) => {
     const target = featureSequenceSubmitOrigin(task.originRef);
     if (!target.ok) return toolError(target.error);
-    const children = (deps.store.getWorldBaseline()?.issues ?? [])
+    const children = (deps.store.world.getWorldBaseline()?.issues ?? [])
       .filter((issue) => issue.parent?.number === target.featureNumber && issue.state === 'open')
       .map((issue) => issue.number);
     const parsed = validateSequenceSubmission(args, children);

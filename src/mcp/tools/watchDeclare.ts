@@ -125,7 +125,7 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
     if (checks.length === 0)
       return toolError('Nothing was declared. Give at least one signal or one measure, or do not call this.');
     const origin = issueOrigin(head.issueNumber);
-    const { proposed } = deps.store.proposeGoalWatch(origin, checks, note);
+    const { proposed } = deps.store.watches.proposeGoalWatch(origin, checks, note);
     return ok({
       declared: proposed,
       pending: true,

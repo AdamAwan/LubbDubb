@@ -79,7 +79,7 @@ test('a PR carrying no watch tag is left alone by the dispatcher', async () => {
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     false,
     'no CI-fix agent is dispatched for an untagged PR',
   );
@@ -108,7 +108,7 @@ test('tagging a PR via the sink lets the harness in; untagging stops it', async 
 
   await system.harness.runCycle('manual');
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     false,
     'held while untagged',
   );
@@ -116,7 +116,7 @@ test('tagging a PR via the sink lets the harness in; untagging stops it', async 
   await system.connector.setPrLabel({ prNumber: 42, label: 'lubbdubb-watch', present: true });
   await system.harness.runCycle('manual');
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     true,
     'the CI-fix agent is dispatched once the tag is on',
   );
@@ -131,7 +131,7 @@ test('a PR on a dispatch branch is tagged by the harness, once', async () => {
   const world = await system.connector.getState();
   const found = world.pullRequests.find((p) => p.number === 42);
   assert.deepEqual(found?.labels, ['lubbdubb-watch'], 'the harness tagged its own pull request');
-  assert.ok(system.store.seededPrs().has(42), 'and recorded that it has answered for it');
+  assert.ok(system.store.prWatchSeeds.seededPrs().has(42), 'and recorded that it has answered for it');
 
   await system.connector.setPrLabel({ prNumber: 42, label: 'lubbdubb-watch', present: false });
   await system.harness.runCycle('manual');
@@ -153,7 +153,7 @@ test('a PR carrying the retired ignore tag is never seeded', async () => {
 
   const found = (await system.connector.getState()).pullRequests.find((p) => p.number === 42);
   assert.deepEqual(found?.labels, ['lubbdubb-ignore'], 'the operator’s old "leave this alone" is not overwritten');
-  assert.equal(system.store.seededPrs().has(42), false);
+  assert.equal(system.store.prWatchSeeds.seededPrs().has(42), false);
   system.store.close();
 });
 
@@ -171,7 +171,7 @@ test('POST /api/prs/:n/watch tags the PR, which the snapshot and harness both ho
   const found = state.world.pullRequests.find((p: { number: number }) => p.number === 42);
   assert.deepEqual(found.labels, ['lubbdubb-watch'], 'the toggle set the tag on the PR');
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     true,
     'the tagged PR is acted on',
   );

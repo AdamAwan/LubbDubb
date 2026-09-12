@@ -35,9 +35,9 @@ export class ObstacleEndingsDesk {
     this.running = true;
     try {
       const now = (this.deps.now ?? Date.now)();
-      const board = this.deps.store.obstacleBoard();
+      const board = this.deps.store.obstacles.obstacleBoard();
       for (const condition of conditionsToWatch(board, world.pullRequests))
-        this.deps.store.watchObstacleCondition(condition);
+        this.deps.store.obstacles.watchObstacleCondition(condition);
       this.settleConditions(board, world);
       this.settleLandings(board);
       this.expire(board, now);
@@ -56,54 +56,58 @@ export class ObstacleEndingsDesk {
 
   private settleConditions(board: readonly ObstacleStanding[], world: WorldSnapshot): void {
     for (const row of board) {
-      const conditions = this.deps.store.listObstacleConditions(row.obstacle.id);
+      const conditions = this.deps.store.obstacles.listObstacleConditions(row.obstacle.id);
       if (conditions.length === 0) continue;
       const settledBefore = conditions.every((condition) => condition.metAt !== null);
       for (const condition of conditions)
-        this.deps.store.setObstacleConditionMet(condition.id, conditionMet(condition, world.pullRequests));
+        this.deps.store.obstacles.setObstacleConditionMet(condition.id, conditionMet(condition, world.pullRequests));
       if (settledBefore && conditionsSettled(conditions, world.pullRequests))
-        this.deps.store.endObstacle(row.obstacle.id, 'resolved', 'condition');
+        this.deps.store.obstacles.endObstacle(row.obstacle.id, 'resolved', 'condition');
     }
   }
 
   private settleLandings(board: readonly ObstacleStanding[]): void {
     const owned = board.filter((row) => row.obstacle.state === 'owned' && row.obstacle.ownerRef !== null);
     if (owned.length === 0) return;
-    const landings = this.deps.store.listGoalLandings();
+    const landings = this.deps.store.environments.listGoalLandings();
     for (const row of owned)
-      if (ownerLanded(row.obstacle, landings)) this.deps.store.endObstacle(row.obstacle.id, 'resolved', 'landing');
+      if (ownerLanded(row.obstacle, landings))
+        this.deps.store.obstacles.endObstacle(row.obstacle.id, 'resolved', 'landing');
   }
 
   private expire(board: readonly ObstacleStanding[], now: number): void {
     for (const row of board)
-      if (clockExpired(row.obstacle, now)) this.deps.store.endObstacle(row.obstacle.id, 'resolved', 'expiry');
+      if (clockExpired(row.obstacle, now)) this.deps.store.obstacles.endObstacle(row.obstacle.id, 'resolved', 'expiry');
   }
 
   private decay(board: readonly ObstacleStanding[], now: number): void {
     for (const row of board)
       if (decayed(row.obstacle, now, this.deps.dormantMs))
-        this.deps.store.endObstacle(row.obstacle.id, 'dormant', 'decay');
+        this.deps.store.obstacles.endObstacle(row.obstacle.id, 'dormant', 'decay');
   }
 
   private sweepWriteUps(): void {
-    const open = this.deps.store.openObstacleWriteUps();
+    const open = this.deps.store.obstacles.openObstacleWriteUps();
     if (open.length === 0) return;
     for (const writeUp of open) {
-      const nodes = this.deps.store.listWorkSubtree(`job:${writeUp.jobId}`);
+      const nodes = this.deps.store.graph.listWorkSubtree(`job:${writeUp.jobId}`);
       const pr = nodes.find((node) => node.kind === 'pr');
-      if (pr && writeUp.prRef === null) this.deps.store.noteObstacleWriteUpPr(writeUp.obstacleId, pr.ref);
+      if (pr && writeUp.prRef === null) this.deps.store.obstacles.noteObstacleWriteUpPr(writeUp.obstacleId, pr.ref);
       const reading = writeUpReading(writeUp.jobId, nodes);
       if (reading !== 'landed' && reading !== 'abandoned') continue;
-      if (!this.deps.store.settleObstacleWriteUp(writeUp.obstacleId, reading)) continue;
-      if (reading === 'landed') this.deps.store.endObstacle(writeUp.obstacleId, 'resolved', 'written-down');
+      if (!this.deps.store.obstacles.settleObstacleWriteUp(writeUp.obstacleId, reading)) continue;
+      if (reading === 'landed') this.deps.store.obstacles.endObstacle(writeUp.obstacleId, 'resolved', 'written-down');
     }
   }
 
   private writeUpNotes(): void {
     const docs = this.deps.docsPrompt;
     if (!docs) return;
-    if (this.deps.store.openObstacleWriteUps().length > 0) return;
-    const row = notesToWriteUp(this.deps.store.obstacleBoard(), this.deps.store.obstaclesWrittenUp())[0];
+    if (this.deps.store.obstacles.openObstacleWriteUps().length > 0) return;
+    const row = notesToWriteUp(
+      this.deps.store.obstacles.obstacleBoard(),
+      this.deps.store.obstacles.obstaclesWrittenUp(),
+    )[0];
     if (!row) return;
     const fields = noteWriteUpFields(row);
     const prompt = [docs(fields.vars), fields.note].join('\n\n');

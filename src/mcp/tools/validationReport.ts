@@ -27,7 +27,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);
     const origin = issueOrigin(target.issueNumber);
-    const check = deps.store.getValidationCheck(origin, target.checkId);
+    const check = deps.store.validation.getValidationCheck(origin, target.checkId);
     if (!check) {
       return toolError(
         `Check "${target.checkId}" is no longer part of issue #${target.issueNumber}'s validation plan — an ` +
@@ -44,7 +44,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     }
 
     if (result === 'blocked') {
-      const next = deps.store.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
+      const next = deps.store.validation.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
       return ok({
         reported: 'blocked',
         check: `${check.letter}. ${check.id}`,
@@ -59,7 +59,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     // to be looked at*, carrying the image, and becomes passed or failed only when a person records
     // a reading. A result is declared, never derived, and an image is not a declaration.
     // → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
-    const next = deps.store.recordValidationResult(origin, check.id, {
+    const next = deps.store.validation.recordValidationResult(origin, check.id, {
       state: result,
       note,
       by: 'agent',

@@ -107,7 +107,7 @@ function pack(prNumber: number, ideas: ReviewIdea[]): ReviewPack {
 
 test('the overrides and the plumbing ratio are one reading, and it never reaches the checker', async () => {
   const { system } = build();
-  system.store.recordReviewPack(
+  system.store.reviewPacks.recordReviewPack(
     pack(7, [
       idea({ id: 'idea_a', attention: 'skim', hunks: [hunk('src/a.ts', 1, 4)] }),
       idea({ id: 'idea_b', attention: 'decide', hunks: [hunk('src/b.ts', 1, 4)] }),
@@ -139,21 +139,21 @@ test('the overrides and the plumbing ratio are one reading, and it never reaches
   assert.equal(calibration.plumbing.ratio, 0.5);
   assert.equal(calibration.plumbing.worst[0]?.prNumber, 7);
 
-  assert.equal(system.store.getCurrentReviewPack(7)!.pack.ideas[0]!.attention, 'skim');
-  assert.deepEqual(system.store.listObstacles(), []);
+  assert.equal(system.store.reviewPacks.getCurrentReviewPack(7)!.pack.ideas[0]!.attention, 'skim');
+  assert.deepEqual(system.store.obstacles.listObstacles(), []);
   await app.close();
   system.store.close();
 });
 
 test('a seen mark is its own column on the same row, and counts a merge nobody read', async () => {
   const { system } = build();
-  system.store.recordReviewPack(
+  system.store.reviewPacks.recordReviewPack(
     pack(7, [
       idea({ id: 'idea_a', attention: 'read', hunks: [hunk('src/a.ts', 1, 4)], falseClaim: true }),
       idea({ id: 'idea_b', attention: 'read', hunks: [hunk('src/b.ts', 1, 4)], falseClaim: true }),
     ]),
   );
-  system.store.recordWorkGraph([{ ref: 'pr:7', kind: 'pr', title: 'Add y', status: 'merged', terminal: true }]);
+  system.store.graph.recordWorkGraph([{ ref: 'pr:7', kind: 'pr', title: 'Add y', status: 'merged', terminal: true }]);
   const { app } = await buildApp(system);
 
   await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/ideas/idea_a/read', payload: { read: true } });
@@ -196,7 +196,7 @@ test('a seen mark is its own column on the same row, and counts a merge nobody r
 
 test('unsharing takes the pack out on the next pulse, and the route does no network write', async () => {
   const { system, transport } = build();
-  system.store.recordReviewPack(pack(7, [idea({ id: 'idea_a', hunks: [hunk('src/a.ts', 1, 4)] })]));
+  system.store.reviewPacks.recordReviewPack(pack(7, [idea({ id: 'idea_a', hunks: [hunk('src/a.ts', 1, 4)] })]));
   const { app } = await buildApp(system);
 
   assert.equal((await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/share' })).statusCode, 202);
@@ -213,9 +213,9 @@ test('unsharing takes the pack out on the next pulse, and the route does no netw
   await system.pool!.run();
   assert.deepEqual(transport.unpublished, [{ fleetId: FLEET, prNumber: 7 }]);
   assert.equal(transport.packs.has(poolPackPath(FLEET, 7)), false);
-  assert.equal(system.store.getReviewPackShare(7), null);
-  assert.ok(system.store.getCurrentReviewPack(7));
-  assert.equal(system.store.listErrors().length, 0);
+  assert.equal(system.store.reviewPacks.getReviewPackShare(7), null);
+  assert.ok(system.store.reviewPacks.getCurrentReviewPack(7));
+  assert.equal(system.store.errors.listErrors().length, 0);
 
   const again = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/unshare' });
   assert.equal(again.statusCode, 202);
@@ -226,7 +226,7 @@ test('unsharing takes the pack out on the next pulse, and the route does no netw
 
 test('a share the pool never carried is withdrawn outright, with nothing to unpublish', async () => {
   const { system, transport } = build();
-  system.store.recordReviewPack(pack(7, [idea({ id: 'idea_a', hunks: [hunk('src/a.ts', 1, 4)] })]));
+  system.store.reviewPacks.recordReviewPack(pack(7, [idea({ id: 'idea_a', hunks: [hunk('src/a.ts', 1, 4)] })]));
   const { app } = await buildApp(system);
   await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/share' });
 

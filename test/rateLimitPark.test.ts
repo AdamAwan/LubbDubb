@@ -115,7 +115,7 @@ async function fleet(issue = 701, patch: Record<string, unknown> = {}) {
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
   failPlanningOpen(system.store, issue);
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   return { system, agent, child: children[0]!, children };
 }
 
@@ -125,16 +125,20 @@ test('an exhausted account parks the agent instead of failing it, and settles no
   child.rateLimit(REJECTED);
   child.result('error_during_execution', true);
 
-  const row = system.store.getAgent(agent.id)!;
+  const row = system.store.agents.getAgent(agent.id)!;
   assert.equal(row.status, 'waiting', 'parked, not failed');
   assert.equal(row.endedAt, null, 'a park is not an ending');
   assert.match(row.waitingReason ?? '', /usage limit/i, 'the reason names the limit');
   assert.match(row.waitingReason ?? '', /five-hour/, 'and which window ran out');
   assert.match(row.waitingReason ?? '', /2026-04-12/, 'and when it comes back');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'waiting', 'the work is still outstanding');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'waiting', 'the work is still outstanding');
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
-  assert.equal(system.store.listErrors().length, 0, 'nothing failed, so nothing is recorded as a failure');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'no question was asked, so nobody is asked one');
+  assert.equal(system.store.errors.listErrors().length, 0, 'nothing failed, so nothing is recorded as a failure');
+  assert.equal(
+    system.store.escalations.listOpenEscalations().length,
+    0,
+    'no question was asked, so nobody is asked one',
+  );
   system.store.close();
 });
 
@@ -144,13 +148,13 @@ test('the turn-end limit park keeps its resources through the later process exit
   child.result('error_during_execution', true);
   child.exit(1);
 
-  const row = system.store.getAgent(agent.id)!;
+  const row = system.store.agents.getAgent(agent.id)!;
   assert.equal(row.status, 'waiting', 'still parked after the process is gone');
   assert.equal(row.pid, null, 'and honest about there being no process');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'waiting');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'waiting');
   assert.equal(system.agents.isLive(agent.id), false, 'the dead session is not held open');
   assert.equal(
-    system.store.listErrors().filter((e) => e.message.includes('failed')).length,
+    system.store.errors.listErrors().filter((e) => e.message.includes('failed')).length,
     0,
     'no "Agent … failed" entry for a limit',
   );
@@ -163,7 +167,7 @@ test('a process exit before the turn end still sheds the limit park and resumes 
   child.rateLimit(rejectedIn(-60_000));
   child.exit(1);
 
-  const row = system.store.getAgent(agent.id)!;
+  const row = system.store.agents.getAgent(agent.id)!;
   assert.equal(row.status, 'waiting', 'still parked after the process is gone');
   assert.equal(row.pid, null, 'the dead launch was shed');
   assert.equal(system.agents.isLive(agent.id), false, 'the dead session is not held open');
@@ -173,8 +177,8 @@ test('a process exit before the turn end still sheds the limit park and resumes 
   await system.harness.runCycle('manual');
 
   assert.equal(children.length, before + 1, 'the expired park reopens a new session');
-  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'running');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'running');
   assert.deepEqual(system.agents.limitedAgentIds(), []);
   system.store.close();
 });
@@ -184,7 +188,7 @@ test('an agent whose process dies with no limit is no park, and fails once resum
   child.speak('Working.');
   child.exit(1);
 
-  assert.equal(system.store.getAgent(agent.id)!.status, 'failed', 'the ordinary crash path is untouched');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'failed', 'the ordinary crash path is untouched');
   assert.equal(system.agents.limitedAgentIds().length, 0);
   system.store.close();
 });
@@ -194,7 +198,7 @@ test('a crash with no limit is a resume, not a park', async () => {
   child.speak('Working.');
   child.exit(1);
 
-  const row = system.store.getAgent(agent.id)!;
+  const row = system.store.agents.getAgent(agent.id)!;
   assert.equal(row.status, 'running', 're-attached rather than settled');
   assert.equal(row.resumeAttempts, 1);
   assert.equal(system.agents.limitedAgentIds().length, 0, 'and nothing about it reads as a limit');
@@ -208,7 +212,7 @@ test('a warning is not an exhaustion, and a cleared limit un-arms the park', asy
   child.result();
   assert.equal(system.agents.limitedAgentIds().length, 0, 'a warning parks nobody');
   assert.match(
-    system.store.getAgent(agent.id)!.waitingReason ?? '',
+    system.store.agents.getAgent(agent.id)!.waitingReason ?? '',
     /without finishing/,
     'the turn ends as the ordinary "stopped without finishing" park',
   );
@@ -218,8 +222,8 @@ test('a warning is not an exhaustion, and a cleared limit un-arms the park', asy
   c2.rateLimit({ ...REJECTED, status: 'allowed' });
   c2.result();
   assert.equal(s2.agents.limitedAgentIds().length, 0, 'a limit that came back is not a park');
-  assert.equal(s2.store.getAgent(a2.id)!.status, 'waiting');
-  assert.doesNotMatch(s2.store.getAgent(a2.id)!.waitingReason ?? '', /usage limit/);
+  assert.equal(s2.store.agents.getAgent(a2.id)!.status, 'waiting');
+  assert.doesNotMatch(s2.store.agents.getAgent(a2.id)!.waitingReason ?? '', /usage limit/);
   system.store.close();
   s2.store.close();
 });
@@ -236,7 +240,7 @@ test('an exhausted overage allowance parks too, and says so', async () => {
   child.result('error_during_execution', true);
 
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
-  assert.match(system.store.getAgent(agent.id)!.waitingReason ?? '', /overage allowance is spent/);
+  assert.match(system.store.agents.getAgent(agent.id)!.waitingReason ?? '', /overage allowance is spent/);
   system.store.close();
 });
 
@@ -246,7 +250,7 @@ test('an agent that finished the work is done, limit or no limit', async () => {
   child.rateLimit(REJECTED);
   child.result();
 
-  assert.equal(system.store.getAgent(agent.id)!.status, 'done', 'a settled ending is not resurrected as a park');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'done', 'a settled ending is not resurrected as a park');
   assert.equal(system.agents.limitedAgentIds().length, 0);
   system.store.close();
 });
@@ -257,7 +261,7 @@ test('resuming a limit-parked agent re-opens the same session in the same worktr
   child.rateLimit(REJECTED);
   child.result('error_during_execution', true);
   child.exit(1);
-  const transcript = system.store.getTranscript(agent.id);
+  const transcript = system.store.transcripts.getTranscript(agent.id);
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` });
@@ -265,10 +269,10 @@ test('resuming a limit-parked agent re-opens the same session in the same worktr
 
   assert.equal(children.length, 2, 'the conversation is re-opened, not restarted');
   const relaunch = children[1]!;
-  const spawnArgs = system.store.getAgent(agent.id)!;
+  const spawnArgs = system.store.agents.getAgent(agent.id)!;
   assert.equal(spawnArgs.status, 'running', 'the agent is back at work');
   assert.equal(spawnArgs.sessionId, agent.sessionId, 'the same conversation');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'running');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'running');
   assert.equal(system.agents.isLive(agent.id), true);
   assert.deepEqual(system.agents.limitedAgentIds(), [], 'the park is over');
   assert.ok(
@@ -277,7 +281,7 @@ test('resuming a limit-parked agent re-opens the same session in the same worktr
   );
 
   relaunch.speak('Migration finished.');
-  const after = system.store.getTranscript(agent.id);
+  const after = system.store.transcripts.getTranscript(agent.id);
   assert.ok(after.startsWith(transcript), 'what was already there is untouched');
   assert.ok(after.includes('Migration finished'));
 
@@ -297,7 +301,7 @@ test('a park whose process survived is resumed down the stdin it already has', a
 
   assert.equal(children.length, 1, 'a live session is not relaunched underneath itself');
   assert.ok(child.writes.some((w) => w.includes('Continue the task')));
-  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'running');
   assert.deepEqual(system.agents.limitedAgentIds(), []);
   await app.close();
   system.store.close();
@@ -331,18 +335,18 @@ test('a park whose window has turned over is resumed by the pulse, with nobody a
 
   assert.equal(children.length, before + 1, 'the conversation is re-opened, not restarted');
   const relaunch = children[before]!;
-  const row = system.store.getAgent(agent.id)!;
+  const row = system.store.agents.getAgent(agent.id)!;
   assert.equal(row.status, 'running', 'back at work without anyone being asked');
   assert.equal(row.sessionId, agent.sessionId, 'and in the same conversation');
   assert.equal(row.waitingReason, null, 'the park sentence is gone with the park');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'running');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'running');
   assert.deepEqual(system.agents.limitedAgentIds(), [], 'the park is over');
   assert.ok(
     relaunch.writes.some((w) => w.includes('usage limit') && w.includes('Continue the task')),
     'and it is told why it stopped, not that an operator did anything',
   );
-  assert.equal(system.store.listErrors().length, 0, 'a resume that worked records no failure');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'nobody was asked a question');
+  assert.equal(system.store.errors.listErrors().length, 0, 'a resume that worked records no failure');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'nobody was asked a question');
   system.store.close();
 });
 
@@ -356,7 +360,7 @@ test('a park whose window has not turned over yet is left where it is', async ()
   await system.harness.runCycle('manual');
 
   assert.equal(children.length, before, 'nothing is relaunched into an account still spent');
-  assert.equal(system.store.getAgent(agent.id)!.status, 'waiting', 'still parked');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'waiting', 'still parked');
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
   system.store.close();
 });
@@ -376,7 +380,7 @@ test('a park claude gave no reset time for waits for a person, however many puls
 
   const { app } = await buildApp(system);
   assert.equal((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` })).statusCode, 200);
-  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'running');
   await app.close();
   system.store.close();
 });
@@ -388,8 +392,8 @@ test('a limit park still lets an operator kill the agent, and killing ends the p
   child.exit(1);
 
   assert.equal(system.agents.kill(agent.id), true);
-  assert.equal(system.store.getAgent(agent.id)!.status, 'killed');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'interrupted');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'killed');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'interrupted');
   assert.deepEqual(system.agents.limitedAgentIds(), [], 'a decided ending is not a park');
   system.store.close();
 });

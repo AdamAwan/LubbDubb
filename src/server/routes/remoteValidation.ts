@@ -30,7 +30,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const origin = issueOrigin(params.number);
       const { refusals } = await system.stateQueries.declare(origin, [{ ...body, seq: 0 }], 'operator');
       hub.broadcast({ type: 'world:changed' });
-      const query = store.listStateQueries().find((q) => q.originRef === origin && q.id === params.queryId) ?? null;
+      const query =
+        store.remoteValidation.listStateQueries().find((q) => q.originRef === origin && q.id === params.queryId) ??
+        null;
       return { ok: true, query, dryRun: refusals };
     }),
   );
@@ -38,7 +40,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.delete(
     '/api/issues/:number/state-queries/:queryId',
     checked({ params: QueryParams }, ({ params, reply }) => {
-      const gone = store.deleteStateQuery(issueOrigin(params.number), params.queryId);
+      const gone = store.remoteValidation.deleteStateQuery(issueOrigin(params.number), params.queryId);
       if (!gone) return reply.code(404).send({ error: 'no such state query on that goal' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
@@ -146,7 +148,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/remote-validation/:environment/rows/:rowId',
     checked({ params: RowParams, body: SelectionBody }, ({ params, body, reply }) => {
-      const changed = store.setRemoteSheetRowSelected(
+      const changed = store.remoteValidation.setRemoteSheetRowSelected(
         issueOrigin(params.number),
         params.environment,
         params.rowId,

@@ -192,7 +192,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       resume: inherited !== null,
     });
 
-    const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
+    const agent = this.store.agents.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
     if (mcp) {
       this.opts.mcp?.bind(mcp.token, agent.id);
@@ -203,7 +203,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       `spawn agent=${agent.id} cwd=${cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}` +
         `${inherited ? ` resumed=${inherited}` : ''}`,
     );
-    this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
+    this.store.tasks.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
     this.wireSession(session, agent.id, task);
     try {
@@ -258,8 +258,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     );
 
     this.sessions.set(agent.id, session);
-    this.store.updateAgent(agent.id, { status: 'running', pid: null, endedAt: null, waitingReason: null });
-    this.store.updateTask(task.id, { status: 'running' });
+    this.store.agents.updateAgent(agent.id, { status: 'running', pid: null, endedAt: null, waitingReason: null });
+    this.store.tasks.updateTask(task.id, { status: 'running' });
     this.wireSession(session, agent.id, task);
     try {
       session.start();
@@ -290,9 +290,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.limited.delete(agentId);
       this.parked.delete(agentId);
       this.stalled.delete(agentId);
-      this.store.setAgentResumed(agentId, null);
-      this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
-      this.store.updateTask(task.id, { status: 'running' });
+      this.store.agents.setAgentResumed(agentId, null);
+      this.store.agents.updateAgent(agentId, { status: 'running', waitingReason: null });
+      this.store.tasks.updateTask(task.id, { status: 'running' });
 
       if (session) {
         this.noteSent(agentId, session, LIMIT_RESUME_MESSAGE);
@@ -301,7 +301,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         return { ok: true };
       }
 
-      const row = this.store.getAgent(agentId);
+      const row = this.store.agents.getAgent(agentId);
       try {
         if (!row || !this.resume(row, task, LIMIT_RESUME_MESSAGE)) throw new Error('the runtime declined the resume');
       } catch (err) {
@@ -365,7 +365,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (session.recordsSentMessages) return;
     const note = renderBlocks([{ type: HUMAN_BLOCK, text }], new Date().toISOString());
     if (!note) return;
-    this.store.appendTranscript(agentId, note);
+    this.store.transcripts.appendTranscript(agentId, note);
     this.emit('output', { agentId, delta: note });
   }
 
@@ -389,8 +389,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.parked.delete(agentId);
     this.limited.delete(agentId);
     this.stalled.delete(agentId);
-    this.store.setAgentResumed(agentId, null);
-    this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
+    this.store.agents.setAgentResumed(agentId, null);
+    this.store.agents.updateAgent(agentId, { status: 'running', waitingReason: null });
     return true;
   }
 
@@ -398,8 +398,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     fn: (caller: { agent: Agent; task: Task }) => R,
   ): R | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
+    const agent = this.store.agents.getAgent(agentId);
+    const task = agent ? this.store.tasks.getTask(agent.taskId) : null;
     if (!agent || !task) return { ok: false, error: 'agent has no task' };
     return fn({ agent, task });
   }
@@ -410,7 +410,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const question = ask.question.trim();
       if (!question) return { ok: false, error: 'question must not be empty' };
       this.handleWaiting(agentId, task, question, ask);
-      const open = this.store.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
+      const open = this.store.escalations.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
       return { ok: true, escalationId: open?.id ?? null };
     });
   }
@@ -420,7 +420,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     input: HumanTaskInput,
   ): { ok: true; task: HumanTask } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
-      const { task: humanTask, created } = this.store.recordHumanTask({
+      const { task: humanTask, created } = this.store.humanTasks.recordHumanTask({
         ...input,
         agentId,
         taskId: task.id,
@@ -434,7 +434,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   filingTarget(agentId: string): FilingTargetResult {
     return this.withCaller(agentId, ({ task }): FilingTargetResult => {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
-      const bug = jobId ? this.store.findBugFilingByJobId(jobId) : null;
+      const bug = jobId ? this.store.bugFilings.findBugFilingByJobId(jobId) : null;
       if (bug) {
         return { ok: true, kind: 'bug', storyNumber: issueSubtreeNumber(bug.originRef) };
       }
@@ -450,7 +450,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
     return this.withCaller(agentId, ({ task }): LinkTicketResult => {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
-      const bug = jobId ? this.store.findBugFilingByJobId(jobId) : null;
+      const bug = jobId ? this.store.bugFilings.findBugFilingByJobId(jobId) : null;
       if (!bug) {
         return {
           ok: false,
@@ -462,7 +462,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       if (!ticketRef.startsWith('issue:')) {
         return { ok: false, error: `A bug must be an issue ref like "issue:314"; got "${ticketRef}".` };
       }
-      const linked = this.store.linkBugFiling(bug.jobId, ticketRef);
+      const linked = this.store.bugFilings.linkBugFiling(bug.jobId, ticketRef);
       if (!linked) {
         return {
           ok: false,
@@ -475,7 +475,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
-      const notedAt = this.store.recordAgentNote(agentId, note);
+      const notedAt = this.store.agents.recordAgentNote(agentId, note);
       this.emit('progress', { agentId, taskId: task.id, note, notedAt });
       return { ok: true, notedAt };
     });
@@ -490,7 +490,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const target = padWriteTarget(task.originRef);
       if (!target.ok) return { ok: false, error: target.error };
-      const entry = this.store.appendScratchEntry({
+      const entry = this.store.scratch.appendScratchEntry({
         padRef: target.padRef,
         authorOriginRef: task.originRef ?? target.padRef,
         agentId,
@@ -508,7 +508,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const target = padWriteTarget(task.originRef);
       if (!target.ok) return { ok: false, error: target.error };
-      return { ok: true, padRef: target.padRef, entries: this.store.listScratchEntries(target.padRef) };
+      return { ok: true, padRef: target.padRef, entries: this.store.scratch.listScratchEntries(target.padRef) };
     });
   }
 
@@ -521,7 +521,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const { task } = caller;
       const origin = retroSubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      this.store.recordRetrospective({
+      this.store.scratch.recordRetrospective({
         originRef: origin.issueOrigin,
         summary,
         document,
@@ -541,7 +541,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const { task } = caller;
       const origin = featureSummarySubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      this.store.recordFeatureSummary({
+      this.store.tickets.recordFeatureSummary({
         originRef: origin.featureOrigin,
         ...input,
         standingKey: this.opts.featureStanding?.(origin.featureOrigin) ?? '',
@@ -562,9 +562,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       if (!origin.ok) return { ok: false, error: origin.error };
       const standing = this.opts.featureSequenceStanding?.(origin.featureOrigin) ?? null;
       const members = standing?.members ?? [];
-      const previous = this.store.getFeatureSequence(origin.featureOrigin);
+      const previous = this.store.sequences.getFeatureSequence(origin.featureOrigin);
       const verdict = resequenceVerdict(previous, input.edges, members);
-      this.store.recordFeatureSequence({
+      this.store.sequences.recordFeatureSequence({
         originRef: origin.featureOrigin,
         status: verdict.carry ? 'accepted' : 'proposed',
         reason: input.reason,
@@ -576,7 +576,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         taskId: task.id,
       });
       if (verdict.carry && previous?.answeredBy) {
-        this.store.answerFeatureSequence(origin.featureOrigin, 'accepted', previous.answeredBy);
+        this.store.sequences.answerFeatureSequence(origin.featureOrigin, 'accepted', previous.answeredBy);
       }
       return {
         ok: true,
@@ -594,7 +594,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const scope = remedyOrigin(task.originRef);
       if (!scope.ok) return { ok: false, error: scope.error };
-      const remedy = this.store.recordRemedy({
+      const remedy = this.store.remedies.recordRemedy({
         kind: scope.kind,
         originRef: scope.originRef,
         prNumber: scope.prNumber,
@@ -618,7 +618,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const origin = conclusionOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      const conclusion = this.store.recordIssueConclusion({
+      const conclusion = this.store.verdicts.recordIssueConclusion({
         originRef: origin.originRef,
         verdict,
         note,
@@ -626,7 +626,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
-      this.store.settleInstructions(origin.originRef);
+      this.store.instructions.settleInstructions(origin.originRef);
       this.emit('conclusion', { agentId, taskId: task.id, conclusion });
       return { ok: true, conclusion };
     });
@@ -640,7 +640,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const origin = conclusionOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      const obstacle = this.store.getObstacle(obstacleId);
+      const obstacle = this.store.obstacles.getObstacle(obstacleId);
       if (!obstacle) {
         return {
           ok: false,
@@ -650,14 +650,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
             `a block that names nothing is a goal nothing brings back.`,
         };
       }
-      const block = this.store.recordObstacleBlock({
+      const block = this.store.obstacles.recordObstacleBlock({
         originRef: origin.originRef,
         obstacleId,
         agentId,
         taskId: task.id,
         note,
       });
-      this.store.settleInstructions(origin.originRef);
+      this.store.instructions.settleInstructions(origin.originRef);
       return { ok: true, block };
     });
   }
@@ -675,7 +675,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       if (!origin.ok) return { ok: false, error: origin.error };
 
       if (verdict === 'delivered') {
-        this.store.recordDelivery({
+        this.store.verdicts.recordDelivery({
           originRef: origin.issueOrigin,
           summary,
           detail,
@@ -687,8 +687,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         return { ok: true, issueOrigin: origin.issueOrigin, verdict };
       }
 
-      const plan = this.store.listPlans().find((p) => p.originRef === origin.issueOrigin) ?? null;
-      const parts = plan ? liveParts(this.store.listPlanParts(plan.id)) : [];
+      const plan = this.store.plans.listPlans().find((p) => p.originRef === origin.issueOrigin) ?? null;
+      const parts = plan ? liveParts(this.store.plans.listPlanParts(plan.id)) : [];
 
       if (plan === null && (cause === 'plan' || cause === 'part')) {
         return {
@@ -724,7 +724,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         };
       }
 
-      this.store.recordShortfall({
+      this.store.verdicts.recordShortfall({
         originRef: origin.issueOrigin,
         cause,
         partSlug: part,
@@ -748,7 +748,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const origin = plannerOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
 
-      const plan = this.store.getPlanByOrigin(origin.issueOrigin);
+      const plan = this.store.plans.getPlanByOrigin(origin.issueOrigin);
       if (plan) {
         return {
           ok: false,
@@ -762,7 +762,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         };
       }
 
-      const shortfall = this.store.getShortfall(origin.issueOrigin);
+      const shortfall = this.store.verdicts.getShortfall(origin.issueOrigin);
       if (shortfall) {
         return {
           ok: false,
@@ -774,7 +774,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         };
       }
 
-      this.store.recordDelivery({
+      this.store.verdicts.recordDelivery({
         originRef: origin.issueOrigin,
         summary,
         detail,
@@ -803,7 +803,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const proposedProfile = this.opts.goalProfile && profile ? profile : null;
       const profileHeld =
         proposedProfile !== null && proposedProfile !== this.opts.goalProfile?.effective(origin.issueOrigin);
-      this.store.recordAppraisal({
+      this.store.verdicts.recordAppraisal({
         originRef: origin.issueOrigin,
         verdict,
         summary,
@@ -831,12 +831,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => {
       const origin = partConclusionOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      const plan = this.store.getPlanByOrigin(issueOrigin(origin.issueNumber));
-      const part = plan ? this.store.listPlanParts(plan.id).find((p) => p.slug === origin.slug) : undefined;
+      const plan = this.store.plans.getPlanByOrigin(issueOrigin(origin.issueNumber));
+      const part = plan ? this.store.plans.listPlanParts(plan.id).find((p) => p.slug === origin.slug) : undefined;
       if (!part) {
         return { ok: false, error: `no part "${origin.slug}" is recorded for issue #${origin.issueNumber}.` };
       }
-      const concluded = this.store.concludePlanPart(part.id, { kind, ref, summary });
+      const concluded = this.store.plans.concludePlanPart(part.id, { kind, ref, summary });
       if (!concluded) {
         return {
           ok: false,
@@ -866,10 +866,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.parked.delete(agentId);
     this.limited.delete(agentId);
     this.stalled.delete(agentId);
-    this.store.flushTranscript(agentId);
-    const agent = this.store.getAgent(agentId);
-    this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
-    if (agent) this.store.updateTask(agent.taskId, { status: 'interrupted' });
+    this.store.transcripts.flushTranscript(agentId);
+    const agent = this.store.agents.getAgent(agentId);
+    this.store.agents.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
+    if (agent) this.store.tasks.updateTask(agent.taskId, { status: 'interrupted' });
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId);
     this.terminals.set(agentId, 'killed');
@@ -886,13 +886,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   complete(agentId: string, by: 'operator' | 'expiry' = 'operator'): boolean {
     const session = this.sessions.get(agentId);
     if (!session) return false;
-    const agent = this.store.getAgent(agentId);
+    const agent = this.store.agents.getAgent(agentId);
     if (!agent) return false;
     const id = agent.id;
     session.kill();
     this.handleTerminal(id, agent.taskId, 'done', by);
-    const task = this.store.getTask(agent.taskId);
-    this.store.recordDecision({
+    const task = this.store.tasks.getTask(agent.taskId);
+    this.store.decisions.recordDecision({
       cycleId: `${by === 'operator' ? 'human' : 'stall'}:${id}`,
       action: {
         type: 'no_op',
@@ -922,8 +922,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       }
       this.disposeFileEvents(id);
       this.releaseMcp(id);
-      this.store.flushTranscript(id);
-      this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
+      this.store.transcripts.flushTranscript(id);
+      this.store.agents.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
       this.exitCodes.delete(id);
       this.exited.delete(id);
@@ -949,7 +949,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (!key || !this.opts.fileEvents) return;
     const records = this.opts.fileEvents.drain(key);
     if (records.length === 0) return;
-    const agent = this.store.getAgent(agentId);
+    const agent = this.store.agents.getAgent(agentId);
     if (!agent) return;
     debugLog('fileEvents', `agent=${agentId} drained ${records.length} record(s)`);
     for (const rec of records) this.ingestFileEvent(agent, rec);
@@ -962,17 +962,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       'fileEvents',
       `agent=${agent.id} write path=${path} tool=${rec.tool ?? '?'} promoted=${promoted} kind=${kind}`,
     );
-    this.store.recordFile(agent.id, { path, tool: rec.tool, promoted });
+    this.store.agents.recordFile(agent.id, { path, tool: rec.tool, promoted });
     this.emit('files', { agentId: agent.id, taskId: agent.taskId });
     if (isPlanFile(path)) this.ingestPlan(agent, path);
     if (promoted) {
-      const flag = this.store.recordFlag(agent.id, { kind, label: basename(path), ref: path });
+      const flag = this.store.agents.recordFlag(agent.id, { kind, label: basename(path), ref: path });
       this.emit('flag', { agentId: agent.id, taskId: agent.taskId, flag });
     }
   }
 
   private ingestPlan(agent: Agent, relPath: string): void {
-    const task = this.store.getTask(agent.taskId);
+    const task = this.store.tasks.getTask(agent.taskId);
     const number = planOriginIssue(task?.originRef ?? null);
     if (!task || number === null) {
       debugLog('fileEvents', `agent=${agent.id} wrote ${PLAN_FILE} but is not a planning agent — ignored`);
@@ -988,7 +988,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       });
       return;
     }
-    const parsed = parsePlanDocument(raw, this.store.listOfferedAreas());
+    const parsed = parsePlanDocument(raw, this.store.remoteValidation.listOfferedAreas());
     if (!parsed.ok) {
       this.opts.errors?.record({
         source: 'agent',
@@ -1042,27 +1042,27 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   private wireSession(session: AgentSession, agentId: string, task: Task): void {
     session.on('output', (delta: string) => {
-      this.store.appendTranscript(agentId, delta);
+      this.store.transcripts.appendTranscript(agentId, delta);
       this.emit('output', { agentId, delta });
       this.drainFileEvents(agentId);
     });
 
     session.on('status', (status) => {
       if (status === 'running') {
-        this.store.updateAgent(agentId, { status: 'running', pid: session.pid, waitingReason: null });
+        this.store.agents.updateAgent(agentId, { status: 'running', pid: session.pid, waitingReason: null });
         this.reflectStatus(agentId, task.id, 'running');
       }
     });
 
     session.on('usage', (usage: AgentUsage) => {
-      this.store.recordAgentUsage(agentId, usage);
+      this.store.agents.recordAgentUsage(agentId, usage);
       this.emit('usage', { agentId, taskId: task.id, usage });
     });
 
-    session.on('limits', (limits: AccountRateLimits) => this.store.recordRateLimits(limits));
+    session.on('limits', (limits: AccountRateLimits) => this.store.rateLimits.recordRateLimits(limits));
 
     session.on('flag', (flag: ParsedFlag) => {
-      const saved = this.store.recordFlag(agentId, flag);
+      const saved = this.store.agents.recordFlag(agentId, flag);
       this.emit('flag', { agentId, taskId: task.id, flag: saved });
     });
 
@@ -1095,12 +1095,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   private autoResume(session: AgentSession, agentId: string, task: Task): number | null {
     const limit = this.opts.resumeAttempts ?? 0;
     if (limit <= 0 || !this.opts.resumable || this.sessions.get(agentId) !== session) return 0;
-    const agent = this.store.getAgent(agentId);
+    const agent = this.store.agents.getAgent(agentId);
     if (!agent?.sessionId) return agent?.resumeAttempts ?? 0;
     if (!existsSync(agent.cwd)) return agent.resumeAttempts;
     if (agent.resumeAttempts >= limit) return agent.resumeAttempts;
 
-    const attempts = this.store.countAgentResumeAttempt(agentId);
+    const attempts = this.store.agents.countAgentResumeAttempt(agentId);
     this.disposeFileEvents(agentId);
     this.releaseMcp(agentId);
     this.sessions.delete(agentId);
@@ -1110,7 +1110,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     try {
       if (this.resume({ ...agent, resumeAttempts: attempts }, task)) return null;
     } catch (err) {
-      this.store.appendTranscript(agentId, `\nResume after crash failed: ${(err as Error).message}\n`);
+      this.store.transcripts.appendTranscript(agentId, `\nResume after crash failed: ${(err as Error).message}\n`);
     }
     return attempts;
   }
@@ -1133,10 +1133,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   private restoreWaiting(agent: Agent, task: Task): void {
     const reason = agent.waitingReason ?? 'Resumed agent is awaiting your input.';
     this.parked.add(agent.id);
-    this.store.updateAgent(agent.id, { status: 'waiting', waitingReason: reason });
-    this.store.updateTask(task.id, { status: 'waiting' });
+    this.store.agents.updateAgent(agent.id, { status: 'waiting', waitingReason: reason });
+    this.store.tasks.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agent.id, task.id, 'waiting');
-    const hasOpen = this.store.listOpenEscalations().some((e) => e.agentId === agent.id);
+    const hasOpen = this.store.escalations.listOpenEscalations().some((e) => e.agentId === agent.id);
     if (!hasOpen) this.emit('waiting', { agentId: agent.id, taskId: task.id, reason });
   }
 
@@ -1182,9 +1182,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       return;
     }
     this.parked.add(agentId);
-    this.store.setAgentResumed(agentId, null);
-    this.store.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
-    this.store.updateTask(task.id, { status: 'waiting' });
+    this.store.agents.setAgentResumed(agentId, null);
+    this.store.agents.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
+    this.store.tasks.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
     this.emit('waiting', { agentId, taskId: task.id, reason, ask });
   }
@@ -1193,14 +1193,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (this.limited.has(agentId)) return;
     const reason = rateLimitParkReason(park);
     this.drainFileEvents(agentId);
-    this.store.flushTranscript(agentId);
+    this.store.transcripts.flushTranscript(agentId);
     const asked = this.parked.has(agentId);
     this.limited.set(agentId, { reason, resetsAt: park.resetsAt });
     this.parked.add(agentId);
     this.stalled.delete(agentId);
-    this.store.setAgentResumed(agentId, null);
-    this.store.updateAgent(agentId, asked ? { status: 'waiting' } : { status: 'waiting', waitingReason: reason });
-    this.store.updateTask(task.id, { status: 'waiting' });
+    this.store.agents.setAgentResumed(agentId, null);
+    this.store.agents.updateAgent(
+      agentId,
+      asked ? { status: 'waiting' } : { status: 'waiting', waitingReason: reason },
+    );
+    this.store.tasks.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
     this.emit('limited', { agentId, taskId: task.id, reason, resetsAt: park.resetsAt });
     if (this.exited.has(agentId)) this.shedLimitedSession(agentId);
@@ -1212,14 +1215,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId);
     this.exited.delete(agentId);
-    this.store.updateAgent(agentId, { pid: null });
+    this.store.agents.updateAgent(agentId, { pid: null });
   }
 
   private reinstateLimitPark(agentId: string, task: Task, park: LimitPark): void {
     this.limited.set(agentId, park);
     this.parked.add(agentId);
-    this.store.updateAgent(agentId, { status: 'waiting', waitingReason: park.reason });
-    this.store.updateTask(task.id, { status: 'waiting' });
+    this.store.agents.updateAgent(agentId, { status: 'waiting', waitingReason: park.reason });
+    this.store.tasks.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
   }
 
@@ -1228,22 +1231,22 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const clock = this.stalled.get(agentId);
     if (clock) clock.at = Math.max(clock.at, Date.now() + clock.grace);
     const resumedAt = new Date().toISOString();
-    this.store.setAgentResumed(agentId, resumedAt);
+    this.store.agents.setAgentResumed(agentId, resumedAt);
     this.emit('resumed', { agentId, taskId, resumedAt });
   }
 
   releasePark(agentId: string): void {
     this.parked.delete(agentId);
     this.stalled.delete(agentId);
-    this.store.setAgentResumed(agentId, null);
+    this.store.agents.setAgentResumed(agentId, null);
   }
 
   private failSpawn(agentId: string, taskId: string, err: Error): void {
     this.sessions.delete(agentId);
-    this.store.appendTranscript(agentId, err.message);
-    this.store.flushTranscript(agentId);
-    this.store.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
-    this.store.updateTask(taskId, { status: 'failed' });
+    this.store.transcripts.appendTranscript(agentId, err.message);
+    this.store.transcripts.flushTranscript(agentId);
+    this.store.agents.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
+    this.store.tasks.updateTask(taskId, { status: 'failed' });
     this.opts.errors?.record({
       source: 'agent',
       message: `Agent ${agentId} failed to spawn (task ${taskId}): ${err.message}`,
@@ -1263,9 +1266,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.limited.delete(agentId);
     this.nudges.delete(agentId);
     this.stalled.delete(agentId);
-    this.store.flushTranscript(agentId);
-    this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
-    this.store.updateTask(taskId, { status });
+    this.store.transcripts.flushTranscript(agentId);
+    this.store.agents.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
+    this.store.tasks.updateTask(taskId, { status });
     this.sessions.delete(agentId);
     const exitCode = this.exitCodes.get(agentId);
     this.exitCodes.delete(agentId);
@@ -1275,7 +1278,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         message:
           `Agent ${agentId} failed (task ${taskId})` +
           `${exitCode !== undefined ? `, exit code ${exitCode}` : ''}${failureNote ? `, ${failureNote}` : ''}`,
-        detail: recentOutputExcerpt(this.store.getTranscript(agentId)) || null,
+        detail: recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
       });
     }
     this.reflectStatus(agentId, taskId, status);

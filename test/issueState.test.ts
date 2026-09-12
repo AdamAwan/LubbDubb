@@ -39,11 +39,11 @@ function world(): WorldSnapshot {
 
 test('a confirmed state lands on the baseline, and only on the item named', () => {
   const store = new Store(':memory:');
-  store.setWorldBaseline(world());
+  store.world.setWorldBaseline(world());
 
-  store.patchWorldState({ number: 5, state: 'In Review' });
+  store.world.patchWorldState({ number: 5, state: 'In Review' });
 
-  const after = store.getWorldBaseline();
+  const after = store.world.getWorldBaseline();
   assert.equal(after?.issues.find((i) => i.number === 5)?.workItemState, 'In Review');
   assert.equal(
     after?.issues.find((i) => i.number === 6)?.workItemState,
@@ -55,20 +55,20 @@ test('a confirmed state lands on the baseline, and only on the item named', () =
 
 test('an item the baseline no longer holds is skipped rather than invented', () => {
   const store = new Store(':memory:');
-  store.setWorldBaseline(world());
-  store.patchWorldState({ number: 99, state: 'Doing' });
-  assert.equal(store.getWorldBaseline()?.issues.length, 2);
+  store.world.setWorldBaseline(world());
+  store.world.patchWorldState({ number: 99, state: 'Doing' });
+  assert.equal(store.world.getWorldBaseline()?.issues.length, 2);
   store.close();
 });
 
 test('the same write lands on the mirror, which is what the board’s columns are built from', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(SINCE, [item({ number: 5, workItemState: 'Ready' }), item({ number: 6 })]);
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(SINCE, [item({ number: 5, workItemState: 'Ready' }), item({ number: 6 })]);
 
-  store.patchTicketState({ number: 5, state: 'In Review' });
+  store.tickets.patchTicketState({ number: 5, state: 'In Review' });
 
-  const rows = store.listTrackerItems();
+  const rows = store.tickets.listTrackerItems();
   assert.equal(rows.find((r) => r.number === 5)?.workItemState, 'In Review');
   assert.equal(rows.find((r) => r.number === 6)?.workItemState, null, 'and nothing else moves');
   store.close();
@@ -76,11 +76,11 @@ test('the same write lands on the mirror, which is what the board’s columns ar
 
 test('a number the mirror does not hold is skipped — the mirror is a record of what was seen', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(SINCE, [item({ number: 5 })]);
-  store.patchTicketState({ number: 99, state: 'Doing' });
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(SINCE, [item({ number: 5 })]);
+  store.tickets.patchTicketState({ number: 99, state: 'Doing' });
   assert.deepEqual(
-    store.listTrackerItems().map((r) => r.number),
+    store.tickets.listTrackerItems().map((r) => r.number),
     [5],
   );
   store.close();
@@ -146,7 +146,7 @@ test('a provider refusal is quoted back as a 400, and neither reading moves', as
 
   const page = (await app.inject({ method: 'GET', url: '/api/tickets?tracking=any' })).json() as TicketsPayload;
   assert.equal(page.rows.find((r) => r.number === 31)?.workItemState, 'Ready', 'the mirror is untouched');
-  assert.ok(system.store.listErrors().some((e) => /invalid transition/.test(e.message)));
+  assert.ok(system.store.errors.listErrors().some((e) => /invalid transition/.test(e.message)));
 });
 
 test('a provider that cannot write states refuses by saying so, and never reaches the sink', async () => {

@@ -72,15 +72,15 @@ export function writeGoalInstruction(
   originRef: string,
   text: string,
 ): { instruction: IssueInstruction; conclusion: IssueConclusion; replanned: Plan | null } {
-  const instruction = store.addIssueInstruction({ originRef, text });
-  const conclusion = store.recordIssueConclusion({
+  const instruction = store.instructions.addIssueInstruction({ originRef, text });
+  const conclusion = store.verdicts.recordIssueConclusion({
     originRef,
     verdict: 'more_work',
     note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
     by: 'operator',
   });
-  const plan = store.getPlanByOrigin(originRef);
-  const replanned = plan?.status === 'complete' ? store.setPlanStatus(plan.id, 'planning') : null;
+  const plan = store.plans.getPlanByOrigin(originRef);
+  const replanned = plan?.status === 'complete' ? store.plans.setPlanStatus(plan.id, 'planning') : null;
   return { instruction, conclusion, replanned };
 }
 
@@ -89,22 +89,12 @@ export function withdrawGoalInstruction(
   originRef: string,
   id: string,
 ): { ok: false } | { ok: true; standing: number } {
-  if (!store.withdrawInstruction(id)) return { ok: false };
-  const standing = store.listStandingInstructions(originRef);
-  const conclusion = store.getIssueConclusion(originRef);
+  if (!store.instructions.withdrawInstruction(id)) return { ok: false };
+  const standing = store.instructions.listStandingInstructions(originRef);
+  const conclusion = store.verdicts.getIssueConclusion(originRef);
   if (standing.length === 0 && conclusion?.by === 'operator' && conclusion.verdict === 'more_work')
-    store.clearIssueConclusion(originRef);
+    store.verdicts.clearIssueConclusion(originRef);
   return { ok: true, standing: standing.length };
 }
 
-type GoalInstructionStore = Pick<
-  Store,
-  | 'addIssueInstruction'
-  | 'recordIssueConclusion'
-  | 'getPlanByOrigin'
-  | 'setPlanStatus'
-  | 'withdrawInstruction'
-  | 'listStandingInstructions'
-  | 'getIssueConclusion'
-  | 'clearIssueConclusion'
->;
+type GoalInstructionStore = Pick<Store, 'instructions' | 'verdicts' | 'plans'>;

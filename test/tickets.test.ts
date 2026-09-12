@@ -47,12 +47,12 @@ function mirrored(over: Partial<MirroredTicket> & Pick<MirroredTicket, 'number'>
 
 test('the mirror keeps everything it has seen and never deletes', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
+  store.tickets.ensureTrackerSweep(MONTH_MS);
 
-  store.recordSweep(SINCE, [item({ number: 10, title: 'First' }), item({ number: 11 })]);
-  store.recordSweep(SINCE, [item({ number: 10, title: 'Renamed', state: 'closed' })]);
+  store.tickets.recordSweep(SINCE, [item({ number: 10, title: 'First' }), item({ number: 11 })]);
+  store.tickets.recordSweep(SINCE, [item({ number: 10, title: 'Renamed', state: 'closed' })]);
 
-  const rows = store.listTrackerItems();
+  const rows = store.tickets.listTrackerItems();
   assert.deepEqual(
     rows.map((r) => r.number),
     [11, 10],
@@ -65,16 +65,16 @@ test('the mirror keeps everything it has seen and never deletes', () => {
 
 test('the backfill anchor is frozen, and the high-water mark only moves forward', () => {
   const store = new Store(':memory:');
-  const first = store.ensureTrackerSweep(MONTH_MS);
-  const again = store.ensureTrackerSweep(MONTH_MS * 12);
+  const first = store.tickets.ensureTrackerSweep(MONTH_MS);
+  const again = store.tickets.ensureTrackerSweep(MONTH_MS * 12);
   assert.equal(again.anchorAt, first.anchorAt, 'the anchor is stamped once');
   assert.equal(first.sweptTo, null, 'and nothing has been swept yet');
 
-  store.recordSweep(SINCE, [item({ number: 1, changedAt: '2026-08-05T00:00:00.000Z' })]);
-  assert.equal(store.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z');
+  store.tickets.recordSweep(SINCE, [item({ number: 1, changedAt: '2026-08-05T00:00:00.000Z' })]);
+  assert.equal(store.tickets.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z');
 
-  store.recordSweep(SINCE, [item({ number: 2, changedAt: '2026-08-02T00:00:00.000Z' })]);
-  assert.equal(store.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z', 'the mark is a maximum');
+  store.tickets.recordSweep(SINCE, [item({ number: 2, changedAt: '2026-08-02T00:00:00.000Z' })]);
+  assert.equal(store.tickets.readTrackerSweep()?.sweptTo, '2026-08-05T00:00:00.000Z', 'the mark is a maximum');
   store.close();
 });
 
@@ -96,7 +96,7 @@ test('the sweep asks from the anchor first and from its own mark after', async (
 
   assert.equal(sweep.backfilling, true, 'a capable provider with nothing swept yet is still filling');
   await sweep.run();
-  const anchor = store.readTrackerSweep()?.anchorAt;
+  const anchor = store.tickets.readTrackerSweep()?.anchorAt;
   assert.equal(asked[0], anchor, 'the first read starts at the frozen floor');
   assert.equal(
     sweep.backfilling,
@@ -121,7 +121,7 @@ test('a fresh mirror is restated by its own first read', async () => {
   });
   await sweep.run();
   assert.notEqual(
-    store.readTrackerSweep()?.restatedAt,
+    store.tickets.readTrackerSweep()?.restatedAt,
     null,
     'so an upgrade pays for the re-read and a new deployment does not',
   );
@@ -152,7 +152,11 @@ test('a mirror written before the history carried states re-reads itself once', 
 
   await sweep.run();
   assert.equal(asked[0], SINCE, 'the sweep asks from the floor again rather than from its own mark');
-  assert.equal(store.listTrackerItems()[0]?.workItemState, 'Closed', 'and every row is re-upserted with its state');
+  assert.equal(
+    store.tickets.listTrackerItems()[0]?.workItemState,
+    'Closed',
+    'and every row is re-upserted with its state',
+  );
 
   await sweep.run();
   assert.equal(asked[1], '2026-08-09T00:00:00.000Z', 'then it is incremental again — the re-read happens once');
@@ -173,7 +177,7 @@ test('a provider that cannot list history mints no anchor and records no fault',
     errors: { record: (e: { message: string }) => errors.push(e.message) } as never,
   });
   await sweep.run();
-  assert.equal(store.readTrackerSweep(), null, 'no floor is stamped for a history that was never read');
+  assert.equal(store.tickets.readTrackerSweep(), null, 'no floor is stamped for a history that was never read');
   assert.deepEqual(errors, [], 'and a provider without the capability is not a failure');
   store.close();
 });
@@ -197,11 +201,11 @@ test('a failed sweep is recorded, leaves the mark behind, and is retried whole',
 
   await sweep.run();
   assert.match(errors[0] ?? '', /ticket sweep failed: tracker refused/);
-  assert.equal(store.readTrackerSweep()?.sweptTo, null, 'the mark never moved past rows nobody wrote');
+  assert.equal(store.tickets.readTrackerSweep()?.sweptTo, null, 'the mark never moved past rows nobody wrote');
 
   fail = false;
   await sweep.run();
-  assert.equal(store.listTrackerItems().length, 1, 'the next sweep picks up what the failed one missed');
+  assert.equal(store.tickets.listTrackerItems().length, 1, 'the next sweep picks up what the failed one missed');
   store.close();
 });
 
@@ -219,7 +223,7 @@ test('a completed sweep that found nothing still stops the tab saying it is fill
   });
 
   await sweep.run();
-  const mark = store.readTrackerSweep();
+  const mark = store.tickets.readTrackerSweep();
   assert.equal(mark?.sweptTo, mark?.anchorAt, 'the mark records the sweep without advancing past it');
   assert.equal(
     sweep.backfilling,
@@ -457,41 +461,41 @@ function fact(number: number, over: Partial<LiveTicketFacts> = {}): LiveTicketFa
 
 test('an item that leaves the open set freezes, keeps everything, and thaws if it comes back', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(
     SINCE,
     [item({ number: 1 }), item({ number: 2 })],
     [fact(1, { workItemState: 'Active', issueType: 'Task', parent: { number: 90, title: 'Payments' } }), fact(2)],
   );
   assert.deepEqual(
-    store.listTrackerItems().map((r) => [r.number, r.tracking]),
+    store.tickets.listTrackerItems().map((r) => [r.number, r.tracking]),
     [
       [2, 'live'],
       [1, 'live'],
     ],
   );
 
-  store.recordSweep(SINCE, [], [fact(2)]);
-  const frozen = store.listTrackerItems().find((r) => r.number === 1);
+  store.tickets.recordSweep(SINCE, [], [fact(2)]);
+  const frozen = store.tickets.listTrackerItems().find((r) => r.number === 1);
   assert.equal(frozen?.tracking, 'frozen');
   assert.equal(frozen?.workItemState, 'Active');
   assert.deepEqual(frozen?.parent, { number: 90, title: 'Payments' });
 
-  store.recordSweep(SINCE, [], [fact(1), fact(2)]);
-  assert.equal(store.listTrackerItems().find((r) => r.number === 1)?.tracking, 'live');
+  store.tickets.recordSweep(SINCE, [], [fact(1), fact(2)]);
+  assert.equal(store.tickets.listTrackerItems().find((r) => r.number === 1)?.tracking, 'live');
   store.close();
 });
 
 test('a closed item keeps the tracker’s own word for why it closed', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(
     SINCE,
     [item({ number: 1, state: 'closed', workItemState: 'Closed' }), item({ number: 2, workItemState: 'Removed' })],
     [],
   );
   assert.deepEqual(
-    store.listTrackerItems().map((r) => [r.number, r.workItemState]),
+    store.tickets.listTrackerItems().map((r) => [r.number, r.workItemState]),
     [
       [2, 'Removed'],
       [1, 'Closed'],
@@ -503,41 +507,48 @@ test('a closed item keeps the tracker’s own word for why it closed', () => {
 
 test('a provider with no native states never wipes one the overlay wrote', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(SINCE, [item({ number: 1 })], [fact(1, { workItemState: 'Active' })]);
-  store.recordSweep(SINCE, [item({ number: 1 })], []);
-  assert.equal(store.listTrackerItems()[0]?.workItemState, 'Active');
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(SINCE, [item({ number: 1 })], [fact(1, { workItemState: 'Active' })]);
+  store.tickets.recordSweep(SINCE, [item({ number: 1 })], []);
+  assert.equal(store.tickets.listTrackerItems()[0]?.workItemState, 'Active');
   store.close();
 });
 
 test('an empty live set freezes nothing at all', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(SINCE, [item({ number: 1 })], [fact(1)]);
-  store.recordSweep(SINCE, [], []);
-  assert.equal(store.listTrackerItems()[0]?.tracking, 'live', 'silence is not evidence that the board is closed');
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(SINCE, [item({ number: 1 })], [fact(1)]);
+  store.tickets.recordSweep(SINCE, [], []);
+  assert.equal(
+    store.tickets.listTrackerItems()[0]?.tracking,
+    'live',
+    'silence is not evidence that the board is closed',
+  );
   store.close();
 });
 
 test('an orphan and an unreadable parent are never collapsed into each other', () => {
   const store = new Store(':memory:');
-  store.ensureTrackerSweep(MONTH_MS);
-  store.recordSweep(SINCE, [item({ number: 1 }), item({ number: 2 })], [fact(1, { parent: null }), fact(2)]);
-  const rows = store.listTrackerItems();
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  store.tickets.recordSweep(SINCE, [item({ number: 1 }), item({ number: 2 })], [fact(1, { parent: null }), fact(2)]);
+  const rows = store.tickets.listTrackerItems();
   assert.equal(rows.find((r) => r.number === 1)?.parent, null, 'a resolved absence is an orphan');
   assert.ok(!('parent' in (rows.find((r) => r.number === 2) ?? {})), 'an unresolved one says nothing');
 
-  store.recordSweep(SINCE, [], [fact(1, { parent: { number: 90, title: 'Payments' } })]);
-  store.recordSweep(SINCE, [], [fact(1)]);
-  assert.deepEqual(store.listTrackerItems().find((r) => r.number === 1)?.parent, { number: 90, title: 'Payments' });
+  store.tickets.recordSweep(SINCE, [], [fact(1, { parent: { number: 90, title: 'Payments' } })]);
+  store.tickets.recordSweep(SINCE, [], [fact(1)]);
+  assert.deepEqual(store.tickets.listTrackerItems().find((r) => r.number === 1)?.parent, {
+    number: 90,
+    title: 'Payments',
+  });
   store.close();
 });
 
 test('a feature keeps its colour, and the ladder is spread rather than piled', () => {
   const store = new Store(':memory:');
-  const first = store.ensureFeatureColors([90, 91]);
+  const first = store.tickets.ensureFeatureColors([90, 91]);
   assert.notEqual(first.get(90), first.get(91), 'two features do not draw as one');
-  const again = store.ensureFeatureColors([91, 90, 92]);
+  const again = store.tickets.ensureFeatureColors([91, 90, 92]);
   assert.equal(again.get(90), first.get(90));
   assert.equal(again.get(91), first.get(91));
   assert.equal(new Set([again.get(90), again.get(91), again.get(92)]).size, 3, 'least-used-first spreads them');

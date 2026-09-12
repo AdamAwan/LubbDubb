@@ -20,7 +20,7 @@ export class PrWorkItemDesk {
     const wanted = prsToLinkWorkItem(world.pullRequests, {
       prAuthorConfigured: this.deps.prAuthorConfigured,
       issues: world.issues,
-      linked: this.deps.store.linkedWorkItemPrs(),
+      linked: this.deps.store.workItemLinks.linkedWorkItemPrs(),
     });
     for (const seed of wanted) await linkPrWorkItem(seed, this.deps);
   }
@@ -42,5 +42,5 @@ export async function linkPrWorkItem(
     return;
   }
   if (!result.ok) return;
-  deps.store.recordWorkItemLink(seed.prNumber, seed.workItemNumber);
+  deps.store.workItemLinks.recordWorkItemLink(seed.prNumber, seed.workItemNumber);
 }

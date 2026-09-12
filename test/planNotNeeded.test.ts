@@ -38,7 +38,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const t = system.store.createTask({
+  const t = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -75,12 +75,12 @@ test('a planner’s verdict lands as a delivery, attributed from the credential'
   const res = await callTool(system, agent, 'plan_not_needed', FOUND);
   assert.equal(res.isError, false);
 
-  const delivery = system.store.getDelivery('issue:12');
+  const delivery = system.store.verdicts.getDelivery('issue:12');
   assert.equal(delivery?.by, 'planner', 'the author is its own — not the assessor, who judged nothing here');
   assert.equal(delivery?.summary, FOUND.summary);
   assert.equal(delivery?.detail, FOUND.detail, 'the working behind the verdict is what makes it reviewable');
   assert.equal(delivery?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null, 'no plan row — that is the whole point');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null, 'no plan row — that is the whole point');
   assert.match(res.text, /not closed|human decision/, 'the planner must not believe it closed the ticket');
   system.store.close?.();
 });
@@ -89,7 +89,7 @@ test('the verdict parks the issue, so neither a planner nor a pickup agent goes 
   const system = build();
   const agent = spawnAgent(system, 'issue:12:plan');
   await callTool(system, agent, 'plan_not_needed', FOUND);
-  const delivery = system.store.getDelivery('issue:12') as IssueDelivery;
+  const delivery = system.store.verdicts.getDelivery('issue:12') as IssueDelivery;
 
   const issue: Issue = {
     id: 'i12',
@@ -138,25 +138,25 @@ test('every other kind of agent is refused, and pointed at the verdict that is i
     assert.equal(res.isError, true, `${origin} is not planning, so it has no plan to decline to write`);
     assert.match(res.text, remedy, 'refusals name the tool that is theirs');
   }
-  assert.equal(system.store.getDelivery('issue:12'), null, 'and nothing is written');
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null, 'and nothing is written');
   system.store.close?.();
 });
 
 test('a replan is refused, because the plan it would leave standing still owns the issue', async () => {
   const system = build();
-  system.store.upsertPlan({ originRef: 'issue:12', title: 'Split it', status: 'planning', reason: 'because' });
+  system.store.plans.upsertPlan({ originRef: 'issue:12', title: 'Split it', status: 'planning', reason: 'because' });
 
   const agent = spawnAgent(system, 'issue:12:plan');
   const res = await callTool(system, agent, 'plan_not_needed', FOUND);
   assert.equal(res.isError, true);
   assert.match(res.text, /plan_submit/, 'the amendment is the way out, and the refusal says so');
-  assert.equal(system.store.getDelivery('issue:12'), null, 'nothing is written');
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null, 'nothing is written');
   system.store.close?.();
 });
 
 test('a standing shortfall is not overturned, and survives the attempt', async () => {
   const system = build();
-  system.store.recordShortfall({
+  system.store.verdicts.recordShortfall({
     originRef: 'issue:12',
     cause: 'goal',
     summary: 'the retry is there but the ticket also asks for a metric, and there is none',
@@ -167,8 +167,8 @@ test('a standing shortfall is not overturned, and survives the attempt', async (
   const res = await callTool(system, agent, 'plan_not_needed', FOUND);
   assert.equal(res.isError, true);
   assert.match(res.text, /not.*reached|missing/i);
-  assert.ok(system.store.getShortfall('issue:12'), 'the assessor’s verdict is still on record');
-  assert.equal(system.store.getDelivery('issue:12'), null);
+  assert.ok(system.store.verdicts.getShortfall('issue:12'), 'the assessor’s verdict is still on record');
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null);
   system.store.close?.();
 });
 
@@ -187,6 +187,6 @@ test('the account is required, and a blob summary is refused at the boundary', a
   assert.equal(blob.isError, true);
   assert.match(blob.text, /one line/i);
 
-  assert.equal(system.store.getDelivery('issue:12'), null, 'a rejected verdict writes nothing');
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null, 'a rejected verdict writes nothing');
   system.store.close?.();
 });

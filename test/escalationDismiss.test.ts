@@ -58,38 +58,38 @@ async function parkedAgent() {
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which auth provider?@@' }] },
   });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
-  const escalation = system.store.listOpenEscalations()[0]!;
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
+  const escalation = system.store.escalations.listOpenEscalations()[0]!;
   return { system, child, agentId, escalation };
 }
 
 test('a parked agent that keeps calling tools is marked resumed — but stays parked, alert intact', async () => {
   const { system, child, agentId, escalation } = await parkedAgent();
-  assert.equal(system.store.getAgent(agentId)!.resumedAt, null);
+  assert.equal(system.store.agents.getAgent(agentId)!.resumedAt, null);
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: 'I will wait for your answer before continuing.' }] },
   });
-  assert.equal(system.store.getAgent(agentId)!.resumedAt, null, 'prose alone must not read as resumed');
+  assert.equal(system.store.agents.getAgent(agentId)!.resumedAt, null, 'prose alone must not read as resumed');
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] },
   });
-  const agent = system.store.getAgent(agentId)!;
+  const agent = system.store.agents.getAgent(agentId)!;
   assert.ok(agent.resumedAt, 'a tool call after the park stamps resumedAt');
 
   assert.equal(agent.status, 'waiting', 'the park is not lifted by the observation');
-  assert.equal(system.store.listOpenEscalations().length, 1, 'the alert is left standing');
-  assert.equal(system.store.getEscalation(escalation.id)!.status, 'open');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1, 'the alert is left standing');
+  assert.equal(system.store.escalations.getEscalation(escalation.id)!.status, 'open');
 
   system.store.close();
 });
@@ -100,17 +100,17 @@ test('answering a question spends the resumed mark, and a fresh park does not in
     type: 'assistant',
     message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }] },
   });
-  assert.ok(system.store.getAgent(agentId)!.resumedAt);
+  assert.ok(system.store.agents.getAgent(agentId)!.resumedAt);
 
   system.escalations.answer(escalation.id, 'Azure AD');
-  assert.equal(system.store.getAgent(agentId)!.resumedAt, null, 'answered, so the mark is spent');
+  assert.equal(system.store.agents.getAgent(agentId)!.resumedAt, null, 'answered, so the mark is spent');
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which tenant?@@' }] },
   });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.resumedAt, null, 'a fresh park starts unmarked');
+  assert.equal(system.store.agents.getAgent(agentId)!.resumedAt, null, 'a fresh park starts unmarked');
 
   system.store.close();
 });
@@ -128,19 +128,19 @@ test('dismiss clears the alert, sends the agent nothing, and leaves it able to a
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().dismissedAs, 'cleared');
 
-  const cleared = system.store.getEscalation(escalation.id)!;
+  const cleared = system.store.escalations.getEscalation(escalation.id)!;
   assert.equal(cleared.status, 'dismissed');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'inbox is empty');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'inbox is empty');
   assert.equal(child.writes.length, before, 'nothing was typed into the agent');
   assert.match(JSON.stringify(cleared.context), /fixed it by hand/);
   assert.ok(
-    system.store.listDecisions(20).some((d) => d.detail?.includes('dismissed escalation')),
+    system.store.decisions.listDecisions(20).some((d) => d.detail?.includes('dismissed escalation')),
     'the dismissal is audited like any other outcome',
   );
 
   const asked = system.agents.ask(agentId, { question: 'Actually, which tenant?' });
   assert.ok(asked.ok && asked.escalationId, 'a later question still reaches you');
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1);
 
   await app.close();
   system.store.close();
@@ -149,7 +149,7 @@ test('dismiss clears the alert, sends the agent nothing, and leaves it able to a
 test('dismissing a proposal rejects it rather than leaving a pending verdict behind', async () => {
   const { system, escalation } = await parkedAgent();
   const { app } = await buildApp(system);
-  const proposal = system.store.createProposal({
+  const proposal = system.store.escalations.createProposal({
     kind: 'merge',
     ref: 'pr:42:merge',
     action: { type: 'merge_pr', prNumber: 42, method: 'squash', confidence: 0.9, reason: 'green' },
@@ -159,8 +159,8 @@ test('dismissing a proposal rejects it rather than leaving a pending verdict beh
   const res = await app.inject({ method: 'POST', url: `/api/escalations/${escalation.id}/dismiss` });
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().dismissedAs, 'proposal_rejected');
-  assert.equal(system.store.listProposals().find((p) => p.id === proposal.id)!.status, 'rejected');
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.listProposals().find((p) => p.id === proposal.id)!.status, 'rejected');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
 
   await app.close();
   system.store.close();

@@ -36,9 +36,9 @@ function quietSystem(backend = new FakePtyBackend()): System {
 
 test('store round-trips error entries, newest first', () => {
   const store = new Store(':memory:');
-  store.recordError({ source: 'cycle', message: 'first' });
-  store.recordError({ source: 'agent', message: 'second', detail: 'a stack' });
-  const errors = store.listErrors();
+  store.errors.recordError({ source: 'cycle', message: 'first' });
+  store.errors.recordError({ source: 'agent', message: 'second', detail: 'a stack' });
+  const errors = store.errors.listErrors();
   assert.equal(errors.length, 2);
   assert.equal(errors[0]!.message, 'second');
   assert.equal(errors[0]!.detail, 'a stack');
@@ -53,7 +53,7 @@ test('ErrorLog persists, mirrors, and emits `logged`', () => {
   const emitted: ErrorLogEntry[] = [];
   log.on('logged', (e) => emitted.push(e));
   const entry = log.record({ source: 'server', message: 'boom' });
-  assert.equal(store.listErrors()[0]!.id, entry.id);
+  assert.equal(store.errors.listErrors()[0]!.id, entry.id);
   assert.deepEqual(mirrored, [entry]);
   assert.deepEqual(emitted, [entry]);
   store.close();
@@ -89,7 +89,7 @@ test('a harness cycle exception is recorded, not thrown away', async () => {
   };
   const report = await system.harness.runCycle('manual');
   assert.match(report.rationale, /cycle failed: provider exploded/);
-  const errors = system.store.listErrors();
+  const errors = system.store.errors.listErrors();
   assert.equal(errors.length, 1);
   assert.equal(errors[0]!.source, 'cycle');
   assert.match(errors[0]!.message, /provider exploded/);
@@ -104,13 +104,13 @@ test('an agent crash is recorded with its exit code and an output tail', async (
   const system = quietSystem(backend);
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Doomed work' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   backend.last().emit('fatal: cannot reach the model\n');
   backend.last().emitExit(2);
 
-  assert.equal(system.store.getAgent(agentId)!.status, 'failed');
-  const errors = system.store.listErrors();
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'failed');
+  const errors = system.store.errors.listErrors();
   assert.equal(errors.length, 1);
   assert.equal(errors[0]!.source, 'agent');
   assert.match(errors[0]!.message, /exit code 2/);
@@ -124,7 +124,7 @@ test('a clean agent finish records no error', async () => {
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Fine work' });
   await system.harness.runCycle('manual');
   backend.last().emit('all good @@LUBBDUBB_DONE@@');
-  assert.equal(system.store.listErrors().length, 0);
+  assert.equal(system.store.errors.listErrors().length, 0);
   system.store.close();
 });
 
@@ -136,7 +136,7 @@ test('a route 500 is recorded and returned as a plain error', async () => {
   };
   const res = await app.inject({ method: 'POST', url: '/api/pulse' });
   assert.equal(res.statusCode, 500);
-  const errors = system.store.listErrors();
+  const errors = system.store.errors.listErrors();
   assert.equal(errors.length, 1);
   assert.equal(errors[0]!.source, 'server');
   assert.match(errors[0]!.message, /POST \/api\/pulse failed: route kaboom/);
@@ -153,7 +153,7 @@ test('POST /api/errors/clear empties the log and the snapshot with it', async ()
   const res = await app.inject({ method: 'POST', url: '/api/errors/clear' });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { ok: true, cleared: 2 });
-  assert.deepEqual(system.store.listErrors(), []);
+  assert.deepEqual(system.store.errors.listErrors(), []);
   assert.deepEqual((await buildStateSnapshot(system)).errors, []);
 
   assert.deepEqual((await app.inject({ method: 'POST', url: '/api/errors/clear' })).json(), {
@@ -161,7 +161,7 @@ test('POST /api/errors/clear empties the log and the snapshot with it', async ()
     cleared: 0,
   });
   system.errors.record({ source: 'agent', message: 'fresh fault' });
-  assert.equal(system.store.listErrors().length, 1);
+  assert.equal(system.store.errors.listErrors().length, 1);
 
   await app.close();
   system.store.close();
@@ -186,7 +186,7 @@ test('a provider failure with no prior success rejects rather than serving an em
   } as unknown as GitHubApi;
   const sc = new GitHubSourceControlIntegration({ api, errors });
   await assert.rejects(() => sc.snapshot(), /Bad credentials/);
-  const recorded = store.listErrors();
+  const recorded = store.errors.listErrors();
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0]!.source, 'provider');
   assert.match(recorded[0]!.message, /sourceControl:github snapshot failed: Bad credentials/);

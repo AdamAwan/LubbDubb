@@ -58,7 +58,7 @@ function relative(number: number): IssueRelative {
 }
 
 function seed(system: System): void {
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: new Date().toISOString(),
     pullRequests: [pullRequest({ number: 50 }), pullRequest({ number: 51, labels: ['lubbdubb-watch'] })],
     closedPullRequests: [],
@@ -114,8 +114,8 @@ function tracked(number: number, labels: string[]): TrackerItem {
 }
 
 function seedMirror(system: System): void {
-  system.store.ensureTrackerSweep(30 * 24 * 60 * 60 * 1000);
-  system.store.recordSweep('2026-07-01T00:00:00.000Z', [
+  system.store.tickets.ensureTrackerSweep(30 * 24 * 60 * 60 * 1000);
+  system.store.tickets.recordSweep('2026-07-01T00:00:00.000Z', [
     tracked(1, []),
     tracked(2, []),
     tracked(9, ['lubbdubb-watch']),
@@ -216,7 +216,7 @@ test('un-watching a pull request shows on the very next state read', async () =>
 
 test('the ownership view of the tag moves with it, or pickup and the toggle disagree', async () => {
   const system = build();
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: new Date().toISOString(),
     pullRequests: [],
     closedPullRequests: [],
@@ -328,7 +328,7 @@ test('an item the mirror has never seen is skipped rather than invented', async 
   const finish = parkCycle(system);
 
   const before = (await app.inject({ method: 'GET', url: '/api/tickets' })).json() as TicketsPayload;
-  system.store.patchTicketLabels({ numbers: [4242], label: 'lubbdubb-watch', present: true });
+  system.store.tickets.patchTicketLabels({ numbers: [4242], label: 'lubbdubb-watch', present: true });
   const after = (await app.inject({ method: 'GET', url: '/api/tickets' })).json() as TicketsPayload;
   assert.deepEqual(
     after.rows.map((r) => r.number),

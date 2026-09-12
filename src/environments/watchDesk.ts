@@ -40,16 +40,16 @@ export class WatchDesk {
     try {
       const steps = watchFindings({
         readings: watchWindowReadings({
-          windows: store.listWatchWindows(),
-          checks: store.listGoalWatches(),
-          readings: store.listWatchReadings(),
+          windows: store.watches.listWatchWindows(),
+          checks: store.watches.listGoalWatches(),
+          readings: store.watches.listWatchReadings(),
           environments: this.deps.environments,
         }),
-        existing: store.listHumanTasksOfKind('watch'),
+        existing: store.humanTasks.listHumanTasksOfKind('watch'),
       });
       for (const step of steps) {
         if (step.kind === 'file')
-          store.recordHumanTask({
+          store.humanTasks.recordHumanTask({
             title: step.title,
             detail: step.detail,
             originRef: step.originRef,
@@ -57,8 +57,8 @@ export class WatchDesk {
             agentId: null,
             taskId: null,
           });
-        else if (step.kind === 'reopen') store.reopenHumanTask(step.taskId, step.detail);
-        else store.settleHumanTask(step.taskId, step.status, step.resolution);
+        else if (step.kind === 'reopen') store.humanTasks.reopenHumanTask(step.taskId, step.detail);
+        else store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
       }
     } catch (err) {
       errors?.record({ source: 'cycle', message: `filing watch findings failed: ${(err as Error).message}` });
@@ -68,22 +68,22 @@ export class WatchDesk {
   private open(): void {
     const { store, errors } = this.deps;
     try {
-      const declared = new Set(store.listGoalWatches().map((c) => c.originRef));
+      const declared = new Set(store.watches.listGoalWatches().map((c) => c.originRef));
       for (const { arrival, settlesAt } of openableArrivals({
-        arrivals: store.listGoalArrivals(),
+        arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
         declared,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       })) {
         if (settlesAt !== null)
-          store.openWatchWindow({
+          store.watches.openWatchWindow({
             goalRef: arrival.goalRef,
             environment: arrival.environment,
             openedAt: arrival.arrivedAt,
             settlesAt,
           });
-        store.markArrivalWatched(arrival.goalRef, arrival.environment);
+        store.environments.markArrivalWatched(arrival.goalRef, arrival.environment);
       }
     } catch (err) {
       errors?.record({ source: 'cycle', message: `opening watch windows failed: ${(err as Error).message}` });
@@ -93,8 +93,8 @@ export class WatchDesk {
   private settle(): void {
     const { store, errors } = this.deps;
     try {
-      for (const window of settlingWindows(store.listWatchWindows(), this.now()))
-        store.settleWatchWindow(window.goalRef, window.environment);
+      for (const window of settlingWindows(store.watches.listWatchWindows(), this.now()))
+        store.watches.settleWatchWindow(window.goalRef, window.environment);
     } catch (err) {
       errors?.record({ source: 'cycle', message: `settling watch windows failed: ${(err as Error).message}` });
     }
@@ -105,8 +105,8 @@ export class WatchDesk {
     let due: WatchWindow[];
     try {
       due = dueWindows({
-        windows: store.listWatchWindows(),
-        readings: store.listWatchReadings(),
+        windows: store.watches.listWatchWindows(),
+        readings: store.watches.listWatchReadings(),
         watchIntervalMs: this.deps.watchIntervalMs,
         now: this.now(),
       });
@@ -115,7 +115,7 @@ export class WatchDesk {
       return;
     }
     const byName = new Map(this.deps.environments.map((e) => [e.name, e]));
-    const checks = store.listGoalWatches();
+    const checks = store.watches.listGoalWatches();
     for (const window of due) {
       const environment = byName.get(window.environment);
       if (environment?.watch === undefined) continue;
@@ -155,7 +155,7 @@ export class WatchDesk {
           kind: check.kind === 'measure' ? 'measure' : 'signal',
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });
-    this.deps.store.recordWatchReading({
+    this.deps.store.watches.recordWatchReading({
       goalRef: window.goalRef,
       environment: window.environment,
       checkId: check.id,

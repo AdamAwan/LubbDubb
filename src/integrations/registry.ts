@@ -35,7 +35,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
-        sentReplies: ctx.store,
+        sentReplies: ctx.store.prReplies,
       });
     },
     azure: (ctx) => {
@@ -49,7 +49,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         repository: az.repository,
         policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
-        sentReplies: ctx.store,
+        sentReplies: ctx.store.prReplies,
       });
     },
   },

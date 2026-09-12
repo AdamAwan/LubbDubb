@@ -133,9 +133,9 @@ function shut(b: Bench): void {
 }
 
 function seed(b: Pick<Bench, 'store' | 'file'>, area: string | null = AREA, goalRef = 'issue:12'): void {
-  b.store.ingestValidation(goalRef, { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-  b.store.saveStateQueries(goalRef, [QUERY], 'agent');
-  b.store.approveStateQuery({
+  b.store.validation.ingestValidation(goalRef, { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
+  b.store.remoteValidation.saveStateQueries(goalRef, [QUERY], 'agent');
+  b.store.remoteValidation.approveStateQuery({
     digest: queryDigest(QUERY.query, QUERY.presence),
     environment: 'acceptance',
     originRef: goalRef,
@@ -144,11 +144,15 @@ function seed(b: Pick<Bench, 'store' | 'file'>, area: string | null = AREA, goal
     detail: null,
   });
   if (area !== null) setArea(b.file, goalRef, CHECK.id, area);
-  b.store.recordGoalArrival({ goalRef, environment: 'acceptance', arrivedAt: new Date(NOW - 1000).toISOString() });
+  b.store.environments.recordGoalArrival({
+    goalRef,
+    environment: 'acceptance',
+    arrivedAt: new Date(NOW - 1000).toISOString(),
+  });
 }
 
 function checkOf(store: Store, goalRef = 'issue:12'): ValidationCheck {
-  const check = store.listValidationChecks(goalRef)[0];
+  const check = store.validation.listValidationChecks(goalRef)[0];
   assert.ok(check !== undefined);
   return check;
 }
@@ -220,12 +224,12 @@ test('an area holding the delimiter its own list is joined on blocks its row at 
     seed(b, 'Reports, exports');
     await b.desk.run();
 
-    const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.match(row?.blockedReason ?? '', /LUBBDUBB_SELECTORS/, 'and the reason names the delimiter');
     assert.match(row?.blockedReason ?? '', /two selectors that do not exist/);
     assert.equal(row?.matched, null, 'the pre-flight leaves a row another cause has already blocked');
     assert.deepEqual(
-      runnableSelectors(b.store, ACCEPTANCE, 'issue:12', b.store.listRemoteSheetRows()),
+      runnableSelectors(b.store, ACCEPTANCE, 'issue:12', b.store.remoteValidation.listRemoteSheetRows()),
       [],
       'so nothing comma-joins it into the variable a project would mis-split',
     );
@@ -327,7 +331,7 @@ test('the pre-flight writes the matched count from the listing, before any press
     seed(b);
     await b.desk.run();
 
-    const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.equal(row?.matched, 12, 'the count is the listing’s, and nothing in this part has ever seen a report');
     assert.equal(row?.blockedReason, null);
     assert.equal(b.runner.asked[0]?.command, ACCEPTANCE.validate?.browser?.listSelectors);
@@ -344,19 +348,19 @@ test('a check whose area the listing does not offer is blocked before a press, a
     seed(b);
     await b.desk.run();
 
-    const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.equal(row?.matched, 0, 'zero matched, and zero matched is never a pass');
     assert.match(row?.blockedReason ?? '', /offers no selector `checkout`/);
 
     // A blocked row writes nothing at all: no reading, no verdict, no world event.
     assert.deepEqual(
-      b.store.listRemoteReadings().filter((r) => r.rowId === row?.rowId),
+      b.store.remoteValidation.listRemoteReadings().filter((r) => r.rowId === row?.rowId),
       [],
     );
     assert.equal(checkOf(b.store).state, 'unrun', 'the check is exactly as it was');
     assert.equal(checkOf(b.store).resultBy, null);
-    assert.deepEqual(b.store.listWorldEvents(), [], 'and the pre-flight is a new writer: no WorldEvent');
-    assert.deepEqual(b.store.listWatchReadings(), [], 'nor anything in watch_readings');
+    assert.deepEqual(b.store.world.listWorldEvents(), [], 'and the pre-flight is a new writer: no WorldEvent');
+    assert.deepEqual(b.store.watches.listWatchReadings(), [], 'nor anything in watch_readings');
   } finally {
     shut(b);
   }
@@ -368,7 +372,7 @@ test('a listing that could not answer blocks the check rows and leaves every oth
     seed(b);
     await b.desk.run();
 
-    const rows = b.store.listRemoteSheetRows();
+    const rows = b.store.remoteValidation.listRemoteSheetRows();
     const check = rows.find((r) => r.kind === 'check');
     assert.match(check?.blockedReason ?? '', /could not say which selectors it offers/);
     assert.equal(check?.matched, null, 'an unanswered listing counts nothing rather than counting zero');
@@ -377,7 +381,7 @@ test('a listing that could not answer blocks the check rows and leaves every oth
     const state = rows.find((r) => r.kind === 'state');
     assert.equal(state?.blockedReason, null, 'the state row is untouched by a runner that could not answer');
     assert.equal(
-      b.store.listRemoteReadings().find((r) => r.rowId === state?.rowId)?.outcome,
+      b.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === state?.rowId)?.outcome,
       'passed',
       'and the reading it already landed stands',
     );
@@ -392,7 +396,7 @@ test('a check that names no area is a person’s, and the pre-flight asks nothin
     seed(b, null);
     await b.desk.run();
 
-    const row = b.store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.equal(row?.blockedReason, null, 'a check declaring no area is manual, exactly as every check is today');
     assert.equal(row?.matched, null);
     assert.equal(
@@ -457,7 +461,7 @@ test('a pre-flight that throws is recorded through errors.record and never fails
     assert.match(logged[0] ?? '', /listing the selectors acceptance offers failed: the runner blew up/);
     assert.match(logged[1] ?? '', /pre-flight for issue:12 on acceptance failed: the runner blew up/);
     assert.equal(
-      store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
+      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
       'passed',
       'and the rest of the assembly still ran',
     );
@@ -499,7 +503,7 @@ test('buildSystem takes remoteRunner, and defaults to the command implementation
     seedSystem(system, join(dir, 'harness.sqlite'));
     await system.harness.runCycle('manual');
     assert.match(
-      system.store.listRemoteSheetRows().find((r) => r.kind === 'check')?.blockedReason ?? '',
+      system.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check')?.blockedReason ?? '',
       /offers no selector `checkout`/,
       'the default spawned the project’s own command and read what it printed',
     );
@@ -520,7 +524,11 @@ test('an environment with no validate.browser block declares no command for a ru
   try {
     seedSystem(system, join(dir, 'harness.sqlite'));
     await system.harness.runCycle('manual');
-    assert.equal(system.store.listRemoteSheetRows().length, 1, 'the sheet is assembled as it always was');
+    assert.equal(
+      system.store.remoteValidation.listRemoteSheetRows().length,
+      1,
+      'the sheet is assembled as it always was',
+    );
     assert.deepEqual(runner.asked, [], 'and nothing is asked of a runner this environment does not declare');
   } finally {
     system.store.close();
@@ -533,7 +541,12 @@ test('a database written before validation_checks.area gains it on boot, and not
   const file = join(dir, 'before-the-column.sqlite');
   try {
     const before = new Store(file);
-    before.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
+    before.validation.ingestValidation('issue:12', {
+      checks: [CHECK],
+      resources: [],
+      supersededReason: '',
+      amendNote: '',
+    });
     before.close();
 
     const raw = new Database(file);
@@ -581,10 +594,15 @@ function build(dir: string, environments: EnvironmentConfig[], runner?: FakeRemo
 }
 
 function seedSystem(system: System, file: string): void {
-  system.store.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
+  system.store.validation.ingestValidation('issue:12', {
+    checks: [CHECK],
+    resources: [],
+    supersededReason: '',
+    amendNote: '',
+  });
   setArea(file, 'issue:12', CHECK.id, AREA);
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  system.store.recordGoalArrival({
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'acceptance',
     arrivedAt: new Date().toISOString(),

@@ -14,10 +14,10 @@ function resolve(
   deps: DesktopToolDeps,
   args: Record<string, unknown>,
 ): { ok: true; held: Ejection } | { ok: false; error: string } {
-  const live = deps.store.liveEjections();
+  const live = deps.store.ejections.liveEjections();
   const id = typeof args.ejection === 'string' ? args.ejection.trim() : '';
   if (id !== '') {
-    const held = deps.store.getEjection(id);
+    const held = deps.store.ejections.getEjection(id);
     if (!held) return { ok: false, error: `No ejection "${id}".` };
     return { ok: true, held };
   }
@@ -79,10 +79,10 @@ const ejectionRead: DesktopToolFactory = (deps) => ({
     const found = resolve(deps, args);
     if (!found.ok) return toolError(found.error);
     const held = found.held;
-    deps.store.noteEjection(held.id, null);
-    const task = deps.store.getTask(held.taskId);
-    const agent = deps.store.getAgent(held.agentId);
-    const transcript = deps.store.getTranscript(held.agentId);
+    deps.store.ejections.noteEjection(held.id, null);
+    const task = deps.store.tasks.getTask(held.taskId);
+    const agent = deps.store.agents.getAgent(held.agentId);
+    const transcript = deps.store.transcripts.getTranscript(held.agentId);
     return toolJson({
       ...describe(deps, held),
       brief: task === null ? null : { title: task.title, prompt: task.prompt, dispatchReason: task.dispatchReason },
@@ -122,7 +122,7 @@ const ejectionNote: DesktopToolFactory = (deps) => ({
     if (note === '') return toolError('note required — one line about what is happening to this work now.');
     if (found.held.settledAt !== null)
       return toolError(`That ejection was settled as "${found.held.outcome}"; there is no hold left to report on.`);
-    deps.store.noteEjection(found.held.id, note);
+    deps.store.ejections.noteEjection(found.held.id, note);
     return toolJson({ ejection: found.held.id, note, means: 'the held slot now says this on the fleet view.' });
   },
 });

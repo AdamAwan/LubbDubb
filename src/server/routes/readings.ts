@@ -12,7 +12,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   app.get(
     '/api/retrospectives/:ref',
     checked({ params: RefParams }, async ({ params }) => {
-      return { retrospective: store.getRetrospective(params.ref) } satisfies RetrospectivePayload;
+      return { retrospective: store.scratch.getRetrospective(params.ref) } satisfies RetrospectivePayload;
     }),
   );
 
@@ -25,7 +25,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         return reply
           .code(400)
           .send({ error: `${ref} is inside neither an issue nor a pull request, so it names no scratchpad` });
-      return { padRef, entries: store.listScratchEntries(padRef) } satisfies ScratchpadPayload;
+      return { padRef, entries: store.scratch.listScratchEntries(padRef) } satisfies ScratchpadPayload;
     }),
   );
 }

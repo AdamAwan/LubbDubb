@@ -14,11 +14,11 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 test('recordAgentUsage stores cumulative values and window-sums the deltas', () => {
   let at = '2026-07-22T10:00:00.000Z';
   const store = new Store(':memory:', () => at);
-  const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  assert.equal(store.getAgent(agent.id)!.costUsd, null);
+  const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  assert.equal(store.agents.getAgent(agent.id)!.costUsd, null);
 
-  store.recordAgentUsage(agent.id, {
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 0.5,
     inputTokens: 1000,
     outputTokens: 200,
@@ -27,7 +27,7 @@ test('recordAgentUsage stores cumulative values and window-sums the deltas', () 
     numTurns: 1,
   });
   at = '2026-07-22T12:00:00.000Z';
-  store.recordAgentUsage(agent.id, {
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 1.25,
     inputTokens: 5000,
     outputTokens: 900,
@@ -36,7 +36,7 @@ test('recordAgentUsage stores cumulative values and window-sums the deltas', () 
     numTurns: 2,
   });
 
-  const after = store.getAgent(agent.id)!;
+  const after = store.agents.getAgent(agent.id)!;
   assert.equal(after.costUsd, 1.25);
   assert.equal(after.inputTokens, 5000);
   assert.equal(after.outputTokens, 900);
@@ -51,9 +51,9 @@ test('recordAgentUsage stores cumulative values and window-sums the deltas', () 
 
 test('a regressed cumulative total never produces a negative window delta', () => {
   const store = new Store(':memory:', () => '2026-07-22T10:00:00.000Z');
-  const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  store.recordAgentUsage(agent.id, {
+  const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 1.0,
     inputTokens: null,
     outputTokens: null,
@@ -61,7 +61,7 @@ test('a regressed cumulative total never produces a negative window delta', () =
     cacheCreationTokens: null,
     numTurns: null,
   });
-  store.recordAgentUsage(agent.id, {
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 0.2,
     inputTokens: null,
     outputTokens: null,
@@ -113,7 +113,7 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'done @@LUBBDUBB_DONE@@' }] } });
   child.emitLine({
@@ -129,7 +129,7 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
     },
   });
 
-  const agent = system.store.getAgent(agentId)!;
+  const agent = system.store.agents.getAgent(agentId)!;
   assert.equal(agent.status, 'done');
   assert.equal(agent.costUsd, 0.42);
   assert.equal(agent.inputTokens, 900 + 4000 + 55_000, 'cache tokens count as input');

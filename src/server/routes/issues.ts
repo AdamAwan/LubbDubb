@@ -104,8 +104,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(400).send({ error: message });
       }
 
-      store.patchWorldState({ number, state });
-      store.patchTicketState({ number, state });
+      store.world.patchWorldState({ number, state });
+      store.tickets.patchTicketState({ number, state });
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, state };
@@ -170,7 +170,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: PriorityBody }, async ({ params, body }) => {
       const { number: issueNumber } = params;
       const { priority } = body;
-      store.setGoalPriority(issueConclusionOrigin(issueNumber), priority);
+      store.priority.setGoalPriority(issueConclusionOrigin(issueNumber), priority);
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, priority, report };
@@ -190,11 +190,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { verdict, note } = body;
       const originRef = issueConclusionOrigin(issueNumber);
       if (verdict === null) {
-        store.clearIssueConclusion(originRef);
+        store.verdicts.clearIssueConclusion(originRef);
         hub.broadcast({ type: 'world:changed' });
         return { ok: true, verdict: null };
       }
-      const conclusion = store.recordIssueConclusion({
+      const conclusion = store.verdicts.recordIssueConclusion({
         originRef,
         verdict,
         note: note ?? 'Set by the operator from the cockpit.',
@@ -251,14 +251,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { verdict, summary } = body;
       const originRef = issueConclusionOrigin(issueNumber);
       if (verdict === null) {
-        store.clearAppraisal(originRef);
+        store.verdicts.clearAppraisal(originRef);
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, appraisal: null };
       }
-      const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
+      const issue = store.world.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
-      const appraisal = store.recordAppraisal({
+      const appraisal = store.verdicts.recordAppraisal({
         originRef,
         verdict,
         summary: summary ?? 'Set by the operator from the cockpit.',
@@ -282,12 +282,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { delivered, summary } = body;
       const originRef = issueConclusionOrigin(issueNumber);
       if (!delivered) {
-        store.clearDelivery(originRef);
+        store.verdicts.clearDelivery(originRef);
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, delivered: false };
       }
-      const delivery = store.recordDelivery({
+      const delivery = store.verdicts.recordDelivery({
         originRef,
         summary: summary ?? 'Marked delivered by the operator.',
         by: 'operator',
@@ -302,11 +302,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: GateReleaseBody }, async ({ params, body }) => {
       const goalRef = issueConclusionOrigin(params.number);
       if (!body.released) {
-        store.clearEnvironmentGateRelease(goalRef);
+        store.environments.clearEnvironmentGateRelease(goalRef);
         hub.broadcast({ type: 'world:changed' });
         return { ok: true, released: null };
       }
-      const release = store.releaseEnvironmentGate(goalRef, body.note ?? '');
+      const release = store.environments.releaseEnvironmentGate(goalRef, body.note ?? '');
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, released: release };
@@ -319,12 +319,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { number: issueNumber } = params;
       const originRef = issueConclusionOrigin(issueNumber);
       if (body.cause === null) {
-        store.clearShortfall(originRef);
+        store.verdicts.clearShortfall(originRef);
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, shortfall: null };
       }
-      const shortfall = store.recordShortfall({
+      const shortfall = store.verdicts.recordShortfall({
         originRef,
         cause: body.cause ?? null,
         partSlug: body.part ?? null,
@@ -365,7 +365,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(400).send({
           error: `note is required — ${validationHeadline(validation.verdict)} Say what you are doing about them, or waive them first.`,
         });
-      const dismissed = store.dismissIssueRun(origin, body.note ?? null);
+      const dismissed = store.floor.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
       const cleared = clearGoalWork(store, system.agents, params.number);
       hub.broadcast({ type: 'dirty' });
@@ -385,7 +385,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/issues/:number/bug',
     checked({ params: IssueNumberParams }, async ({ params, req, reply }) => {
       const { number: issueNumber } = params;
-      const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
+      const issue = store.world.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
       const tracker = trackerCoordinates(config);
       if (!tracker)
@@ -396,12 +396,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return checked({ body: RaiseBugBody }, async ({ body }) => {
         const derived = bugTicketFields(issue, body.summary, tracker);
         const title = body.title ?? derived.title;
-        const candidates = renderCandidates(dedupeCandidates(store.listTrackerItems(), body.summary));
+        const candidates = renderCandidates(dedupeCandidates(store.tickets.listTrackerItems(), body.summary));
         const prompt = [system.prompts.render('raise-bug', derived.vars), candidates]
           .filter((part) => part !== null)
           .join('\n\n');
-        const job = store.createJob({ title, prompt, kind: 'desk' });
-        const filing = store.createBugFiling({ jobId: job.id, originRef: issueConclusionOrigin(issueNumber) });
+        const job = store.jobs.createJob({ title, prompt, kind: 'desk' });
+        const filing = store.bugFilings.createBugFiling({
+          jobId: job.id,
+          originRef: issueConclusionOrigin(issueNumber),
+        });
         hub.broadcast({ type: 'world:changed' });
         const report = await harness.runCycle('manual');
         return { ok: true, filing, job, report };
@@ -428,11 +431,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/issues/:number/agents',
     checked({ params: IssueNumberParams, query: GoalAgentsQuery }, async ({ params, query }) => {
       const ref = issueConclusionOrigin(params.number);
-      const tasks = store.listGoalTasks(
+      const tasks = store.tasks.listGoalTasks(
         ref,
         query.prs.map((n) => `pr:${n}`),
       );
-      return { ref, agents: store.listAgentsForTasks(tasks.map((t) => t.id)), tasks } satisfies GoalAgentsPayload;
+      return {
+        ref,
+        agents: store.agents.listAgentsForTasks(tasks.map((t) => t.id)),
+        tasks,
+      } satisfies GoalAgentsPayload;
     }),
   );
 

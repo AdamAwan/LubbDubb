@@ -123,7 +123,7 @@ test('no rule fires on a watched pull request somebody else opened', async () =>
   system.connector.inject({ kind: 'pr_comment', prNumber: 42, author: 'priya', body: 'please rename this' });
   await system.harness.runCycle('manual');
 
-  const origins = system.store.listTasks().map((t) => t.originRef);
+  const origins = system.store.tasks.listTasks().map((t) => t.originRef);
   assert.equal(
     origins.some((o) => o?.startsWith('pr:42')),
     false,
@@ -152,7 +152,7 @@ test('the same pull request is worked once it is the harness’s own', async () 
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     true,
   );
   system.store.close();

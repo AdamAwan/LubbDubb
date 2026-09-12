@@ -48,7 +48,7 @@ test('a restart closes the PR, drops the branch and puts the part back on the fl
 
   assert.deepEqual(worktrees.deleted, ['issue/12/api']);
 
-  const dispatched = system.store.listTasks().find((t) => t.originRef === partOrigin(ISSUE, 'api'));
+  const dispatched = system.store.tasks.listTasks().find((t) => t.originRef === partOrigin(ISSUE, 'api'));
   assert.ok(dispatched, 'the part was dispatched again');
   await close();
 });
@@ -82,7 +82,7 @@ test('a restart refuses a part that has already merged', async () => {
   const { system, app, close } = await build();
   const plan = seedRunningPlan(system);
   const part = partOf(system, plan, 'api');
-  system.store.updatePlanPart(part.id, { status: 'merged', branch: 'issue/12/api', prNumber: PR });
+  system.store.plans.updatePlanPart(part.id, { status: 'merged', branch: 'issue/12/api', prNumber: PR });
 
   const res = await app.inject({
     method: 'POST',
@@ -99,7 +99,7 @@ test('a restart refuses while an agent is still on the part', async () => {
   const { system, app, worktrees, close } = await build();
   const plan = seedRunningPlan(system);
   inReview(system, plan, 'api', 'issue/12/api', PR);
-  system.store.createTask({
+  system.store.tasks.createTask({
     kind: 'code',
     title: 'still going',
     prompt: 'p',
@@ -234,17 +234,17 @@ function seedRunningPlan(system: System): Plan {
     originRef: `issue:${ISSUE}`,
     title: 'Big thing',
   });
-  system.store.setPlanStatus(plan.id, 'active');
-  return system.store.getPlan(plan.id)!;
+  system.store.plans.setPlanStatus(plan.id, 'active');
+  return system.store.plans.getPlan(plan.id)!;
 }
 
 function inReview(system: System, plan: Plan, slug: string, branch: string, prNumber: number): void {
-  system.store.updatePlanPart(partOf(system, plan, slug).id, { status: 'in_review', branch, prNumber });
+  system.store.plans.updatePlanPart(partOf(system, plan, slug).id, { status: 'in_review', branch, prNumber });
   system.connector.inject({ kind: 'new_pr', number: prNumber, title: 'API', branch });
 }
 
 function partOf(system: System, plan: Plan, slug: string): PlanPart {
-  const part = system.store.listPlanParts(plan.id).find((p) => p.slug === slug);
+  const part = system.store.plans.listPlanParts(plan.id).find((p) => p.slug === slug);
   assert.ok(part, `no part "${slug}"`);
   return part;
 }

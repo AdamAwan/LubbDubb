@@ -79,7 +79,7 @@ async function call(system: System, agent: Agent, tool: string, args: Record<str
 
 function agentOn(system: System, originRef: string): Agent | undefined {
   const task = findTask(system.store, (t) => t.originRef === originRef);
-  return task ? system.store.listAgents().find((a) => a.taskId === task.id) : undefined;
+  return task ? system.store.agents.listAgents().find((a) => a.taskId === task.id) : undefined;
 }
 
 async function authored(system: System): Promise<{ author: Agent; pack: ReviewPack }> {
@@ -128,7 +128,7 @@ async function authored(system: System): Promise<{ author: Agent; pack: ReviewPa
     ],
   });
   assert.equal(submitted.isError, false, submitted.text);
-  return { author: author!, pack: system.store.getCurrentReviewPack(7)!.pack };
+  return { author: author!, pack: system.store.reviewPacks.getCurrentReviewPack(7)!.pack };
 }
 
 function fullCheck(pack: ReviewPack, extra: Record<string, unknown> = {}): Record<string, unknown> {
@@ -377,7 +377,7 @@ test('a pause between the two runs leaves the pack unchecked, and says so', asyn
     findTask(system.store, (t) => t.originRef === checkOrigin(7)),
     undefined,
   );
-  assert.ok(system.store.listErrors().some((e) => /PR #7 was not checked: dispatch is paused/.test(e.message)));
+  assert.ok(system.store.errors.listErrors().some((e) => /PR #7 was not checked: dispatch is paused/.test(e.message)));
   system.store.close();
 });
 
@@ -399,10 +399,10 @@ test('the checker’s verdicts land on the stored document and nothing else in i
   assert.match(res.text, /"false": 1/);
   assert.match(res.text, /"cant_tell": 1/);
 
-  const record = system.store.getCurrentReviewPack(7)!;
+  const record = system.store.reviewPacks.getCurrentReviewPack(7)!;
   const after = record.pack;
   assert.equal(after.headSha, HEAD);
-  assert.equal(system.store.listReviewPacks(7).length, 1, 'the same row, re-recorded');
+  assert.equal(system.store.reviewPacks.listReviewPacks(7).length, 1, 'the same row, re-recorded');
   const [idea, plumbing] = after.ideas;
   assert.equal(idea!.attention, 'read');
   assert.equal(idea!.cue, 'One import, but it is the whole change.');
@@ -452,7 +452,7 @@ test('the checker’s verdicts land on the stored document and nothing else in i
   assert.equal(got.checking, true, 'the checker is still alive after its call');
   await app.close();
 
-  const pid = system.store.getAgent(checker.id)?.pid;
+  const pid = system.store.agents.getAgent(checker.id)?.pid;
   system.agents.kill(checker.id);
   assert.ok(reaps.includes(pid!), 'the subtree is reaped through session.kill()');
   assert.ok(worktrees.removed.includes(checkLeaseKey(7, HEAD)));
@@ -503,7 +503,7 @@ test('a check is refused by field name and lands once fixed; the tool is refused
   assert.equal(unordered.isError, true);
   assert.match(unordered.text, /order must name every idea once, and leaves out: plumbing/);
 
-  assert.equal(system.store.getCurrentReviewPack(7)!.pack.order.length, 0, 'nothing landed');
+  assert.equal(system.store.reviewPacks.getCurrentReviewPack(7)!.pack.order.length, 0, 'nothing landed');
   const fixedIdeas = [
     ideas[0],
     {
@@ -520,7 +520,7 @@ test('a check is refused by field name and lands once fixed; the tool is refused
   ];
   const fixed = await call(system, checker, 'review_pack_check', { ...good, ideas: fixedIdeas });
   assert.equal(fixed.isError, false, fixed.text);
-  const landed = system.store.getCurrentReviewPack(7)!.pack;
+  const landed = system.store.reviewPacks.getCurrentReviewPack(7)!.pack;
   assert.deepEqual(landed.ideas[1]!.claims[0]!.finding, { headline: 'h', body: 'b', step: 1, counter: null });
   system.store.close();
 });

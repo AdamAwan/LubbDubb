@@ -426,13 +426,13 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
   const { system } = systemWithPlans();
   const { app } = await buildApp(system);
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.' });
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -471,9 +471,9 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
 
   const replanned = await app.inject({ method: 'POST', url: `/api/plans/${stored.id}/replan` });
   assert.equal(replanned.statusCode, 200);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'planning');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12')?.status, 'planning');
   assert.deepEqual(
-    system.store.listPlanParts(stored.id).map((p) => p.slug),
+    system.store.plans.listPlanParts(stored.id).map((p) => p.slug),
     ['schema', 'api'],
   );
   const planner = findTask(system.store, (t) => t.originRef === 'issue:12:plan');

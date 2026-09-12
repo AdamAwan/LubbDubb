@@ -80,8 +80,8 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
 }
 
 function arrived(system: System, environment = 'testUk'): void {
-  system.store.ingestGoalWatch('issue:12', [SIGNAL]);
-  system.store.recordGoalArrival({
+  system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment,
     arrivedAt: new Date(Date.now() - 60_000).toISOString(),
@@ -90,7 +90,7 @@ function arrived(system: System, environment = 'testUk'): void {
 
 function delivered(system: System): void {
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
 }
 
 test('a settled-regressed watch files one row, and a second reading files no second one', async () => {
@@ -99,14 +99,14 @@ test('a settled-regressed watch files one row, and a second reading files no sec
   arrived(system);
 
   await system.harness.runCycle();
-  const filed = system.store.listHumanTasksOfKind('watch');
+  const filed = system.store.humanTasks.listHumanTasksOfKind('watch');
   assert.equal(filed.length, 1);
   assert.match(filed[0]!.title, /watch on testUk/);
   assert.equal(filed[0]!.originRef, 'issue:12');
   assert.match(filed[0]!.detail ?? '', /Job X stops timing out/);
   assert.match(filed[0]!.detail ?? '', /answered 1 row where the check declared none at all/);
 
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -117,7 +117,7 @@ test('a settled-regressed watch files one row, and a second reading files no sec
   });
   await system.harness.runCycle();
 
-  const after = system.store.listHumanTasksOfKind('watch');
+  const after = system.store.humanTasks.listHumanTasksOfKind('watch');
   assert.equal(after.length, 1, 'one row per window, never one per reading');
   assert.equal(after[0]!.id, filed[0]!.id);
   assert.match(after[0]!.detail ?? '', /4 rows/, 'and its detail states what the watch says now');
@@ -132,8 +132,8 @@ test('a settled-unknown watch files nothing — it is not a finding', async () =
   await system.harness.runCycle();
   await system.harness.runCycle();
 
-  assert.notEqual(system.store.listWatchWindows()[0]?.settledAt, null, 'settled, and settled unread');
-  assert.deepEqual(system.store.listHumanTasksOfKind('watch'), []);
+  assert.notEqual(system.store.watches.listWatchWindows()[0]?.settledAt, null, 'settled, and settled unread');
+  assert.deepEqual(system.store.humanTasks.listHumanTasksOfKind('watch'), []);
   system.store.close();
 });
 
@@ -142,10 +142,10 @@ test('a reading that comes back clean retracts the row, and a later regression b
   const system = build(observer, [OPEN]);
   arrived(system);
   await system.harness.runCycle();
-  const [row] = system.store.listHumanTasksOfKind('watch');
+  const [row] = system.store.humanTasks.listHumanTasksOfKind('watch');
   assert.equal(row?.status, 'open');
 
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -155,11 +155,11 @@ test('a reading that comes back clean retracts the row, and a later regression b
     detail: null,
   });
   await system.harness.runCycle();
-  const settled = system.store.getHumanTask(row!.id)!;
+  const settled = system.store.humanTasks.getHumanTask(row!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /Settled by the harness/);
 
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -169,9 +169,9 @@ test('a reading that comes back clean retracts the row, and a later regression b
     detail: 'testUk answered 2 rows where the check declared none at all.',
   });
   await system.harness.runCycle();
-  const back = system.store.getHumanTask(row!.id)!;
+  const back = system.store.humanTasks.getHumanTask(row!.id)!;
   assert.equal(back.status, 'open', 'reopened rather than re-filed');
-  assert.equal(system.store.listHumanTasksOfKind('watch').length, 1);
+  assert.equal(system.store.humanTasks.listHumanTasksOfKind('watch').length, 1);
   system.store.close();
 });
 
@@ -184,7 +184,7 @@ test('the close-out carries what the watch says and does not hold it, with holds
   await system.harness.runCycle();
   await system.harness.runCycle();
 
-  const [row] = system.store.listHumanTasksOfKind('close_out');
+  const [row] = system.store.humanTasks.listHumanTasksOfKind('close_out');
   assert.ok(row, 'a watch holds nothing by default — the row is filed while it is open');
   assert.equal(row.status, 'open');
   assert.match(row.detail ?? '', /testUk is answering outside what was declared/);
@@ -200,11 +200,11 @@ test('a goal delivered with a watch still open closes in front of the reading, n
 
   await system.harness.runCycle();
   await system.harness.runCycle();
-  const [row] = system.store.listHumanTasksOfKind('close_out');
+  const [row] = system.store.humanTasks.listHumanTasksOfKind('close_out');
   assert.match(row!.detail ?? '', /read every declared check clean/);
   assert.match(row!.detail ?? '', /still open, and holds nothing/);
 
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -214,7 +214,7 @@ test('a goal delivered with a watch still open closes in front of the reading, n
     detail: 'the watch could not read testUk',
   });
   await system.harness.runCycle();
-  assert.match(system.store.getHumanTask(row!.id)!.detail ?? '', /could not be read/);
+  assert.match(system.store.humanTasks.getHumanTask(row!.id)!.detail ?? '', /could not be read/);
   system.store.close();
 });
 
@@ -227,14 +227,14 @@ test('holds: ["close_out"] withholds the row while the window is open, and relea
   await system.harness.runCycle();
   await system.harness.runCycle();
   assert.deepEqual(
-    system.store.listHumanTasksOfKind('close_out'),
+    system.store.humanTasks.listHumanTasksOfKind('close_out'),
     [],
     'the stricter thing a team opts into — and it withholds from the delivery, not from the arrival',
   );
 
-  system.store.settleWatchWindow('issue:12', 'testUk');
+  system.store.watches.settleWatchWindow('issue:12', 'testUk');
   await system.harness.runCycle();
-  const [row] = system.store.listHumanTasksOfKind('close_out');
+  const [row] = system.store.humanTasks.listHumanTasksOfKind('close_out');
   assert.ok(row, 'a settled watch has said what it is going to say');
   assert.match(row.detail ?? '', /read every declared check clean/);
   system.store.close();
@@ -246,7 +246,7 @@ test('extend re-opens the settled window, and the verdict it fixed is still read
   arrived(system);
   await system.harness.runCycle();
 
-  system.store.recordWatchReading({
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -255,21 +255,21 @@ test('extend re-opens the settled window, and the verdict it fixed is still read
     value: null,
     detail: 'testUk answered 1 row where the check declared none at all.',
   });
-  const before = system.store.listWatchWindows()[0]!;
+  const before = system.store.watches.listWatchWindows()[0]!;
   assert.notEqual(before.settledAt, null);
 
-  const extended = system.store.extendWatchWindow(
+  const extended = system.store.watches.extendWatchWindow(
     'issue:12',
     'testUk',
     new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   );
 
-  assert.equal(system.store.listWatchWindows().length, 1, 'one window, not two');
+  assert.equal(system.store.watches.listWatchWindows().length, 1, 'one window, not two');
   assert.equal(extended?.settledAt, null, 'watching again');
   assert.notEqual(extended?.extendedAt, null, 'and stamped, so the card can say why its end is not the arrival’s');
   assert.equal(extended?.openedAt, before.openedAt, 'and nothing else moved');
   assert.deepEqual(
-    system.store.listWatchReadings().map((r) => r.verdict),
+    system.store.watches.listWatchReadings().map((r) => r.verdict),
     ['regressed'],
     'the verdict that was fixed is still readable',
   );
@@ -280,8 +280,8 @@ test('extend answers nothing for a goal or environment with no window', () => {
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer, [OPEN]);
   const at = new Date(Date.now() + 1000).toISOString();
-  assert.equal(system.store.extendWatchWindow('issue:12', 'testUk', at), null);
-  assert.deepEqual(system.store.listWatchWindows(), []);
+  assert.equal(system.store.watches.extendWatchWindow('issue:12', 'testUk', at), null);
+  assert.deepEqual(system.store.watches.listWatchWindows(), []);
   system.store.close();
 });
 
@@ -299,7 +299,7 @@ test('the extend route refuses a window that is not there, and an environment th
 
   const extended = await app.inject({ method: 'POST', url: '/api/issues/12/watch/testUk/extend' });
   assert.equal(extended.statusCode, 200);
-  assert.notEqual(system.store.listWatchWindows()[0]?.extendedAt, null);
+  assert.notEqual(system.store.watches.listWatchWindows()[0]?.extendedAt, null);
   await app.close();
   system.store.close();
 });
@@ -312,9 +312,9 @@ test('nothing a finding does is written as a WorldEvent', async () => {
 
   await system.harness.runCycle();
   await system.harness.runCycle();
-  assert.equal(system.store.listHumanTasksOfKind('watch').length, 1, 'the finding did happen');
+  assert.equal(system.store.humanTasks.listHumanTasksOfKind('watch').length, 1, 'the finding did happen');
 
-  const events = system.store.listWorldEvents();
+  const events = system.store.world.listWorldEvents();
   assert.deepEqual(
     events.filter((e) => /watch|regress/i.test(`${e.kind} ${e.summary}`)),
     [],
@@ -326,15 +326,15 @@ test('nothing a finding does is written as a WorldEvent', async () => {
 test('the row carries the declaration the reading is measured against, so it can be acted on from the row', async () => {
   const observer = new FakeEnvironmentObserver(REGRESSED);
   const system = build(observer, [OPEN]);
-  system.store.ingestGoalWatch('issue:12', [{ ...SIGNAL, why: 'job X timing out is what the fix was for' }]);
-  system.store.recordGoalArrival({
+  system.store.watches.ingestGoalWatch('issue:12', [{ ...SIGNAL, why: 'job X timing out is what the fix was for' }]);
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'testUk',
     arrivedAt: new Date(Date.now() - 60_000).toISOString(),
   });
 
   await system.harness.runCycle();
-  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+  const detail = system.store.humanTasks.listHumanTasksOfKind('watch')[0]?.detail ?? '';
 
   assert.match(detail, /^### Job X stops timing out$/m, 'the check\u2019s title is a heading, not another paragraph');
   assert.match(detail, /Why it was declared:\*\* job X timing out is what the fix was for/);
@@ -358,7 +358,7 @@ test('a queryUrl puts a link to run the query on the row, and no template draws 
   arrived(system);
 
   await system.harness.runCycle();
-  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+  const detail = system.store.humanTasks.listHumanTasksOfKind('watch')[0]?.detail ?? '';
 
   assert.match(
     detail,
@@ -371,7 +371,7 @@ test('a queryUrl puts a link to run the query on the row, and no template draws 
   arrived(plain);
   await plain.harness.runCycle();
   assert.doesNotMatch(
-    plain.store.listHumanTasksOfKind('watch')[0]?.detail ?? '',
+    plain.store.humanTasks.listHumanTasksOfKind('watch')[0]?.detail ?? '',
     /Run it on/,
     'an environment that named no template draws no link rather than a dead one',
   );
@@ -384,7 +384,7 @@ test('a check that declared no why still carries its query, and says nothing whe
   arrived(system);
 
   await system.harness.runCycle();
-  const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
+  const detail = system.store.humanTasks.listHumanTasksOfKind('watch')[0]?.detail ?? '';
 
   assert.doesNotMatch(detail, /Why it was declared/);
   assert.match(detail, /To see the rows yourself/);

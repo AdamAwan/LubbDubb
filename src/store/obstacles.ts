@@ -41,7 +41,7 @@ interface ObstacleObserver {
   whyNotMine: string | null;
 }
 
-export interface ObstacleOutcome {
+interface ObstacleOutcome {
   obstacle: Obstacle;
   filed: boolean;
   voices: number;

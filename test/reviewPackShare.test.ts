@@ -72,12 +72,12 @@ function build(over: { closedPrWindowMs?: number; transport?: FakePoolTransport 
 
 function agentOn(system: System, originRef: string): Agent | undefined {
   const tasks = new Set(
-    system.store
+    system.store.tasks
       .listTasks()
       .filter((t) => t.originRef === originRef)
       .map((t) => t.id),
   );
-  return system.store.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
+  return system.store.agents.listAgents().find((a) => tasks.has(a.taskId) && a.status === 'running');
 }
 
 async function authored(system: System, code = 'line one\nline two\nline three\n'): Promise<void> {
@@ -158,8 +158,8 @@ test('a pack is shared only when somebody shares it, and the document and its co
     false,
     'the pack is never fetched back',
   );
-  assert.deepEqual(system.store.listObstacles(), [], 'a shared pack files nothing');
-  assert.equal(system.store.listErrors().length, 0);
+  assert.deepEqual(system.store.obstacles.listObstacles(), [], 'a shared pack files nothing');
+  assert.equal(system.store.errors.listErrors().length, 0);
 
   const after = (await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' })).json() as ReviewPackPayload;
   assert.ok(after.sharing.share!.publishedAt, 'the read says it is in the pool');
@@ -169,9 +169,9 @@ test('a pack is shared only when somebody shares it, and the document and its co
 
 test('the secret backstop runs over the embedded code, refuses, names the line, and rewrites nothing', async () => {
   const { system, transport } = await openPrWithPack();
-  const packed = system.store.getCurrentReviewPack(7)!;
+  const packed = system.store.reviewPacks.getCurrentReviewPack(7)!;
   packed.pack.ideas[0]!.anchors[1]!.code = ['line one', 'const token = "ghp_0123456789abcdefghij";'];
-  system.store.recordReviewPack(packed.pack);
+  system.store.reviewPacks.recordReviewPack(packed.pack);
 
   const { app } = await buildApp(system);
   const refused = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack/share' });
@@ -186,8 +186,8 @@ test('the secret backstop runs over the embedded code, refuses, names the line, 
     transport.published.filter((d) => d.kind === 'pack'),
     [],
   );
-  assert.equal(system.store.getReviewPackShare(7), null, 'a refusal with somebody to tell writes no row');
-  assert.ok(system.store.getCurrentReviewPack(7), 'and the local pack is untouched');
+  assert.equal(system.store.reviewPacks.getReviewPackShare(7), null, 'a refusal with somebody to tell writes no row');
+  assert.ok(system.store.reviewPacks.getCurrentReviewPack(7), 'and the local pack is untouched');
   await app.close();
   system.store.close();
 });
@@ -209,8 +209,8 @@ test('a shared pack is pruned once its pull request has been closed long enough,
   assert.deepEqual(transport.unpublished, [{ fleetId: FLEET, prNumber: 7 }]);
   assert.equal(transport.packs.size, 0, 'and the companion with it');
   assert.equal(transport.companions.has(reviewPackCompanionPath(FLEET, 7)), false);
-  assert.equal(system.store.getReviewPackShare(7), null);
-  assert.ok(system.store.getCurrentReviewPack(7), 'the fleet keeps its own record');
+  assert.equal(system.store.reviewPacks.getReviewPackShare(7), null);
+  assert.ok(system.store.reviewPacks.getCurrentReviewPack(7), 'the fleet keeps its own record');
 
   await system.pool!.run();
   assert.equal(transport.unpublished.length, 1);

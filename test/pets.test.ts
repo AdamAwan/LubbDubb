@@ -43,16 +43,16 @@ const BUILD = { sha: 'build_one', clean: true };
 
 function ledger(store: Store, build = BUILD): PetLedger {
   return {
-    actions: store.petActionIndex(),
-    paid: store.petPaidTotals(),
-    chain: replayChain(store.petChainLog()),
-    barren: replayBarren(store.petActionLog(), PET_RULES, started(store)),
+    actions: store.pets.petActionIndex(),
+    paid: store.pets.petPaidTotals(),
+    chain: replayChain(store.pets.petChainLog()),
+    barren: replayBarren(store.pets.petActionLog(), PET_RULES, started(store)),
     build,
   };
 }
 
 function started(store: Store): string {
-  const at = store.vivariumStart();
+  const at = store.pets.vivariumStart();
   assert.ok(at !== null, 'a scan stamps the start, and every keeper here has scanned');
   return at;
 }
@@ -62,20 +62,26 @@ const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', '
 const LIVE_KINDS: PetActionKind[] = KINDS.filter((kind) => kind !== 'claim');
 
 function settle(store: Store, title: string): string {
-  const { task } = store.recordHumanTask({ title, detail: '', agentId: null, taskId: null, originRef: null });
-  store.settleHumanTask(task.id, 'done', 'sorted');
+  const { task } = store.humanTasks.recordHumanTask({
+    title,
+    detail: '',
+    agentId: null,
+    taskId: null,
+    originRef: null,
+  });
+  store.humanTasks.settleHumanTask(task.id, 'done', 'sorted');
   return task.id;
 }
 
 function answer(store: Store, prompt: string): string {
-  const escalation = store.createEscalation({
+  const escalation = store.escalations.createEscalation({
     type: 'answer_question',
     prompt,
     context: {},
     agentId: null,
     taskId: null,
   });
-  store.answerEscalation(escalation.id, 'go ahead');
+  store.escalations.answerEscalation(escalation.id, 'go ahead');
   return escalation.id;
 }
 
@@ -95,7 +101,7 @@ test('scanning twice hatches nothing the second time', () => {
   assert.equal(first.length, 1, 'a certain drop chance hatches on the first pass');
   const second = pets.scan();
   assert.deepEqual(second, [], 'the second pass over the same world writes nothing');
-  assert.equal(store.listPets().length, 1);
+  assert.equal(store.pets.listPets().length, 1);
 });
 
 test('an action that hatched nothing is still recorded, so pity can count it', () => {
@@ -104,7 +110,7 @@ test('an action that hatched nothing is still recorded, so pity can count it', (
   answer(store, 'a question nobody gets a pet for');
   assert.equal(pets.scan().length, 1, 'only the first-of-kind hatches at a zero chance');
   assert.equal(
-    store.petActionsSinceHatch(started(store)).get('escalation'),
+    store.pets.petActionsSinceHatch(started(store)).get('escalation'),
     1,
     'a miss is a row, or the counter can never move',
   );
@@ -116,7 +122,7 @@ test('pity forces a hatch once enough actions have missed', () => {
   const hatched = pets.scan();
   assert.equal(hatched.length, 2, 'the first action ever, and then the one pity forces');
   assert.equal(
-    store.petActionsSinceHatch(started(store)).get('escalation') ?? 0,
+    store.pets.petActionsSinceHatch(started(store)).get('escalation') ?? 0,
     0,
     'and the counter resets behind it',
   );
@@ -131,10 +137,10 @@ test('pity is counted per kind, so a busy action cannot spend a quiet one’s fl
   for (let i = 0; i < 10; i++) settle(store, `task ${i}`);
   pets.scan();
 
-  const byKind = store.petActionsSinceHatch(started(store));
+  const byKind = store.pets.petActionsSinceHatch(started(store));
   assert.equal(byKind.get('escalation'), 1, 'the escalation counter counts escalations only');
   assert.ok((byKind.get('human-task') ?? 0) > 0, 'and the task counter runs on its own');
-  const hatched = store.listPets().filter((pet) => pet.originKind === 'escalation' && pet.originRef !== undefined);
+  const hatched = store.pets.listPets().filter((pet) => pet.originKind === 'escalation' && pet.originRef !== undefined);
   assert.ok(hatched.length >= 1, 'the guaranteed first one is still the only escalation pet');
 });
 
@@ -200,8 +206,8 @@ test('a backlog from before the vivarium started is recorded, and pays for nothi
   settle(store, 'a task from before pets existed');
 
   assert.deepEqual(pets.scan(), [], 'a deployment’s whole history is not one afternoon’s work');
-  assert.deepEqual(store.listPets(), []);
-  const log = store.petActionLog();
+  assert.deepEqual(store.pets.listPets(), []);
+  const log = store.pets.petActionLog();
   assert.equal(log.length, 2, 'recorded all the same, or they stay fresh forever');
   assert.deepEqual(
     log.map((row) => row.petId),
@@ -209,7 +215,7 @@ test('a backlog from before the vivarium started is recorded, and pays for nothi
     'inert rather than pending: written with no pet',
   );
   assert.deepEqual(
-    [...store.petActionsSinceHatch(started(store)).values()],
+    [...store.pets.petActionsSinceHatch(started(store)).values()],
     [],
     'and lending no pity floor to whatever comes next',
   );
@@ -230,10 +236,10 @@ test('a clearance re-stamps the start, so what it leaves standing lends nothing'
 
   const reset = pets.resetOnce();
   assert.ok(reset);
-  assert.equal(store.vivariumStart(), reset.at, 'the start moves to the clearance');
+  assert.equal(store.pets.vivariumStart(), reset.at, 'the start moves to the clearance');
   assert.ok(reset.at > before, 'which is later than where the vivarium began');
   assert.deepEqual(
-    [...store.petActionsSinceHatch(started(store)).values()],
+    [...store.pets.petActionsSinceHatch(started(store)).values()],
     [],
     'the six actions it left standing are behind the new start, so no floor is inherited',
   );
@@ -254,9 +260,9 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
     for (let i = 0; i < 20; i++) answer(store, `question ${i}`);
     for (let i = 0; i < 20; i++) settle(store, `task ${i}`);
     pets.scan();
-    const collection = store.listPets().map((pet) => pet.id);
+    const collection = store.pets.listPets().map((pet) => pet.id);
     assert.ok(collection.length > 1, 'a collection worth carrying over');
-    const log = store.petActionLog();
+    const log = store.pets.petActionLog();
     const earliest = log.map((row) => row.at).sort()[0];
     const barren = [...replayBarren(log, PET_RULES, BEFORE_EVERYTHING)].sort();
     store.close();
@@ -268,14 +274,14 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
     const rebooted = new Store(path, clock);
     const back = new PetKeeper(rebooted, { enabled: true, visible: true }, rules({ dropChance: 0.5 }), () => BUILD);
     assert.deepEqual(back.scan(), [], 'nothing is rolled a second time');
-    assert.equal(rebooted.vivariumStart(), earliest, 'the start is the earliest action already rolled');
+    assert.equal(rebooted.pets.vivariumStart(), earliest, 'the start is the earliest action already rolled');
     assert.deepEqual(
-      rebooted.listPets().map((pet) => pet.id),
+      rebooted.pets.listPets().map((pet) => pet.id),
       collection,
       'and the collection is exactly the one from before',
     );
     assert.deepEqual(
-      [...replayBarren(rebooted.petActionLog(), PET_RULES, started(rebooted))].sort(),
+      [...replayBarren(rebooted.pets.petActionLog(), PET_RULES, started(rebooted))].sort(),
       barren,
       'the replay says precisely what it said when it had no boundary to honour',
     );
@@ -315,8 +321,8 @@ test('beats are derived from spend, and feeding refuses more than there is', () 
   const broke = pets.feed(pet.id, 100);
   assert.equal(broke.ok, false, 'a fleet that has spent nothing has nothing to feed with');
 
-  const agent = store.createAgent({ taskId: 'task_1', cwd: '.', pid: null, sessionId: null });
-  store.recordAgentUsage(agent.id, {
+  const agent = store.agents.createAgent({ taskId: 'task_1', cwd: '.', pid: null, sessionId: null });
+  store.agents.recordAgentUsage(agent.id, {
     costUsd: 1,
     inputTokens: null,
     outputTokens: null,
@@ -331,14 +337,14 @@ test('beats are derived from spend, and feeding refuses more than there is', () 
   const fed = pets.feed(pet.id, 25);
   assert.equal(fed.ok, true);
   assert.equal(pets.state()?.wallet.balance, 0, 'the balance is the subtraction, not a stored column');
-  assert.equal(store.getPet(pet.id)?.fed, 25);
+  assert.equal(store.pets.getPet(pet.id)?.fed, 25);
 });
 
 test('the vivarium refuses a fifth pet rather than evicting one', () => {
   const { store, pets } = keeper({ dropChance: 1 });
   for (let i = 0; i < 5; i++) answer(store, `question ${i}`);
   pets.scan();
-  const all = store.listPets();
+  const all = store.pets.listPets();
   assert.equal(all.length, 5);
   assert.equal(all.filter((p) => p.placed).length, 4, 'the first four stand out; the fifth waits');
   const spare = all.find((p) => !p.placed);
@@ -353,22 +359,22 @@ test('an empty name puts the species’ own back', () => {
   const [pet] = pets.scan();
   assert.ok(pet);
   assert.equal(pets.rename(pet.id, 'Bramble').ok, true);
-  assert.equal(store.getPet(pet.id)?.name, 'Bramble');
+  assert.equal(store.pets.getPet(pet.id)?.name, 'Bramble');
   pets.rename(pet.id, null);
-  assert.equal(store.getPet(pet.id)?.name, null, 'cleared, so the card falls back to the display name');
+  assert.equal(store.pets.getPet(pet.id)?.name, null, 'cleared, so the card falls back to the display name');
 });
 
 test('turning pets off scans nothing and reports nothing, and deletes nothing', () => {
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'hatch me something');
   pets.scan();
-  assert.equal(store.listPets().length, 1);
+  assert.equal(store.pets.listPets().length, 1);
 
   const off = new PetKeeper(store, { enabled: false, visible: true });
   assert.deepEqual(off.scan(), []);
   assert.equal(off.state(), null, 'the cockpit draws nothing rather than an empty enclosure');
   assert.equal(off.feed('anything', 1).ok, false);
-  assert.equal(store.listPets().length, 1, 'and what hatched is still there');
+  assert.equal(store.pets.listPets().length, 1, 'and what hatched is still there');
 });
 
 test('hiding pets draws nothing and stops nothing', () => {
@@ -469,7 +475,7 @@ test('blending a duplicate credits beats and keeps the record', () => {
   const { store, pets } = keeper({ dropChance: 1, pity: 1_000 });
   for (let i = 0; i < 12; i++) answer(store, `question ${i}`);
   pets.scan();
-  const all = store.listPets();
+  const all = store.pets.listPets();
   const dupSpecies = all
     .map((pet) => pet.species)
     .find((species, _i, list) => list.filter((s) => s === species).length > 1);
@@ -483,7 +489,7 @@ test('blending a duplicate credits beats and keeps the record', () => {
   const result = pets.blend(victim.id);
   assert.equal(result.ok, true, 'a duplicate may be blended');
 
-  const after = store.getPet(victim.id);
+  const after = store.pets.getPet(victim.id);
   assert.ok(after, 'the row survives the blend — its origin line is the point of the panel');
   assert.notEqual(after.dissolvedAt, null, 'and carries the stamp that says so');
   assert.equal(after.species, victim.species, 'keeping its species');
@@ -500,7 +506,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   const { store, pets } = keeper({ dropChance: 1, pity: 1_000 });
   answer(store, 'the only question');
   pets.scan();
-  const [only] = store.listPets();
+  const [only] = store.pets.listPets();
   assert.ok(only);
   assert.equal(pets.open(only.id).ok, true);
   const refused = pets.blend(only.id);
@@ -508,7 +514,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
 
   for (let i = 0; i < 12; i++) answer(store, `filler ${i}`);
   pets.scan();
-  const dupes = store.listPets();
+  const dupes = store.pets.listPets();
   const species = dupes.map((p) => p.species).find((s, _i, l) => l.filter((x) => x === s).length > 1)!;
   const victim = dupes.find((p) => p.species === species)!;
   assert.equal(pets.open(victim.id).ok, true);
@@ -533,8 +539,8 @@ function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper 
 }
 
 function spend(store: Store, costUsd: number): void {
-  const agent = store.createAgent({ taskId: `task_${costUsd}`, cwd: '.', pid: null, sessionId: null });
-  store.recordAgentUsage(agent.id, {
+  const agent = store.agents.createAgent({ taskId: `task_${costUsd}`, cwd: '.', pid: null, sessionId: null });
+  store.agents.recordAgentUsage(agent.id, {
     costUsd,
     inputTokens: null,
     outputTokens: null,
@@ -553,7 +559,7 @@ test('a drop arrives as an egg, and opening it reveals rather than decides', () 
 
   const opened = pets.open(pet.id);
   assert.equal(opened.ok, true);
-  const after = store.getPet(pet.id)!;
+  const after = store.pets.getPet(pet.id)!;
   assert.notEqual(after.openedAt, null, 'and the stamp is the whole of what opening writes');
 
   assert.equal(after.species, pet.species, 'the species is the one the roll landed on');
@@ -562,7 +568,7 @@ test('a drop arrives as an egg, and opening it reveals rather than decides', () 
 
   const again = pets.open(pet.id);
   assert.equal(again.ok, true, 'a second open is a success — a double click is not an error');
-  assert.equal(store.getPet(pet.id)?.openedAt, after.openedAt, 'and it does not move the stamp');
+  assert.equal(store.pets.getPet(pet.id)?.openedAt, after.openedAt, 'and it does not move the stamp');
 });
 
 test('an egg cannot be fed or blended, and can still be put out', () => {
@@ -570,7 +576,7 @@ test('an egg cannot be fed or blended, and can still be put out', () => {
   spend(store, 1);
   for (let i = 0; i < 12; i++) answer(store, `question ${i}`);
   pets.scan();
-  const all = store.listPets();
+  const all = store.pets.listPets();
   const species = all.map((p) => p.species).find((s, _i, l) => l.filter((x) => x === s).length > 1)!;
   const egg = all.find((p) => p.species === species)!;
 
@@ -578,10 +584,10 @@ test('an egg cannot be fed or blended, and can still be put out', () => {
   assert.match(fed.ok ? '' : fed.error, /still an egg/);
   const blended = pets.blend(egg.id);
   assert.match(blended.ok ? '' : blended.error, /still an egg/);
-  assert.equal(store.getPet(egg.id)?.fed, 0, 'and nothing was spent on it');
-  assert.equal(store.getPet(egg.id)?.dissolvedAt, null, 'nor lost');
+  assert.equal(store.pets.getPet(egg.id)?.fed, 0, 'and nothing was spent on it');
+  assert.equal(store.pets.getPet(egg.id)?.dissolvedAt, null, 'nor lost');
 
-  const standing = store.listPets().find((p) => p.placed)!;
+  const standing = store.pets.listPets().find((p) => p.placed)!;
   assert.equal(pets.place(standing.id, false).ok, true);
   assert.equal(pets.place(egg.id, true).ok, true);
 });
@@ -607,7 +613,7 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
 
     const store = new Store(path);
     assert.equal(
-      store.getPet('pet_old')?.openedAt,
+      store.pets.getPet('pet_old')?.openedAt,
       '2026-01-02T03:04:05.000Z',
       'a pet raised before the shell existed was revealed when it dropped, and is stamped so',
     );
@@ -621,7 +627,7 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
     store.close();
 
     const rebooted = new Store(path);
-    assert.equal(rebooted.getPet(fresh.id)?.openedAt, null, 'the operator’s unopened egg survives a restart');
+    assert.equal(rebooted.pets.getPet(fresh.id)?.openedAt, null, 'the operator’s unopened egg survives a restart');
     rebooted.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -633,14 +639,14 @@ test('clearing the vivarium releases the collection and starts the beats from ze
   for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
   pets.scan();
   spend(store, 1);
-  const [first] = store.listPets();
+  const [first] = store.pets.listPets();
   assert.ok(first);
   assert.equal(pets.open(first.id).ok, true);
   assert.equal(pets.feed(first.id, 25).ok, true, 'a dollar of spend buys 25 beats');
 
   const reset = pets.resetOnce();
   assert.equal(reset?.cleared, 3, 'it reports what it released');
-  assert.deepEqual(store.listPets(), [], 'and the collection is gone');
+  assert.deepEqual(store.pets.listPets(), [], 'and the collection is gone');
   assert.deepEqual(pets.state()?.wallet, { earned: 0, spent: 0, balance: 0 }, 'beats start again from zero');
 });
 
@@ -651,7 +657,7 @@ test('a cleared collection does not hatch back out of the history it came from',
   pets.resetOnce();
 
   assert.deepEqual(pets.scan(), [], 'the actions are still rolled, so nothing is rolled again');
-  assert.deepEqual(store.listPets(), []);
+  assert.deepEqual(store.pets.listPets(), []);
 
   answer(store, 'something new');
   assert.equal(pets.scan().length, 1, 'a fresh action hatches into the cleared enclosure');
@@ -666,7 +672,7 @@ test('a clearance runs once, and never takes what hatched after it', () => {
   answer(store, 'after');
   pets.scan();
   assert.equal(pets.resetOnce(), null, 'the stamp is what makes every later boot a no-op');
-  assert.equal(store.listPets().length, 1, 'and the pet that hatched after it stays');
+  assert.equal(store.pets.listPets().length, 1, 'and the pet that hatched after it stays');
 });
 
 test('the beats a cleared vivarium earns are the spend since it was cleared', () => {
@@ -689,7 +695,7 @@ test('a clearance is skipped entirely while pets are turned off', () => {
 
   const off = new PetKeeper(store, { enabled: false, visible: true });
   assert.equal(off.resetOnce(), null);
-  assert.equal(store.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
+  assert.equal(store.pets.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
   assert.equal(pets.resetOnce()?.cleared, 1);
 });
 
@@ -735,7 +741,7 @@ test('a pet the scan hatched checks out, and one written straight into the table
   assert.ok(real);
   assert.equal(attestPet(real, ledger(store)), null, 'what the scan wrote must verify against what the scan recorded');
 
-  const forged = store.hatchPet({
+  const forged = store.pets.hatchPet({
     species: 'ouroboros',
     seed: 'upgrade:deadbeef',
     originKind: 'upgrade',
@@ -750,20 +756,20 @@ test('a forged pet cannot be laundered back into beats', () => {
   answer(store, 'a question really answered');
   pets.scan();
   const at = '2026-04-12T14:00:00.000Z';
-  const forged = store.hatchPet({
+  const forged = store.pets.hatchPet({
     species: 'ouroboros',
     seed: 'escalation:esc_forged',
     originKind: 'escalation',
     originRef: 'esc_forged',
     hatchedAt: at,
   });
-  store.recordPetAction({ kind: 'escalation', ref: 'esc_forged', at, petId: forged.id });
+  store.pets.recordPetAction({ kind: 'escalation', ref: 'esc_forged', at, petId: forged.id });
   assert.equal(attestPet(forged, ledger(store))?.code, 'impossible', 'no escalation can ever roll the mythic');
 
   const blended = pets.blend(forged.id);
   assert.equal(blended.ok, false);
   assert.match(blended.ok ? '' : blended.error, /does not check out/, 'refused for what it is, not for being the last');
-  assert.equal(store.getPet(forged.id)?.dissolvedAt, null, 'and not dissolved — nothing here deletes anything');
+  assert.equal(store.pets.getPet(forged.id)?.dissolvedAt, null, 'and not dissolved — nothing here deletes anything');
   assert.equal(pets.feed(forged.id, 1).ok, false, 'nor fed');
   assert.equal(pets.place(forged.id, true).ok, false, 'nor put out');
 });
@@ -781,7 +787,7 @@ test('a flaw is drawn, never deleted, and the origin line survives it', () => {
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'a question really answered');
   pets.scan();
-  const forged = store.hatchPet({
+  const forged = store.pets.hatchPet({
     species: 'ouroboros',
     seed: 'upgrade:deadbeef',
     originKind: 'upgrade',
@@ -805,7 +811,7 @@ test('every pet a long ordinary run produces verifies', () => {
     settle(store, `task ${i}`);
   }
   pets.scan();
-  const all = store.listPets();
+  const all = store.pets.listPets();
   assert.ok(all.length > 0, 'a hundred and twenty actions must produce something to check');
   for (const pet of all) assert.equal(attestPet(pet, ledger(store)), null, `${pet.species} from ${pet.originRef}`);
 });
@@ -826,8 +832,8 @@ test('the replay accuses only what this same clean build hatched', () => {
   pets.scan();
   const at = new Date(Date.parse(started(store)) + 60_000).toISOString();
 
-  store.recordPetAction({ kind: 'escalation', ref: 'esc_barren', at, petId: null });
-  const log = store.petActionLog();
+  store.pets.recordPetAction({ kind: 'escalation', ref: 'esc_barren', at, petId: null });
+  const log = store.pets.petActionLog();
   const barren = replayBarren(log, PET_RULES, started(store));
   assert.ok(barren.has('escalation:esc_barren'), 'at the shipped chance, this one hatches nothing');
 
@@ -854,7 +860,7 @@ test('the replay accuses only what this same clean build hatched', () => {
       builtClean: claim.clean,
       chain: null,
     };
-    const seen = { ...ledger(store), actions: new Map(store.petActionIndex()) };
+    const seen = { ...ledger(store), actions: new Map(store.pets.petActionIndex()) };
     seen.actions.set('escalation:esc_barren', { at, petId: 'pet_forged' });
     assert.equal(
       attestPet(forged, seen)?.code,
@@ -868,10 +874,11 @@ test('an edit anywhere in the collection breaks the chain from there on', () => 
   const { store, pets } = keeper({ dropChance: 1 });
   for (let i = 0; i < 4; i++) answer(store, `question ${i}`);
   pets.scan();
-  const chain = replayChain(store.petChainLog());
-  for (const pet of store.listPets()) assert.equal(pet.chain, chain.get(pet.id), 'what was written is what recomputes');
+  const chain = replayChain(store.pets.petChainLog());
+  for (const pet of store.pets.listPets())
+    assert.equal(pet.chain, chain.get(pet.id), 'what was written is what recomputes');
 
-  const log = store.petChainLog();
+  const log = store.pets.petChainLog();
   const victim = log[1]!;
   const edited = log.map((row) =>
     row.id === victim.id ? { ...row, link: { ...row.link, species: 'ouroboros' as const } } : row,
@@ -913,7 +920,7 @@ test('a database from before the stamp reads as unknown rather than as suspect',
     old.close();
 
     const store = new Store(file);
-    const pet = store.getPet('pet_old');
+    const pet = store.pets.getPet('pet_old');
     assert.ok(pet, 'the historical row survives the migration');
     assert.equal(pet.builtSha, null, 'with no build recorded');
     assert.equal(pet.builtClean, false);
@@ -943,7 +950,7 @@ test('a database from before blending gains the column rather than reading undef
     old.close();
 
     const store = new Store(file);
-    const pet = store.getPet('pet_old');
+    const pet = store.pets.getPet('pet_old');
     assert.ok(pet, 'the historical row survives the migration');
     assert.equal(pet.dissolvedAt, null, 'and reads as alive rather than undefined');
   } finally {
@@ -987,11 +994,11 @@ test('the state carries the vivarium’s start, so the cockpit can say why a bac
     null,
     'before the first scan there is no start, and a surface draws nothing rather than a placeholder',
   );
-  assert.equal(store.vivariumStart(), null, 'drawing the cockpit does not start the vivarium');
+  assert.equal(store.pets.vivariumStart(), null, 'drawing the cockpit does not start the vivarium');
 
   answer(store, 'hatch me something');
   pets.scan();
-  assert.equal(pets.state()?.startedAt, store.vivariumStart(), 'and afterwards it is the store’s own start');
+  assert.equal(pets.state()?.startedAt, store.pets.vivariumStart(), 'and afterwards it is the store’s own start');
 });
 
 function stripComments(text: string): string {
@@ -1022,11 +1029,11 @@ function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   const refs = new Map<PetActionKind, string>();
   refs.set('escalation', answer(store, 'Should the rate-limit park apply to review agents too?'));
   refs.set('human-task', settle(store, 'Issue a deploy key for the staging cluster'));
-  const plan = store.upsertPlan({ originRef: 'issue:437', title: 'Give jobs real names', status: 'active' });
+  const plan = store.plans.upsertPlan({ originRef: 'issue:437', title: 'Give jobs real names', status: 'active' });
   refs.set('plan', plan.id);
-  refs.set('landing', store.recordStackLanding('stack:413', [411, 412]).id);
-  refs.set('job', store.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
-  store.writeUpgradeIntent({
+  refs.set('landing', store.landings.recordStackLanding('stack:413', [411, 412]).id);
+  refs.set('job', store.jobs.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
+  store.upgrades.writeUpgradeIntent({
     state: 'applying',
     targetSha: '9c1d4a2f6b3e',
     requestedAt: new Date().toISOString(),
@@ -1060,10 +1067,18 @@ test('the labels are one batched read per kind over the refs the vivarium holds'
   pets.scan();
 
   const asked = new Map<string, string[][]>();
-  const methods = ['escalationLabels', 'humanTaskLabels', 'planLabels', 'landingLabels', 'jobLabels'] as const;
-  for (const method of methods) {
-    const real = store[method].bind(store);
-    store[method] = (ids: string[]): Map<string, string> => {
+  const labelReads = [
+    ['escalations', 'escalationLabels'],
+    ['humanTasks', 'humanTaskLabels'],
+    ['plans', 'planLabels'],
+    ['landings', 'landingLabels'],
+    ['jobs', 'jobLabels'],
+  ] as const;
+  const methods = labelReads.map(([, method]) => method);
+  for (const [group, method] of labelReads) {
+    const sub = store[group] as unknown as Record<string, (ids: string[]) => Map<string, string>>;
+    const real = sub[method]!.bind(sub);
+    sub[method] = (ids: string[]): Map<string, string> => {
       asked.set(method, [...(asked.get(method) ?? []), ids]);
       return real(ids);
     };
@@ -1147,7 +1162,7 @@ test('a vivarium raised before the chain keeps the pets it earns afterwards', ()
     raw.close();
 
     const store = new Store(file);
-    assert.equal(store.getPet(old.id)?.chain, null, 'the historical row carries no link, as designed');
+    assert.equal(store.pets.getPet(old.id)?.chain, null, 'the historical row carries no link, as designed');
     const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
     for (let i = 0; i < 4; i++) answer(store, `earned after the upgrade ${i}`);
     const fresh = pets.scan();
@@ -1155,13 +1170,13 @@ test('a vivarium raised before the chain keeps the pets it earns afterwards', ()
 
     const book: PetLedger = {
       ...ledger(store),
-      barren: replayBarren(store.petActionLog(), rules({ dropChance: 1 }), started(store)),
+      barren: replayBarren(store.pets.petActionLog(), rules({ dropChance: 1 }), started(store)),
     };
-    assert.equal(attestPet(store.getPet(old.id)!, book), null, 'a pet from before the chain is not judged');
+    assert.equal(attestPet(store.pets.getPet(old.id)!, book), null, 'a pet from before the chain is not judged');
     for (const pet of fresh) {
       assert.equal(attestPet(pet, book), null, `${pet.id} was earned honestly and must not read as an insertion`);
     }
-    const log = store.petChainLog();
+    const log = store.pets.petChainLog();
     const victim = log[2]!;
     const tampered = log.map((row) =>
       row.id === victim.id ? { ...row, link: { ...row.link, species: 'ouroboros' as const } } : row,

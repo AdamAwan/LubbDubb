@@ -198,7 +198,7 @@ test('the harness dispatches a code agent for the waiting gate, through buildSys
   assert.match(task.prompt, /waiting, not failing/);
   assert.match(task.prompt, /pr-agent-review\/reviewed: Run `\/pr-agent-review` on this branch/);
 
-  const decision = system.store
+  const decision = system.store.decisions
     .listDecisions()
     .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:31676:ci-gate');
   assert.equal(decision?.rule, 'pr-ci-gate');
@@ -210,7 +210,7 @@ test('the same world with no rule dispatches nothing at all', async () => {
   const system = build({ checks: [] }, pullRequests);
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listTasks(), []);
+  assert.deepEqual(system.store.tasks.listTasks(), []);
   system.store.close();
 });
 
@@ -232,7 +232,7 @@ test('an advisory-only red aggregate dispatches no code agent', async () => {
   await system.harness.runCycle('manual');
 
   assert.deepEqual(
-    system.store.listDecisions().filter((d) => d.action.type === 'dispatch_code_agent'),
+    system.store.decisions.listDecisions().filter((d) => d.action.type === 'dispatch_code_agent'),
     [],
   );
   system.store.close();
@@ -252,7 +252,7 @@ test('a genuine non-advisory failure alongside an advisory one still dispatches'
   const system = build({ checks: [] }, pullRequests);
   await system.harness.runCycle('manual');
 
-  const decision = system.store
+  const decision = system.store.decisions
     .listDecisions()
     .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:31676:ci');
   assert.ok(decision, 'the non-advisory failure should still dispatch');
@@ -296,7 +296,7 @@ test('the three policy modes are in order of decreasing effect, and `off` is the
     const pullRequests = slice.pullRequests ?? [];
     const system = build({ checks: [] }, pullRequests);
     await system.harness.runCycle('manual');
-    const named = system.store
+    const named = system.store.decisions
       .listDecisions()
       .filter((d) => d.action.type === 'dispatch_code_agent')
       .map(() => findTask(system.store, (t) => t.originRef === 'pr:31676:ci')?.dispatchReason ?? '');

@@ -271,7 +271,7 @@ test('a call is filed under the origin it carried, not the one its task has now'
 test('compaction clears the arguments and keeps the row', () => {
   const store = new Store(':memory:');
   const old = '2026-07-01T09:00:00.000Z';
-  store.recordMcpCall(
+  store.mcpCalls.recordMcpCall(
     {
       channel: 'fleet',
       tool: 'plan_submit',
@@ -285,22 +285,22 @@ test('compaction clears the arguments and keeps the row', () => {
     },
     DEFAULT_MCP_ARGS_RETENTION_DAYS,
   );
-  const before = store.listMcpCallsSince(old)[0]!;
+  const before = store.mcpCalls.listMcpCallsSince(old)[0]!;
   assert.ok(before.args, 'the arguments are recorded');
   assert.ok(before.argsBytes > 0);
 
-  assert.equal(store.compactMcpCallArgs(0), 1);
-  const after = store.listMcpCallsSince(old)[0]!;
+  assert.equal(store.mcpCalls.compactMcpCallArgs(0), 1);
+  const after = store.mcpCalls.listMcpCallsSince(old)[0]!;
   assert.equal(after.args, null);
   assert.equal(after.argsDropped, true, 'compacted is a different fact from "carried none"');
   assert.equal(after.argsBytes, before.argsBytes);
-  assert.equal(store.listMcpCallsSince(old).length, 1, 'the row itself is never dropped');
+  assert.equal(store.mcpCalls.listMcpCallsSince(old).length, 1, 'the row itself is never dropped');
   store.close();
 });
 
 test('a call that carried no arguments is not mistaken for a compacted one', () => {
   const store = new Store(':memory:');
-  store.recordMcpCall(
+  store.mcpCalls.recordMcpCall(
     {
       channel: 'fleet',
       tool: 'scratch_read',
@@ -314,7 +314,7 @@ test('a call that carried no arguments is not mistaken for a compacted one', () 
     },
     14,
   );
-  const row = store.listMcpCallsSince('2026-01-01T00:00:00.000Z')[0]!;
+  const row = store.mcpCalls.listMcpCallsSince('2026-01-01T00:00:00.000Z')[0]!;
   assert.equal(row.args, null);
   assert.equal(row.argsDropped, false);
   assert.equal(row.argsBytes, 0);
@@ -323,7 +323,7 @@ test('a call that carried no arguments is not mistaken for a compacted one', () 
 
 test('a retention of zero records no arguments in the first place', () => {
   const store = new Store(':memory:');
-  store.recordMcpCall(
+  store.mcpCalls.recordMcpCall(
     {
       channel: 'fleet',
       tool: 'raise',
@@ -337,7 +337,7 @@ test('a retention of zero records no arguments in the first place', () => {
     },
     0,
   );
-  const row = store.listMcpCallsSince('2026-01-01T00:00:00.000Z')[0]!;
+  const row = store.mcpCalls.listMcpCallsSince('2026-01-01T00:00:00.000Z')[0]!;
   assert.equal(row.args, null);
   assert.ok(row.argsBytes > 0);
   store.close();
@@ -345,7 +345,7 @@ test('a retention of zero records no arguments in the first place', () => {
 
 test('the last call per tool is answered over all time, not over a window', () => {
   const store = new Store(':memory:');
-  store.recordMcpCall(
+  store.mcpCalls.recordMcpCall(
     {
       channel: 'fleet',
       tool: 'escalate',
@@ -359,7 +359,7 @@ test('the last call per tool is answered over all time, not over a window', () =
     },
     14,
   );
-  const last = store.lastMcpCallByTool();
+  const last = store.mcpCalls.lastMcpCallByTool();
   assert.ok(last.get('fleet:escalate'));
   assert.equal(last.get('fleet:open_pr'), undefined, 'a tool never called is absent rather than null');
   store.close();
@@ -369,7 +369,7 @@ test('no per-tool figure on one channel is taken from the other', () => {
   for (const caller of ['fleet', 'desktop'] as const) {
     const other = caller === 'fleet' ? 'desktop' : 'fleet';
     const store = new Store(':memory:');
-    store.recordMcpCall(
+    store.mcpCalls.recordMcpCall(
       {
         channel: caller,
         tool: 'validation_report',
@@ -383,17 +383,17 @@ test('no per-tool figure on one channel is taken from the other', () => {
       },
       14,
     );
-    const last = store.lastMcpCallByTool();
+    const last = store.mcpCalls.lastMcpCallByTool();
     assert.ok(last.get(`${caller}:validation_report`), `${caller} keeps its own last call`);
     assert.equal(last.get(`${other}:validation_report`), undefined, `${other} never called it`);
 
     const insights = buildMcpInsights({
-      calls: store.listMcpCallsSince('1970-01-01T00:00:00.000Z'),
+      calls: store.mcpCalls.listMcpCallsSince('1970-01-01T00:00:00.000Z'),
       agents: [],
       tasks: [],
       namedInPrompts: new Map(),
       lastCallByTool: last,
-      callsEverByAgent: store.countMcpCallsByAgent(),
+      callsEverByAgent: store.mcpCalls.countMcpCallsByAgent(),
       claudeArgs: [],
       window: resolveWindow('7d', NOW, null),
       now: NOW,
@@ -415,7 +415,7 @@ test('no per-tool figure on one channel is taken from the other', () => {
 
 test('a tool call an agent makes is recorded, and a refusal is recorded with its reason', async () => {
   const system = testSystem();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Work',
     prompt: 'do it',
@@ -429,7 +429,7 @@ test('a tool call an agent makes is recorded, and a refusal is recorded with its
   await session.call('note_progress', { note: 'reading the router' });
   await session.call('plan_submit', {});
 
-  const calls = system.store.listMcpCallsSince('2000-01-01T00:00:00.000Z');
+  const calls = system.store.mcpCalls.listMcpCallsSince('2000-01-01T00:00:00.000Z');
   assert.deepEqual(
     calls.map((c) => c.tool),
     ['note_progress', 'plan_submit'],
@@ -445,7 +445,7 @@ test('a tool call an agent makes is recorded, and a refusal is recorded with its
 
 test('a call to a retired name is answered and recorded rather than lost', async () => {
   const system = testSystem();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Work',
     prompt: 'do it',
@@ -459,7 +459,7 @@ test('a call to a retired name is answered and recorded rather than lost', async
   const res = (await session.call('report_finding', { summary: 'x' })) as { isError?: boolean };
   assert.equal(res.isError, true);
 
-  const [recorded] = system.store.listMcpCallsSince('2000-01-01T00:00:00.000Z');
+  const [recorded] = system.store.mcpCalls.listMcpCallsSince('2000-01-01T00:00:00.000Z');
   assert.equal(recorded?.tool, 'report_finding');
   assert.equal(recorded?.ok, false);
   assert.match(recorded?.error ?? '', /retired/);
@@ -527,9 +527,9 @@ test('a run that straddles the window start is not a silent run', () => {
   const store = new Store(':memory:', () => new Date(clock).toISOString());
   const now = Date.parse('2026-08-01T00:00:00.000Z');
 
-  const long = store.createAgent({ taskId: 'task_long', cwd: '/wt/long', pid: 1 });
+  const long = store.agents.createAgent({ taskId: 'task_long', cwd: '/wt/long', pid: 1 });
   for (let n = 0; n < 3; n += 1)
-    store.recordMcpCall(
+    store.mcpCalls.recordMcpCall(
       {
         channel: 'fleet',
         tool: 'note_progress',
@@ -544,19 +544,19 @@ test('a run that straddles the window start is not a silent run', () => {
       14,
     );
   clock = now - 60 * 60_000;
-  store.updateAgent(long.id, { status: 'done', endedAt: new Date(clock).toISOString() });
+  store.agents.updateAgent(long.id, { status: 'done', endedAt: new Date(clock).toISOString() });
 
-  const mute = store.createAgent({ taskId: 'task_mute', cwd: '/wt/mute', pid: 2 });
-  store.updateAgent(mute.id, { status: 'done', endedAt: new Date(clock).toISOString() });
+  const mute = store.agents.createAgent({ taskId: 'task_mute', cwd: '/wt/mute', pid: 2 });
+  store.agents.updateAgent(mute.id, { status: 'done', endedAt: new Date(clock).toISOString() });
 
   const insights = (window: InsightsWindow) =>
     buildMcpInsights({
-      calls: store.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now, null).since)),
-      agents: store.listAgents(),
+      calls: store.mcpCalls.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now, null).since)),
+      agents: store.agents.listAgents(),
       tasks: [task('task_long', 'issue:12'), task('task_mute', 'issue:13')],
       namedInPrompts: new Map(),
-      lastCallByTool: store.lastMcpCallByTool(),
-      callsEverByAgent: store.countMcpCallsByAgent(),
+      lastCallByTool: store.mcpCalls.lastMcpCallByTool(),
+      callsEverByAgent: store.mcpCalls.countMcpCallsByAgent(),
       claudeArgs: [],
       window: resolveWindow(window, now, null),
       now,

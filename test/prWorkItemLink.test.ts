@@ -134,11 +134,15 @@ test('a PR on a dispatch branch is linked to its work item by the harness, once'
     42,
     'the harness linked the work item it opened the pull request for',
   );
-  assert.ok(system.store.linkedWorkItemPrs().has(42), 'and recorded that it has answered for it');
+  assert.ok(system.store.workItemLinks.linkedWorkItemPrs().has(42), 'and recorded that it has answered for it');
 
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Other' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.linkedWorkItemPrs().size, 1, 'no second link is written for a pull request already done');
+  assert.equal(
+    system.store.workItemLinks.linkedWorkItemPrs().size,
+    1,
+    'no second link is written for a pull request already done',
+  );
   system.store.close();
 });
 
@@ -149,7 +153,7 @@ test('a PR on nobody’s dispatch branch is never linked', async () => {
   await system.harness.runCycle('manual');
 
   assert.equal((await system.connector.getState()).issues.find((i) => i.number === 7)?.linkedPrNumber ?? null, null);
-  assert.equal(system.store.linkedWorkItemPrs().has(42), false);
+  assert.equal(system.store.workItemLinks.linkedWorkItemPrs().has(42), false);
   system.store.close();
 });
 
@@ -158,6 +162,10 @@ test('a PR whose branch names no known work item is left for a human', async () 
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'issue/999' });
   await system.harness.runCycle('manual');
 
-  assert.equal(system.store.linkedWorkItemPrs().has(42), false, 'the harness does not guess at a work item');
+  assert.equal(
+    system.store.workItemLinks.linkedWorkItemPrs().has(42),
+    false,
+    'the harness does not guess at a work item',
+  );
   system.store.close();
 });

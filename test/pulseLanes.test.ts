@@ -159,7 +159,7 @@ test('the pulse hands the read a lane per entity, and a cold one is still in the
   assert.equal(plans[0]!.coldMaxAgeMs, 60);
   assert.equal(hydrationMaxAgeMs(plans[0]!, 'issue:801'), 60);
 
-  const baseline = system.store.getWorldBaseline();
+  const baseline = system.store.world.getWorldBaseline();
   assert.ok(
     baseline?.issues.some((i) => i.number === 801),
     'the cold issue is in the world the cycle decided against',
@@ -172,7 +172,7 @@ test('an issue the fleet is working on is hot, and stays hot while its task is o
   const system = build({ hotReadMaxAgeMs: 20, coldReadMaxAgeMs: 60 });
   system.connector.inject({ kind: 'new_issue', number: 811, title: 'Add login' });
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listTasks().length, 1, 'the issue is dispatched, so the fleet is on it');
+  assert.equal(system.store.tasks.listTasks().length, 1, 'the issue is dispatched, so the fleet is on it');
 
   const plans = capturePlans(system);
   await tick(80);
@@ -191,10 +191,10 @@ test('the cadence follows the fleet: fast while it is working, slow while it is 
 
   system.connector.inject({ kind: 'new_issue', number: 821, title: 'Add login' });
   const busy = await system.harness.runCycle('manual');
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 1);
+  assert.equal(system.store.agents.listAgentsByStatus('starting', 'running').length, 1);
   assert.equal(busy.nextIntervalMs, 30_000, 'an agent is running, so the pulse takes the fast interval');
 
-  for (const agent of system.store.listAgentsByStatus('starting', 'running')) system.agents.complete(agent.id);
+  for (const agent of system.store.agents.listAgentsByStatus('starting', 'running')) system.agents.complete(agent.id);
   system.localCycles.stop();
   system.connector.inject({ kind: 'issue_state', number: 821, state: 'closed' });
   const settled = await system.harness.runCycle('manual');
@@ -207,7 +207,7 @@ test('a build in flight is enough to keep the fleet on the fast interval', async
   system.runtimeControl.apply({ paused: true });
   system.connector.inject({ kind: 'new_pr', number: 831, title: 'Building', branch: 'feat-831' });
   const report = await system.harness.runCycle('manual');
-  const built = system.store.getWorldBaseline()?.pullRequests.find((p) => p.number === 831);
+  const built = system.store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === 831);
 
   assert.equal(built?.ciStatus, 'pending');
   assert.equal(report.nextIntervalMs, 30_000);

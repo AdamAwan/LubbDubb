@@ -89,7 +89,7 @@ function replySink(script: { commentRef?: string } = {}): ActionSink & {
 }
 
 function reviewAgent(system: System): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Address review comments on PR #42',
     prompt: 'answer them',
@@ -233,7 +233,7 @@ test('the operator replying to their own thread leaves it unhandled and unbadged
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'actually, also the caller', inReplyToId: 100 },
   ];
-  const pr = await githubPr({ comments }, system.store);
+  const pr = await githubPr({ comments }, system.store.prReplies);
   const thread = pr.reviewThreads![0]!;
 
   assert.equal(thread.state, 'open', 'a person wrote it, so the fleet still owes an answer');
@@ -249,14 +249,14 @@ test('a reply the harness sent is attributed to the fleet and marks the thread a
   await reply(system, agent, 'Renamed in the latest commit.', '100');
 
   assert.equal(sink.replies.length, 1, 'the reply went out');
-  assert.deepEqual([...system.store.prReplyRefs(42)], ['101'], 'and the harness wrote down what it sent');
-  assert.deepEqual([...system.store.prReplyRefs(43)], [], 'scoped to the pull request it was sent on');
+  assert.deepEqual([...system.store.prReplies.prReplyRefs(42)], ['101'], 'and the harness wrote down what it sent');
+  assert.deepEqual([...system.store.prReplies.prReplyRefs(43)], [], 'scoped to the pull request it was sent on');
 
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'Renamed in the latest commit.', inReplyToId: 100 },
   ];
-  const pr = await githubPr({ comments }, system.store);
+  const pr = await githubPr({ comments }, system.store.prReplies);
   const thread = pr.reviewThreads![0]!;
   assert.equal(thread.state, 'answered');
   assert.deepEqual(
@@ -269,13 +269,13 @@ test('a reply the harness sent is attributed to the fleet and marks the thread a
 
 test('a reviewer coming back after the fleet answered reopens the work', async () => {
   const system = build();
-  system.store.recordPrReplySent(42, '100', '101');
+  system.store.prReplies.recordPrReplySent(42, '100', '101');
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'renamed', inReplyToId: 100 },
     { id: 102, authorLogin: OPERATOR, body: 'not quite what I meant', inReplyToId: 100 },
   ];
-  const pr = await githubPr({ comments }, system.store);
+  const pr = await githubPr({ comments }, system.store.prReplies);
   assert.equal(pr.reviewThreads![0]!.state, 'open');
   assert.deepEqual(
     pr.reviewThreads![0]!.replies.map((r) => r.ours),
@@ -286,7 +286,7 @@ test('a reviewer coming back after the fleet answered reopens the work', async (
 
 test('both providers read the same record and reach the same verdict on a thread', async () => {
   const system = build();
-  system.store.recordPrReplySent(42, '300', '2');
+  system.store.prReplies.recordPrReplySent(42, '300', '2');
 
   const azThreads: AzThread[] = [
     {
@@ -303,8 +303,8 @@ test('both providers read the same record and reach the same verdict on a thread
     { id: 2, authorLogin: OPERATOR, body: 'renamed', inReplyToId: 300 },
   ];
 
-  const az = await azurePr(azThreads, system.store);
-  const gh = await githubPr({ comments: ghComments }, system.store);
+  const az = await azurePr(azThreads, system.store.prReplies);
+  const gh = await githubPr({ comments: ghComments }, system.store.prReplies);
   assert.equal(az.reviewThreads![0]!.state, 'answered');
   assert.equal(gh.reviewThreads![0]!.state, 'answered');
   assert.equal(az.unresolvedComments[0]!.handled, gh.unresolvedComments[0]!.handled);
@@ -322,8 +322,8 @@ test('a send the provider will not name records no attribution, and says so out 
   await reply(system, agent, 'Renamed in the latest commit.', '100');
 
   assert.equal(sink.replies.length, 1, 'the reply still went out');
-  assert.deepEqual([...system.store.prReplyRefs(42)], [], 'but nothing is claimed as the fleet’s');
-  const errors = system.store.listErrors();
+  assert.deepEqual([...system.store.prReplies.prReplyRefs(42)], [], 'but nothing is claimed as the fleet’s');
+  const errors = system.store.errors.listErrors();
   assert.equal(errors.length, 1);
   assert.match(errors[0]!.message, /no comment id/i);
   system.store.close();
@@ -332,16 +332,16 @@ test('a send the provider will not name records no attribution, and says so out 
 test('the record survives a restart', async () => {
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-attrib-db-')), 'lubbdubb.db');
   const before = new Store(dbPath);
-  before.recordPrReplySent(42, '100', '101');
+  before.prReplies.recordPrReplySent(42, '100', '101');
   before.close();
 
   const after = new Store(dbPath);
-  assert.deepEqual([...after.prReplyRefs(42)], ['101'], 'the schema pass reopened the table, rows and all');
+  assert.deepEqual([...after.prReplies.prReplyRefs(42)], ['101'], 'the schema pass reopened the table, rows and all');
 
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: OPERATOR, body: 'renamed', inReplyToId: 100 },
   ];
-  assert.equal((await githubPr({ comments }, after)).reviewThreads![0]!.state, 'answered');
+  assert.equal((await githubPr({ comments }, after.prReplies)).reviewThreads![0]!.state, 'answered');
   after.close();
 });

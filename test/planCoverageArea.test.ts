@@ -145,7 +145,7 @@ function authored(store: Store, steps: unknown[], covers: string[] = []): void {
   });
   assert.equal(parsed.success, true, parsed.success ? '' : JSON.stringify(parsed.error.issues));
   if (!parsed.success) return;
-  store.ingestValidation('issue:12', {
+  store.validation.ingestValidation('issue:12', {
     checks: validationCheckSetInputs(
       [parsed.data],
       [],
@@ -167,7 +167,7 @@ test('a suite step names the area, and it is what lands on the row', () => {
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
     authored(store, [{ kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests' }]);
 
-    const check = store.listValidationChecks('issue:12')[0];
+    const check = store.validation.listValidationChecks('issue:12')[0];
     assert.equal(check?.area, 'Checkout Tests', 'the column the pre-flight compares is written by the step');
     assert.equal(check?.steps[0]?.actor, 'fleet', 'and the environment declares a browser block, so the fleet has it');
   } finally {
@@ -184,7 +184,7 @@ test('covering a test part is a bibliography and no longer an area', () => {
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
     authored(store, [{ kind: 'manual', do: 'Look at it' }], ['checkout-coverage']);
 
-    const check = store.listValidationChecks('issue:12')[0];
+    const check = store.validation.listValidationChecks('issue:12')[0];
     assert.deepEqual(check?.covers, ['checkout-coverage'], 'the entry is kept — it says what the check exercises');
     assert.equal(
       check?.area,
@@ -203,7 +203,7 @@ test('a plan document’s own legacy check set inherits nothing either', () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
-    assert.equal(store.listValidationChecks('issue:12')[0]?.area, null);
+    assert.equal(store.validation.listValidationChecks('issue:12')[0]?.area, null);
   } finally {
     store.close();
   }
@@ -243,7 +243,7 @@ test('the first suite step wins, so a check is still verified against one select
       { kind: 'suite', do: 'Run login', area: 'Login Tests' },
     ]);
     assert.equal(
-      store.listValidationChecks('issue:12')[0]?.area,
+      store.validation.listValidationChecks('issue:12')[0]?.area,
       'Checkout Tests',
       'the two-areas refusal went with the inheritance: a step names one, in an order the author chose',
     );
@@ -263,7 +263,7 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     if (!parsed.ok) return;
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
     authored(store, [{ kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests' }]);
-    store.recordGoalArrival({
+    store.environments.recordGoalArrival({
       goalRef: 'issue:12',
       environment: 'acceptance',
       arrivedAt: new Date(NOW - 1000).toISOString(),
@@ -281,11 +281,11 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     });
     await desk.run();
 
-    const row = store.listRemoteSheetRows().find((r) => r.kind === 'check');
+    const row = store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.equal(row?.blockedReason, null, 'the pre-flight found the area the step named');
     assert.equal(row?.matched, 4, 'and counted the tests the runner attributes to it');
     assert.deepEqual(
-      runnableSelectors(store, ACCEPTANCE, 'issue:12', store.listRemoteSheetRows()),
+      runnableSelectors(store, ACCEPTANCE, 'issue:12', store.remoteValidation.listRemoteSheetRows()),
       ['Checkout Tests'],
       'which is the whole of what the browser half was missing: a selector to carry',
     );
@@ -315,7 +315,7 @@ test('the desk lists what each runner offers, and keeps the answer where a plann
       now: () => NOW,
     });
     await desk.run();
-    assert.deepEqual(store.listOfferedAreas(), ['Checkout Tests', 'Login Tests']);
+    assert.deepEqual(store.remoteValidation.listOfferedAreas(), ['Checkout Tests', 'Login Tests']);
     assert.equal(runner.asked.length, 1, 'one spawn, with no goal in sight — the planner needs it before an arrival');
 
     await desk.run();
@@ -332,7 +332,11 @@ test('a listing that could not say leaves the offering the last answer left stan
   const store = new Store(file);
   const environments = [ACCEPTANCE];
   try {
-    store.recordSelectorOffering('acceptance', [{ selector: 'Checkout Tests', tests: 4 }], '2020-01-01T00:00:00.000Z');
+    store.remoteValidation.recordSelectorOffering(
+      'acceptance',
+      [{ selector: 'Checkout Tests', tests: 4 }],
+      '2020-01-01T00:00:00.000Z',
+    );
     const runner = new FakeRemoteRunner({ acceptance: { listingFailure: 'the command exited 1' } });
     const desk = new RemoteValidationDesk({
       store,
@@ -347,7 +351,7 @@ test('a listing that could not say leaves the offering the last answer left stan
     await desk.run();
     assert.equal(runner.asked.length, 1, 'the stale offering is re-asked');
     assert.deepEqual(
-      store.listOfferedAreas(),
+      store.remoteValidation.listOfferedAreas(),
       ['Checkout Tests'],
       'and an unanswered listing is never an offering of nothing — that would refuse every coverage a planner names',
     );

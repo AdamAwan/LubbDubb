@@ -254,7 +254,7 @@ test('a decomposed issue’s shortfall must name what fell short — synchronous
   const noCause = await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'not finished' });
   assert.equal(noCause.isError, true, 'without it there is nothing the harness can route');
   assert.match(noCause.text, /cause "plan"|cause "part"|cause "goal"/, 'the refusal names the alternatives');
-  assert.equal(system.store.getShortfall('issue:12'), null, 'and nothing is written');
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null, 'and nothing is written');
 
   const badSlug = await callTool(system, agent, 'assess_issue', {
     status: 'more_work',
@@ -272,7 +272,7 @@ test('a decomposed issue’s shortfall must name what fell short — synchronous
     part: 'schema',
   });
   assert.equal(good.isError, false);
-  const row = system.store.getShortfall('issue:12');
+  const row = system.store.verdicts.getShortfall('issue:12');
   assert.equal(row?.cause, 'part');
   assert.equal(row?.partSlug, 'schema');
   assert.equal(row?.by, 'assessor');
@@ -296,7 +296,7 @@ test('an unplanned issue may not blame a plan, and needs no cause at all', async
     summary: 'the endpoint is there but the tests are not',
   });
   assert.equal(bare.isError, false, 'the honest reading is "the work is not finished"');
-  assert.equal(system.store.getShortfall('issue:12')?.cause, null);
+  assert.equal(system.store.verdicts.getShortfall('issue:12')?.cause, null);
   system.store.close();
 });
 
@@ -323,19 +323,19 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
   });
 
   await system.harness.runCycle('manual');
-  const proposal = system.store.listProposals().find((p) => p.kind === 'shortfall');
+  const proposal = system.store.escalations.listProposals().find((p) => p.kind === 'shortfall');
   assert.ok(proposal, 'the rule proposes rather than acts');
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active', 'and nothing moved before the click');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12')!.status, 'active', 'and nothing moved before the click');
 
   const accepted = await system.proposals.accept(proposal!.id, 'agreed');
   assert.ok(accepted && 'outcome' in accepted, 'a shortfall raises no caveats, so nothing gates the accept');
   assert.equal(accepted.outcome, 'performed');
-  const plan = system.store.getPlanByOrigin('issue:12')!;
+  const plan = system.store.plans.getPlanByOrigin('issue:12')!;
   assert.equal(plan.status, 'planning', 'which is the entire effect — rule `issue-plan` takes it from here');
   assert.match(plan.reason ?? '', /the split left out the CLI entirely/, 'the replanner is told what fell short');
-  assert.equal(system.store.getShortfall('issue:12'), null);
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null);
 
-  const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`)!;
+  const audited = system.store.decisions.listDecisions().find((d) => d.cycleId === `human:${proposal!.id}`)!;
   assert.match(audited.detail, /sent the plan for issue:12 back to a planner/);
   assert.match(audited.detail, /authorized by you/);
   system.store.close();
@@ -343,9 +343,9 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
 
 test('accepting a part-cause shortfall appends a part and leaves the one that fell short alone', async () => {
   const { system } = plannedSystem();
-  const planId = system.store.getPlanByOrigin('issue:12')!.id;
-  const schema = system.store.listPlanParts(planId).find((p) => p.slug === 'schema')!;
-  system.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
+  const planId = system.store.plans.getPlanByOrigin('issue:12')!.id;
+  const schema = system.store.plans.listPlanParts(planId).find((p) => p.slug === 'schema')!;
+  system.store.plans.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
 
   const agent = spawnAssessor(system);
   await callTool(system, agent, 'assess_issue', {
@@ -355,10 +355,10 @@ test('accepting a part-cause shortfall appends a part and leaves the one that fe
     part: 'schema',
   });
   await system.harness.runCycle('manual');
-  const proposal = system.store.listProposals().find((p) => p.kind === 'shortfall')!;
+  const proposal = system.store.escalations.listProposals().find((p) => p.kind === 'shortfall')!;
   await system.proposals.accept(proposal.id);
 
-  const parts = system.store.listPlanParts(planId);
+  const parts = system.store.plans.listPlanParts(planId);
   const followup = parts.find((p) => p.slug === 'schema-followup');
   assert.ok(followup, 'one new part, for the scope that fell short');
   assert.equal(followup!.status, 'pending');
@@ -376,16 +376,20 @@ test('rejecting acts on nothing and leaves the issue exactly where it was', asyn
   const agent = spawnAssessor(system);
   await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'wrong split', cause: 'plan' });
   await system.harness.runCycle('manual');
-  const proposal = system.store.listProposals().find((p) => p.kind === 'shortfall')!;
+  const proposal = system.store.escalations.listProposals().find((p) => p.kind === 'shortfall')!;
 
   const rejected = system.proposals.reject(proposal.id, 'the split is fine, the ticket is wrong');
   assert.equal(rejected!.outcome, 'none');
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active', 'unlike a plan refusal, nothing settles');
-  assert.ok(system.store.getShortfall('issue:12'));
+  assert.equal(
+    system.store.plans.getPlanByOrigin('issue:12')!.status,
+    'active',
+    'unlike a plan refusal, nothing settles',
+  );
+  assert.ok(system.store.verdicts.getShortfall('issue:12'));
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().filter((p) => p.kind === 'shortfall').length, 1);
+  assert.equal(system.store.escalations.listProposals().filter((p) => p.kind === 'shortfall').length, 1);
   system.store.close();
 });
 
@@ -397,8 +401,11 @@ test('the loop is bounded by the assessor’s own attempt cap, and nothing new c
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().filter((p) => p.kind === 'shortfall').length, 1);
-  assert.equal(system.store.listOpenEscalations().filter((e) => e.context.originRef === undefined).length >= 0, true);
+  assert.equal(system.store.escalations.listProposals().filter((p) => p.kind === 'shortfall').length, 1);
+  assert.equal(
+    system.store.escalations.listOpenEscalations().filter((e) => e.context.originRef === undefined).length >= 0,
+    true,
+  );
   system.store.close();
 });
 
@@ -649,7 +656,7 @@ function plannedSystem(): { system: System } {
     originRef: 'issue:12',
     title: 'Add the thing',
   });
-  system.store.setPlanStatus(plan.id, 'active');
+  system.store.plans.setPlanStatus(plan.id, 'active');
   return { system };
 }
 
@@ -658,7 +665,7 @@ function unplannedSystem(): { system: System } {
 }
 
 function spawnAssessor(system: System): Agent {
-  const t = system.store.createTask({
+  const t = system.store.tasks.createTask({
     kind: 'code',
     title: 'Assess issue #12',
     prompt: 'judge it',

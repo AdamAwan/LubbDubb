@@ -624,7 +624,7 @@ uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight`
 
 `recordWorldChanges` keeps the harness's memory of the last world:
 
-- The previous snapshot is `this.prevWorld`, falling back to `store.getWorldBaseline()` on the first
+- The previous snapshot is `this.prevWorld`, falling back to `store.world.getWorldBaseline()` on the first
   cycle after a restart — so a restart neither blinds the diff nor floods the feed with "everything
   is new".
 - With no baseline at all (a fresh store), **only** the baseline is written: no diff, no events.

@@ -60,25 +60,25 @@ function build(overrides: Record<string, unknown> = {}): System {
 }
 
 function liveRun(system: System, originRef = 'issue:12', ref = 'issue/12', commit = COMMIT): LocalRun {
-  const run = system.store.beginLocalRun({
+  const run = system.store.localRuns.beginLocalRun({
     originRef,
     ref,
     dir: '/tmp/local-run',
     commit,
     url: 'http://localhost:5173',
   });
-  system.store.setLocalRunStatus(run.id, 'running');
-  return system.store.liveLocalRun() as LocalRun;
+  system.store.localRuns.setLocalRunStatus(run.id, 'running');
+  return system.store.localRuns.liveLocalRun() as LocalRun;
 }
 
 function request(system: System, originRef = 'issue:12'): LocalValidation {
-  const run = system.store.liveLocalRun();
+  const run = system.store.localRuns.liveLocalRun();
   assert.ok(run, 'a run is up to pin the validation to');
   return system.localValidations.request({ originRef, run });
 }
 
 function spawnAgent(system: System, originRef: string, branch = 'issue/12'): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -380,16 +380,16 @@ test('a report against the run it was planned against is recorded; one against a
   const system = build();
   liveRun(system);
   const validation = request(system);
-  system.store.markLocalValidationDispatched(validation.id, 'task-x');
+  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
   const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
 
   const planned = await callTool(system, agent, 'local_validation_plan', { plan: '## Plan\n1. Open it.' });
   assert.ok(!planned.isError, planned.text);
-  assert.equal(system.store.getLocalValidation(validation.id)?.plan, '## Plan\n1. Open it.');
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.plan, '## Plan\n1. Open it.');
 
-  const live = system.store.liveLocalRun();
+  const live = system.store.localRuns.liveLocalRun();
   assert.ok(live);
-  system.store.setLocalRunCommit(live.id, LATER_COMMIT);
+  system.store.localRuns.setLocalRunCommit(live.id, LATER_COMMIT);
 
   const refused = await callTool(system, agent, 'local_validation_report', {
     result: 'passed',
@@ -398,14 +398,18 @@ test('a report against the run it was planned against is recorded; one against a
   assert.ok(refused.isError, 'a reading of a checkout nobody asked about is not recorded');
   assert.match(refused.text, /refreshed onto/);
   assert.match(refused.text, /blocked/);
-  assert.equal(system.store.getLocalValidation(validation.id)?.status, 'dispatched', 'nothing was written');
+  assert.equal(
+    system.store.localValidations.getLocalValidation(validation.id)?.status,
+    'dispatched',
+    'nothing was written',
+  );
 
   const blocked = await callTool(system, agent, 'local_validation_report', {
     result: 'blocked',
     summary: 'the checkout moved while I was working',
   });
   assert.ok(!blocked.isError, blocked.text);
-  assert.equal(system.store.getLocalValidation(validation.id)?.status, 'blocked');
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.status, 'blocked');
   system.store.close();
 });
 
@@ -413,7 +417,7 @@ test('a failed reading writes the row and nothing else — never a shortfall', a
   const system = build();
   liveRun(system);
   const validation = request(system);
-  system.store.markLocalValidationDispatched(validation.id, 'task-x');
+  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
   const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
 
   const reported = await callTool(system, agent, 'local_validation_report', {
@@ -424,12 +428,12 @@ test('a failed reading writes the row and nothing else — never a shortfall', a
   });
   assert.ok(!reported.isError, reported.text);
 
-  const settled = system.store.getLocalValidation(validation.id);
+  const settled = system.store.localValidations.getLocalValidation(validation.id);
   assert.equal(settled?.status, 'failed');
   assert.equal(settled?.findings.length, 1);
   assert.deepEqual(settled?.visited, ['http://localhost:5173/jobs/new']);
-  assert.equal(system.store.getShortfall('issue:12'), null);
-  assert.equal(system.store.getDelivery('issue:12'), null);
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null);
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null);
   system.store.close();
 });
 
@@ -471,9 +475,9 @@ test('the desk settles what nobody will answer: a stopped environment, and a dea
   const stopped = build();
   const first = liveRun(stopped);
   const swept = request(stopped);
-  stopped.store.setLocalRunStatus(first.id, 'stopped');
+  stopped.store.localRuns.setLocalRunStatus(first.id, 'stopped');
   stopped.localValidations.sweep();
-  const gone = stopped.store.getLocalValidation(swept.id);
+  const gone = stopped.store.localValidations.getLocalValidation(swept.id);
   assert.equal(gone?.status, 'abandoned');
   assert.match(gone?.note ?? '', /stopped/);
   stopped.store.close();
@@ -481,11 +485,17 @@ test('the desk settles what nobody will answer: a stopped environment, and a dea
   const dead = build();
   liveRun(dead);
   const orphan = request(dead);
-  const task = dead.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: 'issue:12' });
-  dead.store.markLocalValidationDispatched(orphan.id, task.id);
-  dead.store.updateTask(task.id, { status: 'failed' });
+  const task = dead.store.tasks.createTask({
+    kind: 'code',
+    title: 't',
+    prompt: 'p',
+    branch: null,
+    originRef: 'issue:12',
+  });
+  dead.store.localValidations.markLocalValidationDispatched(orphan.id, task.id);
+  dead.store.tasks.updateTask(task.id, { status: 'failed' });
   dead.localValidations.sweep();
-  const settled = dead.store.getLocalValidation(orphan.id);
+  const settled = dead.store.localValidations.getLocalValidation(orphan.id);
   assert.equal(settled?.status, 'abandoned');
   assert.match(settled?.note ?? '', /without reporting/);
   dead.store.close();
@@ -502,7 +512,7 @@ test('the route refuses a swap nobody consented to, and takes one they did', asy
   assert.match(body.error, /#99 is running locally on issue\/99/);
   assert.match(body.error, /swap/);
   assert.equal(body.live.goal, 'issue:99');
-  assert.equal(system.store.latestLocalValidation('issue:12'), null, 'nothing was recorded');
+  assert.equal(system.store.localValidations.latestLocalValidation('issue:12'), null, 'nothing was recorded');
 
   await app.close();
   system.store.close();
@@ -521,7 +531,7 @@ test('a second press while one is running is refused, and says what is already h
 
   const cancelled = await app.inject({ method: 'POST', url: '/api/issues/12/validate-locally/cancel' });
   assert.equal(cancelled.statusCode, 200);
-  assert.equal(system.store.getLocalValidation(first.id)?.status, 'abandoned');
+  assert.equal(system.store.localValidations.getLocalValidation(first.id)?.status, 'abandoned');
 
   const missing = await app.inject({ method: 'POST', url: '/api/issues/12/validate-locally/cancel' });
   assert.equal(missing.statusCode, 404, 'there is nothing left to call off');

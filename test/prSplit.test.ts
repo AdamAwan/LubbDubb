@@ -119,7 +119,7 @@ test('one round ever: the verdict row is what stops it asking again, coherent or
   system.connector.inject({ kind: 'new_pr', number: 44, title: 'Add the thing', branch: 'issue/12/api' });
   system.connector.inject({ kind: 'pr_size', prNumber: 44, changedFiles: 48 });
 
-  system.store.recordPrSplitVerdict({
+  system.store.prSplits.recordPrSplitVerdict({
     prNumber: 44,
     issueNumber: 12,
     verdict: 'coherent',
@@ -135,7 +135,7 @@ test('one round ever: the verdict row is what stops it asking again, coherent or
     undefined,
     'a push to a pull request already judged coherent does not buy a second reading',
   );
-  const [recorded] = system.store.listPrSplitVerdicts();
+  const [recorded] = system.store.prSplits.listPrSplitVerdicts();
   assert.equal(recorded!.verdict, 'coherent');
   assert.deepEqual(recorded!.concepts, []);
   system.store.close();
@@ -143,7 +143,7 @@ test('one round ever: the verdict row is what stops it asking again, coherent or
 
 test('the verdict round-trips its concepts, and a re-record replaces rather than doubles', () => {
   const system = build(20);
-  system.store.recordPrSplitVerdict({
+  system.store.prSplits.recordPrSplitVerdict({
     prNumber: 44,
     issueNumber: 12,
     verdict: 'split',
@@ -152,7 +152,7 @@ test('the verdict round-trips its concepts, and a re-record replaces rather than
     files: 48,
     agentId: 'a1',
   });
-  system.store.recordPrSplitVerdict({
+  system.store.prSplits.recordPrSplitVerdict({
     prNumber: 44,
     issueNumber: 12,
     verdict: 'split',
@@ -161,7 +161,7 @@ test('the verdict round-trips its concepts, and a re-record replaces rather than
     files: 48,
     agentId: 'a1',
   });
-  const rows = system.store.listPrSplitVerdicts();
+  const rows = system.store.prSplits.listPrSplitVerdicts();
   assert.equal(rows.length, 1, 'keyed on the pull request');
   assert.deepEqual(rows[0]!.concepts, ['schema', 'endpoint', 'refactor']);
   system.store.close();
@@ -177,7 +177,7 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const t = system.store.createTask({
+  const t = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -200,7 +200,7 @@ test('a coherent verdict is a record: it is written, and nothing is asked of the
     files: 48,
   });
   assert.equal(res.isError, false);
-  const [row] = system.store.listPrSplitVerdicts();
+  const [row] = system.store.prSplits.listPrSplitVerdicts();
   assert.equal(row?.verdict, 'coherent');
   assert.equal(row?.prNumber, 44);
   assert.equal(row?.issueNumber, 12, 'attribution is structural — the tool takes no pull request argument');
@@ -220,7 +220,7 @@ test('a split needs its concepts named, and points the agent at plan_correct rat
     files: 48,
   });
   assert.equal(thin.isError, true, 'a split with one concept is not a split');
-  assert.equal(system.store.listPrSplitVerdicts().length, 0, 'and a refusal writes nothing');
+  assert.equal(system.store.prSplits.listPrSplitVerdicts().length, 0, 'and a refusal writes nothing');
 
   const ok = await callTool(system, agent, 'split_assess', {
     verdict: 'split',
@@ -229,7 +229,7 @@ test('a split needs its concepts named, and points the agent at plan_correct rat
     files: 48,
   });
   assert.equal(ok.isError, false);
-  assert.deepEqual(system.store.listPrSplitVerdicts()[0]?.concepts, ['schema', 'endpoint']);
+  assert.deepEqual(system.store.prSplits.listPrSplitVerdicts()[0]?.concepts, ['schema', 'endpoint']);
   assert.match(ok.text, /plan_correct/, 'the recording splits nothing on its own');
   assert.match(ok.text, /Do not close the pull request/);
   system.store.close?.();
@@ -244,6 +244,6 @@ test('the tool refuses an origin that is not a split, so a verdict never lands o
     files: 48,
   });
   assert.equal(res.isError, true);
-  assert.equal(system.store.listPrSplitVerdicts().length, 0);
+  assert.equal(system.store.prSplits.listPrSplitVerdicts().length, 0);
   system.store.close?.();
 });

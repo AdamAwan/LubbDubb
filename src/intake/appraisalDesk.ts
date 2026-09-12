@@ -19,7 +19,7 @@ export class AppraisalDesk {
   constructor(private readonly deps: AppraisalDeskDeps) {}
 
   async announce(world: WorldSnapshot): Promise<void> {
-    const appraisals = new Map(this.deps.store.listAppraisals().map((a) => [a.originRef, a]));
+    const appraisals = new Map(this.deps.store.verdicts.listAppraisals().map((a) => [a.originRef, a]));
     if (appraisals.size === 0) return;
     for (const issue of world.issues) {
       const appraisal = appraisals.get(issueOriginRef('root', issue.number));
@@ -41,7 +41,7 @@ export class AppraisalDesk {
       });
       this.lastBody.set(appraisal.originRef, body);
       if (result.ref && result.ref !== appraisal.commentRef)
-        this.deps.store.setAppraisalComment(appraisal.originRef, result.ref);
+        this.deps.store.verdicts.setAppraisalComment(appraisal.originRef, result.ref);
     } catch (err) {
       this.deps.errors?.record({
         source: 'cycle',

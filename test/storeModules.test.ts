@@ -68,12 +68,12 @@ test('the transcript buffer survives close(), wherever the buffer lives', () => 
   const dbPath = join(dir, 'store.db');
   try {
     const store = new Store(dbPath);
-    store.appendTranscript('agent_x', 'well under ');
-    store.appendTranscript('agent_x', 'the flush threshold');
+    store.transcripts.appendTranscript('agent_x', 'well under ');
+    store.transcripts.appendTranscript('agent_x', 'the flush threshold');
     store.close();
 
     const reopened = new Store(dbPath);
-    assert.equal(reopened.getTranscript('agent_x'), 'well under the flush threshold');
+    assert.equal(reopened.transcripts.getTranscript('agent_x'), 'well under the flush threshold');
     reopened.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

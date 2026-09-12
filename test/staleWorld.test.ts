@@ -55,9 +55,9 @@ test('a stale slice never moves the world baseline, so recovery re-announces not
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listWorldEvents(), []);
+  assert.deepEqual(system.store.world.listWorldEvents(), []);
 
-  assert.equal(system.store.getWorldBaseline()?.pullRequests.length, 1);
+  assert.equal(system.store.world.getWorldBaseline()?.pullRequests.length, 1);
 
   system.store.close();
 });

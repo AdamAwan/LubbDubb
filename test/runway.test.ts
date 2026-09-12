@@ -610,7 +610,7 @@ test('a fleet that goes dry twice files twice, through the real desk and store',
   const empty: Issue[] = [];
   const stocked = [1, 2, 3, 4, 5, 6].map((n) => issue(n));
 
-  const openSupply = () => store.listHumanTasksOfKind('supply').filter((t) => t.status === 'open');
+  const openSupply = () => store.humanTasks.listHumanTasksOfKind('supply').filter((t) => t.status === 'open');
 
   assert.equal(desk.run(deskInput(empty)).state, 'dry');
   assert.equal(openSupply().length, 1, 'the first dry spell is on the bench');
@@ -619,9 +619,13 @@ test('a fleet that goes dry twice files twice, through the real desk and store',
 
   assert.equal(desk.run(deskInput(empty)).state, 'dry');
   assert.equal(openSupply().length, 1, 'the second one is on it too — silence here is the bug');
-  assert.equal(store.listHumanTasksOfKind('supply').length, 1, 'on one row, never a second describing one fleet');
+  assert.equal(
+    store.humanTasks.listHumanTasksOfKind('supply').length,
+    1,
+    'on one row, never a second describing one fleet',
+  );
   assert.ok(
-    store.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
+    store.humanTasks.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
     'and on the bench feed the cockpit actually draws',
   );
 
@@ -690,7 +694,7 @@ test('a pulse over an empty world files the row, and the next one settles it onc
   const world = new FakeWorldStore(system.store);
 
   await system.harness.runCycle('manual');
-  const filed = system.store.listHumanTasksOfKind('supply');
+  const filed = system.store.humanTasks.listHumanTasksOfKind('supply');
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.status, 'open');
   assert.equal(filed[0]!.originRef, null);
@@ -699,7 +703,7 @@ test('a pulse over an empty world files the row, and the next one settles it onc
 
   await system.harness.runCycle('manual');
   assert.deepEqual(
-    system.store.listHumanTasksOfKind('supply').map((t) => t.id),
+    system.store.humanTasks.listHumanTasksOfKind('supply').map((t) => t.id),
     [filed[0]!.id],
   );
 
@@ -716,7 +720,7 @@ test('a pulse over an empty world files the row, and the next one settles it onc
       });
   });
   await system.harness.runCycle('manual');
-  const settled = system.store.getHumanTask(filed[0]!.id)!;
+  const settled = system.store.humanTasks.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /recovered/);
 });
@@ -724,12 +728,12 @@ test('a pulse over an empty world files the row, and the next one settles it onc
 test('switched off, a pulse files nothing and drains what was standing', async () => {
   const on = build();
   await on.harness.runCycle('manual');
-  const standing = on.store.listHumanTasksOfKind('supply');
+  const standing = on.store.humanTasks.listHumanTasksOfKind('supply');
   assert.equal(standing.length, 1);
 
   const off = build({ enabled: false });
   await off.harness.runCycle('manual');
-  assert.deepEqual(off.store.listHumanTasksOfKind('supply'), []);
+  assert.deepEqual(off.store.humanTasks.listHumanTasksOfKind('supply'), []);
 });
 
 test('the band reads a standing supply row off the whole bench, not the hundred-row feed', async () => {
@@ -785,25 +789,25 @@ test('the band reads a standing supply row off the whole bench, not the hundred-
       linkedPrNumber: null,
       workItemState: null,
     };
-    history.recordIssueRun({ ...run, complete: false });
+    history.floor.recordIssueRun({ ...run, complete: false });
     clock += 40 * 60_000;
-    history.recordIssueRun({ ...run, complete: true });
+    history.floor.recordIssueRun({ ...run, complete: true });
     clock += 60_000;
   }
   history.close();
 
   await system.harness.runCycle('manual');
-  const standing = system.store.listHumanTasksOfKind('supply');
+  const standing = system.store.humanTasks.listHumanTasksOfKind('supply');
   assert.equal(standing.length, 1);
   assert.equal(standing[0]!.status, 'open');
 
   queue(3, 6);
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
+  assert.equal(system.store.humanTasks.listHumanTasksOfKind('supply')[0]!.status, 'open');
   assert.equal(buildStateSnapshot(system).runway.state, 'thin');
 
   for (let n = 0; n < 101; n += 1)
-    system.store.recordHumanTask({
+    system.store.humanTasks.recordHumanTask({
       title: `Close out ${n}`,
       detail: 'x',
       agentId: null,
@@ -812,14 +816,14 @@ test('the band reads a standing supply row off the whole bench, not the hundred-
       kind: 'close_out',
     });
   assert.equal(
-    system.store.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
+    system.store.humanTasks.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
     false,
     'the capped feed has lost the standing row — which is the whole hazard',
   );
 
-  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
+  assert.equal(system.store.humanTasks.listHumanTasksOfKind('supply')[0]!.status, 'open');
   assert.equal(buildStateSnapshot(system).runway.state, 'thin');
 
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
+  assert.equal(system.store.humanTasks.listHumanTasksOfKind('supply')[0]!.status, 'open');
 });

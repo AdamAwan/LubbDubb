@@ -109,7 +109,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['test (windows)']): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -123,7 +123,7 @@ function spawnAgent(system: System, originRef: string, ciChecks: string[] = ['te
 
 function stand(system: System, what: string, check: string): void {
   for (const goal of ['issue:900', 'issue:901']) {
-    system.store.recordObstacleSighting(
+    system.store.obstacles.recordObstacleSighting(
       {
         what,
         kind: 'obstacle',
@@ -169,7 +169,10 @@ test('once per agent per obstacle, ever: a second pulse sends nothing', () => {
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.agentId, live.id);
   assert.match(sent[0]!.text, /windows runner wedges/);
-  assert.deepEqual([...system.store.obstaclesNoticedBy(live.id)], [system.store.listObstacles()[0]!.id]);
+  assert.deepEqual(
+    [...system.store.obstacles.obstaclesNoticedBy(live.id)],
+    [system.store.obstacles.listObstacles()[0]!.id],
+  );
   system.store.close();
 });
 
@@ -179,7 +182,10 @@ test('a notice reaches a live session only, and never ends a park', () => {
   stand(system, 'the windows runner wedges before the suite starts', 'test (windows)');
 
   new ObstacleNoticeDesk({ store: system.store, fleet: system.agents }).run();
-  assert.deepEqual([...system.store.obstaclesNoticedBy(live.id)], [system.store.listObstacles()[0]!.id]);
+  assert.deepEqual(
+    [...system.store.obstacles.obstaclesNoticedBy(live.id)],
+    [system.store.obstacles.listObstacles()[0]!.id],
+  );
 
   assert.equal(system.agents.notify('agent-that-never-was', 'anything at all'), false);
   system.store.close();

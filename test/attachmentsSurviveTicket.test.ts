@@ -63,7 +63,7 @@ test('a brief’s images are written under the ticket it was filed as', async ()
     { name: 'after.gif', data: GIF },
   ]);
 
-  const stored = system.store.listAttachments(ticketRef);
+  const stored = system.store.jobs.listAttachments(ticketRef);
   assert.deepEqual(
     stored.map((a) => [a.index, a.label, a.mime]),
     [
@@ -88,8 +88,8 @@ test('two briefs keep their own images, under their own tickets', async () => {
   const second = await fileBrief(system, [{ name: 'two.gif', data: GIF }]);
   assert.notEqual(first, second, 'each brief files its own ticket');
 
-  const a = system.store.listAttachments(first);
-  const b = system.store.listAttachments(second);
+  const a = system.store.jobs.listAttachments(first);
+  const b = system.store.jobs.listAttachments(second);
   assert.deepEqual(
     a.map((x) => x.label),
     ['one.png'],
@@ -108,16 +108,16 @@ test('two briefs keep their own images, under their own tickets', async () => {
 test('every agent dispatched for the goal is handed the images, and only that goal’s', async () => {
   const system = build();
   const ticketRef = await fileBrief(system, [{ name: 'panel.png', data: PNG }]);
-  const attachment = system.store.listAttachments(ticketRef)[0]!;
+  const attachment = system.store.jobs.listAttachments(ticketRef)[0]!;
 
   system.connector.inject({ kind: 'new_issue', number: 315, title: 'Something else entirely', body: 'No image.' });
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  const mine = system.store
+  const mine = system.store.tasks
     .listTasks()
     .filter((t) => t.originRef?.startsWith(`${ticketRef}`))
-    .map((t) => system.store.getTask(t.id)!);
+    .map((t) => system.store.tasks.getTask(t.id)!);
   assert.ok(mine.length > 0, 'the funnel picked the goal up');
   for (const task of mine) {
     assert.ok(task.prompt.includes(attachment.path), `${task.originRef} is given the absolute path`);
@@ -125,10 +125,10 @@ test('every agent dispatched for the goal is handed the images, and only that go
     assert.ok(!task.prompt.startsWith('---'), 'the note is appended to a rendered prompt, not the whole of it');
   }
 
-  const others = system.store
+  const others = system.store.tasks
     .listTasks()
     .filter((t) => t.originRef?.startsWith('issue:315'))
-    .map((t) => system.store.getTask(t.id)!);
+    .map((t) => system.store.tasks.getTask(t.id)!);
   assert.ok(others.length > 0, 'the other goal was picked up too');
   for (const task of others)
     assert.ok(!task.prompt.includes(attachment.path), `${task.originRef} sees nothing of another goal's images`);

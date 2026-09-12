@@ -73,7 +73,7 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
       );
     }
 
-    const recorded = deps.store.recordPrSplitVerdict({
+    const recorded = deps.store.prSplits.recordPrSplitVerdict({
       prNumber,
       issueNumber,
       verdict,
