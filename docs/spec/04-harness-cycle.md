@@ -113,12 +113,11 @@ A local cycle runs **everything derived from the store** — the plan funnel, th
 the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
 and skips **every pass whose subject is the world snapshot**:
 
-`connector.getState` and `recordWorldChanges` — plus every desk the
-[registry](#the-desk-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
+`connector.getState` and `recordWorldChanges` — plus every pass the
+[pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
 `prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
-`obstacleVoice`, `obstacleEndings` and `pool`, and every sweep the
-[sweep registry](#the-sweep-registry) declares `readWorld: true`, which today is `appraisals`,
-`areaPaths`, `reviewedElsewhere` and `tickets`.
+`obstacleVoice`, `obstacleEndings` and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
+`reviewedElsewhere` and `tickets` at the phases below it.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
@@ -127,9 +126,8 @@ run with `prev === next` it would read every notice as settled by a world that h
 `recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
 would be a write, on every local cycle, asserting the world was read when it was not.
 
-The line is held as **data, not as line shape**: each desk and each sweep declares `readWorld` once
-in its registry and the walk skips it, so there is no `if (readWorld)` for a new one to be written
-without. The only two guards left are the world reading itself — `connector.getState` and
+The line is held as **data, not as line shape**: each pass declares `readWorld` once in the registry
+and the walk skips it, so there is no `if (readWorld)` for a new one to be written without. The only two guards left are the world reading itself — `connector.getState` and
 `recordWorldChanges`, which are not passes over the world but the reading of it and the record of
 what it changed.
 
@@ -454,8 +452,8 @@ flowchart TD
      local cycle**: a local cycle takes no diff, and run with `previousWorld === world` it would read
      every transition as new, or every one as none.
 
-   In order — the order itself being a [registry entry](#the-desk-registry) each, not a line in
-   `runCycle`:
+   In order — the order itself being a [registry entry](#the-pulse-registry) each, all of them at the
+   registry's `reconcile` phase, not a line in `runCycle`:
 
    `graduations.run()` follows what became of the documentation pull requests an operator opened for
    a claim, and takes a landed claim out of every prompt because the repository now says it. **Below
@@ -553,8 +551,9 @@ flowchart TD
 
    Each of these — and the burn watch, the ejection expiries, the review waits, the appraisal
    announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the ticket
-   filer below the executor — is a [sweep registry](#the-sweep-registry) entry rather than a line in
+   filer below the executor — is a [registry](#the-pulse-registry) entry rather than a line in
    `runCycle`, and which gap in the read it sits in is the `phase` it declares.
+
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on
@@ -584,30 +583,49 @@ flowchart TD
 18. **Clear `cycleInFlight`**, and fire the [trailing `manual` cycle](#the-trailing-edge) if one was
     refused while this one ran.
 
-### The desk registry
+### The pulse registry
 
-The bookkeeping desks between the world reading and the store read are **declared, not written out**:
-`src/pulseDesks.ts` holds one entry per desk, in the order they run, and `runCycle` walks it. It is the
-same answer `DISPATCH_PIPELINE` (`src/dispatcher/rules.ts`) gives one layer over, for the same reason —
-an order that is load-bearing must be a thing a test can read.
+Every pass the cycle makes over its own bookkeeping — the desks between the world reading and the
+store read, and the sweeps between those reads and `decide` — is **declared, not written out**:
+`src/pulseDesks.ts` holds `PULSE_PIPELINE`, one entry per pass **in the order they run**, and
+`runCycle` walks it. It is the same answer `DISPATCH_PIPELINE` (`src/dispatcher/rules.ts`) gives one
+layer over, for the same reason — an order that is load-bearing must be a thing a test can read — and
+it is derived the same way: the ordered array **is** the registry, so there is no second list of ids
+to fall out of step with it.
 
-An entry is its dependency's name on `PulseDeskDeps` (which `HarnessDeps` extends, so the composition
-root is unchanged) plus three declarations:
+There is one entry type, because a desk is a sweep that runs at its own phase. An entry declares:
 
-- **`readWorld`** — whether the desk's subject is the world snapshot, and so whether it is skipped on a
-  [local cycle](#what-runs-and-what-does-not). One flag per desk, in one place, instead of the guard
+- **`id`** — what the pass is called. It is usually its dependency's name on `PulseDeps` (which
+  `HarnessDeps` extends, so the composition root is unchanged), but it need not be: one dependency can
+  carry two passes at two positions — `fleet` carries `parks` and `stalls`, `escalations` carries
+  `deadAgents` and `settledMerges` — so the registry names the passes, not the deps.
+- **`phase`** — the gap in the cycle's own reads the pass sits in. `runCycle` reads the store between
+  the passes, and [those reads happen once](#ordering) with the result reused — the pulse's own reads,
+  that is; the dispatcher's are taken together below the last phase. So the walk is run once per phase,
+  handed that phase's reading: `reconcile` first, above everything the cycle reads off the store, where
+  the desks run against the world and the world before it; then `open` before the store read, then
+  `afterTasks`, `afterAgents`, `afterVerdicts`, `afterOrigins`, `afterReviews`, and `afterExecute` below
+  the executor, where the ticket filer runs. A pass is handed what the cycle has already read rather
+  than reading it again, which is what keeps "which of the two reads was this decided against?" a
+  question nobody has to ask. The reading each phase is handed is its own — `PulseReadings` maps phase
+  to reading, so `reconcile`'s `{ world, previousWorld }` costs the other seven nothing.
+  `PULSE_PHASES` states the phase order and `test/pulsePipeline.test.ts` asserts the pipeline is
+  grouped by it, so a pass given the wrong phase is a failing test rather than a pass that quietly
+  moved.
+- **`readWorld`** — whether the pass's subject is the world snapshot, and so whether it is skipped on a
+  [local cycle](#what-runs-and-what-does-not). One flag per pass, in one place, instead of the guard
   repeated at every call site.
-- **`awaited`** — every desk is awaited, sync or async alike, except `obstacleDesk`, whose whole
+- **`awaited`** — every pass is awaited, sync or async alike, except `obstacleDesk`, whose whole
   position is that the pulse does not block on a model round trip. That exception is a declared `false`
   rather than a `void` somebody can copy by accident.
-- **`run(deps, { world, previousWorld })`** — how the desk is called, through `deps.<id>?.`, so a desk
-  the deployment does not wire is skipped and never an error. The desks that take a **narrowed** view of
-  the world (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies
-  the narrow type, and widening them to `WorldSnapshot` to make the entries look alike would give each
-  desk reach it has no use for.
+- **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not
+  wire is skipped and never an error. The desks that take a **narrowed** view of the world
+  (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies the narrow
+  type, and widening them to `WorldSnapshot` to make the entries look alike would give each desk reach
+  it has no use for.
 
 **`test/pulsePipeline.test.ts` is what makes the order safe.** It asserts the orderings below **by id
-against the declared list**, so moving a desk that must stay below another fails a test instead of
+against the declared list**, so moving a pass that must stay below another fails a test instead of
 breaking silently:
 
 | Constraint                                                             | Why                                                                                                                                                                      |
@@ -622,39 +640,14 @@ breaking silently:
 | `notices`, `obstacleNotices` → `obstacleOwnership` → `obstacleEndings` | an agent whose report was taken up is told so by the pulse that took it, and the endings read the owner the ownership desk may have just written                         |
 | `prWatch` → `prWorkItems`                                              | one pass says the pull request is the fleet's, the other which work item it is for                                                                                       |
 
-The same test asserts every declared desk takes exactly one position and is actually reached by the
-walk, so a desk wired in `src/system.ts` and left out of the registry cannot sit there dead. Adding a
-desk is therefore three things and no more: a field on `PulseDeskDeps`, an entry in `PULSE_DESKS`
-(which the record's type will not let you forget), and its position in `PULSE_PIPELINE`.
+The same test asserts the walk reaches every entry in the declared order, and that no id is walked
+twice — a duplicate is what would make a position, and so every one of those constraints, mean
+nothing. What it no longer has to assert is that a registry and an ordering agree: there is one list,
+so a pass wired in `src/system.ts` and left out of it cannot sit there dead, and a pass declared and
+never walked cannot exist. Adding a pass is therefore two things and no more: a field on `PulseDeps`,
+and an entry in `PULSE_PIPELINE` at the position it should run.
 
-### The sweep registry
-
-The passes between the desks and `decide` — the parks, the expiries, the tidies, the burn watch, the
-appraisal announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the
-ticket filer — are declared the same way, in the same file: `PULSE_SWEEPS`, walked in the order
-`PULSE_SWEEP_PIPELINE` states, with `PulseSweepDeps` as their dependencies. They are the same kind of
-thing as a desk and get the same `readWorld` and `awaited` flags, for the same reason: a sweep whose
-subject is the world snapshot is one flag, in one place, rather than an `if (readWorld)` at a call
-site that the next sweep can be written without.
-
-Two things differ from the desk registry, and both come from where the sweeps sit:
-
-- **An id is not a dependency's name.** One dependency can carry two sweeps with two positions —
-  `fleet` carries `parks` and `stalls`, `escalations` carries `deadAgents` and `settledMerges` — so
-  `PULSE_SWEEP_PIPELINE` names the sweeps, not the deps, and `test/pulsePipeline.test.ts` is what
-  asserts every declared one takes exactly one position.
-- **`runCycle` reads the store between them**, and [those reads happen once](#ordering) with the
-  result reused — the pulse's own reads, that is; the dispatcher's are taken together below the last
-  sweep phase. So each sweep declares a **`phase`** — the gap in the read it sits in — and the walk
-  is run once per phase, handed that phase's reading: `open` before any of it, then `afterTasks`,
-  `afterAgents`, `afterVerdicts`, `afterOrigins`, `afterReviews`, and `afterExecute` below the
-  executor, where the ticket filer runs. A sweep is handed what the cycle has already read rather
-  than reading it again, which is what keeps "which of the two reads was this decided against?" a
-  question nobody has to ask. `PULSE_SWEEP_PHASES` states the phase order and the same test asserts
-  the pipeline is grouped by it, so a sweep given the wrong phase is a failing test rather than a
-  pass that quietly moved.
-
-A sweep that records its own failures does so inside its own body — `parks` recording a resume that
+A pass that records its own failures does so inside its own body — `parks` recording a resume that
 failed, `issueRuns` its `errors.record` around the whole loop — for the reason every other caught
 failure is recorded rather than swallowed ([18](18-observability.md)).
 

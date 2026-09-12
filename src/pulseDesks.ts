@@ -27,7 +27,11 @@ import type { PoolDesk } from './pool/poolDesk.js';
 
 // → docs/spec/04-harness-cycle.md
 
-export interface PulseDeskDeps {
+export interface PulseDeps {
+  store: Store;
+  errors: ErrorRecorder;
+  review: PrReviewPolicy;
+  reviewProber?: ReviewProber;
   plans?: PlanReconciler;
   prWatch?: PrWatchDesk;
   prWorkItems?: PrWorkItemDesk;
@@ -51,87 +55,6 @@ export interface PulseDeskDeps {
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   obstacleEndings?: { run(world: WorldSnapshot): void };
   pool?: PoolDesk;
-}
-
-export type PulseDeskId = keyof PulseDeskDeps;
-
-export interface PulseReading {
-  world: WorldSnapshot;
-  previousWorld: WorldSnapshot | null;
-}
-
-interface PulseDesk {
-  readWorld: boolean;
-  awaited: boolean;
-  run(deps: PulseDeskDeps, at: PulseReading): unknown;
-}
-
-export const PULSE_DESKS: Record<PulseDeskId, PulseDesk> = {
-  plans: { readWorld: true, awaited: true, run: (d, at) => d.plans?.reconcile(at.world) },
-  prWatch: { readWorld: true, awaited: true, run: (d, at) => d.prWatch?.run(at.world) },
-  prWorkItems: { readWorld: true, awaited: true, run: (d, at) => d.prWorkItems?.run(at.world) },
-  naming: { readWorld: true, awaited: true, run: (d, at) => d.naming?.run(at.world) },
-  branchReaps: { readWorld: true, awaited: true, run: (d, at) => d.branchReaps?.run(at.world) },
-  landings: { readWorld: false, awaited: true, run: (d, at) => d.landings?.settle(at.world) },
-  validationAsks: { readWorld: false, awaited: true, run: (d) => d.validationAsks?.run() },
-  schedules: { readWorld: false, awaited: true, run: (d) => d.schedules?.run() },
-  updates: { readWorld: true, awaited: true, run: (d) => d.updates?.run() },
-  graph: { readWorld: false, awaited: true, run: (d, at) => d.graph?.record(at.world) },
-  environments: { readWorld: true, awaited: true, run: (d, at) => d.environments?.run(at.world) },
-  remoteValidation: { readWorld: true, awaited: true, run: (d) => d.remoteValidation?.run() },
-  validationReady: { readWorld: false, awaited: true, run: (d, at) => d.validationReady?.run(at.world) },
-  closeOuts: { readWorld: false, awaited: true, run: (d, at) => d.closeOuts?.run(at.world) },
-  notices: { readWorld: true, awaited: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
-  graduations: { readWorld: false, awaited: true, run: (d) => d.graduations?.run() },
-  clusters: { readWorld: false, awaited: true, run: (d) => d.clusters?.run() },
-  obstacleVoice: { readWorld: true, awaited: true, run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world) },
-  obstacleDesk: { readWorld: false, awaited: false, run: (d) => d.obstacleDesk?.run() },
-  obstacleNotices: { readWorld: false, awaited: true, run: (d) => d.obstacleNotices?.run() },
-  obstacleOwnership: { readWorld: false, awaited: true, run: (d, at) => d.obstacleOwnership?.run(at.world) },
-  obstacleEndings: { readWorld: true, awaited: true, run: (d, at) => d.obstacleEndings?.run(at.world) },
-  pool: { readWorld: true, awaited: true, run: (d) => d.pool?.run() },
-};
-
-export const PULSE_PIPELINE: readonly PulseDeskId[] = [
-  'plans',
-  'prWatch',
-  'prWorkItems',
-  'naming',
-  'branchReaps',
-  'landings',
-  'validationAsks',
-  'schedules',
-  'updates',
-  'graph',
-  'environments',
-  'remoteValidation',
-  'validationReady',
-  'closeOuts',
-  'notices',
-  'graduations',
-  'clusters',
-  'obstacleVoice',
-  'obstacleDesk',
-  'obstacleNotices',
-  'obstacleOwnership',
-  'obstacleEndings',
-  'pool',
-];
-
-export async function runPulseDesks(deps: PulseDeskDeps, at: PulseReading, readWorld: boolean): Promise<void> {
-  for (const id of PULSE_PIPELINE) {
-    const desk = PULSE_DESKS[id];
-    if (desk.readWorld && !readWorld) continue;
-    if (desk.awaited) await desk.run(deps, at);
-    else void desk.run(deps, at);
-  }
-}
-
-export interface PulseSweepDeps {
-  store: Store;
-  errors: ErrorRecorder;
-  review: PrReviewPolicy;
-  reviewProber?: ReviewProber;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
   burn?: SpendBurnDesk;
@@ -142,7 +65,8 @@ export interface PulseSweepDeps {
   tickets?: { run(): Promise<void> };
 }
 
-type PulseSweepPhase =
+type PulsePhase =
+  | 'reconcile'
   | 'open'
   | 'afterTasks'
   | 'afterAgents'
@@ -151,7 +75,8 @@ type PulseSweepPhase =
   | 'afterReviews'
   | 'afterExecute';
 
-interface PulseSweepReadings {
+interface PulseReadings {
+  reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null };
   open: Record<string, never>;
   afterTasks: { world: WorldSnapshot; tasks: TaskSummary[] };
   afterAgents: { tasks: TaskSummary[]; agents: Agent[] };
@@ -161,79 +86,201 @@ interface PulseSweepReadings {
   afterExecute: Record<string, never>;
 }
 
-type PulseSweepId =
-  | 'parks'
-  | 'stalls'
-  | 'ejectionExpiries'
-  | 'reviewWaits'
-  | 'burn'
-  | 'deadAgents'
-  | 'settledMerges'
-  | 'appraisals'
-  | 'areaPaths'
-  | 'issueRuns'
-  | 'reviewedElsewhere'
-  | 'localValidations'
-  | 'tickets';
-
-interface PulseSweep<P extends PulseSweepPhase = PulseSweepPhase> {
+interface PulseEntry<P extends PulsePhase = PulsePhase, I extends string = string> {
+  id: I;
   phase: P;
   readWorld: boolean;
   awaited: boolean;
-  run(deps: PulseSweepDeps, at: PulseSweepReadings[P]): unknown;
+  run(deps: PulseDeps, at: PulseReadings[P]): unknown;
 }
 
-function sweep<P extends PulseSweepPhase>(entry: PulseSweep<P>): PulseSweep<P> {
+function pass<P extends PulsePhase, I extends string>(entry: PulseEntry<P, I>): PulseEntry<P, I> {
   return entry;
 }
 
-export const PULSE_SWEEPS: Record<PulseSweepId, PulseSweep> = {
-  parks: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => resumeExpiredParks(d) }),
-  stalls: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => d.fleet?.completeExpiredStalls() }),
-  ejectionExpiries: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => d.ejections?.sweepExpiries() }),
-  reviewWaits: sweep({ phase: 'afterTasks', readWorld: false, awaited: true, run: (d, at) => foldReviewWaits(d, at) }),
-  burn: sweep({
+const ENTRIES = [
+  pass({
+    id: 'plans',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.plans?.reconcile(at.world),
+  }),
+  pass({ id: 'prWatch', phase: 'reconcile', readWorld: true, awaited: true, run: (d, at) => d.prWatch?.run(at.world) }),
+  pass({
+    id: 'prWorkItems',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.prWorkItems?.run(at.world),
+  }),
+  pass({ id: 'naming', phase: 'reconcile', readWorld: true, awaited: true, run: (d, at) => d.naming?.run(at.world) }),
+  pass({
+    id: 'branchReaps',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.branchReaps?.run(at.world),
+  }),
+  pass({
+    id: 'landings',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => d.landings?.settle(at.world),
+  }),
+  pass({
+    id: 'validationAsks',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d) => d.validationAsks?.run(),
+  }),
+  pass({ id: 'schedules', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.schedules?.run() }),
+  pass({ id: 'updates', phase: 'reconcile', readWorld: true, awaited: true, run: (d) => d.updates?.run() }),
+  pass({ id: 'graph', phase: 'reconcile', readWorld: false, awaited: true, run: (d, at) => d.graph?.record(at.world) }),
+  pass({
+    id: 'environments',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.environments?.run(at.world),
+  }),
+  pass({
+    id: 'remoteValidation',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d) => d.remoteValidation?.run(),
+  }),
+  pass({
+    id: 'validationReady',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => d.validationReady?.run(at.world),
+  }),
+  pass({
+    id: 'closeOuts',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => d.closeOuts?.run(at.world),
+  }),
+  pass({
+    id: 'notices',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.notices?.run(at.previousWorld, at.world),
+  }),
+  pass({ id: 'graduations', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.graduations?.run() }),
+  pass({ id: 'clusters', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.clusters?.run() }),
+  pass({
+    id: 'obstacleVoice',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world),
+  }),
+  pass({ id: 'obstacleDesk', phase: 'reconcile', readWorld: false, awaited: false, run: (d) => d.obstacleDesk?.run() }),
+  pass({
+    id: 'obstacleNotices',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d) => d.obstacleNotices?.run(),
+  }),
+  pass({
+    id: 'obstacleOwnership',
+    phase: 'reconcile',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => d.obstacleOwnership?.run(at.world),
+  }),
+  pass({
+    id: 'obstacleEndings',
+    phase: 'reconcile',
+    readWorld: true,
+    awaited: true,
+    run: (d, at) => d.obstacleEndings?.run(at.world),
+  }),
+  pass({ id: 'pool', phase: 'reconcile', readWorld: true, awaited: true, run: (d) => d.pool?.run() }),
+  pass({ id: 'parks', phase: 'open', readWorld: false, awaited: true, run: (d) => resumeExpiredParks(d) }),
+  pass({ id: 'stalls', phase: 'open', readWorld: false, awaited: true, run: (d) => d.fleet?.completeExpiredStalls() }),
+  pass({
+    id: 'ejectionExpiries',
+    phase: 'open',
+    readWorld: false,
+    awaited: true,
+    run: (d) => d.ejections?.sweepExpiries(),
+  }),
+  pass({
+    id: 'reviewWaits',
+    phase: 'afterTasks',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => foldReviewWaits(d, at),
+  }),
+  pass({
+    id: 'burn',
     phase: 'afterAgents',
     readWorld: false,
     awaited: true,
     run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }),
   }),
-  deadAgents: sweep({
+  pass({
+    id: 'deadAgents',
     phase: 'afterAgents',
     readWorld: false,
     awaited: true,
     run: (d) => d.escalations?.tidyDeadAgents(),
   }),
-  settledMerges: sweep({
+  pass({
+    id: 'settledMerges',
     phase: 'afterAgents',
     readWorld: false,
     awaited: true,
     run: (d) => d.escalations?.tidySettledMerges(),
   }),
-  appraisals: sweep({
+  pass({
+    id: 'appraisals',
     phase: 'afterVerdicts',
     readWorld: true,
     awaited: true,
     run: (d, at) => d.appraisals?.announce(at.world),
   }),
-  areaPaths: sweep({ phase: 'afterVerdicts', readWorld: true, awaited: true, run: (d) => d.areaPaths?.refresh() }),
-  issueRuns: sweep({ phase: 'afterOrigins', readWorld: false, awaited: true, run: (d, at) => recordIssueRuns(d, at) }),
-  reviewedElsewhere: sweep({
+  pass({ id: 'areaPaths', phase: 'afterVerdicts', readWorld: true, awaited: true, run: (d) => d.areaPaths?.refresh() }),
+  pass({
+    id: 'issueRuns',
+    phase: 'afterOrigins',
+    readWorld: false,
+    awaited: true,
+    run: (d, at) => recordIssueRuns(d, at),
+  }),
+  pass({
+    id: 'reviewedElsewhere',
     phase: 'afterReviews',
     readWorld: true,
     awaited: true,
     run: (d, at) => askReviewedElsewhere(d, at),
   }),
-  localValidations: sweep({
+  pass({
+    id: 'localValidations',
     phase: 'afterReviews',
     readWorld: false,
     awaited: true,
     run: (d) => d.localValidations?.sweep(),
   }),
-  tickets: sweep({ phase: 'afterExecute', readWorld: true, awaited: true, run: (d) => d.tickets?.run() }),
-};
+  pass({ id: 'tickets', phase: 'afterExecute', readWorld: true, awaited: true, run: (d) => d.tickets?.run() }),
+];
 
-export const PULSE_SWEEP_PHASES: readonly PulseSweepPhase[] = [
+export type PulseId = (typeof ENTRIES)[number]['id'];
+
+export const PULSE_PIPELINE: readonly PulseEntry[] = ENTRIES;
+
+export const PULSE_PHASES: readonly PulsePhase[] = [
+  'reconcile',
   'open',
   'afterTasks',
   'afterAgents',
@@ -243,30 +290,13 @@ export const PULSE_SWEEP_PHASES: readonly PulseSweepPhase[] = [
   'afterExecute',
 ];
 
-export const PULSE_SWEEP_PIPELINE: readonly PulseSweepId[] = [
-  'parks',
-  'stalls',
-  'ejectionExpiries',
-  'reviewWaits',
-  'burn',
-  'deadAgents',
-  'settledMerges',
-  'appraisals',
-  'areaPaths',
-  'issueRuns',
-  'reviewedElsewhere',
-  'localValidations',
-  'tickets',
-];
-
-export async function runPulseSweeps<P extends PulseSweepPhase>(
+export async function runPulse<P extends PulsePhase>(
   phase: P,
-  deps: PulseSweepDeps,
-  at: PulseSweepReadings[P],
+  deps: PulseDeps,
+  at: PulseReadings[P],
   readWorld: boolean,
 ): Promise<void> {
-  for (const id of PULSE_SWEEP_PIPELINE) {
-    const entry = PULSE_SWEEPS[id];
+  for (const entry of PULSE_PIPELINE) {
     if (entry.phase !== phase) continue;
     if (entry.readWorld && !readWorld) continue;
     if (entry.awaited) await entry.run(deps, at);
@@ -274,7 +304,7 @@ export async function runPulseSweeps<P extends PulseSweepPhase>(
   }
 }
 
-function resumeExpiredParks(deps: PulseSweepDeps): void {
+function resumeExpiredParks(deps: PulseDeps): void {
   for (const { agentId, error } of deps.fleet?.resumeExpiredParks() ?? [])
     deps.errors.record({
       source: 'agent',
@@ -283,7 +313,7 @@ function resumeExpiredParks(deps: PulseSweepDeps): void {
     });
 }
 
-function foldReviewWaits(deps: PulseSweepDeps, at: PulseSweepReadings['afterTasks']): void {
+function foldReviewWaits(deps: PulseDeps, at: PulseReadings['afterTasks']): void {
   deps.store.reviewWaits.foldReviewWaits(
     at.world.pullRequests
       .filter((pr) =>
@@ -296,7 +326,7 @@ function foldReviewWaits(deps: PulseSweepDeps, at: PulseSweepReadings['afterTask
   );
 }
 
-function recordIssueRuns(deps: PulseSweepDeps, at: PulseSweepReadings['afterOrigins']): void {
+function recordIssueRuns(deps: PulseDeps, at: PulseReadings['afterOrigins']): void {
   try {
     for (const r of runsToRecord(at.world.issues, at.tasks, at.signals)) deps.store.floor.recordIssueRun(r);
   } catch (err) {
