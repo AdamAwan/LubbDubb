@@ -7,7 +7,8 @@ import type { WorldSnapshot } from '../src/types.js';
 
 const WORLD: WorldSnapshot = { takenAt: '2026-09-12T00:00:00.000Z', pullRequests: [], issues: [] };
 const PREV: WorldSnapshot = { takenAt: '2026-09-11T00:00:00.000Z', pullRequests: [], issues: [] };
-const AT = { world: WORLD, previousWorld: PREV };
+const AT = { world: WORLD, previousWorld: PREV, readWorld: true };
+const AT_LOCAL = { ...AT, readWorld: false };
 
 const RECONCILE: PulseId[] = PULSE_PIPELINE.filter((e) => e.phase === 'reconcile').map((e) => e.id as PulseId);
 
@@ -62,7 +63,7 @@ test('every desk in the registry is reached, in the declared order', async () =>
 
 test('a desk needing a fresh world read is skipped on a local cycle, and no other is', async () => {
   const { deps, calls } = deskDeps();
-  await runPulse('reconcile', deps, AT, false);
+  await runPulse('reconcile', deps, AT_LOCAL, false);
   const ran = new Set(calls.map((c) => c.id));
   for (const id of RECONCILE)
     assert.equal(ran.has(id), !entry(id).readWorld, `${id} on a local cycle follows its own readWorld flag`);
@@ -70,25 +71,39 @@ test('a desk needing a fresh world read is skipped on a local cycle, and no othe
 
 test('a missing desk is skipped, never an error — every dependency is optional', async () => {
   await runPulse('reconcile', bareDeps(), AT, true);
-  await runPulse('reconcile', bareDeps(), AT, false);
+  await runPulse('reconcile', bareDeps(), AT_LOCAL, false);
 });
 
 test('the desks handed the diff are handed the pair the diff was taken from', async () => {
   const { deps, calls } = deskDeps();
   await runPulse('reconcile', deps, AT, true);
-  for (const id of ['notices', 'obstacleVoice'] as const) {
-    const call = calls.find((c) => c.id === id);
-    assert.deepEqual(call?.args, ['run', PREV, WORLD], `${id} reads the previous world and this one`);
-  }
+  const call = calls.find((c) => c.id === 'notices');
+  assert.deepEqual(call?.args, ['run', PREV, WORLD], 'notices reads the previous world and this one');
+  const obstacles = calls.find((c) => c.id === 'obstacles');
+  assert.deepEqual(
+    obstacles?.args,
+    ['run', { previousWorld: PREV, world: WORLD, readWorld: true }],
+    'the obstacle desk is handed the pair the diff was taken from, and whether the world was read',
+  );
 });
 
-test('the obstacle reading desk is the one pass the pulse does not wait on', () => {
-  for (const e of PULSE_PIPELINE)
-    assert.equal(
-      e.background ?? false,
-      e.id === 'obstacleDesk',
-      `${e.id}: a model round trip is the only thing the pulse declines to block on`,
-    );
+test('every pass is awaited — a pass that must not block the pulse starts its own work itself', async () => {
+  const order: string[] = [];
+  const slow = (id: string) => async () => {
+    await Promise.resolve();
+    order.push(id);
+  };
+  const deps = {
+    ...bareDeps(),
+    graph: { record: slow('graph') },
+    obstacles: { run: slow('obstacles') },
+  } as unknown as PulseDeps;
+  await runPulse('reconcile', deps, AT, true);
+  assert.deepEqual(
+    order,
+    ['graph', 'obstacles'],
+    "an async pass finishes before the next one starts; declining to block is the pass's own business",
+  );
 });
 
 test('the validation chain runs in the order the bench is read in', () => {
@@ -110,12 +125,8 @@ test('the graph is recorded after the reconciler and before anything that reads 
   below('pool', 'graduations', 'a claim that left for the repository is out of the document before it is derived');
 });
 
-test('the obstacle desks run below the voice that files their rows', () => {
-  for (const id of ['obstacleDesk', 'obstacleNotices', 'obstacleOwnership', 'obstacleEndings'] as const)
-    below(id, 'obstacleVoice', 'a row the harness filed is told, owned and watched on the pulse that saw it');
-  below('obstacleOwnership', 'notices', 'an agent whose report was taken up is told so by the pulse that took it');
-  below('obstacleOwnership', 'obstacleNotices', 'the notices go out above the ownership the pulse may write');
-  below('obstacleEndings', 'obstacleOwnership', 'it reads the owner that desk may have just written');
+test('the obstacle desk runs below the world notices it answers', () => {
+  below('obstacles', 'notices', 'an agent whose report was taken up is told so by the pulse that took it');
 });
 
 test('the pull request register is tagged before it is linked', () => {

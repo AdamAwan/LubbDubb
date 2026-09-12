@@ -168,7 +168,7 @@ export class Harness extends EventEmitter {
       const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
-      await runPulse('reconcile', this.deps, { world, previousWorld }, readWorld);
+      await runPulse('reconcile', this.deps, { world, previousWorld, readWorld }, readWorld);
       await runPulse('open', this.deps, {}, readWorld);
       const tasks = store.tasks.listTasks();
       await runPulse('afterTasks', this.deps, { world, tasks }, readWorld);

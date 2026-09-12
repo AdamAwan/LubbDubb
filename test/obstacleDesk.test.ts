@@ -7,13 +7,14 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleOwnershipDesk } from '../src/obstacles/ownershipDesk.js';
+
 import {
-  ObstacleModelDesk,
+  ObstacleDesk,
   parseObstacleReading,
   type ObstacleReader,
   type ObstacleReadingRequest,
 } from '../src/obstacles/desk.js';
+import { obstacleDesk } from './support/obstacles.js';
 
 const CWD = process.cwd();
 
@@ -73,8 +74,8 @@ function scripted(answer: unknown): { reader: ObstacleReader; seen: ObstacleRead
   };
 }
 
-function deskFor(system: System, reader?: ObstacleReader): ObstacleModelDesk {
-  return new ObstacleModelDesk({ store: system.store, reader, repoRoot: CWD });
+function deskFor(system: System, reader?: ObstacleReader): ObstacleDesk {
+  return obstacleDesk(system.store, { reader, repoRoot: CWD });
 }
 
 test('a key the desk reads that another row already holds suggests a merge and never makes one', async () => {
@@ -91,7 +92,7 @@ test('a key the desk reads that another row already holds suggests a merge and n
   assert.notEqual(mine, theirs);
 
   const { reader } = scripted({ keys: ['check:test (windows)', 'path:src/harness.ts'] });
-  await deskFor(system, reader).run();
+  await deskFor(system, reader).model();
 
   assert.equal(system.store.obstacles.listObstacles().length, 2);
   assert.deepEqual(
@@ -137,7 +138,7 @@ test('a bare check from the desk does not bind, and a path that names nothing is
   const { reader } = scripted({
     keys: ['check:nobody-reports-this', 'path:src/there-is-no-such-file.ts', 'signature:boom at <n>'],
   });
-  await deskFor(system, reader).run();
+  await deskFor(system, reader).model();
 
   assert.deepEqual(
     system.store.obstacles.listObstacleKeys(row).map((key) => key.value),
@@ -155,7 +156,7 @@ test("a path the desk reads is bound by the row's own grounded check, exactly as
     keys: [{ kind: 'check', value: 'test (windows)' }],
   });
   const { reader } = scripted({ keys: ['path:src/harness.ts'] });
-  await deskFor(system, reader).run();
+  await deskFor(system, reader).model();
 
   const added = system.store.obstacles.listObstacleKeys(row).find((key) => key.value === 'src/harness.ts');
   assert.ok(added);
@@ -172,7 +173,7 @@ test('nothing the desk writes moves a state, takes an owner or resolves anything
     purpose: 'ticket',
     ticket: { title: 'Fix: something is red', body: 'The fleet hit this.' },
   });
-  await deskFor(system, reader).run();
+  await deskFor(system, reader).model();
 
   const after = system.store.obstacles.getObstacle(row)!;
   assert.equal(after.state, before.state);
@@ -186,7 +187,7 @@ test('what a row is for is the kind column, and never one an owner is already on
   const key = [{ kind: 'path' as const, value: 'README.md' }];
   const row = report(system, { what: 'the readme disagrees with the code', goalRef: 'issue:1', keys: key });
   const docs = scripted({ purpose: 'docs' });
-  await deskFor(system, docs.reader).run();
+  await deskFor(system, docs.reader).model();
   assert.equal(system.store.obstacles.getObstacle(row)?.kind, 'note');
 
   report(system, { what: 'the readme disagrees with the code', goalRef: 'issue:2', keys: key });
@@ -206,18 +207,17 @@ test('the ticket the desk wrote is the ticket that is filed', async () => {
     purpose: 'ticket',
     ticket: { title: 'The windows runner wedges before the suite starts', body: 'Two goals lost a session to it.' },
   });
-  await deskFor(system, reader).run();
+  await deskFor(system, reader).model();
 
   const filed: { title: string; body: string }[] = [];
-  await new ObstacleOwnershipDesk({
-    store: system.store,
+  await obstacleDesk(system.store, {
     filing: async (input) => {
       filed.push(input as { title: string; body: string });
       return 'issue:841';
     },
     ticketBody: (vars) => `house style: ${vars.claim}`,
     watchLabel: 'lubbdubb-watch',
-  }).run({ takenAt: new Date().toISOString(), pullRequests: [], issues: [] });
+  }).ownership({ takenAt: new Date().toISOString(), pullRequests: [], issues: [] });
 
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.title, 'The windows runner wedges before the suite starts');
@@ -232,9 +232,9 @@ test('a board nobody has said anything new about calls no model at all', async (
   const first = scripted({ keys: [] });
   const desk = deskFor(system, first.reader);
 
-  await desk.run();
+  await desk.model();
   assert.equal(first.seen.length, 1);
-  await desk.run();
+  await desk.model();
   assert.equal(first.seen.length, 1);
 
   await nextMillisecond();
@@ -243,7 +243,7 @@ test('a board nobody has said anything new about calls no model at all', async (
     system.store.obstacles.obstacleInbox().some(({ obstacle }) => obstacle.id === row),
     true,
   );
-  await desk.run();
+  await desk.model();
   assert.equal(first.seen.length, 2);
 });
 
@@ -267,7 +267,7 @@ test("the harness's own words are never read as prose, and a row only it has sai
     },
   );
   const first = scripted({ keys: [] });
-  await deskFor(system, first.reader).run();
+  await deskFor(system, first.reader).model();
   assert.deepEqual(first.seen, []);
 
   const row = system.store.obstacles.listObstacles()[0]!.id;
@@ -281,7 +281,7 @@ test("the harness's own words are never read as prose, and a row only it has sai
   });
   assert.equal(joined, row);
   const second = scripted({ keys: [] });
-  await deskFor(system, second.reader).run();
+  await deskFor(system, second.reader).model();
   assert.equal(second.seen.length, 1);
   assert.deepEqual(
     second.seen[0]!.sightings.map((s) => s.goalRef),
@@ -292,13 +292,12 @@ test("the harness's own words are never read as prose, and a row only it has sai
 test('a reader that throws costs the reading and never the pulse', async () => {
   const system = build();
   const row = report(system, { what: 'something is red', goalRef: 'issue:1' });
-  const desk = new ObstacleModelDesk({
-    store: system.store,
+  const desk = obstacleDesk(system.store, {
     reader: () => Promise.reject(new Error('the model said no')),
     repoRoot: CWD,
     errors: system.errors,
   });
-  await desk.run();
+  await desk.model();
   assert.equal(
     system.store.obstacles.obstacleInbox().some(({ obstacle }) => obstacle.id === row),
     true,
@@ -309,7 +308,7 @@ test('a reader that throws costs the reading and never the pulse', async () => {
 test('a deployment with no reader wired calls nothing and changes nothing', async () => {
   const system = build();
   const row = report(system, { what: 'something is red', goalRef: 'issue:1' });
-  await deskFor(system).run();
+  await deskFor(system).model();
   assert.equal(system.store.obstacles.obstacleReading(row), null);
   assert.deepEqual(system.store.obstacles.listObstacleKeys(row), []);
 });

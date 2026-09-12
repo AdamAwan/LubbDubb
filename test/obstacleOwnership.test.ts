@@ -7,7 +7,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleOwnershipDesk } from '../src/obstacles/ownershipDesk.js';
+import { obstacleDesk } from './support/obstacles.js';
 import { obstacleRepairOrigin, ownershipDoor, redBaseChecks } from '../src/obstacles/ownership.js';
 import { blockedGoals, releasedBlocks } from '../src/obstacles/blocked.js';
 import { obstacleOriginId } from '../src/issueOrigins.js';
@@ -141,8 +141,7 @@ test('the ticket door files once, with the watch label, and cannot be walked thr
   const system = build();
   const id = stand(system);
   const filed: { title: string; labels?: string[]; bug?: boolean; relatedTo?: number }[] = [];
-  const desk = new ObstacleOwnershipDesk({
-    store: system.store,
+  const desk = obstacleDesk(system.store, {
     filing: async (input) => {
       filed.push(input);
       return 'issue:841';
@@ -150,8 +149,8 @@ test('the ticket door files once, with the watch label, and cannot be walked thr
     watchLabel: 'lubbdubb-watch',
   });
 
-  await desk.run(EMPTY_WORLD);
-  await desk.run(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
 
   assert.equal(filed.length, 1);
   assert.deepEqual(filed[0]!.labels, ['lubbdubb-watch']);
@@ -170,8 +169,7 @@ test('a tracker that refuses hands the row back, rather than owning it with noth
   const id = stand(system);
   const errors: string[] = [];
   let attempts = 0;
-  const desk = new ObstacleOwnershipDesk({
-    store: system.store,
+  const desk = obstacleDesk(system.store, {
     filing: async () => {
       attempts += 1;
       if (attempts === 1) throw new Error('the tracker said no');
@@ -181,12 +179,12 @@ test('a tracker that refuses hands the row back, rather than owning it with noth
     errors: { record: (e: { message: string }) => void errors.push(e.message) } as never,
   });
 
-  await desk.run(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
   assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, null);
   assert.equal(errors.length, 1);
 
-  await desk.run(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
   assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:842');
   system.store.close();
 });
@@ -194,9 +192,9 @@ test('a tracker that refuses hands the row back, rather than owning it with noth
 test('the repair door is recorded, never taken: the desk owns a row the rule actually dispatched', async () => {
   const system = build();
   const id = stand(system, ['issue:900', 'issue:901', 'issue:902']);
-  const desk = new ObstacleOwnershipDesk({ store: system.store, watchLabel: '' });
+  const desk = obstacleDesk(system.store);
 
-  await desk.run(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
 
   system.store.tasks.createTask({
@@ -206,7 +204,7 @@ test('the repair door is recorded, never taken: the desk owns a row the rule act
     branch: `obstacle/${id}`,
     originRef: obstacleRepairOrigin(id),
   });
-  await desk.run(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
 
   const owned = system.store.obstacles.getObstacle(id)!;
   assert.equal(owned.state, 'owned');
@@ -348,8 +346,8 @@ test('conclude_work blocked parks the goal, and the desk brings it back', async 
 
   system.store.obstacles.claimObstacle(id);
   system.store.obstacles.setObstacleOwner(id, 'issue:841');
-  const desk = new ObstacleOwnershipDesk({ store: system.store, watchLabel: '' });
-  await desk.run(world);
+  const desk = obstacleDesk(system.store);
+  await desk.ownership(world);
   assert.equal(system.store.obstacles.listObstacleBlocks().length, 1);
   system.store.close();
 });

@@ -23,6 +23,7 @@ import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { RemoteValidationDesk } from './remoteValidation/desk.js';
+import type { ObstacleDesk } from './obstacles/desk.js';
 import type { PoolDesk } from './pool/poolDesk.js';
 
 // → docs/spec/04-harness-cycle.md
@@ -49,11 +50,7 @@ export interface PulseDeps {
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   graduations?: { run(): void };
   clusters?: { run(): void };
-  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  obstacleDesk?: { run(): Promise<void> };
-  obstacleNotices?: { run(): void };
-  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
-  obstacleEndings?: { run(world: WorldSnapshot): void };
+  obstacles?: ObstacleDesk;
   pool?: PoolDesk;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
@@ -76,7 +73,7 @@ type PulsePhase =
   | 'afterExecute';
 
 interface PulseReadings {
-  reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null };
+  reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null; readWorld: boolean };
   open: Record<string, never>;
   afterTasks: { world: WorldSnapshot; tasks: TaskSummary[] };
   afterAgents: { tasks: TaskSummary[]; agents: Agent[] };
@@ -89,7 +86,6 @@ interface PulseReadings {
 interface PulsePass<P extends PulsePhase = PulsePhase, I extends string = string> {
   id: I;
   readWorld: boolean;
-  background?: true;
   run(deps: PulseDeps, at: PulseReadings[P]): unknown;
 }
 
@@ -123,11 +119,11 @@ const ENTRIES = [
     { id: 'notices', readWorld: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
     { id: 'graduations', readWorld: false, run: (d) => d.graduations?.run() },
     { id: 'clusters', readWorld: false, run: (d) => d.clusters?.run() },
-    { id: 'obstacleVoice', readWorld: true, run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world) },
-    { id: 'obstacleDesk', readWorld: false, background: true, run: (d) => d.obstacleDesk?.run() },
-    { id: 'obstacleNotices', readWorld: false, run: (d) => d.obstacleNotices?.run() },
-    { id: 'obstacleOwnership', readWorld: false, run: (d, at) => d.obstacleOwnership?.run(at.world) },
-    { id: 'obstacleEndings', readWorld: true, run: (d, at) => d.obstacleEndings?.run(at.world) },
+    {
+      id: 'obstacles',
+      readWorld: false,
+      run: (d, at) => d.obstacles?.run({ previousWorld: at.previousWorld, world: at.world, readWorld: at.readWorld }),
+    },
     { id: 'pool', readWorld: true, run: (d) => d.pool?.run() },
   ]),
   ...phase('open', [
@@ -177,8 +173,7 @@ export async function runPulse<P extends PulsePhase>(
   for (const entry of PULSE_PIPELINE) {
     if (entry.phase !== phase) continue;
     if (entry.readWorld && !readWorld) continue;
-    if (entry.background) void entry.run(deps, at);
-    else await entry.run(deps, at);
+    await entry.run(deps, at);
   }
 }
 

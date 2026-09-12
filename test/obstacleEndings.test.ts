@@ -7,7 +7,8 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleEndingsDesk } from '../src/obstacles/endingsDesk.js';
+import type { ObstacleDesk } from '../src/obstacles/desk.js';
+import { obstacleDesk } from './support/obstacles.js';
 import {
   clockExpired,
   conditionMet,
@@ -233,9 +234,8 @@ function world(prs: PullRequest[]): WorldSnapshot {
   return { takenAt: NOW, pullRequests: prs, issues: [] };
 }
 
-function desk(system: System, over: { now?: () => number; dormantMs?: number } = {}): ObstacleEndingsDesk {
-  return new ObstacleEndingsDesk({
-    store: system.store,
+function desk(system: System, over: { now?: () => number; dormantMs?: number } = {}): ObstacleDesk {
+  return obstacleDesk(system.store, {
     dormantMs: over.dormantMs ?? WEEK,
     docsPrompt: (vars) => `write it down: ${vars.summary}`,
     now: over.now ?? (() => NOW_MS),
@@ -249,15 +249,15 @@ test('a resolution takes two consecutive real readings, and one green reading is
   const red = world([pr()]);
   const green = world([pr({ ciChecks: [{ name: 'test (windows)', status: 'passing' }] })]);
 
-  endings.run(red);
+  endings.endings(red);
   assert.equal(system.store.obstacles.listObstacleConditions(id).length, 1);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
 
-  endings.run(green);
+  endings.endings(green);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
   assert.notEqual(system.store.obstacles.listObstacleConditions(id)[0]!.metAt, null);
 
-  endings.run(green);
+  endings.endings(green);
   const resolved = system.store.obstacles.getObstacle(id)!;
   assert.equal(resolved.state, 'resolved');
   assert.equal(resolved.endedBy, 'condition');
@@ -270,13 +270,13 @@ test('a red reading between two green ones puts the count back to nothing', () =
   const endings = desk(system);
   const green = world([pr({ ciChecks: [{ name: 'test (windows)', status: 'passing' }] })]);
 
-  endings.run(world([pr()]));
-  endings.run(green);
-  endings.run(world([pr()]));
+  endings.endings(world([pr()]));
+  endings.endings(green);
+  endings.endings(world([pr()]));
   assert.equal(system.store.obstacles.listObstacleConditions(id)[0]!.metAt, null);
-  endings.run(green);
+  endings.endings(green);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
-  endings.run(green);
+  endings.endings(green);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'resolved');
   system.store.close();
 });
@@ -288,11 +288,11 @@ test('the owner landing ends an owned row, off the sweep and not off the merge',
   system.store.obstacles.setObstacleOwner(id, 'issue:841');
 
   const endings = desk(system);
-  endings.run(world([]));
+  endings.endings(world([]));
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'owned', 'nothing has landed yet');
 
   system.store.environments.recordGoalLanding({ prNumber: 7, goalRef: 'issue:841', sha: 'abc123' });
-  endings.run(world([]));
+  endings.endings(world([]));
   const ended = system.store.obstacles.getObstacle(id)!;
   assert.equal(ended.state, 'resolved');
   assert.equal(ended.endedBy, 'landing');
@@ -303,7 +303,7 @@ test('the clock expires a row nothing settled, and a re-report brings it back wh
   const system = build();
   const expiring = stand(system, 'obstacle', 1);
   const until = Date.parse(system.store.obstacles.getObstacle(expiring)!.until!);
-  desk(system, { now: () => until + 1 }).run(world([]));
+  desk(system, { now: () => until + 1 }).endings(world([]));
   const expired = system.store.obstacles.getObstacle(expiring)!;
   assert.equal(expired.state, 'resolved');
   assert.equal(expired.endedBy, 'expiry');
@@ -323,10 +323,10 @@ test('decay takes what nothing has said for obstacleDormantMs', () => {
   const system = build();
   const id = stand(system);
   const seen = Date.parse(system.store.obstacles.getObstacle(id)!.lastSeenAt);
-  desk(system, { now: () => seen + WEEK - 1 }).run(world([]));
+  desk(system, { now: () => seen + WEEK - 1 }).endings(world([]));
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing', 'inside the window it is still on the board');
 
-  desk(system, { now: () => seen + WEEK }).run(world([]));
+  desk(system, { now: () => seen + WEEK }).endings(world([]));
   const dormant = system.store.obstacles.getObstacle(id)!;
   assert.equal(dormant.state, 'dormant');
   assert.equal(dormant.endedBy, 'decay');
@@ -339,14 +339,14 @@ test('a note is written up once, and the note ends when the change lands', () =>
   const id = stand(system, 'note');
   const endings = desk(system);
 
-  endings.run(world([]));
+  endings.endings(world([]));
   const open = system.store.obstacles.openObstacleWriteUps();
   assert.equal(open.length, 1);
   const jobId = open[0]!.jobId;
   assert.match(system.store.jobs.getJob(jobId)!.prompt, /write it down: the windows runner wedges/);
   assert.match(system.store.jobs.getJob(jobId)!.prompt, /merging it is what ends it/);
 
-  endings.run(world([]));
+  endings.endings(world([]));
   assert.equal(system.store.obstacles.openObstacleWriteUps().length, 1);
   assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing', 'a note stands until the change lands');
 
@@ -362,7 +362,7 @@ test('a note is written up once, and the note ends when the change lands', () =>
       provenance: 'observed',
     },
   ]);
-  endings.run(world([]));
+  endings.endings(world([]));
   const ended = system.store.obstacles.getObstacle(id)!;
   assert.equal(ended.state, 'resolved');
   assert.equal(ended.endedBy, 'written-down');

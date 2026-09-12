@@ -116,7 +116,7 @@ and skips **every pass whose subject is the world snapshot**:
 `connector.getState` and `recordWorldChanges` — plus every pass the
 [pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
 `prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
-`obstacleVoice`, `obstacleEndings` and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
+and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
 `reviewedElsewhere` and `tickets` at the phases below it.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
@@ -465,44 +465,41 @@ flowchart TD
    **not** load-bearing at all: nothing waits on a cluster, it takes its own cadence, and the page an
    operator opens is the only reader of what it writes.
 
-   `obstacleVoice.run(prev, world)` records what the harness has seen for itself on the board the
-   agents read — a check red on a branch other pull requests are based on, a check flapping
-   red-then-green on one commit. **The harness is one of the two voices**, so a row it files is
-   standing from the first agent's report rather than the second, which is what makes the two-goal
-   gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). Skipped on a local
-   cycle, and **above the three obstacle desks below it**: a row filed here is one the notice desk
-   may tell a running agent about, one the ownership desk may take up, and one the endings desk
-   promises to watch a condition for — all on the pulse that saw it rather than the next.
+   `obstacles.run(pass)` is the whole obstacle subsystem, five stages on one pulse slot and in one
+   order ([27](27-obstacles.md#one-desk-on-the-pulse)). The **voice** records what the harness has seen
+   for itself on the board the agents read — a check red on a branch other pull requests are based on,
+   a check flapping red-then-green on one commit. **The harness is one of the two voices**, so a row it
+   files is standing from the first agent's report rather than the second, which is what makes the
+   two-goal gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). It runs first
+   because a row filed there is one the same pass goes on to tell a running agent about, take up, and
+   promise to watch a condition for — on the pulse that saw it rather than the next.
 
-   `obstacleDesk.run()` is what a model may decide about the rows the board has not had read since a
-   voice last landed words on one. It is **not awaited**, alone among these desks, and that is the
-   whole of what its position means: a model round trip is not a provider's, nothing below waits on a
-   reading, and a pulse that blocked on one would hold every dispatch behind a call this subsystem
-   makes for its own convenience. What it writes is read by the pulse that finds it written, which
-   for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse either way. It
-   runs one pass at a time and never rejects.
+   The **reading** is what a model may decide about the rows no voice has landed words on since. It is
+   the one thing here the pulse does not wait for: a model round trip is not a provider's, nothing
+   below waits on a reading, and a pulse that blocked on one would hold every dispatch behind a call
+   this subsystem makes for its own convenience. What it writes is read by the pulse that finds it
+   written, which for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse
+   either way.
 
-   `obstacleNotices.run()` tells the agents now running what has changed about an obstacle since they
-   were dispatched — their own reports being taken up or settled, and what a second voice has since
-   corroborated. Above the launch line for `notices`' reason exactly.
+   The **notices** tell the agents now running what has changed about an obstacle since they were
+   dispatched — their own reports being taken up or settled, and what a second voice has since
+   corroborated. The **ownership** then records who owns each row and which goals the board has let
+   back out. The whole pass is **above `decide`**, and both halves matter: a block cleared here is a
+   goal rule `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in
+   the prompt of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the
+   pulse the ticket was filed. The desk also sits **below `notices`** for the reason it sits above
+   `decide`: an agent whose report was taken up is told so by the pulse that took it. Awaited but never
+   blocking — every failure inside is recorded and non-fatal, and a tracker that will not answer costs
+   the ticket and nothing else.
 
-   `obstacleOwnership.run(world)` records who owns each row and which goals the board has let back
-   out. **Above `decide`**, and both halves matter: a block cleared here is a goal rule
-   `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in the prompt
-   of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the pulse the
-   ticket was filed. **Below the notices** for the same reason they sit above `decide`: an agent
-   whose report was taken up is told so by the pulse that took it. Awaited but never blocking — every
-   failure inside is recorded and non-fatal, and a tracker that will not answer costs the ticket and
-   nothing else.
-
-   `obstacleEndings.run(world)` is how each of them ends: a condition the harness promised to watch,
-   the owner landing, the reporter's clock, or nothing having said it for a week. **Skipped on a
-   local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
+   The **endings** are how each row finishes: a condition the harness promised to watch, the owner
+   landing, the reporter's clock, or nothing having said it for a week. Like the voice, it is **skipped
+   on a local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
    consecutive _real_ world readings, and the resolving read is never one a local cycle served — a
    local cycle re-serves the snapshot the last real one read, so counting it would take one reading
    twice and close an obstacle that is still live, the fleet pays for it again, and nothing is red.
-   **Below the ownership desk**, because it reads the owner that desk may have just written. Every
-   failure inside is recorded and non-fatal.
+   It runs last, because it reads the owner the ownership stage may have just written. Every failure
+   inside is recorded and non-fatal.
 
    `pool.run()` is the distance above `fleet`: what other fleets have vouched for, landed here, and
    what this fleet has vouched for, sent out ([28](28-cross-fleet-pool.md)). Above the launch line,
@@ -618,11 +615,11 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
 - **`readWorld`** — whether the pass's subject is the world snapshot, and so whether it is skipped on a
   [local cycle](#what-runs-and-what-does-not). One flag per pass, in one place, instead of the guard
   repeated at every call site.
-- **`background`** — omitted by every pass but one. The walk awaits each pass, sync or async alike, and
-  `background: true` is the single exception: `obstacleDesk`, whose whole position is that the pulse does
-  not block on a model round trip. It is the exception that is declared, not the rule — thirty-five passes
-  asserting they are awaited buries the one that is not — and it is still a declaration rather than a
-  `void` at a call site somebody can copy by accident.
+  The walk **awaits every pass**, sync or async alike, and there is no flag to opt out of that. A pass
+  with work the pulse must not block on starts that work itself and returns — `obstacles` is the one
+  that does, for its model reading ([27](27-obstacles.md#one-desk-on-the-pulse)) — which keeps the
+  decision beside the call it is about rather than in a registry flag every other pass has to be read
+  against.
 - **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not
   wire is skipped and never an error. The desks that take a **narrowed** view of the world
   (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies the narrow
@@ -641,8 +638,7 @@ breaking silently:
 | `validationAsks` → `validationReady` → `closeOuts`                     | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                 |
 | `plans` → `graph`                                                      | the part→PR observations the reconciler just made are the ones recorded                                                                                                  |
 | `graph` → `graduations` → `pool`                                       | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md)) |
-| `obstacleVoice` → the four obstacle desks                              | a row the harness filed is told, owned and watched on the pulse that saw it ([27](27-obstacles.md#the-harness-is-a-voice))                                               |
-| `notices`, `obstacleNotices` → `obstacleOwnership` → `obstacleEndings` | an agent whose report was taken up is told so by the pulse that took it, and the endings read the owner the ownership desk may have just written                         |
+| `notices` → `obstacles`                                               | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
 | `prWatch` → `prWorkItems`                                              | one pass says the pull request is the fleet's, the other which work item it is for                                                                                       |
 
 The same test asserts the walk reaches every entry in the declared order, and that no id is walked
