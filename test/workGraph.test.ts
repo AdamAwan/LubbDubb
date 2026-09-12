@@ -594,8 +594,8 @@ test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
     .filter((f) => readFileSync(f, 'utf8').includes('graph/workGraph'));
   assert.deepEqual(
     readers,
-    ['src/harness.ts', 'src/system.ts'],
-    'only the pulse and the composition root may reach the graph in stage 1',
+    ['src/pulseDesks.ts', 'src/system.ts'],
+    "only the pulse's registry and the composition root may reach the graph in stage 1",
   );
 });
 

@@ -17,30 +17,25 @@ import { deliverySignalQuery } from './delivery/delivery.js';
 import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
 import type { LimitResumeFailure } from './agents/agentManager.js';
-import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AppraisalDesk } from './intake/appraisalDesk.js';
 import type { AreaPathDirectory } from './intake/areaPaths.js';
-import type { PrNamingDesk } from './prNamingDesk.js';
-import type { PrWatchDesk } from './prWatchDesk.js';
-import type { PrWorkItemDesk } from './prWorkItemDesk.js';
-import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
-import type { ValidationAskDesk } from './validation/askDesk.js';
-import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
-import type { BranchReapDesk } from './branchReapDesk.js';
-import type { EnvironmentDesk } from './environments/environmentDesk.js';
-import type { RemoteValidationDesk } from './remoteValidation/desk.js';
-import type { ScheduleDesk } from './schedules/scheduleDesk.js';
-import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
+import type {
+  Action,
+  PrReview,
+  PrReviewRoute,
+  PullRequest,
+  RemoteRunBrief,
+  WorldEvent,
+  WorldSnapshot,
+} from './types.js';
 import { applyThreadReopens } from './prThreads.js';
+import { runPulseDesks, type PulseDeskDeps } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
-import type { StackLandingDesk } from './stacks/landingDesk.js';
-import type { PoolDesk } from './pool/poolDesk.js';
 import type { PrReviewPolicy } from './review/policy.js';
 import { needsFleetReview, reviewReading } from './review/prReview.js';
 import type { ReviewProber } from './review/reviewedElsewhere.js';
@@ -51,7 +46,7 @@ const PRIOR_REMEDY_ROWS = 40;
 
 const READ_PLAN_EVENTS = 200;
 
-interface HarnessDeps {
+interface HarnessDeps extends PulseDeskDeps {
   store: Store;
   connector: Connector;
   dispatcher: Dispatcher;
@@ -67,40 +62,17 @@ interface HarnessDeps {
   modelPins?: { labelPrefix: string; models: AgentModels };
   featureStandings?: () => { number: number; title: string; key: string }[];
   upNextOverrideTtlMs: number;
-  plans?: PlanReconciler;
   appraisals?: AppraisalDesk;
   areaPaths?: AreaPathDirectory;
-  naming?: PrNamingDesk;
-  prWatch?: PrWatchDesk;
-  prWorkItems?: PrWorkItemDesk;
-  closeOuts?: DeliveryCloseOutDesk;
-  validationAsks?: ValidationAskDesk;
-  validationReady?: ValidationReadyDesk;
   burn?: SpendBurnDesk;
   runway?: RunwayDesk;
   issuePickup?: IssuePickupPolicy;
-  branchReaps?: BranchReapDesk;
-  environments?: EnvironmentDesk;
-  remoteValidation?: RemoteValidationDesk;
-  schedules?: ScheduleDesk;
-  landings?: StackLandingDesk;
-  graph?: WorkGraphRecorder;
   tickets?: { run(): Promise<void> };
   localRun?: { noteAlive(): void };
   localValidations?: { sweep(): void };
   remoteRuns?: () => RemoteRunBrief[];
-  updates?: { run(): Promise<void> };
   recovery?: { pendingCount(): number };
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
-  notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  graduations?: { run(): void };
-  clusters?: { run(): void };
-  obstacleNotices?: { run(): void };
-  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  obstacleDesk?: { run(): Promise<void> };
-  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
-  obstacleEndings?: { run(world: WorldSnapshot): void };
-  pool?: PoolDesk;
   ejections?: { sweepExpiries(): unknown[] };
   escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
   freshReads?: { drain(): string[] };
@@ -227,29 +199,7 @@ export class Harness extends EventEmitter {
       const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       const world = applyThreadReopens(observed, store.prThreadReopens());
-      if (readWorld) await this.deps.plans?.reconcile(world);
-      if (readWorld) await this.deps.prWatch?.run(world);
-      if (readWorld) await this.deps.prWorkItems?.run(world);
-      if (readWorld) await this.deps.naming?.run(world);
-      if (readWorld) await this.deps.branchReaps?.run(world);
-      this.deps.landings?.settle(world);
-      this.deps.validationAsks?.run();
-      this.deps.schedules?.run();
-      if (readWorld) await this.deps.updates?.run();
-      this.deps.graph?.record(world);
-      if (readWorld) await this.deps.environments?.run(world);
-      if (readWorld) await this.deps.remoteValidation?.run();
-      this.deps.validationReady?.run(world);
-      this.deps.closeOuts?.run(world);
-      if (readWorld) this.deps.notices?.run(previousWorld, world);
-      this.deps.graduations?.run();
-      this.deps.clusters?.run();
-      if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
-      void this.deps.obstacleDesk?.run();
-      this.deps.obstacleNotices?.run();
-      await this.deps.obstacleOwnership?.run(world);
-      if (readWorld) this.deps.obstacleEndings?.run(world);
-      if (readWorld) await this.deps.pool?.run();
+      await runPulseDesks(this.deps, { world, previousWorld }, readWorld);
       for (const { agentId, error } of this.deps.fleet?.resumeExpiredParks() ?? [])
         this.deps.errors.record({
           source: 'agent',
@@ -297,7 +247,7 @@ export class Harness extends EventEmitter {
           deliveries,
           shortfalls,
           plans,
-          planParts: store.listAllPlanParts(),
+          planParts,
         }))
           store.recordIssueRun(r);
       } catch (err) {
@@ -322,7 +272,8 @@ export class Harness extends EventEmitter {
       const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
       const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
 
-      const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
+      const issueRuns = store.listIssueRuns();
+      const retainedIssues = retainedRunIssues(issueRuns, world.issues);
       const dispatchWorld: WorldSnapshot =
         hiddenPrs.length > 0 || retainedIssues.length > 0
           ? {
@@ -338,7 +289,9 @@ export class Harness extends EventEmitter {
           ? []
           : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
-      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld);
+      const prReviews = store.listPrReviews();
+      const prReviewRoutes = store.listPrReviewRoutes();
+      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld, { prReviews, prReviewRoutes });
 
       this.deps.localValidations?.sweep();
 
@@ -382,8 +335,8 @@ export class Harness extends EventEmitter {
           ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
           ...store.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
         ],
-        prReviews: store.listPrReviews(),
-        prReviewRoutes: store.listPrReviewRoutes(),
+        prReviews,
+        prReviewRoutes,
         prSplits: store.listPrSplitVerdicts(),
         prReviewedElsewhere: store.prsReviewedElsewhere(),
         obstacles: store.obstacleBoard(),
@@ -423,7 +376,7 @@ export class Harness extends EventEmitter {
             deliveries,
             deliverySignals,
             appraisals,
-            runs: store.listIssueRuns(),
+            runs: issueRuns,
             headroom,
             paused: this.deps.runtime.paused,
           },
@@ -478,13 +431,17 @@ export class Harness extends EventEmitter {
     }
   }
 
-  private async askReviewedElsewhere(store: HarnessDeps['store'], world: WorldSnapshot): Promise<void> {
+  private async askReviewedElsewhere(
+    store: HarnessDeps['store'],
+    world: WorldSnapshot,
+    read: { prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] },
+  ): Promise<void> {
     const prober = this.deps.reviewProber;
     const command = this.deps.review.reviewedElsewhere;
     if (prober === undefined || command === null || command.trim() === '') return;
     const rows = {
-      prReviews: new Map(store.listPrReviews().map((r) => [r.prNumber, r])),
-      prReviewRoutes: new Map(store.listPrReviewRoutes().map((r) => [r.prNumber, r])),
+      prReviews: new Map(read.prReviews.map((r) => [r.prNumber, r])),
+      prReviewRoutes: new Map(read.prReviewRoutes.map((r) => [r.prNumber, r])),
       prReviewedElsewhere: store.prsReviewedElsewhere(),
     };
     for (const pr of world.pullRequests) {
