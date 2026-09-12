@@ -599,7 +599,10 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
   `HarnessDeps` extends, so the composition root is unchanged), but it need not be: one dependency can
   carry two passes at two positions — `fleet` carries `parks` and `stalls`, `escalations` carries
   `deadAgents` and `settledMerges` — so the registry names the passes, not the deps.
-- **`phase`** — the gap in the cycle's own reads the pass sits in. `runCycle` reads the store between
+- **`phase`** — the gap in the cycle's own reads the pass sits in, written **once per phase rather than
+  once per pass**: the entries are grouped by a `phase(name, [...])` helper that stamps the phase onto a
+  run of passes and splices them into the one flat array in order, so the phase is stated eight times and
+  not thirty-six, and the list stays the single ordered source of truth. `runCycle` reads the store between
   the passes, and [those reads happen once](#ordering) with the result reused — the pulse's own reads,
   that is; the dispatcher's are taken together below the last phase. So the walk is run once per phase,
   handed that phase's reading: `reconcile` first, above everything the cycle reads off the store, where
@@ -615,9 +618,11 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
 - **`readWorld`** — whether the pass's subject is the world snapshot, and so whether it is skipped on a
   [local cycle](#what-runs-and-what-does-not). One flag per pass, in one place, instead of the guard
   repeated at every call site.
-- **`awaited`** — every pass is awaited, sync or async alike, except `obstacleDesk`, whose whole
-  position is that the pulse does not block on a model round trip. That exception is a declared `false`
-  rather than a `void` somebody can copy by accident.
+- **`background`** — omitted by every pass but one. The walk awaits each pass, sync or async alike, and
+  `background: true` is the single exception: `obstacleDesk`, whose whole position is that the pulse does
+  not block on a model round trip. It is the exception that is declared, not the rule — thirty-five passes
+  asserting they are awaited buries the one that is not — and it is still a declaration rather than a
+  `void` at a call site somebody can copy by accident.
 - **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not
   wire is skipped and never an error. The desks that take a **narrowed** view of the world
   (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies the narrow
@@ -645,7 +650,7 @@ twice — a duplicate is what would make a position, and so every one of those c
 nothing. What it no longer has to assert is that a registry and an ordering agree: there is one list,
 so a pass wired in `src/system.ts` and left out of it cannot sit there dead, and a pass declared and
 never walked cannot exist. Adding a pass is therefore two things and no more: a field on `PulseDeps`,
-and an entry in `PULSE_PIPELINE` at the position it should run.
+and an entry in its phase's group at the position it should run.
 
 A pass that records its own failures does so inside its own body — `parks` recording a resume that
 failed, `issueRuns` its `errors.record` around the whole loop — for the reason every other caught

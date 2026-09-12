@@ -85,8 +85,8 @@ test('the desks handed the diff are handed the pair the diff was taken from', as
 test('the obstacle reading desk is the one pass the pulse does not wait on', () => {
   for (const e of PULSE_PIPELINE)
     assert.equal(
-      e.awaited,
-      e.id !== 'obstacleDesk',
+      e.background ?? false,
+      e.id === 'obstacleDesk',
       `${e.id}: a model round trip is the only thing the pulse declines to block on`,
     );
 });

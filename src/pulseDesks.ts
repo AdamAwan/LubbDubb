@@ -86,193 +86,71 @@ interface PulseReadings {
   afterExecute: Record<string, never>;
 }
 
-interface PulseEntry<P extends PulsePhase = PulsePhase, I extends string = string> {
+interface PulsePass<P extends PulsePhase = PulsePhase, I extends string = string> {
   id: I;
-  phase: P;
   readWorld: boolean;
-  awaited: boolean;
+  background?: true;
   run(deps: PulseDeps, at: PulseReadings[P]): unknown;
 }
 
-function pass<P extends PulsePhase, I extends string>(entry: PulseEntry<P, I>): PulseEntry<P, I> {
-  return entry;
+interface PulseEntry<P extends PulsePhase = PulsePhase, I extends string = string> extends PulsePass<P, I> {
+  phase: P;
+}
+
+function phase<P extends PulsePhase, const T extends readonly PulsePass<P>[]>(
+  name: P,
+  passes: T,
+): { [K in keyof T]: T[K] & { phase: P } } {
+  return passes.map((entry) => ({ ...entry, phase: name })) as { [K in keyof T]: T[K] & { phase: P } };
 }
 
 const ENTRIES = [
-  pass({
-    id: 'plans',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.plans?.reconcile(at.world),
-  }),
-  pass({ id: 'prWatch', phase: 'reconcile', readWorld: true, awaited: true, run: (d, at) => d.prWatch?.run(at.world) }),
-  pass({
-    id: 'prWorkItems',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.prWorkItems?.run(at.world),
-  }),
-  pass({ id: 'naming', phase: 'reconcile', readWorld: true, awaited: true, run: (d, at) => d.naming?.run(at.world) }),
-  pass({
-    id: 'branchReaps',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.branchReaps?.run(at.world),
-  }),
-  pass({
-    id: 'landings',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.landings?.settle(at.world),
-  }),
-  pass({
-    id: 'validationAsks',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.validationAsks?.run(),
-  }),
-  pass({ id: 'schedules', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.schedules?.run() }),
-  pass({ id: 'updates', phase: 'reconcile', readWorld: true, awaited: true, run: (d) => d.updates?.run() }),
-  pass({ id: 'graph', phase: 'reconcile', readWorld: false, awaited: true, run: (d, at) => d.graph?.record(at.world) }),
-  pass({
-    id: 'environments',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.environments?.run(at.world),
-  }),
-  pass({
-    id: 'remoteValidation',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d) => d.remoteValidation?.run(),
-  }),
-  pass({
-    id: 'validationReady',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.validationReady?.run(at.world),
-  }),
-  pass({
-    id: 'closeOuts',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.closeOuts?.run(at.world),
-  }),
-  pass({
-    id: 'notices',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.notices?.run(at.previousWorld, at.world),
-  }),
-  pass({ id: 'graduations', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.graduations?.run() }),
-  pass({ id: 'clusters', phase: 'reconcile', readWorld: false, awaited: true, run: (d) => d.clusters?.run() }),
-  pass({
-    id: 'obstacleVoice',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world),
-  }),
-  pass({ id: 'obstacleDesk', phase: 'reconcile', readWorld: false, awaited: false, run: (d) => d.obstacleDesk?.run() }),
-  pass({
-    id: 'obstacleNotices',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.obstacleNotices?.run(),
-  }),
-  pass({
-    id: 'obstacleOwnership',
-    phase: 'reconcile',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.obstacleOwnership?.run(at.world),
-  }),
-  pass({
-    id: 'obstacleEndings',
-    phase: 'reconcile',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.obstacleEndings?.run(at.world),
-  }),
-  pass({ id: 'pool', phase: 'reconcile', readWorld: true, awaited: true, run: (d) => d.pool?.run() }),
-  pass({ id: 'parks', phase: 'open', readWorld: false, awaited: true, run: (d) => resumeExpiredParks(d) }),
-  pass({ id: 'stalls', phase: 'open', readWorld: false, awaited: true, run: (d) => d.fleet?.completeExpiredStalls() }),
-  pass({
-    id: 'ejectionExpiries',
-    phase: 'open',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.ejections?.sweepExpiries(),
-  }),
-  pass({
-    id: 'reviewWaits',
-    phase: 'afterTasks',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => foldReviewWaits(d, at),
-  }),
-  pass({
-    id: 'burn',
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }),
-  }),
-  pass({
-    id: 'deadAgents',
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.escalations?.tidyDeadAgents(),
-  }),
-  pass({
-    id: 'settledMerges',
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.escalations?.tidySettledMerges(),
-  }),
-  pass({
-    id: 'appraisals',
-    phase: 'afterVerdicts',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.appraisals?.announce(at.world),
-  }),
-  pass({ id: 'areaPaths', phase: 'afterVerdicts', readWorld: true, awaited: true, run: (d) => d.areaPaths?.refresh() }),
-  pass({
-    id: 'issueRuns',
-    phase: 'afterOrigins',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => recordIssueRuns(d, at),
-  }),
-  pass({
-    id: 'reviewedElsewhere',
-    phase: 'afterReviews',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => askReviewedElsewhere(d, at),
-  }),
-  pass({
-    id: 'localValidations',
-    phase: 'afterReviews',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.localValidations?.sweep(),
-  }),
-  pass({ id: 'tickets', phase: 'afterExecute', readWorld: true, awaited: true, run: (d) => d.tickets?.run() }),
+  ...phase('reconcile', [
+    { id: 'plans', readWorld: true, run: (d, at) => d.plans?.reconcile(at.world) },
+    { id: 'prWatch', readWorld: true, run: (d, at) => d.prWatch?.run(at.world) },
+    { id: 'prWorkItems', readWorld: true, run: (d, at) => d.prWorkItems?.run(at.world) },
+    { id: 'naming', readWorld: true, run: (d, at) => d.naming?.run(at.world) },
+    { id: 'branchReaps', readWorld: true, run: (d, at) => d.branchReaps?.run(at.world) },
+    { id: 'landings', readWorld: false, run: (d, at) => d.landings?.settle(at.world) },
+    { id: 'validationAsks', readWorld: false, run: (d) => d.validationAsks?.run() },
+    { id: 'schedules', readWorld: false, run: (d) => d.schedules?.run() },
+    { id: 'updates', readWorld: true, run: (d) => d.updates?.run() },
+    { id: 'graph', readWorld: false, run: (d, at) => d.graph?.record(at.world) },
+    { id: 'environments', readWorld: true, run: (d, at) => d.environments?.run(at.world) },
+    { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
+    { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },
+    { id: 'closeOuts', readWorld: false, run: (d, at) => d.closeOuts?.run(at.world) },
+    { id: 'notices', readWorld: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
+    { id: 'graduations', readWorld: false, run: (d) => d.graduations?.run() },
+    { id: 'clusters', readWorld: false, run: (d) => d.clusters?.run() },
+    { id: 'obstacleVoice', readWorld: true, run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world) },
+    { id: 'obstacleDesk', readWorld: false, background: true, run: (d) => d.obstacleDesk?.run() },
+    { id: 'obstacleNotices', readWorld: false, run: (d) => d.obstacleNotices?.run() },
+    { id: 'obstacleOwnership', readWorld: false, run: (d, at) => d.obstacleOwnership?.run(at.world) },
+    { id: 'obstacleEndings', readWorld: true, run: (d, at) => d.obstacleEndings?.run(at.world) },
+    { id: 'pool', readWorld: true, run: (d) => d.pool?.run() },
+  ]),
+  ...phase('open', [
+    { id: 'parks', readWorld: false, run: (d) => resumeExpiredParks(d) },
+    { id: 'stalls', readWorld: false, run: (d) => d.fleet?.completeExpiredStalls() },
+    { id: 'ejectionExpiries', readWorld: false, run: (d) => d.ejections?.sweepExpiries() },
+  ]),
+  ...phase('afterTasks', [{ id: 'reviewWaits', readWorld: false, run: (d, at) => foldReviewWaits(d, at) }]),
+  ...phase('afterAgents', [
+    { id: 'burn', readWorld: false, run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }) },
+    { id: 'deadAgents', readWorld: false, run: (d) => d.escalations?.tidyDeadAgents() },
+    { id: 'settledMerges', readWorld: false, run: (d) => d.escalations?.tidySettledMerges() },
+  ]),
+  ...phase('afterVerdicts', [
+    { id: 'appraisals', readWorld: true, run: (d, at) => d.appraisals?.announce(at.world) },
+    { id: 'areaPaths', readWorld: true, run: (d) => d.areaPaths?.refresh() },
+  ]),
+  ...phase('afterOrigins', [{ id: 'issueRuns', readWorld: false, run: (d, at) => recordIssueRuns(d, at) }]),
+  ...phase('afterReviews', [
+    { id: 'reviewedElsewhere', readWorld: true, run: (d, at) => askReviewedElsewhere(d, at) },
+    { id: 'localValidations', readWorld: false, run: (d) => d.localValidations?.sweep() },
+  ]),
+  ...phase('afterExecute', [{ id: 'tickets', readWorld: true, run: (d) => d.tickets?.run() }]),
 ];
 
 export type PulseId = (typeof ENTRIES)[number]['id'];
@@ -299,8 +177,8 @@ export async function runPulse<P extends PulsePhase>(
   for (const entry of PULSE_PIPELINE) {
     if (entry.phase !== phase) continue;
     if (entry.readWorld && !readWorld) continue;
-    if (entry.awaited) await entry.run(deps, at);
-    else void entry.run(deps, at);
+    if (entry.background) void entry.run(deps, at);
+    else await entry.run(deps, at);
   }
 }
 
