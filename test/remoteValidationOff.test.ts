@@ -238,7 +238,7 @@ test('a deployment that configured nothing takes the build inert', async () => {
       artefacts: null,
     });
     assert.equal(settled.ok, false, 'a report against no run is a returned refusal, never a throw');
-    assert.equal(system.remoteReadings.handback('a-run-that-was-never-opened', 'nothing here').ok, false);
+    assert.equal(system.remoteReadings.blocked('a-run-that-was-never-opened', 'nothing here').ok, false);
     assert.deepEqual(system.store.listRemoteReadings(), [], 'and nothing was written by either');
     assert.equal(
       system.store.listValidationChecks('issue:12')[0]?.resultBy,

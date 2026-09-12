@@ -842,8 +842,8 @@ which check a report concerns is decided by what the agent was sent to do.
 A `passed` or `failed` report is refused when the check's `amendedAt` is after the dispatch began. The
 desktop channel compares it with the claim's `claimedAt`; the fleet compares it with the task's
 dispatch timestamp. The refusal clears the desktop session's held check, quotes the amendment note,
-and tells the caller to re-read and claim the current wording. A `handback` is still accepted: it is
-an account of not reaching the environment, not a reading against either version of the procedure.
+and tells the caller to re-read and claim the current wording. A `blocked` report is still accepted: it
+is an account of not reaching the environment, not a reading against either version of the procedure.
 
 The origin fence is the **narrow** kind, and deliberately unlike `validation_amend`'s. An amendment
 is a note about how a goal gets tested and the agent best placed to write one is whoever is looking
@@ -858,7 +858,24 @@ nobody sent it to run.
 | ---------- | --------------------------------------------------- | ---------------------------------------------------------- |
 | `passed`   | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
 | `failed`   | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
-| `handback` | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
+| `blocked`  | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
+
+**The verdict is `blocked`; the record it writes is a hand-back.** Two facts wear one word easily here
+and they are not one. `blocked` is what an agent *says* — it could not carry this check out — and it is
+the same word the local ([32](32-local-validation.md)) and remote ([36](36-remote-validation.md)) paths
+take for the same fact. The hand-back is what the harness *writes*: `handback_note` on the row and
+`actor` back to `human`, through `recordValidationHandback`. That is a check returning to a person's
+queue rather than a verdict, so it keeps its name — and the column keeps it for a second reason, that a
+renamed column is invisible on every database from before the rename ([14](14-persistence.md#migrations)).
+
+The verdict was itself called `handback` until the three paths were given one word for it, and the old
+word is **refused by name** rather than quietly accepted: `validateReport` answers a `result` of
+`handback` with a refusal that names `blocked`, `RETIRED_TOOL_NAMES`' rule one layer down
+([11](11-mcp-tools.md#retired-tools)). The templates that carry the word are operator-overridable, so
+the deployments that customised most are exactly the ones still saying it, and a bare enum rejection
+listing four words leaves an agent guessing at which of them it wanted. Accepting both was the other
+option and was rejected: an alias nothing ever retires is two vocabularies for one fact, which is what
+this change removed.
 
 **Why there is a third answer.** An agent that could not reach the environment has learned nothing
 about the goal. With only `passed` and `failed` available its options are a lie and silence, and both
@@ -946,7 +963,7 @@ second look, exactly where a repeat failure is worth most. The window is narrowe
 ## The desktop channel
 
 A check that needs a browser, a login and a real environment is a check the fleet cannot run — and
-`handback` is the honest answer to it, not a fix. The fix is that the operator's **own** Claude Code
+`blocked` is the honest answer to it, not a fix. The fix is that the operator's **own** Claude Code
 can run it, on the machine that has all three, and report the reading onto the same row.
 
 So the harness listens on a second MCP socket (`src/mcp/desktop.ts`,
@@ -1008,7 +1025,7 @@ An **amendment that rewords a claimed check releases the claim**, by exactly the
 the result and the hand-over. Somebody is running that check right now against wording that no longer
 exists, and the amber band is now in front of the operator saying so. A result from that run is refused
 by `validation_report` rather than clearing the band: the caller must read and claim the new wording
-before reporting `passed` or `failed`. A `handback` remains valid, because it records only that the
+before reporting `passed` or `failed`. A `blocked` report remains valid, because it records only that the
 environment could not be reached and no reading was taken.
 
 ### What a desktop reading is worth
@@ -1053,7 +1070,7 @@ under `docs/` for the same reason: one of them would be the stale one.
 
 The skill is the interface, not a convenience. Without it the operator types the same six sentences
 at their Claude every time — which is the friction the whole channel exists to remove, and the reason
-the bench design was rejected. It says what the three answers mean, that `handback` is a right
+the bench design was rejected. It says what the three answers mean, that `blocked` is a right
 answer, and the two things a session with the repository open is most able to do wrong: report
 `passed` from evidence it did not gather, and change code to make a check pass. The `ask` section
 carries the same shape of warning for the same reason — a question is answerable wrongly and

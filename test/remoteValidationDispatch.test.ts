@@ -447,7 +447,7 @@ test('everything the agent must read is appended, and an override that names no 
       assert.match(prompt, new RegExp(`/srv/validation/issue-12/remote/${runId}/artefacts`), 'the artefact directory');
       assert.match(prompt, /LUBBDUBB_SELECTORS=/, 'the parameters ride in the environment, never in the command');
       assert.match(prompt, /remote_validation_report/, 'and the one way it may answer');
-      assert.match(prompt, /handback/, 'including that a handback is a right answer');
+      assert.match(prompt, /blocked/, 'including that a blocked run is a right answer');
       assert.match(prompt, /exit code decides nothing|exit code is never/i, 'and that the exit code decides nothing');
       assert.match(prompt, /read-only checkout/, 'and the rules of the run');
       assert.match(prompt, /Do not edit the suite/, 'not a selector, not a timeout, not a skip');
@@ -555,7 +555,7 @@ test('the advertised schema has no field an agent could state an outcome in', ()
 
     assert.deepEqual(
       Object.keys((schema['properties'] ?? {}) as Record<string, unknown>).sort(),
-      ['artefacts', 'handback', 'reportPath'],
+      ['artefacts', 'blocked', 'reportPath'],
       'where the report landed, where the artefacts went, or why there is neither — and nothing else',
     );
     assert.equal(schema['additionalProperties'], false, 'and an extra key is rejected rather than ignored');
@@ -612,7 +612,24 @@ test('a report records where things landed and settles the run, readably afterwa
   }
 });
 
-test('a handback settles the run with the reason, writes no readings and leaves every row as it was', async () => {
+test('the field this answer used to have is refused by name, pointing at the one that replaced it', async () => {
+  const sys = system();
+  try {
+    seedSheet(sys.store);
+    const runId = press(sys.store);
+    const agent = agentOn(sys, `issue:12:validate-remote:${runId}`, `validate-remote/issue/12/${runId}`);
+    const result = (await sys.mcp.session(agent.id)!.call('remote_validation_report', {
+      handback: 'the acceptance environment refused every login',
+    })) as ToolResultText;
+    assert.equal(result.isError, true);
+    assert.match(result.content[0]?.text ?? '', /"blocked"/, 'the refusal names the word that replaced it');
+    assert.equal(sys.store.getRemoteRun(runId)?.status, 'pending', 'and the run is untouched');
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a blocked run settles with the reason, writes no readings and leaves every row as it was', async () => {
   const sys = system();
   try {
     seedSheet(sys.store);
@@ -620,14 +637,14 @@ test('a handback settles the run with the reason, writes no readings and leaves 
     const before = sys.store.listRemoteSheetRows();
     const agent = agentOn(sys, `issue:12:validate-remote:${runId}`, `validate-remote/issue/12/${runId}`);
     const result = (await sys.mcp.session(agent.id)!.call('remote_validation_report', {
-      handback: 'the acceptance environment refused every login, so nothing was driven',
+      blocked: 'the acceptance environment refused every login, so nothing was driven',
     })) as ToolResultText;
     assert.equal(result.isError, undefined);
 
     const run = sys.store.getRemoteRun(runId);
     assert.equal(run?.status, 'abandoned');
     assert.match(run?.note ?? '', /refused every login/, 'the agent’s reason reaches the operator');
-    assert.deepEqual(sys.store.listRemoteReadings(), [], 'a handback writes no readings');
+    assert.deepEqual(sys.store.listRemoteReadings(), [], 'a blocked run writes no readings');
     assert.deepEqual(sys.store.listRemoteSheetRows(), before, 'and leaves every row exactly as it was');
     assert.equal(
       sys.store.listValidationChecks('issue:12').find((c) => c.id === CHECK.id)?.state,

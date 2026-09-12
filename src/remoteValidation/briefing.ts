@@ -402,7 +402,7 @@ function briefing(input: BriefingInput): string {
     '',
     `- \`reportPath\` — the runner’s machine-readable report, inside \`${input.reportDir}\`.`,
     ...(input.publish === null ? [] : ['- `artefacts` — the URL the publish command printed.']),
-    '- `handback` — a reason, **instead of** a report: the run could not be carried out at all. It records ' +
+    '- `blocked` — a reason, **instead of** a report: the run could not be carried out at all. It records ' +
       'nothing, leaves every row exactly as it was, and carries your reason to the operator. It is a right ' +
       'answer rather than a last resort — an agent that could not reach the environment has learned nothing ' +
       'about the goal, and with only a report available its options would be a lie and silence.',

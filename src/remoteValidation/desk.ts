@@ -169,7 +169,7 @@ export class RemoteValidationDesk {
    * folded into neither arm here, as it is nowhere else in this subsystem.
    *
    * It writes no reading, no check result and nothing on a row: a run nobody reported against
-   * learned nothing about the goal, `handback`'s rule.
+   * learned nothing about the goal, a `blocked` run's rule.
    */
   private sweep(): void {
     const { store, errors } = this.deps;

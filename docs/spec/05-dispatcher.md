@@ -1180,7 +1180,7 @@ The check's own procedure, expectation and resource names are **appended** to th
 `validation-check` prompt rather than interpolated — the half the agent cannot act without, and an
 override that predates the rule would silently drop a new `{token}`.
 
-The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
+The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `blocked` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
 
