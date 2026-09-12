@@ -154,9 +154,9 @@ test('the terminal runtime still detects the protocol sentinels from real output
   failPlanningOpen(system.store, 902);
   await system.harness.runCycle('manual');
 
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   backend.last().emit('I need to know the target framework.\n@@LUBBDUBB_WAITING:Which framework?@@\n');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1);
   system.store.close();
 });

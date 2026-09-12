@@ -39,13 +39,13 @@ export class PlanReconciler {
   constructor(private readonly deps: PlanReconcilerDeps) {}
 
   async reconcile(world: WorldSnapshot): Promise<void> {
-    const plans = this.deps.store
+    const plans = this.deps.store.plans
       .listPlans()
       .filter((p) => p.status === 'active' || p.status === 'complete' || p.status === 'awaiting_approval');
     if (plans.length === 0) return;
 
     await this.maybeFetch();
-    const tasks = this.deps.store.listTasks();
+    const tasks = this.deps.store.tasks.listTasks();
     for (const plan of plans) {
       await this.reconcilePlan(plan, world.pullRequests, world.closedPullRequests ?? [], tasks);
     }
@@ -77,14 +77,14 @@ export class PlanReconciler {
     const { store } = this.deps;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
-    const parts = store.listPlanParts(plan.id);
+    const parts = store.plans.listPlanParts(plan.id);
 
     const flat = issueBranch(issueNumber);
     const presence = await this.deps.git.presence(flat);
     const flatTaken = presence.local || presence.remote;
 
     const declined = new Set(
-      this.deps.store
+      this.deps.store.humanTasks
         .listHumanTasksForParts(parts.filter(partIsHuman).map((p) => p.id))
         .filter((t) => t.status === 'declined')
         .map((t) => t.partId),
@@ -122,7 +122,7 @@ export class PlanReconciler {
     for (const part of parts) {
       const patch = next.get(part.slug);
       if (!patch || !differs(part, patch)) continue;
-      store.updatePlanPart(part.id, patch);
+      store.plans.updatePlanPart(part.id, patch);
       changed = true;
     }
     if (changed && observed.some(collidesWith)) {
@@ -132,10 +132,10 @@ export class PlanReconciler {
       });
     }
 
-    const rolled = store.rollUpPlanStatus(plan.id);
+    const rolled = store.plans.rollUpPlanStatus(plan.id);
     const current = rolled ?? plan;
     if (current.status !== 'awaiting_approval' && (current.statusCommentRef === null || changed || rolled)) {
-      await this.writeStatusComment(current, store.listPlanParts(plan.id), issueNumber);
+      await this.writeStatusComment(current, store.plans.listPlanParts(plan.id), issueNumber);
     }
   }
 
@@ -181,7 +181,7 @@ export class PlanReconciler {
       plan,
       parts,
       this.deps.prRefStyle ?? '#',
-      this.deps.store.listValidationChecks(plan.originRef),
+      this.deps.store.validation.listValidationChecks(plan.originRef),
     );
     if (this.lastComment.get(plan.id) === body) return;
     try {
@@ -190,7 +190,8 @@ export class PlanReconciler {
         body,
         commentRef: plan.statusCommentRef,
       });
-      if (result.ref && result.ref !== plan.statusCommentRef) this.deps.store.setPlanStatusComment(plan.id, result.ref);
+      if (result.ref && result.ref !== plan.statusCommentRef)
+        this.deps.store.plans.setPlanStatusComment(plan.id, result.ref);
       this.lastComment.set(plan.id, body);
     } catch (err) {
       this.deps.errors?.record({

@@ -14,12 +14,12 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/throughput',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
       const since = sinceOrEpoch(window.since);
       return {
         insights: buildThroughputInsights({
-          events: store.listWorldEventsOfKindsSince(since, THROUGHPUT_EVENT_KINDS),
-          replies: store.listPrRepliesSentSince(since),
+          events: store.world.listWorldEventsOfKindsSince(since, THROUGHPUT_EVENT_KINDS),
+          replies: store.prReplies.listPrRepliesSentSince(since),
           window,
           now,
         }),

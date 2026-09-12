@@ -17,7 +17,7 @@ test('the state snapshot reports per-PR health', async () => {
   );
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat', baseBranch: 'main' });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
   const pr = snap.world.pullRequests[0]!;

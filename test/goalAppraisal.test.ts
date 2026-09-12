@@ -390,7 +390,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string, over: Partial<Task> = {}): Agent {
-  const t = system.store.createTask({
+  const t = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -424,7 +424,7 @@ test('a verdict is attributed from the credential and fingerprinted off the text
   });
   assert.equal(res.isError, false);
 
-  const stored = system.store.getAppraisal('issue:12');
+  const stored = system.store.verdicts.getAppraisal('issue:12');
   assert.equal(stored?.by, 'appraiser');
   assert.equal(stored?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
   assert.deepEqual(stored?.missing, ['Better by what measure?', 'Which page?'], 'the list is kept, blanks dropped');
@@ -445,7 +445,7 @@ test('a verdict cast against text the ticket no longer has holds nothing', async
     summary: 'no measure here',
     missing: ['Which measure?'],
   });
-  const stored = system.store.getAppraisal('issue:12');
+  const stored = system.store.verdicts.getAppraisal('issue:12');
   assert.ok(stored);
   assert.equal(appraisalHold(stored, issue()), null);
   system.store.close?.();
@@ -465,7 +465,7 @@ test('an agent doing the work cannot appraise it, and is pointed at what it can 
   const refusal = appraiserOrigin('issue:12');
   assert.equal(refusal.ok, false);
   assert.match(refusal.ok ? '' : refusal.error, /escalate/, 'an agent in the work is sent to a human, not to a park');
-  assert.equal(system.store.getAppraisal('issue:12'), null, 'and nothing is written');
+  assert.equal(system.store.verdicts.getAppraisal('issue:12'), null, 'and nothing is written');
   system.store.close?.();
 });
 
@@ -492,23 +492,23 @@ test('a rejected appraisal writes nothing', async () => {
   assert.equal(bare.isError, true);
   assert.match(bare.text, /missing is required/);
   assert.equal((await call({ status: 'unclear', summary: 'x', missing: [] })).isError, true);
-  assert.equal(system.store.getAppraisal('issue:12'), null);
+  assert.equal(system.store.verdicts.getAppraisal('issue:12'), null);
   const ok = await call({ status: 'workable', summary: 'make search faster', missing: ['stray'] });
   assert.equal(ok.isError, false);
-  assert.deepEqual(system.store.getAppraisal('issue:12')?.missing, []);
+  assert.deepEqual(system.store.verdicts.getAppraisal('issue:12')?.missing, []);
   system.store.close?.();
 });
 
 test('a re-appraisal keeps the instant the first verdict was cast', () => {
   const system = build();
-  const first = system.store.recordAppraisal({
+  const first = system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'a',
     goalRef: 'aaaa',
     by: 'appraiser',
   });
-  const second = system.store.recordAppraisal({
+  const second = system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'b',
@@ -516,25 +516,29 @@ test('a re-appraisal keeps the instant the first verdict was cast', () => {
     by: 'appraiser',
   });
   assert.equal(second.decidedAt, first.decidedAt, 'the row dates the first judgement, however often it is re-cast');
-  assert.equal(system.store.listAppraisals().length, 1, 'one row per issue — a standing verdict is a lookup');
-  assert.equal(system.store.clearAppraisal('issue:12'), true);
-  assert.equal(system.store.getAppraisal('issue:12'), null, 'and "not appraised" has exactly one representation');
+  assert.equal(system.store.verdicts.listAppraisals().length, 1, 'one row per issue — a standing verdict is a lookup');
+  assert.equal(system.store.verdicts.clearAppraisal('issue:12'), true);
+  assert.equal(
+    system.store.verdicts.getAppraisal('issue:12'),
+    null,
+    'and "not appraised" has exactly one representation',
+  );
   system.store.close?.();
 });
 
 test('a verdict about new text gets a new comment rather than overwriting the old question', () => {
   const system = build();
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'a',
     goalRef: 'aaaa',
     by: 'appraiser',
   });
-  system.store.setAppraisalComment('issue:12', 'c_1');
-  assert.equal(system.store.getAppraisal('issue:12')?.commentRef, 'c_1');
+  system.store.verdicts.setAppraisalComment('issue:12', 'c_1');
+  assert.equal(system.store.verdicts.getAppraisal('issue:12')?.commentRef, 'c_1');
 
-  const same = system.store.recordAppraisal({
+  const same = system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'a, restated',
@@ -543,7 +547,7 @@ test('a verdict about new text gets a new comment rather than overwriting the ol
   });
   assert.equal(same.commentRef, 'c_1', 'the same question, edited in place');
 
-  const fresh = system.store.recordAppraisal({
+  const fresh = system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'now a different question',
@@ -573,7 +577,7 @@ test('a refused goal asks its question on the ticket, once, and edits it thereaf
   const system = build();
   const { sink, writes } = commentSink();
   const desk = new AppraisalDesk({ store: system.store, sink });
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'Better how? Name the measure.',
@@ -594,7 +598,7 @@ test('a refused goal asks its question on the ticket, once, and edits it thereaf
   assert.match(body, /\/lubbdubb clarify 12/, 'with a way to get help doing it');
   assert.match(body, /Nothing has been rejected/, 'a question, not a refusal');
   assert.equal(
-    system.store.getAppraisal('issue:12')?.commentRef,
+    system.store.verdicts.getAppraisal('issue:12')?.commentRef,
     'c_1',
     'and the ref is kept, so the next write edits',
   );
@@ -608,7 +612,7 @@ test('a hold that ended is retracted on the thread, not left standing', async ()
   const system = build();
   const { sink, writes } = commentSink();
   const desk = new AppraisalDesk({ store: system.store, sink });
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'no measure here',
@@ -627,7 +631,7 @@ test('a hold that ended is retracted on the thread, not left standing', async ()
 test('nothing is said for a workable verdict', async () => {
   const system = build();
   const { sink, writes } = commentSink();
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'make the search endpoint faster',
@@ -648,17 +652,17 @@ test('the comment body is pure, and a multi-line summary stays inside its quote'
 test('an operator verdict is a first-class one, and clearing it is a delete', () => {
   const system = build();
   const i = issue();
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'I want the reporter to say what they mean',
     goalRef: goalFingerprint(i.title, i.body),
     by: 'operator',
   });
-  const held = appraisalHold(system.store.getAppraisal('issue:12'), i);
+  const held = appraisalHold(system.store.verdicts.getAppraisal('issue:12'), i);
   assert.match(held ?? '', /^you could not act on this goal/, 'attributed to the operator, not to an agent');
 
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'work it anyway',
@@ -666,7 +670,7 @@ test('an operator verdict is a first-class one, and clearing it is a delete', ()
     by: 'operator',
   });
   assert.equal(
-    appraisalHold(system.store.getAppraisal('issue:12'), i),
+    appraisalHold(system.store.verdicts.getAppraisal('issue:12'), i),
     null,
     'the override releases it with no clearing step',
   );
@@ -682,13 +686,13 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
     title: 'Make it better',
     body: 'the thing should be better',
   });
-  system.store.setWorldBaseline(await system.connector.getState());
+  system.store.world.setWorldBaseline(await system.connector.getState());
 
   const untouched = buildStateSnapshot(system);
   assert.equal(untouched.world.issues.find((i) => i.number === 12)!.appraisal, null);
 
   const i = untouched.world.issues.find((x) => x.number === 12)!;
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'unclear',
     summary: 'Name one behaviour that is wrong today.',
@@ -709,7 +713,7 @@ test('a re-cast refusal on the unedited ticket still holds, whatever happened ar
   const s = new Store(':memory:', () => new Date(clock).toISOString());
   const goal = issue();
   const write = (summary: string): IssueAppraisal =>
-    s.recordAppraisal({
+    s.verdicts.recordAppraisal({
       originRef: 'issue:12',
       verdict: 'unclear',
       summary,
@@ -717,22 +721,26 @@ test('a re-cast refusal on the unedited ticket still holds, whatever happened ar
       goalRef: goalFingerprint(goal.title, goal.body),
       by: 'appraiser',
     });
-  const held = (): string | null => appraisalHold(s.getAppraisal('issue:12'), goal);
+  const held = (): string | null => appraisalHold(s.verdicts.getAppraisal('issue:12'), goal);
 
   const first = write('Better how? There is no measure here.');
   assert.ok(held());
 
   clock += 60 * 60_000;
-  s.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'Issue #12 linked to PR #41' }]);
+  s.world.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'Issue #12 linked to PR #41' }]);
   assert.ok(held(), 'a link is not an answer');
 
   clock += 60 * 60_000;
   const second = write('Still no measure I could tell "done" by.');
   assert.equal(second.decidedAt, first.decidedAt, 'the row still dates the first judgement');
   assert.ok(second.updatedAt > first.updatedAt);
-  assert.deepEqual(s.getAppraisal('issue:12')?.missing, ['Better by what measure?'], 'the list round-trips the store');
+  assert.deepEqual(
+    s.verdicts.getAppraisal('issue:12')?.missing,
+    ['Better by what measure?'],
+    'the list round-trips the store',
+  );
   assert.ok(held());
 
-  assert.equal(appraisalHold(s.getAppraisal('issue:12'), { ...goal, body: 'p99 under 200ms' }), null);
+  assert.equal(appraisalHold(s.verdicts.getAppraisal('issue:12'), { ...goal, body: 'p99 under 200ms' }), null);
   s.close();
 });

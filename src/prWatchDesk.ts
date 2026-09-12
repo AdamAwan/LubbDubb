@@ -21,7 +21,7 @@ export class PrWatchDesk {
     const wanted = prsToSeedWatch(world.pullRequests, {
       watchLabel: this.deps.watchLabel,
       legacyIgnoreLabel: this.deps.legacyIgnoreLabel,
-      seeded: this.deps.store.seededPrs(),
+      seeded: this.deps.store.prWatchSeeds.seededPrs(),
     });
     for (const seed of wanted) await seedPrWatch(seed, this.deps);
   }
@@ -41,5 +41,5 @@ export async function seedPrWatch(
     });
     return;
   }
-  deps.store.recordPrWatchSeed(seed.prNumber, seed.branch);
+  deps.store.prWatchSeeds.recordPrWatchSeed(seed.prNumber, seed.branch);
 }

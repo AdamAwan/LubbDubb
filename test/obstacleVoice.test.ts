@@ -83,7 +83,7 @@ function build(): System {
 }
 
 function agentReport(system: System, goalRef: string): void {
-  system.store.recordObstacleSighting(
+  system.store.obstacles.recordObstacleSighting(
     {
       what: 'the windows runner wedges before the suite starts',
       kind: 'obstacle',
@@ -110,18 +110,18 @@ test('a harness voice and one agent voice reach standing, and the harness alone 
   const desk = new ObstacleVoiceDesk({ store: system.store });
   desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
 
-  const filed = system.store.listObstacles();
+  const filed = system.store.obstacles.listObstacles();
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.state, 'sighted');
-  const board = system.store.obstacleBoard();
+  const board = system.store.obstacles.obstacleBoard();
   assert.equal(board[0]!.voices, 1);
-  const sighting = system.store.listObstacleSightings(filed[0]!.id)[0]!;
+  const sighting = system.store.obstacles.listObstacleSightings(filed[0]!.id)[0]!;
   assert.equal(sighting.goalRef, null);
   assert.equal(sighting.agentId, null);
   assert.equal(sighting.transition, 'base-red:test (windows)@base/one');
 
   agentReport(system, 'issue:900');
-  const after = system.store.obstacleBoard();
+  const after = system.store.obstacles.obstacleBoard();
   assert.equal(after.length, 1);
   assert.equal(after[0]!.voices, 2);
   assert.equal(after[0]!.obstacle.state, 'standing');
@@ -134,7 +134,7 @@ test('two harness readings of one transition are one voice and never two rows', 
   const after = world(stack([check()], 2));
   desk.run(before, after);
   desk.run(before, after);
-  const board = system.store.obstacleBoard();
+  const board = system.store.obstacles.obstacleBoard();
   assert.equal(board.length, 1);
   assert.equal(board[0]!.voices, 1);
   assert.equal(board[0]!.obstacle.state, 'sighted');
@@ -148,18 +148,18 @@ test("the harness's own key goes through the gates, and a check the world does n
     ...after,
     pullRequests: after.pullRequests.map((p) => ({ ...p, ciChecks: p.ciChecks && [] })),
   });
-  assert.deepEqual(system.store.listObstacles(), []);
+  assert.deepEqual(system.store.obstacles.listObstacles(), []);
 });
 
 test('the key the harness files binds, but does not resolve a row on its own', () => {
   const system = build();
   const desk = new ObstacleVoiceDesk({ store: system.store });
   desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
-  const [row] = system.store.obstacleBoard();
+  const [row] = system.store.obstacles.obstacleBoard();
   assert.deepEqual(
     row!.keys.map((key) => [key.kind, key.value, key.binds]),
     [['check', 'test (windows)', true]],
   );
   desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()], 2)));
-  assert.equal(system.store.listObstacles().length, 1);
+  assert.equal(system.store.obstacles.listObstacles().length, 1);
 });

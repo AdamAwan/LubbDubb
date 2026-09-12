@@ -95,7 +95,7 @@ function build(): System {
 test('the snapshot carries the candidate containers, derived once for the whole world', () => {
   const system = build();
   try {
-    system.store.setWorldBaseline({
+    system.store.world.setWorldBaseline({
       takenAt: '2026-08-01T00:00:00.000Z',
       pullRequests: [],
       closedPullRequests: [],

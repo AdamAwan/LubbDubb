@@ -104,7 +104,7 @@ async function ask(system: System): Promise<{ agent: Agent; cwd: string }> {
   await system.reviewPacks.whenIdle();
   const task = findTask(system.store, (t) => t.originRef === packOrigin(7));
   assert.ok(task, 'the author task exists');
-  const agent = system.store.listAgents().find((a) => a.taskId === task!.id);
+  const agent = system.store.agents.listAgents().find((a) => a.taskId === task!.id);
   assert.ok(agent, 'the author agent was spawned');
   return { agent: agent!, cwd: agent!.cwd };
 }
@@ -328,7 +328,7 @@ test('asking for a pack spawns a read-only author outside the pulse, and the ask
   assert.equal(task!.branch, packLeaseKey(7, HEAD));
   assert.deepEqual(worktrees.ensured, [{ branch: packLeaseKey(7, HEAD), base: HEAD, readOnly: true }]);
   assert.equal(
-    system.store.listDecisions().some((d) => d.detail.includes('pr:7:pack')),
+    system.store.decisions.listDecisions().some((d) => d.detail.includes('pr:7:pack')),
     false,
   );
 
@@ -394,7 +394,9 @@ test('a head the clone cannot diff fails the ask loudly and leaves no lease behi
     undefined,
   );
   assert.deepEqual(worktrees.ensured, []);
-  assert.ok(system.store.listErrors().some((e) => /Could not start the review pack author for PR #7/.test(e.message)));
+  assert.ok(
+    system.store.errors.listErrors().some((e) => /Could not start the review pack author for PR #7/.test(e.message)),
+  );
   assert.equal(system.reviewPacks.writing(7), false);
   await app.close();
   system.store.close();
@@ -413,7 +415,7 @@ test('the author submits a pack and the harness fills in what it owns; the read 
   assert.equal(res.isError, false, res.text);
   assert.deepEqual(written, [7]);
 
-  const record = system.store.getCurrentReviewPack(7);
+  const record = system.store.reviewPacks.getCurrentReviewPack(7);
   assert.ok(record);
   const pack: ReviewPack = record!.pack;
   assert.equal(pack.schema, REVIEW_PACK_SCHEMA);
@@ -444,7 +446,7 @@ test('the author submits a pack and the harness fills in what it owns; the read 
   assert.deepEqual(pack.ideas[1]!.anchors[0]!.range, { path: 'src/b.ts', start: 9, end: 9 });
 
   const { app } = await buildApp(system);
-  system.store.markReviewIdeaRead({ prNumber: 7, headSha: HEAD, hunks: [h1!.range], read: true });
+  system.store.reviewPacks.markReviewIdeaRead({ prNumber: 7, headSha: HEAD, hunks: [h1!.range], read: true });
   const got = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
   assert.equal(got.statusCode, 200);
   const payload = got.json() as ReviewPackPayload;
@@ -455,9 +457,9 @@ test('the author submits a pack and the harness fills in what it owns; the read 
   assert.equal(payload.stale, null);
   await app.close();
 
-  const pid = system.store.getAgent(agent.id)?.pid;
+  const pid = system.store.agents.getAgent(agent.id)?.pid;
   system.agents.kill(agent.id);
-  assert.equal(system.store.getAgent(agent.id)?.status, 'killed');
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'killed');
   assert.deepEqual(reaps, [pid], 'the subtree is reaped through session.kill()');
   assert.deepEqual(worktrees.removed, [packLeaseKey(7, HEAD)]);
   system.store.close();
@@ -527,7 +529,7 @@ test('a pack is refused by field name — an unowned hunk, one owned twice, a ma
   assert.equal(minted.isError, true);
   assert.match(minted.text, /ids are minted by the harness/);
 
-  assert.equal(system.store.getCurrentReviewPack(7), null, 'nothing landed');
+  assert.equal(system.store.reviewPacks.getCurrentReviewPack(7), null, 'nothing landed');
   const fixed = await submit(system, agent, base);
   assert.equal(fixed.isError, false, fixed.text);
   system.store.close();
@@ -539,7 +541,7 @@ test('the pack is written from both pads: a witnessed claim cites an entry, and 
   await openPr(system);
   system.connector.inject({ kind: 'issue_linked_pr', number: 12, prNumber: 7 });
   await system.harness.runCycle('manual');
-  const goalEntry = system.store.appendScratchEntry({
+  const goalEntry = system.store.scratch.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:import',
     agentId: 'a1',
@@ -553,7 +555,7 @@ test('the pack is written from both pads: a witnessed claim cites an entry, and 
       paths: ['src/a.ts'],
     },
   });
-  const prEntry = system.store.appendScratchEntry({
+  const prEntry = system.store.scratch.appendScratchEntry({
     padRef: 'pr:7',
     authorOriginRef: 'pr:7:ci',
     agentId: 'a2',
@@ -599,7 +601,7 @@ test('the pack is written from both pads: a witnessed claim cites an entry, and 
     ],
   });
   assert.equal(res.isError, false, res.text);
-  const pack = system.store.getCurrentReviewPack(7)!.pack;
+  const pack = system.store.reviewPacks.getCurrentReviewPack(7)!.pack;
   assert.equal(pack.witnessed, true);
   assert.deepEqual(pack.ideas[0]!.anchors[0]!.note, {
     by: 'witness',
@@ -619,7 +621,7 @@ test('the pack is written from both pads: a witnessed claim cites an entry, and 
 
 test('the tool is refused to any agent that is not an author, by name', async () => {
   const { system } = build();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Review',
     prompt: 'read',
@@ -652,7 +654,7 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
   assert.equal(payload.pack.headSha, HEAD, 'the pack is still the one written');
   assert.equal(payload.head, HEAD2);
   assert.deepEqual(payload.stale, { headSha: HEAD2, commitsBehind: 2 });
-  const authors = system.store.listTasks().filter((t) => t.originRef === packOrigin(7));
+  const authors = system.store.tasks.listTasks().filter((t) => t.originRef === packOrigin(7));
   assert.equal(authors.length, 1);
 
   system.connector.inject({ kind: 'pr_pushed', prNumber: 7, headSha: 'c3d4e5f60718293a4b5c6d7e8f901234567890ab' });
@@ -668,13 +670,13 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
   const checking = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(checking.statusCode, 409);
   assert.match(checking.json().error, /being checked/);
-  const checker = system.store.listAgents().find((a) => a.status === 'running' && a.id !== agent.id);
+  const checker = system.store.agents.listAgents().find((a) => a.status === 'running' && a.id !== agent.id);
   assert.ok(checker, 'the checker is on the pull request');
   system.agents.complete(checker!.id);
   const again = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(again.statusCode, 202);
   await system.reviewPacks.whenIdle();
-  assert.equal(system.store.listTasks().filter((t) => t.originRef === packOrigin(7)).length, 2);
+  assert.equal(system.store.tasks.listTasks().filter((t) => t.originRef === packOrigin(7)).length, 2);
   await app.close();
   system.store.close();
 });

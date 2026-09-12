@@ -6,7 +6,7 @@ import type { Store } from '../store/store.js';
 // → docs/spec/06-issue-pickup.md
 
 interface PlacementSettleContext {
-  store: Pick<Store, 'getAppraisal' | 'settleAppraisalPlacement'>;
+  store: Pick<Store, 'verdicts'>;
   connector: { canPlaceWorkItem(): boolean };
   errors?: ErrorRecorder;
 }
@@ -29,7 +29,7 @@ export async function settlePlacement(
     return { ok: false, error: message };
   }
   const origin = issueConclusionOrigin(issueNumber);
-  const appraisal = ctx.store.getAppraisal(origin);
-  const settled = appraisal !== null && ctx.store.settleAppraisalPlacement(origin, appraisal.goalRef, field);
+  const appraisal = ctx.store.verdicts.getAppraisal(origin);
+  const settled = appraisal !== null && ctx.store.verdicts.settleAppraisalPlacement(origin, appraisal.goalRef, field);
   return { ok: true, settled };
 }

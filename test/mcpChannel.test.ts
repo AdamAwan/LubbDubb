@@ -179,7 +179,7 @@ function retiredAwareTools(): McpTool[] {
   const agent = spawnAgent(system, 'issue:12');
   return buildTools(
     { store: system.store, agents: system.agents },
-    { agent, task: system.store.getTask(agent.taskId)! },
+    { agent, task: system.store.tasks.getTask(agent.taskId)! },
   );
 }
 
@@ -417,7 +417,7 @@ function build(overrides: Record<string, unknown> = {}): System {
 }
 
 function spawnAgent(system: System, originRef: string, title = 'Big thing'): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -429,7 +429,7 @@ function spawnAgent(system: System, originRef: string, title = 'Big thing'): Age
 }
 
 function advertisedSchema(system: System, agent: Agent, name: string): { properties: Record<string, unknown> } {
-  const task = system.store.getTask(agent.taskId)!;
+  const task = system.store.tasks.getTask(agent.taskId)!;
   const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find((t) => t.name === name);
   assert.ok(tool, `${name} is built`);
   return tool.inputSchema as { properties: Record<string, unknown> };
@@ -455,12 +455,12 @@ test('plan_submit persists the verdict and hands the agent its status back', asy
   });
   assert.equal(res.isError, false);
 
-  const plan = system.store.getPlanByOrigin('issue:12');
+  const plan = system.store.plans.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan landed against the issue origin, not the planner origin');
   assert.equal(plan!.status, 'awaiting_approval');
   assert.equal(plan!.title, 'Big thing');
   assert.deepEqual(
-    system.store.listPlanParts(plan!.id).map((p) => p.slug),
+    system.store.plans.listPlanParts(plan!.id).map((p) => p.slug),
     ['schema', 'reader'],
   );
 
@@ -490,15 +490,15 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /dependency cycle/);
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null);
-  assert.deepEqual(system.store.listPlans(), []);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null);
+  assert.deepEqual(system.store.plans.listPlans(), []);
 
   const fixed = await callTool(system, agent, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'Small after all.',
   });
   assert.equal(fixed.isError, false);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
   assert.match(fixed.text, /nothing is scheduled until an operator approves it/);
   system.store.close();
 });
@@ -526,10 +526,10 @@ test('plan_submit accepts and persists the widened document', async () => {
   });
   assert.equal(res.isError, false);
 
-  const plan = system.store.getPlanByOrigin('issue:231')!;
+  const plan = system.store.plans.getPlanByOrigin('issue:231')!;
   assert.equal(plan.risks, 'part 2 briefly serves artifacts unguarded');
   assert.match(plan.document!, /^# Serving artifacts/);
-  assert.equal(system.store.listPlanParts(plan.id)[0]!.acceptance, 'round-trips; tampered and expired refused');
+  assert.equal(system.store.plans.listPlanParts(plan.id)[0]!.acceptance, 'round-trips; tampered and expired refused');
   system.store.close();
 });
 
@@ -565,7 +565,7 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   });
   assert.equal(res.isError, false);
 
-  const checks = system.store.listValidationChecks('issue:284');
+  const checks = system.store.validation.listValidationChecks('issue:284');
   assert.equal(checks.length, 1);
   assert.equal(checks[0]!.letter, 'A');
   assert.equal(checks[0]!.expect, 'No issue/284/reap ref, locally or on the remote.');
@@ -573,14 +573,14 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   assert.deepEqual(checks[0]!.covers, ['reap-writer']);
   assert.equal(checks[0]!.candidateWhy, 'it is a git assertion and nothing else');
 
-  const resources = system.store.listValidationResources('issue:284');
+  const resources = system.store.validation.listValidationResources('issue:284');
   assert.deepEqual(
     resources.map((r) => r.name),
     ['fixture-repo.tar.gz', 'orders-dump.sql'],
   );
   assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.provided, false);
   assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.humanTaskId, null);
-  assert.equal(system.store.listHumanTasks().length, 0);
+  assert.equal(system.store.humanTasks.listHumanTasks().length, 0);
   system.store.close();
 });
 
@@ -597,14 +597,14 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /who runs it is not yours to say/);
-  assert.equal(system.store.getPlanByOrigin('issue:285'), null);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:285'), null);
 
   const fixed = await callTool(system, agent, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'one PR',
   });
   assert.equal(fixed.isError, false);
-  assert.deepEqual(system.store.listValidationChecks('issue:285'), []);
+  assert.deepEqual(system.store.validation.listValidationChecks('issue:285'), []);
   system.store.close();
 });
 
@@ -618,15 +618,15 @@ test('identity is structural: an agent cannot submit a plan for work it was not 
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /only available to a planning agent/);
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null);
 
   const planner = spawnAgent(system, 'issue:41:plan');
   await callTool(system, planner, 'plan_submit', {
     parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'Just one.',
   });
-  assert.ok(system.store.getPlanByOrigin('issue:41'));
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null, 'no cross-origin write');
+  assert.ok(system.store.plans.getPlanByOrigin('issue:41'));
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null, 'no cross-origin write');
   system.store.close();
 });
 
@@ -644,7 +644,7 @@ test('a revoked credential can no longer call tools', async () => {
   })) as ToolResultText;
   assert.equal(stale.isError, true, 'and the bridge that already held one is refused');
   assert.match(stale.content[0]!.text, /unknown or revoked/);
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null);
   system.store.close();
 });
 
@@ -661,14 +661,14 @@ test('escalate parks the agent with structure the sentinel could never carry', a
   assert.equal(res.isError, false);
   assert.equal((JSON.parse(res.text) as { parked: boolean }).parked, true);
 
-  const [esc, ...rest] = system.store.listOpenEscalations();
+  const [esc, ...rest] = system.store.escalations.listOpenEscalations();
   assert.equal(rest.length, 0);
   assert.equal(esc!.prompt, 'Which auth provider should I assume?');
   assert.equal(esc!.type, 'resolve_ambiguity', 'the kind picks the inbox type');
   assert.deepEqual(esc!.context.options, ['Auth0', 'Cognito', 'roll our own']);
   assert.equal(esc!.context.detail, 'The repo has stubs for two of these.');
   assert.equal(esc!.context.originRef, 'issue:12');
-  assert.equal(system.store.getAgent(agent.id)?.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'waiting');
   system.store.close();
 });
 
@@ -690,8 +690,8 @@ test('escalate and the WAITING sentinel converge on one park, in either order', 
       await tool();
     }
 
-    assert.equal(system.store.listOpenEscalations().length, 1, `one escalation (toolFirst=${toolFirst})`);
-    assert.equal(system.store.getAgent(agent.id)?.status, 'waiting');
+    assert.equal(system.store.escalations.listOpenEscalations().length, 1, `one escalation (toolFirst=${toolFirst})`);
+    assert.equal(system.store.agents.getAgent(agent.id)?.status, 'waiting');
     system.store.close();
   }
 });
@@ -701,12 +701,12 @@ test('answering releases the park, so the next question is a fresh one', async (
   const agent = spawnAgent(system, 'issue:12');
 
   await callTool(system, agent, 'escalate', { question: 'First?' });
-  const first = system.store.listOpenEscalations()[0]!;
+  const first = system.store.escalations.listOpenEscalations()[0]!;
   system.escalations.answer(first.id, 'yes');
-  assert.equal(system.store.getAgent(agent.id)?.status, 'running');
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'running');
 
   await callTool(system, agent, 'escalate', { question: 'Second?' });
-  const open = system.store.listOpenEscalations();
+  const open = system.store.escalations.listOpenEscalations();
   assert.equal(open.length, 1);
   assert.equal(open[0]!.prompt, 'Second?', 'the latch does not swallow a later, genuinely new ask');
   system.store.close();
@@ -724,8 +724,8 @@ test('a whitelisted escalate is auto-answered and says so rather than implying a
   const payload = JSON.parse(res.text) as { parked: boolean; escalationId: string | null };
   assert.equal(payload.parked, false);
   assert.equal(payload.escalationId, null);
-  assert.deepEqual(system.store.listOpenEscalations(), []);
-  assert.equal(system.store.getAgent(agent.id)?.status, 'running');
+  assert.deepEqual(system.store.escalations.listOpenEscalations(), []);
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'running');
   system.store.close();
 });
 
@@ -734,14 +734,14 @@ test('escalate refuses an empty question instead of parking on nothing', async (
   const agent = spawnAgent(system, 'issue:12');
   const res = await callTool(system, agent, 'escalate', { question: '   ' });
   assert.equal(res.isError, true);
-  assert.deepEqual(system.store.listOpenEscalations(), []);
-  assert.equal(system.store.getAgent(agent.id)?.status, 'running');
+  assert.deepEqual(system.store.escalations.listOpenEscalations(), []);
+  assert.equal(system.store.agents.getAgent(agent.id)?.status, 'running');
   system.store.close();
 });
 
 test('world_read answers out of the harness view, with the status envelope on it', async () => {
   const system = build();
-  system.store.setWorldBaseline(
+  system.store.world.setWorldBaseline(
     fakeWorld({
       pullRequests: [
         fakePr(42, {
@@ -785,7 +785,7 @@ test('world_read answers out of the harness view, with the status envelope on it
 
 test('reading an issue carries the plan graph, which lives only in the store', async () => {
   const system = build();
-  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
+  system.store.world.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
   const planner = spawnAgent(system, 'issue:12:plan');
   await callTool(system, planner, 'plan_submit', {
     reason: 'Schema before reader.',
@@ -812,7 +812,7 @@ test('reading an issue carries the plan graph, which lives only in the store', a
 
 test('world_read is deliberately a general read, not one fenced to the caller origin', async () => {
   const system = build();
-  system.store.setWorldBaseline(
+  system.store.world.setWorldBaseline(
     fakeWorld({
       pullRequests: [
         fakePr(7, { branch: 'issue/12/schema', baseBranch: 'main', ciStatus: 'failing' }),
@@ -840,7 +840,7 @@ test('world_read explains itself rather than failing blankly', async () => {
   assert.equal(early.isError, true);
   assert.match(early.text, /has not completed a cycle yet/);
 
-  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
+  system.store.world.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
   const missing = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '99' });
   assert.equal(missing.isError, true);
   assert.match(missing.text, /no issue issue:99\. Issues the harness is tracking: #12\./);
@@ -853,8 +853,8 @@ test('world_read explains itself rather than failing blankly', async () => {
 
 test('a desk agent with no origin is told to name a ref rather than reading nothing', async () => {
   const system = build();
-  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
-  const task = system.store.createTask({
+  system.store.world.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
+  const task = system.store.tasks.createTask({
     kind: 'desk',
     title: 'Ad-hoc',
     prompt: 'poke about',
@@ -875,18 +875,18 @@ test('note_progress lands on the agent row and hands back the status envelope', 
   const system = build();
   const agent = spawnAgent(system, 'pr:142:ci');
 
-  const before = system.store.getAgent(agent.id)!.status;
+  const before = system.store.agents.getAgent(agent.id)!.status;
   const res = await callTool(system, agent, 'note_progress', {
     note: 'Reading how the dispatcher ranks candidates before touching rule `plan-part`',
   });
   assert.equal(res.isError, false);
 
-  const stored = system.store.getAgent(agent.id)!;
+  const stored = system.store.agents.getAgent(agent.id)!;
   assert.equal(stored.note, 'Reading how the dispatcher ranks candidates before touching rule `plan-part`');
   assert.ok(stored.notedAt, 'the note is dated so a reader can tell how current it is');
   assert.equal(stored.status, before);
   assert.equal(stored.waitingReason, null);
-  assert.deepEqual(system.store.listOpenEscalations(), []);
+  assert.deepEqual(system.store.escalations.listOpenEscalations(), []);
 
   const payload = JSON.parse(res.text) as { noted: boolean; note: string; _status: Record<string, unknown> };
   assert.equal(payload.noted, true);
@@ -901,11 +901,11 @@ test('a note is a current value, not a stream — the second one replaces the fi
   await callTool(system, agent, 'note_progress', { note: 'Reading the store schema' });
   await callTool(system, agent, 'note_progress', { note: 'Running the full suite after the rename' });
 
-  const stored = system.store.getAgent(agent.id)!;
+  const stored = system.store.agents.getAgent(agent.id)!;
   assert.equal(stored.note, 'Running the full suite after the rename');
 
-  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
-  assert.equal(system.store.getAgent(agent.id)!.note, 'Running the full suite after the rename');
+  system.store.agents.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
+  assert.equal(system.store.agents.getAgent(agent.id)!.note, 'Running the full suite after the rename');
   system.store.close();
 });
 
@@ -918,11 +918,11 @@ test('an over-long note is stored trimmed and the agent is told, rather than los
   const payload = JSON.parse(res.text) as { note: string; trimmed?: string };
   assert.equal(payload.note.length, MAX_NOTE_LENGTH);
   assert.match(payload.trimmed ?? '', /trimmed/);
-  assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
+  assert.equal(system.store.agents.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
 
   const empty = await callTool(system, agent, 'note_progress', { note: '   ' });
   assert.equal(empty.isError, true);
-  assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
+  assert.equal(system.store.agents.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
   system.store.close();
 });
 
@@ -934,7 +934,7 @@ test('silence is not "no progress": an agent that never notes leaves the card as
 
   backend.last().emit('Running tests…\n');
   backend.last().emit('@@LUBBDUBB_DONE@@');
-  assert.equal(system.store.getAgent(agent.id)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'done');
 
   const snap = (await (await app.inject({ method: 'GET', url: '/api/state' })).json()) as {
     agents: Record<string, unknown>[];
@@ -961,8 +961,8 @@ test('a note is dated but nothing reads the date as liveness', async () => {
   assert.equal(typeof shipped.notedAt, 'string');
   const derived = Object.keys(shipped).filter((k) => /stale|stuck|idle|silent|heartbeat|alive/i.test(k));
   assert.deepEqual(derived, []);
-  assert.equal(shipped.status, system.store.getAgent(agent.id)!.status);
-  assert.deepEqual(system.store.listErrors(10), []);
+  assert.equal(shipped.status, system.store.agents.getAgent(agent.id)!.status);
+  assert.deepEqual(system.store.errors.listErrors(10), []);
   await app.close();
   system.store.close();
 });
@@ -977,8 +977,8 @@ test('a note is a write, so it too is attributed structurally — one field, and
 
   await callTool(system, one, 'note_progress', { note: 'Fixing the CI failure' });
   await callTool(system, two, 'note_progress', { note: 'Reading the issue' });
-  assert.equal(system.store.getAgent(one.id)!.note, 'Fixing the CI failure');
-  assert.equal(system.store.getAgent(two.id)!.note, 'Reading the issue');
+  assert.equal(system.store.agents.getAgent(one.id)!.note, 'Fixing the CI failure');
+  assert.equal(system.store.agents.getAgent(two.id)!.note, 'Reading the issue');
   system.store.close();
 });
 
@@ -1007,7 +1007,7 @@ test('an un-allowlisted call blocks, appears in the inbox, and Allow lets the sa
   const pending = startPermission(system, agent, { command: 'terraform apply' });
   await tick();
 
-  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id);
+  const esc = system.store.escalations.listOpenEscalations().find((e) => e.agentId === agent.id);
   assert.ok(esc, 'the blocked call files an escalation');
   assert.ok(esc!.context.permission, 'marked as a permission request');
   assert.match(esc!.prompt, /terraform apply/);
@@ -1017,7 +1017,7 @@ test('an un-allowlisted call blocks, appears in the inbox, and Allow lets the sa
   const verdict = verdictOf(await pending);
   assert.equal(verdict.behavior, 'allow');
   assert.deepEqual(verdict.updatedInput, { command: 'terraform apply' });
-  assert.equal(system.store.getEscalation(esc!.id)?.status, 'answered');
+  assert.equal(system.store.escalations.getEscalation(esc!.id)?.status, 'answered');
   system.store.close();
 });
 
@@ -1026,13 +1026,13 @@ test('Deny returns a structured denial the agent reads, and does not orphan the 
   const agent = spawnAgent(system, 'issue:12');
   const pending = startPermission(system, agent, { command: 'rm -rf /' });
   await tick();
-  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id)!;
+  const esc = system.store.escalations.listOpenEscalations().find((e) => e.agentId === agent.id)!;
 
   assert.equal(system.permissions.decide(esc.id, false, 'too destructive'), true);
   const verdict = verdictOf(await pending);
   assert.equal(verdict.behavior, 'deny');
   assert.match(String(verdict.message), /too destructive/);
-  assert.equal(system.store.getTask(agent.taskId)?.status, 'running');
+  assert.equal(system.store.tasks.getTask(agent.taskId)?.status, 'running');
   assert.equal(system.permissions.decide(esc.id, true), false);
   system.store.close();
 });
@@ -1042,7 +1042,7 @@ test('killing an agent mid-request resolves its blocked call as a denial (no hun
   const agent = spawnAgent(system, 'issue:12');
   const pending = startPermission(system, agent, { command: 'sleep 999' });
   await tick();
-  assert.ok(system.store.listOpenEscalations().some((e) => e.agentId === agent.id));
+  assert.ok(system.store.escalations.listOpenEscalations().some((e) => e.agentId === agent.id));
 
   system.agents.kill(agent.id);
   const verdict = verdictOf(await pending);
@@ -1056,7 +1056,7 @@ test('the ordinary answer route refuses a permission request and names the one t
   const agent = spawnAgent(system, 'issue:12');
   const pending = startPermission(system, agent, { command: 'docker run x' });
   await tick();
-  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id)!;
+  const esc = system.store.escalations.listOpenEscalations().find((e) => e.agentId === agent.id)!;
 
   const answered = await app.inject({
     method: 'POST',
@@ -1159,7 +1159,7 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
     [...MCP_TOOL_NAMES].sort(),
   );
   assert.equal((replies[2]!.result as ToolResultText).isError, undefined);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
 
   server.release(credential.token);
   assert.equal(existsSync(credential.configPath!), false);
@@ -1218,13 +1218,13 @@ function roundTrip(socketPath: string, lines: string[]): Promise<{ id: unknown; 
 
 test('conclude_part closes a part that produced no PR, and the plan rolls up complete', async () => {
   const system = build();
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Investigate',
     status: 'active',
     reason: 'Measure before building.',
   });
-  system.store.upsertPlanParts(plan.id, [
+  system.store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'probe',
       seq: 1,
@@ -1238,8 +1238,8 @@ test('conclude_part closes a part that produced no PR, and the plan rolls up com
       expectedKind: 'report',
     },
   ]);
-  const part = system.store.listPlanParts(plan.id)[0]!;
-  system.store.updatePlanPart(part.id, { status: 'dispatched' });
+  const part = system.store.plans.listPlanParts(plan.id)[0]!;
+  system.store.plans.updatePlanPart(part.id, { status: 'dispatched' });
 
   const agent = spawnAgent(system, 'issue:12:part:probe');
   const res = await callTool(system, agent, 'conclude_part', {
@@ -1249,11 +1249,11 @@ test('conclude_part closes a part that produced no PR, and the plan rolls up com
   });
   assert.equal(res.isError, false);
 
-  const after = system.store.listPlanParts(plan.id)[0]!;
+  const after = system.store.plans.listPlanParts(plan.id)[0]!;
   assert.equal(after.status, 'concluded');
   assert.equal(after.outcomeKind, 'determination');
   assert.equal(after.outcomeRef, 'finding:f_1');
-  assert.equal(system.store.rollUpPlanStatus(plan.id)?.status, 'complete');
+  assert.equal(system.store.plans.rollUpPlanStatus(plan.id)?.status, 'complete');
 
   const again = await callTool(system, agent, 'conclude_part', { kind: 'report', summary: 'again' });
   assert.equal(again.isError, true);
@@ -1289,13 +1289,13 @@ test('conclude_part refuses "code": a merge is observed, never declared', async 
 
 test('every terminal tool tells the caller to print the done sentinel', async () => {
   const system = build();
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Investigate',
     status: 'active',
     reason: 'Measure before building.',
   });
-  system.store.upsertPlanParts(plan.id, [
+  system.store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'probe',
       seq: 1,
@@ -1309,7 +1309,7 @@ test('every terminal tool tells the caller to print the done sentinel', async ()
       expectedKind: 'report',
     },
   ]);
-  system.store.updatePlanPart(system.store.listPlanParts(plan.id)[0]!.id, { status: 'dispatched' });
+  system.store.plans.updatePlanPart(system.store.plans.listPlanParts(plan.id)[0]!.id, { status: 'dispatched' });
 
   const calls = [
     ['issue:12:assess', 'assess_issue', { status: 'delivered', summary: 'all present' }],
@@ -1357,7 +1357,10 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
   assert.match(opened.title, /^#182 feat\(store\)/);
 
   assert.equal(world.issues.find((i) => i.number === 182)?.linkedPrNumber, payload.pullRequest);
-  assert.ok(system.store.linkedWorkItemPrs().has(payload.pullRequest), 'and the link is recorded, so it happens once');
+  assert.ok(
+    system.store.workItemLinks.linkedWorkItemPrs().has(payload.pullRequest),
+    'and the link is recorded, so it happens once',
+  );
   system.store.close();
 });
 
@@ -1365,13 +1368,13 @@ test('open_pr opens a part’s pull request against its own branch, plan and all
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 183, title: 'Ticket sync rewrite', body: '' });
   await system.harness.runCycle('manual');
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: 'issue:183',
     title: 'Ticket sync rewrite',
     status: 'active',
     reason: 'Schema before reader.',
   });
-  system.store.upsertPlanParts(plan.id, [
+  system.store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -1397,8 +1400,8 @@ test('open_pr opens a part’s pull request against its own branch, plan and all
       expectedKind: 'code',
     },
   ]);
-  const bottom = system.store.listPlanParts(plan.id).find((p) => p.slug === 'schema')!;
-  system.store.updatePlanPart(bottom.id, { status: 'dispatched' });
+  const bottom = system.store.plans.listPlanParts(plan.id).find((p) => p.slug === 'schema')!;
+  system.store.plans.updatePlanPart(bottom.id, { status: 'dispatched' });
 
   const first = await callTool(system, spawnAgent(system, 'issue:183:part:schema'), 'open_pr', {
     summary: 'sync cursor table',
@@ -1427,13 +1430,13 @@ test('open_pr states no position for a lone part, and the plan roll-up reaches i
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 184, title: 'Prune the spool', body: '' });
   await system.harness.runCycle('manual');
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: 'issue:184',
     title: 'Prune the spool',
     status: 'active',
     reason: 'One pull request will do.',
   });
-  system.store.upsertPlanParts(plan.id, [
+  system.store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'prune',
       seq: 1,
@@ -1479,7 +1482,7 @@ test('open_pr is refused for an origin that is not doing an issue’s work', asy
 test('open_pr degrades to the floor when authoring is unwired — it never silently no-ops', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:182');
-  const task = system.store.getTask(agent.taskId)!;
+  const task = system.store.tasks.getTask(agent.taskId)!;
   const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find(
     (t) => t.name === 'open_pr',
   );
@@ -1491,7 +1494,7 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
 
 test('the caller is resolved in exactly one place, so the identity chain cannot be got wrong twice', () => {
   const source = repoText('src/agents/agentManager.ts');
-  const preamble = source.match(/agent \? this\.store\.getTask\(agent\.taskId\) : null/g) ?? [];
+  const preamble = source.match(/agent \? this\.store\.tasks\.getTask\(agent\.taskId\) : null/g) ?? [];
   assert.equal(preamble.length, 1, 'the agent -> task resolution appears once, inside withCaller');
   assert.match(source, /private withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
 });

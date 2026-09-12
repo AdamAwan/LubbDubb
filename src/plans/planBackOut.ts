@@ -42,7 +42,7 @@ export async function backOutOfPlan(
   if (verdict === 'close') {
     const settled = declinePlan(store, act.planId, act.originRef, note);
     done.push(settled.detail);
-    store.recordIssueConclusion({
+    store.verdicts.recordIssueConclusion({
       originRef: issueConclusionOrigin(issueNumber),
       verdict: 'done',
       note: note ?? 'An operator closed this ticket from the plan approval card.',

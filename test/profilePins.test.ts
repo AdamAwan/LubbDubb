@@ -234,7 +234,7 @@ async function dispatchTagged(n: number, labels: string[]) {
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login', labels });
   failPlanningOpen(system.store, n);
   await system.harness.runCycle('manual');
-  const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
+  const task = system.store.tasks.getTask(system.store.agents.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   return { args: launches[0]!, task, system };
 }
 
@@ -268,7 +268,7 @@ test('a pin survives a retry, because nothing about it is a function of run hist
   const again = resolveAgentProfile(MODELS, task.rule, 'deep');
   assert.deepEqual(again, { name: 'deep', model: 'opus', effort: 'medium', permissionMode: null, source: 'pin' });
 
-  const issue = system.store.getWorldBaseline()?.issues.find((i) => i.number === 943);
+  const issue = system.store.world.getWorldBaseline()?.issues.find((i) => i.number === 943);
   assert.equal(resolveModelTag(issue?.labels, 'lubbdubb', MODELS).profile, 'deep');
   system.store.close();
 });

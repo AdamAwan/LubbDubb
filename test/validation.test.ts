@@ -105,7 +105,7 @@ test('an unknown resource or part reference is dropped, never a refusal', () => 
       },
     }),
   );
-  const [stored] = store.listValidationChecks(goal);
+  const [stored] = store.validation.listValidationChecks(goal);
   assert.deepEqual(stored!.uses, ['fixture.tar.gz']);
   assert.deepEqual(stored!.covers, ['writer']);
 });
@@ -123,7 +123,7 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
       },
     }),
   );
-  const checks = store.listValidationChecks(goal);
+  const checks = store.validation.listValidationChecks(goal);
   assert.equal(checks.find((c) => c.id === 'a')!.candidateWhy, 'runs git; no login');
   assert.equal(checks.find((c) => c.id === 'b')!.candidateWhy, null);
 });
@@ -146,20 +146,20 @@ test('a resource the planner cannot provide is not an ask until the goal is deli
   const asks = new ValidationAskDesk(store);
 
   asks.run();
-  assert.equal(store.listHumanTasks().length, 0, 'nothing is delivered, so nothing is asked for');
+  assert.equal(store.humanTasks.listHumanTasks().length, 0, 'nothing is delivered, so nothing is asked for');
 
-  store.recordDelivery({ originRef: goal, summary: 'PR #40 landed it', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'PR #40 landed it', by: 'assessor' });
   asks.run();
-  const filed = store.listHumanTasks();
+  const filed = store.humanTasks.listHumanTasks();
   assert.equal(filed.length, 1, 'only the unprovided one is an ask');
   assert.match(filed[0]!.title, /orders-dump\.sql/);
   assert.match(filed[0]!.detail ?? '', /week of real orders/);
-  assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, filed[0]!.id);
+  assert.equal(store.validation.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, filed[0]!.id);
 
   asks.run();
   ingest(store, withResources());
   asks.run();
-  assert.equal(store.listHumanTasks().length, 1);
+  assert.equal(store.humanTasks.listHumanTasks().length, 1);
 });
 
 test('a resource naming access rather than a file is never an ask', () => {
@@ -176,39 +176,48 @@ test('a resource naming access rather than a file is never an ask', () => {
       },
     }),
   );
-  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(store).run();
 
-  const filed = store.listHumanTasks();
+  const filed = store.humanTasks.listHumanTasks();
   assert.equal(filed.length, 1);
   assert.match(filed[0]!.title, /orders-dump\.sql/);
-  assert.equal(store.listValidationResources(goal).find((r) => r.kind === 'access')!.humanTaskId, null);
+  assert.equal(store.validation.listValidationResources(goal).find((r) => r.kind === 'access')!.humanTaskId, null);
 });
 
 test('an assessor that sends the goal back stops it being asked about', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, withResources());
   const asks = new ValidationAskDesk(store);
-  store.recordShortfall({ originRef: goal, cause: 'goal', summary: 'the export is still wrong', by: 'assessor' });
+  store.verdicts.recordShortfall({
+    originRef: goal,
+    cause: 'goal',
+    summary: 'the export is still wrong',
+    by: 'assessor',
+  });
   asks.run();
-  assert.equal(store.listHumanTasks().length, 0, 'a shortfall is not a delivery — there is nothing to validate');
+  assert.equal(
+    store.humanTasks.listHumanTasks().length,
+    0,
+    'a shortfall is not a delivery — there is nothing to validate',
+  );
 
-  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
-  store.recordShortfall({ originRef: goal, cause: 'goal', summary: 'still wrong', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.verdicts.recordShortfall({ originRef: goal, cause: 'goal', summary: 'still wrong', by: 'assessor' });
   asks.run();
-  assert.equal(store.listHumanTasks().length, 0);
+  assert.equal(store.humanTasks.listHumanTasks().length, 0);
 });
 
 test('a replan that stops needing a resource withdraws the ask it filed', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, withResources());
-  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(store).run();
-  const [filed] = store.listHumanTasks();
+  const [filed] = store.humanTasks.listHumanTasks();
   assert.equal(filed?.status, 'open');
 
   ingest(store, doc({ validation: { resources: [{ name: 'fixture.tar.gz', kind: 'fixture' }], checks: [check()] } }));
-  const settled = store.getHumanTask(filed!.id);
+  const settled = store.humanTasks.getHumanTask(filed!.id);
   assert.equal(settled?.status, 'declined');
   assert.match(settled?.resolution ?? '', /no longer needs this/);
 });
@@ -216,10 +225,10 @@ test('a replan that stops needing a resource withdraws the ask it filed', () => 
 test('a planner that can produce the resource after all withdraws the ask too', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, withResources());
-  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   const asks = new ValidationAskDesk(store);
   asks.run();
-  const [filed] = store.listHumanTasks();
+  const [filed] = store.humanTasks.listHumanTasks();
 
   ingest(
     store,
@@ -230,21 +239,21 @@ test('a planner that can produce the resource after all withdraws the ask too', 
       },
     }),
   );
-  assert.equal(store.getHumanTask(filed!.id)?.status, 'declined');
+  assert.equal(store.humanTasks.getHumanTask(filed!.id)?.status, 'declined');
   asks.run();
-  assert.equal(store.listHumanTasks().filter((t) => t.status === 'open').length, 0);
+  assert.equal(store.humanTasks.listHumanTasks().filter((t) => t.status === 'open').length, 0);
 });
 
 test('a withdrawal never overwrites what the operator already answered', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, withResources());
-  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.verdicts.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(store).run();
-  const [filed] = store.listHumanTasks();
-  store.settleHumanTask(filed!.id, 'done', 'dropped it in the validation directory');
+  const [filed] = store.humanTasks.listHumanTasks();
+  store.humanTasks.settleHumanTask(filed!.id, 'done', 'dropped it in the validation directory');
 
   ingest(store, doc({ validation: { resources: [], checks: [check()] } }));
-  const settled = store.getHumanTask(filed!.id);
+  const settled = store.humanTasks.getHumanTask(filed!.id);
   assert.equal(settled?.status, 'done');
   assert.equal(settled?.resolution, 'dropped it in the validation directory');
 });
@@ -261,7 +270,7 @@ test('nextCheckLetter walks A..Z and then AA, skipping what is taken', () => {
 test('letters are assigned in declaration order and survive a reordering amendment', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'first' }), check({ id: 'second' })] } }));
-  const before = new Map(store.listValidationChecks(goal).map((c) => [c.id, c.letter]));
+  const before = new Map(store.validation.listValidationChecks(goal).map((c) => [c.id, c.letter]));
   assert.deepEqual(
     [...before],
     [
@@ -274,7 +283,7 @@ test('letters are assigned in declaration order and survive a reordering amendme
     store,
     doc({ validation: { checks: [check({ id: 'second' }), check({ id: 'third' }), check({ id: 'first' })] } }),
   );
-  const after = new Map(store.listValidationChecks(goal).map((c) => [c.id, c.letter]));
+  const after = new Map(store.validation.listValidationChecks(goal).map((c) => [c.id, c.letter]));
   assert.equal(after.get('first'), 'A');
   assert.equal(after.get('second'), 'B');
   assert.equal(after.get('third'), 'C');
@@ -283,8 +292,8 @@ test('letters are assigned in declaration order and survive a reordering amendme
 test('a re-declared check keeps its result; a reworded one loses it', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
-  store.recordValidationResult(goal, 'a', { state: 'passed', note: 'opened fine', by: 'operator' });
-  store.recordValidationResult(goal, 'b', { state: 'passed', note: 'opened fine', by: 'operator' });
+  store.validation.recordValidationResult(goal, 'a', { state: 'passed', note: 'opened fine', by: 'operator' });
+  store.validation.recordValidationResult(goal, 'b', { state: 'passed', note: 'opened fine', by: 'operator' });
 
   ingest(
     store,
@@ -297,7 +306,7 @@ test('a re-declared check keeps its result; a reworded one loses it', () => {
       },
     }),
   );
-  const checks = new Map(store.listValidationChecks(goal).map((c) => [c.id, c]));
+  const checks = new Map(store.validation.listValidationChecks(goal).map((c) => [c.id, c]));
   assert.equal(checks.get('a')!.state, 'passed');
   assert.equal(checks.get('b')!.state, 'unrun');
   assert.equal(checks.get('b')!.resultNote, null);
@@ -309,22 +318,22 @@ test('a check an amendment drops is superseded, not deleted — and keeps its le
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
   ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
 
-  const checks = store.listValidationChecks(goal);
+  const checks = store.validation.listValidationChecks(goal);
   assert.equal(checks.length, 2, 'the record survives the amendment');
   const dropped = checks.find((c) => c.id === 'b')!;
   assert.match(dropped.supersededReason!, /no longer includes this check/);
 
   ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'c' })] } }));
-  assert.equal(store.listValidationChecks(goal).find((c) => c.id === 'c')!.letter, 'C');
+  assert.equal(store.validation.listValidationChecks(goal).find((c) => c.id === 'c')!.letter, 'C');
 });
 
 test('a re-declared check comes back out of supersession', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
   ingest(store, doc({ validation: { checks: [] } }));
-  assert.ok(store.listValidationChecks(goal)[0]!.supersededReason);
+  assert.ok(store.validation.listValidationChecks(goal)[0]!.supersededReason);
   ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  const back = store.listValidationChecks(goal)[0]!;
+  const back = store.validation.listValidationChecks(goal)[0]!;
   assert.equal(back.supersededReason, null);
   assert.equal(back.letter, 'A', 'and under the handle it always had');
 });
@@ -332,9 +341,9 @@ test('a re-declared check comes back out of supersession', () => {
 test('an amendment with no validation block leaves the checks exactly as they are', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  store.recordValidationResult(goal, 'a', { state: 'passed', note: 'fine', by: 'operator' });
+  store.validation.recordValidationResult(goal, 'a', { state: 'passed', note: 'fine', by: 'operator' });
   ingest(store, doc());
-  const [only] = store.listValidationChecks(goal);
+  const [only] = store.validation.listValidationChecks(goal);
   assert.equal(only!.state, 'passed');
   assert.equal(only!.supersededReason, null);
 });
@@ -342,20 +351,24 @@ test('an amendment with no validation block leaves the checks exactly as they ar
 test('a new reading clears what the last one left behind', () => {
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  store.recordValidationResult(goal, 'a', {
+  store.validation.recordValidationResult(goal, 'a', {
     state: 'deferred',
     note: 'the test environment is rebuilt on Thursday',
     by: 'operator',
     until: '2026-09-03',
   });
-  const deferred = store.listValidationChecks(goal)[0]!;
+  const deferred = store.validation.listValidationChecks(goal)[0]!;
   assert.equal(deferred.deferUntil, '2026-09-03');
 
-  const passed = store.recordValidationResult(goal, 'a', { state: 'passed', note: 'ran it', by: 'operator' })!;
+  const passed = store.validation.recordValidationResult(goal, 'a', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  })!;
   assert.equal(passed.resultNote, 'ran it');
   assert.equal(passed.deferUntil, null);
 
-  const reset = store.recordValidationResult(goal, 'a', { state: 'unrun', note: null, by: null })!;
+  const reset = store.validation.recordValidationResult(goal, 'a', { state: 'unrun', note: null, by: null })!;
   assert.equal(reset.resultNote, null);
   assert.equal(reset.resultBy, null);
   assert.equal(reset.resultAt, null, 'an unrun check carrying a timestamp reads as one that was run and forgotten');
@@ -365,7 +378,10 @@ test('a superseded check refuses a result — its plan has withdrawn it', () => 
   const store = new Store(':memory:');
   const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
   ingest(store, doc({ validation: { checks: [] } }));
-  assert.equal(store.recordValidationResult(goal, 'a', { state: 'passed', note: 'n', by: 'operator' }), null);
+  assert.equal(
+    store.validation.recordValidationResult(goal, 'a', { state: 'passed', note: 'n', by: 'operator' }),
+    null,
+  );
 });
 
 test('an old database is rebuilt onto the goal, and the merge keys come through unchanged', () => {
@@ -399,21 +415,21 @@ test('an old database is rebuilt onto the goal, and the merge keys come through 
   db.close();
 
   const store = new Store(path);
-  const [check] = store.listValidationChecks('issue:7');
+  const [check] = store.validation.listValidationChecks('issue:7');
   assert.ok(check, 'the check came across, keyed on the goal its plan named');
   assert.equal(check.id, 'csv-opens', 'the merge key is untouched');
   assert.equal(check.letter, 'B', 'and so is the handle a person types');
   assert.equal(check.state, 'passed');
   assert.equal(check.resultNote, 'ran it');
   assert.equal(check.actor, 'fleet', 'the hand-over survives too — it is an operator decision');
-  const [resource] = store.listValidationResources('issue:7');
+  const [resource] = store.validation.listValidationResources('issue:7');
   assert.equal(resource?.name, 'fixture.tar.gz');
   assert.equal(resource?.humanTaskId, 'task_1', 'the ask already filed for it is still joined');
-  assert.equal(store.listAllValidationChecks().length, 1);
+  assert.equal(store.validation.listAllValidationChecks().length, 1);
 
   store.close();
   const again = new Store(path);
-  assert.equal(again.listValidationChecks('issue:7').length, 1);
+  assert.equal(again.validation.listValidationChecks('issue:7').length, 1);
   again.close();
   rmSync(dir, { recursive: true, force: true });
 });

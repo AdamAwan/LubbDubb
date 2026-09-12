@@ -160,20 +160,20 @@ export class UpdateDesk {
   }
 
   private advanceDrain(): void {
-    const intent = this.deps.store.readUpgradeIntent();
+    const intent = this.deps.store.upgrades.readUpgradeIntent();
     if (intent.state !== 'draining') return;
-    if (this.deps.store.countLiveAgents() > 0) return;
-    this.deps.store.writeUpgradeIntent({ ...intent, state: 'ready' });
+    if (this.deps.store.agents.countLiveAgents() > 0) return;
+    this.deps.store.upgrades.writeUpgradeIntent({ ...intent, state: 'ready' });
   }
 
   private advanceAuto(): void {
     if (!this.deps.autoUpdate) return;
     for (let i = 0; i < 3; i++) {
-      const intent = this.deps.store.readUpgradeIntent();
+      const intent = this.deps.store.upgrades.readUpgradeIntent();
       const step = autoUpgradeStep({
         intent,
         upgradable: upgradability(this.standing ?? unknownStanding(this.now())),
-        live: this.deps.store.countLiveAgents(),
+        live: this.deps.store.agents.countLiveAgents(),
         supervised: this.supervised,
         drainDeadlineMs: this.deps.drainDeadlineMs,
         drainingForMs: drainingForMs(intent, Date.parse(this.now())),
@@ -196,7 +196,7 @@ export class UpdateDesk {
    * @public called by `main.ts`, beside `RecoveryDesk.settleUpgrade`.
    */
   restorePause(): boolean | null {
-    const intent = this.deps.store.readUpgradeIntent();
+    const intent = this.deps.store.upgrades.readUpgradeIntent();
     if (intent.state !== 'applying') return null;
     const paused = !intent.pausedByDrain;
     this.deps.runtimeControl.apply({ paused });
@@ -206,8 +206,8 @@ export class UpdateDesk {
   reading(): BuildReading {
     return buildReading({
       standing: this.standing ?? unknownStanding(this.now()),
-      intent: this.deps.store.readUpgradeIntent(),
-      live: this.deps.store.countLiveAgents(),
+      intent: this.deps.store.upgrades.readUpgradeIntent(),
+      live: this.deps.store.agents.countLiveAgents(),
       supervised: this.supervised,
       project: this.project,
       projectBranch: this.deps.project?.branch,
@@ -230,13 +230,13 @@ export class UpdateDesk {
 
   request(action: UpgradeAction, opts: { interrupt?: boolean } = {}): UpgradeTransition {
     const standing = this.standing ?? unknownStanding(this.now());
-    const intent = this.deps.store.readUpgradeIntent();
+    const intent = this.deps.store.upgrades.readUpgradeIntent();
     const result = applyUpgradeAction(
       intent,
       { action, interrupt: opts.interrupt },
       {
         upgradable: upgradability(standing, this.project),
-        live: this.deps.store.countLiveAgents(),
+        live: this.deps.store.agents.countLiveAgents(),
         alreadyPaused: this.deps.runtimeControl.paused,
         targetSha: standing.upstream,
         now: this.now(),
@@ -249,7 +249,7 @@ export class UpdateDesk {
     } else {
       this.deps.runtimeControl.apply({ paused: true });
     }
-    this.deps.store.writeUpgradeIntent(result.intent);
+    this.deps.store.upgrades.writeUpgradeIntent(result.intent);
 
     if (result.intent.state === 'applying') this.onHandoff?.();
     return result;
@@ -263,8 +263,8 @@ export class UpdateDesk {
    * @public called by `main.ts` after `RecoveryDesk.settleUpgrade`.
    */
   clearIntent(): void {
-    if (this.deps.store.readUpgradeIntent().state === 'idle') return;
-    this.deps.store.writeUpgradeIntent(IDLE_INTENT);
+    if (this.deps.store.upgrades.readUpgradeIntent().state === 'idle') return;
+    this.deps.store.upgrades.writeUpgradeIntent(IDLE_INTENT);
   }
 }
 

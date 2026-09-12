@@ -82,7 +82,7 @@ async function dispatched(patch: Record<string, unknown> = {}) {
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   return { system, child: children[0]!, agentId };
 }
 
@@ -91,19 +91,27 @@ test('a stop is put to the agent before it is ever put to a human', async () => 
 
   child.stop('Kicked off the test run; waiting for it to finish.');
 
-  assert.equal(system.store.listOpenEscalations().length, 0, 'nobody is asked a question the agent can answer');
+  assert.equal(
+    system.store.escalations.listOpenEscalations().length,
+    0,
+    'nobody is asked a question the agent can answer',
+  );
   assert.equal(child.nudges().length, 1, 'the agent is asked instead');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running', 'and it is still the harness working, not you');
+  assert.equal(
+    system.store.agents.getAgent(agentId)!.status,
+    'running',
+    'and it is still the harness working, not you',
+  );
   assert.match(
-    system.store.getTranscript(agentId),
+    system.store.transcripts.getTranscript(agentId),
     /check it now, then keep going/,
     'the nudge is in the transcript, so the agent carrying on is not an unexplained jump',
   );
 
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'All green. @@LUBBDUBB_DONE@@' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.status, 'done');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'and it never cost you an inbox item');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'done');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'and it never cost you an inbox item');
 
   system.store.close();
 });
@@ -114,12 +122,12 @@ test('a stop that survives the budget reaches the operator, quoting the agent', 
   child.stop('Waiting for CI.');
   child.stop('Still waiting for CI.');
   assert.equal(child.nudges().length, 2, 'the budget is spent');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'and nothing has reached you yet');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'and nothing has reached you yet');
 
   child.stop('Blocked until CI goes green on PR #412.');
   assert.equal(child.nudges().length, 2, 'the budget is a whole-life one — a third stop is not a third nudge');
 
-  const [escalation] = system.store.listOpenEscalations();
+  const [escalation] = system.store.escalations.listOpenEscalations();
   assert.ok(escalation, 'a stop the agent will not account for is yours after all');
   assert.match(escalation.prompt, /Stopped without finishing/, 'the headline says what happened');
   assert.match(
@@ -127,8 +135,8 @@ test('a stop that survives the budget reaches the operator, quoting the agent', 
     /Blocked until CI goes green on PR #412\./,
     'and the body quotes the agent, which is the diagnosis you used to open the transcript for',
   );
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
-  assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.tasks.getTask(system.store.agents.getAgent(agentId)!.taskId)!.status, 'waiting');
 
   system.store.close();
 });
@@ -139,9 +147,9 @@ test('nudges off restores the immediate park', async () => {
   child.stop('Handing over.');
 
   assert.equal(child.nudges().length, 0);
-  const [escalation] = system.store.listOpenEscalations();
+  const [escalation] = system.store.escalations.listOpenEscalations();
   assert.match(escalation!.prompt, /Handing over\./);
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
 
   system.store.close();
 });
@@ -154,8 +162,8 @@ test('an agent parked on a question is not nudged when the turn it asked in ends
   child.emitLine({ type: 'result', subtype: 'success' });
 
   assert.equal(child.nudges().length, 0, 'the park owns the agent');
-  assert.equal(system.store.listOpenEscalations().length, 1, 'and its question stands alone');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1, 'and its question stands alone');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
 
   system.store.close();
 });
@@ -164,9 +172,9 @@ test('a stop nobody answers settles itself as done, and says so in the audit', a
   const { system, child, agentId } = await dispatched({ agentStallNudges: 0, agentStallParkMs: 1 });
 
   child.stop('Pushed 6b4b9c7; the build is green and there are no threads left.');
-  const [escalation] = system.store.listOpenEscalations();
+  const [escalation] = system.store.escalations.listOpenEscalations();
   assert.ok(escalation, 'the item is still filed — you get to see it and to disagree');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
   assert.deepEqual(
     system.agents.stallDeadlines().map((p) => p.agentId),
     [agentId],
@@ -176,13 +184,13 @@ test('a stop nobody answers settles itself as done, and says so in the audit', a
   await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(system.agents.completeExpiredStalls(), [agentId]);
 
-  const agent = system.store.getAgent(agentId)!;
+  const agent = system.store.agents.getAgent(agentId)!;
   assert.equal(agent.status, 'done', 'the click you were going to make, made for you');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'done');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'and the card goes with it');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'done');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'and the card goes with it');
   assert.equal(system.agents.stallDeadlines().length, 0);
 
-  const decision = system.store.listDecisions().find((d) => d.cycleId === `stall:${agentId}`);
+  const decision = system.store.decisions.listDecisions().find((d) => d.cycleId === `stall:${agentId}`);
   assert.ok(decision, 'recorded under its own cycle id: who ended the run is a question the log answers');
   assert.match(decision.action.reason ?? '', /unannounced stop stood unanswered/);
 
@@ -202,7 +210,7 @@ test('extending buys time, and only for a park that is actually counting', async
 
   await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(system.agents.completeExpiredStalls(), [], 'the countdown is the operator’s to hold');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting', 'so the agent is still theirs to answer');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting', 'so the agent is still theirs to answer');
 
   const other = system.agents.extendStallPark('agent_nobody');
   assert.equal(other.ok, false, 'a park with no clock refuses rather than reporting time bought on nothing');
@@ -220,7 +228,7 @@ test('a question the agent asked never expires, and neither does a stop when the
 
   const off = await dispatched({ agentStallNudges: 0, agentStallParkMs: 0 });
   off.child.stop('Handing over.');
-  assert.equal(off.system.store.listOpenEscalations().length, 1);
+  assert.equal(off.system.store.escalations.listOpenEscalations().length, 1);
   assert.equal(off.system.agents.stallDeadlines().length, 0, '0 restores the park that stands forever');
   off.system.store.close();
 });
@@ -237,7 +245,7 @@ test('the account running out takes the stop’s clock with it, whichever arrive
 
   await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(system.agents.completeExpiredStalls(), [], 'so nothing settles it');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting', 'the conversation is still there to continue');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting', 'the conversation is still there to continue');
   assert.deepEqual(system.agents.limitedAgentIds(), [agentId], 'with the park that has its own ending intact');
 
   system.store.close();
@@ -250,12 +258,12 @@ test('a park the harness resumed takes its clock with it: a working agent is nev
   child.rateLimit();
   assert.ok(system.agents.resumeParked(agentId).ok, 'the window turned over');
 
-  assert.equal(system.store.getAgent(agentId)!.status, 'running', 'the agent is back at work');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running', 'the agent is back at work');
   assert.equal(system.agents.stallDeadlines().length, 0, 'and no clock is left running over it');
 
   await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(system.agents.completeExpiredStalls(), [], 'so the countdown kills nothing mid-turn');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
 
   system.store.close();
 });

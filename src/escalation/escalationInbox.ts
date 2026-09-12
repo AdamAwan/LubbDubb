@@ -30,7 +30,7 @@ export class EscalationInbox extends EventEmitter {
   }
 
   create(input: CreateEscalationInput): Escalation {
-    const esc = this.store.createEscalation({
+    const esc = this.store.escalations.createEscalation({
       type: input.type,
       prompt: input.prompt,
       context: input.context ?? {},
@@ -42,11 +42,11 @@ export class EscalationInbox extends EventEmitter {
   }
 
   answer(id: string, response: string): AnswerResult {
-    const esc = this.store.getEscalation(id);
+    const esc = this.store.escalations.getEscalation(id);
     if (!esc) throw new Error(`Escalation ${id} not found`);
     if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
 
-    const updated = this.store.answerEscalation(id, response);
+    const updated = this.store.escalations.answerEscalation(id, response);
 
     let routing: AnswerResult['routing'] = 'queued_for_dispatch';
     if (esc.agentId && this.agents.isLive(esc.agentId)) {
@@ -58,23 +58,26 @@ export class EscalationInbox extends EventEmitter {
   }
 
   settleResolved(id: string, response: string): Escalation {
-    const esc = this.store.getEscalation(id);
+    const esc = this.store.escalations.getEscalation(id);
     if (!esc) throw new Error(`Escalation ${id} not found`);
     if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
-    const updated = this.store.answerEscalation(id, response);
+    const updated = this.store.escalations.answerEscalation(id, response);
     this.emit('answered', { escalation: updated, routing: 'resolved_out_of_band' });
     return updated;
   }
 
   dismiss(id: string, note?: string): Escalation {
-    const esc = this.store.getEscalation(id);
+    const esc = this.store.escalations.getEscalation(id);
     if (!esc) throw new Error(`Escalation ${id} not found`);
     if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
     const reason = note?.trim() || 'Dismissed by the operator without an answer.';
     const at = new Date().toISOString();
-    const updated = this.store.dismissEscalation(id, { ...esc.context, dismissal: { reason, at, by: 'operator' } });
+    const updated = this.store.escalations.dismissEscalation(id, {
+      ...esc.context,
+      dismissal: { reason, at, by: 'operator' },
+    });
     if (esc.agentId) this.agents.releasePark(esc.agentId);
-    this.store.recordDecision({
+    this.store.decisions.recordDecision({
       cycleId: `human:${id}`,
       action: { type: 'no_op', reason: 'dismiss escalation' },
       outcome: 'executed',
@@ -87,11 +90,11 @@ export class EscalationInbox extends EventEmitter {
   dismissEscalationsForAgent(agentId: string, reason: string): Escalation[] {
     const at = new Date().toISOString();
     const dismissed: Escalation[] = [];
-    for (const esc of this.store.listOpenEscalations()) {
+    for (const esc of this.store.escalations.listOpenEscalations()) {
       if (esc.agentId !== agentId) continue;
       const context = { ...esc.context, dismissal: { reason, at } };
-      const updated = this.store.dismissEscalation(esc.id, context);
-      this.store.recordDecision({
+      const updated = this.store.escalations.dismissEscalation(esc.id, context);
+      this.store.decisions.recordDecision({
         cycleId: 'agent-lifecycle',
         action: { type: 'no_op', reason: 'dismiss orphaned escalation' },
         outcome: 'executed',
@@ -113,15 +116,15 @@ export class EscalationInbox extends EventEmitter {
    */
   tidySettledMerges(): Escalation[] {
     const settled = settledMergeAsks({
-      proposals: this.store.listProposals(),
-      openEscalations: this.store.listOpenEscalations(),
-      settledPrs: this.store.settledPrs(),
+      proposals: this.store.escalations.listProposals(),
+      openEscalations: this.store.escalations.listOpenEscalations(),
+      settledPrs: this.store.graph.settledPrs(),
     });
     const answered: Escalation[] = [];
     for (const ask of settled) {
       for (const proposalId of ask.proposalIds) {
-        if (!this.store.withdrawProposal(proposalId, ask.verdict)) continue;
-        this.store.recordDecision({
+        if (!this.store.escalations.withdrawProposal(proposalId, ask.verdict)) continue;
+        this.store.decisions.recordDecision({
           cycleId: 'pr-lifecycle',
           action: { type: 'no_op', reason: 'withdraw a merge proposal its pull request settled' },
           outcome: 'executed',
@@ -155,9 +158,9 @@ export class EscalationInbox extends EventEmitter {
    */
   tidyDeadAgents(): Escalation[] {
     const dead = new Map<string, AgentStatus>();
-    for (const esc of this.store.listOpenEscalations()) {
+    for (const esc of this.store.escalations.listOpenEscalations()) {
       if (!esc.agentId || dead.has(esc.agentId)) continue;
-      const agent = this.store.getAgent(esc.agentId);
+      const agent = this.store.agents.getAgent(esc.agentId);
       if (agent && DEAD_AGENT_STATUSES.has(agent.status)) dead.set(esc.agentId, agent.status);
     }
     return [...dead].flatMap(([agentId, status]) =>

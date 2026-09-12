@@ -8,9 +8,9 @@ export class ValidationAskDesk {
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(): void {
-    const deliveries = this.store.listDeliveries();
+    const deliveries = this.store.verdicts.listDeliveries();
     if (deliveries.length === 0) return;
-    const shortfalls = new Set(this.store.listShortfalls().map((s) => s.originRef));
+    const shortfalls = new Set(this.store.verdicts.listShortfalls().map((s) => s.originRef));
     for (const delivery of deliveries) {
       if (shortfalls.has(delivery.originRef)) continue;
       fileResourceAsks(this.store, delivery.originRef);

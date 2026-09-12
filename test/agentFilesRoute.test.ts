@@ -30,13 +30,25 @@ test('GET /api/agents/:id/files answers one agent, and 404s an agent that does n
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
-  const taskA = system.store.createTask({ kind: 'code', title: 'a', prompt: 'p', branch: 'b1', originRef: 'issue:1' });
-  const taskB = system.store.createTask({ kind: 'code', title: 'b', prompt: 'p', branch: 'b2', originRef: 'issue:2' });
-  const a = system.store.createAgent({ taskId: taskA.id, cwd: '/wt/a', pid: null });
-  const b = system.store.createAgent({ taskId: taskB.id, cwd: '/wt/b', pid: null });
-  system.store.recordFile(a.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
-  system.store.recordFile(a.id, { path: 'src/system.ts', tool: 'Edit', promoted: false });
-  system.store.recordFile(b.id, { path: 'README.md', tool: 'Write', promoted: false });
+  const taskA = system.store.tasks.createTask({
+    kind: 'code',
+    title: 'a',
+    prompt: 'p',
+    branch: 'b1',
+    originRef: 'issue:1',
+  });
+  const taskB = system.store.tasks.createTask({
+    kind: 'code',
+    title: 'b',
+    prompt: 'p',
+    branch: 'b2',
+    originRef: 'issue:2',
+  });
+  const a = system.store.agents.createAgent({ taskId: taskA.id, cwd: '/wt/a', pid: null });
+  const b = system.store.agents.createAgent({ taskId: taskB.id, cwd: '/wt/b', pid: null });
+  system.store.agents.recordFile(a.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
+  system.store.agents.recordFile(a.id, { path: 'src/system.ts', tool: 'Edit', promoted: false });
+  system.store.agents.recordFile(b.id, { path: 'README.md', tool: 'Write', promoted: false });
 
   const res = await app.inject({ method: 'GET', url: `/api/agents/${a.id}/files` });
   assert.equal(res.statusCode, 200);
@@ -51,9 +63,15 @@ test('GET /api/agents/:id/files answers one agent, and 404s an agent that does n
 
 test('the state snapshot no longer ships a fleet-wide files list', () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
-  const task = system.store.createTask({ kind: 'code', title: 'a', prompt: 'p', branch: 'b', originRef: 'issue:1' });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: '/wt/a', pid: null });
-  system.store.recordFile(agent.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
+  const task = system.store.tasks.createTask({
+    kind: 'code',
+    title: 'a',
+    prompt: 'p',
+    branch: 'b',
+    originRef: 'issue:1',
+  });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: '/wt/a', pid: null });
+  system.store.agents.recordFile(agent.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
 
   const snap: Record<string, unknown> = { ...buildStateSnapshot(system) };
   assert.equal('files' in snap, false, 'the drawer fetches its own rows; nothing polls the whole table');
@@ -66,13 +84,13 @@ test('scope drift still sees a part whose agent is older than the overlap window
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const store = system.store;
 
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Issue #12',
     status: 'active',
     reason: 'Two pull requests of work.',
   });
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -88,22 +106,28 @@ test('scope drift still sees a part whose agent is older than the overlap window
     },
   ]);
 
-  const partTask = store.createTask({
+  const partTask = store.tasks.createTask({
     kind: 'code',
     title: 'Schema',
     prompt: 'p',
     branch: 'issue/12/schema',
     originRef: 'issue:12:part:schema',
   });
-  const partAgent = store.createAgent({ taskId: partTask.id, cwd: '/wt/p', pid: null });
-  store.updateTask(partTask.id, { agentId: partAgent.id });
-  store.recordFile(partAgent.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
+  const partAgent = store.agents.createAgent({ taskId: partTask.id, cwd: '/wt/p', pid: null });
+  store.tasks.updateTask(partTask.id, { agentId: partAgent.id });
+  store.agents.recordFile(partAgent.id, { path: 'src/wire.ts', tool: 'Write', promoted: false });
 
   for (let i = 0; i < OVERLAP_AGENT_WINDOW + 5; i++) {
-    const t = store.createTask({ kind: 'code', title: `t${i}`, prompt: 'p', branch: `b${i}`, originRef: `issue:${i}` });
-    const a = store.createAgent({ taskId: t.id, cwd: `/wt/${i}`, pid: null });
-    store.updateTask(t.id, { agentId: a.id });
-    store.recordFile(a.id, { path: `src/other/${i}.ts`, tool: 'Write', promoted: false });
+    const t = store.tasks.createTask({
+      kind: 'code',
+      title: `t${i}`,
+      prompt: 'p',
+      branch: `b${i}`,
+      originRef: `issue:${i}`,
+    });
+    const a = store.agents.createAgent({ taskId: t.id, cwd: `/wt/${i}`, pid: null });
+    store.tasks.updateTask(t.id, { agentId: a.id });
+    store.agents.recordFile(a.id, { path: `src/other/${i}.ts`, tool: 'Write', promoted: false });
   }
 
   const snap = buildStateSnapshot(system);

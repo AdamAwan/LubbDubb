@@ -38,7 +38,7 @@ function build(overrides: Record<string, unknown> = {}): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -84,7 +84,7 @@ function planWith(
 }
 
 function checksOf(system: System, goal: string): ValidationCheck[] {
-  return system.store.listValidationChecks(goal);
+  return system.store.validation.listValidationChecks(goal);
 }
 
 function byId(system: System, goal: string, id: string): ValidationCheck {
@@ -141,7 +141,7 @@ test('an amendment naming one check leaves every other check exactly as it was',
     check({ id: 'b', title: 'Second' }),
     check({ id: 'c', title: 'Third' }),
   ]);
-  system.store.recordValidationResult(plan, 'b', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'b', { state: 'passed', note: 'ran it', by: 'operator' });
 
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
     note: 'the export lives under Reports now',
@@ -180,7 +180,7 @@ test('an added check lands unrun, after the last, on the next free letter', asyn
 test('rewording withdraws the result, keeps what it used to say, and says so to the agent', async () => {
   const system = build();
   const plan = planWith(system, [check()]);
-  system.store.recordValidationResult(plan, 'csv-opens', {
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
     state: 'passed',
     note: 'Opened in Excel 2019, columns intact.',
     by: 'operator',
@@ -206,7 +206,11 @@ test('rewording withdraws the result, keeps what it used to say, and says so to 
 test('a re-declaration word for word keeps the result and raises no band', async () => {
   const system = build();
   const plan = planWith(system, [check()]);
-  system.store.recordValidationResult(plan, 'csv-opens', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  });
 
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
     note: 'tidying the references',
@@ -352,16 +356,16 @@ test('an amendment adds resources and removes none, and an unprovided one is ask
   });
   assert.equal(res.isError, false);
 
-  const names = system.store.listValidationResources(plan).map((r) => r.name);
+  const names = system.store.validation.listValidationResources(plan).map((r) => r.name);
   assert.deepEqual(names.sort(), ['orders-dump.sql', 'seed.sql']);
   assert.deepEqual(byId(system, plan, 'orders-import').uses.sort(), ['orders-dump.sql', 'seed.sql']);
 
-  const asks = () => system.store.listHumanTasks().filter((t) => t.title.includes('orders-dump.sql'));
+  const asks = () => system.store.humanTasks.listHumanTasks().filter((t) => t.title.includes('orders-dump.sql'));
   const desk = new ValidationAskDesk(system.store);
   desk.run();
   assert.equal(asks().length, 0, 'nothing is delivered yet');
 
-  system.store.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
   desk.run();
   assert.equal(asks().length, 1);
   assert.match(asks()[0]!.detail ?? '', /could not produce it/);
@@ -370,9 +374,9 @@ test('an amendment adds resources and removes none, and an unprovided one is ask
 test('an amendment saying it can produce the resource after all withdraws the ask', async () => {
   const system = build();
   const plan = planWith(system, [check()], [{ name: 'orders-dump.sql', kind: 'data', provided: false }]);
-  system.store.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(system.store).run();
-  const [filed] = system.store.listHumanTasks();
+  const [filed] = system.store.humanTasks.listHumanTasks();
   assert.equal(filed?.status, 'open');
 
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
@@ -381,7 +385,7 @@ test('an amendment saying it can produce the resource after all withdraws the as
     checks: [check()],
   });
   assert.equal(res.isError, false);
-  const settled = system.store.getHumanTask(filed!.id);
+  const settled = system.store.humanTasks.getHumanTask(filed!.id);
   assert.equal(settled?.status, 'declined');
   assert.match(settled?.resolution ?? '', /no longer needs this/);
 });
@@ -399,14 +403,22 @@ test('with no plan the tool refuses rather than pretending', async () => {
 test('the band clears when the operator records a reading against the new wording', async () => {
   const system = build();
   const plan = planWith(system, [check()]);
-  system.store.recordValidationResult(plan, 'csv-opens', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  });
   await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
     note: 'it is XLSX now',
     checks: [check({ expect: 'It opens as a workbook.' })],
   });
   assert.ok(byId(system, plan, 'csv-opens').amendedAt);
 
-  system.store.recordValidationResult(plan, 'csv-opens', { state: 'passed', note: 'ran it again', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it again',
+    by: 'operator',
+  });
   const after = byId(system, plan, 'csv-opens');
   assert.equal(after.amendedAt, null);
   assert.equal(after.revision, null);
@@ -421,7 +433,7 @@ test('a replan bands what it changed, and a plan first declaring its checks band
     [null, null],
   );
 
-  system.store.recordValidationResult(plan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
   planWith(system, [check({ id: 'a', expect: 'It opens as a workbook.' }), check({ id: 'b', title: 'Second' })]);
 
   const a = byId(system, plan, 'a');
@@ -433,14 +445,18 @@ test('a replan bands what it changed, and a plan first declaring its checks band
 test('a withdrawn reading is stated off the cockpit too — on the close-out and on the ticket', () => {
   const system = build();
   const plan = planWith(system, [check()]);
-  system.store.recordValidationResult(plan, 'csv-opens', { state: 'passed', note: 'ran it', by: 'operator' });
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  });
   planWith(system, [check({ expect: 'It opens as a workbook.' })]);
   const checks = checksOf(system, plan);
 
   const [line] = outstandingChecks(checks);
   assert.match(line ?? '', /amended since you recorded \*\*passed\*\*/);
 
-  const comment = renderPlanComment(system.store.getPlanByOrigin('issue:12')!, [], '#', checks);
+  const comment = renderPlanComment(system.store.plans.getPlanByOrigin('issue:12')!, [], '#', checks);
   assert.match(comment, /amended after it was passed/);
 
   const fresh = build();

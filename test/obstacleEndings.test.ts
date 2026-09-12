@@ -205,7 +205,7 @@ function build(): System {
 
 function stand(system: System, kind: 'obstacle' | 'note' = 'obstacle', untilHours: number | null = null): string {
   for (const goal of ['issue:900', 'issue:901']) {
-    system.store.recordObstacleSighting(
+    system.store.obstacles.recordObstacleSighting(
       {
         what: 'the windows runner wedges before the suite starts',
         kind,
@@ -226,7 +226,7 @@ function stand(system: System, kind: 'obstacle' | 'note' = 'obstacle', untilHour
       },
     );
   }
-  return system.store.listObstacles()[0]!.id;
+  return system.store.obstacles.listObstacles()[0]!.id;
 }
 
 function world(prs: PullRequest[]): WorldSnapshot {
@@ -250,15 +250,15 @@ test('a resolution takes two consecutive real readings, and one green reading is
   const green = world([pr({ ciChecks: [{ name: 'test (windows)', status: 'passing' }] })]);
 
   endings.run(red);
-  assert.equal(system.store.listObstacleConditions(id).length, 1);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing');
+  assert.equal(system.store.obstacles.listObstacleConditions(id).length, 1);
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
 
   endings.run(green);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing');
-  assert.notEqual(system.store.listObstacleConditions(id)[0]!.metAt, null);
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
+  assert.notEqual(system.store.obstacles.listObstacleConditions(id)[0]!.metAt, null);
 
   endings.run(green);
-  const resolved = system.store.getObstacle(id)!;
+  const resolved = system.store.obstacles.getObstacle(id)!;
   assert.equal(resolved.state, 'resolved');
   assert.equal(resolved.endedBy, 'condition');
   system.store.close();
@@ -273,27 +273,27 @@ test('a red reading between two green ones puts the count back to nothing', () =
   endings.run(world([pr()]));
   endings.run(green);
   endings.run(world([pr()]));
-  assert.equal(system.store.listObstacleConditions(id)[0]!.metAt, null);
+  assert.equal(system.store.obstacles.listObstacleConditions(id)[0]!.metAt, null);
   endings.run(green);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
   endings.run(green);
-  assert.equal(system.store.getObstacle(id)!.state, 'resolved');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'resolved');
   system.store.close();
 });
 
 test('the owner landing ends an owned row, off the sweep and not off the merge', () => {
   const system = build();
   const id = stand(system);
-  assert.ok(system.store.claimObstacle(id));
-  system.store.setObstacleOwner(id, 'issue:841');
+  assert.ok(system.store.obstacles.claimObstacle(id));
+  system.store.obstacles.setObstacleOwner(id, 'issue:841');
 
   const endings = desk(system);
   endings.run(world([]));
-  assert.equal(system.store.getObstacle(id)!.state, 'owned', 'nothing has landed yet');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'owned', 'nothing has landed yet');
 
-  system.store.recordGoalLanding({ prNumber: 7, goalRef: 'issue:841', sha: 'abc123' });
+  system.store.environments.recordGoalLanding({ prNumber: 7, goalRef: 'issue:841', sha: 'abc123' });
   endings.run(world([]));
-  const ended = system.store.getObstacle(id)!;
+  const ended = system.store.obstacles.getObstacle(id)!;
   assert.equal(ended.state, 'resolved');
   assert.equal(ended.endedBy, 'landing');
   system.store.close();
@@ -302,32 +302,35 @@ test('the owner landing ends an owned row, off the sweep and not off the merge',
 test('the clock expires a row nothing settled, and a re-report brings it back whole', () => {
   const system = build();
   const expiring = stand(system, 'obstacle', 1);
-  const until = Date.parse(system.store.getObstacle(expiring)!.until!);
+  const until = Date.parse(system.store.obstacles.getObstacle(expiring)!.until!);
   desk(system, { now: () => until + 1 }).run(world([]));
-  const expired = system.store.getObstacle(expiring)!;
+  const expired = system.store.obstacles.getObstacle(expiring)!;
   assert.equal(expired.state, 'resolved');
   assert.equal(expired.endedBy, 'expiry');
 
   assert.equal(stand(system), expiring);
-  const back = system.store.getObstacle(expiring)!;
+  const back = system.store.obstacles.getObstacle(expiring)!;
   assert.equal(back.state, 'standing');
   assert.equal(back.endedBy, null, 'a reopened row does not go on saying which ending took it');
-  assert.ok(system.store.listObstacleKeys(expiring).length > 0, 'the keys survive, so a re-report reopens it');
+  assert.ok(
+    system.store.obstacles.listObstacleKeys(expiring).length > 0,
+    'the keys survive, so a re-report reopens it',
+  );
   system.store.close();
 });
 
 test('decay takes what nothing has said for obstacleDormantMs', () => {
   const system = build();
   const id = stand(system);
-  const seen = Date.parse(system.store.getObstacle(id)!.lastSeenAt);
+  const seen = Date.parse(system.store.obstacles.getObstacle(id)!.lastSeenAt);
   desk(system, { now: () => seen + WEEK - 1 }).run(world([]));
-  assert.equal(system.store.getObstacle(id)!.state, 'standing', 'inside the window it is still on the board');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing', 'inside the window it is still on the board');
 
   desk(system, { now: () => seen + WEEK }).run(world([]));
-  const dormant = system.store.getObstacle(id)!;
+  const dormant = system.store.obstacles.getObstacle(id)!;
   assert.equal(dormant.state, 'dormant');
   assert.equal(dormant.endedBy, 'decay');
-  assert.ok(system.store.listObstacleKeys(id).length > 0, 'the keys survive, so a re-report reopens it');
+  assert.ok(system.store.obstacles.listObstacleKeys(id).length > 0, 'the keys survive, so a re-report reopens it');
   system.store.close();
 });
 
@@ -337,17 +340,17 @@ test('a note is written up once, and the note ends when the change lands', () =>
   const endings = desk(system);
 
   endings.run(world([]));
-  const open = system.store.openObstacleWriteUps();
+  const open = system.store.obstacles.openObstacleWriteUps();
   assert.equal(open.length, 1);
   const jobId = open[0]!.jobId;
-  assert.match(system.store.getJob(jobId)!.prompt, /write it down: the windows runner wedges/);
-  assert.match(system.store.getJob(jobId)!.prompt, /merging it is what ends it/);
+  assert.match(system.store.jobs.getJob(jobId)!.prompt, /write it down: the windows runner wedges/);
+  assert.match(system.store.jobs.getJob(jobId)!.prompt, /merging it is what ends it/);
 
   endings.run(world([]));
-  assert.equal(system.store.openObstacleWriteUps().length, 1);
-  assert.equal(system.store.getObstacle(id)!.state, 'standing', 'a note stands until the change lands');
+  assert.equal(system.store.obstacles.openObstacleWriteUps().length, 1);
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing', 'a note stands until the change lands');
 
-  system.store.recordWorkGraph([
+  system.store.graph.recordWorkGraph([
     { ref: `job:${jobId}`, kind: 'job', parentRef: null, title: 'docs', status: 'done', terminal: true },
     {
       ref: 'pr:7',
@@ -360,19 +363,23 @@ test('a note is written up once, and the note ends when the change lands', () =>
     },
   ]);
   endings.run(world([]));
-  const ended = system.store.getObstacle(id)!;
+  const ended = system.store.obstacles.getObstacle(id)!;
   assert.equal(ended.state, 'resolved');
   assert.equal(ended.endedBy, 'written-down');
-  assert.equal(system.store.openObstacleWriteUps().length, 0);
-  assert.equal(system.store.obstacleBoard()[0]!.obstacle.state, 'resolved');
+  assert.equal(system.store.obstacles.openObstacleWriteUps().length, 0);
+  assert.equal(system.store.obstacles.obstacleBoard()[0]!.obstacle.state, 'resolved');
   system.store.close();
 });
 
 test('a row already ended keeps the ending that took it', () => {
   const system = build();
   const id = stand(system);
-  assert.equal(system.store.endObstacle(id, 'resolved', 'condition'), true);
-  assert.equal(system.store.endObstacle(id, 'dormant', 'decay'), false, 'a row already ended keeps its ending');
-  assert.equal(system.store.getObstacle(id)!.endedBy, 'condition');
+  assert.equal(system.store.obstacles.endObstacle(id, 'resolved', 'condition'), true);
+  assert.equal(
+    system.store.obstacles.endObstacle(id, 'dormant', 'decay'),
+    false,
+    'a row already ended keeps its ending',
+  );
+  assert.equal(system.store.obstacles.getObstacle(id)!.endedBy, 'condition');
   system.store.close();
 });

@@ -140,7 +140,7 @@ test('a pull request whose provider reports no threads is left alone, never inve
 
 test('the cockpit sees a reopen on the next read, without waiting for a pulse', async () => {
   const system = build();
-  system.store.setWorldBaseline(world([pr([thread({ state: 'resolved' })])]));
+  system.store.world.setWorldBaseline(world([pr([thread({ state: 'resolved' })])]));
   const { app } = await buildApp(system);
 
   const done = await app.inject({
@@ -155,7 +155,7 @@ test('the cockpit sees a reopen on the next read, without waiting for a pulse', 
   assert.equal(shown.reviewThreads![0]!.state, 'reopened');
   assert.equal(shown.unresolvedComments[0]!.handled, false);
 
-  assert.equal(system.store.getWorldBaseline()!.pullRequests[0]!.reviewThreads![0]!.state, 'resolved');
+  assert.equal(system.store.world.getWorldBaseline()!.pullRequests[0]!.reviewThreads![0]!.state, 'resolved');
 
   const undone = await app.inject({
     method: 'POST',
@@ -168,7 +168,7 @@ test('the cockpit sees a reopen on the next read, without waiting for a pulse', 
 
 test('a reopen on a thread nothing carries is refused rather than reported as done', async () => {
   const system = build();
-  system.store.setWorldBaseline(world([pr([thread()])]));
+  system.store.world.setWorldBaseline(world([pr([thread()])]));
   const { app } = await buildApp(system);
 
   const noThread = await app.inject({
@@ -180,20 +180,26 @@ test('a reopen on a thread nothing carries is refused rather than reported as do
 
   const noPr = await app.inject({ method: 'POST', url: '/api/prs/99/threads/t1/reopen', payload: { reopened: true } });
   assert.equal(noPr.statusCode, 404);
-  assert.equal(system.store.prThreadReopens().length, 0);
+  assert.equal(system.store.threadReopens.prThreadReopens().length, 0);
 });
 
 test('a reopened thread reaches the dispatcher as work, and the fleet answering it spends the mark', async () => {
   const system = build();
-  system.store.setWorldBaseline(world([pr([thread({ state: 'answered' })])]));
+  system.store.world.setWorldBaseline(world([pr([thread({ state: 'answered' })])]));
   const { app } = await buildApp(system);
   await app.inject({ method: 'POST', url: '/api/prs/7/threads/t1/reopen', payload: { reopened: true } });
 
-  const reopened = applyThreadReopens(system.store.getWorldBaseline()!, system.store.prThreadReopens());
+  const reopened = applyThreadReopens(
+    system.store.world.getWorldBaseline()!,
+    system.store.threadReopens.prThreadReopens(),
+  );
   assert.equal(reopened.pullRequests[0]!.unresolvedComments.filter((c) => !c.handled).length, 1);
 
-  system.store.setPrThreadReopened(7, 't1', false);
-  const settled = applyThreadReopens(system.store.getWorldBaseline()!, system.store.prThreadReopens());
+  system.store.threadReopens.setPrThreadReopened(7, 't1', false);
+  const settled = applyThreadReopens(
+    system.store.world.getWorldBaseline()!,
+    system.store.threadReopens.prThreadReopens(),
+  );
   assert.equal(
     settled.pullRequests[0]!.unresolvedComments.every((c) => c.handled),
     true,

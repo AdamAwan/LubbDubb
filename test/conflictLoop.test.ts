@@ -36,7 +36,7 @@ function build(overrides: Partial<ActionSink> = {}) {
 }
 
 function notifiedFor(system: ReturnType<typeof build>['system'], origin: string) {
-  return system.store.listDecisions().filter((d) => {
+  return system.store.decisions.listDecisions().filter((d) => {
     if (d.outcome !== 'executed' || d.action.type !== 'respond_to_agent') return false;
     const origins = d.action.originRefs;
     return Array.isArray(origins) && origins.includes(origin);
@@ -63,11 +63,11 @@ test('a behind PR is brought up to date by the provider, with no agent dispatche
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listTasks().filter((t) => t.originRef === 'pr:45:mergeable').length,
+    system.store.tasks.listTasks().filter((t) => t.originRef === 'pr:45:mergeable').length,
     0,
     'a routine base merge costs no agent',
   );
-  const done = system.store
+  const done = system.store.decisions
     .listDecisions()
     .find((d) => d.action.type === 'update_pr_branch' && d.action.originRef === 'pr:45:mergeable');
   assert.ok(done, 'the act is in the decision log');
@@ -88,11 +88,11 @@ test('a base update the provider refuses falls back to a code agent, and is reco
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 46, mergeable: true, mergeableState: 'behind' });
 
   await system.harness.runCycle('manual');
-  const failed = system.store.listDecisions().find((d) => d.action.type === 'update_pr_branch');
+  const failed = system.store.decisions.listDecisions().find((d) => d.action.type === 'update_pr_branch');
   assert.equal(failed?.outcome, 'rejected');
   assert.match(failed!.detail, /update-branch refused/);
-  assert.equal(system.store.listTasks().length, 0, 'nothing dispatched on the cycle that tried');
-  assert.match(system.store.listErrors()[0]?.message ?? '', /Updating PR #46 from main failed/);
+  assert.equal(system.store.tasks.listTasks().length, 0, 'nothing dispatched on the cycle that tried');
+  assert.match(system.store.errors.listErrors()[0]?.message ?? '', /Updating PR #46 from main failed/);
 
   await system.harness.runCycle('manual');
   const task = findTask(system.store, (t) => t.originRef === 'pr:46:mergeable');
@@ -111,7 +111,11 @@ test('a second concern on a running branch notifies the live agent, not a duplic
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
   await system.harness.runCycle('manual');
 
-  assert.equal(system.store.listTasks().filter((t) => t.branch === 'feat').length, 1, 'still one agent on the branch');
+  assert.equal(
+    system.store.tasks.listTasks().filter((t) => t.branch === 'feat').length,
+    1,
+    'still one agent on the branch',
+  );
   assert.equal(notifiedFor(system, 'pr:42:mergeable').length, 1, 'the conflict was delivered to the running agent');
   assert.match(backend.last().writes.join(''), /merge main in, resolve the conflicts/i);
   system.store.close();
@@ -127,7 +131,7 @@ test('a branch with a running agent is told its base moved, never merged under',
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listDecisions().filter((d) => d.action.type === 'update_pr_branch').length,
+    system.store.decisions.listDecisions().filter((d) => d.action.type === 'update_pr_branch').length,
     0,
     'nothing is pushed to a branch an agent holds',
   );
@@ -142,17 +146,17 @@ test('a concern on a waiting branch is held, then delivered once the agent resum
   system.connector.inject({ kind: 'ci_failed', prNumber: 44 });
   await system.harness.runCycle('manual');
 
-  const agentId = system.store.listAgentsByStatus('running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('running')[0]!.id;
   backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
 
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 44, mergeable: false, mergeableState: 'dirty' });
   await system.harness.runCycle('manual');
   assert.equal(notifiedFor(system, 'pr:44:mergeable').length, 0, 'must not inject while the agent is waiting');
 
-  const esc = system.store.listOpenEscalations()[0]!;
+  const esc = system.store.escalations.listOpenEscalations()[0]!;
   system.escalations.answer(esc.id, 'go ahead');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
   await system.harness.runCycle('manual');
   assert.equal(notifiedFor(system, 'pr:44:mergeable').length, 1, 'the held conflict is delivered once running again');
   system.store.close();

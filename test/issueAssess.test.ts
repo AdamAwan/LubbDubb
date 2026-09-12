@@ -372,7 +372,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const t = system.store.createTask({
+  const t = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -402,7 +402,7 @@ test('a delivered verdict parks the issue, attributed from the credential', asyn
   });
   assert.equal(res.isError, false);
 
-  const delivery = system.store.getDelivery('issue:12');
+  const delivery = system.store.verdicts.getDelivery('issue:12');
   assert.equal(delivery?.by, 'assessor');
   assert.equal(delivery?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
   assert.match(res.text, /not closed|stays a human decision/, 'the agent must not believe it closed the ticket');
@@ -418,11 +418,11 @@ test('a more_work verdict lands as a shortfall, never in the working agent’s o
   });
   assert.equal(res.isError, false);
 
-  const shortfall = system.store.getShortfall('issue:12');
+  const shortfall = system.store.verdicts.getShortfall('issue:12');
   assert.equal(shortfall?.by, 'assessor');
   assert.equal(shortfall?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
-  assert.equal(system.store.getIssueConclusion('issue:12'), null, "the agent's own row is left alone");
-  assert.equal(system.store.getDelivery('issue:12'), null, 'and the park is not written');
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null, "the agent's own row is left alone");
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null, 'and the park is not written');
   system.store.close?.();
 });
 
@@ -432,12 +432,12 @@ test('the two verdicts clear each other, so an issue never carries both', async 
 
   await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'all present' });
   await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'actually the CLI half is missing' });
-  assert.equal(system.store.getDelivery('issue:12'), null);
-  assert.ok(system.store.getShortfall('issue:12'));
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null);
+  assert.ok(system.store.verdicts.getShortfall('issue:12'));
 
   await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'the CLI half landed in PR #41' });
-  assert.equal(system.store.getShortfall('issue:12'), null);
-  assert.ok(system.store.getDelivery('issue:12'));
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null);
+  assert.ok(system.store.verdicts.getDelivery('issue:12'));
   system.store.close?.();
 });
 
@@ -454,7 +454,7 @@ test('an agent that did the work cannot assess it, and is told which tool is its
     assert.equal(res.isError, true, `${origin} is doing the work, so judging it is not an assessment`);
     assert.match(res.text, remedy, 'refusals name the tool that is theirs');
   }
-  assert.equal(system.store.getDelivery('issue:12'), null, 'and nothing is written');
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null, 'and nothing is written');
   system.store.close?.();
 });
 
@@ -477,14 +477,14 @@ test('a rejected assessment writes nothing', async () => {
   const badVerdict = await callTool(system, agent, 'assess_issue', { status: 'done', summary: 'x' });
   assert.equal(badVerdict.isError, true, '"done" is conclude_work\'s word, not this one');
 
-  assert.equal(system.store.getDelivery('issue:12'), null);
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.equal(system.store.verdicts.getDelivery('issue:12'), null);
+  assert.equal(system.store.verdicts.getIssueConclusion('issue:12'), null);
   system.store.close?.();
 });
 
 test('world_read carries the work subtree, including a PR the world has forgotten', async () => {
   const system = build();
-  system.store.recordWorkGraph([
+  system.store.graph.recordWorkGraph([
     { ref: 'issue:12', kind: 'issue', parentRef: null, title: 'Add the thing', status: 'open', terminal: false },
     {
       ref: 'pr:40',
@@ -496,7 +496,7 @@ test('world_read carries the work subtree, including a PR the world has forgotte
       provenance: 'observed',
     },
   ]);
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: NOW,
     pullRequests: [],
     issues: [issue()],
@@ -517,7 +517,7 @@ test('world_read carries the work subtree, including a PR the world has forgotte
 test('an assessment appears in the graph under its issue, and is never terminal', () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:assess');
-  const t = system.store.getTask(system.store.getAgent(agent.id)!.taskId)!;
+  const t = system.store.tasks.getTask(system.store.agents.getAgent(agent.id)!.taskId)!;
 
   const nodes = foldWorkGraph({
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
@@ -547,7 +547,7 @@ test('the operator can park an issue and release it again', async () => {
     payload: { delivered: true, summary: 'checked it myself' },
   });
   assert.equal(parked.statusCode, 200);
-  const row = system.store.getDelivery('issue:12');
+  const row = system.store.verdicts.getDelivery('issue:12');
   assert.equal(row?.by, 'operator');
   assert.equal(row?.summary, 'checked it myself');
 
@@ -557,7 +557,11 @@ test('the operator can park an issue and release it again', async () => {
     payload: { delivered: false },
   });
   assert.equal(released.statusCode, 200);
-  assert.equal(system.store.getDelivery('issue:12'), null, 'clearing is a delete, not a stored "not delivered"');
+  assert.equal(
+    system.store.verdicts.getDelivery('issue:12'),
+    null,
+    'clearing is a delete, not a stored "not delivered"',
+  );
 
   await app.app.close();
   system.store.close?.();
@@ -591,7 +595,7 @@ test('detail round-trips through the channel on both verdicts', async () => {
     detail,
   });
   assert.equal(bad.isError, false);
-  assert.equal(system.store.getShortfall('issue:12')?.detail, detail);
+  assert.equal(system.store.verdicts.getShortfall('issue:12')?.detail, detail);
 
   const deliverer = spawnAgent(system, 'issue:13:assess');
   const good = await callTool(system, deliverer, 'assess_issue', {
@@ -600,11 +604,11 @@ test('detail round-trips through the channel on both verdicts', async () => {
     detail,
   });
   assert.equal(good.isError, false);
-  assert.equal(system.store.getDelivery('issue:13')?.detail, detail);
+  assert.equal(system.store.verdicts.getDelivery('issue:13')?.detail, detail);
 
   const quiet = spawnAgent(system, 'issue:14:assess');
   await callTool(system, quiet, 'assess_issue', { status: 'delivered', summary: 'nothing to add' });
-  assert.equal(system.store.getDelivery('issue:14')?.detail, null);
+  assert.equal(system.store.verdicts.getDelivery('issue:14')?.detail, null);
   system.store.close?.();
 });
 
@@ -617,6 +621,6 @@ test('a blob summary is refused at the boundary, not filed and read later', asyn
   });
   assert.equal(res.isError, true);
   assert.match(res.text, /one line/i);
-  assert.equal(system.store.getShortfall('issue:12'), null, 'a refused assessment writes nothing');
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null, 'a refused assessment writes nothing');
   system.store.close?.();
 });

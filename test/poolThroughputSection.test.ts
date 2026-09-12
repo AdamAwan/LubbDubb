@@ -37,14 +37,14 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
 
 function fleetWithWork(): Store {
   const store = new Store(':memory:', () => NOW);
-  store.recordWorldEvents([
+  store.world.recordWorldEvents([
     { kind: 'pr_opened', ref: 'pr:1', summary: 'PR #1 opened: a change' },
     { kind: 'pr_merged', ref: 'pr:1', summary: 'PR #1 merged' },
     { kind: 'pr_comment', ref: 'pr:1', summary: 'PR #1: someone commented' },
     { kind: 'issue_closed', ref: 'issue:1', summary: 'Issue #1 closed' },
     { kind: 'pr_mergeable', ref: 'pr:1', summary: 'PR #1 is mergeable' },
   ]);
-  store.recordPrReplySent(1, 'thread-1', 'comment-1');
+  store.prReplies.recordPrReplySent(1, 'thread-1', 'comment-1');
   return store;
 }
 
@@ -111,7 +111,7 @@ test('what may be summed is what the publishing fleet declared, and it declares 
 
 test('a measure the publisher did not declare is dropped at the mirror, not at the fold', () => {
   const store = new Store(':memory:', () => NOW);
-  store.replacePoolFleetDigest(
+  store.pool.replaceFleetDigest(
     'alice@acme-api',
     'acme-api',
     digestDoc({
@@ -126,7 +126,7 @@ test('a measure the publisher did not declare is dropped at the mirror, not at t
     }),
   );
 
-  const rollup = foldPoolDigest(store.listPoolDigestRows('acme-api'), { project: 'acme-api', since: null });
+  const rollup = foldPoolDigest(store.pool.listDigestRows('acme-api'), { project: 'acme-api', since: null });
   assert.deepEqual(
     rollup.byThroughput.map((r) => [r.key, r.count]).sort(),
     [
@@ -141,7 +141,7 @@ test('a measure the publisher did not declare is dropped at the mirror, not at t
 test('four fleets that could not scope their world do not multiply one repository’s merges', () => {
   const store = new Store(':memory:', () => NOW);
   for (const id of ['a', 'b', 'c', 'd']) {
-    store.replacePoolFleetDigest(
+    store.pool.replaceFleetDigest(
       `${id}@acme-api`,
       'acme-api',
       digestDoc({
@@ -158,7 +158,7 @@ test('four fleets that could not scope their world do not multiply one repositor
     );
   }
 
-  const rollup = foldPoolDigest(store.listPoolDigestRows('acme-api'), { project: 'acme-api', since: null });
+  const rollup = foldPoolDigest(store.pool.listDigestRows('acme-api'), { project: 'acme-api', since: null });
   assert.equal(
     rollup.byThroughput.find((r) => r.key === 'pr-merged'),
     undefined,

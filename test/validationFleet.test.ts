@@ -67,13 +67,13 @@ function amendment(over: Partial<ValidationCheckAmendment> = {}): ValidationChec
 }
 
 function byId(system: System, goal: string, id: string): ValidationCheck {
-  const found = system.store.listValidationChecks(goal).find((c) => c.id === id);
+  const found = system.store.validation.listValidationChecks(goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -280,7 +280,7 @@ test('it ranks last: a check never takes the slot a pickup wanted', async () => 
 test('the dispatched agent records a reading, and it is attributed to the fleet', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
 
   const res = await callTool(system, spawnAgent(system, 'issue:12:validate:csv-opens'), 'validation_report', {
     result: 'passed',
@@ -312,7 +312,7 @@ test('an agent that was not sent to run this check may not report on it, and is 
 test('a hand-back records no reading and returns the check with its reason', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
 
   const res = await callTool(system, spawnAgent(system, 'issue:12:validate:csv-opens'), 'validation_report', {
     result: 'handback',
@@ -331,7 +331,7 @@ test('a hand-back records no reading and returns the check with its reason', asy
 test('a report says what it saw, or it is refused', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
   const agent = spawnAgent(system, 'issue:12:validate:csv-opens');
 
   const blank = await callTool(system, agent, 'validation_report', { result: 'passed', note: '   ' });
@@ -344,9 +344,9 @@ test('a report says what it saw, or it is refused', async () => {
 test('a check withdrawn while an agent was running it is said plainly, and nothing is written', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
   const agent = spawnAgent(system, 'issue:12:validate:csv-opens');
-  system.store.amendValidation(planId, {
+  system.store.validation.amendValidation(planId, {
     checks: [],
     withdraw: [{ id: 'csv-opens', reason: 'the export was dropped' }],
     resources: [],
@@ -361,13 +361,13 @@ test('a check withdrawn while an agent was running it is said plainly, and nothi
 test('a reworded dispatched check refuses a result and keeps the amendment band', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
   const agent = spawnAgent(system, 'issue:12:validate:csv-opens');
-  const task = system.store.getTask(agent.taskId);
+  const task = system.store.tasks.getTask(agent.taskId);
   assert.ok(task);
   const dispatchedAt = task.createdAt;
   while (new Date().toISOString() <= dispatchedAt) await new Promise((resolve) => setTimeout(resolve, 1));
-  system.store.amendValidation(planId, {
+  system.store.validation.amendValidation(planId, {
     checks: [
       {
         ...CHECK,
@@ -408,7 +408,11 @@ test('handing over is an operator act, and a settled check is refused rather tha
   assert.equal(back.statusCode, 200);
   assert.equal(byId(system, goal, 'csv-opens').actor, 'human');
 
-  system.store.recordValidationResult(goal, 'csv-opens', { state: 'passed', note: 'it opened', by: 'operator' });
+  system.store.validation.recordValidationResult(goal, 'csv-opens', {
+    state: 'passed',
+    note: 'it opened',
+    by: 'operator',
+  });
   const settled = await app.inject({ method: 'POST', url, payload: { to: 'fleet' } });
   assert.equal(settled.statusCode, 400);
   assert.match(settled.body, /reset it first/);
@@ -418,12 +422,17 @@ test('handing over is an operator act, and a settled check is refused rather tha
 test('a rewording withdraws the hand-over; a word-for-word re-declaration keeps it', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
 
-  system.store.amendValidation(planId, { checks: amendment(), withdraw: [], resources: [], note: 'no change' });
+  system.store.validation.amendValidation(planId, {
+    checks: amendment(),
+    withdraw: [],
+    resources: [],
+    note: 'no change',
+  });
   assert.equal(byId(system, planId, 'csv-opens').actor, 'fleet');
 
-  system.store.amendValidation(planId, {
+  system.store.validation.amendValidation(planId, {
     checks: amendment({ do: 'Log into the test environment, then export a report.' }),
     withdraw: [],
     resources: [],
@@ -437,10 +446,10 @@ test('a rewording withdraws the hand-over; a word-for-word re-declaration keeps 
 test('the next reading answers a hand-back, exactly as it answers an amendment', async () => {
   const system = build();
   const planId = planWith(system, [CHECK]);
-  system.store.recordValidationHandback(planId, 'csv-opens', 'no browser');
+  system.store.validation.recordValidationHandback(planId, 'csv-opens', 'no browser');
   assert.match(byId(system, planId, 'csv-opens').handbackNote ?? '', /no browser/);
 
-  system.store.recordValidationResult(planId, 'csv-opens', {
+  system.store.validation.recordValidationResult(planId, 'csv-opens', {
     state: 'passed',
     note: 'I ran it myself',
     by: 'operator',
@@ -452,32 +461,39 @@ test('handing a check over again briefs the next agent with the last attempt’s
   const system = build();
   const planId = planWith(system, [CHECK]);
 
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
-  system.store.recordValidationHandback(planId, 'csv-opens', 'no login for staging');
-  const again = system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.validation.recordValidationHandback(planId, 'csv-opens', 'no login for staging');
+  const again = system.store.validation.setValidationActor(planId, 'csv-opens', 'fleet');
   assert.ok(again);
   assert.equal(again.actor, 'fleet');
   assert.match(checkBriefing(again), /gave this back before[\s\S]*no login for staging/);
 
-  assert.match(outstandingChecks(system.store.listValidationChecks(planId)).join('\n'), /handed to the fleet/);
+  assert.match(
+    outstandingChecks(system.store.validation.listValidationChecks(planId)).join('\n'),
+    /handed to the fleet/,
+  );
 });
 
 test('the close-out line says who owes the check, and the ticket says who recorded it', async () => {
   const system = build();
   const goal = planWith(system, [CHECK, { ...CHECK, id: 'pdf-prints', title: 'The PDF prints' }]);
-  system.store.setValidationActor(goal, 'csv-opens', 'fleet');
-  system.store.recordValidationHandback(goal, 'pdf-prints', 'the printer is not reachable from here');
+  system.store.validation.setValidationActor(goal, 'csv-opens', 'fleet');
+  system.store.validation.recordValidationHandback(goal, 'pdf-prints', 'the printer is not reachable from here');
 
-  const lines = outstandingChecks(system.store.listValidationChecks(goal));
+  const lines = outstandingChecks(system.store.validation.listValidationChecks(goal));
   assert.match(lines.join('\n'), /handed to the fleet/);
   assert.match(lines.join('\n'), /handed back.*printer is not reachable/);
 
-  system.store.recordValidationResult(goal, 'csv-opens', { state: 'passed', note: 'it opened', by: 'agent' });
+  system.store.validation.recordValidationResult(goal, 'csv-opens', {
+    state: 'passed',
+    note: 'it opened',
+    by: 'agent',
+  });
   const comment = renderPlanComment(
-    system.store.getPlanByOrigin(goal) as Plan,
+    system.store.plans.getPlanByOrigin(goal) as Plan,
     [],
     '#',
-    system.store.listValidationChecks(goal),
+    system.store.validation.listValidationChecks(goal),
   );
   assert.match(comment, /recorded by an agent/);
 });

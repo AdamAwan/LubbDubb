@@ -42,7 +42,7 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
       );
     }
     const originRef = issueOrigin(issue);
-    const plan = deps.store.getPlanByOrigin(originRef);
+    const plan = deps.store.plans.getPlanByOrigin(originRef);
     if (!plan) {
       return toolError(
         `Issue #${issue} has no plan, so there is nothing to correct. Say what you found in your conclusion ` +
@@ -73,7 +73,7 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
     });
     if (!proposed.ok) return toolError(proposed.error);
 
-    const parts = deps.store.listPlanParts(plan.id);
+    const parts = deps.store.plans.listPlanParts(plan.id);
     return ok({
       proposed: true,
       amendmentId: proposed.proposed.amendment.id,

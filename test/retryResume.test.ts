@@ -80,17 +80,17 @@ async function dispatch(
         };
   const parsed = parseActions([raw]);
   assert.equal(parsed.rejected.length, 0, 'the test action is valid');
-  await system.executor.execute(`cycle_${origin}_${system.store.listTasks().length}`, {
+  await system.executor.execute(`cycle_${origin}_${system.store.tasks.listTasks().length}`, {
     ...parsed,
     rationale: '',
   });
 }
 
 function finishLiveAgent(system: System): void {
-  const live = system.store.listAgentsByStatus('starting', 'running')[0];
+  const live = system.store.agents.listAgentsByStatus('starting', 'running')[0];
   assert.ok(live, 'there is a live agent to finish');
   assert.equal(system.agents.complete(live.id), true);
-  assert.equal(system.store.getAgent(live.id)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(live.id)!.status, 'done');
 }
 
 function sessionFlag(launch: Launch): { flag: string; id: string } {
@@ -121,15 +121,15 @@ test('a re-dispatched origin resumes the previous agent’s conversation instead
   assert.equal(launches[1]!.args.includes('--session-id'), false, 'and does not also pin it');
   assert.equal(launches[1]!.cwd, launches[0]!.cwd, 'in the directory the transcript is keyed to');
 
-  const agents = system.store.listAgents();
+  const agents = system.store.agents.listAgents();
   assert.equal(agents.length, 2, 'a retry writes a new agent row rather than reusing one');
   assert.notEqual(agents[0]!.taskId, agents[1]!.taskId, 'each attempt owns its task row');
   assert.equal(agents[0]!.sessionId, agents[1]!.sessionId, 'both rows name the one conversation');
   for (const agent of agents) {
-    assert.equal(system.store.getTask(agent.taskId)!.originRef, 'issue:901', 'both attempts on the same origin');
+    assert.equal(system.store.tasks.getTask(agent.taskId)!.originRef, 'issue:901', 'both attempts on the same origin');
   }
 
-  const retryTask = system.store.getTask(agents[0]!.taskId)!;
+  const retryTask = system.store.tasks.getTask(agents[0]!.taskId)!;
   assert.match(retryTask.prompt, /this is attempt 2/i);
   assert.match(retryTask.prompt, /without the concern being cleared/i);
   assert.match(retryTask.prompt, /worktree was removed/i, 'a code retry is warned its worktree was recreated');
@@ -141,7 +141,7 @@ test('a re-dispatched origin resumes the previous agent’s conversation instead
   );
   assert.doesNotMatch(retryTask.prompt, /resumed after a server restart/i, 'not the restart wording');
 
-  const executed = system.store.listDecisions().filter((d) => d.outcome === 'executed');
+  const executed = system.store.decisions.listDecisions().filter((d) => d.outcome === 'executed');
   assert.match(executed[0]!.detail, /Resumed the previous agent's conversation/);
 
   system.store.close();
@@ -158,9 +158,12 @@ test('a first dispatch of an origin starts cold, and says so', async () => {
   await dispatch(system, 'issue:902', { branch: 'issue/902' });
 
   assert.equal(sessionFlag(launches[0]!).flag, '--session-id');
-  const task = system.store.getTask(system.store.listTasks()[0]!.id)!;
+  const task = system.store.tasks.getTask(system.store.tasks.listTasks()[0]!.id)!;
   assert.doesNotMatch(task.prompt, /this is attempt/i, 'nothing to inherit, so no retry note');
-  assert.match(system.store.listDecisions().find((d) => d.outcome === 'executed')!.detail, /^Spawned code agent/);
+  assert.match(
+    system.store.decisions.listDecisions().find((d) => d.outcome === 'executed')!.detail,
+    /^Spawned code agent/,
+  );
 
   system.store.close();
 });
@@ -200,7 +203,7 @@ test('a live agent on the origin is never resumed — the dispatch is skipped as
   await dispatch(system, 'issue:901');
 
   assert.equal(launches.length, 1, 'no second process on one conversation');
-  const skipped = system.store.listDecisions().find((d) => d.outcome === 'skipped');
+  const skipped = system.store.decisions.listDecisions().find((d) => d.outcome === 'skipped');
   assert.ok(skipped, 'the origin gate refused it');
   assert.match(skipped.detail, /already in flight/);
 
@@ -220,10 +223,10 @@ test('a non-resumable runtime re-dispatches cold, and the audit does not claim o
   finishLiveAgent(system);
   await dispatch(system, 'issue:901');
 
-  const agents = system.store.listAgents();
+  const agents = system.store.agents.listAgents();
   assert.equal(agents.length, 2);
   for (const agent of agents) assert.equal(agent.sessionId, null, 'raw pins nothing to resume');
-  const spawns = system.store
+  const spawns = system.store.decisions
     .listDecisions()
     .filter((d) => d.outcome === 'executed' && d.action.type === 'dispatch_code_agent');
   assert.equal(spawns.length, 2, 'both dispatches are audited');
@@ -247,7 +250,7 @@ test('a desk retry re-attaches in the previous scratch directory, not a fresh on
 
   assert.equal(launches[1]!.cwd, launches[0]!.cwd, 'the retry lands where its transcript is');
   assert.equal(sessionFlag(launches[1]!).flag, '--resume');
-  const retryTask = system.store.getTask(system.store.listAgents()[0]!.taskId)!;
+  const retryTask = system.store.tasks.getTask(system.store.agents.listAgents()[0]!.taskId)!;
   assert.doesNotMatch(retryTask.prompt, /worktree was removed/i, 'a desk agent keeps its scratch dir');
 
   system.store.close();
@@ -262,7 +265,7 @@ test('a killed agent’s conversation is not inherited', async () => {
   });
 
   await dispatch(system, 'issue:901');
-  const live = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const live = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   system.agents.kill(live.id);
   assert.equal(retryResumeFor('issue:901', system.store), null, 'a decided ending is not resumed');
 

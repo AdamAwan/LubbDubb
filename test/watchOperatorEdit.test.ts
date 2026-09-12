@@ -81,10 +81,10 @@ test('an operator writes a check, and it is live and read without anybody approv
   });
   assert.equal(res.statusCode, 200);
 
-  const [check] = system.store.listGoalWatches();
+  const [check] = system.store.watches.listGoalWatches();
   assert.equal(check?.id, 'no-timeouts');
   assert.equal(check?.authored, 'operator');
-  assert.deepEqual(system.store.listProposedGoalWatches(), []);
+  assert.deepEqual(system.store.watches.listProposedGoalWatches(), []);
   assert.equal(check?.dryRunEnvironment, 'testUk');
   assert.equal(check?.dryRunVerdict, 'fires');
 
@@ -109,7 +109,7 @@ test('a signal without a presence query is refused, exactly as a plan document r
   });
 
   assert.equal(res.statusCode, 400);
-  assert.deepEqual(system.store.listGoalWatches(), []);
+  assert.deepEqual(system.store.watches.listGoalWatches(), []);
   await app.close();
   system.store.close();
 });
@@ -152,7 +152,7 @@ test('the body and the path must name the same check', async () => {
   });
 
   assert.equal(res.statusCode, 400);
-  assert.deepEqual(system.store.listGoalWatches(), []);
+  assert.deepEqual(system.store.watches.listGoalWatches(), []);
   await app.close();
   system.store.close();
 });
@@ -160,7 +160,7 @@ test('the body and the path must name the same check', async () => {
 test('a replan neither reverts an operator’s edit nor sweeps the check they wrote', async () => {
   const system = build();
   const { app } = await buildApp(system);
-  system.store.ingestGoalWatch('issue:12', [PLANNED]);
+  system.store.watches.ingestGoalWatch('issue:12', [PLANNED]);
 
   await app.inject({
     method: 'PUT',
@@ -187,9 +187,9 @@ test('a replan neither reverts an operator’s edit nor sweeps the check they wr
     },
   });
 
-  system.store.ingestGoalWatch('issue:12', [PLANNED]);
+  system.store.watches.ingestGoalWatch('issue:12', [PLANNED]);
 
-  const checks = system.store.listGoalWatches();
+  const checks = system.store.watches.listGoalWatches();
   assert.equal(checks.length, 2, 'the check the operator wrote is still here');
   const edited = checks.find((c) => c.id === 'no-timeouts');
   assert.equal(edited?.title, 'Job X stops timing out after retries', 'the edit stands');
@@ -212,17 +212,17 @@ test('an edit keeps a measure’s baseline where the question did not change, an
     unit: 'ms',
   };
   await app.inject({ method: 'PUT', url: '/api/issues/12/watch/checks/orders-p95', payload: measure });
-  assert.equal(system.store.listGoalWatches()[0]?.baselineValue, 412, 'the dry run took the before');
+  assert.equal(system.store.watches.listGoalWatches()[0]?.baselineValue, 412, 'the dry run took the before');
 
   await app.inject({
     method: 'PUT',
     url: '/api/issues/12/watch/checks/orders-p95',
     payload: { ...measure, title: 'Orders p95 has not regressed' },
   });
-  assert.equal(system.store.listGoalWatches()[0]?.baselineValue, 412, 'the same question keeps its answer');
+  assert.equal(system.store.watches.listGoalWatches()[0]?.baselineValue, 412, 'the same question keeps its answer');
 
-  const saved = system.store.saveOperatorWatch('issue:12', {
-    ...system.store.listGoalWatches()[0]!,
+  const saved = system.store.watches.saveOperatorWatch('issue:12', {
+    ...system.store.watches.listGoalWatches()[0]!,
     query: 'requests | summarize value = percentile(duration, 99)',
   });
   assert.equal(saved.baselineValue, null, 'a reading is a reading of that query');
@@ -235,8 +235,8 @@ test('an edit keeps a measure’s baseline where the question did not change, an
 test('a delete takes the check and its readings, and answers 404 for one that was never there', async () => {
   const system = build();
   const { app } = await buildApp(system);
-  system.store.ingestGoalWatch('issue:12', [PLANNED]);
-  system.store.recordWatchReading({
+  system.store.watches.ingestGoalWatch('issue:12', [PLANNED]);
+  system.store.watches.recordWatchReading({
     goalRef: 'issue:12',
     environment: 'testUk',
     checkId: 'no-timeouts',
@@ -248,8 +248,8 @@ test('a delete takes the check and its readings, and answers 404 for one that wa
 
   const gone = await app.inject({ method: 'DELETE', url: '/api/issues/12/watch/checks/no-timeouts' });
   assert.equal(gone.statusCode, 200);
-  assert.deepEqual(system.store.listGoalWatches(), []);
-  assert.deepEqual(system.store.listWatchReadings(), []);
+  assert.deepEqual(system.store.watches.listGoalWatches(), []);
+  assert.deepEqual(system.store.watches.listWatchReadings(), []);
 
   const again = await app.inject({ method: 'DELETE', url: '/api/issues/12/watch/checks/no-timeouts' });
   assert.equal(again.statusCode, 404);
@@ -261,8 +261,8 @@ test('a delete takes the check and its readings, and answers 404 for one that wa
 test('the goal page carries the declarations, an agent’s unruled one included', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
-  system.store.ingestGoalWatch('issue:12', [PLANNED]);
-  system.store.proposeGoalWatch('issue:12', [{ ...PLANNED, id: 'retry-loop' }], 'The retry is the new signal.');
+  system.store.watches.ingestGoalWatch('issue:12', [PLANNED]);
+  system.store.watches.proposeGoalWatch('issue:12', [{ ...PLANNED, id: 'retry-loop' }], 'The retry is the new signal.');
 
   await system.harness.runCycle();
   const page = buildGoalPage(buildStateSnapshot(system) as unknown as AppState, 'issue:12', []);

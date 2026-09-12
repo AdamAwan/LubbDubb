@@ -162,7 +162,7 @@ test('a branch note records no proposer at all, and says so through the admissio
 
 test('recordDecision lifts both ids off the action into their own columns', () => {
   const store = new Store(':memory:');
-  const d = store.recordDecision({
+  const d = store.decisions.recordDecision({
     cycleId: 'cyc',
     action: {
       type: 'escalate_to_human',
@@ -175,7 +175,7 @@ test('recordDecision lifts both ids off the action into their own columns', () =
   });
   assert.equal(d.rule, 'issue-pickup');
   assert.equal(d.admission, 'cooldown-escalate');
-  const [read] = store.listDecisions();
+  const [read] = store.decisions.listDecisions();
   assert.equal(read?.rule, 'issue-pickup', 'and survives the round trip');
   assert.equal(read?.admission, 'cooldown-escalate');
   store.close();
@@ -183,7 +183,7 @@ test('recordDecision lifts both ids off the action into their own columns', () =
 
 test('an action with no admission records null, never the rule over again', () => {
   const store = new Store(':memory:');
-  const d = store.recordDecision({
+  const d = store.decisions.recordDecision({
     cycleId: 'cyc',
     action: { type: 'dispatch_code_agent', reason: 'go', rule: 'issue-pickup' },
     outcome: 'executed',
@@ -226,18 +226,18 @@ test('the migration is additive on a database created before the column', () => 
   );
   assert.ok(columns.has('admission'), 'the column was added rather than the table recreated');
 
-  const [row] = store.listDecisions();
+  const [row] = store.decisions.listDecisions();
   assert.equal(row?.id, 'dec_old', 'the pre-existing row is still there — nothing was rewritten');
   assert.equal(row?.rule, 'cooldown-escalate', 'and it still carries the outcome in the old place');
   assert.equal(row?.admission, null);
 
-  store.recordDecision({
+  store.decisions.recordDecision({
     cycleId: 'cyc2',
     action: { type: 'escalate_to_human', reason: 'x', rule: 'issue-pickup', admission: 'cooldown-escalate' },
     outcome: 'executed',
     detail: '',
   });
-  const both = store.listDecisions();
+  const both = store.decisions.listDecisions();
   assert.equal(both.length, 2);
   store.close();
 });

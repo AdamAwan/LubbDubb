@@ -125,7 +125,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -146,10 +146,10 @@ test('writing an instruction records the words and the verdict that gets them re
     });
     assert.equal(res.statusCode, 200);
 
-    const standing = system.store.listStandingInstructions('issue:1');
+    const standing = system.store.instructions.listStandingInstructions('issue:1');
     assert.equal(standing.length, 1);
     assert.equal(standing[0]?.text, 'change the button to primary');
-    const conclusion = system.store.getIssueConclusion('issue:1');
+    const conclusion = system.store.verdicts.getIssueConclusion('issue:1');
     assert.equal(conclusion?.verdict, 'more_work');
     assert.equal(conclusion?.by, 'operator');
     assert.doesNotMatch(conclusion?.note ?? '', /primary/, 'the words live in one place, not two');
@@ -166,7 +166,7 @@ test('instructions accumulate rather than overwriting each other', async () => {
     for (const text of ['change the button to primary', 'change the permission required'])
       await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text } });
     assert.deepEqual(
-      system.store.listStandingInstructions('issue:1').map((i) => i.text),
+      system.store.instructions.listStandingInstructions('issue:1').map((i) => i.text),
       ['change the button to primary', 'change the permission required'],
     );
   } finally {
@@ -181,8 +181,8 @@ test('an empty instruction is refused', async () => {
   try {
     const res = await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: '  ' } });
     assert.equal(res.statusCode, 400);
-    assert.equal(system.store.listStandingInstructions('issue:1').length, 0);
-    assert.equal(system.store.getIssueConclusion('issue:1'), null, 'and no verdict is left behind either');
+    assert.equal(system.store.instructions.listStandingInstructions('issue:1').length, 0);
+    assert.equal(system.store.verdicts.getIssueConclusion('issue:1'), null, 'and no verdict is left behind either');
   } finally {
     await app.close();
     system.store.close();
@@ -195,15 +195,23 @@ test('withdrawing the last instruction takes its verdict with it', async () => {
   try {
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'first' } });
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'second' } });
-    const [first, second] = system.store.listStandingInstructions('issue:1');
+    const [first, second] = system.store.instructions.listStandingInstructions('issue:1');
 
     const one = await app.inject({ method: 'DELETE', url: `/api/issues/1/instruction/${first?.id}` });
     assert.equal(one.statusCode, 200);
-    assert.equal(system.store.getIssueConclusion('issue:1')?.verdict, 'more_work', 'one still stands, so it stays');
+    assert.equal(
+      system.store.verdicts.getIssueConclusion('issue:1')?.verdict,
+      'more_work',
+      'one still stands, so it stays',
+    );
 
     const both = await app.inject({ method: 'DELETE', url: `/api/issues/1/instruction/${second?.id}` });
     assert.equal(both.statusCode, 200);
-    assert.equal(system.store.getIssueConclusion('issue:1'), null, 'nothing left to read, so nothing bounces back');
+    assert.equal(
+      system.store.verdicts.getIssueConclusion('issue:1'),
+      null,
+      'nothing left to read, so nothing bounces back',
+    );
 
     const again = await app.inject({ method: 'DELETE', url: `/api/issues/1/instruction/${second?.id}` });
     assert.equal(again.statusCode, 409, 'withdrawing a settled one is refused rather than silently succeeding');
@@ -218,15 +226,15 @@ test('an agent’s own declaration survives a withdrawal', async () => {
   const { app } = await buildApp(system);
   try {
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'change it' } });
-    system.store.recordIssueConclusion({
+    system.store.verdicts.recordIssueConclusion({
       originRef: 'issue:1',
       verdict: 'more_work',
       note: 'the migration is still missing',
       by: 'agent',
     });
-    const [only] = system.store.listStandingInstructions('issue:1');
+    const [only] = system.store.instructions.listStandingInstructions('issue:1');
     await app.inject({ method: 'DELETE', url: `/api/issues/1/instruction/${only?.id}` });
-    assert.equal(system.store.getIssueConclusion('issue:1')?.by, 'agent', 'left exactly where it was found');
+    assert.equal(system.store.verdicts.getIssueConclusion('issue:1')?.by, 'agent', 'left exactly where it was found');
   } finally {
     await app.close();
     system.store.close();
@@ -293,7 +301,7 @@ test('concluding the goal settles every instruction standing on it', async () =>
     assert.notEqual(result.isError, true);
 
     assert.equal(
-      system.store.listStandingInstructions('issue:1').length,
+      system.store.instructions.listStandingInstructions('issue:1').length,
       0,
       'the conclusion is the answer to them, so they do not reach the next agent twice',
     );
@@ -308,14 +316,14 @@ test('an instruction on a delivered goal takes the park down with it', async () 
   const { app } = await buildApp(system);
   try {
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
-    system.store.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
+    system.store.verdicts.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
 
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
-    assert.equal(system.store.getDelivery('issue:1'), null, 'the goal is not delivered any more');
-    assert.equal(system.store.getIssueConclusion('issue:1')?.verdict, 'more_work');
+    assert.equal(system.store.verdicts.getDelivery('issue:1'), null, 'the goal is not delivered any more');
+    assert.equal(system.store.verdicts.getIssueConclusion('issue:1')?.verdict, 'more_work');
 
     await system.harness.runCycle('manual');
-    const dispatched = system.store.listTasks().filter((t) => t.originRef?.startsWith('issue:1') === true);
+    const dispatched = system.store.tasks.listTasks().filter((t) => t.originRef?.startsWith('issue:1') === true);
     assert.ok(dispatched.length > 0, 'and an agent is on it');
     assert.ok(
       dispatched.every((t) => t.originRef !== 'issue:1:retro'),
@@ -333,10 +341,10 @@ test('an instruction on a goal whose plan is finished sends the plan back to a p
   try {
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     const plan = settledPlan(system, 1);
-    assert.equal(system.store.getPlan(plan.id)?.status, 'complete', 'the state the funnel used to stop in');
+    assert.equal(system.store.plans.getPlan(plan.id)?.status, 'complete', 'the state the funnel used to stop in');
 
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
-    assert.equal(system.store.getPlan(plan.id)?.status, 'planning');
+    assert.equal(system.store.plans.getPlan(plan.id)?.status, 'planning');
 
     await system.harness.runCycle('manual');
     const replanner = findTask(system.store, (t) => t.originRef === 'issue:1:plan');
@@ -356,7 +364,7 @@ test('a plan still in flight is left exactly where it is', async () => {
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     const plan = planWithOnePart(system.store, 1, 'Ship the thing');
     await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
-    assert.equal(system.store.getPlan(plan.id)?.status, 'active');
+    assert.equal(system.store.plans.getPlan(plan.id)?.status, 'active');
   } finally {
     await app.close();
     system.store.close();
@@ -369,7 +377,7 @@ test('the goal in issue #603: delivered, plan complete, written up — and More 
   try {
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     settledPlan(system, 1);
-    system.store.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
+    system.store.verdicts.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
     await system.harness.runCycle('manual');
     assert.ok(
       findTask(system.store, (t) => t.originRef === 'issue:1:retro'),
@@ -390,9 +398,9 @@ test('the goal in issue #603: delivered, plan complete, written up — and More 
 
 function settledPlan(system: System, issueNumber: number): Plan {
   const plan = planWithOnePart(system.store, issueNumber, `Issue #${issueNumber}`);
-  const [part] = system.store.listPlanParts(plan.id);
-  system.store.markPartDispatched(part!.id, 'task_seed', `issue/${issueNumber}/whole`);
-  system.store.concludePlanPart(part!.id, { kind: 'report', ref: null, summary: 'delivered' });
-  system.store.rollUpPlanStatus(plan.id);
+  const [part] = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.markPartDispatched(part!.id, 'task_seed', `issue/${issueNumber}/whole`);
+  system.store.plans.concludePlanPart(part!.id, { kind: 'report', ref: null, summary: 'delivered' });
+  system.store.plans.rollUpPlanStatus(plan.id);
   return plan;
 }

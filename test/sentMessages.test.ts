@@ -73,7 +73,7 @@ async function dispatched(patch: Record<string, unknown> = {}) {
   });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   return { system, child: children[0]!, agentId };
 }
 
@@ -90,7 +90,7 @@ test('an answer typed into an agent appears in its transcript', async () => {
 
   assert.equal(system.agents.respond(agentId, 'Use OAuth, and keep the sessions short.'), true);
 
-  const transcript = system.store.getTranscript(agentId);
+  const transcript = system.store.transcripts.getTranscript(agentId);
   assert.match(transcript, /Use OAuth, and keep the sessions short\./, 'the message you sent is in the transcript');
   assert.match(transcript, /▸ sent/, 'labelled as a turn you took, not as something the agent said');
   assert.ok(
@@ -109,9 +109,9 @@ test('the transcript never shows a message that was not delivered', async () => 
   const { system, agentId } = await dispatched();
 
   system.agents.kill(agentId);
-  const before = system.store.getTranscript(agentId);
+  const before = system.store.transcripts.getTranscript(agentId);
   assert.equal(system.agents.respond(agentId, 'Are you there?'), false);
-  assert.equal(system.store.getTranscript(agentId), before, 'nothing to send it to, so nothing is claimed');
+  assert.equal(system.store.transcripts.getTranscript(agentId), before, 'nothing to send it to, so nothing is claimed');
 
   system.store.close();
 });
@@ -120,12 +120,12 @@ test('ending a usage-limit park says so in the transcript', async () => {
   const { system, child, agentId } = await dispatched();
 
   child.rateLimit();
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
 
   const resumed = system.agents.resumeParked(agentId);
   assert.ok(resumed.ok, 'the park ends');
   assert.match(
-    system.store.getTranscript(agentId),
+    system.store.transcripts.getTranscript(agentId),
     /The limit has cleared/,
     'and the agent picking the work back up is not an unexplained jump',
   );

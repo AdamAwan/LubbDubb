@@ -80,7 +80,7 @@ async function dispatched(patch: Record<string, unknown> = {}) {
   });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   return { system, child: children[0]!, agentId };
 }
 
@@ -89,7 +89,7 @@ test('an agent that says nothing at all is parked — and told, not asked', asyn
 
   await past(WINDOW_MS * 3);
 
-  const [escalation] = system.store.listOpenEscalations();
+  const [escalation] = system.store.escalations.listOpenEscalations();
   assert.ok(escalation, 'the wedge reaches you, where before it reached nobody');
   assert.match(escalation.prompt, /Went silent mid-turn/, 'the headline says what happened');
   assert.match(escalation.prompt, /no output at all/, 'and why nothing was asked of it');
@@ -98,7 +98,7 @@ test('an agent that says nothing at all is parked — and told, not asked', asyn
     0,
     'a nudge is read at the end of a turn, and this agent is not going to reach one — asking spends the budget on a pipe nobody is reading',
   );
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
   assert.deepEqual(
     system.agents.stallDeadlines().map((p) => p.agentId),
     [agentId],
@@ -114,11 +114,11 @@ test('the countdown settles the wedge, and the settle is what reaps the process'
   await past(WINDOW_MS * 3);
   assert.deepEqual(system.agents.completeExpiredStalls(), [agentId]);
 
-  const agent = system.store.getAgent(agentId)!;
+  const agent = system.store.agents.getAgent(agentId)!;
   assert.equal(agent.status, 'done', 'settled the way an unanswered stop is settled');
-  assert.equal(system.store.getTask(agent.taskId)!.status, 'done');
+  assert.equal(system.store.tasks.getTask(agent.taskId)!.status, 'done');
   assert.ok(child.killed, 'and the wedged process goes with it — the tool call holding the worktree open is the point');
-  assert.equal(system.store.listOpenEscalations().length, 0, 'the card goes with it too');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'the card goes with it too');
 
   shutdown(system);
 });
@@ -131,8 +131,12 @@ test('a long step is not a wedge: anything on stdout starts the window over', as
     child.toolCall('Bash');
   }
 
-  assert.equal(system.store.listOpenEscalations().length, 0, 'nobody is told anything about an agent that is working');
-  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+  assert.equal(
+    system.store.escalations.listOpenEscalations().length,
+    0,
+    'nobody is told anything about an agent that is working',
+  );
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'running');
   assert.equal(system.agents.stallDeadlines().length, 0);
 
   shutdown(system);
@@ -152,7 +156,7 @@ test('a parked agent that starts working again is never settled under its own ha
     'a tool call from a parked agent contradicts its clock, so the clock moves',
   );
   assert.deepEqual(system.agents.completeExpiredStalls(), [], 'and nothing settles an agent that is visibly working');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting', 'the card stands: it is still yours to read');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting', 'the card stands: it is still yours to read');
 
   shutdown(system);
 });
@@ -161,13 +165,17 @@ test('a question the agent asked is never turned into a wedge, and 0 turns the c
   const asked = await dispatched({ agentStallParkMs: 60_000 });
   assert.ok(asked.system.agents.ask(asked.agentId, { question: 'Which auth provider?' }).ok);
   await past(WINDOW_MS * 3);
-  assert.equal(asked.system.store.listOpenEscalations().length, 1, 'its own question, and only that');
+  assert.equal(asked.system.store.escalations.listOpenEscalations().length, 1, 'its own question, and only that');
   assert.equal(asked.system.agents.stallDeadlines().length, 0, 'standing until somebody answers it');
   shutdown(asked.system);
 
   const off = await dispatched({ agentSilenceParkMs: 0, agentStallParkMs: 60_000 });
   await past(WINDOW_MS * 3);
-  assert.equal(off.system.store.listOpenEscalations().length, 0, '0 restores the wedge that stands forever');
-  assert.equal(off.system.store.getAgent(off.agentId)!.status, 'running');
+  assert.equal(
+    off.system.store.escalations.listOpenEscalations().length,
+    0,
+    '0 restores the wedge that stands forever',
+  );
+  assert.equal(off.system.store.agents.getAgent(off.agentId)!.status, 'running');
   shutdown(off.system);
 });

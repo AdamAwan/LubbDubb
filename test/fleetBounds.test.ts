@@ -26,9 +26,9 @@ function testSystem(): System {
 }
 
 function run(system: System, originRef: string, endedAt: string | null, title = 'a shift'): Agent {
-  const task = system.store.createTask({ kind: 'code', title, prompt: 'x', branch: null, originRef });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  if (endedAt !== null) system.store.updateAgent(agent.id, { status: 'done', endedAt });
+  const task = system.store.tasks.createTask({ kind: 'code', title, prompt: 'x', branch: null, originRef });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  if (endedAt !== null) system.store.agents.updateAgent(agent.id, { status: 'done', endedAt });
   return agent;
 }
 

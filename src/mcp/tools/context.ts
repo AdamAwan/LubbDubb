@@ -186,18 +186,18 @@ interface StatusEnvelope {
 }
 
 function statusEnvelope(store: Store, agent: Agent, task: Task): StatusEnvelope {
-  const open = store.listOpenEscalations().find((e) => e.agentId === agent.id) ?? null;
+  const open = store.escalations.listOpenEscalations().find((e) => e.agentId === agent.id) ?? null;
   const env: StatusEnvelope = {
     origin: task.originRef,
     task: { title: task.title, status: task.status },
     awaitingHuman: open ? { prompt: open.prompt } : null,
   };
   const issue = originIssueNumber(task.originRef);
-  const plan = issue === null ? null : store.getPlanByOrigin(issueOrigin(issue));
+  const plan = issue === null ? null : store.plans.getPlanByOrigin(issueOrigin(issue));
   if (plan) {
     env.plan = {
       status: plan.status,
-      parts: store.listPlanParts(plan.id).map((p) => ({ slug: p.slug, status: p.status })),
+      parts: store.plans.listPlanParts(plan.id).map((p) => ({ slug: p.slug, status: p.status })),
     };
   }
   return env;

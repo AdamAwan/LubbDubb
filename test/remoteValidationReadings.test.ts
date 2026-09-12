@@ -155,16 +155,16 @@ function setArea(file: string, checkId: string, area: string): void {
 /** A delivered, landed and sheeted goal, with one confirmed `check` row the pre-flight matched. */
 function seed(b: Bench, rows: { check: ValidationCheckInput; area: string; matched: number | null }[]): string {
   const { store } = b.sys;
-  store.ingestValidation('issue:12', {
+  store.validation.ingestValidation('issue:12', {
     checks: rows.map((r) => r.check),
     resources: [],
     supersededReason: '',
     amendNote: '',
   });
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
-  store.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
-  store.saveRemoteSheetRows(
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+  store.remoteValidation.saveRemoteSheetRows(
     'issue:12',
     'acceptance',
     rows.map((r, at) => ({
@@ -180,7 +180,7 @@ function seed(b: Bench, rows: { check: ValidationCheckInput; area: string; match
     })),
   );
   for (const r of rows) setArea(b.file, r.check.id, r.area);
-  const { run } = store.beginRemoteRun({
+  const { run } = store.remoteValidation.beginRemoteRun({
     goalRef: 'issue:12',
     environment: 'acceptance',
     tenant: 'validation-customer-1',
@@ -205,7 +205,7 @@ function report(b: Bench, tests: TestLine[], name = 'results.json'): string {
 }
 
 function reading(b: Bench, checkId: string): RemoteReading {
-  const found = b.sys.store
+  const found = b.sys.store.remoteValidation
     .listRemoteReadings()
     .filter((r) => r.rowId === `check:${checkId}`)
     .at(-1);
@@ -246,7 +246,7 @@ test('a non-zero exit over a report full of passes yields passes', async () => {
     );
 
     assert.equal(reading(b, CHECK.id).outcome, 'passed');
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'passed');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.state, 'passed');
   } finally {
     b.close();
   }
@@ -276,7 +276,7 @@ test('a zero exit over a report full of failures yields failures', async () => {
     );
 
     assert.equal(reading(b, CHECK.id).outcome, 'failed', 'and a clean exit decides nothing either');
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'failed');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.state, 'failed');
   } finally {
     b.close();
   }
@@ -302,7 +302,11 @@ test('the matched count is the pre-flight’s listing, never the report’s own 
     assert.equal(read.rows, 4, 'the matched count on the reading is the row’s, which the pre-flight wrote');
     assert.equal(read.executed, 2, 'and executed is the report’s');
     assert.match(read.detail ?? '', /matched 4 tests .* and only 2 ran/);
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'unrun', 'a blocked row writes nothing');
+    assert.equal(
+      b.sys.store.validation.listValidationChecks('issue:12')[0]?.state,
+      'unrun',
+      'a blocked row writes nothing',
+    );
   } finally {
     b.close();
   }
@@ -354,7 +358,7 @@ test('tests skipped because a dependency failed are blocked, never failed', asyn
     assert.equal(read.outcome, 'blocked', 'that is what a failed auth-setup project looks like');
     assert.equal(read.executed, 0);
     assert.match(read.detail ?? '', /auth-setup project failed/, 'and the report is what distinguishes it');
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'unrun');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.state, 'unrun');
   } finally {
     b.close();
   }
@@ -375,7 +379,7 @@ test('a report that omits the tests a failed dependency held names that failure,
     assert.match(read.detail ?? '', /names no test under/);
     assert.match(read.detail ?? '', new RegExp(`\`${OTHER_AREA}\` did`), 'the failure elsewhere is named');
     assert.match(read.detail ?? '', /failed dependency/);
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'unrun');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.state, 'unrun');
   } finally {
     b.close();
   }
@@ -422,7 +426,7 @@ test('an environment that moved under the run blocks a failure', async () => {
     assert.equal(read.endedSha, MOVED, 'and the row records which commits it straddled');
     assert.match(read.detail ?? '', /moved under this run/);
     assert.equal(
-      b.sys.store.listValidationChecks('issue:12')[0]?.state,
+      b.sys.store.validation.listValidationChecks('issue:12')[0]?.state,
       'unrun',
       'a blocked row writes nothing on the check',
     );
@@ -442,8 +446,8 @@ test('an environment that moved under the run leaves a pass a pass', async () =>
     assert.equal(read.outcome, 'passed', 'a journey that completed completed');
     assert.equal(read.startedSha, DEPLOYED);
     assert.equal(read.endedSha, MOVED, 'and it records the same two commits');
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.state, 'passed');
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.state, 'passed');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
   } finally {
     b.close();
   }
@@ -454,7 +458,7 @@ test('a later run supersedes rather than deletes, and every reading carries the 
   try {
     const first = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
     await settle(b, first, report(b, [{ selector: AREA, status: 'failed' }], 'first.json'));
-    const { run: second } = b.sys.store.beginRemoteRun({
+    const { run: second } = b.sys.store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
       tenant: 'validation-customer-1',
@@ -463,7 +467,7 @@ test('a later run supersedes rather than deletes, and every reading carries the 
     assert.ok(second);
     await settle(b, second.id, report(b, [{ selector: AREA, status: 'passed' }], 'second.json'));
 
-    const readings = b.sys.store.listRemoteReadings();
+    const readings = b.sys.store.remoteValidation.listRemoteReadings();
     assert.deepEqual(
       readings.map((r) => r.outcome),
       ['failed', 'passed'],
@@ -473,8 +477,8 @@ test('a later run supersedes rather than deletes, and every reading carries the 
       assert.equal(read.startedSha, DEPLOYED);
       assert.equal(read.endedSha, DEPLOYED, 'a reading with no commit beside it is of a product nobody can name');
     }
-    assert.equal(b.sys.store.getRemoteRun(first)?.reportPath?.endsWith('first.json'), true);
-    assert.equal(b.sys.store.getRemoteRun(second.id)?.status, 'ended');
+    assert.equal(b.sys.store.remoteValidation.getRemoteRun(first)?.reportPath?.endsWith('first.json'), true);
+    assert.equal(b.sys.store.remoteValidation.getRemoteRun(second.id)?.status, 'ended');
   } finally {
     b.close();
   }
@@ -487,9 +491,9 @@ test('a run writes on an unrun check, and again on one whose last reading was it
   try {
     const first = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
     await settle(b, first, report(b, [{ selector: AREA, status: 'passed' }], 'first.json'));
-    assert.equal(b.sys.store.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
 
-    const { run: second } = b.sys.store.beginRemoteRun({
+    const { run: second } = b.sys.store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
       tenant: 'validation-customer-1',
@@ -498,7 +502,7 @@ test('a run writes on an unrun check, and again on one whose last reading was it
     assert.ok(second);
     await settle(b, second.id, report(b, [{ selector: AREA, status: 'failed' }], 'second.json'));
 
-    const settled = b.sys.store.listValidationChecks('issue:12')[0];
+    const settled = b.sys.store.validation.listValidationChecks('issue:12')[0];
     assert.equal(settled?.state, 'failed', 'a spec reading may replace a spec reading');
     assert.equal(settled?.resultBy, 'spec');
   } finally {
@@ -511,7 +515,7 @@ for (const by of ['operator', 'agent', 'desktop'] as const) {
     const b = bench();
     try {
       const runId = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
-      b.sys.store.recordValidationResult('issue:12', CHECK.id, {
+      b.sys.store.validation.recordValidationResult('issue:12', CHECK.id, {
         state: 'passed',
         note: 'I placed one and it placed',
         by,
@@ -519,7 +523,7 @@ for (const by of ['operator', 'agent', 'desktop'] as const) {
 
       await settle(b, runId, report(b, [{ selector: AREA, status: 'failed' }]));
 
-      const kept = b.sys.store.listValidationChecks('issue:12')[0];
+      const kept = b.sys.store.validation.listValidationChecks('issue:12')[0];
       assert.equal(kept?.state, 'passed', 'a reading somebody took is theirs');
       assert.equal(kept?.resultBy, by);
       assert.equal(kept?.resultNote, 'I placed one and it placed');
@@ -543,7 +547,7 @@ test('a blocked row writes nothing at all on the check', async () => {
     const read = reading(b, CHECK.id);
     assert.equal(read.outcome, 'blocked');
     assert.match(read.detail ?? '', /could not be opened/);
-    const check = b.sys.store.listValidationChecks('issue:12')[0];
+    const check = b.sys.store.validation.listValidationChecks('issue:12')[0];
     assert.equal(check?.state, 'unrun');
     assert.equal(check?.resultBy, null, 'no reading was taken, so nothing is attributed to anybody');
   } finally {
@@ -555,10 +559,15 @@ test('a check that names no area is a person’s, and a run writes nothing on it
   const b = bench();
   try {
     const { store } = b.sys;
-    store.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-    store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-    store.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
-    store.saveRemoteSheetRows('issue:12', 'acceptance', [
+    store.validation.ingestValidation('issue:12', {
+      checks: [CHECK],
+      resources: [],
+      supersededReason: '',
+      amendNote: '',
+    });
+    store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+    store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+    store.remoteValidation.saveRemoteSheetRows('issue:12', 'acceptance', [
       {
         rowId: `check:${CHECK.id}`,
         kind: 'check',
@@ -571,7 +580,7 @@ test('a check that names no area is a person’s, and a run writes nothing on it
         matched: null,
       },
     ]);
-    const { run } = store.beginRemoteRun({
+    const { run } = store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
       tenant: 'validation-customer-1',
@@ -581,12 +590,12 @@ test('a check that names no area is a person’s, and a run writes nothing on it
     await settle(b, run.id, report(b, [{ selector: AREA, status: 'failed' }]));
 
     assert.deepEqual(
-      store.listRemoteReadings(),
+      store.remoteValidation.listRemoteReadings(),
       [],
       'the pre-flight asks a runner about areas, and this declares none',
     );
-    assert.equal(store.listValidationChecks('issue:12')[0]?.state, 'unrun');
-    assert.equal(store.getRemoteRun(run.id)?.status, 'ended', 'and the run is still settled');
+    assert.equal(store.validation.listValidationChecks('issue:12')[0]?.state, 'unrun');
+    assert.equal(store.remoteValidation.getRemoteRun(run.id)?.status, 'ended', 'and the run is still settled');
   } finally {
     b.close();
   }
@@ -609,7 +618,7 @@ test('a failed row reaches rule validation-failed through the ordinary failed re
       recentDecisions: [],
       agentHeadroom: 3,
       deliveries: [delivered()],
-      validationChecks: b.sys.store.listValidationChecks('issue:12'),
+      validationChecks: b.sys.store.validation.listValidationChecks('issue:12'),
     };
     const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(ctx);
     assert.equal(
@@ -628,26 +637,34 @@ test('a failed row is never a shortfall, never an issue verdict, never a WorldEv
     const { store } = b.sys;
     const runId = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
     await b.sys.harness.runCycle('manual');
-    const events = store.listWorldEvents(50).length;
+    const events = store.world.listWorldEvents(50).length;
 
     await settle(b, runId, report(b, [{ selector: AREA, status: 'failed' }]));
     await b.sys.harness.runCycle('manual');
 
-    assert.equal(store.listWorldEvents(50).length, events, 'a reading written as one un-parks the goal it reported on');
-    assert.deepEqual(store.listWatchReadings(), [], 'and a window’s evidence is on the window’s clock');
-    assert.equal(store.getShortfall('issue:12'), null, 'a shortfall would clear the delivery row that parks the goal');
-    assert.notEqual(store.getDelivery('issue:12'), null, 'so the goal stays delivered, and parked');
     assert.equal(
-      store.getIssueConclusion('issue:12'),
+      store.world.listWorldEvents(50).length,
+      events,
+      'a reading written as one un-parks the goal it reported on',
+    );
+    assert.deepEqual(store.watches.listWatchReadings(), [], 'and a window’s evidence is on the window’s clock');
+    assert.equal(
+      store.verdicts.getShortfall('issue:12'),
+      null,
+      'a shortfall would clear the delivery row that parks the goal',
+    );
+    assert.notEqual(store.verdicts.getDelivery('issue:12'), null, 'so the goal stays delivered, and parked');
+    assert.equal(
+      store.verdicts.getIssueConclusion('issue:12'),
       null,
       'the four verdict kinds are conclusion, delivery, shortfall and appraisal',
     );
-    assert.equal(store.getAppraisal('issue:12'), null);
+    assert.equal(store.verdicts.getAppraisal('issue:12'), null);
 
-    const validate = store.listHumanTasksOfKind('validate').find((t) => t.originRef === 'issue:12');
+    const validate = store.humanTasks.listHumanTasksOfKind('validate').find((t) => t.originRef === 'issue:12');
     assert.ok(validate, 'the validate bench row is the one surface a reading moves');
     assert.notEqual(validate.status, 'declined', 'and it is not declined by a reading taken for it');
-    const closeOut = store.listHumanTasksOfKind('close_out').find((t) => t.originRef === 'issue:12');
+    const closeOut = store.humanTasks.listHumanTasksOfKind('close_out').find((t) => t.originRef === 'issue:12');
     assert.equal(closeOut?.status ?? 'open', 'open', 'the close-out obligation stays open');
   } finally {
     b.close();
@@ -661,8 +678,13 @@ test('rowToCheck narrows an unrecognised result_by to attributed to nobody, rath
   const file = join(dir, 'harness.db');
   const store = new Store(file);
   try {
-    store.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-    store.recordValidationResult('issue:12', CHECK.id, { state: 'passed', note: 'by hand', by: 'operator' });
+    store.validation.ingestValidation('issue:12', {
+      checks: [CHECK],
+      resources: [],
+      supersededReason: '',
+      amendNote: '',
+    });
+    store.validation.recordValidationResult('issue:12', CHECK.id, { state: 'passed', note: 'by hand', by: 'operator' });
   } finally {
     store.close();
   }
@@ -679,7 +701,7 @@ test('rowToCheck narrows an unrecognised result_by to attributed to nobody, rath
 
   const reopened = new Store(file);
   try {
-    const check = reopened.listValidationChecks('issue:12')[0];
+    const check = reopened.validation.listValidationChecks('issue:12')[0];
     assert.equal(check?.state, 'passed', 'the reading itself still reads');
     assert.equal(check?.resultBy, null, 'and nobody is credited with it');
   } finally {
@@ -718,7 +740,7 @@ test('all confirmed rows in one invocation are folded row by row out of the one 
 
     assert.equal(reading(b, CHECK.id).outcome, 'passed');
     assert.equal(reading(b, SECOND.id).outcome, 'failed', 'one code could never have said both');
-    const checks = b.sys.store.listValidationChecks('issue:12');
+    const checks = b.sys.store.validation.listValidationChecks('issue:12');
     assert.equal(checks.find((c) => c.id === CHECK.id)?.state, 'passed');
     assert.equal(checks.find((c) => c.id === SECOND.id)?.state, 'failed');
     for (const c of checks) assert.equal(c.resultBy, 'spec');

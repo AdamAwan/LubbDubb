@@ -226,7 +226,7 @@ test('the board quotes the summary whole and composes nothing', () => {
 
 test('a second submission revises one row and keeps the date it was first written', () => {
   const store = new Store(':memory:');
-  const first = store.recordFeatureSummary({
+  const first = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
     standing: 'Not started.',
     usable: null,
@@ -236,7 +236,7 @@ test('a second submission revises one row and keeps the date it was first writte
     agentId: 'a1',
     taskId: 't1',
   });
-  const second = store.recordFeatureSummary({
+  const second = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
     standing: 'On hallway now.',
     usable: 'Switch a customer over and their pairs survive.',
@@ -246,8 +246,12 @@ test('a second submission revises one row and keeps the date it was first writte
     agentId: 'a2',
     taskId: 't2',
   });
-  assert.equal(store.listFeatureSummaries().length, 1, 'a revision is one row, not two accounts of one Feature');
+  assert.equal(
+    store.tickets.listFeatureSummaries().length,
+    1,
+    'a revision is one row, not two accounts of one Feature',
+  );
   assert.equal(second.createdAt, first.createdAt, 'still dates the first time anybody said where this was');
-  assert.equal(store.getFeatureSummary('issue:29857')?.standing, 'On hallway now.');
-  assert.equal(store.getFeatureSummary('issue:29857')?.standingKey, 'k2');
+  assert.equal(store.tickets.getFeatureSummary('issue:29857')?.standing, 'On hallway now.');
+  assert.equal(store.tickets.getFeatureSummary('issue:29857')?.standingKey, 'k2');
 });

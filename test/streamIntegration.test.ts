@@ -55,7 +55,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
   failPlanningOpen(system.store, 901);
   await system.harness.runCycle('manual');
   const child = children[0]!;
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   child.emitLine({
     type: 'assistant',
@@ -70,8 +70,8 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'All done.\n@@LUBBDUBB_DONE@@' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
 
-  assert.equal(system.store.getAgent(agentId)!.status, 'done');
-  const transcript = system.store.getTranscript(agentId);
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'done');
+  const transcript = system.store.transcripts.getTranscript(agentId);
   assert.ok(!transcript.includes('@@LUBBDUBB_DONE@@'), 'no leaked sentinel in the persisted transcript');
   assert.ok(transcript.includes('Listing the files.'), 'assistant prose present');
   assert.ok(transcript.includes('Bash') && transcript.includes('ls src'), 'tool call labelled');
@@ -101,15 +101,15 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   assert.equal(firstMsg.type, 'user');
   assert.match(firstMsg.message.content, /issue #902/);
 
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   child.emitLine({
     type: 'assistant',
     message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which auth provider?@@' }] },
   });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
-  const esc = system.store.listOpenEscalations()[0]!;
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
+  const esc = system.store.escalations.listOpenEscalations()[0]!;
   assert.equal(esc.agentId, agentId);
 
   const res = system.escalations.answer(esc.id, 'Azure AD');
@@ -118,8 +118,8 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
 
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'done @@LUBBDUBB_DONE@@' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.equal(system.store.getAgent(agentId)!.status, 'done');
-  assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'done');
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'done');
+  assert.equal(system.store.tasks.getTask(system.store.agents.getAgent(agentId)!.taskId)!.status, 'done');
 
   system.store.close();
 });

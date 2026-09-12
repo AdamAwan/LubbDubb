@@ -38,7 +38,7 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
-    const proposal = deps.store.getProposal(id);
+    const proposal = deps.store.escalations.getProposal(id);
     if (!proposal) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
     const caveats = proposedCaveats(proposal);
     return toolJson({
@@ -113,7 +113,7 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
       return toolError('verdict must be "accept", "reject", "close_ticket" or "hold_ticket".');
     const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
 
-    const standing = deps.store.getProposal(id);
+    const standing = deps.store.escalations.getProposal(id);
     if (!standing) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
     if (standing.status !== 'pending')
       return toolError(

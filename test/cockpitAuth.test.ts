@@ -171,9 +171,9 @@ test('a flagged artifact opens by navigation with only the capability the snapsh
 
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   writeFileSync(join(wt, 'report.html'), '<h1>Report</h1>');
-  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
-  const flag = system.store.recordFlag(agent.id, { kind: 'report', label: 'report.html', ref: 'report.html' });
+  const task = system.store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const flag = system.store.agents.recordFlag(agent.id, { kind: 'report', label: 'report.html', ref: 'report.html' });
 
   const state = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
   const artifactUrl: string = state.json().artifactUrls[flag.id];
@@ -202,10 +202,10 @@ test('an artifact capability is scoped to one flag and is not a cockpit credenti
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   writeFileSync(join(wt, 'a.html'), 'A');
   writeFileSync(join(wt, 'b.html'), 'B');
-  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
-  const a = system.store.recordFlag(agent.id, { kind: 'r', label: 'a', ref: 'a.html' });
-  const b = system.store.recordFlag(agent.id, { kind: 'r', label: 'b', ref: 'b.html' });
+  const task = system.store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const a = system.store.agents.recordFlag(agent.id, { kind: 'r', label: 'a', ref: 'a.html' });
+  const b = system.store.agents.recordFlag(agent.id, { kind: 'r', label: 'b', ref: 'b.html' });
 
   const state = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
   const urls: Record<string, string> = state.json().artifactUrls;
@@ -563,7 +563,7 @@ test('the first refusal of a run is recorded and names the credential channel', 
   const { app } = await buildApp(system);
 
   await app.inject({ method: 'GET', url: '/api/state' });
-  const logged = system.store.listErrors().filter((e) => e.message.includes('cockpit refused'));
+  const logged = system.store.errors.listErrors().filter((e) => e.message.includes('cockpit refused'));
   assert.equal(logged.length, 1);
   assert.match(logged[0]?.detail ?? '', /credential=none/);
   assert.match(logged[0]?.detail ?? '', /path=\/api\/state/);
@@ -582,7 +582,7 @@ test('later refusals are not recorded, and no refusal ever logs the presented to
   await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: 'Bearer hunter2' } });
   for (let i = 0; i < 5; i++) await app.inject({ method: 'GET', url: '/api/state' });
 
-  const logged = system.store.listErrors().filter((e) => e.message.includes('cockpit refused'));
+  const logged = system.store.errors.listErrors().filter((e) => e.message.includes('cockpit refused'));
   assert.equal(logged.length, 1, 'only the first');
   assert.match(logged[0]?.detail ?? '', /credential=bearer/);
   assert.doesNotMatch(logged[0]?.detail ?? '', /hunter2/, 'the credential is described, never quoted');

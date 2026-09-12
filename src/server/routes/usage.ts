@@ -18,29 +18,29 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/usage',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const window = resolveWindow(query.window, now, store.rateLimits.readRateLimits());
       const since = sinceOrEpoch(window.since);
-      const plans = store.listPlans();
+      const plans = store.plans.listPlans();
       return {
         insights: buildOperatorInsights({
-          escalations: store.listEscalations(),
-          proposals: store.listProposals(),
-          humanTasks: store.listHumanTasks(ALL),
-          obstacles: store.listObstacles(),
-          upgrade: store.readUpgradeIntent(),
-          landings: store.listStackLandings(ALL),
+          escalations: store.escalations.listEscalations(),
+          proposals: store.escalations.listProposals(),
+          humanTasks: store.humanTasks.listHumanTasks(ALL),
+          obstacles: store.obstacles.listObstacles(),
+          upgrade: store.upgrades.readUpgradeIntent(),
+          landings: store.landings.listStackLandings(ALL),
           plans,
-          amendments: plans.flatMap((plan) => store.listPlanAmendments(plan.id)),
-          checks: store.listAllValidationChecks(),
-          conclusions: store.listIssueConclusions(),
-          agents: store.listAgents(),
-          costEvents: store.listUsageEventsSince(since),
+          amendments: plans.flatMap((plan) => store.plans.listPlanAmendments(plan.id)),
+          checks: store.validation.listAllValidationChecks(),
+          conclusions: store.verdicts.listIssueConclusions(),
+          agents: store.agents.listAgents(),
+          costEvents: store.agents.listUsageEventsSince(since),
           window,
           now,
         }),
         reach: buildSurfaceReach({
-          rows: store.listSurfaceReachSince(since),
-          everLinked: store.linkedSubjectsEverReached(),
+          rows: store.surfaceReach.listSurfaceReachSince(since),
+          everLinked: store.surfaceReach.linkedSubjectsEverReached(),
           window,
         }),
       } satisfies UsagePayload;
@@ -50,8 +50,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   app.post(
     '/api/usage/events',
     checked({ body: UsageBatchBody }, async ({ body }) => {
-      store.recordSurfaceReach(body.events as SurfaceReachInput[]);
-      store.pruneSurfaceReach();
+      store.surfaceReach.recordSurfaceReach(body.events as SurfaceReachInput[]);
+      store.surfaceReach.pruneSurfaceReach();
       return { ok: true };
     }),
   );

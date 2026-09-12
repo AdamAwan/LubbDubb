@@ -84,7 +84,7 @@ export const reviewRoute: ToolFactory = ({ deps, agent, task, ok }) => {
       const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
       if (reason === '') return toolError('Route rejected: the reason is what an operator reads instead of guessing.');
 
-      const route = deps.store.recordPrReviewRoute({
+      const route = deps.store.prReviewRoutes.recordPrReviewRoute({
         prNumber,
         mode: skip ? '' : mode,
         skipped: skip,

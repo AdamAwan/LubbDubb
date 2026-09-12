@@ -40,9 +40,9 @@ export class EjectionDesk {
           'reads first, and what everybody else sees on the held slot.',
       };
     }
-    const agent = store.getAgent(agentId);
+    const agent = store.agents.getAgent(agentId);
     if (!agent) return { ok: false, error: `No agent "${agentId}".` };
-    const task = store.getTask(agent.taskId);
+    const task = store.tasks.getTask(agent.taskId);
     if (!task) return { ok: false, error: `Agent ${agentId} has no task recorded, so there is no work to hold.` };
     if (task.originRef === null) {
       return {
@@ -52,7 +52,7 @@ export class EjectionDesk {
           'to staff it again. Kill it instead — the branch and the transcript are unaffected either way.',
       };
     }
-    const standing = store.liveEjectionForOrigin(task.originRef);
+    const standing = store.ejections.liveEjectionForOrigin(task.originRef);
     if (standing) {
       return { ok: false, error: `${task.originRef} is already held by an ejection (${standing.id}).` };
     }
@@ -67,7 +67,7 @@ export class EjectionDesk {
           'and transcript are still there; queue a job on them if you want the work.',
       };
     }
-    const ejection = store.recordEjection({
+    const ejection = store.ejections.recordEjection({
       originRef: task.originRef,
       branch: task.branch,
       worktreePath: agent.cwd,
@@ -76,7 +76,7 @@ export class EjectionDesk {
       sessionId: agent.sessionId,
       reason: trimmed,
     });
-    store.recordDecision({
+    store.decisions.recordDecision({
       cycleId: `eject:${agent.id}`,
       action: {
         type: 'no_op',
@@ -90,7 +90,7 @@ export class EjectionDesk {
 
   settle(id: string, outcome: Exclude<EjectionOutcome, 'expired'>, note: string | null): SettleResult {
     const { store } = this.deps;
-    const standing = store.getEjection(id);
+    const standing = store.ejections.getEjection(id);
     if (!standing) return { ok: false, error: `No ejection "${id}".` };
     if (standing.settledAt !== null) {
       return {
@@ -110,9 +110,9 @@ export class EjectionDesk {
       };
     }
     const jobId = outcome === 'requeued' ? this.requeue(standing, trimmed) : null;
-    const settled = store.settleEjection(id, outcome, trimmed === '' ? null : trimmed);
+    const settled = store.ejections.settleEjection(id, outcome, trimmed === '' ? null : trimmed);
     if (!settled) return { ok: false, error: `Ejection "${id}" was settled by something else.` };
-    store.recordDecision({
+    store.decisions.recordDecision({
       cycleId: `eject:${standing.agentId}`,
       action: { type: 'no_op', reason: `${standing.originRef} was handed back to the fleet as "${outcome}"` },
       outcome: 'executed',
@@ -127,12 +127,12 @@ export class EjectionDesk {
     const policy = this.deps.policy();
     const now = this.deps.now();
     const gone: Ejection[] = [];
-    for (const standing of store.liveEjections()) {
+    for (const standing of store.ejections.liveEjections()) {
       if (!expired(standing.ejectedAt, now, policy)) continue;
-      const settled = store.settleEjection(standing.id, 'expired', null);
+      const settled = store.ejections.settleEjection(standing.id, 'expired', null);
       if (!settled) continue;
       gone.push(settled);
-      store.recordDecision({
+      store.decisions.recordDecision({
         cycleId: `eject:${standing.agentId}`,
         action: {
           type: 'no_op',
@@ -151,10 +151,10 @@ export class EjectionDesk {
 
   private requeue(standing: Ejection, note: string): string | null {
     const { store } = this.deps;
-    const task = store.getTask(standing.taskId);
+    const task = store.tasks.getTask(standing.taskId);
     if (!task) return null;
     const request = requeueJobRequest(task, { note: standing.lastNote });
-    const job = store.createJob({
+    const job = store.jobs.createJob({
       title: request.title,
       prompt: `${ejectionPreamble(standing, note)}\n\n${request.prompt}`,
       kind: 'code',

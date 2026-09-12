@@ -81,7 +81,7 @@ test('one round: a recorded verdict ends the concern, and no push brings it back
   await system.harness.runCycle('manual');
   assert.ok(findTask(system.store, (t) => t.originRef === 'pr:8:review'));
 
-  system.store.recordPrReview({
+  system.store.prReviews.recordPrReview({
     prNumber: 8,
     headSha: 'abc123',
     verdict: 'findings',
@@ -92,7 +92,7 @@ test('one round: a recorded verdict ends the concern, and no push brings it back
   system.connector.inject({ kind: 'ci_passed', prNumber: 8 });
   await system.harness.runCycle('manual');
 
-  const tasks = system.store.listTasks().filter((t) => t.originRef === 'pr:8:review');
+  const tasks = system.store.tasks.listTasks().filter((t) => t.originRef === 'pr:8:review');
   assert.equal(tasks.length, 1, 'nothing re-reviews a pull request the fleet has already read');
   system.store.close();
 });
@@ -105,10 +105,10 @@ test('the merge gate holds an unreviewed pull request, and releases it on any ve
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 9, mergeable: true, mergeableState: 'clean' });
   await system.harness.runCycle('manual');
 
-  const merges = () => system.store.listDecisions().filter((d) => d.action.type === 'merge_pr');
+  const merges = () => system.store.decisions.listDecisions().filter((d) => d.action.type === 'merge_pr');
   assert.equal(merges().length, 0, 'green, approved and mergeable is not enough while nobody has read it');
 
-  system.store.recordPrReview({
+  system.store.prReviews.recordPrReview({
     prNumber: 9,
     headSha: null,
     verdict: 'findings',
@@ -145,7 +145,7 @@ test("the project's charter reaches the reviewer's prompt, from the checkout", a
 
   const task = findTask(system.store, (t) => t.originRef === 'pr:11:review');
   assert.ok(task);
-  const prompt = system.store.getTask(task!.id)!.prompt;
+  const prompt = system.store.tasks.getTask(task!.id)!.prompt;
   assert.match(prompt, /Every colour is a token\. Never a hex\./);
   assert.match(prompt, /What this project asks a "deep" review to look at/);
   system.store.close();
@@ -214,7 +214,7 @@ test('with two modes declared, the triage runs first and the review waits for it
     'dispatching now would price the review on a mode nothing has chosen yet',
   );
 
-  system.store.recordPrReviewRoute({
+  system.store.prReviewRoutes.recordPrReviewRoute({
     prNumber: 12,
     mode: 'quick',
     skipped: false,
@@ -250,7 +250,7 @@ test('the mode carries its profile onto the dispatch', async () => {
     modes: { deep: { charterFile: null, profile: 'heavy' }, quick: { charterFile: null, profile: 'light' } },
   });
   system.connector.inject({ kind: 'new_pr', number: 14, title: 'A change', branch: 'feature-14' });
-  system.store.recordPrReviewRoute({
+  system.store.prReviewRoutes.recordPrReviewRoute({
     prNumber: 14,
     mode: 'quick',
     skipped: false,
@@ -261,7 +261,7 @@ test('the mode carries its profile onto the dispatch', async () => {
 
   const review = findTask(system.store, (t) => t.originRef === 'pr:14:review');
   assert.ok(review);
-  const dispatched = system.store
+  const dispatched = system.store.decisions
     .listDecisions()
     .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:14:review');
   assert.equal(
@@ -313,7 +313,7 @@ test('a triage that spent its attempts fails open: the review runs the default m
   });
   system.connector.inject({ kind: 'new_pr', number: 15, title: 'A change', branch: 'feature-15' });
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    system.store.recordDecision({
+    system.store.decisions.recordDecision({
       cycleId: `spent-${attempt}`,
       action: {
         type: 'dispatch_desk_agent',
@@ -366,12 +366,12 @@ test('a skipped pull request is not reviewed, and not held out of the merge gate
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 31, mergeable: true, mergeableState: 'clean' });
   await system.harness.runCycle('manual');
   assert.equal(
-    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    system.store.decisions.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
     0,
     'held while the triage is still deciding',
   );
 
-  system.store.recordPrReviewRoute({
+  system.store.prReviewRoutes.recordPrReviewRoute({
     prNumber: 31,
     mode: '',
     skipped: true,
@@ -386,7 +386,7 @@ test('a skipped pull request is not reviewed, and not held out of the merge gate
     'the triage said nothing needs to read this one',
   );
   assert.equal(
-    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    system.store.decisions.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
     1,
     'a skip is a decision, so it releases the gate — otherwise the cheapest answer wedges the branch',
   );
@@ -462,7 +462,7 @@ test('a pull request reviewed elsewhere is not reviewed again, and not held eith
     undefined,
     'somebody has read this diff; a second opinion is one nobody asked for',
   );
-  assert.equal(system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length, 1);
+  assert.equal(system.store.decisions.listDecisions().filter((d) => d.action.type === 'merge_pr').length, 1);
 
   await system.harness.runCycle('manual');
   assert.deepEqual(prober.asked, [40], 'the answer is stored, so the shell-out happens once');
@@ -479,11 +479,11 @@ test('a check that says no is asked again, and one that says nothing leaves the 
   assert.ok(findTask(system.store, (t) => t.originRef === 'pr:42:review'));
   assert.deepEqual(prober.asked, [41, 42]);
   assert.ok(
-    system.store.listErrors(10).some((e) => /reviewedElsewhere check for PR 42 said nothing/.test(e.message)),
+    system.store.errors.listErrors(10).some((e) => /reviewedElsewhere check for PR 42 said nothing/.test(e.message)),
     'a verdict that said nothing is on the error log, never swallowed',
   );
   assert.equal(
-    system.store.listErrors(10).filter((e) => /PR 41/.test(e.message)).length,
+    system.store.errors.listErrors(10).filter((e) => /PR 41/.test(e.message)).length,
     0,
     'a real "no" is an answer, not a fault',
   );
@@ -495,7 +495,7 @@ test('the check is asked only of the pull requests a review is otherwise due for
   system.connector.inject({ kind: 'new_pr', number: 43, title: 'A change', branch: 'feature-43' });
   system.connector.inject({ kind: 'pr_comment', prNumber: 43, author: 'alice', body: 'try another approach' });
   system.connector.inject({ kind: 'new_pr', number: 44, title: 'Read already', branch: 'feature-44' });
-  system.store.recordPrReview({
+  system.store.prReviews.recordPrReview({
     prNumber: 44,
     headSha: null,
     verdict: 'clear',
@@ -578,7 +578,7 @@ test('an agent on the pull request branch neither blocks the review nor is told 
   assert.ok(review, 'the review takes its own checkout, so the branch agent is not in its way');
   assert.equal(review!.branch, 'review/pr-63');
 
-  const notes = system.store
+  const notes = system.store.decisions
     .listDecisions()
     .filter((d) => d.action.type === 'respond_to_agent')
     .flatMap((d) => (d.action as { originRefs?: string[] }).originRefs ?? []);

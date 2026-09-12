@@ -319,7 +319,7 @@ test('a pulse files the validate row, and the next one settles it once the resul
   world.mutate((w) => {
     w.issues.push(issue(12, { title: 'Ship the thing' }));
   });
-  system.store.ingestValidation('issue:12', {
+  system.store.validation.ingestValidation('issue:12', {
     checks: [
       {
         id: 'merged-branch-gone',
@@ -339,11 +339,11 @@ test('a pulse files the validate row, and the next one settles it once the resul
   });
 
   await system.harness.runCycle('manual');
-  assert.deepEqual(system.store.listHumanTasksOfKind('validate'), []);
+  assert.deepEqual(system.store.humanTasks.listHumanTasksOfKind('validate'), []);
 
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
   await system.harness.runCycle('manual');
-  const filed = system.store.listHumanTasksOfKind('validate');
+  const filed = system.store.humanTasks.listHumanTasksOfKind('validate');
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.status, 'open');
   assert.equal(filed[0]!.originRef, 'issue:12');
@@ -352,17 +352,17 @@ test('a pulse files the validate row, and the next one settles it once the resul
 
   await system.harness.runCycle('manual');
   assert.deepEqual(
-    system.store.listHumanTasksOfKind('validate').map((t) => t.id),
+    system.store.humanTasks.listHumanTasksOfKind('validate').map((t) => t.id),
     [filed[0]!.id],
   );
 
-  system.store.recordValidationResult('issue:12', 'merged-branch-gone', {
+  system.store.validation.recordValidationResult('issue:12', 'merged-branch-gone', {
     state: 'passed',
     note: 'ran it against the fixture repo',
     by: 'operator',
   });
   await system.harness.runCycle('manual');
-  const settled = system.store.getHumanTask(filed[0]!.id)!;
+  const settled = system.store.humanTasks.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /nothing is left for you to run/);
 });
@@ -370,7 +370,7 @@ test('a pulse files the validate row, and the next one settles it once the resul
 test('clearing the last delivery retracts the row, with nothing else on the board', () => {
   const system = build();
   const desk = new ValidationReadyDesk(system.store);
-  system.store.ingestValidation('issue:12', {
+  system.store.validation.ingestValidation('issue:12', {
     checks: [
       {
         id: 'merged-branch-gone',
@@ -389,14 +389,14 @@ test('clearing the last delivery retracts the row, with nothing else on the boar
     amendNote: 'the plan was re-read',
   });
 
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
   desk.run({ issues: [issue(12)] });
-  const filed = system.store.listHumanTasksOfKind('validate');
+  const filed = system.store.humanTasks.listHumanTasksOfKind('validate');
   assert.equal(filed.length, 1);
 
-  system.store.clearDelivery('issue:12');
+  system.store.verdicts.clearDelivery('issue:12');
   desk.run({ issues: [issue(12)] });
-  const settled = system.store.getHumanTask(filed[0]!.id)!;
+  const settled = system.store.humanTasks.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'declined');
   assert.match(settled.resolution ?? '', /back into production/);
 });

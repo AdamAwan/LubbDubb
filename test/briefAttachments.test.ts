@@ -88,8 +88,8 @@ test('POST /api/jobs stores an attachment on disk and queues the job', async () 
   });
   assert.equal(res.statusCode, 200);
 
-  const job = system.store.listJobs()[0]!;
-  const stored = system.store.listAttachments(`job:${job.id}`);
+  const job = system.store.jobs.listJobs()[0]!;
+  const stored = system.store.jobs.listAttachments(`job:${job.id}`);
   assert.equal(stored.length, 2);
   assert.deepEqual(
     stored.map((a) => a.mime),
@@ -119,7 +119,7 @@ test('a refused attachment queues no job', async () => {
   });
   assert.equal(res.statusCode, 400);
   assert.match(res.json().error, /x\.pdf is not one of the accepted image formats/);
-  assert.equal(system.store.listJobs().length, 0, 'nothing was queued');
+  assert.equal(system.store.jobs.listJobs().length, 0, 'nothing was queued');
   assert.equal(existsSync(system.config.attachmentRoot) ? readdirSync(system.config.attachmentRoot).length : 0, 0);
 
   const many = await app.inject({
@@ -132,7 +132,7 @@ test('a refused attachment queues no job', async () => {
     },
   });
   assert.equal(many.statusCode, 400);
-  assert.equal(system.store.listJobs().length, 0);
+  assert.equal(system.store.jobs.listJobs().length, 0);
 
   await app.close();
   system.store.close();
@@ -152,16 +152,16 @@ test('a dispatched brief is told where to read its attachment', async () => {
     },
   });
 
-  const job = system.store.listJobs()[0]!;
-  const task = system.store.getTask(system.store.getJob(job.id)!.taskId!)!;
-  const attachment = system.store.listAttachments(`job:${job.id}`)[0]!;
+  const job = system.store.jobs.listJobs()[0]!;
+  const task = system.store.tasks.getTask(system.store.jobs.getJob(job.id)!.taskId!)!;
+  const attachment = system.store.jobs.listAttachments(`job:${job.id}`)[0]!;
   assert.ok(task.prompt.startsWith('Make the panel look like this.'));
   assert.ok(task.prompt.includes(attachment.path), 'the agent is given the absolute path');
   assert.match(task.prompt, /The operator attached an image/);
 
-  const other = system.store.createJob({ title: 'Elsewhere', prompt: 'Something else.', kind: 'desk' });
+  const other = system.store.jobs.createJob({ title: 'Elsewhere', prompt: 'Something else.', kind: 'desk' });
   await system.harness.runCycle('manual');
-  const otherTask = system.store.getTask(system.store.getJob(other.id)!.taskId!)!;
+  const otherTask = system.store.tasks.getTask(system.store.jobs.getJob(other.id)!.taskId!)!;
   assert.equal(otherTask.prompt, 'Something else.');
 
   await app.close();
@@ -178,13 +178,13 @@ test('cancelling a brief forgets its attachments', async () => {
     url: '/api/jobs',
     payload: { prompt: 'Like this.', kind: 'desk', attachments: [{ name: 'a.png', data: PNG.toString('base64') }] },
   });
-  const job = system.store.listQueuedJobs()[0]!;
-  const path = system.store.listAttachments(`job:${job.id}`)[0]!.path;
+  const job = system.store.jobs.listQueuedJobs()[0]!;
+  const path = system.store.jobs.listAttachments(`job:${job.id}`)[0]!.path;
   assert.ok(existsSync(path));
 
   const cancelled = await app.inject({ method: 'POST', url: `/api/jobs/${job.id}/cancel` });
   assert.equal(cancelled.statusCode, 200);
-  assert.deepEqual(system.store.listAttachments(`job:${job.id}`), []);
+  assert.deepEqual(system.store.jobs.listAttachments(`job:${job.id}`), []);
   assert.equal(existsSync(path), false);
 
   await app.close();

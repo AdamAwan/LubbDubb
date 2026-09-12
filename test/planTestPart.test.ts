@@ -62,9 +62,9 @@ test('coverage reaches the row through both transports, and comes back on the pa
   assert.equal(tool.success && tool.data[1]!.coverage, 'checkout with a saved card');
 
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
-  store.upsertPlanParts(plan.id, planPartInputs(parsed.document));
-  const parts = store.listPlanParts(plan.id);
+  const plan = store.plans.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
+  store.plans.upsertPlanParts(plan.id, planPartInputs(parsed.document));
+  const parts = store.plans.listPlanParts(plan.id);
   assert.equal(parts[0]!.coverage, null, 'a part that declared none carries null, not an empty string');
   assert.equal(parts[1]!.coverage, 'checkout with a saved card');
   store.close();
@@ -112,7 +112,7 @@ test('plan_parts.coverage is declared in PLAN_COLUMNS, so a database from before
   assert.equal(PLAN_COLUMNS.plan_parts!.coverage, 'TEXT', 'CREATE TABLE IF NOT EXISTS never alters an existing table');
   const path = beforeTheColumn();
   const store = new Store(path);
-  const parts = store.listPlanParts('plan_old');
+  const parts = store.plans.listPlanParts('plan_old');
   assert.equal(parts.length, 1);
   assert.equal(parts[0]!.coverage, null, 'null means "not a test part", which is true of every row written before');
   assert.equal(parts[0]!.status, 'merged', 'and nothing else about the row moved');
@@ -155,21 +155,29 @@ test('a declared test part holds the goal exactly as any other part does', () =>
   const parsed = parsePlanDocument(document('checkout with a saved card'));
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
-  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
-  store.upsertPlanParts(plan.id, planPartInputs(parsed.document));
-  const [change, coverage] = store.listPlanParts(plan.id);
+  const plan = store.plans.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
+  store.plans.upsertPlanParts(plan.id, planPartInputs(parsed.document));
+  const [change, coverage] = store.plans.listPlanParts(plan.id);
 
-  store.updatePlanPart(change!.id, { status: 'merged' });
-  assert.equal(store.rollUpPlanStatus(plan.id), null, 'the plan does not roll up while the coverage part is unbuilt');
-  assert.equal(store.getPlanByOrigin('issue:12')?.status, 'active');
+  store.plans.updatePlanPart(change!.id, { status: 'merged' });
+  assert.equal(
+    store.plans.rollUpPlanStatus(plan.id),
+    null,
+    'the plan does not roll up while the coverage part is unbuilt',
+  );
+  assert.equal(store.plans.getPlanByOrigin('issue:12')?.status, 'active');
   assert.deepEqual(
-    planProgress(store.listPlanParts(plan.id)),
+    planProgress(store.plans.listPlanParts(plan.id)),
     { settled: 1, total: 2 },
     'it is counted like any other part, not exempted from the roll-up',
   );
 
-  store.updatePlanPart(coverage!.id, { status: 'merged' });
-  assert.equal(store.rollUpPlanStatus(plan.id)?.status, 'complete', 'and it completes once the coverage part merges');
+  store.plans.updatePlanPart(coverage!.id, { status: 'merged' });
+  assert.equal(
+    store.plans.rollUpPlanStatus(plan.id)?.status,
+    'complete',
+    'and it completes once the coverage part merges',
+  );
   store.close();
 });
 
@@ -373,9 +381,9 @@ test('an override that never learned any new token still receives the note in fu
 
 test('a replan declares a new part to amend a merged one, and never retracts it', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
+  const plan = store.plans.upsertPlan({ originRef: 'issue:12', title: 'Checkout', status: 'active', reason: 'r' });
   const declared = (slugs: { slug: string; coverage?: string }[]) =>
-    store.upsertPlanParts(
+    store.plans.upsertPlanParts(
       plan.id,
       slugs.map((s, i) => ({
         slug: s.slug,
@@ -393,11 +401,11 @@ test('a replan declares a new part to amend a merged one, and never retracts it'
       })),
     );
   declared([{ slug: 'checkout-coverage', coverage: 'checkout with a saved card' }]);
-  const merged = store.listPlanParts(plan.id)[0]!;
-  store.updatePlanPart(merged.id, { status: 'merged', prNumber: 41 });
+  const merged = store.plans.listPlanParts(plan.id)[0]!;
+  store.plans.updatePlanPart(merged.id, { status: 'merged', prNumber: 41 });
 
   assert.deepEqual(
-    partsToRetire(store.listPlanParts(plan.id), ['something-else']),
+    partsToRetire(store.plans.listPlanParts(plan.id), ['something-else']),
     [],
     'a merged part is work, so a replan that stops declaring it leaves it alone',
   );
@@ -406,7 +414,7 @@ test('a replan declares a new part to amend a merged one, and never retracts it'
     { slug: 'checkout-coverage', coverage: 'checkout with a saved card' },
     { slug: 'checkout-coverage-express', coverage: 'checkout with express pay' },
   ]);
-  const after = store.listPlanParts(plan.id);
+  const after = store.plans.listPlanParts(plan.id);
   assert.equal(after.find((p) => p.slug === 'checkout-coverage')?.status, 'merged', 'the merged part is untouched');
   assert.equal(after.find((p) => p.slug === 'checkout-coverage')?.prNumber, 41);
   const fresh = after.find((p) => p.slug === 'checkout-coverage-express');
@@ -414,7 +422,7 @@ test('a replan declares a new part to amend a merged one, and never retracts it'
   assert.equal(fresh?.coverage, 'checkout with express pay');
 
   declared([{ slug: 'checkout-coverage', coverage: 'checkout with a saved card and a coupon' }]);
-  const rewritten = store.listPlanParts(plan.id).find((p) => p.slug === 'checkout-coverage')!;
+  const rewritten = store.plans.listPlanParts(plan.id).find((p) => p.slug === 'checkout-coverage')!;
   assert.equal(rewritten.coverage, 'checkout with a saved card and a coupon', 'the declaration is refreshed');
   assert.equal(
     rewritten.status,

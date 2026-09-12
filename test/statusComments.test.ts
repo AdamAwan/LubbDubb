@@ -41,7 +41,7 @@ async function withIssue(system: System): Promise<Issue> {
     body: 'the thing should be better',
   });
   const world = await system.connector.getState();
-  system.store.setWorldBaseline(world);
+  system.store.world.setWorldBaseline(world);
   return world.issues.find((i) => i.number === ISSUE)!;
 }
 
@@ -53,7 +53,7 @@ async function snapshot(system: System): Promise<CockpitState> {
 test('a plan that has written no comment ships null, not an empty link', async () => {
   const system = build();
   await withIssue(system);
-  system.store.upsertPlan({ originRef: `issue:${ISSUE}`, title: 'Big thing', status: 'active', reason: null });
+  system.store.plans.upsertPlan({ originRef: `issue:${ISSUE}`, title: 'Big thing', status: 'active', reason: null });
 
   const snap = await snapshot(system);
   assert.equal(snap.plans[0]!.statusCommentRef, null);
@@ -67,14 +67,14 @@ test('a plan that has written no comment ships null, not an empty link', async (
 test('the plan status comment ships as a canonical ref, never the provider id', async () => {
   const system = build();
   await withIssue(system);
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: `issue:${ISSUE}`,
     title: 'Big thing',
     status: 'active',
     reason: null,
   });
-  system.store.setPlanStatusComment(plan.id, '8391');
-  assert.equal(system.store.getPlan(plan.id)!.statusCommentRef, '8391', 'the store keeps the provider id');
+  system.store.plans.setPlanStatusComment(plan.id, '8391');
+  assert.equal(system.store.plans.getPlan(plan.id)!.statusCommentRef, '8391', 'the store keeps the provider id');
 
   const snap = await snapshot(system);
   assert.equal(snap.plans[0]!.statusCommentRef, `issue:${ISSUE}:comment:8391`);
@@ -84,7 +84,7 @@ test('the plan status comment ships as a canonical ref, never the provider id', 
 test("the appraisal's refusal comment ships beside its verdict", async () => {
   const system = build();
   const issue = await withIssue(system);
-  system.store.recordAppraisal({
+  system.store.verdicts.recordAppraisal({
     originRef: `issue:${ISSUE}`,
     verdict: 'unclear',
     summary: 'Name one behaviour that is wrong today.',
@@ -95,7 +95,7 @@ test("the appraisal's refusal comment ships beside its verdict", async () => {
   const asked = await snapshot(system);
   assert.equal(asked.world.issues.find((i) => i.number === ISSUE)!.appraisal!.commentRef, null);
 
-  system.store.setAppraisalComment(`issue:${ISSUE}`, '8402');
+  system.store.verdicts.setAppraisalComment(`issue:${ISSUE}`, '8402');
   const answered = await snapshot(system);
   assert.equal(
     answered.world.issues.find((i) => i.number === ISSUE)!.appraisal!.commentRef,
@@ -107,21 +107,21 @@ test("the appraisal's refusal comment ships beside its verdict", async () => {
 test('the refs the snapshot ships are the refs a provider can resolve', async () => {
   const system = build();
   const issue = await withIssue(system);
-  const plan = system.store.upsertPlan({
+  const plan = system.store.plans.upsertPlan({
     originRef: `issue:${ISSUE}`,
     title: 'Big thing',
     status: 'active',
     reason: null,
   });
-  system.store.setPlanStatusComment(plan.id, '8391');
-  system.store.recordAppraisal({
+  system.store.plans.setPlanStatusComment(plan.id, '8391');
+  system.store.verdicts.recordAppraisal({
     originRef: `issue:${ISSUE}`,
     verdict: 'unclear',
     summary: 'Name one behaviour that is wrong today.',
     goalRef: goalFingerprint(issue.title, issue.body),
     by: 'appraiser',
   });
-  system.store.setAppraisalComment(`issue:${ISSUE}`, '8402');
+  system.store.verdicts.setAppraisalComment(`issue:${ISSUE}`, '8402');
 
   const snap = await snapshot(system);
   const shipped = [

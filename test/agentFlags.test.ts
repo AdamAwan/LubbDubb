@@ -149,21 +149,21 @@ test('StreamJsonSession emits a flag from an assistant event and strips it from 
 
 test('Store.recordFlag dedupes by (agent, ref) and lists newest-first across agents', () => {
   const store = new Store(':memory:');
-  const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const a = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  const b = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const a = store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  const b = store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
 
-  const first = store.recordFlag(a.id, { kind: 'artifact', label: 'design.html', ref: './design.html' });
-  const refreshed = store.recordFlag(a.id, { kind: 'design', label: 'Design', ref: './design.html' });
-  store.recordFlag(b.id, { kind: 'report', label: 'Report', ref: 'r.html' });
+  const first = store.agents.recordFlag(a.id, { kind: 'artifact', label: 'design.html', ref: './design.html' });
+  const refreshed = store.agents.recordFlag(a.id, { kind: 'design', label: 'Design', ref: './design.html' });
+  store.agents.recordFlag(b.id, { kind: 'report', label: 'Report', ref: 'r.html' });
 
   assert.equal(refreshed.id, first.id);
-  const aFlags = store.listFlags(a.id);
+  const aFlags = store.agents.listFlags(a.id);
   assert.equal(aFlags.length, 1);
   assert.equal(aFlags[0]?.kind, 'design');
   assert.equal(aFlags[0]?.label, 'Design');
 
-  assert.equal(store.listAllFlags().length, 2);
+  assert.equal(store.agents.listAllFlags().length, 2);
   store.close();
 });
 
@@ -187,11 +187,11 @@ test('GET /artifacts/:id serves a confined file by flag id and refuses traversal
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   writeFileSync(join(wt, 'design.html'), '<h1>Design</h1>');
 
-  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
-  const good = system.store.recordFlag(agent.id, { kind: 'design', label: 'design.html', ref: 'design.html' });
-  const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'p', ref: '../../../etc/passwd' });
-  const urlFlag = system.store.recordFlag(agent.id, { kind: 'link', label: 'a', ref: 'https://x.test/a' });
+  const task = system.store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const good = system.store.agents.recordFlag(agent.id, { kind: 'design', label: 'design.html', ref: 'design.html' });
+  const escaped = system.store.agents.recordFlag(agent.id, { kind: 'x', label: 'p', ref: '../../../etc/passwd' });
+  const urlFlag = system.store.agents.recordFlag(agent.id, { kind: 'link', label: 'a', ref: 'https://x.test/a' });
 
   const ok = await app.inject({ method: 'GET', url: `/artifacts/${good.id}` });
   assert.equal(ok.statusCode, 200);
@@ -226,9 +226,13 @@ test('GET /artifacts/:id serves an out-of-worktree file under a configured absol
   const { app } = await buildApp(system);
 
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
-  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
-  const under = system.store.recordFlag(agent.id, { kind: 'report', label: 'plan.md', ref: join(shared, 'plan.md') });
+  const task = system.store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const under = system.store.agents.recordFlag(agent.id, {
+    kind: 'report',
+    label: 'plan.md',
+    ref: join(shared, 'plan.md'),
+  });
 
   const ok = await app.inject({ method: 'GET', url: `/artifacts/${under.id}` });
   assert.equal(ok.statusCode, 200);
@@ -236,10 +240,10 @@ test('GET /artifacts/:id serves an out-of-worktree file under a configured absol
 
   const outside = mkdtempSync(join(tmpdir(), 'lubbdubb-outside-'));
   writeFileSync(join(outside, 'secret.md'), 'nope');
-  const bad = system.store.recordFlag(agent.id, { kind: 'x', label: 's', ref: join(outside, 'secret.md') });
+  const bad = system.store.agents.recordFlag(agent.id, { kind: 'x', label: 's', ref: join(outside, 'secret.md') });
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${bad.id}` })).statusCode, 404);
 
-  const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'e', ref: join(shared, '..', 'etc') });
+  const escaped = system.store.agents.recordFlag(agent.id, { kind: 'x', label: 'e', ref: join(shared, '..', 'etc') });
   assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${escaped.id}` })).statusCode, 404);
 
   await app.close();

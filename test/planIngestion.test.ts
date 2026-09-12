@@ -116,8 +116,13 @@ test('parsePlanDocument rejects malformed plans with a reason, never throwing', 
 
 test('a plan upserts by issue origin and its parts merge on slug', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: 'Two PRs.' });
-  store.upsertPlanParts(plan.id, [
+  const plan = store.plans.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'active',
+    reason: 'Two PRs.',
+  });
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -144,7 +149,7 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
     },
   ]);
 
-  const parts = store.listPlanParts(plan.id);
+  const parts = store.plans.listPlanParts(plan.id);
   assert.deepEqual(
     parts.map((p) => p.slug),
     ['schema', 'reader'],
@@ -152,10 +157,15 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   assert.deepEqual(parts[1]?.dependsOn, ['schema']);
   assert.equal(parts[0]?.status, 'pending');
 
-  const replanned = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: 'Three.' });
+  const replanned = store.plans.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'active',
+    reason: 'Three.',
+  });
   assert.equal(replanned.id, plan.id, 'the plan id is stable across a replan');
   assert.equal(replanned.createdAt, plan.createdAt);
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -181,7 +191,7 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       expectedKind: null,
     },
   ]);
-  const after = store.listPlanParts(plan.id);
+  const after = store.plans.listPlanParts(plan.id);
   assert.deepEqual(
     after.map((p) => p.slug).sort(),
     ['extra', 'reader', 'schema'],
@@ -190,32 +200,32 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   assert.equal(after.find((p) => p.slug === 'schema')?.title, 'Schema (revised)');
 
   assert.deepEqual(
-    store.listPlans().map((p) => p.originRef),
+    store.plans.listPlans().map((p) => p.originRef),
     ['issue:12'],
   );
-  assert.equal(store.getPlanByOrigin('issue:99'), null);
+  assert.equal(store.plans.getPlanByOrigin('issue:99'), null);
   store.close();
 });
 
 test('a re-declared slug is un-retired, so Reject then Replan is not a goal-killer', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'awaiting_approval',
     reason: 'Two PRs.',
   });
-  store.upsertPlanParts(plan.id, [part('schema', 1, 'Schema'), part('reader', 2, 'Reader')]);
+  store.plans.upsertPlanParts(plan.id, [part('schema', 1, 'Schema'), part('reader', 2, 'Reader')]);
 
   const refused = refusePlan(store, plan.id, 'issue:12', 'the split is wrong');
   assert.equal(refused.ok, true);
   assert.deepEqual(
-    store.listPlanParts(plan.id).map((p) => p.status),
+    store.plans.listPlanParts(plan.id).map((p) => p.status),
     ['retired', 'retired'],
   );
 
-  store.upsertPlanParts(plan.id, [part('schema', 1, 'Schema, revised'), part('reader', 2, 'Reader, revised')]);
-  const back = store.listPlanParts(plan.id);
+  store.plans.upsertPlanParts(plan.id, [part('schema', 1, 'Schema, revised'), part('reader', 2, 'Reader, revised')]);
+  const back = store.plans.listPlanParts(plan.id);
   assert.deepEqual(
     back.map((p) => [p.slug, p.status, p.title]),
     [
@@ -229,15 +239,15 @@ test('a re-declared slug is un-retired, so Reject then Replan is not a goal-kill
 
 test('a dropped part re-declared by a later amendment comes back, reason and all', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({ originRef: 'issue:13', title: 'Thing', status: 'active', reason: null });
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B')]);
-  store.updatePlanPart(`${plan.id}:b`, { status: 'blocked', blockedReason: 'a branch is in the way' });
-  store.updatePlanPart(`${plan.id}:b`, { status: 'retired' });
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
-  assert.equal(store.listPlanParts(plan.id).find((p) => p.slug === 'b')?.status, 'retired');
+  const plan = store.plans.upsertPlan({ originRef: 'issue:13', title: 'Thing', status: 'active', reason: null });
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B')]);
+  store.plans.updatePlanPart(`${plan.id}:b`, { status: 'blocked', blockedReason: 'a branch is in the way' });
+  store.plans.updatePlanPart(`${plan.id}:b`, { status: 'retired' });
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  assert.equal(store.plans.listPlanParts(plan.id).find((p) => p.slug === 'b')?.status, 'retired');
 
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B, back again')]);
-  const b = store.listPlanParts(plan.id).find((p) => p.slug === 'b');
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B, back again')]);
+  const b = store.plans.listPlanParts(plan.id).find((p) => p.slug === 'b');
   assert.equal(b?.status, 'pending');
   assert.equal(b?.title, 'B, back again');
   assert.equal(b?.blockedReason, null);
@@ -246,12 +256,12 @@ test('a dropped part re-declared by a later amendment comes back, reason and all
 
 test("progress survives an amendment — only retirement is the declaration's to lift", () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({ originRef: 'issue:14', title: 'Thing', status: 'active', reason: null });
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
-  store.updatePlanPart(`${plan.id}:a`, { status: 'blocked', blockedReason: 'CI is red', branch: 'issue/14/a' });
+  const plan = store.plans.upsertPlan({ originRef: 'issue:14', title: 'Thing', status: 'active', reason: null });
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  store.plans.updatePlanPart(`${plan.id}:a`, { status: 'blocked', blockedReason: 'CI is red', branch: 'issue/14/a' });
 
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A, reworded')]);
-  const a = store.listPlanParts(plan.id)[0];
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A, reworded')]);
+  const a = store.plans.listPlanParts(plan.id)[0];
   assert.equal(a?.status, 'blocked');
   assert.equal(a?.blockedReason, 'CI is red');
   assert.equal(a?.branch, 'issue/14/a');
@@ -261,18 +271,18 @@ test("progress survives an amendment — only retirement is the declaration's to
 
 test('a plan with no live parts is refused rather than released into silence', () => {
   const store = new Store(':memory:');
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: 'issue:15',
     title: 'Thing',
     status: 'awaiting_approval',
     reason: null,
   });
-  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
-  store.updatePlanPart(`${plan.id}:a`, { status: 'retired' });
+  store.plans.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  store.plans.updatePlanPart(`${plan.id}:a`, { status: 'retired' });
   const released = releasePlan(store, plan.id, 'issue:15');
   assert.equal(released.ok, false);
   assert.match(released.detail, /no live parts/);
-  assert.equal(store.getPlan(plan.id)?.status, 'awaiting_approval');
+  assert.equal(store.plans.getPlan(plan.id)?.status, 'awaiting_approval');
   store.close();
 });
 
@@ -306,7 +316,7 @@ function planningConfig() {
 
 function plannerAgent(system: System, originRef: string): Agent {
   const cwd = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Plan issue #12',
     prompt: 'plan it',
@@ -348,13 +358,13 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
       ],
     }),
   );
-  const plan = system.store.getPlanByOrigin('issue:12');
+  const plan = system.store.plans.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan was ingested from the worktree');
   assert.equal(plan!.status, 'awaiting_approval');
   assert.equal(plan!.reason, 'Schema first.');
   assert.equal(plan!.title, 'Big thing', 'the issue title, not the task title');
   assert.deepEqual(
-    system.store.listPlanParts(plan!.id).map((p) => p.slug),
+    system.store.plans.listPlanParts(plan!.id).map((p) => p.slug),
     ['schema', 'reader'],
   );
 
@@ -369,10 +379,10 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
       parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     }),
   );
-  const one = system.store.getPlanByOrigin('issue:13')!;
+  const one = system.store.plans.getPlanByOrigin('issue:13')!;
   assert.equal(one.status, 'awaiting_approval', 'one part or eight, a plan is asked about on the same terms');
   assert.deepEqual(
-    system.store.listPlanParts(one.id).map((p) => p.slug),
+    system.store.plans.listPlanParts(one.id).map((p) => p.slug),
     ['whole'],
   );
 
@@ -390,7 +400,7 @@ test('an invalid or non-planner plan.json records no plan (and an invalid one is
 
   const bad = plannerAgent(system, 'issue:12:plan');
   writeThroughHook(system, bad, PLAN_FILE, '{"version":1,"verdict":"parts","reason":"x","parts":[]}');
-  assert.equal(system.store.getPlanByOrigin('issue:12'), null);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12'), null);
   assert.equal(errors.filter((m) => m.includes('invalid')).length, 1);
 
   const pickup = plannerAgent(system, 'issue:14');
@@ -400,7 +410,7 @@ test('an invalid or non-planner plan.json records no plan (and an invalid one is
     PLAN_FILE,
     '{"version":1,"verdict":"parts","reason":"x","parts":[{"slug":"a","title":"A","scope":"s","dependsOn":[]}]}',
   );
-  assert.equal(system.store.getPlanByOrigin('issue:14'), null);
+  assert.equal(system.store.plans.getPlanByOrigin('issue:14'), null);
 
   system.store.close();
 });
@@ -420,10 +430,10 @@ test('the plan file is tracked as a written file but never promoted to an artifa
   );
 
   assert.deepEqual(
-    system.store.listFiles(agent.id).map((f) => f.path),
+    system.store.agents.listFiles(agent.id).map((f) => f.path),
     [PLAN_FILE],
   );
-  assert.deepEqual(system.store.listFlags(agent.id), [], 'a side-channel file is not an artifact');
+  assert.deepEqual(system.store.agents.listFlags(agent.id), [], 'a side-channel file is not an artifact');
   system.store.close();
 });
 
@@ -494,7 +504,7 @@ test('the widened plan document round-trips through ingestion', () => {
   assert.equal(plan.risks, 'part 2 briefly serves artifacts with no guard');
   assert.equal(plan.outOfScope, 'capability revocation');
   assert.match(plan.document!, /^# Why/);
-  const part = store.listPlanParts(plan.id)[0]!;
+  const part = store.plans.listPlanParts(plan.id)[0]!;
   assert.equal(part.rationale, 'a pure predicate with no callers');
   assert.equal(part.acceptance, 'mint/verify round-trip, tampered and expired both refused');
   store.close();
@@ -515,7 +525,7 @@ test('a document from an older planner still validates, and reads as absent', ()
   assert.equal(plan.approach, null);
   assert.equal(plan.risks, null);
   assert.equal(plan.document, null);
-  assert.equal(store.listPlanParts(plan.id)[0]!.rationale, null);
+  assert.equal(store.plans.listPlanParts(plan.id)[0]!.rationale, null);
   store.close();
 });
 

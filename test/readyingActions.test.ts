@@ -60,7 +60,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
   const worktrees = new ParkedWorktrees();
   const system = buildSystem(testConfig(), { worktrees, backend: new FakePtyBackend() });
 
-  const job = system.store.createJob({
+  const job = system.store.jobs.createJob({
     title: 'Remove the scan-check pollers',
     prompt: 'Remove them.',
     kind: 'code',
@@ -80,7 +80,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
   assert.ok(Date.parse(row.startedAt) > 0, 'with something to measure the wait from');
 
   assert.equal(waiting.agents.filter((a) => a.status !== 'done').length, 0, 'no agent row yet');
-  assert.equal(system.store.countLiveAgents(), 0, 'and nothing counted against the cap');
+  assert.equal(system.store.agents.countLiveAgents(), 0, 'and nothing counted against the cap');
 
   worktrees.letThrough();
   await cycle;
@@ -95,7 +95,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
 test('a dispatch that throws takes its readying row with it', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FailingWorktrees(), backend: new FakePtyBackend() });
 
-  system.store.createJob({
+  system.store.jobs.createJob({
     title: 'Remove the scan-check pollers',
     prompt: 'Remove them.',
     kind: 'code',
@@ -104,7 +104,7 @@ test('a dispatch that throws takes its readying row with it', async () => {
   await system.harness.runCycle('manual');
 
   assert.match(
-    system.store.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
+    system.store.decisions.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
     /Failed to start agent: EBUSY/,
   );
   assert.deepEqual(buildStateSnapshot(system).readying, []);
@@ -119,7 +119,7 @@ test('the board announces itself, so a cockpit sees the row without waiting for 
   const steps: string[] = [];
   system.readying.on('changed', () => steps.push(system.readying.list()[0]?.step ?? 'none'));
 
-  system.store.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
+  system.store.jobs.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
   const cycle = system.harness.runCycle('manual');
   await worktrees.reached;
   worktrees.letThrough();

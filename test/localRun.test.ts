@@ -109,7 +109,7 @@ test('a start with nothing configured refuses, and names the field that fixes it
   const result = await runner.start('issue:284');
   assert.equal(result.ok, false);
   assert.match(result.ok ? '' : result.error, /localRun\.instruction/);
-  assert.equal(store.currentLocalRun(), null, 'a refusal records nothing at all');
+  assert.equal(store.localRuns.currentLocalRun(), null, 'a refusal records nothing at all');
   store.close();
 });
 
@@ -119,7 +119,7 @@ test('a start prepares the checkout, writes the run, and tells the session what 
   assert.ok(result.ok, result.ok ? '' : result.error);
 
   assert.deepEqual(worktrees.previewed, ['issue/284/viewer']);
-  const run = store.liveLocalRun();
+  const run = store.localRuns.liveLocalRun();
   assert.equal(run?.originRef, 'issue:284');
   assert.equal(run?.ref, 'issue/284/viewer');
   assert.equal(run?.pid, 4242);
@@ -143,10 +143,10 @@ test('a goal whose parts have all merged runs from the integration branch', asyn
 test('the turn ending means the environment is up, not that the run is over', async () => {
   const { runner, store, sessions } = build();
   await runner.start('issue:284');
-  assert.equal(store.liveLocalRun()?.status, 'starting');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'starting');
 
   sessions[0]?.emit('done');
-  assert.equal(store.liveLocalRun()?.status, 'running');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'running');
   assert.deepEqual(sessions[0]?.log, ['start']);
   store.close();
 });
@@ -193,8 +193,8 @@ test('a session that fails settles the run with what it last said', async () => 
   sessions[0]?.emit('output', 'EADDRINUSE: port 4200 is already taken\n');
   sessions[0]?.emit('failed');
 
-  assert.equal(store.liveLocalRun(), null);
-  const last = store.currentLocalRun();
+  assert.equal(store.localRuns.liveLocalRun(), null);
+  const last = store.localRuns.currentLocalRun();
   assert.equal(last?.status, 'failed');
   assert.match(last?.note ?? '', /EADDRINUSE/);
   store.close();
@@ -209,7 +209,7 @@ test('a stop runs the stop instruction, then reaps', async () => {
   const told = session?.sent[1] ?? '';
   assert.match(told, /^Run \/dev-environment stop\./);
   assert.match(told, /Stop everything that start brought up/);
-  assert.equal(store.currentLocalRun()?.status, 'stopping', 'and the run says so while it happens');
+  assert.equal(store.localRuns.currentLocalRun()?.status, 'stopping', 'and the run says so while it happens');
   assert.deepEqual(session?.log, ['start'], 'nothing is killed until the instruction has run');
 
   session?.emit('output', 'stopped 6 containers; port 5173 is free\n');
@@ -217,7 +217,7 @@ test('a stop runs the stop instruction, then reaps', async () => {
   await stopping;
 
   assert.deepEqual(session?.log, ['start', 'reap', 'kill']);
-  const run = store.currentLocalRun();
+  const run = store.localRuns.currentLocalRun();
   assert.equal(run?.status, 'stopped');
   assert.match(run?.note ?? '', /6 containers/, 'what it said it stopped is the record of the stop');
   store.close();
@@ -230,7 +230,7 @@ test('a stop with nothing configured says what it could not do', async () => {
 
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
   assert.equal(sessions[0]?.sent.length, 1, 'nothing was asked of it');
-  const note = store.currentLocalRun()?.note ?? '';
+  const note = store.localRuns.currentLocalRun()?.note ?? '';
   assert.match(note, /may still be running/);
   assert.match(note, /localRun\.stopInstruction/, 'and names the field that fixes it');
   store.close();
@@ -242,14 +242,14 @@ test('a stop that never finishes is killed anyway, and says it was not confirmed
   await runner.stop();
 
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
-  assert.match(store.currentLocalRun()?.note ?? '', /did not finish within/);
+  assert.match(store.localRuns.currentLocalRun()?.note ?? '', /did not finish within/);
   store.close();
 });
 
 test('a stop with no session left spawns one in the run’s own checkout', async () => {
   const first = build({ stopInstruction: 'Run /dev-environment stop.' });
   await first.runner.start('issue:284');
-  const dir = first.store.liveLocalRun()?.dir ?? '';
+  const dir = first.store.localRuns.liveLocalRun()?.dir ?? '';
 
   const after = build({ store: first.store, stopInstruction: 'Run /dev-environment stop.' });
   const stopping = after.runner.stop();
@@ -261,7 +261,7 @@ test('a stop with no session left spawns one in the run’s own checkout', async
   spawned.emit('done');
   await stopping;
   assert.deepEqual(spawned.log, ['start', 'reap', 'kill'], 'and it is closed again afterwards');
-  assert.equal(after.store.liveLocalRun(), null);
+  assert.equal(after.store.localRuns.liveLocalRun(), null);
   first.store.close();
 });
 
@@ -272,7 +272,7 @@ test('a swap waits for the stop before it touches the checkout', async () => {
 
   const swapping = runner.start('issue:285');
   assert.deepEqual(worktrees.previewed, ['main'], 'nothing is prepared while the old one is coming down');
-  assert.equal(store.currentLocalRun()?.status, 'stopping');
+  assert.equal(store.localRuns.currentLocalRun()?.status, 'stopping');
 
   sessions[0]?.emit('done');
   const result = await swapping;
@@ -286,15 +286,15 @@ test('a stopping run is live: nothing may begin beside it, and a restart settles
   const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
   await runner.start('issue:284');
   const stopping = runner.stop();
-  const live = store.liveLocalRun();
+  const live = store.localRuns.liveLocalRun();
   assert.equal(live?.status, 'stopping', 'a run coming down still holds the environment');
 
   const after = build({ store, resumeInstruction: 'Run /dev-environment continue.' });
   const settled = after.runner.resumeInterrupted();
   assert.equal(settled.outcome, 'settled');
-  assert.equal(store.liveLocalRun(), null);
+  assert.equal(store.localRuns.liveLocalRun(), null);
   assert.equal(after.sessions.length, 0, 'and nothing was brought back');
-  assert.match(store.currentLocalRun()?.note ?? '', /taken down/);
+  assert.match(store.localRuns.currentLocalRun()?.note ?? '', /taken down/);
 
   sessions[0]?.emit('done');
   await stopping;
@@ -308,7 +308,7 @@ test('the shutdown path kills without a turn, and records that it did', async ()
 
   assert.equal(sessions[0]?.sent.length, 1, 'the stop instruction was not run');
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
-  const note = store.currentLocalRun()?.note ?? '';
+  const note = store.localRuns.currentLocalRun()?.note ?? '';
   assert.match(note, /the harness shut down/);
   assert.match(note, /may still be running/);
   store.close();
@@ -321,18 +321,18 @@ test('stopping reaps the subtree before it signals the child', async () => {
 
   assert.deepEqual(reaped, [4242]);
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
-  assert.equal(store.liveLocalRun(), null);
-  assert.equal(store.currentLocalRun()?.status, 'stopped');
+  assert.equal(store.localRuns.liveLocalRun(), null);
+  assert.equal(store.localRuns.currentLocalRun()?.status, 'stopped');
   store.close();
 });
 
 test('starting another goal stops the first — one environment, one run', async () => {
   const { runner, store, sessions } = build();
   await runner.start('issue:284');
-  const first = store.liveLocalRun();
+  const first = store.localRuns.liveLocalRun();
   await runner.start('issue:285');
 
-  const second = store.liveLocalRun();
+  const second = store.localRuns.liveLocalRun();
   assert.equal(second?.originRef, 'issue:285');
   assert.notEqual(second?.id, first?.id);
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
@@ -342,13 +342,13 @@ test('starting another goal stops the first — one environment, one run', async
 
 test('a restart settles a run it cannot bring back, and names the field that would', () => {
   const { runner, store } = build();
-  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: '/tmp/x', commit: 'abc123', url: null });
-  assert.equal(store.liveLocalRun()?.originRef, 'issue:284');
+  store.localRuns.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: '/tmp/x', commit: 'abc123', url: null });
+  assert.equal(store.localRuns.liveLocalRun()?.originRef, 'issue:284');
 
   const outcome = runner.resumeInterrupted();
   assert.equal(outcome.outcome, 'settled');
-  assert.equal(store.liveLocalRun(), null);
-  const note = store.currentLocalRun()?.note ?? '';
+  assert.equal(store.localRuns.liveLocalRun(), null);
+  const note = store.localRuns.currentLocalRun()?.note ?? '';
   assert.match(note, /restarted/);
   assert.match(note, /localRun\.resumeInstruction/, 'and the operator is told what would have changed it');
   store.close();
@@ -363,10 +363,10 @@ test('nothing live is nothing to do', () => {
 test('a restart brings an interrupted run back in its own checkout, without preparing it', async () => {
   const first = build({ resumeInstruction: 'Run /dev-environment continue.' });
   await first.runner.start('issue:284');
-  const dir = first.store.liveLocalRun()?.dir ?? '';
+  const dir = first.store.localRuns.liveLocalRun()?.dir ?? '';
   first.runner.stopFast('the harness shut down');
   assert.deepEqual(first.sessions[0]?.log, ['start', 'reap', 'kill']);
-  const held = first.store.liveLocalRun();
+  const held = first.store.localRuns.liveLocalRun();
   assert.ok(held, 'the row outlives the process it was holding');
   assert.match(held.note ?? '', /next boot/);
 
@@ -380,10 +380,10 @@ test('a restart brings an interrupted run back in its own checkout, without prep
   assert.match(brought.sent[0] ?? '', /You did not start this/);
   assert.match(brought.sent[0] ?? '', /not a collision/);
   assert.deepEqual(after.worktrees.previewed, [], 'the checkout already stands at the run’s own commit');
-  assert.equal(after.store.liveLocalRun()?.id, held.id, 'the same run, continued — not a second one');
+  assert.equal(after.store.localRuns.liveLocalRun()?.id, held.id, 'the same run, continued — not a second one');
 
   brought.emit('done');
-  assert.equal(after.store.liveLocalRun()?.status, 'running');
+  assert.equal(after.store.localRuns.liveLocalRun()?.status, 'running');
   first.store.close();
 });
 
@@ -395,7 +395,7 @@ test('a run interrupted longer ago than the window is not brought back', async (
   await first.runner.start('issue:284');
   first.runner.stopFast('the harness shut down');
   assert.equal(
-    first.store.liveLocalRun()?.interruptedAt,
+    first.store.localRuns.liveLocalRun()?.interruptedAt,
     new Date(at).toISOString(),
     'the fast stop dates the interruption — the one thing the next boot can judge',
   );
@@ -408,8 +408,8 @@ test('a run interrupted longer ago than the window is not brought back', async (
   const outcome = after.runner.resumeInterrupted();
   assert.equal(outcome.outcome, 'settled');
   assert.equal(after.sessions.length, 0, 'no session was spent bringing back an environment nobody is watching');
-  assert.equal(after.store.liveLocalRun(), null, 'and the row stops claiming a process that is gone');
-  const note = after.store.currentLocalRun()?.note ?? '';
+  assert.equal(after.store.localRuns.liveLocalRun(), null, 'and the row stops claiming a process that is gone');
+  const note = after.store.localRuns.currentLocalRun()?.note ?? '';
   assert.match(note, /3 hours ago/);
   assert.match(note, /may still be running/, 'the operator is told what may still be up');
   assert.match(note, /localRun\.resumeWindowMs/, 'and what would have changed it');
@@ -429,7 +429,7 @@ test('a run interrupted inside the window still comes back', async () => {
   });
   assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
   assert.equal(after.sessions.length, 1);
-  assert.equal(after.store.liveLocalRun()?.interruptedAt, null);
+  assert.equal(after.store.localRuns.liveLocalRun()?.interruptedAt, null);
   first.store.close();
 });
 
@@ -439,7 +439,7 @@ test('a live row with neither stamp is unknown, not recent, and is not brought b
   let store: Store | null = null;
   try {
     const before = new Store(file);
-    const run = before.beginLocalRun({
+    const run = before.localRuns.beginLocalRun({
       originRef: 'issue:284',
       ref: 'main',
       dir: process.cwd(),
@@ -454,8 +454,8 @@ test('a live row with neither stamp is unknown, not recent, and is not brought b
     store = new Store(file);
     const after = build({ store, resumeInstruction: 'Run /dev-environment continue.' });
     assert.equal(after.runner.resumeInterrupted().outcome, 'settled');
-    assert.match(store.currentLocalRun()?.note ?? '', /not known/);
-    assert.equal(store.liveLocalRun(), null);
+    assert.match(store.localRuns.currentLocalRun()?.note ?? '', /not known/);
+    assert.equal(store.localRuns.liveLocalRun(), null);
   } finally {
     store?.close();
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
@@ -483,7 +483,7 @@ test('a force close is dated by the pulse, and its run still comes back', async 
   const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
   await first.runner.start('issue:284');
   first.runner.noteAlive();
-  const held = first.store.liveLocalRun();
+  const held = first.store.localRuns.liveLocalRun();
   assert.equal(held?.interruptedAt, null, 'nothing was shut down, so nothing stamped an interruption');
   assert.ok(held?.lastSeenAt, 'but the pulse recorded that the harness was holding it');
 
@@ -509,18 +509,24 @@ test('a force close long enough ago is not brought back, and the note says what 
   });
   assert.equal(after.runner.resumeInterrupted().outcome, 'settled');
   assert.equal(after.sessions.length, 0);
-  assert.match(after.store.currentLocalRun()?.note ?? '', /last holding it 5 hours ago/);
+  assert.match(after.store.localRuns.currentLocalRun()?.note ?? '', /last holding it 5 hours ago/);
   first.store.close();
 });
 
 test('a boot never dates a run it declined to bring back', () => {
   const at = Date.parse('2026-09-02T09:00:00.000Z');
   const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
-  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), commit: 'abc123', url: null });
-  const before = store.liveLocalRun()?.lastSeenAt ?? null;
+  store.localRuns.beginLocalRun({
+    originRef: 'issue:284',
+    ref: 'main',
+    dir: process.cwd(),
+    commit: 'abc123',
+    url: null,
+  });
+  const before = store.localRuns.liveLocalRun()?.lastSeenAt ?? null;
 
   runner.noteAlive();
-  assert.equal(store.liveLocalRun()?.lastSeenAt, before, 'a harness holding nothing dates nothing');
+  assert.equal(store.localRuns.liveLocalRun()?.lastSeenAt, before, 'a harness holding nothing dates nothing');
   store.close();
 });
 
@@ -549,17 +555,21 @@ test('a pulse dates the run the harness is holding, at the buildSystem seam', as
   try {
     const started = await system.localRun.start('issue:12');
     assert.ok(started.ok, started.ok ? '' : started.error);
-    const run = system.store.liveLocalRun();
+    const run = system.store.localRuns.liveLocalRun();
     assert.ok(run?.lastSeenAt, 'a run starts held, as of now');
 
     const stale = '2020-01-01T00:00:00.000Z';
     const raw = new Database(file);
     raw.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(stale, run.id);
     raw.close();
-    assert.equal(system.store.liveLocalRun()?.lastSeenAt, stale, 'backdated, as a harness left running would be');
+    assert.equal(
+      system.store.localRuns.liveLocalRun()?.lastSeenAt,
+      stale,
+      'backdated, as a harness left running would be',
+    );
 
     await system.harness.runCycle('manual');
-    const seen = system.store.liveLocalRun()?.lastSeenAt ?? null;
+    const seen = system.store.localRuns.liveLocalRun()?.lastSeenAt ?? null;
     assert.ok(seen !== null && seen > stale, 'the pulse re-dated it');
   } finally {
     system.store.close();
@@ -583,7 +593,13 @@ test('the boot that adds the stamp dates the run it is upgrading over', () => {
   let store: Store | null = null;
   try {
     const before = new Store(file);
-    before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), commit: 'abc123', url: null });
+    before.localRuns.beginLocalRun({
+      originRef: 'issue:284',
+      ref: 'main',
+      dir: process.cwd(),
+      commit: 'abc123',
+      url: null,
+    });
     before.close();
 
     const raw = new Database(file);
@@ -595,7 +611,11 @@ test('the boot that adds the stamp dates the run it is upgrading over', () => {
     raw.close();
 
     store = new Store(file, () => at);
-    assert.equal(store.liveLocalRun()?.interruptedAt, at, 'the row this boot inherited is dated to this boot');
+    assert.equal(
+      store.localRuns.liveLocalRun()?.interruptedAt,
+      at,
+      'the row this boot inherited is dated to this boot',
+    );
     const after = build({ store, resumeInstruction: 'Run /dev-environment continue.', now: () => Date.parse(at) });
     assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
   } finally {
@@ -606,7 +626,7 @@ test('the boot that adds the stamp dates the run it is upgrading over', () => {
 
 test('a run whose checkout has gone is not brought back', () => {
   const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.' });
-  store.beginLocalRun({
+  store.localRuns.beginLocalRun({
     originRef: 'issue:284',
     ref: 'main',
     dir: join(tmpdir(), 'lubbdubb-gone-' + String(process.pid)),
@@ -616,8 +636,8 @@ test('a run whose checkout has gone is not brought back', () => {
 
   const outcome = runner.resumeInterrupted();
   assert.equal(outcome.outcome, 'settled');
-  assert.match(store.currentLocalRun()?.note ?? '', /is gone/);
-  assert.equal(store.liveLocalRun(), null);
+  assert.match(store.localRuns.currentLocalRun()?.note ?? '', /is gone/);
+  assert.equal(store.localRuns.liveLocalRun(), null);
   store.close();
 });
 
@@ -640,7 +660,7 @@ test('what the session spends lands on the run, cumulative reports and all', asy
   session?.emit('usage', usage(0.4, 3));
   session?.emit('usage', usage(1.1, 8));
 
-  const run = store.currentLocalRun();
+  const run = store.localRuns.currentLocalRun();
   assert.equal(run?.costUsd, 1.1);
   assert.equal(run?.numTurns, 8);
   assert.equal(run?.inputTokens, 8000);
@@ -659,7 +679,7 @@ test('a teardown by a fresh session adds to the run rather than replacing it', a
   stopper?.emit('done');
   await stopping;
 
-  const run = first.store.currentLocalRun();
+  const run = first.store.localRuns.currentLocalRun();
   assert.equal(run?.costUsd, 2.15, 'the stop is part of what the run cost');
   assert.equal(run?.numTurns, 14);
   first.store.close();
@@ -668,8 +688,8 @@ test('a teardown by a fresh session adds to the run rather than replacing it', a
 test('a run that reports nothing stays unmeasured, not free', async () => {
   const { runner, store } = build();
   await runner.start('issue:284');
-  assert.equal(store.currentLocalRun()?.costUsd, null);
-  assert.equal(store.currentLocalRun()?.numTurns, null);
+  assert.equal(store.localRuns.currentLocalRun()?.costUsd, null);
+  assert.equal(store.localRuns.currentLocalRun()?.numTurns, null);
   store.close();
 });
 
@@ -682,7 +702,7 @@ test('a local run’s money is in the rolling window, dated', async () => {
   const deltas = store.listCostDeltasSince('2000-01-01T00:00:00.000Z');
   assert.equal(deltas.length, 1);
   assert.equal(deltas[0]?.costUsd, 0.75);
-  assert.deepEqual(store.listUsageEventsSince('2000-01-01T00:00:00.000Z'), []);
+  assert.deepEqual(store.agents.listUsageEventsSince('2000-01-01T00:00:00.000Z'), []);
   store.close();
 });
 
@@ -701,13 +721,13 @@ test('a database from before the columns reads them as unmeasured, and can be wr
   old.close();
 
   const store = new Store(path);
-  const run = store.currentLocalRun();
+  const run = store.localRuns.currentLocalRun();
   assert.equal(run?.id, 'r-old');
   assert.equal(run?.costUsd, null, 'that run measured nothing, which is not the same as costing nothing');
   assert.equal(run?.commit, null);
-  store.setLocalRunCommit('r-old', 'abc123');
-  assert.equal(store.currentLocalRun()?.commit, 'abc123', 'and the column can be written on an old database');
-  store.addLocalRunUsage('r-old', {
+  store.localRuns.setLocalRunCommit('r-old', 'abc123');
+  assert.equal(store.localRuns.currentLocalRun()?.commit, 'abc123', 'and the column can be written on an old database');
+  store.localRuns.addLocalRunUsage('r-old', {
     costUsd: 0.2,
     inputTokens: 100,
     outputTokens: 10,
@@ -715,7 +735,7 @@ test('a database from before the columns reads them as unmeasured, and can be wr
     cacheCreationTokens: null,
     numTurns: 1,
   });
-  assert.equal(store.currentLocalRun()?.costUsd, 0.2);
+  assert.equal(store.localRuns.currentLocalRun()?.costUsd, 0.2);
   assert.equal(store.sumUsageCostSince('2000-01-01T00:00:00.000Z'), 0.2, 'and the deltas table was created too');
   store.close();
 });
@@ -858,7 +878,7 @@ test('a turn that ends with no sentinel is the environment up', async () => {
   await runner.start('issue:284');
   assert.equal(runner.turn(), 'start');
   sessions[0]?.emit('stalled', 'Up on :5173');
-  assert.equal(store.liveLocalRun()?.status, 'running');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'running');
   assert.equal(runner.turn(), null, 'nothing is in flight once the turn has ended');
   assert.deepEqual(sessions[0]?.log, ['start'], 'nothing was killed');
   store.close();
@@ -873,8 +893,8 @@ test('a stop whose session stalls rather than saying done still settles, reap be
   sessions[0]?.emit('output', 'stopped 6 containers\n');
   sessions[0]?.emit('stalled', 'stopped 6 containers');
   await stopping;
-  assert.equal(store.currentLocalRun()?.status, 'stopped');
-  assert.match(store.currentLocalRun()?.note ?? '', /stopped 6 containers/);
+  assert.equal(store.localRuns.currentLocalRun()?.status, 'stopped');
+  assert.match(store.localRuns.currentLocalRun()?.note ?? '', /stopped 6 containers/);
   assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
   assert.equal(runner.turn(), null);
   store.close();
@@ -883,7 +903,7 @@ test('a stop whose session stalls rather than saying done still settles, reap be
 test('a start records the commit the checkout stands at', async () => {
   const { runner, store, worktrees } = build({ ref: 'issue/284/viewer' });
   await runner.start('issue:284');
-  const run = store.liveLocalRun();
+  const run = store.localRuns.liveLocalRun();
   assert.equal(run?.commit, await worktrees.previewCommit('issue/284/viewer'));
   assert.match(run?.commit ?? '', /^[0-9a-f]{40}$/, 'sha-shaped, as production will be');
   store.close();
@@ -901,10 +921,10 @@ test('a message is echoed into the tail, handed to the session, and is a turn un
     'the message is in the tail',
   );
   assert.equal(runner.turn(), 'message');
-  assert.equal(store.liveLocalRun()?.status, 'running', 'a message is not a change of status');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'running', 'a message is not a change of status');
   sessions[0]?.emit('stalled', 'Restarted.');
   assert.equal(runner.turn(), null);
-  assert.equal(store.liveLocalRun()?.status, 'running');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'running');
   store.close();
 });
 
@@ -965,7 +985,7 @@ test('a refresh moves the checkout to the tip, records it, and tells the session
   });
   await runner.start('issue:284');
   sessions[0]?.emit('stalled', '');
-  const was = store.liveLocalRun()?.commit ?? '';
+  const was = store.localRuns.liveLocalRun()?.commit ?? '';
   const tip = 'f'.repeat(40);
   worktrees.setPreviewCommit('issue/284/viewer', tip);
 
@@ -974,7 +994,7 @@ test('a refresh moves the checkout to the tip, records it, and tells the session
   assert.deepEqual(result.moved, { from: was, to: tip });
   assert.deepEqual(worktrees.resolved, ['issue/284/viewer']);
   assert.deepEqual(worktrees.previewed, ['issue/284/viewer', 'issue/284/viewer']);
-  assert.equal(store.liveLocalRun()?.commit, tip);
+  assert.equal(store.localRuns.liveLocalRun()?.commit, tip);
 
   const told = sessions[0]?.sent[1] ?? '';
   assert.match(told, /^Run the migrations\./, 'the operator’s own sentence first');
@@ -984,7 +1004,7 @@ test('a refresh moves the checkout to the tip, records it, and tells the session
   assert.equal(runner.turn(), 'refresh');
   sessions[0]?.emit('stalled', 'Restarted the API.');
   assert.equal(runner.turn(), null);
-  assert.equal(store.liveLocalRun()?.status, 'running');
+  assert.equal(store.localRuns.liveLocalRun()?.status, 'running');
   store.close();
 });
 
@@ -1033,13 +1053,13 @@ test('a refresh whose checkout will not move leaves the recorded commit alone', 
   const { runner, store, worktrees, sessions } = build({ ref: 'issue/284/viewer' });
   await runner.start('issue:284');
   sessions[0]?.emit('stalled', '');
-  const was = store.liveLocalRun()?.commit;
+  const was = store.localRuns.liveLocalRun()?.commit;
   worktrees.setPreviewCommit('issue/284/viewer', 'c'.repeat(40));
   worktrees.failPreview = new Error('EBUSY: resource busy or locked');
   const result = await runner.refresh();
   assert.equal(result.ok, false);
   assert.match(result.ok ? '' : result.error, /part-reset/);
-  assert.equal(store.liveLocalRun()?.commit, was, 'a commit the tree does not stand at is not recorded');
+  assert.equal(store.localRuns.liveLocalRun()?.commit, was, 'a commit the tree does not stand at is not recorded');
   assert.equal(sessions[0]?.sent.length, 1, 'and the session was not told about a move that did not happen');
   store.close();
 });
@@ -1053,8 +1073,8 @@ test('a refresh with nothing holding the environment moves the checkout and says
   after.worktrees.setPreviewCommit('issue/284/viewer', 'd'.repeat(40));
   const result = await after.runner.refresh();
   assert.ok(result.ok, result.ok ? '' : result.error);
-  assert.equal(store.liveLocalRun()?.commit, 'd'.repeat(40), 'the git half is still done');
-  assert.match(store.liveLocalRun()?.note ?? '', /nothing holds/);
+  assert.equal(store.localRuns.liveLocalRun()?.commit, 'd'.repeat(40), 'the git half is still done');
+  assert.match(store.localRuns.liveLocalRun()?.note ?? '', /nothing holds/);
   assert.equal(after.sessions.length, 0, 'and no session was spawned to be told');
   store.close();
 });

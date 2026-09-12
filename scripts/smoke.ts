@@ -31,7 +31,7 @@ async function smokeToolCall(system: System): Promise<void> {
   const log = (m: string): void => console.log(`  ${m}`);
   if (!(await system.mcp.listen())) throw new Error('MCP bridge server would not listen');
 
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Plan issue #12',
     prompt: 'plan it',
@@ -39,7 +39,7 @@ async function smokeToolCall(system: System): Promise<void> {
     originRef: 'issue:12:plan',
     originTitle: 'Big thing',
   });
-  const agent = system.store.createAgent({ taskId: task.id, cwd: process.cwd(), pid: null, status: 'running' });
+  const agent = system.store.agents.createAgent({ taskId: task.id, cwd: process.cwd(), pid: null, status: 'running' });
   const credential = system.mcp.open();
   if (!credential.configPath) throw new Error('no launch config was written');
   system.mcp.bind(credential.token, agent.id);
@@ -84,9 +84,9 @@ async function smokeToolCall(system: System): Promise<void> {
   const call = frames[2]?.result as { isError?: boolean; content: { text: string }[] };
   if (call.isError) throw new Error(`plan_submit failed: ${call.content[0]?.text}`);
 
-  const plan = system.store.getPlanByOrigin('issue:12');
+  const plan = system.store.plans.getPlanByOrigin('issue:12');
   if (!plan) throw new Error('plan_submit returned success but wrote nothing');
-  const parts = system.store.listPlanParts(plan.id).map((p) => p.slug);
+  const parts = system.store.plans.listPlanParts(plan.id).map((p) => p.slug);
   log(`✓ plan persisted through the tool: status=${plan.status} parts=${parts.join(',')}`);
 
   send({
@@ -117,7 +117,7 @@ async function smokeToolCall(system: System): Promise<void> {
   }
   log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
 
-  const queuedBefore = system.store.listQueuedJobs().length;
+  const queuedBefore = system.store.jobs.listQueuedJobs().length;
   send({
     jsonrpc: '2.0',
     id: 6,
@@ -134,7 +134,7 @@ async function smokeToolCall(system: System): Promise<void> {
   if (!finding || finding.agentId !== agent.id || finding.originRef !== 'issue:12:plan') {
     throw new Error(`report_finding wrote the wrong attribution: ${JSON.stringify(finding)}`);
   }
-  if (system.store.listQueuedJobs().length !== queuedBefore) {
+  if (system.store.jobs.listQueuedJobs().length !== queuedBefore) {
     throw new Error('report_finding queued work by itself — promotion must be the operator’s');
   }
   log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
@@ -147,7 +147,7 @@ async function smokeToolCall(system: System): Promise<void> {
     const noteFrame = frames[frames.length - 1]?.result as { isError?: boolean; content: { text: string }[] };
     if (noteFrame.isError) throw new Error(`note_progress failed: ${noteFrame.content[0]?.text}`);
   }
-  const noted = system.store.getAgent(agent.id);
+  const noted = system.store.agents.getAgent(agent.id);
   if (noted?.note !== 'Running the full suite after the rename' || !noted.notedAt) {
     throw new Error(`note_progress left the wrong note: ${JSON.stringify(noted?.note)}`);
   }
@@ -156,8 +156,8 @@ async function smokeToolCall(system: System): Promise<void> {
   bridge.kill();
   system.mcp.release(credential.token);
   await system.mcp.close();
-  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
-  system.store.updateTask(task.id, { status: 'done' });
+  system.store.agents.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
+  system.store.tasks.updateTask(task.id, { status: 'done' });
 }
 
 const SMOKE_PARTS = [
@@ -189,15 +189,15 @@ async function main(): Promise<void> {
   system.connector.inject({ kind: 'ci_failed', prNumber: 42 });
   await system.harness.runCycle('manual');
 
-  const agent = system.store.listAgentsByStatus('starting', 'running', 'waiting')[0];
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running', 'waiting')[0];
   if (!agent) throw new Error('no agent spawned');
   log(`agent ${agent.id} spawned (pid ${agent.pid ?? '?'}) in ${agent.cwd}`);
   if (!agent.cwd.includes('feature-caching')) throw new Error('agent not in the expected worktree');
   log('✓ code agent is running in a git worktree keyed by the PR branch');
 
   console.log('2. Wait for the agent to hit a waiting state and escalate.');
-  await waitFor('agent waiting', () => system.store.getAgent(agent.id)!.status === 'waiting');
-  const esc = system.store.listOpenEscalations()[0];
+  await waitFor('agent waiting', () => system.store.agents.getAgent(agent.id)!.status === 'waiting');
+  const esc = system.store.escalations.listOpenEscalations()[0];
   if (!esc) throw new Error('no escalation raised');
   log(`✓ escalation raised: "${esc.prompt}"`);
 
@@ -206,10 +206,10 @@ async function main(): Promise<void> {
   log(`✓ routing = ${result.routing}`);
 
   console.log('4. Wait for the agent to finish.');
-  await waitFor('agent done', () => system.store.getAgent(agent.id)!.status === 'done', 15_000);
+  await waitFor('agent done', () => system.store.agents.getAgent(agent.id)!.status === 'done', 15_000);
   log('✓ agent completed');
 
-  const transcript = system.store.getTranscript(agent.id);
+  const transcript = system.store.transcripts.getTranscript(agent.id);
   log('--- agent transcript (tail) ---');
   transcript
     .trim()

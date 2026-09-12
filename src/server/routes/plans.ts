@@ -24,9 +24,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/plans/:id/history',
     checked({ params: IdParams }, async ({ params, reply }) => {
       const { id } = params;
-      if (!store.getPlan(id)) return reply.code(404).send({ error: 'plan not found' });
-      const revisions = store.listPlanRevisions(id);
-      const pending = store.listPlanAmendments(id).find((a) => a.status === 'pending') ?? null;
+      if (!store.plans.getPlan(id)) return reply.code(404).send({ error: 'plan not found' });
+      const revisions = store.plans.listPlanRevisions(id);
+      const pending = store.plans.listPlanAmendments(id).find((a) => a.status === 'pending') ?? null;
       return {
         revisions,
         diff: latestPlanDiff(revisions),
@@ -39,17 +39,19 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/plans/:id/replan',
     checked({ params: IdParams }, async ({ params, reply }) => {
       const { id } = params;
-      const plan = store.getPlan(id);
+      const plan = store.plans.getPlan(id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      const next = store.setPlanStatus(id, 'planning');
+      const next = store.plans.setPlanStatus(id, 'planning');
       const ref = planProposalRef(plan.originRef);
-      const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+      const pending = store.escalations
+        .listProposals()
+        .find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
       if (pending) proposals.reject(pending.id, 'superseded by a replan');
-      const pendingAmendments = store.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
+      const pendingAmendments = store.plans.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
       supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       for (const amendment of pendingAmendments) {
         const amendmentRef = planAmendmentProposalRef(amendment.id);
-        const card = store
+        const card = store.escalations
           .listProposals()
           .find((p) => p.kind === 'plan_amendment' && p.ref === amendmentRef && p.status === 'pending');
         if (card) proposals.reject(card.id, 'superseded by a replan');
@@ -63,9 +65,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/plans/:id/acceptance',
     checked({ params: IdParams, body: AcceptanceBody }, async ({ params, body, reply }) => {
-      const plan = store.getPlan(params.id);
+      const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const criteria = acceptanceCriteria(part);
       if (!criteria.some((c) => c.text === body.criterion))
@@ -73,7 +75,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const next = body.met
         ? [...part.acceptanceMet.filter((c) => c !== body.criterion), body.criterion]
         : part.acceptanceMet.filter((c) => c !== body.criterion);
-      const updated = store.setPartAcceptanceMet(part.id, next);
+      const updated = store.plans.setPartAcceptanceMet(part.id, next);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, part: updated };
     }),
@@ -86,9 +88,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/plans/:id/part-profile',
     checked({ params: IdParams, body: PartProfileBody }, async ({ params, body, reply }) => {
-      const plan = store.getPlan(params.id);
+      const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const wanted = body.profile ?? null;
       const known = orderedProfiles(config.agentModels).map((p) => p.name);
@@ -99,7 +101,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
               ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
               : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
         });
-      const updated = store.setPartProfile(part.id, wanted);
+      const updated = store.plans.setPartProfile(part.id, wanted);
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, part: updated };
@@ -125,12 +127,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/plans/:id/regroup',
     checked({ params: IdParams, body: RegroupBody }, async ({ params, body, reply }) => {
-      const plan = store.getPlan(params.id);
+      const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
       const regrouped = regroupedDocument({
         plan,
-        parts: store.listPlanParts(plan.id),
-        atoms: store.listAllPlanAtoms().filter((a) => a.planId === plan.id),
+        parts: store.plans.listPlanParts(plan.id),
+        atoms: store.plans.listAllPlanAtoms().filter((a) => a.planId === plan.id),
         groups: body.groups,
       });
       if (!regrouped.ok) return reply.code(400).send({ error: regrouped.error });
@@ -157,14 +159,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/plans/:id/restart-part',
     checked({ params: IdParams, body: RestartPartBody }, async ({ params, body, reply }) => {
-      const plan = store.getPlan(params.id);
+      const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const issueNumber = planIssueNumber(plan.originRef);
       if (issueNumber === null)
         return reply.code(400).send({ error: `${plan.originRef} names no issue, so its parts have no branch to drop` });
-      const refusal = partRestartRefusal(part, store.listTasks(), system.connector.canClosePr());
+      const refusal = partRestartRefusal(part, store.tasks.listTasks(), system.connector.canClosePr());
       if (refusal !== null) return reply.code(400).send({ error: refusal });
 
       const done = await restartPlanPart(
@@ -195,11 +197,11 @@ function pendingView(
     diff:
       declared === null
         ? null
-        : proposedPlanDiff(store.listPlanRevisions(amendment.planId), {
+        : proposedPlanDiff(store.plans.listPlanRevisions(amendment.planId), {
             narrative: declared.narrative,
             parts: declared.parts,
           }),
-    warnings: declared === null ? [] : amendmentWarnings(store.listPlanParts(amendment.planId), declared.parts),
+    warnings: declared === null ? [] : amendmentWarnings(store.plans.listPlanParts(amendment.planId), declared.parts),
   };
 }
 

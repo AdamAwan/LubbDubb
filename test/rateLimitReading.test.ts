@@ -70,7 +70,7 @@ async function fleet(issue: number) {
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
   failPlanningOpen(system.store, issue);
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   return { system, agent, child: children[0]! };
 }
 
@@ -95,8 +95,8 @@ test('an allowed reading is observation only — it never parks the agent', asyn
   child.emitLine({ type: 'result', subtype: 'success', total_cost_usd: 0.01, num_turns: 1 });
 
   assert.equal(system.agents.limitedAgentIds().length, 0, 'nothing parked on a reading inside the limits');
-  assert.notEqual(system.store.getAgent(agent.id)!.status, 'waiting');
-  assert.ok(system.store.readRateLimits(), 'and the reading still landed');
+  assert.notEqual(system.store.agents.getAgent(agent.id)!.status, 'waiting');
+  assert.ok(system.store.rateLimits.readRateLimits(), 'and the reading still landed');
   system.store.close();
 });
 
@@ -112,10 +112,16 @@ test('an older CLI carries no windows, and the chip degrades to cost rather than
 test('the freshest reading wins, whatever order the reports arrive in', () => {
   const store = new Store(':memory:');
   const at = (iso: string) => ({ fiveHour: { usedPercentage: 10, resetsAt: null }, sevenDay: null, capturedAt: iso });
-  store.recordRateLimits(at('2026-08-27T12:00:00.000Z'));
-  store.recordRateLimits({ ...at('2026-08-27T12:05:00.000Z'), fiveHour: { usedPercentage: 40, resetsAt: null } });
-  store.recordRateLimits({ ...at('2026-08-27T12:02:00.000Z'), fiveHour: { usedPercentage: 20, resetsAt: null } });
-  assert.equal(store.readRateLimits()?.fiveHour?.usedPercentage, 40);
-  assert.equal(store.readRateLimits()?.capturedAt, '2026-08-27T12:05:00.000Z');
+  store.rateLimits.recordRateLimits(at('2026-08-27T12:00:00.000Z'));
+  store.rateLimits.recordRateLimits({
+    ...at('2026-08-27T12:05:00.000Z'),
+    fiveHour: { usedPercentage: 40, resetsAt: null },
+  });
+  store.rateLimits.recordRateLimits({
+    ...at('2026-08-27T12:02:00.000Z'),
+    fiveHour: { usedPercentage: 20, resetsAt: null },
+  });
+  assert.equal(store.rateLimits.readRateLimits()?.fiveHour?.usedPercentage, 40);
+  assert.equal(store.rateLimits.readRateLimits()?.capturedAt, '2026-08-27T12:05:00.000Z');
   store.close();
 });

@@ -24,22 +24,22 @@ export class TicketSweep {
 
   get backfilling(): boolean {
     if (!this.opts.source.tracksTicketHistory) return false;
-    return this.opts.store.readTrackerSweep()?.sweptTo == null;
+    return this.opts.store.tickets.readTrackerSweep()?.sweptTo == null;
   }
 
   get anchorAt(): string | null {
-    return this.opts.store.readTrackerSweep()?.anchorAt ?? null;
+    return this.opts.store.tickets.readTrackerSweep()?.anchorAt ?? null;
   }
 
   async run(): Promise<void> {
     const { store, source, errors } = this.opts;
     if (!source.tracksTicketHistory) return;
-    const mark = store.ensureTrackerSweep(this.opts.backfillMs ?? TICKET_BACKFILL_MS);
+    const mark = store.tickets.ensureTrackerSweep(this.opts.backfillMs ?? TICKET_BACKFILL_MS);
     const restating = mark.restatedAt === null && mark.sweptTo !== null;
     const askedFrom = restating ? mark.anchorAt : (mark.sweptTo ?? mark.anchorAt);
     try {
       const items = await source.listTicketHistory(askedFrom);
-      store.recordSweep(askedFrom, items, liveFacts(store.getWorldBaseline()?.issues ?? []));
+      store.tickets.recordSweep(askedFrom, items, liveFacts(store.world.getWorldBaseline()?.issues ?? []));
     } catch (err) {
       errors?.record({
         source: 'provider',

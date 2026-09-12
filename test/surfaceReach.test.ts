@@ -168,7 +168,7 @@ test('an empty batch is accepted and stores nothing — a flush with nothing in 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'POST', url: '/api/usage/events', payload: { events: [] } });
   assert.equal(res.statusCode, 200);
-  assert.equal(system.store.listSurfaceReachSince(new Date(0).toISOString()).length, 0);
+  assert.equal(system.store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 0);
   await app.close();
   system.store.close();
 });
@@ -176,10 +176,10 @@ test('an empty batch is accepted and stores nothing — a flush with nothing in 
 test('the retention sweep drops from the back and keeps the ninety days it promises', () => {
   const system = build();
   const { store } = system;
-  store.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
-  assert.equal(store.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
-  store.pruneSurfaceReach(true);
-  assert.equal(store.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
+  store.surfaceReach.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
+  assert.equal(store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
+  store.surfaceReach.pruneSurfaceReach(true);
+  assert.equal(store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
   system.store.close();
 });
 

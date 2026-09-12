@@ -69,8 +69,9 @@ function refusingSystem(worktrees: FakeWorktreeManager): System {
 }
 
 function refusals(system: System, origin: string): number {
-  return system.store.listDecisions(200).filter((d) => d.outcome === 'rejected' && d.action.originRef === origin)
-    .length;
+  return system.store.decisions
+    .listDecisions(200)
+    .filter((d) => d.outcome === 'rejected' && d.action.originRef === origin).length;
 }
 
 async function pulseTo(system: System, origin: string, n: number): Promise<void> {
@@ -79,7 +80,7 @@ async function pulseTo(system: System, origin: string, n: number): Promise<void>
 }
 
 function dispatched(system: System, origin: string): boolean {
-  return system.store
+  return system.store.decisions
     .listDecisions(200)
     .some((d) => d.outcome === 'executed' && d.action.originRef === origin && d.action.type === 'dispatch_code_agent');
 }
@@ -94,8 +95,12 @@ test('a dispatch refused on every pulse reaches the operator, and one bad pulse 
   failPlanningOpen(system.store, 901);
 
   await pulseTo(system, 'issue:901:assess', 1);
-  assert.equal(system.store.listAgentsByStatus('starting', 'running').length, 0, 'nothing started on that branch');
-  assert.equal(system.store.listErrors().length, 0, 'the refusal is not recorded as a failure, and never was');
+  assert.equal(
+    system.store.agents.listAgentsByStatus('starting', 'running').length,
+    0,
+    'nothing started on that branch',
+  );
+  assert.equal(system.store.errors.listErrors().length, 0, 'the refusal is not recorded as a failure, and never was');
   assert.equal(await refusalRow(system, 'issue:901:assess'), undefined, 'one refusal raises nothing');
 
   await pulseTo(system, 'issue:901:assess', 2);

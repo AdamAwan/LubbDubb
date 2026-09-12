@@ -44,7 +44,7 @@ function relative(number: number): IssueRelative {
 }
 
 function seed(system: System): void {
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     takenAt: new Date().toISOString(),
     pullRequests: [],
     closedPullRequests: [],
@@ -151,7 +151,7 @@ test('a partial cascade failure is reported rather than answered "watched"', asy
   assert.match(error, /work item 3 is locked/);
   assert.deepEqual(new Set(writes), new Set([1, 2, 4]));
   assert.equal(
-    system.store.listErrors(50).some((e) => e.message.includes('work item 3 is locked')),
+    system.store.errors.listErrors(50).some((e) => e.message.includes('work item 3 is locked')),
     true,
   );
 });

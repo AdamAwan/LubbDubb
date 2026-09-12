@@ -58,7 +58,7 @@ async function parkedOnQuestionnaire() {
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 
   const asked = system.agents.ask(agentId, {
     question: "I've read the plan against the code — three things I'd question.",
@@ -66,7 +66,7 @@ async function parkedOnQuestionnaire() {
     questions: QUESTIONS,
   });
   assert.ok(asked.ok && asked.escalationId, 'the ask parked the agent');
-  const escalation = system.store.listOpenEscalations()[0]!;
+  const escalation = system.store.escalations.listOpenEscalations()[0]!;
   return { system, child, escalation };
 }
 
@@ -94,7 +94,7 @@ test('answering folds every answer into one reply and settles the item', async (
   });
   assert.equal(res.statusCode, 200);
 
-  const answered = system.store.getEscalation(escalation.id)!;
+  const answered = system.store.escalations.getEscalation(escalation.id)!;
   assert.equal(answered.status, 'answered');
   assert.match(answered.response ?? '', /1\. Split part one, or leave it as two\?\n> Keep two/);
   assert.match(answered.response ?? '', /3\. Rename the type\?\n> Yes — expectedKind/);
@@ -133,7 +133,7 @@ test('the answers arm refuses what it cannot line up', async () => {
   });
   assert.equal(both.statusCode, 400, 'which text the agent would get is ambiguous');
 
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1);
   const free = await app.inject({
     method: 'POST',
     url: `/api/escalations/${escalation.id}/answer`,
@@ -148,8 +148,8 @@ test('the answers arm refuses what it cannot line up', async () => {
 test('a plain question refuses the answers arm rather than inventing questions for it', async () => {
   const { system } = await parkedOnQuestionnaire();
   const { app } = await buildApp(system);
-  const agentId = system.store.listOpenEscalations()[0]!.agentId!;
-  system.escalations.dismiss(system.store.listOpenEscalations()[0]!.id, 'making room');
+  const agentId = system.store.escalations.listOpenEscalations()[0]!.agentId!;
+  system.escalations.dismiss(system.store.escalations.listOpenEscalations()[0]!.id, 'making room');
   const asked = system.agents.ask(agentId, { question: 'Which tenant?' });
   assert.ok(asked.ok && asked.escalationId);
 

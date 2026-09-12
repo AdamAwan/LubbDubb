@@ -47,7 +47,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 async function dispatch(system: System, issueNumber: number): Promise<string> {
   system.connector.inject({ kind: 'new_issue', number: issueNumber, title: 'Add login' });
   await system.harness.runCycle('manual');
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0];
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0];
   assert.ok(agent, 'a code agent was dispatched');
   return agent.id;
 }
@@ -120,7 +120,7 @@ test('a shutdown interrupt reaps every live agent subtree', async () => {
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add login' });
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Add logout' });
   await system.harness.runCycle('manual');
-  const live = system.store.listAgentsByStatus('starting', 'running');
+  const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.ok(live.length >= 2, 'two agents are up');
 
   system.agents.interruptAll();

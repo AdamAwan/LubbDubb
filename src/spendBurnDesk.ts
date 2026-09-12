@@ -29,11 +29,11 @@ export class SpendBurnDesk {
       policy: this.policy,
       agents: world.agents,
       tasks: world.tasks,
-      existing: this.store.listHumanTasksOfKind('burn'),
+      existing: this.store.humanTasks.listHumanTasksOfKind('burn'),
     });
     for (const step of steps) {
       if (step.kind === 'file')
-        this.store.recordHumanTask({
+        this.store.humanTasks.recordHumanTask({
           title: step.title,
           detail: step.detail,
           originRef: step.originRef,
@@ -41,7 +41,7 @@ export class SpendBurnDesk {
           agentId: step.agentId,
           taskId: null,
         });
-      else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
+      else this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
     }
   }
 }

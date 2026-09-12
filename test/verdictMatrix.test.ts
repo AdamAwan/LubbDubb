@@ -11,28 +11,35 @@ type Fixture = {
 
 const FIXTURES: Record<VerdictKind, Fixture> = {
   conclusion: {
-    write: (s, ref) => void s.recordIssueConclusion({ originRef: ref, verdict: 'done', note: 'shipped', by: 'agent' }),
-    read: (s, ref) => s.getIssueConclusion(ref),
+    write: (s, ref) =>
+      void s.verdicts.recordIssueConclusion({ originRef: ref, verdict: 'done', note: 'shipped', by: 'agent' }),
+    read: (s, ref) => s.verdicts.getIssueConclusion(ref),
   },
   delivery: {
-    write: (s, ref) => void s.recordDelivery({ originRef: ref, summary: 'every criterion is met', by: 'assessor' }),
-    read: (s, ref) => s.getDelivery(ref),
+    write: (s, ref) =>
+      void s.verdicts.recordDelivery({ originRef: ref, summary: 'every criterion is met', by: 'assessor' }),
+    read: (s, ref) => s.verdicts.getDelivery(ref),
   },
   shortfall: {
     write: (s, ref) =>
-      void s.recordShortfall({ originRef: ref, cause: 'plan', summary: 'the shape was wrong', by: 'assessor' }),
-    read: (s, ref) => s.getShortfall(ref),
+      void s.verdicts.recordShortfall({
+        originRef: ref,
+        cause: 'plan',
+        summary: 'the shape was wrong',
+        by: 'assessor',
+      }),
+    read: (s, ref) => s.verdicts.getShortfall(ref),
   },
   appraisal: {
     write: (s, ref) =>
-      void s.recordAppraisal({
+      void s.verdicts.recordAppraisal({
         originRef: ref,
         verdict: 'workable',
         summary: 'clear enough',
         goalRef: 'g1',
         by: 'appraiser',
       }),
-    read: (s, ref) => s.getAppraisal(ref),
+    read: (s, ref) => s.verdicts.getAppraisal(ref),
   },
 };
 

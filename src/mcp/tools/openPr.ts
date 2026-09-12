@@ -68,11 +68,11 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
 
     const issueNumber = originIssueNumber(task.originRef);
-    const plan = issueNumber === null ? null : deps.store.getPlanByOrigin(issueOrigin(issueNumber));
+    const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
     const target = resolveOpenPr(task.originRef, {
-      issues: deps.store.getWorldBaseline()?.issues ?? [],
+      issues: deps.store.world.getWorldBaseline()?.issues ?? [],
       plan,
-      parts: plan ? deps.store.listPlanParts(plan.id) : [],
+      parts: plan ? deps.store.plans.listPlanParts(plan.id) : [],
       defaultBranch: wiring.defaultBranch,
     });
     if ('error' in target) return toolError(target.error);

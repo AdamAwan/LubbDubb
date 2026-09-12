@@ -39,7 +39,7 @@ export class LocalValidationDesk extends EventEmitter {
   }
 
   request(input: { originRef: string; run: LocalRun }): LocalValidation {
-    const row = this.deps.store.createLocalValidation({
+    const row = this.deps.store.localValidations.createLocalValidation({
       originRef: input.originRef,
       runId: input.run.id,
       ref: input.run.ref,
@@ -58,14 +58,14 @@ export class LocalValidationDesk extends EventEmitter {
   }
 
   open(originRef: string): LocalValidation | null {
-    const row = this.deps.store.latestLocalValidation(originRef);
+    const row = this.deps.store.localValidations.latestLocalValidation(originRef);
     return row !== null && localValidationIsOpen(row) ? row : null;
   }
 
   cancel(originRef: string): LocalValidation | null {
     const row = this.open(originRef);
     if (row === null) return null;
-    const settled = this.deps.store.abandonLocalValidation(row.id, 'called off from the cockpit');
+    const settled = this.deps.store.localValidations.abandonLocalValidation(row.id, 'called off from the cockpit');
     if (settled !== null) this.emit('changed');
     return settled;
   }
@@ -78,7 +78,7 @@ export class LocalValidationDesk extends EventEmitter {
         ok: false,
         error: `This validation is already ${target.row.status} — ${target.row.note ?? 'it was settled while you were working'}. Nothing was recorded.`,
       };
-    this.deps.store.setLocalValidationPlan(target.row.id, plan);
+    this.deps.store.localValidations.setLocalValidationPlan(target.row.id, plan);
     this.emit('changed');
     return { ok: true };
   }
@@ -96,7 +96,7 @@ export class LocalValidationDesk extends EventEmitter {
     if (!target.ok) return target;
     const { row } = target;
     if (result.status !== 'blocked') {
-      const stale = validationRunStale(row, this.deps.store.liveLocalRun());
+      const stale = validationRunStale(row, this.deps.store.localRuns.liveLocalRun());
       if (stale !== null)
         return {
           ok: false,
@@ -105,7 +105,7 @@ export class LocalValidationDesk extends EventEmitter {
             `against, and it is no longer what is running. Report "blocked" with what you did manage to see.`,
         };
     }
-    const written = this.deps.store.recordLocalValidationReport(row.id, {
+    const written = this.deps.store.localValidations.recordLocalValidationReport(row.id, {
       status: result.status,
       summary: result.summary,
       findings: result.findings,
@@ -124,18 +124,18 @@ export class LocalValidationDesk extends EventEmitter {
 
   sweep(): void {
     try {
-      const live = this.deps.store.liveLocalRun();
-      for (const row of this.deps.store.listOpenLocalValidations()) {
+      const live = this.deps.store.localRuns.liveLocalRun();
+      for (const row of this.deps.store.localValidations.listOpenLocalValidations()) {
         const stale = validationRunStale(row, live);
         if (stale !== null) {
-          if (this.deps.store.abandonLocalValidation(row.id, stale) !== null) this.emit('changed');
+          if (this.deps.store.localValidations.abandonLocalValidation(row.id, stale) !== null) this.emit('changed');
           continue;
         }
         if (row.status !== 'dispatched' || row.taskId === null) continue;
-        const task = this.deps.store.getTask(row.taskId);
+        const task = this.deps.store.tasks.getTask(row.taskId);
         if (task === null || isActiveTask(task)) continue;
         if (
-          this.deps.store.abandonLocalValidation(
+          this.deps.store.localValidations.abandonLocalValidation(
             row.id,
             'the agent running it ended without reporting — its transcript says what happened',
           ) !== null
@@ -176,7 +176,7 @@ export class LocalValidationDesk extends EventEmitter {
           'This tool belongs to a local validation, and you were not dispatched for one. Which validation a ' +
           'report is about is settled by what you were sent to do, so there is nothing here for you to write to.',
       };
-    const row = this.deps.store.getLocalValidation(parts.id);
+    const row = this.deps.store.localValidations.getLocalValidation(parts.id);
     if (row === null) return { ok: false, error: 'The validation you were dispatched for no longer exists.' };
     return { ok: true, row };
   }

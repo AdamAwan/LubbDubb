@@ -12,17 +12,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const { store } = system;
 
   app.get('/api/obstacles', async () => {
-    const board = store.obstacleBoard();
+    const board = store.obstacles.obstacleBoard();
     const rows: ObstacleBoardRow[] = board.map((row) => ({
       ...row,
-      sightings: store.listObstacleSightings(row.obstacle.id),
+      sightings: store.obstacles.listObstacleSightings(row.obstacle.id),
     }));
     return {
       rows,
       counts: {
         sightings: rows.reduce((n, row) => n + row.sightings.length, 0),
         goals: new Set(rows.flatMap((row) => row.goalRefs)).size,
-        told: store.obstacleNoticesSent(),
+        told: store.obstacles.obstacleNoticesSent(),
         window: callRate(store, system.config.obstacleDormantMs),
       },
       dormantMs: system.config.obstacleDormantMs,
@@ -38,9 +38,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/obstacles/:id/mute',
     checked({ params: IdParams, body: MuteBody }, async ({ params, body, reply }) => {
-      const obstacle = store.getObstacle(params.id);
+      const obstacle = store.obstacles.getObstacle(params.id);
       if (!obstacle) return reply.code(404).send({ error: 'obstacle not found' });
-      if (!store.muteObstacle(params.id, body.muted)) {
+      if (!store.obstacles.muteObstacle(params.id, body.muted)) {
         return reply.code(409).send({
           error: body.muted
             ? `this obstacle is ${obstacle.state}, so it is already reaching nobody — there is nothing to silence`
@@ -48,7 +48,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         });
       }
       hub.broadcast({ type: 'dirty' });
-      return { ok: true, obstacle: store.getObstacle(params.id) };
+      return { ok: true, obstacle: store.obstacles.getObstacle(params.id) };
     }),
   );
 
@@ -61,9 +61,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/obstacles/:id/own',
     checked({ params: IdParams, body: OwnBody }, async ({ params, body, reply }) => {
-      const obstacle = store.getObstacle(params.id);
+      const obstacle = store.obstacles.getObstacle(params.id);
       if (!obstacle) return reply.code(404).send({ error: 'obstacle not found' });
-      if (!store.claimObstacle(params.id)) {
+      if (!store.obstacles.claimObstacle(params.id)) {
         return reply.code(409).send({
           error:
             obstacle.ownerRef === null
@@ -71,31 +71,31 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
               : `${obstacle.ownerRef} already owns this obstacle`,
         });
       }
-      store.setObstacleOwner(params.id, body.ownerRef);
+      store.obstacles.setObstacleOwner(params.id, body.ownerRef);
       hub.broadcast({ type: 'dirty' });
-      return { ok: true, obstacle: store.getObstacle(params.id) };
+      return { ok: true, obstacle: store.obstacles.getObstacle(params.id) };
     }),
   );
 
   app.post(
     '/api/obstacles/:id/retire',
     checked({ params: IdParams }, async ({ params, reply }) => {
-      const obstacle = store.getObstacle(params.id);
+      const obstacle = store.obstacles.getObstacle(params.id);
       if (!obstacle) return reply.code(404).send({ error: 'obstacle not found' });
-      if (!store.endObstacle(params.id, 'resolved', 'retired')) {
+      if (!store.obstacles.endObstacle(params.id, 'resolved', 'retired')) {
         return reply
           .code(409)
           .send({ error: `this obstacle is ${obstacle.state}, so nothing is owed of anybody about it` });
       }
       hub.broadcast({ type: 'dirty' });
-      return { ok: true, obstacle: store.getObstacle(params.id) };
+      return { ok: true, obstacle: store.obstacles.getObstacle(params.id) };
     }),
   );
 
   app.post(
     '/api/obstacles/:id/write-up',
     checked({ params: IdParams, body: z.object({}).optional() }, async ({ params, reply }) => {
-      const row = store.obstacleBoard().find((entry) => entry.obstacle.id === params.id);
+      const row = store.obstacles.obstacleBoard().find((entry) => entry.obstacle.id === params.id);
       if (!row) return reply.code(404).send({ error: 'obstacle not found' });
       const { obstacle } = row;
       if (obstacle.kind !== 'note') {
@@ -110,12 +110,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           error: `this note is ${obstacle.state}, and only a standing one is written down — one report is not evidence`,
         });
       }
-      if (store.obstaclesWrittenUp().has(obstacle.id)) {
+      if (store.obstacles.obstaclesWrittenUp().has(obstacle.id)) {
         return reply
           .code(409)
           .send({ error: 'this note has already been written up once, and that is the whole of it' });
       }
-      if (store.openObstacleWriteUps().length > 0) {
+      if (store.obstacles.openObstacleWriteUps().length > 0) {
         return reply
           .code(409)
           .send({ error: 'a note is already being written up — one at a time, across the whole fleet' });
@@ -132,7 +132,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
 function callRate(store: RouteContext['system']['store'], dormantMs: number): ObstacleCallRate {
   const since = new Date(Date.now() - dormantMs).toISOString();
-  const calls = store.listMcpCallsSince(since).filter((call) => call.channel === 'fleet');
+  const calls = store.mcpCalls.listMcpCallsSince(since).filter((call) => call.channel === 'fleet');
   const raises = calls.filter((call) => call.tool === 'raise');
   return {
     since,

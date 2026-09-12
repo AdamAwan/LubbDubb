@@ -135,7 +135,7 @@ test('only an environment that declares a health check is asked, and its answer 
   await system.harness.runCycle();
 
   assert.deepEqual(prober.asked, ['testUk', 'liveUk']);
-  const readings = system.store.listEnvironmentHealth();
+  const readings = system.store.environments.listEnvironmentHealth();
   assert.deepEqual(
     readings.map((r) => [r.environment, r.state, r.tier, r.reasons.join()]),
     [
@@ -150,7 +150,7 @@ test('a check that cannot answer is written down as unknown, never as well', asy
 
   await system.harness.runCycle();
 
-  const reading = system.store.listEnvironmentHealth()[0];
+  const reading = system.store.environments.listEnvironmentHealth()[0];
   assert.equal(reading?.state, 'unknown');
   assert.equal(reading?.detail, 'unscripted');
 });
@@ -163,27 +163,27 @@ test('a health reading stands for its interval, and an episode keeps its start',
   await system.harness.runCycle();
   assert.deepEqual(prober.asked, ['testUk'], 'a standing reading inside the interval is not re-asked');
 
-  const first = system.store.listEnvironmentHealth()[0];
+  const first = system.store.environments.listEnvironmentHealth()[0];
   assert.ok(first);
-  system.store.recordEnvironmentHealth({
+  system.store.environments.recordEnvironmentHealth({
     environment: 'testUk',
     state: 'unhealthy',
     tier: 'orange',
     reasons: ['Pipeline failing', 'and now Solr'],
     detail: null,
   });
-  const same = system.store.listEnvironmentHealth()[0];
+  const same = system.store.environments.listEnvironmentHealth()[0];
   assert.equal(same?.changedAt, first.changedAt, 'still the same episode');
   assert.deepEqual(same?.reasons, ['Pipeline failing', 'and now Solr'], 'but the newest account of it');
 
-  system.store.recordEnvironmentHealth({
+  system.store.environments.recordEnvironmentHealth({
     environment: 'testUk',
     state: 'unhealthy',
     tier: 'red',
     reasons: [],
     detail: null,
   });
-  const worse = system.store.listEnvironmentHealth()[0];
+  const worse = system.store.environments.listEnvironmentHealth()[0];
   assert.notEqual(worse?.changedAt, first.changedAt, 'a change of tier is a new episode');
 });
 

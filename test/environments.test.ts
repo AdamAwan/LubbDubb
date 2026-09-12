@@ -712,12 +712,12 @@ test('a merge is recorded against its goal and answered from where the environme
 
   await system.harness.runCycle();
 
-  const landings = system.store.listGoalLandings();
+  const landings = system.store.environments.listGoalLandings();
   assert.equal(landings.length, 1);
   assert.equal(landings[0]?.goalRef, 'issue:7');
   assert.equal(landings[0]?.sha, mergeShaFor(7));
 
-  const rows = system.store.listEnvironmentReach();
+  const rows = system.store.environments.listEnvironmentReach();
   assert.equal(rows.find((r) => r.environment === 'staging')?.status, 'reached');
   assert.equal(rows.find((r) => r.environment === 'prod')?.status, 'absent');
 });
@@ -741,7 +741,7 @@ test('a stacked pull request’s squash is not a landing, and the goal still arr
   await system.harness.runCycle();
 
   assert.deepEqual(
-    system.store.listGoalLandings().map((l) => l.prNumber),
+    system.store.environments.listGoalLandings().map((l) => l.prNumber),
     [7],
     'the stacked squash sits on a branch that is deleted and is an ancestor of nothing',
   );
@@ -751,7 +751,7 @@ test('a stacked pull request’s squash is not a landing, and the goal still arr
   assert.equal(staging?.total, 1);
   assert.equal(staging?.status, 'reached');
   assert.deepEqual(
-    system.store.listGoalArrivals().map((a) => `${a.goalRef} ${a.environment}`),
+    system.store.environments.listGoalArrivals().map((a) => `${a.goalRef} ${a.environment}`),
     ['issue:7 staging'],
     'the arrival fires rather than the goal reading partial 1/2 for ever',
   );
@@ -790,7 +790,7 @@ test('a probe that could not answer marks every landing unknown rather than leav
 
   await system.harness.runCycle();
 
-  const row = system.store.listEnvironmentReach().find((r) => r.environment === 'staging');
+  const row = system.store.environments.listEnvironmentReach().find((r) => r.environment === 'staging');
   assert.equal(row?.status, 'unknown');
   assert.match(row?.detail ?? '', /unscripted/);
 });
@@ -803,7 +803,7 @@ test('with no environment configured nothing is probed, but landings are still r
   await system.harness.runCycle();
 
   assert.deepEqual(prober.asked, []);
-  assert.equal(system.store.listGoalLandings().length, 1);
+  assert.equal(system.store.environments.listGoalLandings().length, 1);
 });
 
 test('a goal arriving is recorded once, and a later pulse adds nothing', async () => {
@@ -814,7 +814,7 @@ test('a goal arriving is recorded once, and a later pulse adds nothing', async (
   await system.harness.runCycle();
   await system.harness.runCycle();
 
-  const arrivals = system.store.listGoalArrivals();
+  const arrivals = system.store.environments.listGoalArrivals();
   assert.equal(arrivals.length, 1, 'arriving twice is not two arrivals');
   assert.equal(arrivals[0]?.goalRef, 'issue:7');
   assert.equal(arrivals[0]?.environment, 'staging');
@@ -830,7 +830,11 @@ test('half a goal in an environment has not arrived in it', async () => {
 
   await system.harness.runCycle();
 
-  assert.deepEqual(system.store.listGoalArrivals(), [], 'a release cut between two merges is not an arrival');
+  assert.deepEqual(
+    system.store.environments.listGoalArrivals(),
+    [],
+    'a release cut between two merges is not an arrival',
+  );
 });
 
 function announcingDesk(environments: EnvironmentConfig[], now: () => number) {
@@ -867,8 +871,12 @@ const TESTUK: EnvironmentConfig[] = [{ name: 'testUk', at: 'unused', arrival: { 
 test('an arrival the harness watched happen is said on the ticket, once', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, comments } = announcingDesk(TESTUK, () => now);
-  store.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'testUk', arrivedAt: '2026-08-20T11:59:30.000Z' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'testUk',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
@@ -877,19 +885,23 @@ test('an arrival the harness watched happen is said on the ticket, once', async 
   assert.equal(comments[0]?.number, 12);
   assert.match(comments[0]?.body ?? '', /reached `testUk`/);
   assert.equal(comments[0]?.commentRef, null);
-  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+  assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
 });
 
 test('an arrival the harness merely discovered is stamped, and says nothing', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, comments } = announcingDesk(TESTUK, () => now);
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'testUk', arrivedAt: '2026-08-13T09:00:00.000Z' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'testUk',
+    arrivedAt: '2026-08-13T09:00:00.000Z',
+  });
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
   assert.deepEqual(comments, []);
   assert.notEqual(
-    store.listGoalArrivals()[0]?.announcedAt,
+    store.environments.listGoalArrivals()[0]?.announcedAt,
     null,
     'stamped anyway, so turning comments on later does not announce a year of history',
   );
@@ -906,11 +918,16 @@ function establishedDeployment(environments: EnvironmentConfig[], now: number) {
   let clock = new Date(now - 7 * 24 * 60 * 60_000).toISOString();
   const store = new Store(':memory:', () => clock);
   for (let n = 1; n <= 12; n += 1) {
-    store.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}` });
+    store.environments.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}` });
     for (const env of environments) {
-      store.recordEnvironmentReach({ sha: `sha${n}`, environment: env.name, status: 'reached', detail: null });
-      store.recordGoalArrival({ goalRef: `issue:${n}`, environment: env.name, arrivedAt: clock });
-      store.markArrivalAnnounced(`issue:${n}`, env.name);
+      store.environments.recordEnvironmentReach({
+        sha: `sha${n}`,
+        environment: env.name,
+        status: 'reached',
+        detail: null,
+      });
+      store.environments.recordGoalArrival({ goalRef: `issue:${n}`, environment: env.name, arrivedAt: clock });
+      store.environments.markArrivalAnnounced(`issue:${n}`, env.name);
     }
   }
   clock = new Date(now).toISOString();
@@ -937,14 +954,19 @@ test('a renamed environment catches the deployment up silently', async () => {
 
   const renamed: EnvironmentConfig[] = [{ name: 'test-uk', at: 'unused', arrival: { comment: true } }];
   for (let n = 1; n <= 12; n += 1)
-    store.recordEnvironmentReach({ sha: `sha${n}`, environment: 'test-uk', status: 'reached', detail: null });
+    store.environments.recordEnvironmentReach({
+      sha: `sha${n}`,
+      environment: 'test-uk',
+      status: 'reached',
+      detail: null,
+    });
   for (let n = 1; n <= 12; n += 1)
-    store.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'test-uk', arrivedAt: clock() });
+    store.environments.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'test-uk', arrivedAt: clock() });
 
   await desk(renamed).run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
   assert.deepEqual(comments, [], 'nothing about the work changed — the operator edited a string');
-  const under = store.listGoalArrivals().filter((a) => a.environment === 'test-uk');
+  const under = store.environments.listGoalArrivals().filter((a) => a.environment === 'test-uk');
   assert.equal(under.length, 12);
   assert.ok(
     under.every((a) => a.announcedAt !== null),
@@ -956,11 +978,19 @@ test('a name with no history still speaks for work that lands after it', async (
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, comments, desk } = establishedDeployment(TESTUK, now);
   const added: EnvironmentConfig[] = [...TESTUK, { name: 'liveEu', at: 'unused', arrival: { comment: true } }];
-  store.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99' });
-  store.recordEnvironmentReach({ sha: 'sha99', environment: 'liveEu', status: 'reached', detail: null });
-  store.recordGoalArrival({ goalRef: 'issue:99', environment: 'liveEu', arrivedAt: new Date(now).toISOString() });
+  store.environments.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99' });
+  store.environments.recordEnvironmentReach({ sha: 'sha99', environment: 'liveEu', status: 'reached', detail: null });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:99',
+    environment: 'liveEu',
+    arrivedAt: new Date(now).toISOString(),
+  });
   for (let n = 1; n <= 12; n += 1)
-    store.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'liveEu', arrivedAt: new Date(now).toISOString() });
+    store.environments.recordGoalArrival({
+      goalRef: `issue:${n}`,
+      environment: 'liveEu',
+      arrivedAt: new Date(now).toISOString(),
+    });
 
   await desk(added).run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
@@ -976,49 +1006,69 @@ const HALLWAY: EnvironmentConfig[] = [{ name: 'hallway', at: 'unused', arrival: 
 test('an arrival the harness watched happen moves the work item on, once', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
-  store.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-20T11:59:30.000Z' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'hallway',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
   assert.deepEqual(moves, [{ number: 12, state: 'Worthy' }], 'the arrival is a moment, so the board moves once');
-  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+  assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
 });
 
 test('an arrival the harness merely discovered moves nothing', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-13T09:00:00.000Z' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'hallway',
+    arrivedAt: '2026-08-13T09:00:00.000Z',
+  });
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
   assert.deepEqual(moves, [], 'naming the state later does not re-file a year of shipped work');
-  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+  assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
 });
 
 test('a work item the provider refuses to move is left for the next pulse', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk } = announcingDesk(HALLWAY, () => now);
-  store.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'hallway', arrivedAt: '2026-08-20T11:59:30.000Z' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'hallway',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
   const sink = (desk as unknown as { deps: { sink: { setWorkItemState: () => Promise<never> } } }).deps.sink;
   sink.setWorkItemState = () => Promise.reject(new Error('transition not allowed'));
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
-  assert.equal(store.listGoalArrivals()[0]?.announcedAt, null, 'unstamped, so the move is retried rather than lost');
+  assert.equal(
+    store.environments.listGoalArrivals()[0]?.announcedAt,
+    null,
+    'unstamped, so the move is retried rather than lost',
+  );
 });
 
 test('an environment that asks for no comment stamps its arrivals silently', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, comments } = announcingDesk([{ name: 'testUk', at: 'unused' }], () => now);
-  store.recordGoalArrival({ goalRef: 'issue:12', environment: 'testUk', arrivedAt: '2026-08-20T11:59:30.000Z' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'testUk',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
 
   await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
 
   assert.deepEqual(comments, []);
-  assert.notEqual(store.listGoalArrivals()[0]?.announcedAt, null);
+  assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
 });
 
 test('nothing gates the obligations until an environment says it does', () => {
@@ -1088,14 +1138,14 @@ test('a delivered goal that merged nothing still draws its hold, and the release
   const system = build(environments, new FakeEnvironmentProber());
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'the goal' });
   await system.harness.runCycle();
-  system.store.recordDelivery({
+  system.store.verdicts.recordDelivery({
     originRef: 'issue:7',
     summary: 'closed out by hand — nothing here merges',
     by: 'operator',
   });
 
   await system.harness.runCycle();
-  assert.equal(system.store.listGoalLandings().length, 0, 'this goal merged nothing — that is the shape');
+  assert.equal(system.store.environments.listGoalLandings().length, 0, 'this goal merged nothing — that is the shape');
 
   const row = buildStateSnapshot(system).environmentReach.find((g) => g.goalRef === 'issue:7');
   assert.ok(row, 'a held goal earns a row because it is held, not because it has been anywhere');
@@ -1105,13 +1155,13 @@ test('a delivered goal that merged nothing still draws its hold, and the release
     [['testUk', 'absent', 0, 0]],
   );
 
-  system.store.releaseEnvironmentGate('issue:7', 'nothing here deploys');
+  system.store.environments.releaseEnvironmentGate('issue:7', 'nothing here deploys');
   await system.harness.runCycle();
   const released = buildStateSnapshot(system).environmentReach.find((g) => g.goalRef === 'issue:7');
   assert.equal(released?.gateHold, null, 'released, so nothing is holding it any more');
   assert.equal(released?.released?.note, 'nothing here deploys', 'and the row says on whose word');
   assert.equal(
-    system.store.listHumanTasksOfKind('close_out').some((t) => t.originRef === 'issue:7'),
+    system.store.humanTasks.listHumanTasksOfKind('close_out').some((t) => t.originRef === 'issue:7'),
     true,
     'the close-out the gate was holding is filed on the next pulse',
   );
@@ -1129,7 +1179,7 @@ test('a part’s merge lands under the goal, arrives as the goal, and opens the 
       return { ok: true, ref: `comment_${comments.length}` };
     },
   } as unknown as ActionSink;
-  store.recordWorkGraph(plannedGoal());
+  store.graph.recordWorkGraph(plannedGoal());
   const desk = new EnvironmentDesk({
     store,
     environments,
@@ -1145,11 +1195,11 @@ test('a part’s merge lands under the goal, arrives as the goal, and opens the 
   await desk.run(world({ closedPullRequests: [mergedPr({ number: 1 }), mergedPr({ number: 2 })] }));
 
   assert.deepEqual(
-    store.listGoalLandings().map((l) => l.goalRef),
+    store.environments.listGoalLandings().map((l) => l.goalRef),
     ['issue:12', 'issue:12'],
     'both parts’ merges are the goal’s landings',
   );
-  const arrivals = store.listGoalArrivals();
+  const arrivals = store.environments.listGoalArrivals();
   assert.equal(arrivals.length, 1);
   assert.equal(arrivals[0]?.goalRef, 'issue:12', 'the goal arrived, not one part of it');
   assert.equal(openedGoals('close_out', environments, arrivals, [])?.has('issue:12'), true);
@@ -1162,16 +1212,20 @@ test('the rows a part ref was already filed under are repaired on the next boot'
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-partref-'));
   const path = join(dir, 'landings.db');
   const before = new Store(path);
-  before.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12:part:api', sha: 'sha1' });
-  before.recordGoalLanding({ prNumber: 2, goalRef: 'issue:12:part:ui', sha: 'sha2' });
-  before.recordGoalLanding({ prNumber: 3, goalRef: 'issue:99', sha: 'sha3' });
-  before.recordGoalArrival({ goalRef: 'issue:12:part:api', environment: 'testUk', arrivedAt: '2026-08-01' });
-  before.recordGoalArrival({ goalRef: 'issue:99', environment: 'testUk', arrivedAt: '2026-08-01' });
+  before.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12:part:api', sha: 'sha1' });
+  before.environments.recordGoalLanding({ prNumber: 2, goalRef: 'issue:12:part:ui', sha: 'sha2' });
+  before.environments.recordGoalLanding({ prNumber: 3, goalRef: 'issue:99', sha: 'sha3' });
+  before.environments.recordGoalArrival({
+    goalRef: 'issue:12:part:api',
+    environment: 'testUk',
+    arrivedAt: '2026-08-01',
+  });
+  before.environments.recordGoalArrival({ goalRef: 'issue:99', environment: 'testUk', arrivedAt: '2026-08-01' });
   before.close();
 
   const after = new Store(path);
   assert.deepEqual(
-    after.listGoalLandings().map((l) => [l.prNumber, l.goalRef]),
+    after.environments.listGoalLandings().map((l) => [l.prNumber, l.goalRef]),
     [
       [1, 'issue:12'],
       [2, 'issue:12'],
@@ -1180,13 +1234,13 @@ test('the rows a part ref was already filed under are repaired on the next boot'
     'the label is corrected and the fact — which commit which PR merged as — is untouched',
   );
   assert.deepEqual(
-    after.listGoalArrivals().map((a) => a.goalRef),
+    after.environments.listGoalArrivals().map((a) => a.goalRef),
     ['issue:99'],
   );
 
   after.close();
   const again = new Store(path);
-  assert.equal(again.listGoalLandings().length, 3);
+  assert.equal(again.environments.listGoalLandings().length, 3);
   again.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -1197,9 +1251,9 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
   const old = Date.parse('2026-08-19T12:00:00.000Z');
   const now = Date.parse('2026-08-23T12:00:00.000Z');
   const before = new Store(path, () => new Date(old).toISOString());
-  before.recordWorkGraph(fourPartGoal());
-  const plan = before.upsertPlan({ originRef: 'issue:12', title: 'Four parts', status: 'active' });
-  const parts = before.upsertPlanParts(
+  before.graph.recordWorkGraph(fourPartGoal());
+  const plan = before.plans.upsertPlan({ originRef: 'issue:12', title: 'Four parts', status: 'active' });
+  const parts = before.plans.upsertPlanParts(
     plan.id,
     ['api', 'ui', 'docs', 'tests'].map((slug, i) => ({
       slug,
@@ -1215,10 +1269,14 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
       profile: null,
     })),
   );
-  before.updatePlanPart(parts[0]!.id, { status: 'merged' });
-  before.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' });
-  before.recordEnvironmentReach({ sha: 'sha1', environment: 'testUk', status: 'reached', detail: null });
-  before.recordGoalArrival({ goalRef: 'issue:12', environment: 'testUk', arrivedAt: new Date(old).toISOString() });
+  before.plans.updatePlanPart(parts[0]!.id, { status: 'merged' });
+  before.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' });
+  before.environments.recordEnvironmentReach({ sha: 'sha1', environment: 'testUk', status: 'reached', detail: null });
+  before.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'testUk',
+    arrivedAt: new Date(old).toISOString(),
+  });
   before.close();
 
   const after = new Store(path, () => new Date(now).toISOString());
@@ -1226,11 +1284,11 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
     { name: 'testUk', at: 'unused', arrival: { opens: ['close_out'], comment: true } },
   ];
   assert.equal(
-    openedGoals('close_out', environments, after.listGoalArrivals(), [])?.has('issue:12'),
+    openedGoals('close_out', environments, after.environments.listGoalArrivals(), [])?.has('issue:12'),
     false,
     'a stale partial arrival must not keep the gate open',
   );
-  assert.deepEqual(after.listGoalArrivals(), []);
+  assert.deepEqual(after.environments.listGoalArrivals(), []);
 
   const comments: IssueCommentInput[] = [];
   const sink = {
@@ -1242,7 +1300,7 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
   const prober = new FakeEnvironmentProber({ testUk: ['head-testUk'] });
   const git = new FakeGitObserver();
   for (const sha of ['sha1', 'sha2', 'sha3', 'sha4']) git.setContains('head-testUk', sha, true);
-  for (const part of parts.slice(1)) after.updatePlanPart(part!.id, { status: 'merged' });
+  for (const part of parts.slice(1)) after.plans.updatePlanPart(part!.id, { status: 'merged' });
   const desk = new EnvironmentDesk({
     store: after,
     environments,
@@ -1260,7 +1318,7 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
     world({ closedPullRequests: [mergedPr({ number: 2 }), mergedPr({ number: 3 }), mergedPr({ number: 4 })] }),
   );
 
-  const arrivals = after.listGoalArrivals();
+  const arrivals = after.environments.listGoalArrivals();
   assert.equal(arrivals.length, 1);
   assert.equal(arrivals[0]?.goalRef, 'issue:12');
   assert.equal(arrivals[0]?.environment, 'testUk');

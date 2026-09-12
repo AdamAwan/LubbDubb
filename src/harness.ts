@@ -194,7 +194,7 @@ export class Harness extends EventEmitter {
         at: new Date().toISOString(),
       };
     }
-    const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.getWorldBaseline()) : null;
+    const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.world.getWorldBaseline()) : null;
     if (source === 'local' && cached === null) {
       return {
         cycleId: 'unbaselined',
@@ -215,18 +215,18 @@ export class Harness extends EventEmitter {
       const { store } = this.deps;
       const readPlan = readWorld
         ? buildReadPlan({
-            previous: this.prevWorld ?? store.getWorldBaseline(),
-            tasks: store.listTasks(),
-            events: store.listWorldEvents(READ_PLAN_EVENTS),
+            previous: this.prevWorld ?? store.world.getWorldBaseline(),
+            tasks: store.tasks.listTasks(),
+            events: store.world.listWorldEvents(READ_PLAN_EVENTS),
             now: Date.now(),
             lanes: this.deps.readLanes,
             fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
       const observed = cached ?? (await this.deps.connector.getState(readPlan));
-      const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : observed;
+      const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
-      const world = applyThreadReopens(observed, store.prThreadReopens());
+      const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
       if (readWorld) await this.deps.plans?.reconcile(world);
       if (readWorld) await this.deps.prWatch?.run(world);
       if (readWorld) await this.deps.prWorkItems?.run(world);
@@ -258,8 +258,8 @@ export class Harness extends EventEmitter {
         });
       this.deps.fleet?.completeExpiredStalls();
       this.deps.ejections?.sweepExpiries();
-      const tasks = store.listTasks();
-      store.foldReviewWaits(
+      const tasks = store.tasks.listTasks();
+      store.reviewWaits.foldReviewWaits(
         world.pullRequests
           .filter((pr) =>
             awaitingReview(
@@ -269,27 +269,27 @@ export class Harness extends EventEmitter {
           )
           .map((pr) => pr.number),
       );
-      const agents = store.listAgents();
+      const agents = store.agents.listAgents();
       this.deps.burn?.run({ agents, tasks });
       this.deps.escalations?.tidyDeadAgents();
       this.deps.escalations?.tidySettledMerges();
-      const openEscalations = store.listOpenEscalations();
-      const queuedJobs = store.listQueuedJobs();
-      const standingJobs = store.listStandingJobs();
-      const ejections = store.liveEjections();
-      const plans = store.listPlans();
-      const planParts = store.listAllPlanParts();
-      const conclusions = store.listIssueConclusions();
-      const deliveries = store.listDeliveries();
+      const openEscalations = store.escalations.listOpenEscalations();
+      const queuedJobs = store.jobs.listQueuedJobs();
+      const standingJobs = store.jobs.listStandingJobs();
+      const ejections = store.ejections.liveEjections();
+      const plans = store.plans.listPlans();
+      const planParts = store.plans.listAllPlanParts();
+      const conclusions = store.verdicts.listIssueConclusions();
+      const deliveries = store.verdicts.listDeliveries();
       const deliveryWindow = deliverySignalQuery(deliveries);
-      const shortfalls = store.listShortfalls();
+      const shortfalls = store.verdicts.listShortfalls();
       const deliverySignals = deliveryWindow
-        ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
+        ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
-      const appraisals = store.listAppraisals();
+      const appraisals = store.verdicts.listAppraisals();
       if (readWorld) await this.deps.appraisals?.announce(world);
       if (readWorld) await this.deps.areaPaths?.refresh();
-      const retrospectiveOrigins = store.listRetrospectiveOrigins();
+      const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
       try {
         for (const r of runsToRecord(world.issues, tasks, {
           retrospectiveOrigins,
@@ -297,9 +297,9 @@ export class Harness extends EventEmitter {
           deliveries,
           shortfalls,
           plans,
-          planParts: store.listAllPlanParts(),
+          planParts: store.plans.listAllPlanParts(),
         }))
-          store.recordIssueRun(r);
+          store.floor.recordIssueRun(r);
       } catch (err) {
         this.deps.errors.record({
           source: 'cycle',
@@ -307,22 +307,22 @@ export class Harness extends EventEmitter {
           detail: (err as Error).stack ?? null,
         });
       }
-      const recentDecisions = store.listDecisions(200);
-      const proposals = store.listProposals();
+      const recentDecisions = store.decisions.listDecisions(200);
+      const proposals = store.escalations.listProposals();
       const signals = rejectionSignalQuery(proposals);
-      const rejectionSignals = signals ? store.listWorldEventsSince(signals.since, signals.refs) : [];
-      const priorityOverrides = store.listPriorityOverrides();
-      const goalPriorities = store.listGoalPriorities();
-      const goalPauses = store.listGoalPauses();
-      const profileOverrides = store.listProfileOverrides();
-      const liveAgents = store.countLiveAgents();
+      const rejectionSignals = signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [];
+      const priorityOverrides = store.priority.listPriorityOverrides();
+      const goalPriorities = store.priority.listGoalPriorities();
+      const goalPauses = store.pauses.listGoalPauses();
+      const profileOverrides = store.profileOverrides.listProfileOverrides();
+      const liveAgents = store.agents.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
       const label = this.deps.prWatchLabel;
       const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
       const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
 
-      const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
+      const retainedIssues = retainedRunIssues(store.floor.listIssueRuns(), world.issues);
       const dispatchWorld: WorldSnapshot =
         hiddenPrs.length > 0 || retainedIssues.length > 0
           ? {
@@ -336,7 +336,7 @@ export class Harness extends EventEmitter {
       const featureSummaryKeys =
         featureStandings.length === 0
           ? []
-          : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
+          : store.tickets.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
       if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld);
 
@@ -354,14 +354,17 @@ export class Harness extends EventEmitter {
         ejections,
         plans,
         planParts,
-        planAtoms: store.listAllPlanAtoms(),
-        planAmendments: store.listPendingPlanAmendments(),
-        validationChecks: store.listAllValidationChecks(),
-        validationPlans: store.listValidationPlanRecords(),
-        localRun: store.liveLocalRun(),
-        localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
+        planAtoms: store.plans.listAllPlanAtoms(),
+        planAmendments: store.plans.listPendingPlanAmendments(),
+        validationChecks: store.validation.listAllValidationChecks(),
+        validationPlans: store.validation.listValidationPlanRecords(),
+        localRun: store.localRuns.liveLocalRun(),
+        localValidations: [
+          ...store.localValidations.listOpenLocalValidations(),
+          ...store.localValidations.listLocalValidationsAwaitingFix(),
+        ],
         remoteRuns: this.deps.remoteRuns?.() ?? [],
-        selectorOfferings: store.listSelectorOfferings(),
+        selectorOfferings: store.remoteValidation.listSelectorOfferings(),
         conclusions,
         deliveries,
         deliverySignals,
@@ -370,7 +373,7 @@ export class Harness extends EventEmitter {
         retrospectiveOrigins,
         featureStandings,
         featureSummaryKeys,
-        featureSequences: store.listFeatureSequences(),
+        featureSequences: store.sequences.listFeatureSequences(),
         recentDecisions,
         proposals,
         rejectionSignals,
@@ -379,15 +382,15 @@ export class Harness extends EventEmitter {
         goalPauses,
         profileOverrides,
         priorRemedies: [
-          ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
-          ...store.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
+          ...store.remedies.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
+          ...store.remedies.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
         ],
-        prReviews: store.listPrReviews(),
-        prReviewRoutes: store.listPrReviewRoutes(),
-        prSplits: store.listPrSplitVerdicts(),
-        prReviewedElsewhere: store.prsReviewedElsewhere(),
-        obstacles: store.obstacleBoard(),
-        obstacleBlocks: store.listObstacleBlocks(),
+        prReviews: store.prReviews.listPrReviews(),
+        prReviewRoutes: store.prReviewRoutes.listPrReviewRoutes(),
+        prSplits: store.prSplits.listPrSplitVerdicts(),
+        prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
+        obstacles: store.obstacles.obstacleBoard(),
+        obstacleBlocks: store.obstacles.listObstacleBlocks(),
         modelPins: this.deps.modelPins,
         agentHeadroom: headroom,
       });
@@ -405,8 +408,8 @@ export class Harness extends EventEmitter {
 
       const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
-      store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
-      store.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      store.priority.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      store.profileOverrides.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
       if (this.deps.runway && this.deps.issuePickup)
         this.deps.runway.run({
@@ -423,7 +426,7 @@ export class Harness extends EventEmitter {
             deliveries,
             deliverySignals,
             appraisals,
-            runs: store.listIssueRuns(),
+            runs: store.floor.listIssueRuns(),
             headroom,
             paused: this.deps.runtime.paused,
           },
@@ -432,7 +435,7 @@ export class Harness extends EventEmitter {
 
       const stale = world.staleSources ?? [];
       const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
-      store.recordDecision({
+      store.decisions.recordDecision({
         cycleId,
         action: { type: 'no_op', reason: 'cycle rationale' } as Action,
         outcome: 'skipped',
@@ -483,15 +486,15 @@ export class Harness extends EventEmitter {
     const command = this.deps.review.reviewedElsewhere;
     if (prober === undefined || command === null || command.trim() === '') return;
     const rows = {
-      prReviews: new Map(store.listPrReviews().map((r) => [r.prNumber, r])),
-      prReviewRoutes: new Map(store.listPrReviewRoutes().map((r) => [r.prNumber, r])),
-      prReviewedElsewhere: store.prsReviewedElsewhere(),
+      prReviews: new Map(store.prReviews.listPrReviews().map((r) => [r.prNumber, r])),
+      prReviewRoutes: new Map(store.prReviewRoutes.listPrReviewRoutes().map((r) => [r.prNumber, r])),
+      prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     };
     for (const pr of world.pullRequests) {
       if (!needsFleetReview(pr, reviewReading(rows, pr.number), this.deps.review)) continue;
       const report = await prober.check(pr.number, command);
       if (report.verdict === 'reviewed') {
-        store.recordPrReviewedElsewhere(pr.number, command);
+        store.prReviewExternals.recordPrReviewedElsewhere(pr.number, command);
         continue;
       }
       if (report.verdict === 'unknown') {
@@ -508,13 +511,13 @@ export class Harness extends EventEmitter {
     if (prev) {
       const changes = diffWorlds(prev, world);
       if (changes.length) {
-        const events = store.recordWorldEvents(changes);
+        const events = store.world.recordWorldEvents(changes);
         this.emit('world:events', { events });
       }
     }
     this.prevWorld = world;
-    store.setWorldBaseline(world);
-    store.archiveClosedPrs(world.closedPullRequests ?? []);
+    store.world.setWorldBaseline(world);
+    store.prArchive.archiveClosedPrs(world.closedPullRequests ?? []);
   }
 
   override emit<K extends keyof HarnessEvents>(event: K, ...args: HarnessEvents[K]): boolean {

@@ -108,7 +108,7 @@ export const agentControl: DesktopToolFactory = (deps) => ({
     const action = args.action as AgentAction;
     if (typeof action !== 'string' || !(action in AGENT_ACTIONS))
       return toolError(`action must be one of: ${Object.keys(AGENT_ACTIONS).join(', ')}.`);
-    const agent = deps.store.getAgent(id);
+    const agent = deps.store.agents.getAgent(id);
     if (!agent) return toolError(`No agent "${id}". Call fleet_status for the ones that are running.`);
 
     const fleet = deps.agents();

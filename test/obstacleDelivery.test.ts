@@ -30,7 +30,7 @@ function build(): System {
 
 function board(system: System, what: string, check: string, file: string, voices: number): void {
   for (let i = 0; i < voices; i++) {
-    system.store.recordObstacleSighting(
+    system.store.obstacles.recordObstacleSighting(
       {
         what,
         kind: 'obstacle',
@@ -71,9 +71,9 @@ async function dispatch(system: System, ciChecks: string[]): Promise<string> {
     ],
   } as unknown as DispatchResult;
   await system.executor.execute('cyc', plan);
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:412:ci');
+  const task = system.store.tasks.listTasks().find((t) => t.originRef === 'pr:412:ci');
   assert.ok(task, 'nothing was dispatched, so there is no prompt to read');
-  return system.store.getTask(task.id)?.prompt ?? '';
+  return system.store.tasks.getTask(task.id)?.prompt ?? '';
 }
 
 test('an obstacle on this dispatch’s own check is appended to its prompt, and one on another check is not', async () => {
@@ -97,7 +97,7 @@ test('a sighted row reaches nobody, however well its keys match', async () => {
   const prompt = await dispatch(system, ['test (windows)']);
 
   assert.doesNotMatch(prompt, /windows runner wedges/);
-  assert.equal(system.store.listObstacles()[0]!.state, 'sighted');
+  assert.equal(system.store.obstacles.listObstacles()[0]!.state, 'sighted');
   system.store.close();
 });
 

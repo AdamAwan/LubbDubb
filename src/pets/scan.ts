@@ -12,29 +12,29 @@ interface PetActionCandidate {
 export function collectActions(store: Store): PetActionCandidate[] {
   const out: PetActionCandidate[] = [];
 
-  for (const escalation of store.listEscalations()) {
+  for (const escalation of store.escalations.listEscalations()) {
     if (escalation.answeredAt !== null) out.push({ kind: 'escalation', ref: escalation.id, at: escalation.answeredAt });
   }
 
-  for (const task of store.listHumanTasks(ALL)) {
+  for (const task of store.humanTasks.listHumanTasks(ALL)) {
     if (task.kind === 'ask' && task.status === 'done' && task.resolvedAt !== null)
       out.push({ kind: 'human-task', ref: task.id, at: task.resolvedAt });
   }
 
-  for (const plan of store.listPlans()) {
+  for (const plan of store.plans.listPlans()) {
     if (plan.status === 'active' || plan.status === 'complete')
       out.push({ kind: 'plan', ref: plan.id, at: plan.updatedAt });
   }
 
-  for (const landing of store.listStackLandings(ALL)) {
+  for (const landing of store.landings.listStackLandings(ALL)) {
     out.push({ kind: 'landing', ref: landing.id, at: landing.createdAt });
   }
 
-  for (const job of store.listJobs(ALL)) {
+  for (const job of store.jobs.listJobs(ALL)) {
     if (job.originRef === null) out.push({ kind: 'job', ref: job.id, at: job.createdAt });
   }
 
-  const upgrade = store.readUpgradeIntent();
+  const upgrade = store.upgrades.readUpgradeIntent();
   if (upgrade.state === 'applying' && upgrade.targetSha !== null && upgrade.requestedAt !== null)
     out.push({ kind: 'upgrade', ref: upgrade.targetSha, at: upgrade.requestedAt });
 

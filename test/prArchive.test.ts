@@ -32,17 +32,17 @@ test('a closed pull request is archived by the pulse and outlives the world’s 
 
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'Add widget', branch: 'issue/12/widget' });
   await system.harness.runCycle('manual');
-  assert.deepEqual(system.store.listArchivedPrs(), [], 'an open pull request is not archived');
+  assert.deepEqual(system.store.prArchive.listArchivedPrs(), [], 'an open pull request is not archived');
 
   system.connector.inject({ kind: 'pr_closed', prNumber: 42, merged: true });
   await system.harness.runCycle('manual');
   assert.deepEqual(
-    system.store.listArchivedPrs().map((pr) => ({ number: pr.number, merged: pr.merged, title: pr.title })),
+    system.store.prArchive.listArchivedPrs().map((pr) => ({ number: pr.number, merged: pr.merged, title: pr.title })),
     [{ number: 42, merged: true, title: 'Add widget' }],
   );
 
-  system.store.setWorldBaseline({ takenAt: new Date().toISOString(), pullRequests: [], issues: [] });
-  const kept = system.store.listArchivedPrs();
+  system.store.world.setWorldBaseline({ takenAt: new Date().toISOString(), pullRequests: [], issues: [] });
+  const kept = system.store.prArchive.listArchivedPrs();
   assert.deepEqual(
     kept.map((pr) => pr.number),
     [42],
@@ -74,11 +74,11 @@ test('re-reporting the same closed pull request refreshes its row rather than ad
     closedAt: '2026-01-01T00:00:00.000Z',
   };
 
-  system.store.archiveClosedPrs([pr]);
-  system.store.archiveClosedPrs([{ ...pr, title: 'as last read' }]);
+  system.store.prArchive.archiveClosedPrs([pr]);
+  system.store.prArchive.archiveClosedPrs([{ ...pr, title: 'as last read' }]);
 
   assert.deepEqual(
-    system.store.listArchivedPrs().map((row) => row.title),
+    system.store.prArchive.listArchivedPrs().map((row) => row.title),
     ['as last read'],
   );
 

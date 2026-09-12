@@ -754,7 +754,7 @@ test('/api/state ships the classification verdict, from the same call the dispat
     { name: 'flaky-suite', status: 'failing' },
   ];
   const world = await system.connector.getState();
-  system.store.setWorldBaseline({
+  system.store.world.setWorldBaseline({
     ...world,
     pullRequests: [pr(31, { ciStatus: 'failing', ciChecks: checks })],
   });

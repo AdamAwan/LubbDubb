@@ -41,7 +41,7 @@ function readWorld(
   task: Task,
   args: Record<string, unknown>,
 ): { ok: true; payload: Record<string, unknown> } | { ok: false; error: string } {
-  const world = store.getWorldBaseline();
+  const world = store.world.getWorldBaseline();
   if (!world) {
     return {
       ok: false,
@@ -56,12 +56,12 @@ function readWorld(
 
   const item = { ...found.item };
   if (target.target.kind === 'issue') {
-    const plan = store.getPlanByOrigin(target.target.canonical);
+    const plan = store.plans.getPlanByOrigin(target.target.canonical);
     if (plan) {
       item.plan = {
         status: plan.status,
         reason: plan.reason,
-        parts: liveParts(store.listPlanParts(plan.id)).map((p) => ({
+        parts: liveParts(store.plans.listPlanParts(plan.id)).map((p) => ({
           slug: p.slug,
           title: p.title,
           scope: p.scope,
@@ -72,7 +72,7 @@ function readWorld(
         })),
       };
     }
-    const work = store.listWorkSubtree(target.target.canonical);
+    const work = store.graph.listWorkSubtree(target.target.canonical);
     if (work.length > 0) {
       item.work = work.map((n) => ({
         ref: n.ref,

@@ -38,7 +38,7 @@ async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: n
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
   failPlanningOpen(sys.store, issueNumber);
   await sys.harness.runCycle('manual');
-  const task = sys.store.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
+  const task = sys.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
   assert.ok(task, 'a code task should have been dispatched');
   return task!;
 }
@@ -54,14 +54,14 @@ async function waitFor(cond: () => boolean, ms = 2000): Promise<void> {
 test('completing an agent lands on the done terminal, not the kill one', async () => {
   const { system, backend } = build();
   const task = await codeAgent(system, 7);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
 
   backend.last().emit('@@LUBBDUBB_WAITING:I think that is everything@@\r\n');
-  assert.equal(system.store.getAgent(agent.id)!.status, 'waiting');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'waiting');
 
   assert.equal(system.agents.complete(agent.id), true);
-  assert.equal(system.store.getAgent(agent.id)!.status, 'done');
-  assert.equal(system.store.getTask(task.id)!.status, 'done', 'the task must read done, not interrupted');
+  assert.equal(system.store.agents.getAgent(agent.id)!.status, 'done');
+  assert.equal(system.store.tasks.getTask(task.id)!.status, 'done', 'the task must read done, not interrupted');
   assert.equal(system.agents.isLive(agent.id), false);
   system.store.close();
 });
@@ -69,7 +69,7 @@ test('completing an agent lands on the done terminal, not the kill one', async (
 test('a completed agent is reaped as done, and its worktree slot released', async () => {
   const { system } = build();
   await codeAgent(system, 8);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   const cwd = agent.cwd;
   const reaps: string[] = [];
   system.agents.on('reaped', ({ status }) => reaps.push(status));
@@ -86,24 +86,24 @@ test('a completed agent is reaped as done, and its worktree slot released', asyn
 test('completing settles the escalation the agent was parked on', async () => {
   const { system, backend } = build();
   await codeAgent(system, 9);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
 
   backend.last().emit('@@LUBBDUBB_WAITING:anything else?@@\r\n');
-  assert.equal(system.store.listOpenEscalations().length, 1, 'the park should raise an escalation');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1, 'the park should raise an escalation');
 
   system.agents.complete(agent.id);
-  assert.equal(system.store.listOpenEscalations().length, 0);
+  assert.equal(system.store.escalations.listOpenEscalations().length, 0);
   system.store.close();
 });
 
 test('completing is audited as the operator’s own act', async () => {
   const { system, backend } = build();
   await codeAgent(system, 10);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   backend.last().emit('@@LUBBDUBB_WAITING:done I think@@\r\n');
 
   system.agents.complete(agent.id);
-  const row = system.store.listDecisions(50).find((d) => d.cycleId === `human:${agent.id}`);
+  const row = system.store.decisions.listDecisions(50).find((d) => d.cycleId === `human:${agent.id}`);
   assert.ok(row, 'a decision must be recorded under the human: cycle id the cockpit badges');
   assert.equal(row!.outcome, 'executed');
   system.store.close();
@@ -112,7 +112,7 @@ test('completing is audited as the operator’s own act', async () => {
 test('completing an agent that is no longer live is refused', async () => {
   const { system, backend } = build();
   await codeAgent(system, 11);
-  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   const { app } = await buildApp(system);
 
   const ok = await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/complete` });

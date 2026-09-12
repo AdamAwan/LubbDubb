@@ -26,14 +26,14 @@ const PROMPT = `a rendered agent prompt, ${'x'.repeat(4096)}`;
 
 test('the snapshot ships tasks without their prompts', () => {
   const system = testSystem();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Fix the thing',
     prompt: PROMPT,
     branch: 'issue/1',
     originRef: 'issue:1',
   });
-  system.store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
+  system.store.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
 
   const snapshot = buildStateSnapshot(system);
   const shipped = snapshot.tasks.find((t) => t.id === task.id);
@@ -41,13 +41,13 @@ test('the snapshot ships tasks without their prompts', () => {
   assert.ok(!('prompt' in shipped), 'and carries no prompt');
   assert.ok(!JSON.stringify(snapshot).includes(PROMPT), 'no prompt text reaches the payload by any route');
 
-  assert.equal(system.store.getTask(task.id)?.prompt, PROMPT);
+  assert.equal(system.store.tasks.getTask(task.id)?.prompt, PROMPT);
   system.store.close();
 });
 
 test('a summary row is the whole task minus its prompt', () => {
   const system = testSystem();
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Fix the thing',
     prompt: PROMPT,
@@ -64,36 +64,36 @@ test('a summary row is the whole task minus its prompt', () => {
     profileSource: 'rule',
   });
 
-  const summary = system.store.listTasks().find((t) => t.id === task.id);
+  const summary = system.store.tasks.listTasks().find((t) => t.id === task.id);
   assert.ok(summary);
   assert.deepEqual(
     Object.keys(summary).sort(),
-    Object.keys(system.store.getTask(task.id)!)
+    Object.keys(system.store.tasks.getTask(task.id)!)
       .filter((k) => k !== 'prompt')
       .sort(),
     'the narrow read returns every column the whole row has, except the prompt',
   );
-  assert.deepEqual({ ...system.store.getTask(task.id)!, prompt: undefined }, { ...summary, prompt: undefined });
+  assert.deepEqual({ ...system.store.tasks.getTask(task.id)!, prompt: undefined }, { ...summary, prompt: undefined });
   system.store.close();
 });
 
 test('the snapshot ships only the escalations still waiting on a person', () => {
   const system = testSystem();
-  const open = system.store.createEscalation({
+  const open = system.store.escalations.createEscalation({
     type: 'answer_question',
     prompt: 'Which database?',
     context: { recentOutput: 'a transcript tail'.repeat(64) },
     taskId: null,
     agentId: null,
   });
-  const settled = system.store.createEscalation({
+  const settled = system.store.escalations.createEscalation({
     type: 'answer_question',
     prompt: 'Which queue?',
     context: { recentOutput: 'another transcript tail'.repeat(64) },
     taskId: null,
     agentId: null,
   });
-  system.store.answerEscalation(settled.id, 'the first one');
+  system.store.escalations.answerEscalation(settled.id, 'the first one');
 
   const snapshot = buildStateSnapshot(system);
   assert.deepEqual(

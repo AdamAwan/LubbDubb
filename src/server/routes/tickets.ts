@@ -47,17 +47,17 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     TICKETS_RATE_LIMIT,
     checked({ query: TicketQuery }, async ({ query }) => {
       const watchLabel = watchLabelFor(config.labelPrefix);
-      const runs = store.listIssueRuns();
+      const runs = store.floor.listIssueRuns();
       const { goals } = buildSpendGoals({
-        agents: store.listAgents(),
-        localRuns: store.listLocalRuns(),
-        tasks: store.listTasks(),
-        nodes: store.listWorkNodes(),
-        issues: store.getWorldBaseline()?.issues ?? [],
+        agents: store.agents.listAgents(),
+        localRuns: store.localRuns.listLocalRuns(),
+        tasks: store.tasks.listTasks(),
+        nodes: store.graph.listWorkNodes(),
+        issues: store.world.getWorldBaseline()?.issues ?? [],
         runs,
       });
-      const items = store.listTrackerItems();
-      const featureSlots = store.ensureFeatureColors(
+      const items = store.tickets.listTrackerItems();
+      const featureSlots = store.tickets.ensureFeatureColors(
         items.flatMap((item) => (item.parent ? [item.parent.number] : [])),
       );
       const page = buildTicketPage({
@@ -71,11 +71,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         outcomes: ticketOutcomes({
           runs,
-          conclusions: store.listIssueConclusions(),
-          deliveries: store.listDeliveries(),
-          shortfalls: store.listShortfalls(),
-          plans: store.listPlans(),
-          planParts: store.listAllPlanParts(),
+          conclusions: store.verdicts.listIssueConclusions(),
+          deliveries: store.verdicts.listDeliveries(),
+          shortfalls: store.verdicts.listShortfalls(),
+          plans: store.plans.listPlans(),
+          planParts: store.plans.listAllPlanParts(),
         }),
         watchLabel,
         query: {

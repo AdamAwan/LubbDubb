@@ -94,7 +94,7 @@ function build(
 }
 
 function seed(system: System): void {
-  system.store.ingestValidation('issue:12', {
+  system.store.validation.ingestValidation('issue:12', {
     checks: [
       {
         id: 'an-order-places',
@@ -112,9 +112,9 @@ function seed(system: System): void {
     supersededReason: '',
     amendNote: '',
   });
-  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  system.store.saveStateQueries('issue:12', [QUERY], 'agent');
-  system.store.approveStateQuery({
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  system.store.remoteValidation.saveStateQueries('issue:12', [QUERY], 'agent');
+  system.store.remoteValidation.approveStateQuery({
     digest: queryDigest(QUERY.query, QUERY.presence),
     environment: 'acceptance',
     originRef: 'issue:12',
@@ -122,7 +122,7 @@ function seed(system: System): void {
     rows: 0,
     detail: null,
   });
-  system.store.recordGoalArrival({
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'acceptance',
     arrivedAt: new Date().toISOString(),
@@ -134,14 +134,14 @@ function seed(system: System): void {
  * the store because nothing on the off deployment would open one, and the task is left `failed`.
  */
 function plantDeadRun(system: System): string {
-  const { run } = system.store.beginRemoteRun({
+  const { run } = system.store.remoteValidation.beginRemoteRun({
     goalRef: 'issue:12',
     environment: 'acceptance',
     tenant: 'swept-tenant',
     startedSha: DEPLOYED,
   });
   assert.ok(run, 'the store opened one');
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Run the sheet',
     prompt: 'run it',
@@ -149,8 +149,8 @@ function plantDeadRun(system: System): string {
     originRef: `issue:12:validate-remote:${run.id}`,
     originTitle: 'A goal',
   });
-  system.store.updateTask(task.id, { status: 'failed' });
-  assert.ok(system.store.claimRemoteRun(run.id, task.id), 'and the flip claimed it');
+  system.store.tasks.updateTask(task.id, { status: 'failed' });
+  assert.ok(system.store.remoteValidation.claimRemoteRun(run.id, task.id), 'and the flip claimed it');
   return run.id;
 }
 
@@ -178,15 +178,15 @@ test('a deployment that configured nothing takes the build inert', async () => {
     await system.harness.runCycle('manual');
     await system.harness.runCycle('manual');
 
-    assert.deepEqual(system.store.listRemoteSheets(), [], 'no sheet');
-    assert.deepEqual(system.store.listRemoteSheetRows(), [], 'no sheet row');
-    assert.deepEqual(system.store.listRemoteReadings(), [], 'no reading');
-    assert.equal(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'no arrival stamped');
+    assert.deepEqual(system.store.remoteValidation.listRemoteSheets(), [], 'no sheet');
+    assert.deepEqual(system.store.remoteValidation.listRemoteSheetRows(), [], 'no sheet row');
+    assert.deepEqual(system.store.remoteValidation.listRemoteReadings(), [], 'no reading');
+    assert.equal(system.store.environments.listGoalArrivals()[0]?.sheetedAt, null, 'no arrival stamped');
     assert.deepEqual(asked.asked, [], 'no command is spawned');
     assert.deepEqual(keeper.asked, [], 'no tenant command either — and none is ever invented');
     assert.deepEqual(runner.asked, [], 'and the runner is inert: no listing, no run, no publish');
-    assert.deepEqual(system.store.listRemoteRuns(), [], 'no run');
-    assert.deepEqual(system.store.listRemoteTenants(), [], 'no tenant stamped');
+    assert.deepEqual(system.store.remoteValidation.listRemoteRuns(), [], 'no run');
+    assert.deepEqual(system.store.remoteValidation.listRemoteTenants(), [], 'no tenant stamped');
 
     // The press, the cancel and the tenant control are all inert here: nothing to press, and the
     // refusal is a returned value rather than a throw.
@@ -194,11 +194,11 @@ test('a deployment that configured nothing takes the build inert', async () => {
     assert.equal(pressed.ok, false, 'a press on an environment with no validate block is refused');
     assert.equal(system.remoteRuns.cancel('acceptance', null), null);
     assert.equal((await system.remoteRuns.prepareTenant('acceptance')).ok, false);
-    assert.deepEqual(system.store.listRemoteRuns(), [], 'and still no run row');
+    assert.deepEqual(system.store.remoteValidation.listRemoteRuns(), [], 'and still no run row');
     assert.deepEqual(keeper.asked, [], 'and still no tenant command');
     assert.deepEqual(runner.asked, [], 'and still nothing asked of a runner');
 
-    const bench = system.store.listHumanTasksOfKind('validate');
+    const bench = system.store.humanTasks.listHumanTasksOfKind('validate');
     assert.equal(bench.length, 1, 'the validate row is filed as it always was');
     assert.doesNotMatch(bench[0]?.detail ?? '', /sheet/i, 'and says nothing about a sheet');
 
@@ -221,7 +221,7 @@ test('a deployment that configured nothing takes the build inert', async () => {
       'nothing is briefed, so rule `remote-validation` proposes nothing',
     );
     assert.deepEqual(
-      system.store.listDecisions(50).filter((d) => d.rule === 'remote-validation'),
+      system.store.decisions.listDecisions(50).filter((d) => d.rule === 'remote-validation'),
       [],
       'and no cycle here decided anything under it',
     );
@@ -239,9 +239,9 @@ test('a deployment that configured nothing takes the build inert', async () => {
     });
     assert.equal(settled.ok, false, 'a report against no run is a returned refusal, never a throw');
     assert.equal(system.remoteReadings.handback('a-run-that-was-never-opened', 'nothing here').ok, false);
-    assert.deepEqual(system.store.listRemoteReadings(), [], 'and nothing was written by either');
+    assert.deepEqual(system.store.remoteValidation.listRemoteReadings(), [], 'and nothing was written by either');
     assert.equal(
-      system.store.listValidationChecks('issue:12')[0]?.resultBy,
+      system.store.validation.listValidationChecks('issue:12')[0]?.resultBy,
       null,
       'no check here is attributed to a spec, because no spec ran anywhere',
     );
@@ -253,8 +253,16 @@ test('a deployment that configured nothing takes the build inert', async () => {
     // deployment opens one — and the early return the sweep sits inside must still stamp nothing.
     const planted = plantDeadRun(system);
     await system.harness.runCycle('manual');
-    assert.equal(system.store.getRemoteRun(planted)?.status, 'dispatched', 'the sweep never runs here');
-    assert.equal(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'and it stamps no arrival on the way past');
+    assert.equal(
+      system.store.remoteValidation.getRemoteRun(planted)?.status,
+      'dispatched',
+      'the sweep never runs here',
+    );
+    assert.equal(
+      system.store.environments.listGoalArrivals()[0]?.sheetedAt,
+      null,
+      'and it stamps no arrival on the way past',
+    );
   } finally {
     system.store.close();
   }
@@ -270,19 +278,19 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
     await system.harness.runCycle('manual');
 
     assert.deepEqual(
-      system.store.listRemoteSheets().map((s) => `${s.goalRef} ${s.environment}`),
+      system.store.remoteValidation.listRemoteSheets().map((s) => `${s.goalRef} ${s.environment}`),
       ['issue:12 acceptance'],
     );
     assert.deepEqual(
-      system.store.listRemoteSheetRows().map((r) => r.rowId),
+      system.store.remoteValidation.listRemoteSheetRows().map((r) => r.rowId),
       ['check:an-order-places', `state:${QUERY.id}`],
     );
     assert.equal(
-      system.store.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
+      system.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
       'passed',
       'an approved row arrives with its reading already on it',
     );
-    assert.notEqual(system.store.listGoalArrivals()[0]?.sheetedAt, null, 'the arrival is stamped');
+    assert.notEqual(system.store.environments.listGoalArrivals()[0]?.sheetedAt, null, 'the arrival is stamped');
     assert.deepEqual(
       asked.asked.map((a) => `${a.environment}:${a.kind}`),
       ['acceptance:presence', 'acceptance:state'],
@@ -294,7 +302,7 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
       'and this environment declares no browser block, so the pre-flight asks a runner nothing',
     );
 
-    const bench = system.store.listHumanTasksOfKind('validate');
+    const bench = system.store.humanTasks.listHumanTasksOfKind('validate');
     assert.match(bench[0]?.detail ?? '', /A validation sheet is assembled for `acceptance` — 2 rows\./);
 
     const state = buildStateSnapshot(system) as unknown as Record<string, unknown>;
@@ -308,18 +316,18 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
 
     // And the press is reachable on the same run: it opens a run row, pins it to the commit the
     // environment stands at now, and re-reads the confirmed row through it.
-    system.store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+    system.store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
     const pressed = await system.remoteRuns.press('issue:12', 'acceptance');
     assert.equal(pressed.ok, true);
-    assert.equal(system.store.listRemoteRuns().length, 1);
-    assert.equal(system.store.listRemoteRuns()[0]?.startedSha, DEPLOYED);
+    assert.equal(system.store.remoteValidation.listRemoteRuns().length, 1);
+    assert.equal(system.store.remoteValidation.listRemoteRuns()[0]?.startedSha, DEPLOYED);
     assert.equal(
-      system.store.listRemoteReadings().filter((r) => r.runId !== null).length,
+      system.store.remoteValidation.listRemoteReadings().filter((r) => r.runId !== null).length,
       1,
       'the approved row is re-read under the run',
     );
     assert.equal(
-      system.store.listRemoteRuns()[0]?.tenant,
+      system.store.remoteValidation.listRemoteRuns()[0]?.tenant,
       '',
       'this environment declares no tenant, and none is made up',
     );
@@ -328,7 +336,7 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
     // The reading half is reachable on the same run. This environment permits `state` only, so its
     // `check` row is blocked and no browser row is owed an agent — what a report has to say here is
     // that there is no run left open for one, which is the honest answer rather than a silent one.
-    const runId = system.store.listRemoteRuns()[0]!.id;
+    const runId = system.store.remoteValidation.listRemoteRuns()[0]!.id;
     const settled = await system.remoteReadings.settle(runId, {
       reportPath: join(system.config.repoRoot, 'results.json'),
       artefacts: null,
@@ -349,7 +357,7 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
     // with a reason, so the `(environment, tenant)` lock is never held for good.
     const planted = plantDeadRun(system);
     await system.harness.runCycle('manual');
-    const swept = system.store.getRemoteRun(planted);
+    const swept = system.store.remoteValidation.getRemoteRun(planted);
     assert.equal(swept?.status, 'abandoned');
     assert.match(swept?.note ?? '', /ended without reporting/, 'and the reason is readable afterwards');
   } finally {

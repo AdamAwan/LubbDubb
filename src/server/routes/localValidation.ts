@@ -25,7 +25,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           validation: open,
         });
 
-      const live = store.liveLocalRun();
+      const live = store.localRuns.liveLocalRun();
       if (live !== null && live.originRef !== origin && body.swap !== true) {
         const goal = /^issue:(\d+)$/.exec(live.originRef)?.[1] ?? live.originRef;
         return reply.code(409).send({
@@ -52,7 +52,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         }
       }
 
-      const run = store.liveLocalRun();
+      const run = store.localRuns.liveLocalRun();
       if (run === null)
         return reply.code(400).send({
           error: 'The local environment stopped before the validation could be recorded. Try again.',

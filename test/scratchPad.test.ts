@@ -36,7 +36,7 @@ function build(): System {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -91,7 +91,7 @@ test('a pad note is trimmed rather than refused, and says so', () => {
 
 test('pad entries are appended and read back oldest first, one pad per issue', () => {
   const store = new Store(':memory:');
-  store.appendScratchEntry({
+  store.scratch.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:schema',
     agentId: 'a1',
@@ -100,7 +100,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     note: 'the migration needed a PRAGMA check',
     decision: null,
   });
-  store.appendScratchEntry({
+  store.scratch.appendScratchEntry({
     padRef: 'issue:12',
     authorOriginRef: 'issue:12:part:dispatcher',
     agentId: 'a2',
@@ -109,7 +109,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     note: 'reused the schema part branch as a base',
     decision: null,
   });
-  store.appendScratchEntry({
+  store.scratch.appendScratchEntry({
     padRef: 'issue:99',
     authorOriginRef: 'issue:99',
     agentId: 'a3',
@@ -119,7 +119,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     decision: null,
   });
 
-  const entries = store.listScratchEntries('issue:12');
+  const entries = store.scratch.listScratchEntries('issue:12');
   assert.equal(entries.length, 2);
   assert.equal(entries[0]?.note, 'the migration needed a PRAGMA check');
   assert.equal(entries[0]?.authorOriginRef, 'issue:12:part:schema');
@@ -127,10 +127,10 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
   assert.equal(entries[1]?.topic, null);
   assert.ok((entries[0]?.createdAt ?? '') <= (entries[1]?.createdAt ?? ''));
   assert.deepEqual(
-    store.listScratchEntries('issue:99').map((e) => e.note),
+    store.scratch.listScratchEntries('issue:99').map((e) => e.note),
     ['another goal entirely'],
   );
-  assert.deepEqual(store.listScratchEntries('issue:7'), []);
+  assert.deepEqual(store.scratch.listScratchEntries('issue:7'), []);
 });
 
 test('an empty note is refused; a topic is collapsed to one short line', () => {
@@ -186,11 +186,11 @@ test('an over-long note is stored trimmed, and an empty one is refused', async (
   const long = await callTool(system, agent, 'scratch_append', { note: 'y'.repeat(MAX_PAD_NOTE + 10) });
   assert.equal(long.isError, false);
   assert.match(long.text, /"trimmed":\s*true/);
-  assert.equal(system.store.listScratchEntries('issue:12')[0]?.note.length, MAX_PAD_NOTE);
+  assert.equal(system.store.scratch.listScratchEntries('issue:12')[0]?.note.length, MAX_PAD_NOTE);
 
   const empty = await callTool(system, agent, 'scratch_append', { note: '   ' });
   assert.equal(empty.isError, true);
-  assert.equal(system.store.listScratchEntries('issue:12').length, 1, 'a refused note lands nowhere');
+  assert.equal(system.store.scratch.listScratchEntries('issue:12').length, 1, 'a refused note lands nowhere');
   system.store.close();
 });
 
@@ -225,7 +225,7 @@ test('the snapshot ships the pad reading and the trail is fetched on demand', as
   const issues = state.json().world.issues as { number: number; scratchpad: unknown }[];
   assert.deepEqual(issues.find((i) => i.number === 12)?.scratchpad, {
     entries: 2,
-    updatedAt: system.store.listScratchEntries('issue:12')[1]?.createdAt,
+    updatedAt: system.store.scratch.listScratchEntries('issue:12')[1]?.createdAt,
   });
   assert.equal(issues.find((i) => i.number === 13)?.scratchpad, null);
   assert.doesNotMatch(state.body, /PRAGMA check/);

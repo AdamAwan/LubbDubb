@@ -77,11 +77,11 @@ test('the v2 fields round-trip through the schema and onto the plan row', () => 
 
   const s = store();
   const { plan } = ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
-  const read = s.getPlan(plan.id);
+  const read = s.plans.getPlan(plan.id);
   assert.equal(read?.alternatives, DOC.alternatives);
   assert.equal(read?.verification, DOC.verification);
   assert.deepEqual(read?.evidence[0], { path: 'src/cache.ts', line: 88, note: 'writes under the old key' });
-  const parts = s.listPlanParts(plan.id);
+  const parts = s.plans.listPlanParts(plan.id);
   assert.deepEqual(parts[0]?.touches, ['src/store/']);
   assert.equal(parts[1]?.size, 'm');
 });
@@ -94,7 +94,7 @@ test('a v1 document still validates, and reads back with the v2 fields empty', (
   if (!parsed.ok) return;
   const s = store();
   const { plan } = ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:9', title: 'Issue 9' });
-  const read = s.getPlan(plan.id);
+  const read = s.plans.getPlan(plan.id);
   assert.equal(read?.alternatives, null);
   assert.equal(read?.openQuestions, null);
   assert.equal(read?.verification, null);
@@ -107,7 +107,7 @@ test('an amendment that omits the narrative leaves the previous one standing', (
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
-  const plan = s.upsertPlan({ originRef: 'issue:12', title: 'Issue 12', status: 'active' });
+  const plan = s.plans.upsertPlan({ originRef: 'issue:12', title: 'Issue 12', status: 'active' });
   assert.equal(plan.alternatives, DOC.alternatives);
   assert.deepEqual(plan.evidence.length, 1);
 });
@@ -120,7 +120,7 @@ test('every ingestion records a revision, numbered in order', () => {
   const { plan } = ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
   ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
 
-  const revisions = s.listPlanRevisions(plan.id);
+  const revisions = s.plans.listPlanRevisions(plan.id);
   assert.deepEqual(
     revisions.map((r) => r.seq),
     [1, 2],
@@ -136,17 +136,17 @@ test('a revision records what was proposed, not what the store made of it', () =
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   const { plan } = ingestPlanDocument(s, { doc: parsed.document, originRef: 'issue:12', title: 'Issue 12' });
-  const schema = s.listPlanParts(plan.id).find((p) => p.slug === 'schema');
+  const schema = s.plans.listPlanParts(plan.id).find((p) => p.slug === 'schema');
   assert.ok(schema);
-  s.updatePlanPart(schema.id, { status: 'in_review', prNumber: 7 });
+  s.plans.updatePlanPart(schema.id, { status: 'in_review', prNumber: 7 });
 
   const amended = parsePlanDocument(JSON.stringify({ ...DOC, parts: [{ ...DOC.parts[1], dependsOn: [] }] }));
   assert.equal(amended.ok, true);
   if (!amended.ok) return;
   ingestPlanDocument(s, { doc: amended.document, originRef: 'issue:12', title: 'Issue 12' });
 
-  assert.equal(s.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.status, 'in_review');
-  const diff = latestPlanDiff(s.listPlanRevisions(plan.id));
+  assert.equal(s.plans.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.status, 'in_review');
+  const diff = latestPlanDiff(s.plans.listPlanRevisions(plan.id));
   assert.equal(diff?.parts.find((p) => p.slug === 'schema')?.kind, 'dropped');
 });
 
@@ -428,7 +428,7 @@ test('POST /api/plans/:id/acceptance ticks a criterion, and refuses one the part
     payload: { slug: 'schema', criterion: 'The table exists.', met: true },
   });
   assert.equal(ok.statusCode, 200);
-  assert.deepEqual(system.store.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.acceptanceMet, [
+  assert.deepEqual(system.store.plans.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.acceptanceMet, [
     'The table exists.',
   ]);
 
@@ -451,7 +451,7 @@ test('POST /api/plans/:id/acceptance ticks a criterion, and refuses one the part
     url: `/api/plans/${plan.id}/acceptance`,
     payload: { slug: 'schema', criterion: 'The table exists.', met: false },
   });
-  assert.deepEqual(system.store.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.acceptanceMet, []);
+  assert.deepEqual(system.store.plans.listPlanParts(plan.id).find((p) => p.slug === 'schema')?.acceptanceMet, []);
   await app.close();
   system.store.close();
 });

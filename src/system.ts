@@ -190,8 +190,8 @@ interface BuildOptions {
 
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
-  store.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
-  store.pruneSurfaceReach(true);
+  store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
+  store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
   const ingressInbox = new IngressInbox();
@@ -214,9 +214,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         get size() {
           // Grown by the ejections, not shared with them: a held slot the cap did not
           // account for is a dispatch refused for want of a directory, forever.
-          return defaultPoolSize(runtimeControl.cap) + store.liveEjections().length;
+          return defaultPoolSize(runtimeControl.cap) + store.ejections.liveEjections().length;
         },
-        held: (branch) => store.findActiveTaskByBranch(branch) !== null || store.ejectionOnBranch(branch) !== null,
+        held: (branch) =>
+          store.tasks.findActiveTaskByBranch(branch) !== null || store.ejections.ejectionOnBranch(branch) !== null,
       },
       config.localRunRoot,
       errors,
@@ -397,7 +398,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
               const models = config.agentModels;
               const number = Number(/^issue:(\d+)$/.exec(issueOrigin)?.[1]);
               const issue = Number.isFinite(number)
-                ? store.getWorldBaseline()?.issues.find((i) => i.number === number)
+                ? store.world.getWorldBaseline()?.issues.find((i) => i.number === number)
                 : undefined;
               return resolveModelTag(issue?.labels, config.labelPrefix, models).profile ?? models?.default ?? null;
             },
@@ -409,7 +410,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       : undefined,
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(
-        store.getWorldBaseline()?.issues ?? [],
+        store.world.getWorldBaseline()?.issues ?? [],
         config.issueContainerTypes,
         (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
         config.issueSequenceMaxChildren,
@@ -796,15 +797,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
-    if (store.listOpenEscalations().some((e) => e.agentId === agentId)) return;
-    const task = store.getTask(taskId);
+    if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
+    const task = store.tasks.getTask(taskId);
     escalations.create({
       type: escalationTypeForAsk(ask?.kind),
       prompt: reason,
       context: {
         taskTitle: task?.title,
         originRef: task?.originRef ?? null,
-        recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+        recentOutput: recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
         ...(ask?.options ? { options: ask.options } : {}),
         ...(ask?.detail ? { detail: ask.detail } : {}),
         ...(ask?.questions ? { questions: ask.questions } : {}),
@@ -831,11 +832,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   agents.on('reaped', ({ taskId }) => {
-    const task = store.getTask(taskId);
+    const task = store.tasks.getTask(taskId);
     const branch = task?.branch;
     if (!branch) return;
     const active = (s: string): boolean => s === 'queued' || s === 'running' || s === 'waiting';
-    if (store.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
+    if (store.tasks.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
     void worktrees.remove(branch).catch((err: Error) => {
       errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });
@@ -882,12 +883,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     permissionMode: config.agentPermissionMode,
     defaultBranch: config.defaultBranch,
     choicesFor: (originRef) => {
-      const plan = store.getPlanByOrigin(originRef);
+      const plan = store.plans.getPlanByOrigin(originRef);
       const number = planIssueNumber(originRef);
-      const world = store.getWorldBaseline();
+      const world = store.world.getWorldBaseline();
       const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
       const own = issue ? (openPrForIssue(issue, world?.pullRequests ?? [])?.branch ?? null) : null;
-      return localRunChoices(plan ? store.listPlanParts(plan.id) : [], own);
+      return localRunChoices(plan ? store.plans.listPlanParts(plan.id) : [], own);
     },
     reap: reapTree,
     errors,
@@ -900,11 +901,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     baseFor: (originRef, ref) => {
       if (ref === config.defaultBranch) return null;
       const number = planIssueNumber(originRef);
-      const plan = store.getPlanByOrigin(originRef);
-      const parts = plan ? store.listPlanParts(plan.id) : [];
+      const plan = store.plans.getPlanByOrigin(originRef);
+      const parts = plan ? store.plans.listPlanParts(plan.id) : [];
       const part = parts.find((p) => p.branch === ref);
       if (part !== undefined && number !== null) return partBase(part, bySlug(parts), number, config.defaultBranch);
-      const pr = store.getWorldBaseline()?.pullRequests.find((p) => p.branch === ref);
+      const pr = store.world.getWorldBaseline()?.pullRequests.find((p) => p.branch === ref);
       return pr?.baseBranch ?? config.defaultBranch;
     },
     fetchIntervalMs: config.planning.gitFetchIntervalMs,
