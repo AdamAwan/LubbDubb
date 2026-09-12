@@ -1,3 +1,4 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { rollUpReach } from '../environments/reach.js';
 import { isContainerType } from '../issueRelations.js';
 import type { MirroredTicket } from '../store/tickets.js';
@@ -104,15 +105,15 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       issueType: self?.issueType ?? null,
       counts: countStandings(group.rows),
       briefing: briefingFor(group.rows, brief),
-      summary: input.summaries.get(`issue:${number}`) ?? null,
-      sequence: input.sequences.get(`issue:${number}`) ?? null,
+      summary: input.summaries.get(issueOriginRef('root', number)) ?? null,
+      sequence: input.sequences.get(issueOriginRef('root', number)) ?? null,
       children: orderChildren(group.rows).slice(0, FEATURE_CHILDREN),
       costUsd: totalCost(group.rows),
       reach: foldReach(group.rows, reachByGoal, input.environments),
       lastLandingAt: latestLanding(group.rows, landedAt),
       landings: landingsUnder(group.rows, landingsByGoal),
       standingKey: input.standingKeys.get(number) ?? '',
-      paused: input.pauses?.get(`issue:${number}`) ?? null,
+      paused: input.pauses?.get(issueOriginRef('root', number)) ?? null,
     });
   }
 
@@ -255,8 +256,7 @@ function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, Es
 }
 
 function issueNumberOf(ref: string): number | null {
-  const match = /^issue:(\d+)$/.exec(ref);
-  return match ? Number(match[1]) : null;
+  return issueOriginNumber('root', ref);
 }
 
 function totalCost(rows: readonly FeatureChildRow[], seed: number | null = null): number | null {
@@ -279,7 +279,7 @@ function foldReach(
     let reached = 0;
     let unresolved = 0;
     for (const row of rows) {
-      const found = reachByGoal.get(`issue:${row.number}`)?.find((e) => e.environment === environment);
+      const found = reachByGoal.get(issueOriginRef('root', row.number))?.find((e) => e.environment === environment);
       if (found === undefined) continue;
       total += 1;
       if (found.status === 'reached') reached += 1;
@@ -292,7 +292,7 @@ function foldReach(
 function latestLanding(rows: readonly FeatureChildRow[], landedAt: ReadonlyMap<string, string>): string | null {
   let latest: string | null = null;
   for (const row of rows) {
-    const at = landedAt.get(`issue:${row.number}`);
+    const at = landedAt.get(issueOriginRef('root', row.number));
     if (at !== undefined && (latest === null || at > latest)) latest = at;
   }
   return latest;

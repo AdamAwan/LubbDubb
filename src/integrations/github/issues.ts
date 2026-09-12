@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   IssueCloseInput,
@@ -90,7 +91,7 @@ export class GitHubIssuesIntegration
       labels: input.labels,
       assignee: input.assignee,
     });
-    return { ok: true, ref: `issue:${created.number}` };
+    return { ok: true, ref: issueOriginRef('root', created.number) };
   }
 
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
@@ -100,7 +101,7 @@ export class GitHubIssuesIntegration
 
   async closeIssue(input: IssueCloseInput): Promise<SendResult> {
     await this.opts.api.closeIssue(input.number, input.reason);
-    return { ok: true, ref: `issue:${input.number}` };
+    return { ok: true, ref: issueOriginRef('root', input.number) };
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

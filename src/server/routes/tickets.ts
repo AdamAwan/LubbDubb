@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { TicketStateFilter, TicketTrackingFilter, TicketsPayload } from '../../wire.js';
 import { effectivePickupStates } from '../../dispatcher/issuePickup.js';
 import { buildSpendGoals } from '../../spendInsights.js';
@@ -89,8 +90,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
       const refUrls: Record<string, string> = {};
       for (const row of page.rows) {
-        const url = connector.resolveRefUrl(`issue:${row.number}`);
-        if (url) refUrls[`issue:${row.number}`] = url;
+        const url = connector.resolveRefUrl(issueOriginRef('root', row.number));
+        if (url) refUrls[issueOriginRef('root', row.number)] = url;
       }
 
       return {

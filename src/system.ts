@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
 import { prRefStyle } from './prRef.js';
 import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
@@ -395,17 +396,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         ? {
             effective: (issueOrigin: string): string | null => {
               const models = config.agentModels;
-              const number = Number(/^issue:(\d+)$/.exec(issueOrigin)?.[1]);
-              const issue = Number.isFinite(number)
-                ? store.getWorldBaseline()?.issues.find((i) => i.number === number)
-                : undefined;
+              const number = issueOriginNumber('root', issueOrigin);
+              const issue =
+                number === null ? undefined : store.getWorldBaseline()?.issues.find((i) => i.number === number);
               return resolveModelTag(issue?.labels, config.labelPrefix, models).profile ?? models?.default ?? null;
             },
           }
         : undefined,
     featureStanding: featureBoard
       ? (featureOrigin: string): string | null =>
-          featureRecords(store, featureBoard).find((f) => `issue:${f.number}` === featureOrigin)?.key ?? null
+          featureRecords(store, featureBoard).find((f) => issueOriginRef('root', f.number) === featureOrigin)?.key ??
+          null
       : undefined,
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(
@@ -413,7 +414,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         config.issueContainerTypes,
         (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
         config.issueSequenceMaxChildren,
-      ).find((f) => `issue:${f.feature.number}` === featureOrigin);
+      ).find((f) => issueOriginRef('root', f.feature.number) === featureOrigin);
       return found ? { key: found.key, members: found.members } : null;
     },
     createSession: agentSetup.factory,

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { FeatureBoardPayload } from '../../wire.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
@@ -93,8 +94,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         ...(board.orphans?.children ?? []).map((c) => c.number),
       ];
       for (const number of refs) {
-        const url = connector.resolveRefUrl(`issue:${number}`);
-        if (url) refUrls[`issue:${number}`] = url;
+        const url = connector.resolveRefUrl(issueOriginRef('root', number));
+        if (url) refUrls[issueOriginRef('root', number)] = url;
       }
 
       return {
@@ -112,7 +113,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!featureBoardOn(config, connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
-      const answered = store.answerFeatureSequence(`issue:${params.number}`, body.answer, body.by);
+      const answered = store.answerFeatureSequence(issueOriginRef('root', params.number), body.answer, body.by);
       if (!answered) {
         return reply
           .code(404)

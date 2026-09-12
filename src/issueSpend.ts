@@ -1,3 +1,4 @@
+import { issueSubtreeNumber } from './issueOrigins.js';
 import type { Agent, IssueSpend, LocalRun, TaskSummary, WorkNode } from './types.js';
 import { issueOrigin } from './plans/planning.js';
 
@@ -16,8 +17,6 @@ interface SpendRollup {
   localRunAttribution: Map<string, number | null>;
   attribution: Map<string, number | null>;
 }
-
-const ISSUE_SUBTREE = /^issue:(\d+)(?::|$)/;
 
 const PR_NODE = /^(pr:\d+)(?::|$)/;
 
@@ -86,8 +85,8 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
 export function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, string | null>): number | null {
   let ref = originRef === null ? null : (prNodeRefOf(originRef) ?? originRef);
   for (let hop = 0; ref !== null && hop < MAX_HOPS; hop++) {
-    const named = ISSUE_SUBTREE.exec(ref);
-    if (named) return Number(named[1]);
+    const named = issueSubtreeNumber(ref);
+    if (named !== null) return named;
     ref = parentOf.get(ref) ?? null;
   }
   return null;

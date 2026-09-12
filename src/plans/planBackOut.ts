@@ -4,7 +4,7 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { applyIssueWatch } from '../issueWatch.js';
-import { originIssueNumber } from './planning.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 import { declinePlan, refusePlan } from './planApproval.js';
 
 // → docs/spec/08-planning.md
@@ -30,7 +30,7 @@ export async function backOutOfPlan(
   note: string | null,
 ): Promise<BackOutResult> {
   const { store } = ctx;
-  const issueNumber = originIssueNumber(act.originRef);
+  const issueNumber = issueSubtreeNumber(act.originRef);
   if (issueNumber === null) return { ok: false, detail: `${act.originRef} names no issue to back out of` };
 
   const done: string[] = [];

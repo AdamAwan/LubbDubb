@@ -1,3 +1,4 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import type { PullRequest, WorkNode, WorldSnapshot } from '../types.js';
 import { issueForPr } from '../prIssue.js';
 import { prState } from '../prHealth.js';
@@ -69,11 +70,11 @@ function goalOfPr(nodes: WorkNode[]): Map<number, string> {
 
 function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
   const issue = issueForPr(pr, world.issues);
-  return issue === null ? null : `issue:${issue.number}`;
+  return issue === null ? null : issueOriginRef('root', issue.number);
 }
 
 function isGoalRoot(ref: string): boolean {
-  return /^issue:\d+$/.test(ref);
+  return issueOriginNumber('root', ref) !== null;
 }
 
 function prNumberOf(ref: string): number | null {

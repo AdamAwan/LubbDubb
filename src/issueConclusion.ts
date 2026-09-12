@@ -6,6 +6,7 @@ import type {
   Plan,
   PlanPart,
 } from './types.js';
+import { inIssueOriginFamily, issueOriginNumber, issueOriginRef, issueSubtreeNumber } from './issueOrigins.js';
 import { planInFlight } from './plans/parts.js';
 
 // → docs/spec/06-issue-pickup.md#concluding-an-issue
@@ -63,22 +64,20 @@ function planInFlightVerdict(plan: Plan | null): ResolvedConclusion | null {
 }
 
 export function issueConclusionOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}`;
+  return issueOriginRef('root', issueNumber);
 }
 
 export function conclusionOrigin(
   originRef: string | null,
 ): { ok: true; originRef: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const match = /^issue:(\d+)$/.exec(ref);
-  if (match) return { ok: true, originRef: ref };
+  if (issueOriginNumber('root', ref) !== null) return { ok: true, originRef: ref };
 
-  const part = /^issue:(\d+):part:/.exec(ref);
-  if (part) {
+  if (inIssueOriginFamily('part', ref)) {
     return {
       ok: false,
       error:
-        `conclude_work is for the whole issue, and you are working one part of issue #${part[1]}'s plan. ` +
+        `conclude_work is for the whole issue, and you are working one part of issue #${issueSubtreeNumber(ref)}'s plan. ` +
         `The harness concludes a decomposed issue from its plan — when every part has finished, the issue ` +
         `is done, and no part agent has to say so. Finish your part: open its pull request, or if it ` +
         `finished without one (it was a write-up, or you found nothing needs building) close it with ` +
@@ -86,33 +85,33 @@ export function conclusionOrigin(
         `needed), raise it.`,
     };
   }
-  const planner = /^issue:(\d+):plan$/.exec(ref);
-  if (planner) {
+  const planner = issueOriginNumber('plan', ref);
+  if (planner !== null) {
     return {
       ok: false,
       error:
-        `conclude_work is for an agent that did the work, and you are planning issue #${planner[1]}, ` +
+        `conclude_work is for an agent that did the work, and you are planning issue #${planner}, ` +
         `not delivering it. Submit your decomposition with plan_submit instead.`,
     };
   }
-  const assessor = /^issue:(\d+):assess$/.exec(ref);
-  if (assessor) {
+  const assessor = issueOriginNumber('assess', ref);
+  if (assessor !== null) {
     return {
       ok: false,
       error:
         `conclude_work is for an agent that did the work, and you were dispatched to *assess* issue ` +
-        `#${assessor[1]} rather than to deliver it. Cast your verdict with assess_issue instead — it ` +
+        `#${assessor} rather than to deliver it. Cast your verdict with assess_issue instead — it ` +
         `carries the extra answer yours needs ("delivered"), which parks the issue without claiming an ` +
         `agent finished a turn on it.`,
     };
   }
-  const appraiser = /^issue:(\d+):appraisal$/.exec(ref);
-  if (appraiser) {
+  const appraiser = issueOriginNumber('appraisal', ref);
+  if (appraiser !== null) {
     return {
       ok: false,
       error:
         `conclude_work is for an agent that did the work, and you were dispatched to judge whether issue ` +
-        `#${appraiser[1]}'s goal can be worked from at all — before anything was started. Cast your verdict ` +
+        `#${appraiser}'s goal can be worked from at all — before anything was started. Cast your verdict ` +
         `with appraise_issue instead.`,
     };
   }

@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../../issueOrigins.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { featureSummaryOrigin } from '../../summaries/featureSummary.js';
 import type { RawAction, StageContext } from './context.js';
@@ -9,7 +10,7 @@ export function featureSummary(s: StageContext): void {
   const written = new Map((ctx.featureSummaryKeys ?? []).map((k) => [k.originRef, k.standingKey]));
   for (const feature of ctx.featureStandings ?? []) {
     const origin = featureSummaryOrigin(feature.number);
-    if (written.get(`issue:${feature.number}`) === feature.key) continue;
+    if (written.get(issueOriginRef('root', feature.number)) === feature.key) continue;
     if (s.activeOrigins.has(origin)) continue;
 
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);

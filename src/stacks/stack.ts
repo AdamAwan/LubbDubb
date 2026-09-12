@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { Plan, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
@@ -100,6 +101,5 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
 }
 
 function issueNumberOf(originRef: string): number | null {
-  const match = /^issue:(\d+)$/.exec(originRef);
-  return match?.[1] !== undefined ? Number(match[1]) : null;
+  return issueOriginNumber('root', originRef);
 }

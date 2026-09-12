@@ -1,5 +1,6 @@
 import type { Decision, Plan } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 
 // → docs/spec/08-planning.md
 
@@ -16,21 +17,15 @@ export const DEFAULT_PLANNING: PlanningPolicy = {
 };
 
 export function planOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}:plan`;
+  return issueOriginRef('plan', issueNumber);
 }
 
 export function issueOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}`;
+  return issueOriginRef('root', issueNumber);
 }
 
 export function planOriginIssue(originRef: string | null): number | null {
-  const match = /^issue:(\d+):plan$/.exec(originRef ?? '');
-  return match ? Number(match[1]) : null;
-}
-
-export function originIssueNumber(originRef: string | null): number | null {
-  const match = /^issue:(\d+)(?::|$)/.exec(originRef ?? '');
-  return match ? Number(match[1]) : null;
+  return issueOriginNumber('plan', originRef);
 }
 
 export function planBranch(issueNumber: number): string {

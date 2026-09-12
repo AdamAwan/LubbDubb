@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import { basePrOf } from '../prHealth.js';
 import type { ObstacleStanding, PullRequest } from '../types.js';
 
@@ -52,8 +53,8 @@ const TITLE_CHARS = 80;
 
 export function obstacleTicketGoal(row: ObstacleStanding): number | null {
   for (const ref of row.goalRefs) {
-    const match = /^issue:(\d+)$/.exec(ref);
-    if (match) return Number(match[1]);
+    const number = issueOriginNumber('root', ref);
+    if (number !== null) return number;
   }
   return null;
 }

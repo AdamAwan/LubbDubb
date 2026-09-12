@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system.js';
 import type { Config } from '../config.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
@@ -302,7 +303,7 @@ export function buildStateSections(
       ...appraisals.map((a) => issueCommentRef(a.originRef, a.commentRef)),
       ...worldEvents.map((e) => e.ref),
       ...tasks.map((t) => t.originRef),
-      ...world.issues.map((i) => `issue:${i.number}`),
+      ...world.issues.map((i) => issueOriginRef('root', i.number)),
       ...issueRuns.map((r) => r.originRef),
       ...shiftLog.map((d) => d.subjectRef),
     ],

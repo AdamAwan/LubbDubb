@@ -1119,8 +1119,9 @@ report landed. **It states no outcome** — → [The report tool](#the-report-to
   looks live and never fires. An operator reading the book to find out why nothing happened is
   entitled to the difference.
 
-**A new `issue:<n>:…` origin is classified in `src/issueOrigins.ts`**, and `validate-remote:` joins
-`EVIDENCE_SUFFIX_PREFIXES` beside `validate:`, `validate-failure:` and `validate-local:`. A run is
+**A new `issue:<n>:…` origin is declared, with its role, in `src/issueOrigins.ts`**, and
+`validate-remote:<run>` is declared **evidence** beside `validate:`, `validate-failure:` and
+`validate-local:` ([05](05-dispatcher.md#the-issue-origin-vocabulary)). A run is
 evidence about delivered work, not work. Left out it reads as `unrecognised`: it stops expanding under
 a goal's priority flag ([05](05-dispatcher.md#marking-a-goal-a-priority)) and its spend files under
 "other" rather than the phase it belongs to ([18](18-observability.md)). Neither is red.

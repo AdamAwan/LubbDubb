@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 import type { SelectorOffering, ValidationCheck, ValidationPlanRecord } from '../types.js';
 
@@ -7,16 +8,14 @@ import type { SelectorOffering, ValidationCheck, ValidationPlanRecord } from '..
 /**
  * The validation planner's dispatch origin. One per goal — there is one check set and it is written
  * once — so the suffix carries no id, which is `assess` and `retro`'s shape rather than
- * `validate:<check>`'s. It is classified in `src/issueOrigins.ts`; left out it reads as
- * `unrecognised` and its spend files under "other".
+ * `validate:<check>`'s. It is declared, with its role, in `src/issueOrigins.ts`.
  */
 export function validationPlanOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}:validate-plan`;
+  return issueOriginRef('validationPlan', issueNumber);
 }
 
 export function validationPlanIssue(originRef: string | null): number | null {
-  const match = /^issue:(\d+):validate-plan$/.exec(originRef ?? '');
-  return match ? Number(match[1]) : null;
+  return issueOriginNumber('validationPlan', originRef);
 }
 
 export function validationPlanBranch(issueNumber: number): string {

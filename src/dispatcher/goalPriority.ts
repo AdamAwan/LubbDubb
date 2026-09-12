@@ -1,6 +1,6 @@
 import type { GoalPriority, Issue, ObstacleBlock, ObstacleStanding, Plan, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from './issuePickup.js';
-import { issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
+import { issueOriginNumber, issueOriginRef, issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -16,8 +16,8 @@ interface GoalWorld {
 export function expeditedOrigins(goals: readonly GoalPriority[], world: GoalWorld): (originRef: string) => boolean {
   const numbers: number[] = [];
   for (const goal of goals) {
-    const match = /^issue:(\d+)$/.exec(goal.originRef);
-    if (match) numbers.push(Number(match[1]));
+    const number = issueOriginNumber('root', goal.originRef);
+    if (number !== null) numbers.push(number);
   }
   if (numbers.length === 0) return () => false;
 
@@ -31,13 +31,13 @@ export function expeditedOrigins(goals: readonly GoalPriority[], world: GoalWorl
     if (typeof linked === 'number') prNumbers.add(linked);
   }
   const flaggedPlans = new Set(
-    world.plans.filter((p) => numbers.some((n) => p.originRef === `issue:${n}`)).map((p) => p.id),
+    world.plans.filter((p) => numbers.some((n) => p.originRef === issueOriginRef('root', n))).map((p) => p.id),
   );
   for (const part of world.parts) {
     if (part.prNumber !== null && flaggedPlans.has(part.planId)) prNumbers.add(part.prNumber);
   }
 
-  const flaggedGoals = new Set(numbers.map((n) => `issue:${n}`));
+  const flaggedGoals = new Set(numbers.map((n) => issueOriginRef('root', n)));
   const flaggedObstacles = new Set([
     ...(world.obstacles ?? [])
       .filter((row) => row.goalRefs.some((ref) => flaggedGoals.has(ref)))
