@@ -14,6 +14,7 @@ export interface DispatchRule {
   name: string;
   description: string;
   kind: RuleKind;
+  emittedBy?: string;
   enabled?: (c: RuleConditions) => boolean;
 }
 
@@ -59,6 +60,7 @@ const RULES = [
   {
     id: 'pr-review',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Pull request not yet reviewed',
     description:
       "A watched pull request nothing has reviewed gets a read-only agent to read the diff and say what it found, before a person is asked to. It leads the PR concerns because the review is the earliest thing that can be done to a pull request and the one whose value decays fastest: a diff read on the pulse it opened is read once, where the same reading taken after a CI fix and a base merge is a reading of somebody else's work. It stands down — rather than ranking below — where a human reviewer already has unhandled threads open, since the diff is about to be rewritten and a second opinion on the old one is spent for nothing. One round, ever: the verdict is recorded against the pull request, nothing re-reviews it after a push, and what it found reaches the person whose approval the merge still needs. Off unless the operator turns it on, because it is the one rule that spends an agent on every pull request.",
@@ -67,6 +69,7 @@ const RULES = [
   {
     id: 'pr-review-comment',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Unhandled review comments',
     description:
       'Every unresolved review thread on a PR goes to one code agent together, to either fix the code or draft a reply defending the approach — review feedback must never silently rot. All of them at once, not one per cycle: comments from a single review pass are related, so answering them in isolation produces duplicate or contradictory fixes. It leads the PR concerns because a review is the one signal that can invalidate the diff itself: fixing CI or resolving a conflict against code a reviewer is about to have rewritten spends an agent on work the next push throws away, and re-conflicts the branch a second time.',
@@ -81,6 +84,7 @@ const RULES = [
   {
     id: 'pr-ci-blocked',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'CI blocked elsewhere',
     description:
       'Every failing check on this PR is one the operator configured as somebody else’s to fix, and at least one asked to be escalated rather than ignored. No agent is dispatched — a human is asked once, since nothing an agent can do would turn the PR green.',
@@ -88,6 +92,7 @@ const RULES = [
   {
     id: 'pr-ci-gate',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Check waiting on an action',
     description:
       'A blocking check the operator configured with `states: ["pending"]` is sitting queued rather than running — an Azure status policy waiting on a command somebody has to issue. Nothing is red, so no other rule looks at it and the PR would wait forever. One code agent is sent to do what the rule’s guidance names, on its own origin `pr:<n>:ci-gate`: the cooldown budget for a stalled gate is not the budget for a broken build, and a gate the agent cannot clear escalates on its own attempt cap. Ranked below a red build — a failing check is a thing that broke, a waiting one is a thing that has not happened yet.',
@@ -95,6 +100,7 @@ const RULES = [
   {
     id: 'pr-base-update',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Base out of date',
     description:
       'A PR that has fallen **behind** its base branch is brought back into line so it never sits unmergeable while the base moves on. Behind means the provider has already said the merge is clean, so there is no judgement in it and no agent is spent: the harness asks the provider to merge the base in itself, in one request, and the act is audited under the same origin an agent would have been. A provider that cannot do the merge itself — Azure DevOps has no such endpoint — or one that refuses falls back to a code agent on the next pulse, so the cheap path being unavailable never leaves a PR behind. Second-to-last of the concerns, because a base merged now into code an open review is about to change is a merge done twice.',
@@ -102,6 +108,7 @@ const RULES = [
   {
     id: 'pr-base-update-conflict',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Conflicts with base',
     description:
       'A PR that **conflicts** with its base branch keeps its code agent, because resolving a conflict is judgement rather than a merge the provider has already called clean — and the prompt tells the agent to escalate if it cannot resolve cleanly. Split from `pr-base-update` so the two arms of one predicate can be priced apart in `agentModels.byRule`: conflict resolution and a routine base merge want different models, and on a provider with no direct-merge endpoint both arms would otherwise dispatch an agent on one profile. It shares the `pr:<n>:mergeable` origin with the behind arm — same PR, same problem, so one cooldown and one attempt budget. Last of the concerns, for the reason the behind arm is second-to-last.',
@@ -109,6 +116,7 @@ const RULES = [
   {
     id: 'pr-merge-ready',
     kind: 'rule',
+    emittedBy: 'pr-ci-failing',
     name: 'Merge-ready PR',
     description:
       'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
@@ -298,7 +306,15 @@ export type AdmissionId = Extract<(typeof RULES)[number], { kind: 'admission' }>
 
 export type StageRuleId = Extract<(typeof RULES)[number], { kind: 'rule' }>['id'];
 
-export const DISPATCH_PIPELINE: readonly { id: StageRuleId; enabled?: (c: RuleConditions) => boolean }[] = RULES.filter(
+type EmittedRuleId = Extract<(typeof RULES)[number], { emittedBy: string }>['id'];
+
+export type OwnStageRuleId = Exclude<StageRuleId, EmittedRuleId>;
+
+type PipelineEntry =
+  | { id: OwnStageRuleId; emittedBy?: undefined; enabled?: (c: RuleConditions) => boolean }
+  | { id: EmittedRuleId; emittedBy: OwnStageRuleId; enabled?: (c: RuleConditions) => boolean };
+
+export const DISPATCH_PIPELINE: readonly PipelineEntry[] = RULES.filter(
   (r): r is Extract<(typeof RULES)[number], { kind: 'rule' }> => r.kind === 'rule',
 );
 

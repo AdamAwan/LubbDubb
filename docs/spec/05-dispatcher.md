@@ -67,6 +67,20 @@ The registry keeps all three because `decisions.rule` is **persisted**: a row na
 `cooldown-escalate` must still resolve years later. So the registry is the display vocabulary and the
 pipeline is the ordered subset that runs.
 
+`emittedBy` is the fourth field, and it is what makes the pipeline's coverage checkable. A rule of
+kind `rule` either has a **stage of its own** — a module under `src/dispatcher/rules/` registered in
+`STAGES` under its id — or it names, in `emittedBy`, the rule whose stage produces it. Nothing else is
+a legal third state, and that is carried by the types rather than by a convention: `OwnStageRuleId` is
+the rule ids with no `emittedBy`, `STAGES` is a **total** `Record<OwnStageRuleId, …>` so a rule with
+neither fails `typecheck`, and `DISPATCH_PIPELINE`'s element type declares `emittedBy` as an
+`OwnStageRuleId` so an `emittedBy` naming a rule that is itself emitted — or naming nothing — fails
+there. Both arms matter: `STAGES` was `Partial` for as long as the PR pass was the only shared one, and
+under a `Partial` map a rule added to `DISPATCH_PIPELINE` with no stage is **silently inert** — walked
+every cycle, proposing nothing, with nothing red and nothing to read. The walk skips an `emittedBy`
+entry outright, which is why a shared pass runs once per cycle rather than once per id it can emit;
+pointing all of them at the same function instead would run it seven times over. `test/dispatchPipeline.test.ts`
+asserts the same shape at runtime, against the loosening of the type rather than against the types.
+
 ### The rules, in evaluation order
 
 `enabled` is the predicate that switches an optional rule into the pipeline; a rule with none is
@@ -119,11 +133,20 @@ has not turned the feature on, rather than as a rule that looks live and never f
 
 The seven PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than eight,
 because at most one agent works a branch and the fold that picks the top concern has to see them
-together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
-The pass is registered in `STAGES` under `pr-ci-failing` and stays there whatever the order inside the
-group: the seven are contiguous, so nothing runs between them and the pass contributes at the same
-point in the walk whichever id carries it. Moving the registration to track "the first of them" would
-be a second copy of the ordering.
+together. That pass is `src/dispatcher/rules/prConcerns.ts` — it gathers every concern on a watched
+pull request, collapses them to one per pull request, and ranks across pull requests. Its relative
+urgency inside the group is still the pipeline order: `concernUrgency` looks up the index.
+
+The pass is registered in `STAGES` under `pr-ci-failing`, and the other seven ids declare
+`emittedBy: 'pr-ci-failing'`. It stays under that id whatever the order inside the group: the eight are
+contiguous, so nothing runs between them and the pass contributes at the same point in the walk
+whichever id carries it. Moving the registration to track "the first of them" would be a second copy of
+the ordering. The module is named for what it does rather than for the id it is registered under — it
+was `prCiFailing.ts` while `pr-ci-failing` was the only one of the eight anybody could find from the
+`STAGES` map, and that name read as "the failing-CI rule" to every later reader. The **rule ids** did
+not move with it: they are persisted in `decisions.rule`, matched as origin patterns in
+`src/store/tasks.ts`, and priced in `agentModels.byRule`, so a rename there is a data migration and not
+a tidy-up.
 
 `pr-review-triage` is deliberately **not** in that group: it dispatches a desk agent rather than a branch
 agent, so the one-agent-per-branch fold does not apply to it, and it runs as its own stage above the
@@ -294,8 +317,9 @@ verdict to act on, prior work, a plan row, a spent attempt cap — writes nothin
 the issue to the funnel rather than holding it.
 
 Adding a rule is still two things and not three: a registry entry in the position it should run, and a
-module registered in `STAGES` under that id. An id with no entry was covered by an earlier pass (the
-PR pass above), and nothing anywhere renders a position.
+module registered in `STAGES` under that id — or, where an earlier pass already produces it, an
+`emittedBy` naming that pass instead of a module. There is no third option: a rule with neither does
+not compile. Nothing anywhere renders a position.
 
 ### Not rules
 
