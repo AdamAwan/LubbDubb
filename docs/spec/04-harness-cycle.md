@@ -113,9 +113,11 @@ A local cycle runs **everything derived from the store** — the plan funnel, th
 the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
 and skips **every pass whose subject is the world snapshot**:
 
-`connector.getState`, `recordWorldChanges`, `plans.reconcile`, `prWatch`, `prWorkItems`, `naming`,
-`branchReaps`, `updates`, `environments`, `notices`, `pool`, `appraisals.announce`,
-`areaPaths.refresh`, `askReviewedElsewhere` and `tickets`.
+`connector.getState`, `recordWorldChanges`, `appraisals.announce`, `areaPaths.refresh`,
+`askReviewedElsewhere` and `tickets` — plus every desk the [registry](#the-desk-registry) declares
+`readWorld: true`, which today is `plans`, `prWatch`, `prWorkItems`, `naming`, `branchReaps`,
+`updates`, `environments`, `remoteValidation`, `notices`, `obstacleVoice`, `obstacleEndings` and
+`pool`.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
@@ -124,9 +126,9 @@ run with `prev === next` it would read every notice as settled by a world that h
 `recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
 would be a write, on every local cycle, asserting the world was read when it was not.
 
-The line is easy to hold in the code: with the executor's one deliberate exception, **every awaited
-call in the body talks to the outside world and every synchronous one does not**, so the guard sits on
-exactly the awaits.
+The line is held as **data, not as line shape**: each desk declares `readWorld` once in the registry
+and the walk skips it, so there is no `if (readWorld)` for a new desk to be written without. The
+handful of world-facing passes outside the registry still carry the guard at their call site.
 
 **Why deciding against a cached world is mostly safe.** Almost every gate that stops the fleet doing a
 thing twice — the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is
@@ -448,7 +450,8 @@ flowchart TD
      local cycle**: a local cycle takes no diff, and run with `previousWorld === world` it would read
      every transition as new, or every one as none.
 
-   In order:
+   In order — the order itself being a [registry entry](#the-desk-registry) each, not a line in
+   `runCycle`:
 
    `graduations.run()` follows what became of the documentation pull requests an operator opened for
    a claim, and takes a landed claim out of every prompt because the repository now says it. **Below
@@ -509,7 +512,12 @@ flowchart TD
    unreachable pool works exactly as a fleet without one.
 
 9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
-   and the most recent 200 decisions. Immediately **above** the whole read,
+   and the most recent 200 decisions. **Each of these rows is read once per cycle and the result
+   reused.** Nothing inside a cycle writes them — the issue runs recorded above are the cycle's only
+   write to a table it goes on to read, and that write is above the read — so a second read of
+   `listAllPlanParts`, `listIssueRuns`, `listPrReviews` or `listPrReviewRoutes` could only ever
+   return the same rows, at the cost of another query and of a reader having to wonder which of the
+   two the decision was made against. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
    the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
    clock ([10](10-agent-runtimes.md#ending-it-on-the-clock)). Its position is the point: an agent it
@@ -559,6 +567,49 @@ flowchart TD
 17. **Emit `cycle:end`** with the report.
 18. **Clear `cycleInFlight`**, and fire the [trailing `manual` cycle](#the-trailing-edge) if one was
     refused while this one ran.
+
+### The desk registry
+
+The bookkeeping desks between the world reading and the store read are **declared, not written out**:
+`src/pulseDesks.ts` holds one entry per desk, in the order they run, and `runCycle` walks it. It is the
+same answer `DISPATCH_PIPELINE` (`src/dispatcher/rules.ts`) gives one layer over, for the same reason —
+an order that is load-bearing must be a thing a test can read.
+
+An entry is its dependency's name on `PulseDeskDeps` (which `HarnessDeps` extends, so the composition
+root is unchanged) plus three declarations:
+
+- **`readWorld`** — whether the desk's subject is the world snapshot, and so whether it is skipped on a
+  [local cycle](#what-runs-and-what-does-not). One flag per desk, in one place, instead of the guard
+  repeated at every call site.
+- **`awaited`** — every desk is awaited, sync or async alike, except `obstacleDesk`, whose whole
+  position is that the pulse does not block on a model round trip. That exception is a declared `false`
+  rather than a `void` somebody can copy by accident.
+- **`run(deps, { world, previousWorld })`** — how the desk is called, through `deps.<id>?.`, so a desk
+  the deployment does not wire is skipped and never an error. The desks that take a **narrowed** view of
+  the world (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies
+  the narrow type, and widening them to `WorldSnapshot` to make the entries look alike would give each
+  desk reach it has no use for.
+
+**`test/pulsePipeline.test.ts` is what makes the order safe.** It asserts the orderings below **by id
+against the declared list**, so moving a desk that must stay below another fails a test instead of
+breaking silently:
+
+| Constraint                                                             | Why                                                                                                                                                                      |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `graph` → `environments`, immediately                                  | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                          |
+| `environments` → `remoteValidation`                                    | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                       |
+| `remoteValidation` → `validationReady`                                 | the validate row's detail carries **this** pulse's sheet                                                                                                                 |
+| `validationAsks` → `validationReady` → `closeOuts`                     | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                 |
+| `plans` → `graph`                                                      | the part→PR observations the reconciler just made are the ones recorded                                                                                                  |
+| `graph` → `graduations` → `pool`                                       | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md)) |
+| `obstacleVoice` → the four obstacle desks                              | a row the harness filed is told, owned and watched on the pulse that saw it ([27](27-obstacles.md#the-harness-is-a-voice))                                               |
+| `notices`, `obstacleNotices` → `obstacleOwnership` → `obstacleEndings` | an agent whose report was taken up is told so by the pulse that took it, and the endings read the owner the ownership desk may have just written                         |
+| `prWatch` → `prWorkItems`                                              | one pass says the pull request is the fleet's, the other which work item it is for                                                                                       |
+
+The same test asserts every declared desk takes exactly one position and is actually reached by the
+walk, so a desk wired in `src/system.ts` and left out of the registry cannot sit there dead. Adding a
+desk is therefore three things and no more: a field on `PulseDeskDeps`, an entry in `PULSE_DESKS`
+(which the record's type will not let you forget), and its position in `PULSE_PIPELINE`.
 
 ## Failure handling
 

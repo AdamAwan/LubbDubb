@@ -14,7 +14,7 @@ import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput, StateQueryInput, ValidationCheckInput } from '../src/types.js';
-import { repoText } from './support/paths.js';
+import { PULSE_PIPELINE, type PulseDeskId } from '../src/pulseDesks.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -496,17 +496,16 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
 });
 
 test('the desk assembles below EnvironmentDesk and above ValidationReadyDesk', () => {
-  const text = repoText('src/harness.ts');
-  const at = (needle: string): number => {
-    const found = text.indexOf(needle);
-    assert.ok(found > 0, `${needle} is in the pulse`);
+  const at = (id: PulseDeskId): number => {
+    const found = PULSE_PIPELINE.indexOf(id);
+    assert.ok(found >= 0, `${id} takes a position in the pulse`);
     return found;
   };
-  const graph = at('graph?.record(world)');
-  const environments = at('environments?.run(world)');
-  const sheets = at('remoteValidation?.run()');
-  const ready = at('validationReady?.run(world)');
-  const closeOuts = at('closeOuts?.run(world)');
+  const graph = at('graph');
+  const environments = at('environments');
+  const sheets = at('remoteValidation');
+  const ready = at('validationReady');
+  const closeOuts = at('closeOuts');
   assert.ok(graph < environments, 'attribution walks the graph the arrivals are read off');
   assert.ok(environments < sheets, 'above it, every sheet would be one pulse late forever, with nothing red');
   assert.ok(sheets < ready, 'below it, the bench row would state the pulse before the readings landed');
