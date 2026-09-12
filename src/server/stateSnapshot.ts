@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system.js';
-import type { Config } from '../config.js';
+import type { Config } from '../config/config.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
@@ -47,10 +47,10 @@ import { fleetHistory } from './fleetHistory.js';
 import { placementAsks, truncateAreaPaths, type AreaPathTree, type PlacementTypePolicy } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
-import { prHealth, prState } from '../prHealth.js';
-import { applyThreadReopens } from '../prThreads.js';
+import { prHealth, prState } from '../pr/prHealth.js';
+import { applyThreadReopens } from '../pr/prThreads.js';
 import { expiresAt } from '../ejection/policy.js';
-import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
+import { prAttentionStatus, type PrAttentionContext } from '../pr/prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
 import { packStandingOf } from '../reviewPacks/standing.js';
@@ -62,8 +62,8 @@ import {
 } from '../dispatcher/issuePickup.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
-import { rollUpIssueSpend } from '../issueSpend.js';
-import { tallyRunOutcomes } from '../reliabilityInsights.js';
+import { rollUpIssueSpend } from '../insights/issueSpend.js';
+import { tallyRunOutcomes } from '../insights/reliabilityInsights.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { readRunway } from '../supply/runway.js';

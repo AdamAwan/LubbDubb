@@ -13,7 +13,7 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
-import { ourReplyRefs, threadComments, threadState, type SentPrReplies } from '../../prThreads.js';
+import { ourReplyRefs, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,

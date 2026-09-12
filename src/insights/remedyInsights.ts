@@ -1,6 +1,6 @@
-import type { Remedy, RemedyCause, RemedyGuard, RemedyKind, UsageEvent } from './types.js';
+import type { Remedy, RemedyCause, RemedyGuard, RemedyKind, UsageEvent } from '../types.js';
 import { roundUsd } from './issueSpend.js';
-import { CAUSES_BY_KIND, CAUSE_COPY, GUARD_COPY, GUARD_ORDER } from './remedies/remedies.js';
+import { CAUSES_BY_KIND, CAUSE_COPY, GUARD_COPY, GUARD_ORDER } from '../remedies/remedies.js';
 
 // → docs/spec/18-observability.md
 

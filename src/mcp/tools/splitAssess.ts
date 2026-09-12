@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { toolSchema } from '../schema.js';
-import { splitTargetPr } from '../../prSplit.js';
+import { splitTargetPr } from '../../pr/prSplit.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 

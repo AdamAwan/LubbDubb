@@ -1,4 +1,4 @@
-import type { Config } from './config.js';
+import type { Config } from './config/config.js';
 import type { Store } from './store/store.js';
 import type { IssueConclusion, IssueInstruction, Plan } from './types.js';
 

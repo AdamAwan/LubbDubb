@@ -273,7 +273,7 @@ operator that bouncing the fleet will answer it.
 
 ### A fault the file has already answered
 
-Most keys are restart-only — a key is live only if `src/configApply.ts` holds an arm for it
+Most keys are restart-only — a key is live only if `src/config/configApply.ts` holds an arm for it
 ([02](02-configuration.md#liveness)) — and `integrations` and `userId` are two of the ones that are
 not. So an operator can write both, watch nothing happen, and open this reading to be told to point
 the harness at a project they have already pointed it at. Every surface involved was telling the
@@ -299,7 +299,7 @@ the same save. The confirm sheet writes `repoRoot`, `defaultBranch` and the prov
 `pointed` had been answered — a sentence about a key that check never looked at. They land in
 `restart` instead, which claims nothing about what they fix.
 
-`fleet` is in it, on `fleetId` alone. The key has no arm in `src/configApply.ts`, so writing it leaves
+`fleet` is in it, on `fleetId` alone. The key has no arm in `src/config/configApply.ts`, so writing it leaves
 the pool desk sitting out until a restart — the row is restated with that in its words rather than
 disappearing the moment the file holds a value the process is not running on
 ([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)).

@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
-import { awaitingReview } from '../src/prHealth.js';
+import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
+import { awaitingReview } from '../src/pr/prHealth.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
@@ -476,7 +476,7 @@ test('a pending proposal and a standing rejection read differently through the w
 
 test('the verdict is a lens: nothing in the dispatcher reads it, and computing it decides nothing', async () => {
   const importers = srcFiles('src')
-    .filter((f) => f !== 'src/prAttention.ts')
+    .filter((f) => f !== 'src/pr/prAttention.ts')
     .filter((f) => readFileSync(f, 'utf8').includes('prAttention.js'));
   assert.deepEqual(
     importers,
@@ -655,7 +655,7 @@ test('the lens names the concern the dispatcher acts on, and the court it acts i
           ]);
           const subject = pr({ ...arm.over, baseBranch: 'main', mergeableState, unresolvedComments: comments });
           const lens = prAttentionStatus(subject, ctx({ ci: arm.policy, recentDecisions }));
-          const dispatcher = new RuleDispatcher({}, DEFAULT_COOLDOWN, undefined, 'main', {}, arm.policy);
+          const dispatcher = new RuleDispatcher({ cooldown: DEFAULT_COOLDOWN, defaultBranch: 'main', ci: arm.policy });
           const result = await dispatcher.decide({
             world: { takenAt: NOW, pullRequests: [subject], issues: [] },
             tasks: [],

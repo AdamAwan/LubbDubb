@@ -26,7 +26,7 @@ import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
 import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
 import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
-import type { PrRefStyle } from '../../prRef.js';
+import type { PrRefStyle } from '../../pr/prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';

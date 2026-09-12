@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -193,7 +193,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 test('the delivery an overrule writes is what stops the assessor re-deriving the shortfall', async () => {
-  const dispatcher = (): RuleDispatcher => new RuleDispatcher({}, {}, undefined, 'main');
+  const dispatcher = (): RuleDispatcher => new RuleDispatcher({ defaultBranch: 'main' });
   const assessments = (actions: { rule?: unknown }[]): number =>
     actions.filter((a) => a.rule === 'issue-assess').length;
 

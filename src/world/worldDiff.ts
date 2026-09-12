@@ -1,5 +1,5 @@
 import { issueOriginRef } from '../issueOrigins.js';
-import { prState } from '../prHealth.js';
+import { prState } from '../pr/prHealth.js';
 import type { CiStatus, Issue, PullRequest, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
 
 // → docs/spec/03-world-model.md

@@ -113,11 +113,12 @@ A local cycle runs **everything derived from the store** — the plan funnel, th
 the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
 and skips **every pass whose subject is the world snapshot**:
 
-`connector.getState`, `recordWorldChanges`, `appraisals.announce`, `areaPaths.refresh`,
-`askReviewedElsewhere` and `tickets` — plus every desk the [registry](#the-desk-registry) declares
-`readWorld: true`, which today is `plans`, `prWatch`, `prWorkItems`, `naming`, `branchReaps`,
-`updates`, `environments`, `remoteValidation`, `notices`, `obstacleVoice`, `obstacleEndings` and
-`pool`.
+`connector.getState` and `recordWorldChanges` — plus every desk the
+[registry](#the-desk-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
+`prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
+`obstacleVoice`, `obstacleEndings` and `pool`, and every sweep the
+[sweep registry](#the-sweep-registry) declares `readWorld: true`, which today is `appraisals`,
+`areaPaths`, `reviewedElsewhere` and `tickets`.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
@@ -126,9 +127,11 @@ run with `prev === next` it would read every notice as settled by a world that h
 `recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
 would be a write, on every local cycle, asserting the world was read when it was not.
 
-The line is held as **data, not as line shape**: each desk declares `readWorld` once in the registry
-and the walk skips it, so there is no `if (readWorld)` for a new desk to be written without. The
-handful of world-facing passes outside the registry still carry the guard at their call site.
+The line is held as **data, not as line shape**: each desk and each sweep declares `readWorld` once
+in its registry and the walk skips it, so there is no `if (readWorld)` for a new one to be written
+without. The only two guards left are the world reading itself — `connector.getState` and
+`recordWorldChanges`, which are not passes over the world but the reading of it and the record of
+what it changed.
 
 **Why deciding against a cached world is mostly safe.** Almost every gate that stops the fleet doing a
 thing twice — the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is
@@ -512,13 +515,17 @@ flowchart TD
    place, and a publish that fails leaves the document dirty for the next pulse. A fleet with an
    unreachable pool works exactly as a fleet without one.
 
-9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
-   and the most recent 200 decisions. **Each of these rows is read once per cycle and the result
-   reused.** Nothing inside a cycle writes them — the issue runs recorded above are the cycle's only
-   write to a table it goes on to read, and that write is above the read — so a second read of
-   `listAllPlanParts`, `listIssueRuns`, `listPrReviews` or `listPrReviewRoutes` could only ever
-   return the same rows, at the cost of another query and of a reader having to wonder which of the
-   two the decision was made against. Immediately **above** the whole read,
+9. **Read the fleet and the store** — tasks, agents, queued jobs, plans, plan parts, the verdicts,
+   the retrospective origins, the issue runs, the reviews and their routes, and the most recent 200
+   decisions. These are the rows the **pulse itself** works from: the sweeps are handed them, `busy`
+   and the runway reading are computed from them, and the dispatch inputs take them as given. Every
+   other row the dispatcher wants is read one step below, at
+   [`buildDispatchInputs`](05-dispatcher.md#assembling-the-context). **Each of these rows is read
+   once per cycle and the result reused.** Nothing inside a cycle writes them — the issue runs
+   recorded above are the cycle's only write to a table it goes on to read, and that write is above
+   the read — so a second read of `listAllPlanParts`, `listIssueRuns`, `listPrReviews` or
+   `listPrReviewRoutes` could only ever return the same rows, at the cost of another query and of a
+   reader having to wonder which of the two the decision was made against. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
    the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
    clock ([10](10-agent-runtimes.md#ending-it-on-the-clock)). Its position is the point: an agent it
@@ -532,8 +539,8 @@ flowchart TD
    make, made for them ([10](10-agent-runtimes.md#when-nobody-answers-the-stop)). Its position is the
    resume's argument in reverse: an agent it settles must **stop** counting as live for the rest of
    this pulse, so the slot it was holding is one the dispatch below can use. It settles agents and
-   dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Immediately above
-   the escalation read,
+   dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Above the
+   escalation read the dispatch inputs take,
    `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
    backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
    off "Needs you" on this pulse rather than never
@@ -542,12 +549,20 @@ flowchart TD
    `escalations.tidySettledMerges()` runs beside it and in the same register, for the other card
    nobody can answer: a merge ask whose pull request has already merged
    ([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). It reads the work graph, so its
-   position is below `graph.record` above and above the escalation read below.
+   position is below `graph.record` above and above the escalation read the dispatch inputs take.
+
+   Each of these — and the burn watch, the ejection expiries, the review waits, the appraisal
+   announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the ticket
+   filer below the executor — is a [sweep registry](#the-sweep-registry) entry rather than a line in
+   `runCycle`, and which gap in the read it sits in is the `phase` it declares.
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on
     the watch tag and on whose pull request it is.
-12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+12. **Assemble the context and `dispatcher.decide(ctx)`** — `buildDispatchInputs(store, pulse)`
+    ([05](05-dispatcher.md#assembling-the-context)) takes the readings above as `pulse` and reads the
+    rest of the `DispatchContext` itself. Every one of those reads is of a table nothing between step
+    9 and here writes, so it is the same row set step 9 would have read.
 13. **Take the runway reading** — `runway.run()` asks whether there is anything left for the fleet to
     do, and whether the reason there is not is upstream of it ([25](25-supply.md)). Positioned
     **below `decide`** for both neighbours: it needs every read `decide` needs — the plan funnel, the
@@ -611,6 +626,37 @@ The same test asserts every declared desk takes exactly one position and is actu
 walk, so a desk wired in `src/system.ts` and left out of the registry cannot sit there dead. Adding a
 desk is therefore three things and no more: a field on `PulseDeskDeps`, an entry in `PULSE_DESKS`
 (which the record's type will not let you forget), and its position in `PULSE_PIPELINE`.
+
+### The sweep registry
+
+The passes between the desks and `decide` — the parks, the expiries, the tidies, the burn watch, the
+appraisal announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the
+ticket filer — are declared the same way, in the same file: `PULSE_SWEEPS`, walked in the order
+`PULSE_SWEEP_PIPELINE` states, with `PulseSweepDeps` as their dependencies. They are the same kind of
+thing as a desk and get the same `readWorld` and `awaited` flags, for the same reason: a sweep whose
+subject is the world snapshot is one flag, in one place, rather than an `if (readWorld)` at a call
+site that the next sweep can be written without.
+
+Two things differ from the desk registry, and both come from where the sweeps sit:
+
+- **An id is not a dependency's name.** One dependency can carry two sweeps with two positions —
+  `fleet` carries `parks` and `stalls`, `escalations` carries `deadAgents` and `settledMerges` — so
+  `PULSE_SWEEP_PIPELINE` names the sweeps, not the deps, and `test/pulsePipeline.test.ts` is what
+  asserts every declared one takes exactly one position.
+- **`runCycle` reads the store between them**, and [those reads happen once](#ordering) with the
+  result reused — the pulse's own reads, that is; the dispatcher's are taken together below the last
+  sweep phase. So each sweep declares a **`phase`** — the gap in the read it sits in — and the walk
+  is run once per phase, handed that phase's reading: `open` before any of it, then `afterTasks`,
+  `afterAgents`, `afterVerdicts`, `afterOrigins`, `afterReviews`, and `afterExecute` below the
+  executor, where the ticket filer runs. A sweep is handed what the cycle has already read rather
+  than reading it again, which is what keeps "which of the two reads was this decided against?" a
+  question nobody has to ask. `PULSE_SWEEP_PHASES` states the phase order and the same test asserts
+  the pipeline is grouped by it, so a sweep given the wrong phase is a failing test rather than a
+  pass that quietly moved.
+
+A sweep that records its own failures does so inside its own body — `parks` recording a resume that
+failed, `issueRuns` its `errors.record` around the whole loop — for the reason every other caught
+failure is recorded rather than swallowed ([18](18-observability.md)).
 
 ## Failure handling
 
@@ -678,7 +724,8 @@ pull request without one and the only thing that used to clear it was a dispatch
 
 ## `DispatchContext`
 
-What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
+What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`), assembled by
+`src/dispatcher/dispatchInputs.ts` ([05](05-dispatcher.md#assembling-the-context)):
 
 | Field                | Contents                                                                |
 | -------------------- | ----------------------------------------------------------------------- |

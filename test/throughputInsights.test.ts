@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../src/throughputInsights.js';
+import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../src/insights/throughputInsights.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import type { PrReplySent, WorldEvent, WorldEventKind, WorldSnapshot } from '../src/types.js';
-import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
+import { resolveWindow, type InsightsWindow } from '../src/insights/insightsWindow.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ThroughputPayload } from '../src/wire.js';

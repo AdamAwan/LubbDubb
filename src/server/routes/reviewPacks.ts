@@ -13,7 +13,7 @@ import type {
   ReviewSeenBody,
 } from '../../wire.js';
 import { buildReviewCalibration } from '../../reviewPacks/calibration.js';
-import { InsightsQuery, resolveWindow, timelineSpan, windowView } from '../../insightsWindow.js';
+import { InsightsQuery, resolveWindow, timelineSpan, windowView } from '../../insights/insightsWindow.js';
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 

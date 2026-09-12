@@ -5,17 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { resolveWindow } from '../src/insightsWindow.js';
+import { resolveWindow } from '../src/insights/insightsWindow.js';
 import {
   buildOperatorInsights,
   type OperatorInput,
   type OperatorRow,
   type OperatorRowId,
   type OperatorRowKind,
-} from '../src/operatorInsights.js';
+} from '../src/insights/operatorInsights.js';
 import { USAGE_SUBJECTS } from '../src/usage/events.js';
 import { IDLE_INTENT } from '../src/selfUpdate/upgradePlan.js';
 import type { UsagePayload } from '../src/wire.js';

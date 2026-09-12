@@ -131,7 +131,7 @@ provider and persisted row that predates them reads unchanged:
   with no `ci.checks` rule naming it, so rule `pr-ci-gate` sends an agent to queue the run
   ([07](07-pull-requests.md#ci-checks)).
 
-`prState(pr)` (`src/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
+`prState(pr)` (`src/pr/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
 when present and otherwise folds back onto `merged`. It **never invents `closed`** — a PR nobody told
 us was closed is open or merged, never abandoned. Inferring abandonment from a disappearance is
 exactly the bug the closed-PR list exists to fix.

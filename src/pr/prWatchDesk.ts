@@ -1,7 +1,7 @@
-import type { ErrorRecorder } from './errorLog.js';
-import type { ActionSink } from './sink/actionSink.js';
-import type { Store } from './store/store.js';
-import type { WorldSnapshot } from './types.js';
+import type { ErrorRecorder } from '../errorLog.js';
+import type { ActionSink } from '../sink/actionSink.js';
+import type { Store } from '../store/store.js';
+import type { WorldSnapshot } from '../types.js';
 import { prsToSeedWatch, type PrWatchSeed } from './prWatch.js';
 
 // → docs/spec/07-pull-requests.md

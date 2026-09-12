@@ -1,4 +1,4 @@
-import { basePrOf, newlyFailingChecks, recoveredOnSameCommit } from '../prHealth.js';
+import { basePrOf, newlyFailingChecks, recoveredOnSameCommit } from '../pr/prHealth.js';
 import type { CiCheck, PullRequest, WorldSnapshot } from '../types.js';
 
 // → docs/spec/27-obstacles.md

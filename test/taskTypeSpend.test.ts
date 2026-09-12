@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { rollUpChecks, rollUpTaskTypes } from '../src/taskTypeSpend.js';
+import { rollUpChecks, rollUpTaskTypes } from '../src/insights/taskTypeSpend.js';
 import { backfillTaskDispatchKind, TASK_COLUMNS } from '../src/store/tasks.js';
 import { ensureColumns } from '../src/store/migrate.js';
 import { SCHEMA } from '../src/store/schema.js';

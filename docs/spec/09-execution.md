@@ -628,7 +628,7 @@ merge commit and the branch.
   pull request wins — the cockpit's ordering in `closedPrs`, for its reason. Open pull requests are
   not unioned in: the rule fires only for a goal that has none, and one appearing between the decision
   and the read is work in flight rather than something that landed.
-- **Which pull requests are the goal's is `issueForPr`** (`src/prIssue.ts`), the harness's one answer
+- **Which pull requests are the goal's is `issueForPr`** (`src/pr/prIssue.ts`), the harness's one answer
   to that question, plus the plan's part rows — the arm `issueForPr` cannot supply, for a part whose
   branch follows no convention or whose pull request the provider never linked. The parts are read for
   their numbers and nothing else.

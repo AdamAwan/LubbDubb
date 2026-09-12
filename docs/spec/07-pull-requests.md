@@ -1,6 +1,6 @@
 # 07 — Pull requests
 
-Every PR predicate lives in `src/prHealth.ts`, pure and unit-tested (`test/prHealth.test.ts`,
+Every PR predicate lives in `src/pr/prHealth.ts`, pure and unit-tested (`test/prHealth.test.ts`,
 `test/prWatch.test.ts`, `test/stackedPrs.test.ts`). The dispatcher, the cockpit and the
 `world_read` tool all read them, so all three give one account of a PR.
 
@@ -41,7 +41,7 @@ alone does not stop the provider holding the PR on it.
 
 ## How wide a pull request is
 
-`src/prSplit.ts` — pure, and read by rule `pr-split` ([05](05-dispatcher.md)) and by the planner and
+`src/pr/prSplit.ts` — pure, and read by rule `pr-split` ([05](05-dispatcher.md)) and by the planner and
 part prompts.
 
 ```
@@ -413,7 +413,7 @@ place the model is consulted is `landingScope`, at the click, in the route.
 
 ## Whose pull request is it
 
-`isOurPr(pr, prAuthorConfigured)` / `isSomeoneElsesPr(pr)` (`src/prOwnership.ts`), asked in one place
+`isOurPr(pr, prAuthorConfigured)` / `isSomeoneElsesPr(pr)` (`src/pr/prOwnership.ts`), asked in one place
 because several paths need it and two wordings of "which pull requests are mine" would drift.
 
 **`PullRequest.viewerAuthored` is the answer, and the provider is the only thing that can give it.**
@@ -584,7 +584,7 @@ request as `#12` on Azure does not fail to link. It links, confidently, to an un
 nothing about that is red: the description renders, the sigil is live, and only a reader who follows
 it finds a work item about something else.
 
-`src/prRef.ts` holds the whole of it — `prRefStyle(provider)` picks the sigil from
+`src/pr/prRef.ts` holds the whole of it — `prRefStyle(provider)` picks the sigil from
 `integrations.sourceControl` and `prRef(n, style)` writes one reference. Threaded from `system.ts` to
 every place a pull request is named in prose that somebody else reads:
 
@@ -613,7 +613,7 @@ nothing.
 
 ## `prAttentionStatus(pr, ctx)`
 
-`src/prAttention.ts`, pure and unit-tested (`test/prAttention.test.ts`). The PR-side sibling of
+`src/pr/prAttention.ts`, pure and unit-tested (`test/prAttention.test.ts`). The PR-side sibling of
 `issuePickupStatus`: it folds every gate that decides what happens to a PR into one verdict about
 **whose turn it is** — `{ status, reasons }`, reasons most actionable first and never empty.
 
@@ -711,7 +711,7 @@ one is about a **span**, and a span is not recoverable from a snapshot: no provi
 answer either, since a pull request that spent two days red was not waiting on anybody for those two
 days.
 
-So it is observed as it happens. `awaitingReview(pr, staffed)` (`src/prHealth.ts`, pure) is folded
+So it is observed as it happens. `awaitingReview(pr, staffed)` (`src/pr/prHealth.ts`, pure) is folded
 once per pulse into `pr_review_waits` ([14](14-persistence.md)) as a **watermark**: one row per
 waiting pull request, written only when absent and deleted the moment it stops waiting. A plain
 upsert would set it to now on every pulse and read as "waiting five minutes" forever.
@@ -848,7 +848,7 @@ and not only its opening line ([below](#the-thread-is-the-conversation)). `revie
 threads with the state kept as well: who wrote each message, where the thread hangs in the diff, and
 one of four states.
 The providers build the threads and derive the comments from them (`threadComments` in
-`src/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
+`src/pr/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
 cannot happen — there is one derivation, not two.
 
 | state      | what it means                                                                 | `handled` |
@@ -933,7 +933,7 @@ comment it created — in the same vocabulary `PrThreadMessage.id` uses on the w
 `(pr_number, comment_ref)`. Both providers read it through the same `SentPrReplies` seam, threaded in
 from `src/system.ts` via the registry, so the reply list a person reads and the comment list a rule
 dispatches on cannot come to disagree about a thread — which is why there is one derivation in
-`src/prThreads.ts` at all.
+`src/pr/prThreads.ts` at all.
 
 `commentRef` is deliberately separate from `SendResult.ref`. `ref` is a URL for a person to click in
 the audit log and matches nothing on a read; comparing the wrong one would quietly never match, which
@@ -1442,7 +1442,7 @@ Opt-in on its own would stop the harness acting on the pull requests it opened i
   request the fleet just opened is never briefly invisible to the fleet.
 - **On the pulse.** `PrWatchDesk` tags any open pull request on a branch only a dispatch cuts —
   `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, the one predicate `isHarnessBranch` in
-  `src/prOwnership.ts` — that carries no tag. That is the floor under the first: an agent that opened
+  `src/pr/prOwnership.ts` — that carries no tag. That is the floor under the first: an agent that opened
   its own after the tool reported itself unwired, a code job's pull request, and every pull request
   already open the first pulse a deployment runs this.
 
@@ -1477,7 +1477,7 @@ That mattered because of one branch policy. **Check for linked work items** bloc
 carrying no relation, so on Azure the fleet was opening pull requests that were blocked from the
 moment they existed, and the only thing that moved them was a code agent — a model call, a worktree
 and a context window spent rediscovering a number the harness had held on a row since pickup. The
-work item is not a judgement. It is `issueForPr(pr, issues)` in `src/prIssue.ts`: the pull request
+work item is not a judgement. It is `issueForPr(pr, issues)` in `src/pr/prIssue.ts`: the pull request
 the issue links, else the issue its `issue/<n>` branch names — **the same predicate the rename reads**,
 asked once so the number in a pull request's title and the number on its tracker link cannot
 disagree.
@@ -1489,7 +1489,7 @@ So the link is written the way the tag is, and in the same two places:
 - **On the pulse.** `PrWorkItemDesk` links any open pull request that `isOurPr` claims and
   `issueForPr` resolves. The floor under the first, for the watch seeding's reasons.
 
-Both go through `linkPrWorkItem` in `src/prWorkItemDesk.ts`, the one write path, exactly as both
+Both go through `linkPrWorkItem` in `src/pr/prWorkItemDesk.ts`, the one write path, exactly as both
 tagging paths go through `seedPrWatch`.
 
 **`ok: false` is "this provider does not need it", not a failure.** `CompositeConnector.linkWorkItem`

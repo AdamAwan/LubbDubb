@@ -1,4 +1,4 @@
-import type { PullRequest } from './types.js';
+import type { PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#whose-pull-request-is-it
 

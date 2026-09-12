@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { AllowancePayload } from '../../wire.js';
-import { buildAllowanceInsights } from '../../allowanceInsights.js';
-import { buildSpendGoals } from '../../spendInsights.js';
+import { buildAllowanceInsights } from '../../insights/allowanceInsights.js';
+import { buildSpendGoals } from '../../insights/spendInsights.js';
 import {
   InsightsQuery,
   resolveWindow,
@@ -10,7 +10,7 @@ import {
   sinceOrEpoch,
   timelineSpan,
   windowView,
-} from '../../insightsWindow.js';
+} from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 

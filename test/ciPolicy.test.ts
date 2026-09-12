@@ -11,9 +11,9 @@ import {
   type CiPolicy,
 } from '../src/ci/ciPolicy.js';
 import { describeCiPolicy } from '../src/ci/describeCiPolicy.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
-import { prHealth } from '../src/prHealth.js';
+import { prHealth } from '../src/pr/prHealth.js';
 import { aggregateCiStatus, listCiChecks } from '../src/integrations/github/sourceControl.js';
 import { aggregatePolicyCiStatus, listPolicyCiChecks } from '../src/integrations/azure/sourceControl.js';
 import type { AzPolicyEvaluation } from '../src/integrations/azure/azureDevOpsApi.js';
@@ -413,7 +413,7 @@ test('loadConfig: the ci block defaults to empty, round-trips, and is validated 
 });
 
 async function decide(prs: PullRequest[], ci: CiPolicy, extra: Partial<DispatchContext> = {}) {
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', {}, ci);
+  const dispatcher = new RuleDispatcher({ defaultBranch: 'main', ci });
   return dispatcher.decide(context(prs, extra));
 }
 

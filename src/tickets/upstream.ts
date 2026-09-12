@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Config } from '../config.js';
+import type { Config } from '../config/config.js';
 import type { FilingTarget } from '../sink/actionSink.js';
 
 // → docs/spec/13-jobs-and-tickets.md

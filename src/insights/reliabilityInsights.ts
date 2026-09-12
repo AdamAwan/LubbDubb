@@ -1,7 +1,7 @@
-import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from './types.js';
+import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from '../types.js';
 import { prNodeRefOf, roundUsd, unmeasured } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
-import { ciStatusOf } from './world/worldDiff.js';
+import { ciStatusOf } from '../world/worldDiff.js';
 import {
   bucketIndexIn,
   runInWindow,

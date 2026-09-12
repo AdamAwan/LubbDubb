@@ -17,25 +17,25 @@ import type { OrphanedWork } from './agents/crashRecovery.js';
 import type { BuildReading } from './selfUpdate/upgradePlan.js';
 import type { FileOverlap } from './fileOverlap.js';
 import type { UnrecordedWork } from './graph/unrecorded.js';
-import type { PrAttention } from './prAttention.js';
+import type { PrAttention } from './pr/prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
 import type { PoolRollup } from './pool/aggregate.js';
-import type { PrHealth } from './prHealth.js';
+import type { PrHealth } from './pr/prHealth.js';
 import type { PrPackStanding } from './reviewPacks/standing.js';
 import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
-import type { ConfigChange } from './configApply.js';
-import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
-import type { ThroughputInsights } from './throughputInsights.js';
+import type { ConfigChange } from './config/configApply.js';
+import type { ReliabilityInsights, RunTally } from './insights/reliabilityInsights.js';
+import type { ThroughputInsights } from './insights/throughputInsights.js';
 import type { ReviewCalibration } from './reviewPacks/calibration.js';
-import type { RemedyInsights } from './remedyInsights.js';
-import type { AllowanceInsights } from './allowanceInsights.js';
-import type { SpendInsights } from './spendInsights.js';
-import type { McpInsights } from './mcpInsights.js';
-import type { OperatorInsights } from './operatorInsights.js';
-import type { SurfaceReachInsights } from './surfaceReachInsights.js';
-import type { SpendTrend } from './spendTrend.js';
+import type { RemedyInsights } from './insights/remedyInsights.js';
+import type { AllowanceInsights } from './insights/allowanceInsights.js';
+import type { SpendInsights } from './insights/spendInsights.js';
+import type { McpInsights } from './insights/mcpInsights.js';
+import type { OperatorInsights } from './insights/operatorInsights.js';
+import type { SurfaceReachInsights } from './insights/surfaceReachInsights.js';
+import type { SpendTrend } from './insights/spendTrend.js';
 import type { Stack } from './stacks/stack.js';
 import type { LocalRunOption } from './localRun/ref.js';
 import type {
@@ -906,8 +906,8 @@ export type {
   WorldEvent,
   WorldEventKind,
 } from './types.js';
-export type { OperatorInsights, OperatorRow, OperatorRowKind } from './operatorInsights.js';
-export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './surfaceReachInsights.js';
+export type { OperatorInsights, OperatorRow, OperatorRowKind } from './insights/operatorInsights.js';
+export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
 export type { PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
 export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
@@ -920,7 +920,7 @@ export type { FileOverlap } from './fileOverlap.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
 export type { RunningConfigEntry } from './server/runningConfig.js';
-export type { ConfigChange } from './configApply.js';
+export type { ConfigChange } from './config/configApply.js';
 export type {
   CiHealth,
   CiSubject,
@@ -930,7 +930,7 @@ export type {
   RunPhaseHealth,
   RunRepeat,
   RunTally,
-} from './reliabilityInsights.js';
+} from './insights/reliabilityInsights.js';
 export type {
   ThroughputBucket,
   ThroughputConversation,
@@ -939,7 +939,7 @@ export type {
   ThroughputMeasure,
   ThroughputSubject,
   ThroughputTotal,
-} from './throughputInsights.js';
+} from './insights/throughputInsights.js';
 export type {
   ReviewCalibration,
   ReviewOverridePair,
@@ -948,7 +948,7 @@ export type {
   ReviewPlumbingReading,
   ReviewProminenceReading,
 } from './reviewPacks/calibration.js';
-export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
+export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
 export type { CiCheck } from './types.js';
@@ -966,8 +966,8 @@ export type {
   AllowanceLane,
   AllowanceProjection,
   AllowanceReading,
-} from './allowanceInsights.js';
-export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+} from './insights/allowanceInsights.js';
+export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './insights/spendInsights.js';
 export type { LocalRunFreshness, LocalRunPorts, LocalRunTurn } from './types.js';
 export type {
   McpChannelUsage,
@@ -979,18 +979,18 @@ export type {
   McpRefusal,
   McpSilentRun,
   McpToolUsage,
-} from './mcpInsights.js';
-export type { InsightsWindow, InsightsWindowView } from './insightsWindow.js';
+} from './insights/mcpInsights.js';
+export type { InsightsWindow, InsightsWindowView } from './insights/insightsWindow.js';
 export type {
   SpendTrend,
   SpendTrendComparison,
   SpendTrendPeriod,
   SpendTrendPhaseShift,
   SpendTrendBucket,
-} from './spendTrend.js';
+} from './insights/spendTrend.js';
 // → docs/spec/16-http-api.md
 
-export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
+export type { ChecksSpend, TaskTypeSpend } from './insights/taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { CaveatAnswerInput } from './plans/planCaveats.js';

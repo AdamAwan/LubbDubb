@@ -1,4 +1,4 @@
-import type { PrComment, PrReviewThread, PrThreadState, PullRequest, WorldSnapshot } from './types.js';
+import type { PrComment, PrReviewThread, PrThreadState, PullRequest, WorldSnapshot } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity
 

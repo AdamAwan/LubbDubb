@@ -5326,7 +5326,7 @@ sharing a surface. It is drawn under the fleet's own scope only — see
 [Just me, or the pool](#just-me-or-the-pool).
 
 Six windows — `5h session`, `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by
-`resolveWindow` (`src/insightsWindow.ts`) and shipped back on every payload
+`resolveWindow` (`src/insights/insightsWindow.ts`) and shipped back on every payload
 ([18](18-observability.md#the-window)). **The page draws the window it was handed, never the one it
 asked with**: a caption derived from the key is free to disagree with the buckets the server actually
 cut, and the caption is the half a reader would believe. The resolution is stated beside the control —
@@ -5642,7 +5642,7 @@ What comes first is the two ways the channel fails without saying so:
   ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
 
 **A count of zero is four facts wearing one face, and the server says which.** This is the part that
-earns the tab. `src/mcpInsights.ts` ships a verdict per silent tool with the evidence behind it, rather
+earns the tab. `src/insights/mcpInsights.ts` ships a verdict per silent tool with the evidence behind it, rather
 than three numbers for the cockpit to interpret — the same rule `PHASE_COPY` and `OUTCOME_COPY` follow,
 and for the same reason: it is a claim about what the harness did, and a cockpit re-deriving it would
 be a second opinion drawn inches from the first. The ladder, worst first:

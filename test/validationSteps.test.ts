@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { VALIDATION_COLUMNS } from '../src/store/validation.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

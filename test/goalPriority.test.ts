@@ -7,7 +7,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { expeditedOrigins } from '../src/dispatcher/goalPriority.js';
 import type { Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';

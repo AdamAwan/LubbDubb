@@ -1,8 +1,8 @@
 import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
-import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../spendInsights.js';
+import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../insights/spendInsights.js';
 import type { PoolDigestMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
-import { throughputMeasureLabel } from '../throughputInsights.js';
+import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { USAGE_COPY, type UsageEvent } from '../usage/events.js';
 
 // → docs/spec/28-cross-fleet-pool.md

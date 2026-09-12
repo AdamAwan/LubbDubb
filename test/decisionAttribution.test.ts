@@ -66,7 +66,7 @@ function spentCap(origin: string, rule: string): Decision[] {
 }
 
 test('only admission-kind ids are ever emitted into the admission field', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main');
+  const d = new RuleDispatcher({ defaultBranch: 'main' });
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
@@ -81,7 +81,7 @@ test('only admission-kind ids are ever emitted into the admission field', async 
 });
 
 test('a throttled pickup names issue-pickup as its proposer, not the cap that stopped it', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main');
+  const d = new RuleDispatcher({ defaultBranch: 'main' });
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
@@ -95,7 +95,7 @@ test('a throttled pickup names issue-pickup as its proposer, not the cap that st
 });
 
 test("a throttled PR concern names the concern's own rule", async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main');
+  const d = new RuleDispatcher({ defaultBranch: 'main' });
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [pr({ ciStatus: 'failing' })], issues: [] },
@@ -145,7 +145,7 @@ test('a branch note records no proposer at all, and says so through the admissio
     resumedAt: null,
     resumeAttempts: 0,
   };
-  const d = new RuleDispatcher({}, {}, undefined, 'main');
+  const d = new RuleDispatcher({ defaultBranch: 'main' });
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [pr({ ciStatus: 'failing' })], issues: [] },

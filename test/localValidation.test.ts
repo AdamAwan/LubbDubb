@@ -8,7 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { localValidationFileSignerFor } from '../src/server/routes/artifacts.js';
 import { verifyArtifactCapability } from '../src/server/artifactCapability.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -241,22 +241,15 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function rules(policy = DEFAULT_LOCAL_VALIDATION): RuleDispatcher {
-  return new RuleDispatcher(
-    {},
-    {},
-    undefined,
-    'main',
-    {},
-    {},
-    {},
-    '/srv/validation',
-    '#',
-    {},
-    { routing: null, modes: {} },
-    '',
-    '',
-    () => policy,
-  );
+  return new RuleDispatcher({
+    defaultBranch: 'main',
+    validationRoot: '/srv/validation',
+    prRefStyle: '#',
+    reviewCharters: { routing: null, modes: {} },
+    watchNote: '',
+    watchDeclareNote: '',
+    localValidation: () => policy,
+  });
 }
 
 function dispatchesOn(actions: { type: string }[], marker: string): string[] {

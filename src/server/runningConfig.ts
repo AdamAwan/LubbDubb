@@ -1,5 +1,5 @@
-import { baselineConfig, type Config } from '../config.js';
-import { isLiveField } from '../configApply.js';
+import { baselineConfig, type Config } from '../config/config.js';
+import { isLiveField } from '../config/configApply.js';
 import {
   CONFIG_FIELDS,
   configField,
@@ -9,7 +9,7 @@ import {
   type ConfigFieldAccess,
   type ConfigFieldRequirement,
   type ConfigFieldType,
-} from '../configFields.js';
+} from '../config/configFields.js';
 
 // → docs/spec/02-configuration.md
 

@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Config } from '../config.js';
-import { configField, suggestedValue } from '../configFields.js';
-import type { ConfigChange } from '../configApply.js';
+import type { Config } from '../config/config.js';
+import { configField, suggestedValue } from '../config/configFields.js';
+import type { ConfigChange } from '../config/configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';

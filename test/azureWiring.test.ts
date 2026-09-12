@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { buildIntegrations } from '../src/integrations/registry.js';
 import { CompositeConnector } from '../src/integrations/compositeConnector.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { isRefResolvable, type IntegrationSelection } from '../src/integrations/integration.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';

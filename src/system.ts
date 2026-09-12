@@ -1,8 +1,8 @@
 import { tmpdir } from 'node:os';
 import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
-import { prRefStyle } from './prRef.js';
+import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
-import { configFilePath, projectConfigFilePath, type Config } from './config.js';
+import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations, buildPoolTransport, worldScope } from './integrations/registry.js';
@@ -46,7 +46,7 @@ import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
 import { ObstacleVoiceDesk } from './obstacles/voiceDesk.js';
 import { trackerCoordinates } from './mcp/findings.js';
-import { PrNamingDesk } from './prNamingDesk.js';
+import { PrNamingDesk } from './pr/prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
@@ -71,8 +71,8 @@ import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './p
 import { validationPlanNote } from './validation/authoring.js';
 import { stepCapabilities } from './validation/steps.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
-import { PrWatchDesk } from './prWatchDesk.js';
-import { PrWorkItemDesk } from './prWorkItemDesk.js';
+import { PrWatchDesk } from './pr/prWatchDesk.js';
+import { PrWorkItemDesk } from './pr/prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
@@ -107,7 +107,7 @@ import { CommandPortLister, type PortLister } from './localRun/ports.js';
 import { FakePortLister } from './localRun/fakePortLister.js';
 import { localRunChoices } from './localRun/ref.js';
 import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
-import { LiveConfig } from './configApply.js';
+import { LiveConfig } from './config/configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
 
@@ -520,26 +520,24 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sequencing: config.issueSequencing,
     sequenceMaxChildren: config.issueSequenceMaxChildren,
   };
-  const rules = new RuleDispatcher(
-    issuePickup,
-    {},
-    prompts,
-    config.defaultBranch,
-    config.planning,
-    config.ci,
-    config.validation,
-    config.validationRoot,
-    prRefStyle(config.integrations.sourceControl),
-    config.review,
+  const rules = new RuleDispatcher({
+    pickup: issuePickup,
+    templates: prompts,
+    defaultBranch: config.defaultBranch,
+    planning: config.planning,
+    ci: config.ci,
+    validation: config.validation,
+    validationRoot: config.validationRoot,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
+    review: config.review,
     reviewCharters,
-    watchNote(config.environments),
-    watchDeclareNote(config.environments),
-    undefined,
-    (offerings) => testPartNote(config.environments, offerings),
-    stateDeclareNote(config.environments),
-    config.environments.some((env) => env.validate !== undefined),
-    (offerings) => validationPlanNote(config.environments, offerings),
-  );
+    watchNote: watchNote(config.environments),
+    watchDeclareNote: watchDeclareNote(config.environments),
+    testPartNote: (offerings) => testPartNote(config.environments, offerings),
+    stateDeclareNote: stateDeclareNote(config.environments),
+    remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
+    validationPlanNote: (offerings) => validationPlanNote(config.environments, offerings),
+  });
   const dispatcher: Dispatcher = rules;
 
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ThroughputPayload } from '../../wire.js';
-import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../../throughputInsights.js';
-import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insightsWindow.js';
+import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../../insights/throughputInsights.js';
+import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 

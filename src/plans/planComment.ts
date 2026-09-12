@@ -1,7 +1,7 @@
 import type { Plan, PlanPart, ValidationCheck } from '../types.js';
 import { liveChecks, validationVerdict } from '../validation/verdict.js';
 import { partOutcomeKind, planProgress } from './parts.js';
-import { prRef, type PrRefStyle } from '../prRef.js';
+import { prRef, type PrRefStyle } from '../pr/prRef.js';
 
 // → docs/spec/08-planning.md
 

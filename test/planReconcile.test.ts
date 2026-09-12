@@ -376,7 +376,7 @@ test('a declined step blocks its part without wedging the plan', async () => {
   assert.match(parts[0]?.blockedReason ?? '', /is a step for a person, and it was declined/);
   assert.equal(planIsWedged(parts), false, 'the operator declined it, and nothing is stranded behind it');
 
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', PLANNING_ON).decide({
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: PLANNING_ON }).decide({
     world: {
       takenAt: '2026-07-25T12:00:00.000Z',
       pullRequests: [],

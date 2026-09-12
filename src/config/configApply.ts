@@ -1,7 +1,7 @@
 import { CONFIG_FIELDS, readPath } from './configFields.js';
 import type { Config } from './config.js';
-import type { CiPolicy } from './ci/ciPolicy.js';
-import type { RuntimeControl } from './runtimeControl.js';
+import type { CiPolicy } from '../ci/ciPolicy.js';
+import type { RuntimeControl } from '../runtimeControl.js';
 
 // → docs/spec/02-configuration.md
 

@@ -14,7 +14,7 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { PrThreadState, PullRequest } from '../../types.js';
-import { threadComments } from '../../prThreads.js';
+import { threadComments } from '../../pr/prThreads.js';
 import type {
   BranchDeleteCapable,
   WorldCapability,

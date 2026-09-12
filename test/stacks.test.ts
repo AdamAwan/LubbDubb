@@ -4,8 +4,8 @@ import { Store } from '../src/store/store.js';
 import { FakeConnector } from '../src/connector/fakeConnector.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { buildStacks } from '../src/stacks/stack.js';
-import { retargetsFor } from '../src/prRetarget.js';
-import { basePrOf } from '../src/prHealth.js';
+import { retargetsFor } from '../src/pr/prRetarget.js';
+import { basePrOf } from '../src/pr/prHealth.js';
 import type { Plan, PlanPart, PullRequest } from '../src/types.js';
 
 function connector(): FakeConnector {

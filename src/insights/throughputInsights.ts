@@ -1,4 +1,4 @@
-import type { PrReplySent, WorldEvent, WorldEventKind } from './types.js';
+import type { PrReplySent, WorldEvent, WorldEventKind } from '../types.js';
 import {
   bucketIndexIn,
   inWindow,

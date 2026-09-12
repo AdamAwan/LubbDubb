@@ -1,5 +1,5 @@
 import type { DispatchContext } from '../dispatcher.js';
-import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../../prHealth.js';
+import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../../pr/prHealth.js';
 import type { Agent, Decision, PullRequest } from '../../types.js';
 import { askedAlready } from '../admission.js';
 import {

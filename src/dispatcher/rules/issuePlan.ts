@@ -1,5 +1,5 @@
 import { supersededReason } from '../admission.js';
-import { budgetNote } from '../../prSplit.js';
+import { budgetNote } from '../../pr/prSplit.js';
 import { atomNote } from '../../plans/atoms.js';
 import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';

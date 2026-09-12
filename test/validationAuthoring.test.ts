@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -16,7 +16,7 @@ import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { sheetableArrivals } from '../src/environments/watchWindow.js';
 import { validationPlanNote } from '../src/validation/authoring.js';
 import { issueOriginRole } from '../src/issueOrigins.js';
-import { phaseOf } from '../src/spendInsights.js';
+import { phaseOf } from '../src/insights/spendInsights.js';
 import type { Agent, GoalArrival, Issue, IssueDelivery, Plan } from '../src/types.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written

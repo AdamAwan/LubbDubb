@@ -1,8 +1,8 @@
 import { issueForPr } from './prIssue.js';
 import { isOurPr } from './prOwnership.js';
 import { prTitleFields, renderPrTitle } from './prTitle.js';
-import type { PrTitleInput } from './sink/actionSink.js';
-import type { Issue, PullRequest } from './types.js';
+import type { PrTitleInput } from '../sink/actionSink.js';
+import type { Issue, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

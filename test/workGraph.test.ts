@@ -16,7 +16,7 @@ import type {
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 import { partSettled } from '../src/plans/parts.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { buildApp } from '../src/server/app.js';

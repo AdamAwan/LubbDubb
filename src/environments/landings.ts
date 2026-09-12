@@ -1,7 +1,7 @@
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import type { PullRequest, WorkNode, WorldSnapshot } from '../types.js';
-import { issueForPr } from '../prIssue.js';
-import { prState } from '../prHealth.js';
+import { issueForPr } from '../pr/prIssue.js';
+import { prState } from '../pr/prHealth.js';
 
 // → docs/spec/24-environments.md
 

@@ -1,4 +1,4 @@
-import type { PrThreadReopen } from '../prThreads.js';
+import type { PrThreadReopen } from '../pr/prThreads.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md

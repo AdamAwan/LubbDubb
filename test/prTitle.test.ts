@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prTitleFields, renderPrTitle } from '../src/prTitle.js';
-import { renamablePrs, type PrRenameContext } from '../src/prRename.js';
+import { prTitleFields, renderPrTitle } from '../src/pr/prTitle.js';
+import { renamablePrs, type PrRenameContext } from '../src/pr/prRename.js';
 import type { Issue, PullRequest } from '../src/types.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 

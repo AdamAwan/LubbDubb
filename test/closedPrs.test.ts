@@ -12,7 +12,7 @@ import type { AzClosedPull, AzureDevOpsApi } from '../src/integrations/azure/azu
 import type { GhClosedPull, GitHubApi } from '../src/integrations/github/githubApi.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import { observePartPr } from '../src/plans/parts.js';
-import { prState } from '../src/prHealth.js';
+import { prState } from '../src/pr/prHealth.js';
 import type { PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 
 const NOW = Date.parse('2026-07-25T12:00:00.000Z');

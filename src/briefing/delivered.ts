@@ -1,4 +1,4 @@
-import { prState } from '../prHealth.js';
+import { prState } from '../pr/prHealth.js';
 import type { PullRequest } from '../types.js';
 
 // → docs/spec/09-execution.md

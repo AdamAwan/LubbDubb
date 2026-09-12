@@ -28,7 +28,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | ------------------- | -------------------------------- | ---------------------------------------------------------------------- |
 | Composition root    | `src/system.ts`                  | Wires every module through its interface; the only place they meet     |
 | Entry point         | `src/server/main.ts`             | Loads config, boots, parks orphaned agents, serves, shuts down cleanly |
-| Config              | `src/config.ts`                  | Defaults, file overrides, env overrides, path resolution               |
+| Config              | `src/config/config.ts`           | Defaults, file overrides, env overrides, path resolution               |
 | Store               | `src/store/store.ts`             | The only module that touches SQLite                                    |
 | Connector (read)    | `src/connector/connector.ts`     | The seam the world is read through                                     |
 | Action sink (write) | `src/sink/actionSink.ts`         | The seam side-effectful actions are written through                    |

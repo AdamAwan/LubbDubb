@@ -1,4 +1,4 @@
-import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } from './types.js';
+import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } from '../types.js';
 import type { SpendGoal } from './spendInsights.js';
 import { issueBehind, roundUsd, unmeasured } from './issueSpend.js';
 import type { InsightsWindowView } from './insightsWindow.js';

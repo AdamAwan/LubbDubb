@@ -27,11 +27,11 @@ opinion about something already measured is the failure this repo keeps writing 
   counting, silently, the day a second path settles the same thing. The vivarium is the consumer
   today. That list is the operator-action vocabulary, and this reading takes it whole rather than
   writing a second one.
-- **`src/mcpInsights.ts`** already holds the doctrine this reading needs most, over a different
+- **`src/insights/mcpInsights.ts`** already holds the doctrine this reading needs most, over a different
   actor: [a count of zero is not a finding](#a-quiet-surface-is-four-different-facts).
 - **`src/store/mcpCalls.ts`** is the one table in the tree that exists only to be read by a fold, and
   its three properties are the template for [the one new table](#the-one-new-table).
-- **`src/insightsWindow.ts`** is the window, already decided once. This reading picks no span of its
+- **`src/insights/insightsWindow.ts`** is the window, already decided once. This reading picks no span of its
   own.
 
 ## The event registry
@@ -101,7 +101,7 @@ disclosure, the cockpit cannot edit a tracker item's own content, the feature bo
 a retro is drawn flat and a pet's card is always whole — so `pr.expand`, `ticket.edit`,
 `feature.filter`, `retro.expand` and `pet.expand` had no control behind them. A `ui` cell with no call
 site is a **permanent silent zero**, which is the "never named" failure
-[`src/mcpInsights.ts`](../../src/mcpInsights.ts) exists to diagnose, one actor over. Each comes back
+[`src/insights/mcpInsights.ts`](../../src/insights/mcpInsights.ts) exists to diagnose, one actor over. Each comes back
 on the day its control does.
 
 ### Each event declares where it is seen
@@ -176,8 +176,8 @@ half](#it-carries-the-ui-half-of-the-registry-by-declaration).
 
 ### The operator ledger
 
-`src/operatorInsights.ts` — `buildOperatorInsights`, a fold, no new table, sibling to
-`src/spendInsights.ts` and `src/reliabilityInsights.ts` and derived for their reason exactly. It is
+`src/insights/operatorInsights.ts` — `buildOperatorInsights`, a fold, no new table, sibling to
+`src/insights/spendInsights.ts` and `src/insights/reliabilityInsights.ts` and derived for their reason exactly. It is
 served by `GET /api/usage` (`src/server/routes/usage.ts`), which resolves the window once and passes
 it down.
 
@@ -218,7 +218,7 @@ omits the one ask that parks the whole fleet.
 | Abandoning a plan     | `PlanStatus` reaching `abandoned`                                                                                               |
 | Settling a check      | `ValidationCheckState`, with `ValidationCheckResultBy` saying whether a person or the fleet settled it — [20](20-validation.md) |
 | Concluding a goal     | the issue conclusions, `by = 'operator'` — [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)                      |
-| Stopping an agent     | the run's `killed` / `interrupted` outcome, already counted by `src/reliabilityInsights.ts`                                     |
+| Stopping an agent     | the run's `killed` / `interrupted` outcome, already counted by `src/insights/reliabilityInsights.ts`                            |
 
 **Authorising a landing is an act and not an ask**, though it settles something: the row exists only
 because somebody clicked, and nothing anywhere records that a landable stack was ever put in front of
@@ -252,7 +252,7 @@ outstanding for longer than the whole span. That is the only way to say _too lon
 serving six spans.
 
 **`null` is never zero.** A row whose record cannot answer a column ships `null` for it, which is
-`src/mcpInsights.ts`' doctrine applied one actor over: an obstacle's `updated_at` moves on every
+`src/insights/mcpInsights.ts`' doctrine applied one actor over: an obstacle's `updated_at` moves on every
 sighting, so there is no instant to measure a wait to, and a landing records the click and never the
 offer. A panel drawing a zero there would be manufacturing a finding out of a missing column.
 
@@ -275,7 +275,7 @@ fleet for six hours and is declined four times in five" is a decision, and it is
 any reading the harness keeps today.
 
 **A decline is not a failure.** An operator declining an ask is the harness having asked for the
-wrong thing, and the two columns stay separate for the reason `src/reliabilityInsights.ts` keeps
+wrong thing, and the two columns stay separate for the reason `src/insights/reliabilityInsights.ts` keeps
 `killed` out of `completionRate`: folded together, a well-steered fleet and a broken one draw the
 same shape.
 
@@ -415,7 +415,7 @@ the day its table can answer per day.
 
 ## A quiet surface is four different facts
 
-The trap, stated in full at `src/mcpInsights.ts` for the tool channel and transferring to surfaces
+The trap, stated in full at `src/insights/mcpInsights.ts` for the tool channel and transferring to surfaces
 without amendment. "Nobody opened the feature board this week" wants four different actions:
 
 - **nobody could have reached it** — no link to it was drawn on any surface an operator visited;
@@ -428,10 +428,10 @@ without amendment. "Nobody opened the feature board this week" wants four differ
 So this reading **does not ship counts for a panel to interpret.** It ships a verdict per surface
 with the evidence behind it: `never-linked`, `linked-never-visited`, `visited-never-operated`,
 `operated`, `console-dark`. A cockpit re-deriving that from three numbers would be a second opinion
-drawn inches from the first — the objection `src/mcpInsights.ts` already makes, and the reason its
+drawn inches from the first — the objection `src/insights/mcpInsights.ts` already makes, and the reason its
 copy lives where it does.
 
-`buildSurfaceReach` (`src/surfaceReachInsights.ts`) settles them on one ladder, and its order is the
+`buildSurfaceReach` (`src/insights/surfaceReachInsights.ts`) settles them on one ladder, and its order is the
 whole of it. **`console-dark` outranks everything**, because a per-surface verdict drawn over a window
 nobody was in is a finding manufactured out of an absent operator — a page of `never-linked` over the
 week somebody was on holiday is four findings' worth of noise. Then `operated`, then
@@ -524,7 +524,7 @@ Four changes, each shippable, each answering something on its own:
    stage below is keyed on it, and because that split is what stops stage 1 and stage 2 counting the
    same act twice. Nothing crosses `src/wire.ts` yet: the cockpit has no consumer until stage 2, and
    an export with no consumer is what `knip` is set to `error` about.
-1. **The operator ledger.** _Built._ `src/operatorInsights.ts` and `GET /api/usage` — a fold over
+1. **The operator ledger.** _Built._ `src/insights/operatorInsights.ts` and `GET /api/usage` — a fold over
    records that already exist: no table, no migration, no cockpit writer. It answers most of the
    original question, and it is the change that proves the framing before anything is stored for it.
 2. **Surface reach.** _Built._ The table, the batching writer, the verdicts and the panel. The only

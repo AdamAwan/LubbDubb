@@ -31,7 +31,7 @@ import type {
   ValidationPlanRecord,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
-import type { PrRefStyle } from '../../prRef.js';
+import type { PrRefStyle } from '../../pr/prRef.js';
 
 // → docs/spec/05-dispatcher.md (the rule book)
 

@@ -7,7 +7,7 @@ import { issueOriginRole } from '../src/issueOrigins.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -283,7 +283,7 @@ test('a standing verdict is not re-assessed', async () => {
 });
 
 test('the watch gate applies, evaluated once on the issue', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
+  const d = new RuleDispatcher({ pickup: { watchLabel: 'agent-ready' } });
 
   const unwatched = await d.decide(ctx());
   assert.deepEqual(origins(unwatched.actions), [], 'opt-in: an untagged issue is left alone');

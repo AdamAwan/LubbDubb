@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+import type { Config } from '../config/config.js';
 import { briefTicketFields } from '../briefTicket.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { deriveJobTitle } from '../jobs.js';

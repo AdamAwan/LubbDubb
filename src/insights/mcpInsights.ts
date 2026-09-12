@@ -1,6 +1,6 @@
-import type { Agent, McpCall, McpChannel, TaskSummary } from './types.js';
-import { MCP_PROTOCOL_ADDENDUM } from './agents/agentProtocol.js';
-import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES, RETIRED_TOOL_NAMES, TOOL_NAMING } from './mcp/names.js';
+import type { Agent, McpCall, McpChannel, TaskSummary } from '../types.js';
+import { MCP_PROTOCOL_ADDENDUM } from '../agents/agentProtocol.js';
+import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES, RETIRED_TOOL_NAMES, TOOL_NAMING } from '../mcp/names.js';
 import { phaseLabel, phaseOf, PHASE_ORDER, type SpendPhase } from './spendInsights.js';
 import {
   inWindow,

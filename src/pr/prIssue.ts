@@ -1,4 +1,4 @@
-import type { Issue, PullRequest } from './types.js';
+import type { Issue, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

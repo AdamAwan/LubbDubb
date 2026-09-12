@@ -1,7 +1,7 @@
 import { isHarnessBranch, isSomeoneElsesPr } from './prOwnership.js';
 import { prState } from './prHealth.js';
-import { isWatched } from './watchLabels.js';
-import type { PullRequest } from './types.js';
+import { isWatched } from '../watchLabels.js';
+import type { PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

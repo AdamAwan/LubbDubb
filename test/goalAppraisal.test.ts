@@ -11,7 +11,7 @@ import { appraisalHold, goalFingerprint, hasWorkStarted, isAppraised } from '../
 import { AppraisalDesk, renderAppraisalComment } from '../src/intake/appraisalDesk.js';
 import { appraiserOrigin } from '../src/mcp/goalAppraisal.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Agent, Decision, Issue, IssueAppraisal, Plan, Task, WorldSnapshot } from '../src/types.js';
@@ -203,7 +203,7 @@ test('a running appraiser keeps standing the planner and pickup down, cycle afte
 });
 
 test('the watch gate applies — an untagged issue is never appraised', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
+  const d = new RuleDispatcher({ pickup: { watchLabel: 'agent-ready' } });
 
   const unwatched = await d.decide(ctx());
   assert.deepEqual(origins(unwatched.actions), [], 'the appraisal never filters a backlog nobody opted in');

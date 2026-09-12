@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { AccountRateLimits } from './types.js';
+import type { AccountRateLimits } from '../types.js';
 
 // → docs/spec/18-observability.md
 

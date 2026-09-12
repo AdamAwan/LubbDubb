@@ -11,6 +11,33 @@ interface Dispatcher {
 
 `DispatchResult` is `{ actions, rejected, rationale, upcoming? }`.
 
+## Assembling the context
+
+`buildDispatchInputs(store, pulse)` in `src/dispatcher/dispatchInputs.ts` is what produces a
+`DispatchContext`, and it lives here rather than in `src/harness.ts` on purpose: the harness's job is
+the pulse, and a rule that wants a new kind of row is otherwise an edit to the harness before a line
+of dispatch logic is written. With the assembly beside the rules, a new row type is the store module,
+this function, `DispatchContext`, the `StageContext` and the rule — none of them the pulse.
+
+The split between what it reads and what it is handed is not taste, it is the
+[read-once rule](04-harness-cycle.md#ordering). `pulse` carries every reading the cycle already took
+for its own work — the world split, the fleet, the queued jobs, the plan graph, the verdicts and
+their signals, the retrospective origins, the reviews and their routes, the decision window, the
+feature standings and the headroom — because a second read of those would be another query, and
+worse, a second answer to "which reading was this decided against?". Everything whose **only**
+consumer is `decide` is read here, at one point, below the last sweep phase: the escalations and
+proposals, the standing jobs and ejections, the plan atoms and amendments, the validation checks and
+plans, the local run and its validations, the selector offerings, the feature summaries and
+sequences, the priority, pause and profile overrides, the prior remedies, the PR splits and the
+reviewed-elsewhere set, and the obstacle board.
+
+Reading them here rather than where the pulse reads its own is safe for one stated reason: **no desk
+and no sweep between the two points writes any of those tables.** The sweeps that do write — the
+escalation tidies, the ejection expiries, the issue runs, the reviewed-elsewhere probe, the local
+validation sweep — all sit above this point, so the rows are the rows step 9 would have read. A new
+desk or sweep that writes one of these tables must therefore sit above `decide` like every other
+writer, or the dispatch decides against a reading it invalidated.
+
 ## The action vocabulary
 
 `src/dispatcher/actions.ts` defines the complete set as a zod discriminated union on `type`. This is

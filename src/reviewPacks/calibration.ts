@@ -1,4 +1,4 @@
-import type { InsightsWindowView } from '../insightsWindow.js';
+import type { InsightsWindowView } from '../insights/insightsWindow.js';
 import type { ReviewAttention, ReviewIdea, ReviewMark, ReviewPackRecord, ReviewRange } from '../types.js';
 
 // → docs/spec/31-review-packs.md

@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+import type { Config } from '../config/config.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import { ticketAssignee } from '../ticketAssignment.js';
 import { bugFilingType, filingType } from '../ticketTypes.js';

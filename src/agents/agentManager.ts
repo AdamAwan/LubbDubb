@@ -6,7 +6,7 @@ import { issueSubtreeNumber } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
-import type { WhitelistRule } from '../config.js';
+import type { WhitelistRule } from '../config/config.js';
 import type {
   AccountRateLimits,
   Agent,

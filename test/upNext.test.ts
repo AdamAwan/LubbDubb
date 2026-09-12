@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Job, WorldSnapshot } from '../src/types.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -72,7 +72,7 @@ test('upcoming items carry rule, title, kind and branch for the cockpit', async 
 });
 
 test('label-encoded priority orders the queue', async () => {
-  const d = new RuleDispatcher({ priorityLabels: { hot: 5 }, defaultPriority: 1 });
+  const d = new RuleDispatcher({ pickup: { priorityLabels: { hot: 5 }, defaultPriority: 1 } });
   const result = await d.decide(ctx({ issues: [issue(101), issue(102, ['hot'])] }, { agentHeadroom: 1 }));
   assert.deepEqual(
     result.upcoming?.map((q) => q.origin),

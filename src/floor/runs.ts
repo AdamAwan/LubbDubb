@@ -13,7 +13,7 @@ import { hasPriorWork } from '../delivery/assessment.js';
 
 // → docs/spec/22-pets.md
 
-interface CompletionSignals {
+export interface CompletionSignals {
   retrospectiveOrigins: readonly string[];
   conclusions: readonly IssueConclusion[];
   deliveries: readonly IssueDelivery[];

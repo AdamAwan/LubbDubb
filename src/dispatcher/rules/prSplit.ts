@@ -1,8 +1,8 @@
 import { dispatchVerdict } from '../dispatchCooldown.js';
-import { issueForPr } from '../../prIssue.js';
+import { issueForPr } from '../../pr/prIssue.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { currentPlanSummary, liveParts } from '../../plans/parts.js';
-import { prBreadth, splitBranch, splitOrigin } from '../../prSplit.js';
+import { prBreadth, splitBranch, splitOrigin } from '../../pr/prSplit.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 

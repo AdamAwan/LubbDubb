@@ -1,4 +1,4 @@
-import type { SentPrReplies } from '../prThreads.js';
+import type { SentPrReplies } from '../pr/prThreads.js';
 import type { PrReplySent } from '../types.js';
 import type { StoreContext } from './context.js';
 

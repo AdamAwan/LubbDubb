@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -620,7 +620,7 @@ test('a failed row reaches rule validation-failed through the ordinary failed re
       deliveries: [delivered()],
       validationChecks: b.sys.store.validation.listValidationChecks('issue:12'),
     };
-    const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(ctx);
+    const { actions } = await new RuleDispatcher({ defaultBranch: 'main' }).decide(ctx);
     assert.equal(
       actions.some((a) => a.rule === 'validation-failed' && a.type === 'dispatch_code_agent'),
       true,

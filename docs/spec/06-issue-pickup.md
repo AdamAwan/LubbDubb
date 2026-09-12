@@ -30,7 +30,7 @@ is _acted on_.
 
 Where each gate lives:
 
-- **PRs** — `isPrWatched(pr, watchLabel)` in `src/prHealth.ts`. `Harness.runCycle` filters unwatched
+- **PRs** — `isPrWatched(pr, watchLabel)` in `src/pr/prHealth.ts`. `Harness.runCycle` filters unwatched
   PRs out of the dispatch world.
 - **Issues** — `isIssuePickupEligible` / `issuePickupStatus` in `src/dispatcher/issuePickup.ts`.
 

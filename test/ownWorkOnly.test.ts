@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfigFromText, loadConfig, projectConfigLayer } from '../src/config.js';
+import { loadConfigFromText, loadConfig, projectConfigLayer } from '../src/config/config.js';
 
 function fileWith(body: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-own-'));

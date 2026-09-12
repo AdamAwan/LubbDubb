@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { Store } from '../src/store/store.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildDesktopTools } from '../src/mcp/desktopTools.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import {
@@ -71,7 +71,7 @@ function queued(upcoming: QueueItem[] | undefined, origin: string): QueueItem | 
 }
 
 function full(): RuleDispatcher {
-  return new RuleDispatcher({ sequencing: 'full' });
+  return new RuleDispatcher({ pickup: { sequencing: 'full' } });
 }
 
 function sequence(over: Partial<FeatureSequence> = {}): FeatureSequence {
@@ -247,7 +247,9 @@ test('a declined order stops holding it off once the Feature gains a story', asy
 });
 
 test('links alone runs no sequencer — every edge there was drawn by a person', async () => {
-  const { upcoming } = await new RuleDispatcher({ sequencing: 'links' }).decide(ctx([story(11), story(12)]));
+  const { upcoming } = await new RuleDispatcher({ pickup: { sequencing: 'links' } }).decide(
+    ctx([story(11), story(12)]),
+  );
   assert.equal(queued(upcoming, 'issue:500:sequence'), undefined);
 });
 
