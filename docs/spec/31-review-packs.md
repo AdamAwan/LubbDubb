@@ -1214,7 +1214,7 @@ Two consequences that are easy to miss:
   will refuse a legitimate share sometimes, which is the correct direction to fail in and should
   surprise nobody when it happens. It is the pool's own `secretRefusal` pointed at every string the
   document would carry — anchor code, counter code, notes, claims, the author's prose — and **the
-  refusal names the place and never the match**: _idea 1, step 2: src/config.ts:41 — it looks like it
+  refusal names the place and never the match**: _idea 1, step 2: src/config/config.ts:41 — it looks like it
   contains a GitHub token_. Echoing the line would be this control creating the exposure it exists to
   stop. It runs twice, at the ask and again at the publish, because the ask is the last moment a
   person is there to be told and the publish is the last moment before the bytes leave; a refusal with

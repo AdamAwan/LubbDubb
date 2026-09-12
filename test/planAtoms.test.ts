@@ -15,7 +15,7 @@ import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { pastTheFunnel } from './support/plans.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { PLAN_COLUMNS } from '../src/store/plans.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

@@ -234,7 +234,7 @@ it speaks for reads as complete.
 
 ## Per-goal spend
 
-`rollUpIssueSpend` (`src/issueSpend.ts`) answers what a **ticket** cost — the unit an operator
+`rollUpIssueSpend` (`src/insights/issueSpend.ts`) answers what a **ticket** cost — the unit an operator
 budgets in, and the one thing the tracker names. It is pure, computed each snapshot from three lists
 `buildStateSnapshot` already holds (`agents`, `tasks`, and the work graph), and ships as
 `Issue.spend` on every enriched issue — live issues and retained runs alike, through the same
@@ -272,7 +272,7 @@ last one ends.
 
 ## The window
 
-`src/insightsWindow.ts`. Every reading the Insights page draws is measured over one stretch of time,
+`src/insights/insightsWindow.ts`. Every reading the Insights page draws is measured over one stretch of time,
 chosen by the operator and resolved here — the key comes in on the query string of the three fetched
 routes ([16](16-http-api.md#the-fetched-routes)), and the resolution is passed down to every fold under
 them.
@@ -405,14 +405,14 @@ than the key it asked with. A caption computed in the browser from the key is fr
 buckets the server actually cut, and the caption is the half a reader would believe.
 
 **The `window` query parameter is declared with the rule, not in the routes.** `InsightsQuery` lives in
-`src/insightsWindow.ts` beside the union it validates, for the reason `ShortfallBody` lives with the
+`src/insights/insightsWindow.ts` beside the union it validates, for the reason `ShortfallBody` lives with the
 shortfall rule: three routes take it and all three must accept exactly the set the cockpit can offer.
 The default is applied there too, so a route reached without one answers for the same stretch the page
 opens on rather than for whatever that route's author picked.
 
 ## The spend breakdown
 
-`buildSpendInsights` (`src/spendInsights.ts`) answers the question a cost figure raises and cannot
+`buildSpendInsights` (`src/insights/spendInsights.ts`) answers the question a cost figure raises and cannot
 hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md#the-fetched-routes))
 and drawn by the Insights page's Economics and Work mix tabs ([17](17-cockpit.md#economics)). Three
 splits of one pot of money, plus the coverage caveat:
@@ -435,7 +435,7 @@ splits of one pot of money, plus the coverage caveat:
   about, and the last bucket is therefore "up to now" — still filling, which is why the page draws it
   hollow.
 - **By task type** and **by failing check** — `rollUpTaskTypes` and `rollUpChecks`
-  (`src/taskTypeSpend.ts`), the grain below `phases`. See below.
+  (`src/insights/taskTypeSpend.ts`), the grain below `phases`. See below.
 - **`landed` and `lostCostUsd`** — the two figures the Economics headline's ratio needs beside the
   total: pull requests merged inside the window, and what the runs that failed or crashed inside it
   cost. They ride on **this** payload rather than being fetched from the reliability one because
@@ -534,7 +534,7 @@ fallback, but it now means one thing only — a goal older than the run record i
 
 ## The spend trend
 
-`buildSpendTrend` (`src/spendTrend.ts`) answers the question the breakdown cannot, being a single
+`buildSpendTrend` (`src/insights/spendTrend.ts`) answers the question the breakdown cannot, being a single
 stretch: **is what I did working**. It is served by `GET /api/spend/trend`
 ([16](16-http-api.md#the-fetched-routes)) and drawn by the Insights page's Trend tab
 ([17](17-cockpit.md#the-trend-tab)). Eight buckets, three readings, one shared axis.
@@ -641,7 +641,7 @@ never opens should cost nothing.
 
 ## The allowance
 
-`src/allowanceInsights.ts`, `GET /api/allowance`, the Insights page's Allowance tab
+`src/insights/allowanceInsights.ts`, `GET /api/allowance`, the Insights page's Allowance tab
 ([17](17-cockpit.md#allowance)). The chip says how much of the five hours is gone and can say nothing
 else, because `account_rate_limits` keeps one row and overwrites it on every turn. This is the series
 behind that number, drawn four ways: the percentage over the window with the agent runs beneath it,
@@ -777,7 +777,7 @@ free, and a watch that cannot see must not be allowed to conclude anything — i
 
 ## The reliability breakdown
 
-`buildReliabilityInsights` (`src/reliabilityInsights.ts`) answers the question the spend breakdown
+`buildReliabilityInsights` (`src/insights/reliabilityInsights.ts`) answers the question the spend breakdown
 stops one short of: the money bought _something_, and **did it work**. It is served by
 `GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Insights page's
 Reliability tab ([17](17-cockpit.md#reliability)). Two halves, and they are the two halves of one
@@ -858,7 +858,7 @@ flakiest pipeline in the repository as recovering instantly.
 The spend breakdown asks where the money went and the reliability breakdown asks whether the runs it
 bought worked. Neither answers the question an operator asks first about a fortnight: **how much came
 out** — how many pull requests opened and merged, how much review the fleet drew and answered, how
-many issues opened and closed. `buildThroughputInsights` (`src/throughputInsights.ts`) is that
+many issues opened and closed. `buildThroughputInsights` (`src/insights/throughputInsights.ts`) is that
 reading, served by `GET /api/throughput` ([16](16-http-api.md#the-fetched-routes)) and drawn by the
 Insights page's Throughput tab ([17](17-cockpit.md#throughput)).
 
@@ -941,7 +941,7 @@ is the repository's, which every fleet watching it also reports.
 The reliability breakdown counts reds and prices them. It cannot say **why** any of them happened,
 and a flaky runner, a stale assertion, a missing `.js` extension and a real defect are the same red,
 the same dollars and the same row everywhere else the harness draws one. `remedies` is the record
-that closes that, and `buildRemedyInsights` (`src/remedyInsights.ts`) is its reading — the Insights
+that closes that, and `buildRemedyInsights` (`src/insights/remedyInsights.ts`) is its reading — the Insights
 page's Causes tab, on the same payload and over the same window ([17](17-cockpit.md#causes)).
 
 **The agent that fixed it writes it.** `report_remedy` ([11](11-mcp-tools.md)) is called at the end

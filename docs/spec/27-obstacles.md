@@ -281,7 +281,7 @@ and the base branch and never the rung, and `Store.obstacleVoices` folds by it b
 The readings are `src/obstacles/voice.ts`, pure over the pair of snapshots, and the desk that files
 them is `src/obstacles/voiceDesk.ts`, on the pulse above the notice, ownership and endings desks so
 a row it files is told, owned and watched on the pulse that saw it. Neither reading is new: both are
-`src/prHealth.ts`' — `recoveredOnSameCommit` and `newlyFailingChecks`, shared with the knowledge
+`src/pr/prHealth.ts`' — `recoveredOnSameCommit` and `newlyFailingChecks`, shared with the knowledge
 notices rather than copied, because a second copy of a provider reading is a second thing to be
 wrong about. It is **skipped on a local cycle**, for the endings desk's reason: it is handed the
 _pair_ the diff was taken from, and a local cycle takes no diff.

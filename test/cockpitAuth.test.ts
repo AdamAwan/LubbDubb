@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { request } from 'node:http';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import {
   authorizeRequest,
   createAuthThrottle,

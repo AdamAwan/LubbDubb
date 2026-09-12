@@ -11,10 +11,10 @@ import type {
   RunningConfigPayload,
 } from '../../wire.js';
 import { describeCiPolicy } from '../../ci/describeCiPolicy.js';
-import { loadConfigFromText, projectConfigLayer, type Config } from '../../config.js';
-import { diffConfig } from '../../configApply.js';
-import { configField, envOverride, fieldValueRefusal } from '../../configFields.js';
-import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
+import { loadConfigFromText, projectConfigLayer, type Config } from '../../config/config.js';
+import { diffConfig } from '../../config/configApply.js';
+import { configField, envOverride, fieldValueRefusal } from '../../config/configFields.js';
+import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../config/configFile.js';
 import { MCP_SERVER_ID } from '../../mcp/names.js';
 import { describeRunningConfig } from '../runningConfig.js';
 import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../stateSnapshot.js';

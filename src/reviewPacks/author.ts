@@ -6,7 +6,7 @@ import type { AgentManager } from '../agents/agentManager.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { GitObserver } from '../git/gitObserver.js';
-import { issueForPr } from '../prIssue.js';
+import { issueForPr } from '../pr/prIssue.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import { goalOriginFor, padOriginFor } from '../scratch/pad.js';
 import type { Store } from '../store/store.js';

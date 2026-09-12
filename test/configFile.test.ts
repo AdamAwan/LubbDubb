@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { configRevision, editConfigText, readConfigText, writeConfigText } from '../src/configFile.js';
+import { configRevision, editConfigText, readConfigText, writeConfigText } from '../src/config/configFile.js';
 
 const COMMENTED = `{
   "// maxConcurrentAgents": "Hard cap on concurrent agents. Raised for the Tuesday backlog push.",

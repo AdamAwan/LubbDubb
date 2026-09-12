@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

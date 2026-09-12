@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeUpstreamIssues } from '../src/tickets/fakeUpstream.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../src/tickets/upstream.js';
-import type { Config } from '../src/config.js';
+import type { Config } from '../src/config/config.js';
 import type { FilingTargetProbe, IssueFiled } from '../src/wire.js';
 
 function system(opts: { upstream?: FakeUpstreamIssues; github?: { owner: string; repo: string } } = {}): System {

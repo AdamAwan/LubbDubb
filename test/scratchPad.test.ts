@@ -7,7 +7,7 @@ import { MAX_PAD_NOTE, normalisePadNote, padOriginFor, padWriteTarget } from '..
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import type { Agent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildApp } from '../src/server/app.js';

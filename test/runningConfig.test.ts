@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import { describeRunningConfig, type RunningConfigEntry } from '../src/server/runningConfig.js';
 
 function entries(config: Config): RunningConfigEntry[] {

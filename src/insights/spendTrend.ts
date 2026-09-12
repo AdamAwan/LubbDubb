@@ -1,8 +1,8 @@
-import type { Agent, AgentStatus, Issue, WorldEvent } from './types.js';
-import type { TicketClosure } from './store/tickets.js';
+import type { Agent, AgentStatus, Issue, WorldEvent } from '../types.js';
+import type { TicketClosure } from '../store/tickets.js';
 import { roundUsd } from './issueSpend.js';
 import { PHASE_ORDER, phaseLabel, zeroPhases, type SpendGoal, type SpendPhase } from './spendInsights.js';
-import { ciStatusOf } from './world/worldDiff.js';
+import { ciStatusOf } from '../world/worldDiff.js';
 import { runInstant, trendSpan, windowView, type InsightsWindowView, type ResolvedWindow } from './insightsWindow.js';
 
 // → docs/spec/18-observability.md

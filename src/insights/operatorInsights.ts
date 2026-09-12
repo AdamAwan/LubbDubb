@@ -11,8 +11,8 @@ import type {
   UpgradeIntent,
   UsageEvent as CostEvent,
   ValidationCheck,
-} from './types.js';
-import type { UsageSubject } from './usage/events.js';
+} from '../types.js';
+import type { UsageSubject } from '../usage/events.js';
 import { roundUsd } from './issueSpend.js';
 import { inWindow, timelineSpan, windowView, type InsightsWindowView, type ResolvedWindow } from './insightsWindow.js';
 

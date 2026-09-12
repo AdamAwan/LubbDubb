@@ -1,4 +1,4 @@
-import type { Config } from './config.js';
+import type { Config } from './config/config.js';
 
 // → docs/spec/13-jobs-and-tickets.md
 

@@ -1,6 +1,6 @@
-import { issueSubtreeNumber } from './issueOrigins.js';
-import type { Agent, IssueSpend, LocalRun, TaskSummary, WorkNode } from './types.js';
-import { issueOrigin } from './plans/planning.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
+import type { Agent, IssueSpend, LocalRun, TaskSummary, WorkNode } from '../types.js';
+import { issueOrigin } from '../plans/planning.js';
 
 // → docs/spec/18-observability.md
 

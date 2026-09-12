@@ -1,5 +1,5 @@
-import type { PrBaseInput } from './sink/actionSink.js';
-import type { PullRequest } from './types.js';
+import type { PrBaseInput } from '../sink/actionSink.js';
+import type { PullRequest } from '../types.js';
 import { prState } from './prHealth.js';
 
 // → docs/spec/07-pull-requests.md

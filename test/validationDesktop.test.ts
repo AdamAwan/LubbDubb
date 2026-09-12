@@ -9,7 +9,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { buildApp } from '../src/server/app.js';
 import type { McpChannelPayload } from '../src/wire.js';
 import { shellArgv } from '../web/src/components/McpTab.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';

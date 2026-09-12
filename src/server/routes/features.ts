@@ -3,7 +3,7 @@ import { issueOriginRef } from '../../issueOrigins.js';
 import type { FeatureBoardPayload } from '../../wire.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
-import { buildSpendGoals } from '../../spendInsights.js';
+import { buildSpendGoals } from '../../insights/spendInsights.js';
 import { featureRecords } from '../../summaries/featureRecord.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';

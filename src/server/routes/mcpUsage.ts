@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { McpUsagePayload } from '../../wire.js';
-import { buildMcpInsights } from '../../mcpInsights.js';
+import { buildMcpInsights } from '../../insights/mcpInsights.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES, RETIRED_TOOL_NAMES } from '../../mcp/names.js';
-import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insightsWindow.js';
+import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 

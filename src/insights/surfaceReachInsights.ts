@@ -1,5 +1,5 @@
-import type { SurfaceReach } from './types.js';
-import { SUBJECT_LABEL, USAGE_SUBJECTS, VERB_LABEL, type UsageSubject, type UsageVerb } from './usage/events.js';
+import type { SurfaceReach } from '../types.js';
+import { SUBJECT_LABEL, USAGE_SUBJECTS, VERB_LABEL, type UsageSubject, type UsageVerb } from '../usage/events.js';
 import { inWindow, type ResolvedWindow } from './insightsWindow.js';
 
 // → docs/spec/18-observability.md

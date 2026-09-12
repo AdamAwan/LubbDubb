@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -12,8 +12,8 @@ import {
   aggregatePolicyCiStatus,
 } from '../src/integrations/azure/sourceControl.js';
 import { policyDisplayAliases, policyDisplayName } from '../src/integrations/azure/restAzureDevOpsApi.js';
-import { prHealth } from '../src/prHealth.js';
-import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
+import { prHealth } from '../src/pr/prHealth.js';
+import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { AzPolicyEvaluation, AzPull, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { CiPolicy } from '../src/ci/ciPolicy.js';

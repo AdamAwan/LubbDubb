@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { TicketStateFilter, TicketTrackingFilter, TicketsPayload } from '../../wire.js';
 import { effectivePickupStates } from '../../dispatcher/issuePickup.js';
-import { buildSpendGoals } from '../../spendInsights.js';
+import { buildSpendGoals } from '../../insights/spendInsights.js';
 import { buildTicketPage, NO_FEATURE } from '../../tickets/ticketList.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';

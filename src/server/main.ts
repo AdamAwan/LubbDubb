@@ -1,5 +1,5 @@
-import { loadDeploymentConfig } from '../config.js';
-import { watchConfigFile } from '../configWatch.js';
+import { loadDeploymentConfig } from '../config/config.js';
+import { watchConfigFile } from '../config/configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import { buildSystem } from '../system.js';

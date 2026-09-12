@@ -1,5 +1,5 @@
 import { issueOriginNumber } from '../issueOrigins.js';
-import { basePrOf } from '../prHealth.js';
+import { basePrOf } from '../pr/prHealth.js';
 import type { ObstacleStanding, PullRequest } from '../types.js';
 
 // → docs/spec/27-obstacles.md

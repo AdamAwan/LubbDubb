@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Agent, Remedy, RemedyInput } from '../src/types.js';
 import type { ReliabilityPayload } from '../src/wire.js';
 import { remedyAskNote, remedyOrigin, validateRemedy } from '../src/remedies/remedies.js';
 import { priorCiRemediesNote, priorReviewRemediesNote } from '../src/remedies/priorRemedies.js';
-import { buildRemedyInsights } from '../src/remedyInsights.js';
+import { buildRemedyInsights } from '../src/insights/remedyInsights.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-remedies-'));

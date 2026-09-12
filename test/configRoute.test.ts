@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfigFromText } from '../src/config.js';
+import { loadConfigFromText } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ConfigSavePayload, RunningConfigPayload } from '../src/wire.js';

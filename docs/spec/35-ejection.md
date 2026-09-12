@@ -306,7 +306,7 @@ where a held slot is said, which is the surface the operator asked for it on.
 | `ejection.expiryHours`         | `number`  | `8`     | How long a hold stands before the harness takes the work back and says so. `0` means no expiry, which is the operator accepting the wedge it can cause. |
 | `ejection.contactGraceMinutes` | `number`  | `15`    | How long a claim with no contact at all reads as fresh before the card says `never contacted` and re-offers the link.                                   |
 
-Declared in `src/configFields.ts` with the rest, defaulted in `src/ejection/policy.ts` rather than at a
+Declared in `src/config/configFields.ts` with the rest, defaulted in `src/ejection/policy.ts` rather than at a
 use site, listed in `DEEP_MERGED_BLOCKS` so a save of one leaf does not drop the other two, and grouped
 in `src/server/runningConfig.ts` so it is not invisible in the config form
 ([02](02-configuration.md#precedence)).

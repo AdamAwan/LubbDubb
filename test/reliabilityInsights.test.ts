@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReliabilityInsights, tallyRunOutcomes } from '../src/reliabilityInsights.js';
+import { buildReliabilityInsights, tallyRunOutcomes } from '../src/insights/reliabilityInsights.js';
 import { ciStatusOf, diffWorlds } from '../src/world/worldDiff.js';
 import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent, WorldSnapshot } from '../src/types.js';
-import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
+import { resolveWindow, type InsightsWindow } from '../src/insights/insightsWindow.js';
 
 const T0 = Date.parse('2026-08-04T00:00:00.000Z');
 const NOW = Date.parse('2026-08-04T12:00:00.000Z');
@@ -317,7 +317,7 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const { loadConfig } = await import('../src/config.js');
+  const { loadConfig } = await import('../src/config/config.js');
   const { buildSystem } = await import('../src/system.js');
   const { FakePtyBackend } = await import('../src/pty/fakeBackend.js');
   const { FakeWorktreeManager } = await import('../src/worktree/fakeWorktreeManager.js');

@@ -1,6 +1,6 @@
 # 02 — Configuration
 
-All configuration lives in `src/config.ts` as the `Config` interface, its `DEFAULTS`, and two
+All configuration lives in `src/config/config.ts` as the `Config` interface, its `DEFAULTS`, and two
 loaders. There is no other configuration mechanism.
 
 ## Two loaders
@@ -24,7 +24,7 @@ environment. `scripts/smoke.ts` builds a hermetic scenario against a throwaway r
 
 Values are merged in this order, later winning:
 
-1. `DEFAULTS` (in `src/config.ts`)
+1. `DEFAULTS` (in `src/config/config.ts`)
 2. `lubbdubb.project.json`, read from `repoRoot` — the [project layer](#the-project-layer), shared by
    a team through the repository the harness works on
 3. `lubbdubb.config.json`, read from `process.cwd()` — the operator's own; absent is fine,
@@ -221,7 +221,7 @@ to the project.
 
 ## Fields
 
-Every configurable leaf is declared once, in `src/configFields.ts`: its type (`number`, `boolean`,
+Every configurable leaf is declared once, in `src/config/configFields.ts`: its type (`number`, `boolean`,
 `string`, `enum`, `stringList`, `json`, `colourMap`), the members where it is an enum, how far an
 operator reaches to edit it, the environment variable that beats it, and one line saying why it exists.
 
@@ -292,7 +292,7 @@ check is _meaning_ — whether a burn multiple is above 1, whether a CI routing 
 
 ## Liveness
 
-Whether saving a key takes effect now is decided by one thing: whether `src/configApply.ts` holds a
+Whether saving a key takes effect now is decided by one thing: whether `src/config/configApply.ts` holds a
 named **arm** that re-seats whoever is holding the value. A key with an arm is live. A key without one
 is `restart`, and the cockpit says so on its own row.
 
@@ -839,7 +839,7 @@ a model per _kind_ of work:
 ```
 
 - **The key is a `DISPATCH_RULES` id.** That id is already persisted on `Task.rule` and is already the
-  axis `src/taskTypeSpend.ts` prices work by, so config, spend and the decision log share one
+  axis `src/insights/taskTypeSpend.ts` prices work by, so config, spend and the decision log share one
   vocabulary rather than growing a second. → [05](05-dispatcher.md#the-rule-book)
 - **The rule id is the whole grain, so a rule with two costs is two rules.** The last pair in the
   example is the case: `pr-base-update` merges a base the provider has already called clean, and

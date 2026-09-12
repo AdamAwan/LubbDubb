@@ -1,26 +1,26 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { IntegrationSelection } from './integrations/integration.js';
-import { DEFAULT_CONTAINER_TYPES, DEFAULT_PARENTED_TYPES } from './issueRelations.js';
-import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
-import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
-import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
-import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
-import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
-import { DEFAULT_EJECTION, type EjectionPolicy } from './ejection/policy.js';
-import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
-import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
-import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from './localValidation/policy.js';
-import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
-import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
-import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
-import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
-import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from './store/mcpCalls.js';
-import type { PetPolicy } from './pets/keeper.js';
-import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
-import { DEFAULT_READ_LANES } from './world/readPlan.js';
-import type { IssueSequencing } from './sequence/readiness.js';
-import { DEFAULT_SEQUENCE_MAX_CHILDREN } from './sequence/sequence.js';
+import type { IntegrationSelection } from '../integrations/integration.js';
+import { DEFAULT_CONTAINER_TYPES, DEFAULT_PARENTED_TYPES } from '../issueRelations.js';
+import { DEFAULT_PLANNING, type PlanningPolicy } from '../plans/planning.js';
+import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from '../spendBurn.js';
+import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from '../supply/runway.js';
+import type { SelfUpdatePolicy } from '../selfUpdate/upgradePlan.js';
+import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
+import { DEFAULT_EJECTION, type EjectionPolicy } from '../ejection/policy.js';
+import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
+import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from '../localRun/policy.js';
+import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localValidation/policy.js';
+import { validateCiPolicy, type CiPolicy } from '../ci/ciPolicy.js';
+import { validatePolicyCheckModes, type PolicyCheckModes } from '../integrations/azure/policyKinds.js';
+import { validateAgentModels, type AgentModels } from '../agents/modelPolicy.js';
+import { DEFAULT_FILING_TYPES } from '../ticketTypes.js';
+import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../store/mcpCalls.js';
+import type { PetPolicy } from '../pets/keeper.js';
+import { validateEnvironments, type EnvironmentConfig } from '../environments/policy.js';
+import { DEFAULT_READ_LANES } from '../world/readPlan.js';
+import type { IssueSequencing } from '../sequence/readiness.js';
+import { DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 
 // → docs/spec/02-configuration.md
 

@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
-import { prTitleFields, renderPrTitle } from '../../prTitle.js';
+import { prTitleFields, renderPrTitle } from '../../pr/prTitle.js';
 import { openPrFailure, resolveOpenPr } from '../openPr.js';
-import { linkPrWorkItem } from '../../prWorkItemDesk.js';
-import { seedPrWatch } from '../../prWatchDesk.js';
+import { linkPrWorkItem } from '../../pr/prWorkItemDesk.js';
+import { seedPrWatch } from '../../pr/prWatchDesk.js';
 import { toolError } from '../protocol.js';
-import type { PrRefStyle } from '../../prRef.js';
+import type { PrRefStyle } from '../../pr/prRef.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md

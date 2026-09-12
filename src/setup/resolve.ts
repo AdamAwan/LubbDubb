@@ -1,5 +1,5 @@
 import { resolve as resolvePath } from 'node:path';
-import { projectConfigFilePath, projectConfigLayer, type Config } from '../config.js';
+import { projectConfigFilePath, projectConfigLayer, type Config } from '../config/config.js';
 import { watchLabelFor } from '../watchLabels.js';
 import { credentialVar, parseRemote, type RemoteTarget } from './remote.js';
 import type { SetupProbes } from './probes.js';

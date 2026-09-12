@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { ReliabilityPayload } from '../../wire.js';
-import { buildReliabilityInsights } from '../../reliabilityInsights.js';
-import { buildRemedyInsights, isReturnOrigin } from '../../remedyInsights.js';
-import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insightsWindow.js';
+import { buildReliabilityInsights } from '../../insights/reliabilityInsights.js';
+import { buildRemedyInsights, isReturnOrigin } from '../../insights/remedyInsights.js';
+import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 

@@ -5,10 +5,10 @@ import { foldPoolDigest } from '../src/pool/aggregate.js';
 import { buildDigestDocument } from '../src/pool/digestArm.js';
 import { POOL_SCHEMA_VERSION, parsePoolDocument } from '../src/pool/document.js';
 import { renderPoolMarkdown } from '../src/pool/markdown.js';
-import { poolableThroughputMeasures, throughputMeasureLabel } from '../src/throughputInsights.js';
+import { poolableThroughputMeasures, throughputMeasureLabel } from '../src/insights/throughputInsights.js';
 import type { PoolDigestDocument } from '../src/types.js';
 import { INTEGRATION_PROVIDERS, VIEWER_SCOPED, worldScope } from '../src/integrations/registry.js';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 
 const SCOPED = { pullRequests: true, issues: true };
 

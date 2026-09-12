@@ -70,7 +70,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   a single-operator deployment is the operator's own account. Compare against it and the operator's
   follow-up on their own thread reads as the harness's: `answered` folds to `PrComment.handled`, the
   only bit rule `pr-review-comment` reads, so their comment is marked as work already done and never
-  dispatched for. Both providers must read the same record through `src/prThreads.ts`, and every
+  dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
   uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**.
   → [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
 

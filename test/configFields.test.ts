@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { loadConfig } from '../src/config.js';
-import { configField, CONFIG_FIELDS, fieldValueRefusal, topSegment } from '../src/configFields.js';
-import { isLiveField, liveFieldPaths } from '../src/configApply.js';
+import { loadConfig } from '../src/config/config.js';
+import { configField, CONFIG_FIELDS, fieldValueRefusal, topSegment } from '../src/config/configFields.js';
+import { isLiveField, liveFieldPaths } from '../src/config/configApply.js';
 import { describeRunningConfig, groupedTopLevelKeys } from '../src/server/runningConfig.js';
-import { declaredTopLevelKeys, configTopLevelKeys } from '../src/configFields.js';
+import { declaredTopLevelKeys, configTopLevelKeys } from '../src/config/configFields.js';
 import { repoPath } from './support/paths.js';
 
 test('every config key is declared, so a new one cannot arrive un-editable', () => {

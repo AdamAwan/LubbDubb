@@ -8,8 +8,8 @@ import type {
   TaskSummary,
   WorkNode,
   WorldEvent,
-} from './types.js';
-import { issueOriginRole, issueSubtreeNumber, obstacleOriginId } from './issueOrigins.js';
+} from '../types.js';
+import { issueOriginRole, issueSubtreeNumber, obstacleOriginId } from '../issueOrigins.js';
 import { rollUpIssueSpend, roundUsd, unmeasured } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 import {

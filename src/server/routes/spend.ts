@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { SpendPayload, SpendTrendPayload } from '../../wire.js';
-import { buildSpendGoals, buildSpendInsights } from '../../spendInsights.js';
-import { buildSpendTrend } from '../../spendTrend.js';
-import { InsightsQuery, resolveWindow, sinceOrEpoch, trendSince } from '../../insightsWindow.js';
+import { buildSpendGoals, buildSpendInsights } from '../../insights/spendInsights.js';
+import { buildSpendTrend } from '../../insights/spendTrend.js';
+import { InsightsQuery, resolveWindow, sinceOrEpoch, trendSince } from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 

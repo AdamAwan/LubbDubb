@@ -12,7 +12,7 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolveTenant } from '../src/remoteValidation/tenants.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from '../src/plans/planning.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

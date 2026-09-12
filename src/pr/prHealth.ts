@@ -1,5 +1,5 @@
-import { isWatched } from './watchLabels.js';
-import type { CiCheck, PrState, PullRequest } from './types.js';
+import { isWatched } from '../watchLabels.js';
+import type { CiCheck, PrState, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

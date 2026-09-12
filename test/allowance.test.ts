@@ -4,11 +4,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { buildAllowanceInsights } from '../src/allowanceInsights.js';
-import type { AllowanceInsights } from '../src/allowanceInsights.js';
+import { buildAllowanceInsights } from '../src/insights/allowanceInsights.js';
+import type { AllowanceInsights } from '../src/insights/allowanceInsights.js';
 import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } from '../src/types.js';
-import type { SpendGoal } from '../src/spendInsights.js';
-import type { InsightsWindowView } from '../src/insightsWindow.js';
+import type { SpendGoal } from '../src/insights/spendInsights.js';
+import type { InsightsWindowView } from '../src/insights/insightsWindow.js';
 
 const T0 = Date.parse('2026-08-27T12:00:00.000Z');
 const iso = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();

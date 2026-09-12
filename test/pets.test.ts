@@ -700,7 +700,7 @@ test('a clearance is skipped entirely while pets are turned off', () => {
 });
 
 test('no configuration key can reach the roll', () => {
-  const fields = readFileSync('src/configFields.ts', 'utf8');
+  const fields = readFileSync('src/config/configFields.ts', 'utf8');
   const paths = [...fields.matchAll(/path: '(pets\.[a-zA-Z]+)'/g)].map((m) => m[1]);
   assert.deepEqual(
     paths,

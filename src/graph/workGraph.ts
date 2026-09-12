@@ -11,7 +11,7 @@ import type {
 } from '../types.js';
 import { planIssueNumber, partOrigin, partSettled } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
-import { basePrOf, prState } from '../prHealth.js';
+import { basePrOf, prState } from '../pr/prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { jobBranch } from '../jobs.js';
 

@@ -5,7 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanPart, PlanPartBlocker, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
-import { type PrRefStyle } from '../prRef.js';
+import { type PrRefStyle } from '../pr/prRef.js';
 import {
   bySlug,
   dependenciesOf,

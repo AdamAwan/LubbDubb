@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -17,7 +17,7 @@ import type {
   GitHubApi,
 } from '../src/integrations/github/githubApi.js';
 import type { AzPull, AzThread, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
-import type { SentPrReplies } from '../src/prThreads.js';
+import type { SentPrReplies } from '../src/pr/prThreads.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { Agent, PullRequest } from '../src/types.js';
 

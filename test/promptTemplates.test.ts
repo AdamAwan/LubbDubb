@@ -12,7 +12,7 @@ import {
 } from '../src/dispatcher/promptTemplates.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { overridePath } from '../web/src/components/PromptsTab.js';

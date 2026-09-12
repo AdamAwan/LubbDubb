@@ -13,7 +13,7 @@ import {
   trendSpan,
   windowView,
   type InsightsWindow,
-} from '../src/insightsWindow.js';
+} from '../src/insights/insightsWindow.js';
 import { windowButtonLabel } from '../web/src/components/InsightsPage.js';
 
 const NOW = Date.parse('2026-08-21T12:00:00.000Z');

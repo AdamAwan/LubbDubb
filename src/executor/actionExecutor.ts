@@ -46,7 +46,7 @@ import { featureSequenceSubmitOrigin } from '../sequence/sequence.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { deliveredWorkBriefing } from '../briefing/delivered.js';
 import { assessIssueNumber } from '../delivery/assessment.js';
-import { issueForPr } from '../prIssue.js';
+import { issueForPr } from '../pr/prIssue.js';
 import { liveParts } from '../plans/parts.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';

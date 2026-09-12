@@ -1,6 +1,6 @@
 import { CAUSES_BY_KIND, GUARD_ORDER } from '../remedies/remedies.js';
-import { isReturnOrigin } from '../remedyInsights.js';
-import { PHASE_ORDER, phaseOf, type SpendPhase } from '../spendInsights.js';
+import { isReturnOrigin } from '../insights/remedyInsights.js';
+import { PHASE_ORDER, phaseOf, type SpendPhase } from '../insights/spendInsights.js';
 import type { Store } from '../store/store.js';
 import type {
   Agent,
@@ -14,7 +14,11 @@ import type {
   WorldEvent,
 } from '../types.js';
 import type { WorldScope } from '../integrations/registry.js';
-import { poolableThroughputMeasures, THROUGHPUT_EVENT_KINDS, throughputMeasureOf } from '../throughputInsights.js';
+import {
+  poolableThroughputMeasures,
+  THROUGHPUT_EVENT_KINDS,
+  throughputMeasureOf,
+} from '../insights/throughputInsights.js';
 import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 

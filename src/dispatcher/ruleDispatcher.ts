@@ -1,5 +1,5 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
-import type { PrRefStyle } from '../prRef.js';
+import type { PrRefStyle } from '../pr/prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import type { Decision, Issue, SelectorOffering, ValidationCheck } from '../types.js';

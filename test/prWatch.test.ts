@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { isPrWatched } from '../src/prHealth.js';
-import { prsToSeedWatch } from '../src/prWatch.js';
+import { isPrWatched } from '../src/pr/prHealth.js';
+import { prsToSeedWatch } from '../src/pr/prWatch.js';
 import type { PullRequest } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 

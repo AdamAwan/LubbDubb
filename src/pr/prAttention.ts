@@ -1,7 +1,7 @@
-import { ciNeedsHuman, classifyCiFailures, classifyWatchedChecks, type CiPolicy } from './ci/ciPolicy.js';
-import { dispatchVerdict, type CooldownPolicy } from './dispatcher/dispatchCooldown.js';
-import { prCommentsOrigin } from './dispatcher/reviewThreads.js';
-import { concernUrgency, type StageRuleId } from './dispatcher/rules.js';
+import { ciNeedsHuman, classifyCiFailures, classifyWatchedChecks, type CiPolicy } from '../ci/ciPolicy.js';
+import { dispatchVerdict, type CooldownPolicy } from '../dispatcher/dispatchCooldown.js';
+import { prCommentsOrigin } from '../dispatcher/reviewThreads.js';
+import { concernUrgency, type StageRuleId } from '../dispatcher/rules.js';
 import {
   basePrOf,
   ciNeedsAttention,
@@ -12,8 +12,8 @@ import {
   prState,
 } from './prHealth.js';
 import { isSomeoneElsesPr } from './prOwnership.js';
-import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
-import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
+import { mergeProposalRef, proposalHold } from '../proposals/proposals.js';
+import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import {
   needsFleetReview,
   resolvedReviewMode,
@@ -25,8 +25,8 @@ import {
   triageRuns,
   triagePendingLabel,
   type PrReviewReading,
-} from './review/prReview.js';
-import { isActiveTask } from './tasks.js';
+} from '../review/prReview.js';
+import { isActiveTask } from '../tasks.js';
 import type {
   Decision,
   PrReview,
@@ -36,7 +36,7 @@ import type {
   TaskSummary,
   ViewerAssignment,
   WorldEvent,
-} from './types.js';
+} from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

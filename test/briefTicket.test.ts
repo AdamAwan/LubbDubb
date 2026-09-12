@@ -8,7 +8,7 @@ import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { briefTicketFields } from '../src/briefTicket.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import type { Job } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 

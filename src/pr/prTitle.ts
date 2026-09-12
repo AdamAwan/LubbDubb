@@ -1,4 +1,4 @@
-import { renderTemplate } from './dispatcher/promptTemplates.js';
+import { renderTemplate } from '../dispatcher/promptTemplates.js';
 
 // → docs/spec/07-pull-requests.md#naming
 

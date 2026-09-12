@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePoolTransport } from '../src/integrations/fake/fakePool.js';
 import { GitPoolTransport } from '../src/integrations/pool/gitPool.js';
 import { foldPoolDigest } from '../src/pool/aggregate.js';

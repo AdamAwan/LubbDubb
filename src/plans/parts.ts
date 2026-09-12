@@ -1,6 +1,6 @@
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
-import { prState } from '../prHealth.js';
-import { prRef, type PrRefStyle } from '../prRef.js';
+import { prState } from '../pr/prHealth.js';
+import { prRef, type PrRefStyle } from '../pr/prRef.js';
 import type { PartOutcomeKind, Plan, PlanAtom, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/08-planning.md

@@ -31,7 +31,7 @@ import { buildApp } from '../src/server/app.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import type { Agent, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { repoText } from './support/paths.js';

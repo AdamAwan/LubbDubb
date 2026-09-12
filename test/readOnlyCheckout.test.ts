@@ -11,7 +11,7 @@ import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import type { Issue, IssueDelivery, Plan, Task, ValidationCheck } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 import { pastTheFunnel } from './support/plans.js';

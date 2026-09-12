@@ -1,6 +1,6 @@
-import type { ErrorRecorder } from './errorLog.js';
-import type { ActionSink } from './sink/actionSink.js';
-import type { WorldSnapshot } from './types.js';
+import type { ErrorRecorder } from '../errorLog.js';
+import type { ActionSink } from '../sink/actionSink.js';
+import type { WorldSnapshot } from '../types.js';
 import { renamablePrs } from './prRename.js';
 import { retargetsFor } from './prRetarget.js';
 

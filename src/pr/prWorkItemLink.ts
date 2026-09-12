@@ -1,7 +1,7 @@
 import { issueForPr } from './prIssue.js';
 import { isOurPr } from './prOwnership.js';
 import { prState } from './prHealth.js';
-import type { Issue, PullRequest } from './types.js';
+import type { Issue, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 

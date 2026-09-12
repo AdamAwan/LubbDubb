@@ -1,4 +1,4 @@
-import type { AzureDevOpsConfig, GitHubConfig } from '../config.js';
+import type { AzureDevOpsConfig, GitHubConfig } from '../config/config.js';
 import { resolve } from 'node:path';
 import type { Integration, IntegrationContext, IntegrationSelection, WorldCapability } from './integration.js';
 import type { PoolTransport } from '../pool/transport.js';

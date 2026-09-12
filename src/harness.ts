@@ -8,8 +8,8 @@ import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
-import { isPrWatched } from './prHealth.js';
-import { isSomeoneElsesPr } from './prOwnership.js';
+import { isPrWatched } from './pr/prHealth.js';
+import { isSomeoneElsesPr } from './pr/prOwnership.js';
 
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { retainedRunIssues } from './floor/runs.js';
@@ -18,7 +18,7 @@ import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
-import { applyThreadReopens } from './prThreads.js';
+import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulseDesks, runPulseSweeps, type PulseDeskDeps, type PulseSweepDeps } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';

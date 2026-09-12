@@ -1,7 +1,7 @@
 import type { Config } from './config.js';
 import type { LiveConfig } from './configApply.js';
 import { configRevision, readConfigText } from './configFile.js';
-import type { ErrorRecorder } from './errorLog.js';
+import type { ErrorRecorder } from '../errorLog.js';
 
 // → docs/spec/02-configuration.md
 

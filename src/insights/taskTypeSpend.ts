@@ -1,6 +1,6 @@
-import type { Agent, TaskSummary } from './types.js';
+import type { Agent, TaskSummary } from '../types.js';
 import { roundUsd, unmeasured } from './issueSpend.js';
-import { DISPATCH_RULES, type DispatchRuleId } from './dispatcher/rules.js';
+import { DISPATCH_RULES, type DispatchRuleId } from '../dispatcher/rules.js';
 
 // → docs/spec/18-observability.md
 

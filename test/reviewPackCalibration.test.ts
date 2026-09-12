@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakePoolTransport } from '../src/integrations/fake/fakePool.js';
 import { poolPackPath } from '../src/pool/document.js';

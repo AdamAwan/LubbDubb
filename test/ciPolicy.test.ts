@@ -11,9 +11,9 @@ import {
   type CiPolicy,
 } from '../src/ci/ciPolicy.js';
 import { describeCiPolicy } from '../src/ci/describeCiPolicy.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
-import { prHealth } from '../src/prHealth.js';
+import { prHealth } from '../src/pr/prHealth.js';
 import { aggregateCiStatus, listCiChecks } from '../src/integrations/github/sourceControl.js';
 import { aggregatePolicyCiStatus, listPolicyCiChecks } from '../src/integrations/azure/sourceControl.js';
 import type { AzPolicyEvaluation } from '../src/integrations/azure/azureDevOpsApi.js';

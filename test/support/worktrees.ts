@@ -1,4 +1,4 @@
-import type { Config } from '../../src/config.js';
+import type { Config } from '../../src/config/config.js';
 import type { System } from '../../src/system.js';
 import { WorktreeManager } from '../../src/worktree/worktreeManager.js';
 

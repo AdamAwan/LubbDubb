@@ -12,7 +12,7 @@ import { Store } from '../src/store/store.js';
 import { buildApp } from '../src/server/app.js';
 import { absolutePrefixes } from '../src/server/routes/artifacts.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 test('parseFlag accepts a bare ref and infers kind/label', () => {
