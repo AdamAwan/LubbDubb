@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type {
   Job,
   Plan,
@@ -168,7 +169,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   const assessTasks = new Map<string, TaskSummary[]>();
   for (const task of input.tasks) {
     if (task.originRef === null) continue;
-    if (!/^issue:\d+:assess$/.test(task.originRef)) continue;
+    if (issueOriginNumber('assess', task.originRef) === null) continue;
     const bucket = assessTasks.get(task.originRef);
     if (bucket) bucket.push(task);
     else assessTasks.set(task.originRef, [task]);

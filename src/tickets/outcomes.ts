@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import type {
   ConclusionAuthor,
@@ -67,6 +68,6 @@ function wordFor(
 }
 
 function issueNumberOf(originRef: string): number[] {
-  const match = /^issue:(\d+)$/.exec(originRef);
-  return match ? [Number(match[1])] : [];
+  const number = issueOriginNumber('root', originRef);
+  return number === null ? [] : [number];
 }

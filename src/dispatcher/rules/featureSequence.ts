@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../../issueOrigins.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { featureSequenceOrigin } from '../../sequence/sequence.js';
 import type { RawAction, StageContext } from './context.js';
@@ -7,7 +8,7 @@ import type { RawAction, StageContext } from './context.js';
 export function featureSequence(s: StageContext): void {
   const { ctx } = s;
   for (const feature of s.sequenceableFeatures) {
-    const stored = s.sequences.get(`issue:${feature.feature.number}`);
+    const stored = s.sequences.get(issueOriginRef('root', feature.feature.number));
     if (stored?.standingKey === feature.key) continue;
     const origin = featureSequenceOrigin(feature.feature.number);
     if (s.activeOrigins.has(origin)) continue;

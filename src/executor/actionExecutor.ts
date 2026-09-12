@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { inIssueOriginFamily, issueOriginRef } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
@@ -898,7 +899,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
     entries: store.listScratchEntries(issueOriginRef),
     files,
     neighbours: store.listGoalNeighbours(issueOriginRef, neighbourSeedPaths(files, plan)),
-    forPart: /^issue:\d+:part:/.test(ref),
+    forPart: inIssueOriginFamily('part', ref),
   });
   return briefing || null;
 }
@@ -907,7 +908,7 @@ function deliveredWorkFor(originRef: string | null | undefined, store: Store): s
   const issueNumber = assessIssueNumber(originRef ?? '');
   if (issueNumber === null) return null;
   const baseline = store.getWorldBaseline();
-  const plan = store.getPlanByOrigin(`issue:${issueNumber}`);
+  const plan = store.getPlanByOrigin(issueOriginRef('root', issueNumber));
   const partPrs = new Set(
     (plan ? liveParts(store.listPlanParts(plan.id)) : []).flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
   );

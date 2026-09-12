@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../issueOrigins.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -21,7 +22,7 @@ export class AppraisalDesk {
     const appraisals = new Map(this.deps.store.listAppraisals().map((a) => [a.originRef, a]));
     if (appraisals.size === 0) return;
     for (const issue of world.issues) {
-      const appraisal = appraisals.get(`issue:${issue.number}`);
+      const appraisal = appraisals.get(issueOriginRef('root', issue.number));
       if (!appraisal || appraisal.verdict !== 'unclear') continue;
       const held = appraisalHold(appraisal, issue) !== null;
       if (!held && appraisal.commentRef === null) continue;

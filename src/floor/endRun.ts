@@ -1,5 +1,5 @@
 import { issueConclusionOrigin } from '../issueConclusion.js';
-import { originIssueNumber } from '../plans/planning.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { Agent } from '../types.js';
 
@@ -21,12 +21,12 @@ export function clearGoalWork(
   let killed = 0;
   for (const agent of store.listAgentsByStatus(...LIVE)) {
     const task = store.getTask(agent.taskId);
-    if (originIssueNumber(task?.originRef ?? null) !== issueNumber) continue;
+    if (issueSubtreeNumber(task?.originRef ?? null) !== issueNumber) continue;
     if (agents.kill(agent.id)) killed += 1;
   }
   let cancelled = 0;
   for (const job of store.listQueuedJobs()) {
-    if (originIssueNumber(job.originRef) !== issueNumber) continue;
+    if (issueSubtreeNumber(job.originRef) !== issueNumber) continue;
     if (store.cancelJob(job.id)) cancelled += 1;
   }
   const instructions = store.settleInstructions(issueConclusionOrigin(issueNumber));

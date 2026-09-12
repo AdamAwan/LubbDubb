@@ -1,3 +1,4 @@
+import { inIssueOriginFamily, issueOriginNumber, issueOriginRef, issueSubtreeNumber } from '../issueOrigins.js';
 import { planOriginIssue } from '../plans/planning.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -58,45 +59,44 @@ export function plannerOrigin(
 ): { ok: true; originRef: string; issueOrigin: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
   const number = planOriginIssue(ref);
-  if (number !== null) return { ok: true, originRef: ref, issueOrigin: `issue:${number}` };
+  if (number !== null) return { ok: true, originRef: ref, issueOrigin: issueOriginRef('root', number) };
 
-  const part = /^issue:(\d+):part:/.exec(ref);
-  if (part) {
+  if (inIssueOriginFamily('part', ref)) {
     return {
       ok: false,
       error:
         `plan_not_needed is the planner's verdict on a whole issue, and you are working one part of issue ` +
-        `#${part[1]}'s plan. If there is nothing to build in your part, close it with conclude_part and ` +
+        `#${issueSubtreeNumber(ref)}'s plan. If there is nothing to build in your part, close it with conclude_part and ` +
         `kind "determination" — the plan already speaks for the issue.`,
     };
   }
-  const assessor = /^issue:(\d+):assess$/.exec(ref);
-  if (assessor) {
+  const assessor = issueOriginNumber('assess', ref);
+  if (assessor !== null) {
     return {
       ok: false,
       error:
         `plan_not_needed is for a planner deciding there is nothing to build, and you were dispatched to ` +
-        `assess whether issue #${assessor[1]} was delivered. Cast your verdict with assess_issue — ` +
+        `assess whether issue #${assessor} was delivered. Cast your verdict with assess_issue — ` +
         `"delivered" records the same park with your account of the work behind it.`,
     };
   }
-  const appraiser = /^issue:(\d+):appraisal$/.exec(ref);
-  if (appraiser) {
+  const appraiser = issueOriginNumber('appraisal', ref);
+  if (appraiser !== null) {
     return {
       ok: false,
       error:
         `plan_not_needed says a goal is already met, and you were dispatched to judge whether issue ` +
-        `#${appraiser[1]}'s goal can be worked from at all. Cast your verdict with appraise_issue: a ticket ` +
+        `#${appraiser}'s goal can be worked from at all. Cast your verdict with appraise_issue: a ticket ` +
         `that contradicts what is already true of the repository is "unclear", which is the reading that ` +
         `puts it in front of the person who filed it.`,
     };
   }
-  const issue = /^issue:(\d+)$/.exec(ref);
-  if (issue) {
+  const issue = issueOriginNumber('root', ref);
+  if (issue !== null) {
     return {
       ok: false,
       error:
-        `plan_not_needed is a planner's verdict, and you were dispatched to deliver issue #${issue[1]}. If ` +
+        `plan_not_needed is a planner's verdict, and you were dispatched to deliver issue #${issue}. If ` +
         `you found there is nothing to do because it is already done, say so with conclude_work — status ` +
         `"done" and a note saying what you found.`,
     };

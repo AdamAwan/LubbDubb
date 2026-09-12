@@ -1,3 +1,4 @@
+import { issueOriginId, issueOriginNumber } from '../issueOrigins.js';
 import type { PartOutcomeKind } from '../types.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -15,48 +16,51 @@ export const PART_OUTCOME_KIND_HELP: Record<DeclarableKind, string> = {
 
 const MAX_PART_SUMMARY = 2000;
 
+// The slug shape `plan_submit` validated the part under. → docs/spec/08-planning.md
+const PART_SLUG = /^[a-z0-9][a-z0-9-]*$/;
+
 export function partConclusionOrigin(
   originRef: string | null,
 ): { ok: true; issueNumber: number; slug: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const part = /^issue:(\d+):part:([a-z0-9][a-z0-9-]*)$/.exec(ref);
-  if (part) return { ok: true, issueNumber: Number(part[1]), slug: part[2]! };
+  const part = issueOriginId('part', ref);
+  if (part !== null && PART_SLUG.test(part.id)) return { ok: true, issueNumber: part.issueNumber, slug: part.id };
 
-  const issue = /^issue:(\d+)$/.exec(ref);
-  if (issue) {
+  const issue = issueOriginNumber('root', ref);
+  if (issue !== null) {
     return {
       ok: false,
       error:
         `conclude_part closes one part of a decomposed issue, and you own the whole of issue ` +
-        `#${issue[1]} rather than a part of it. Use conclude_work instead — it says whether the issue ` +
+        `#${issue} rather than a part of it. Use conclude_work instead — it says whether the issue ` +
         `is finished, which is the verdict your origin carries.`,
     };
   }
-  const planner = /^issue:(\d+):plan$/.exec(ref);
-  if (planner) {
+  const planner = issueOriginNumber('plan', ref);
+  if (planner !== null) {
     return {
       ok: false,
       error:
-        `conclude_part closes a part that has been worked, and you are planning issue #${planner[1]}, ` +
+        `conclude_part closes a part that has been worked, and you are planning issue #${planner}, ` +
         `not delivering any of it. Submit your decomposition with plan_submit instead.`,
     };
   }
-  const assessor = /^issue:(\d+):assess$/.exec(ref);
-  if (assessor) {
+  const assessor = issueOriginNumber('assess', ref);
+  if (assessor !== null) {
     return {
       ok: false,
       error:
         `conclude_part closes a part you worked, and you were dispatched to *assess* issue ` +
-        `#${assessor[1]} rather than to deliver any of it. Cast your verdict with assess_issue instead.`,
+        `#${assessor} rather than to deliver any of it. Cast your verdict with assess_issue instead.`,
     };
   }
-  const appraiser = /^issue:(\d+):appraisal$/.exec(ref);
-  if (appraiser) {
+  const appraiser = issueOriginNumber('appraisal', ref);
+  if (appraiser !== null) {
     return {
       ok: false,
       error:
         `conclude_part closes a part you worked, and you were dispatched to judge whether issue ` +
-        `#${appraiser[1]}'s goal can be worked from at all. Cast your verdict with appraise_issue instead.`,
+        `#${appraiser}'s goal can be worked from at all. Cast your verdict with appraise_issue instead.`,
     };
   }
   return {

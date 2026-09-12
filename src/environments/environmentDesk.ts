@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
@@ -259,6 +260,5 @@ function verdictOf(answer: boolean | null): EnvironmentReachStatus {
 }
 
 function issueNumber(goalRef: string): number | null {
-  const m = /^issue:(\d+)$/.exec(goalRef);
-  return m?.[1] === undefined ? null : Number(m[1]);
+  return issueOriginNumber('root', goalRef);
 }

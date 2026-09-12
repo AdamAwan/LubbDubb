@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { AllowancePayload } from '../../wire.js';
 import { buildAllowanceInsights } from '../../allowanceInsights.js';
 import { buildSpendGoals } from '../../spendInsights.js';
@@ -71,7 +72,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       }
       for (const lane of allowance.lanes) {
         if (lane.issueNumber === null) continue;
-        const ref = `issue:${lane.issueNumber}`;
+        const ref = issueOriginRef('root', lane.issueNumber);
         if (ref in refUrls) continue;
         const url = connector.resolveRefUrl(ref);
         if (url) refUrls[ref] = url;

@@ -1,4 +1,5 @@
-import { originIssueNumber, issueOrigin } from '../../plans/planning.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
+import { issueOrigin } from '../../plans/planning.js';
 import { proposePlanAmendment } from '../../plans/planAmendment.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { z } from 'zod';
@@ -34,7 +35,7 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
     }),
   ),
   handler: (args) => {
-    const issue = originIssueNumber(task.originRef);
+    const issue = issueSubtreeNumber(task.originRef);
     if (issue === null) {
       return toolError(
         `plan_correct is only available to an agent working a planned goal. This task's origin is ` +

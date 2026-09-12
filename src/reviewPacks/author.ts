@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, resolve, sep } from 'node:path';
+import { issueOriginRef } from '../issueOrigins.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -145,7 +146,7 @@ export class ReviewPackAuthor extends EventEmitter {
     const { store } = this.deps;
     const world = store.getWorldBaseline();
     const issue = world ? issueForPr(pr, world.issues) : null;
-    const goal = issue ? goalOriginFor(`issue:${issue.number}`) : null;
+    const goal = issue ? goalOriginFor(issueOriginRef('root', issue.number)) : null;
     const own = padOriginFor(packOrigin(pr.number))!;
     const entries = [...(goal ? store.listScratchEntries(goal) : []), ...store.listScratchEntries(own)];
     return { goal, own, entries };

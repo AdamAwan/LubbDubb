@@ -41,6 +41,62 @@ became of it, and both are lifted into their own decision columns (see
 `parseActions(raw)` validates an array, partitioning into `actions` and `rejected` (each rejected item
 keeps its raw value and a joined zod error path/message).
 
+## The issue-origin vocabulary
+
+A dispatch origin under an issue is `issue:<n>`, or `issue:<n>:<suffix>` with an optional id —
+`issue:412`, `issue:412:plan`, `issue:412:part:schema`, `issue:412:validate:some-check`. The strings
+are **persisted**: `tasks.origin_ref`, `decisions.rule`, a plan's part refs, an escalation's own
+origin, a bench row's ref, and the keys `agentModels.byRule` prices work under. A string that changes
+shape silently orphans every row already written in the old one.
+
+`src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
+`issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `assess`, `retro`,
+`validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
+`validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall` — and the entry carries
+three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
+family whose suffix is the whole of it), and its **role**.
+
+Both halves come off that one entry. `issueOriginRef(family, n, id?)` mints; `parseIssueOrigin`,
+`issueOriginId`, `issueOriginNumber`, `inIssueOriginFamily` and `issueSubtreeNumber` read; and
+`issueOriginRole` classifies. **A family cannot exist without a role**: the table is a
+`Record<IssueOriginFamily, …>` over the family union and `role` is a required field, so a new family
+without one does not compile, and `test/issueOriginVocabulary.test.ts` holds every family to the exact
+string it mints.
+
+`validate-plan` carries no id where `validate:<check>` does, and that is the shape of the thing rather
+than an inconsistency: there is one check set per goal and it is written once, so there is nothing to
+name — `assess` and `retro`'s shape.
+
+### The three roles
+
+The `issue:<n>:*` subtree holds materially different things, and `issueOriginRole(n, ref)` is what
+tells them apart — `null` for an origin that is not under issue `n` at all, and one of:
+
+- **`work`** — the pickup root and a plan's parts, plus `validate-local-fix:<id>`. Something was built.
+- **`evidence`** — `assess`, `retro`, `validate-plan`, `validate:<check>`,
+  `validate-failure:<check>`, `validate-local:<id>` and `validate-remote:<run>`. Not work, but only
+  ever downstream of some.
+- **`deliberation`** — `plan`, `appraisal`, `sequence` and `split:<pr>`. The harness thinking about the
+  issue; a task on one says it has been thought about, never that anything was built.
+
+Matching the whole subtree instead was a real defect: the planner's own task made every issue that
+reached pickup look worked, so it was assessed instead of picked up, the assessor honestly reported
+nothing delivered, rule `issue-shortfall` replanned, and the issue cycled the funnel without a line of
+its work ever being written.
+
+An **unrecognised** suffix is its own answer rather than a silent default — that is exactly how
+`:plan` slipped through. It is also a role a family may be **declared** with, which is what `summary`
+and `shortfall` carry today: both are read as unrecognised by every consumer, and both are suspected
+defects rather than a decision the vocabulary endorses — `issue:<n>:summary` in particular is a real
+dispatch origin (rule `feature-summary`), so it does not expand under a goal's priority flag and its
+spend files under "other". Declaring the role, rather than leaving the family out of the table, is
+what makes that visible instead of invisible.
+
+A role is judged on the **suffix**, never on the id: `issue:<n>:validate-local:` with no id is still
+that family and still `evidence`, because a role that fell back to `unrecognised` on a malformed id
+would lose exactly the origin an operator needs to see. The stricter parsers — the ones that hand a
+caller the id — are the ones that refuse it.
+
 ## The rule book
 
 `src/dispatcher/rules.ts` holds the registry as data. Every action the `RuleDispatcher` emits carries
@@ -879,19 +935,12 @@ otherwise claim: no prior tasks means the work has not started, so rule `issue-p
 with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
 this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it — one judging, one redoing.
 
-**Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
-the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
-the **work**; `issue:N:assess`, `issue:N:retro` and `issue:N:validate-plan` are not work but only
-ever happen downstream of some, so they count as **evidence**; `issue:N:plan`, `issue:N:appraisal` and `issue:N:split:<pr>` are the harness
-**deliberating**, and a task on one of those says the issue has been thought about, never that anything
-was built. Matching the whole
-subtree was a real defect: the planner's own task made every issue that reached pickup look worked, so
-it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
-replanned, and the issue cycled the funnel without a line of its work ever being written. An
-**unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
-slipped through — and `hasPriorWork` does not count it, failing toward a redundant pickup an operator
-can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the whole known
-vocabulary, so the next origin added has to be classified rather than inherited.
+**Which origins count is decided in one place**, `issueOriginRole` — and it answers off the same
+declaration that mints them, so a family cannot reach the dispatcher unclassified
+([The issue-origin vocabulary](#the-issue-origin-vocabulary)). `hasPriorWork` counts **work** and
+**evidence**, and does not count an **unrecognised** suffix, failing toward a redundant pickup an
+operator can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the
+vocabulary from the assessor's side and `test/issueOriginVocabulary.test.ts` from the vocabulary's.
 
 It is answered from `ctx.tasks`, **never from the work graph**. The graph is keyed on these same
 origin strings, which is why it reads like a graph query; it is the same question asked of the source

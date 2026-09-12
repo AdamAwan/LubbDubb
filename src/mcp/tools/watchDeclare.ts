@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginHead, issueOriginNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { WatchSchema, watchCheckInputs } from '../../validation/watchDocument.js';
@@ -102,15 +103,15 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
   ),
   handler: (args) => {
     const ref = task.originRef ?? '';
-    const match = /^issue:(\d+)(?::(.+))?$/.exec(ref);
-    if (!match)
+    const head = issueOriginHead(ref);
+    if (head === null)
       return toolError(
         `watch_declare declares the post-deploy watch of the goal you are working on, and this task's ` +
           `origin is ${ref || '(none)'}, which names no issue.`,
       );
-    if (match[2] === 'plan')
+    if (issueOriginNumber('plan', ref) !== null)
       return toolError(
-        `You are planning issue #${match[1]}, so the watch is yours to *write*, not to amend. Declare the ` +
+        `You are planning issue #${head.issueNumber}, so the watch is yours to *write*, not to amend. Declare the ` +
           `whole thing in plan_submit's "watch" block — that transport speaks for the entire check set, ` +
           'which is what a planner is entitled to do and an agent halfway through a part is not.',
       );
@@ -123,7 +124,7 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
     const checks = watchCheckInputs(parsed.data);
     if (checks.length === 0)
       return toolError('Nothing was declared. Give at least one signal or one measure, or do not call this.');
-    const origin = issueOrigin(Number(match[1]));
+    const origin = issueOrigin(head.issueNumber);
     const { proposed } = deps.store.proposeGoalWatch(origin, checks, note);
     return ok({
       declared: proposed,

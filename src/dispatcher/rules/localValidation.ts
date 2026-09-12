@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../../issueOrigins.js';
 import { localValidationBriefing } from '../../localValidation/briefing.js';
 import {
   localValidationKey,
@@ -25,9 +26,8 @@ export function localValidation(s: StageContext): void {
     if (run === null) continue;
     if (run.status !== 'starting' && run.status !== 'running') continue;
 
-    const parts = /^issue:(\d+)$/.exec(row.originRef);
-    if (parts === null) continue;
-    const issueNumber = Number(parts[1]);
+    const issueNumber = issueOriginNumber('root', row.originRef);
+    if (issueNumber === null) continue;
     const issue = s.liveIssue(issueNumber);
     if (issue === null) continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;

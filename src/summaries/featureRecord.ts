@@ -1,3 +1,4 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { isContainerType } from '../issueRelations.js';
 import { allGoalReach } from '../environments/reach.js';
 import { isWatched } from '../watchLabels.js';
@@ -50,7 +51,7 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
   for (const item of items) {
     if (isContainerType(item.issueType, opts.containerTypes)) continue;
     if (!item.parent) continue;
-    const goalRef = `issue:${item.number}`;
+    const goalRef = issueOriginRef('root', item.number);
     const shortfall = shortfalls.get(goalRef);
     const child: FeatureChildRecord = {
       number: item.number,
@@ -83,9 +84,8 @@ function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, { 
   const out = new Map<number, { prompt: string; since: string }[]>();
   for (const ask of escalations) {
     if (ask.status !== 'open') continue;
-    const match = /^issue:(\d+)$/.exec(ask.context.originRef ?? '');
-    if (!match) continue;
-    const number = Number(match[1]);
+    const number = issueOriginNumber('root', ask.context.originRef ?? '');
+    if (number === null) continue;
     const list = out.get(number) ?? [];
     list.push({ prompt: ask.prompt, since: ask.createdAt });
     out.set(number, list);
@@ -113,7 +113,7 @@ export function renderFeatureDossier(
     }
     for (const ask of child.questions) lines.push(`- Waiting on a person since ${ask.since}: "${ask.prompt}"`);
     if (child.landedAt) lines.push(`- Last landed a commit at ${child.landedAt}`);
-    for (const env of reach.get(`issue:${child.number}`) ?? []) {
+    for (const env of reach.get(issueOriginRef('root', child.number)) ?? []) {
       lines.push(`- ${env.environment}: ${env.status} (${env.landed}/${env.total} landings)`);
     }
     lines.push('');

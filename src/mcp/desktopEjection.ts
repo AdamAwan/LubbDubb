@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { originIssueNumber } from '../plans/planning.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 import { toolSchema } from './schema.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { Ejection } from '../types.js';
@@ -23,7 +23,7 @@ function resolve(
   }
   const issue = typeof args.issue === 'number' ? args.issue : null;
   if (issue !== null) {
-    const matches = live.filter((e) => originIssueNumber(e.originRef) === issue);
+    const matches = live.filter((e) => issueSubtreeNumber(e.originRef) === issue);
     const only = matches[0];
     if (matches.length === 1 && only !== undefined) return { ok: true, held: only };
     if (matches.length === 0)
@@ -50,7 +50,7 @@ function describe(deps: DesktopToolDeps, held: Ejection): Record<string, unknown
   return {
     ejection: held.id,
     origin: held.originRef,
-    issue: originIssueNumber(held.originRef),
+    issue: issueSubtreeNumber(held.originRef),
     branch: held.branch,
     worktree: held.worktreePath,
     reason: held.reason,

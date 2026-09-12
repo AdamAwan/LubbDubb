@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
@@ -33,8 +34,8 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const rows = store.listRemoteSheetRows();
   const out: RemoteRunBrief[] = [];
   for (const run of runs) {
-    const issueNumber = Number(/^issue:(\d+)$/.exec(run.goalRef)?.[1] ?? NaN);
-    if (!Number.isInteger(issueNumber)) continue;
+    const issueNumber = issueOriginNumber('root', run.goalRef);
+    if (issueNumber === null) continue;
     const environment = input.environments.find((e) => e.name === run.environment);
     const browser = environment?.validate?.browser;
     if (environment === undefined || browser?.runner === undefined) continue;

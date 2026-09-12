@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginRef } from '../issueOrigins.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import { toolSchema } from './schema.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
@@ -131,7 +132,7 @@ function featureFor(
         'that the stories carry the watch tag.',
     };
   }
-  return { ok: true, number, originRef: `issue:${number}`, stories };
+  return { ok: true, number, originRef: issueOriginRef('root', number), stories };
 }
 
 function standingFor(deps: DesktopToolDeps, feature: number): { key: string; members: number[] } {

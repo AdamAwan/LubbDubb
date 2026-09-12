@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { issueOriginNumber, issueOriginRef } from '../../issueOrigins.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -16,7 +17,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/validate-locally',
     checked({ params: IssueNumberParams, body: Body }, async ({ params, body, reply }) => {
-      const origin = `issue:${String(params.number)}`;
+      const origin = issueOriginRef('root', params.number);
 
       const open = localValidations.open(origin);
       if (open !== null)
@@ -27,7 +28,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
       const live = store.liveLocalRun();
       if (live !== null && live.originRef !== origin && body.swap !== true) {
-        const goal = /^issue:(\d+)$/.exec(live.originRef)?.[1] ?? live.originRef;
+        const goal = issueOriginNumber('root', live.originRef) ?? live.originRef;
         return reply.code(409).send({
           error:
             `#${goal} is running locally on ${live.ref} (${live.status}). Validating #${String(params.number)} ` +
@@ -68,7 +69,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/validate-locally/cancel',
     checked({ params: IssueNumberParams }, async ({ params, reply }) => {
-      const cancelled = localValidations.cancel(`issue:${String(params.number)}`);
+      const cancelled = localValidations.cancel(issueOriginRef('root', params.number));
       if (cancelled === null)
         return reply.code(404).send({ error: `Nothing is being validated locally on #${String(params.number)}.` });
       hub.broadcast({ type: 'dirty', sections: ['goals'] });

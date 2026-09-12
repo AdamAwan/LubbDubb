@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
@@ -435,8 +436,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
       const bug = jobId ? this.store.findBugFilingByJobId(jobId) : null;
       if (bug) {
-        const parsed = Number(bug.originRef.replace(/^issue:/, '').split(':')[0]);
-        return { ok: true, kind: 'bug', storyNumber: Number.isInteger(parsed) ? parsed : null };
+        return { ok: true, kind: 'bug', storyNumber: issueSubtreeNumber(bug.originRef) };
       }
       return {
         ok: false,

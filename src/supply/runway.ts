@@ -1,3 +1,4 @@
+import { issueOriginRef, issueSubtreeNumber } from '../issueOrigins.js';
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EscalationSpan, HumanTask, Issue, IssueRun } from '../types.js';
 import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from '../dispatcher/issuePickup.js';
@@ -99,7 +100,10 @@ export function readRunway(input: RunwayInput): RunwayReading {
     if (INFLIGHT.has(status)) inflight += 1;
     else if (QUEUED.has(status)) queued += 1;
     else if (status === 'appraisal') {
-      const hold = appraisalHold(appraisals.find((a) => a.originRef === `issue:${issue.number}`) ?? null, issue);
+      const hold = appraisalHold(
+        appraisals.find((a) => a.originRef === issueOriginRef('root', issue.number)) ?? null,
+        issue,
+      );
       if (hold === null) queued += 1;
       else held += 1;
     } else if (HELD.has(status)) {
@@ -218,8 +222,8 @@ interface Hold {
 }
 
 function goalOf(ref: string | null): string | null {
-  const m = ref === null ? null : /^issue:(\d+)(?::|$)/.exec(ref);
-  return m ? `issue:${m[1] as string}` : null;
+  const number = issueSubtreeNumber(ref);
+  return number === null ? null : issueOriginRef('root', number);
 }
 
 function benchRowHolds(t: HumanTask): boolean {
@@ -240,7 +244,7 @@ function humanHolds(input: RunwayInput): Map<string, Hold[]> {
   };
 
   for (const t of input.humanTasks) if (benchRowHolds(t)) add(t.originRef, t.createdAt, t.resolvedAt);
-  const issuesByRef = new Map(input.issues.map((i) => [`issue:${i.number}`, i]));
+  const issuesByRef = new Map(input.issues.map((i) => [issueOriginRef('root', i.number), i]));
   for (const a of input.pickup.appraisals ?? []) {
     if (a.profileAnsweredAt === null) continue;
     const issue = issuesByRef.get(a.originRef);

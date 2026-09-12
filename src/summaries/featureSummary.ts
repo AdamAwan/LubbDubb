@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 
 // → docs/spec/14-persistence.md
 
@@ -7,16 +8,15 @@ const MAX_STANDING = 1_200;
 const MAX_SECTION = 2_000;
 
 export function featureSummaryOrigin(featureNumber: number): string {
-  return `issue:${featureNumber}:summary`;
+  return issueOriginRef('summary', featureNumber);
 }
 
 export function featureSummarySubmitOrigin(
   originRef: string | null,
 ): { ok: true; featureOrigin: string; featureNumber: number } | { ok: false; error: string } {
-  const match = originRef ? /^issue:(\d+):summary$/.exec(originRef) : null;
-  if (match) {
-    const number = Number(match[1]);
-    return { ok: true, featureOrigin: `issue:${number}`, featureNumber: number };
+  const number = issueOriginNumber('summary', originRef);
+  if (number !== null) {
+    return { ok: true, featureOrigin: issueOriginRef('root', number), featureNumber: number };
   }
   return {
     ok: false,

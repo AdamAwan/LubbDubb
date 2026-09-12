@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { issueOriginRef } from '../../issueOrigins.js';
 import { checked, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -22,7 +23,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/local-run',
     checked({ body: StartBody }, async ({ body, reply }) => {
-      const result = await localRun.start(`issue:${body.issue}`, body.ref);
+      const result = await localRun.start(issueOriginRef('root', body.issue), body.ref);
       if (!result.ok) return reply.code(400).send({ error: result.error });
       hub.broadcast({ type: 'dirty' });
       return { ok: true, run: result.run };

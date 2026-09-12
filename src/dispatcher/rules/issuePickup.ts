@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../../issueOrigins.js';
 import { supersededReason } from '../admission.js';
 import { issueBranch } from '../issuePickup.js';
 import { relatedWorkNote } from '../../issueRelations.js';
@@ -9,7 +10,7 @@ import type { Candidate, RawAction, StageContext } from './context.js';
 export function issuePickup(s: StageContext): void {
   for (const { issue } of s.eligibleIssues) {
     if (s.routes.get(issue.number)?.route !== 'unplanned') continue;
-    const origin = `issue:${issue.number}`;
+    const origin = issueOriginRef('root', issue.number);
     if (s.activeOrigins.has(origin)) continue;
     const supersededBy = s.assessing.has(issue.number)
       ? ('issue-assess' as const)
