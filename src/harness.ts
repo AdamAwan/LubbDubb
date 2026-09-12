@@ -1,44 +1,27 @@
 import { EventEmitter } from 'node:events';
 import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
-import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
-import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
-import { awaitingReview, isPrWatched } from './prHealth.js';
+import { isPrWatched } from './prHealth.js';
 import { isSomeoneElsesPr } from './prOwnership.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
-import { retainedRunIssues, runsToRecord } from './floor/runs.js';
+import { retainedRunIssues } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
-import type { LimitResumeFailure } from './agents/agentManager.js';
-import type { AppraisalDesk } from './intake/appraisalDesk.js';
-import type { AreaPathDirectory } from './intake/areaPaths.js';
-import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
-import type {
-  Action,
-  PrReview,
-  PrReviewRoute,
-  PullRequest,
-  RemoteRunBrief,
-  WorldEvent,
-  WorldSnapshot,
-} from './types.js';
+import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './prThreads.js';
-import { runPulseDesks, type PulseDeskDeps } from './pulseDesks.js';
+import { runPulseDesks, runPulseSweeps, type PulseDeskDeps, type PulseSweepDeps } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
-import type { PrReviewPolicy } from './review/policy.js';
-import { needsFleetReview, reviewReading } from './review/prReview.js';
-import type { ReviewProber } from './review/reviewedElsewhere.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -46,35 +29,23 @@ const PRIOR_REMEDY_ROWS = 40;
 
 const READ_PLAN_EVENTS = 200;
 
-interface HarnessDeps extends PulseDeskDeps {
-  store: Store;
+interface HarnessDeps extends PulseDeskDeps, PulseSweepDeps {
   connector: Connector;
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
   idleHeartbeatIntervalMs: number;
   readLanes: ReadLanes;
-  errors: ErrorRecorder;
   runtime: RuntimeControl;
   prWatchLabel: string;
-  review: PrReviewPolicy;
-  reviewProber?: ReviewProber;
   modelPins?: { labelPrefix: string; models: AgentModels };
   featureStandings?: () => { number: number; title: string; key: string }[];
   upNextOverrideTtlMs: number;
-  appraisals?: AppraisalDesk;
-  areaPaths?: AreaPathDirectory;
-  burn?: SpendBurnDesk;
   runway?: RunwayDesk;
   issuePickup?: IssuePickupPolicy;
-  tickets?: { run(): Promise<void> };
   localRun?: { noteAlive(): void };
-  localValidations?: { sweep(): void };
   remoteRuns?: () => RemoteRunBrief[];
   recovery?: { pendingCount(): number };
-  fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
-  ejections?: { sweepExpiries(): unknown[] };
-  escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
   freshReads?: { drain(): string[] };
 }
 
@@ -200,29 +171,11 @@ export class Harness extends EventEmitter {
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
       await runPulseDesks(this.deps, { world, previousWorld }, readWorld);
-      for (const { agentId, error } of this.deps.fleet?.resumeExpiredParks() ?? [])
-        this.deps.errors.record({
-          source: 'agent',
-          message: `Agent ${agentId} could not be resumed after its usage limit cleared; it stays parked`,
-          detail: error,
-        });
-      this.deps.fleet?.completeExpiredStalls();
-      this.deps.ejections?.sweepExpiries();
+      await runPulseSweeps('open', this.deps, {}, readWorld);
       const tasks = store.tasks.listTasks();
-      store.reviewWaits.foldReviewWaits(
-        world.pullRequests
-          .filter((pr) =>
-            awaitingReview(
-              pr,
-              tasks.some((t) => isActiveTask(t) && t.branch === pr.branch),
-            ),
-          )
-          .map((pr) => pr.number),
-      );
+      await runPulseSweeps('afterTasks', this.deps, { world, tasks }, readWorld);
       const agents = store.agents.listAgents();
-      this.deps.burn?.run({ agents, tasks });
-      this.deps.escalations?.tidyDeadAgents();
-      this.deps.escalations?.tidySettledMerges();
+      await runPulseSweeps('afterAgents', this.deps, { tasks, agents }, readWorld);
       const openEscalations = store.escalations.listOpenEscalations();
       const queuedJobs = store.jobs.listQueuedJobs();
       const standingJobs = store.jobs.listStandingJobs();
@@ -237,26 +190,14 @@ export class Harness extends EventEmitter {
         ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
       const appraisals = store.verdicts.listAppraisals();
-      if (readWorld) await this.deps.appraisals?.announce(world);
-      if (readWorld) await this.deps.areaPaths?.refresh();
+      await runPulseSweeps('afterVerdicts', this.deps, { world }, readWorld);
       const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
-      try {
-        for (const r of runsToRecord(world.issues, tasks, {
-          retrospectiveOrigins,
-          conclusions,
-          deliveries,
-          shortfalls,
-          plans,
-          planParts,
-        }))
-          store.floor.recordIssueRun(r);
-      } catch (err) {
-        this.deps.errors.record({
-          source: 'cycle',
-          message: `Recording issue runs failed: ${(err as Error).message}`,
-          detail: (err as Error).stack ?? null,
-        });
-      }
+      await runPulseSweeps(
+        'afterOrigins',
+        this.deps,
+        { world, tasks, signals: { retrospectiveOrigins, conclusions, deliveries, shortfalls, plans, planParts } },
+        readWorld,
+      );
       const recentDecisions = store.decisions.listDecisions(200);
       const proposals = store.escalations.listProposals();
       const signals = rejectionSignalQuery(proposals);
@@ -291,9 +232,7 @@ export class Harness extends EventEmitter {
 
       const prReviews = store.prReviews.listPrReviews();
       const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
-      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld, { prReviews, prReviewRoutes });
-
-      this.deps.localValidations?.sweep();
+      await runPulseSweeps('afterReviews', this.deps, { dispatchWorld, prReviews, prReviewRoutes }, readWorld);
 
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
@@ -396,7 +335,7 @@ export class Harness extends EventEmitter {
       });
 
       const summary = await this.deps.executor.execute(cycleId, plan);
-      if (readWorld) await this.deps.tickets?.run();
+      await runPulseSweeps('afterExecute', this.deps, {}, readWorld);
       const report: CycleReport = {
         cycleId,
         source,
@@ -430,35 +369,6 @@ export class Harness extends EventEmitter {
       if (this.pendingManual && !this.stopped) {
         this.pendingManual = false;
         void this.runCycle('manual');
-      }
-    }
-  }
-
-  private async askReviewedElsewhere(
-    store: HarnessDeps['store'],
-    world: WorldSnapshot,
-    read: { prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] },
-  ): Promise<void> {
-    const prober = this.deps.reviewProber;
-    const command = this.deps.review.reviewedElsewhere;
-    if (prober === undefined || command === null || command.trim() === '') return;
-    const rows = {
-      prReviews: new Map(read.prReviews.map((r) => [r.prNumber, r])),
-      prReviewRoutes: new Map(read.prReviewRoutes.map((r) => [r.prNumber, r])),
-      prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
-    };
-    for (const pr of world.pullRequests) {
-      if (!needsFleetReview(pr, reviewReading(rows, pr.number), this.deps.review)) continue;
-      const report = await prober.check(pr.number, command);
-      if (report.verdict === 'reviewed') {
-        store.prReviewExternals.recordPrReviewedElsewhere(pr.number, command);
-        continue;
-      }
-      if (report.verdict === 'unknown') {
-        this.deps.errors.record({
-          source: 'cycle',
-          message: `the review.reviewedElsewhere check for PR ${pr.number} said nothing: ${report.detail ?? 'no detail'}`,
-        });
       }
     }
   }

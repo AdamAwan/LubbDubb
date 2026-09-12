@@ -113,11 +113,12 @@ A local cycle runs **everything derived from the store** — the plan funnel, th
 the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
 and skips **every pass whose subject is the world snapshot**:
 
-`connector.getState`, `recordWorldChanges`, `appraisals.announce`, `areaPaths.refresh`,
-`askReviewedElsewhere` and `tickets` — plus every desk the [registry](#the-desk-registry) declares
-`readWorld: true`, which today is `plans`, `prWatch`, `prWorkItems`, `naming`, `branchReaps`,
-`updates`, `environments`, `remoteValidation`, `notices`, `obstacleVoice`, `obstacleEndings` and
-`pool`.
+`connector.getState` and `recordWorldChanges` — plus every desk the
+[registry](#the-desk-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
+`prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
+`obstacleVoice`, `obstacleEndings` and `pool`, and every sweep the
+[sweep registry](#the-sweep-registry) declares `readWorld: true`, which today is `appraisals`,
+`areaPaths`, `reviewedElsewhere` and `tickets`.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
@@ -126,9 +127,11 @@ run with `prev === next` it would read every notice as settled by a world that h
 `recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
 would be a write, on every local cycle, asserting the world was read when it was not.
 
-The line is held as **data, not as line shape**: each desk declares `readWorld` once in the registry
-and the walk skips it, so there is no `if (readWorld)` for a new desk to be written without. The
-handful of world-facing passes outside the registry still carry the guard at their call site.
+The line is held as **data, not as line shape**: each desk and each sweep declares `readWorld` once
+in its registry and the walk skips it, so there is no `if (readWorld)` for a new one to be written
+without. The only two guards left are the world reading itself — `connector.getState` and
+`recordWorldChanges`, which are not passes over the world but the reading of it and the record of
+what it changed.
 
 **Why deciding against a cached world is mostly safe.** Almost every gate that stops the fleet doing a
 thing twice — the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is
@@ -543,6 +546,11 @@ flowchart TD
    nobody can answer: a merge ask whose pull request has already merged
    ([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). It reads the work graph, so its
    position is below `graph.record` above and above the escalation read below.
+
+   Each of these — and the burn watch, the ejection expiries, the review waits, the appraisal
+   announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the ticket
+   filer below the executor — is a [sweep registry](#the-sweep-registry) entry rather than a line in
+   `runCycle`, and which gap in the read it sits in is the `phase` it declares.
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on
@@ -611,6 +619,36 @@ The same test asserts every declared desk takes exactly one position and is actu
 walk, so a desk wired in `src/system.ts` and left out of the registry cannot sit there dead. Adding a
 desk is therefore three things and no more: a field on `PulseDeskDeps`, an entry in `PULSE_DESKS`
 (which the record's type will not let you forget), and its position in `PULSE_PIPELINE`.
+
+### The sweep registry
+
+The passes between the desks and `decide` — the parks, the expiries, the tidies, the burn watch, the
+appraisal announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the
+ticket filer — are declared the same way, in the same file: `PULSE_SWEEPS`, walked in the order
+`PULSE_SWEEP_PIPELINE` states, with `PulseSweepDeps` as their dependencies. They are the same kind of
+thing as a desk and get the same `readWorld` and `awaited` flags, for the same reason: a sweep whose
+subject is the world snapshot is one flag, in one place, rather than an `if (readWorld)` at a call
+site that the next sweep can be written without.
+
+Two things differ from the desk registry, and both come from where the sweeps sit:
+
+- **An id is not a dependency's name.** One dependency can carry two sweeps with two positions —
+  `fleet` carries `parks` and `stalls`, `escalations` carries `deadAgents` and `settledMerges` — so
+  `PULSE_SWEEP_PIPELINE` names the sweeps, not the deps, and `test/pulsePipeline.test.ts` is what
+  asserts every declared one takes exactly one position.
+- **`runCycle` reads the store between them**, and [those reads happen once](#ordering) with the
+  result reused. So each sweep declares a **`phase`** — the gap in the read it sits in — and the walk
+  is run once per phase, handed that phase's reading: `open` before any of it, then `afterTasks`,
+  `afterAgents`, `afterVerdicts`, `afterOrigins`, `afterReviews`, and `afterExecute` below the
+  executor, where the ticket filer runs. A sweep is handed what the cycle has already read rather
+  than reading it again, which is what keeps "which of the two reads was this decided against?" a
+  question nobody has to ask. `PULSE_SWEEP_PHASES` states the phase order and the same test asserts
+  the pipeline is grouped by it, so a sweep given the wrong phase is a failing test rather than a
+  pass that quietly moved.
+
+A sweep that records its own failures does so inside its own body — `parks` recording a resume that
+failed, `issueRuns` its `errors.record` around the whole loop — for the reason every other caught
+failure is recorded rather than swallowed ([18](18-observability.md)).
 
 ## Failure handling
 

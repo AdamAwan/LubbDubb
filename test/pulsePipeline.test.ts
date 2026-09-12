@@ -1,6 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PULSE_DESKS, PULSE_PIPELINE, runPulseDesks, type PulseDeskId, type PulseReading } from '../src/pulseDesks.js';
+import {
+  PULSE_DESKS,
+  PULSE_PIPELINE,
+  PULSE_SWEEP_PHASES,
+  PULSE_SWEEP_PIPELINE,
+  PULSE_SWEEPS,
+  runPulseDesks,
+  runPulseSweeps,
+  type PulseDeskId,
+  type PulseReading,
+  type PulseSweepDeps,
+} from '../src/pulseDesks.js';
+import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
+import type { Store } from '../src/store/store.js';
 import type { WorldSnapshot } from '../src/types.js';
 
 const WORLD: WorldSnapshot = { takenAt: '2026-09-12T00:00:00.000Z', pullRequests: [], issues: [] };
@@ -114,4 +127,93 @@ test('the obstacle desks run below the voice that files their rows', () => {
 
 test('the pull request register is tagged before it is linked', () => {
   below('prWorkItems', 'prWatch', 'one pass says the pull request is the fleet’s, the other which work item it is for');
+});
+
+function sweepDeps(): { deps: PulseSweepDeps; calls: string[] } {
+  const calls: string[] = [];
+  const note = (name: string) => (): [] => {
+    calls.push(name);
+    return [];
+  };
+  const store = {
+    reviewWaits: { foldReviewWaits: note('reviewWaits') },
+    floor: { recordIssueRun: note('issueRuns') },
+    prReviewExternals: {
+      prsReviewedElsewhere: note('reviewedElsewhere'),
+      recordPrReviewedElsewhere: note('recordPrReviewedElsewhere'),
+    },
+  } as unknown as Store;
+  const deps: PulseSweepDeps = {
+    store,
+    errors: { record: note('errors') } as unknown as PulseSweepDeps['errors'],
+    review: { ...DEFAULT_PR_REVIEW, reviewedElsewhere: 'true' },
+    reviewProber: { check: async () => ({ verdict: 'not-reviewed', detail: null }) },
+    fleet: { resumeExpiredParks: note('parks'), completeExpiredStalls: note('stalls') },
+    ejections: { sweepExpiries: note('ejectionExpiries') },
+    burn: { run: note('burn') } as unknown as PulseSweepDeps['burn'],
+    escalations: { tidyDeadAgents: note('deadAgents'), tidySettledMerges: note('settledMerges') },
+    appraisals: { announce: async () => void calls.push('appraisals') } as unknown as PulseSweepDeps['appraisals'],
+    areaPaths: { refresh: async () => void calls.push('areaPaths') } as unknown as PulseSweepDeps['areaPaths'],
+    localValidations: { sweep: note('localValidations') },
+    tickets: { run: async () => void calls.push('tickets') },
+  };
+  return { deps, calls };
+}
+
+async function walkSweeps(deps: PulseSweepDeps, readWorld: boolean): Promise<void> {
+  await runPulseSweeps('open', deps, {}, readWorld);
+  await runPulseSweeps('afterTasks', deps, { world: WORLD, tasks: [] }, readWorld);
+  await runPulseSweeps('afterAgents', deps, { tasks: [], agents: [] }, readWorld);
+  await runPulseSweeps('afterVerdicts', deps, { world: WORLD }, readWorld);
+  await runPulseSweeps(
+    'afterOrigins',
+    deps,
+    {
+      world: WORLD,
+      tasks: [],
+      signals: { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [], planParts: [] },
+    },
+    readWorld,
+  );
+  await runPulseSweeps('afterReviews', deps, { dispatchWorld: WORLD, prReviews: [], prReviewRoutes: [] }, readWorld);
+  await runPulseSweeps('afterExecute', deps, {}, readWorld);
+}
+
+test('every declared sweep takes exactly one position, and the sweep pipeline names nothing else', () => {
+  assert.deepEqual(
+    [...PULSE_SWEEP_PIPELINE].sort(),
+    Object.keys(PULSE_SWEEPS).sort(),
+    'a sweep declared and never walked is a sweep that is silently dead',
+  );
+  assert.equal(new Set(PULSE_SWEEP_PIPELINE).size, PULSE_SWEEP_PIPELINE.length, 'no sweep is walked twice');
+});
+
+test('the sweep pipeline is grouped by phase, in the phase order the cycle walks', () => {
+  const phases = PULSE_SWEEP_PIPELINE.map((id) => PULSE_SWEEPS[id].phase);
+  const reached = [...new Set(phases)];
+  assert.deepEqual(
+    reached,
+    PULSE_SWEEP_PHASES.filter((p) => phases.includes(p)),
+    'a phase whose sweeps are split across the list runs them out of the order the list states',
+  );
+});
+
+test('a sweep needing a fresh world read is skipped on a local cycle, and no other is', async () => {
+  const fresh = sweepDeps();
+  await walkSweeps(fresh.deps, true);
+  const local = sweepDeps();
+  await walkSweeps(local.deps, false);
+  const worldFacing = PULSE_SWEEP_PIPELINE.filter((id) => PULSE_SWEEPS[id].readWorld);
+  assert.deepEqual(worldFacing, ['appraisals', 'areaPaths', 'reviewedElsewhere', 'tickets']);
+  for (const id of worldFacing) {
+    assert.ok(fresh.calls.includes(id), `${id} runs on a cycle that read the world`);
+    assert.ok(!local.calls.includes(id), `${id} is skipped on a local cycle, and the flag is what skips it`);
+  }
+  for (const id of ['parks', 'stalls', 'ejectionExpiries', 'reviewWaits', 'burn', 'deadAgents', 'settledMerges'])
+    assert.ok(local.calls.includes(id), `${id} reads the store, so a local cycle runs it`);
+});
+
+test('a missing sweep dependency is skipped, never an error', async () => {
+  const { deps } = sweepDeps();
+  await walkSweeps({ store: deps.store, errors: deps.errors, review: deps.review }, true);
 });

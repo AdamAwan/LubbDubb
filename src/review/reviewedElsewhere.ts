@@ -1,4 +1,9 @@
 import { exec } from 'node:child_process';
+import type { ErrorRecorder } from '../errorLog.js';
+import type { Store } from '../store/store.js';
+import type { PrReview, PrReviewRoute, WorldSnapshot } from '../types.js';
+import type { PrReviewPolicy } from './policy.js';
+import { needsFleetReview, reviewReading } from './prReview.js';
 
 // → docs/spec/31-review-packs.md
 
@@ -62,4 +67,32 @@ interface ExecFailure extends Error {
 function firstLine(text: string): string | null {
   const line = text.split('\n').find((l) => l.trim() !== '');
   return line === undefined ? null : line.trim().slice(0, 200);
+}
+
+export async function askReviewedElsewhere(
+  deps: { store: Store; errors: ErrorRecorder; review: PrReviewPolicy; reviewProber?: ReviewProber },
+  at: { dispatchWorld: WorldSnapshot; prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] },
+): Promise<void> {
+  const prober = deps.reviewProber;
+  const command = deps.review.reviewedElsewhere;
+  if (prober === undefined || command === null || command.trim() === '') return;
+  const rows = {
+    prReviews: new Map(at.prReviews.map((r) => [r.prNumber, r])),
+    prReviewRoutes: new Map(at.prReviewRoutes.map((r) => [r.prNumber, r])),
+    prReviewedElsewhere: deps.store.prReviewExternals.prsReviewedElsewhere(),
+  };
+  for (const pr of at.dispatchWorld.pullRequests) {
+    if (!needsFleetReview(pr, reviewReading(rows, pr.number), deps.review)) continue;
+    const report = await prober.check(pr.number, command);
+    if (report.verdict === 'reviewed') {
+      deps.store.prReviewExternals.recordPrReviewedElsewhere(pr.number, command);
+      continue;
+    }
+    if (report.verdict === 'unknown') {
+      deps.errors.record({
+        source: 'cycle',
+        message: `the review.reviewedElsewhere check for PR ${pr.number} said nothing: ${report.detail ?? 'no detail'}`,
+      });
+    }
+  }
 }
