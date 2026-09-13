@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { inIssueOriginFamily, issueOriginRef } from '../issueOrigins.js';
+import type { IssueOriginFamily } from '../issueOrigins.js';
+import { inIssueOriginFamily, issueOriginRef, parseIssueOrigin } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
@@ -951,11 +952,19 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
   return outstandingWorkNote(stored.note, stored.updatedAt);
 }
 
+const WITHOUT_PRIOR_WORK: ReadonlySet<IssueOriginFamily> = new Set<IssueOriginFamily>([
+  'retro',
+  'split',
+  'summary',
+  'sequence',
+]);
+
 function priorWorkFor(originRef: string | null | undefined, store: Store, outstandingShown: boolean): string | null {
   const ref = originRef ?? '';
   const issueOriginRef = goalOriginFor(ref);
   if (!issueOriginRef) return null;
-  if (retroSubmitOrigin(ref).ok) return null;
+  const parsed = parseIssueOrigin(ref);
+  if (parsed !== null && WITHOUT_PRIOR_WORK.has(parsed.family)) return null;
   const plan = store.plans.getPlanByOrigin(issueOriginRef);
   const files = store.agents.listGoalFiles(issueOriginRef);
   const briefing = priorWorkBriefing({

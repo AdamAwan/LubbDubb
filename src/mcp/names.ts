@@ -1,5 +1,7 @@
 // → docs/spec/11-mcp-tools.md
 
+import type { DispatchRuleId } from '../dispatcher/rules.js';
+
 export const MCP_SERVER_ID = 'lubbdubb';
 
 export const MCP_TOOL_NAMES = [
@@ -46,12 +48,12 @@ export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   raise: 'addendum',
   escalate: 'addendum',
-  plan_submit: 'addendum',
   plan_correct: 'addendum',
   world_read: 'addendum',
   open_pr: 'addendum',
   note_progress: 'addendum',
   request_human_task: 'addendum',
+  plan_submit: 'point-of-use',
   reply_to_review: 'point-of-use',
   link_ticket: 'point-of-use',
   plan_not_needed: 'point-of-use',
@@ -81,6 +83,65 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   review_pack_check: 'point-of-use',
   request_permission: 'point-of-use',
 };
+
+export const UNIVERSAL_TOOLS: readonly McpToolName[] = [
+  'raise',
+  'escalate',
+  'plan_correct',
+  'world_read',
+  'open_pr',
+  'request_human_task',
+  'note_progress',
+  'request_permission',
+  'scratch_append',
+  'scratch_read',
+  'validation_amend',
+];
+
+export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
+  'manual-job': MCP_TOOL_NAMES,
+  'local-validation': ['local_validation_plan', 'local_run_read', 'local_validation_report'],
+  'local-validation-fix': [],
+  'obstacle-repair': [],
+  'pr-review-triage': ['review_route'],
+  'pr-split': ['split_assess'],
+  'pr-review': ['review_report', 'reply_to_review'],
+  'pr-review-comment': ['report_remedy', 'reply_to_review'],
+  'pr-ci-failing': ['report_remedy'],
+  'pr-ci-blocked': [],
+  'pr-ci-gate': [],
+  'pr-base-update': [],
+  'pr-base-update-conflict': [],
+  'pr-merge-ready': [],
+  'work-item-in-progress': [],
+  'work-item-in-review': [],
+  'work-item-back-to-pickup': [],
+  'issue-appraisal': ['appraise_issue'],
+  'issue-plan': ['plan_submit', 'plan_not_needed'],
+  'issue-assess': ['assess_issue', 'validation_plan'],
+  'issue-shortfall': [],
+  'issue-retro': ['retro_submit'],
+  'plan-approval': [],
+  'plan-amendment': [],
+  'plan-blocked': [],
+  'plan-part': ['conclude_part', 'watch_declare', 'state_declare'],
+  'issue-pickup': ['conclude_work', 'watch_declare', 'state_declare'],
+  'validation-plan': ['validation_plan'],
+  'validation-plan-approval': [],
+  'validate-check': ['validation_report'],
+  'remote-validation': ['remote_validation_report'],
+  'validation-failed': [],
+  'feature-summary': ['feature_summary'],
+  'feature-sequence': ['sequence_submit'],
+  'branch-notify': [],
+  'cooldown-escalate': [],
+  idle: [],
+};
+
+export function toolsForRule(rule: string | null): ReadonlySet<McpToolName> {
+  if (rule === null || !Object.hasOwn(RULE_TOOLS, rule)) return new Set(MCP_TOOL_NAMES);
+  return new Set([...UNIVERSAL_TOOLS, ...RULE_TOOLS[rule as DispatchRuleId]]);
+}
 
 export const RETIRED_TOOL_NAMES: readonly string[] = [
   'report_finding',

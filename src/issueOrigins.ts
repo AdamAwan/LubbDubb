@@ -2,7 +2,7 @@
 
 type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
 
-type IssueOriginFamily =
+export type IssueOriginFamily =
   | 'root'
   | 'plan'
   | 'appraisal'

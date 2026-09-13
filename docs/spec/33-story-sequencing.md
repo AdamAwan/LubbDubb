@@ -74,6 +74,14 @@ to order a list it was never given ([09](09-execution.md)). The links are marked
 that could not tell them from its own guesses would restate them as inferences, and the provenance
 would be lost a layer before an operator ever saw the card.
 
+**The dossier is bounded, and it names what it dropped.** Each story's body is cut at 1 200
+characters and the list itself at **40 stories**, with the elision stated in the dossier's own
+trailer — a partial list read as the whole one is an order over stories the sequencer was never
+shown. 40 is `issueSequenceMaxChildren`'s default, so on a stock deployment the rule has already
+refused to ask about a Feature the cap would bite on and the prompt is byte-identical to one
+composed before the cap existed. It bites on the deployment that raised that number, where the
+refusal to spend was lifted for the rule and nothing then bounded the prompt at all.
+
 It is **`feature-summary`'s shape throughout** (`src/dispatcher/rules/featureSummary.ts`,
 `src/summaries/featureSummary.ts`), deliberately, because that rule already solved this rule's hard
 parts: a desk agent with no branch and no worktree, triggered by a standing-key comparison rather
