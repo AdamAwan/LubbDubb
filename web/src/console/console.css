@@ -4981,18 +4981,41 @@ button.cn-grow {
 .cn-ov-pips {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 .cn-ov-pip {
   width: 20px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+/* The mark is drawn inside the button rather than as it: a 3px target is not one
+   a pointer can hit, so the button keeps a touchable height and the bar it draws
+   stays the height it reads best at. */
+.cn-ov-pip::after {
+  content: '';
+  display: block;
+  width: 100%;
   height: 3px;
   border-radius: 2px;
-  background: var(--cn-inert);
+  background: var(--cn-tone, var(--cn-inert));
+  opacity: 0.4;
 }
-.cn-ov-pip-done {
-  background: var(--cn-green);
+.cn-ov-pip:hover::after {
+  opacity: 0.75;
 }
-.cn-ov-pip-here {
-  background: var(--cn-tone, var(--cn-accent));
+.cn-ov-pip:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 1px;
+}
+.cn-ov-pip-here::after {
+  height: 5px;
+  opacity: 1;
 }
 .cn-ov-next-title {
   font-size: 19px;

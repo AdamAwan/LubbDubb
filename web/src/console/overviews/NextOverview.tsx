@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CockpitView } from '../../view/viewModel.js';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { NeedRow } from '../../view/needsYou.js';
@@ -26,17 +26,46 @@ import { byWeight, partsHeld } from './asks.js';
  * other asks sit alongside, off the goal page's own `parts` fold, with the part
  * the ask is about marked in the ask's own tone.
  *
- * Skipping is local state and deliberately so: it is a cursor through this
+ * The cursor is local state and deliberately so: it is a position in this
  * sitting, not a place. A reload starts again at the top, which is the correct
- * behaviour for a queue whose order the server decides.
+ * behaviour for a queue whose order the server decides — and the order does
+ * change under the operator, so the cursor is **held by id**: an ask answered
+ * two positions up would otherwise shuffle the list and move something else
+ * under the cursor, which is how a surface like this hands somebody a verdict
+ * they were not looking at. The id is resolved back to an index on every render,
+ * and where it is gone — answered, withdrawn — the position it held is the one
+ * the next ask falls into.
  */
 export function NextOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = [...view.needsYou].sort(byWeight);
-  const [skipped, setSkipped] = useState<readonly string[]>([]);
-  const live = rows.filter((r) => !skipped.includes(r.id));
-  const row = live[0];
+  const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
   const held = partsHeld(rows);
-  const answered = rows.length - live.length;
+
+  const found = cursor === null ? -1 : rows.findIndex((r) => r.id === cursor.id);
+  const at = Math.min(found === -1 ? (cursor?.at ?? 0) : found, Math.max(rows.length - 1, 0));
+  const row = rows[at];
+  const go = (to: number): void => {
+    const next = rows[to];
+    if (next !== undefined) setCursor({ id: next.id, at: to });
+  };
+
+  /* The arrows move the cursor, except where the operator is writing — every ask
+     that takes a note or an answer puts a field on this page, and a left arrow
+     inside one is a caret move, not a navigation. `closest` rather than a tag
+     check, because the reply boxes are contenteditable in places and the caret is
+     several elements down from the one that owns it. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target instanceof Element ? e.target : null;
+      if (el?.closest('input, textarea, select, [contenteditable]') != null) return;
+      e.preventDefault();
+      go(e.key === 'ArrowLeft' ? at - 1 : at + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   if (row === undefined) {
     return (
@@ -48,11 +77,6 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             {view.live.length} {view.live.length === 1 ? 'agent is' : 'agents are'} working. The next thing that wants
             an answer will land here.
           </p>
-          {skipped.length > 0 && (
-            <Button tone="secondary" onClick={() => setSkipped([])}>
-              Bring back {skipped.length} skipped
-            </Button>
-          )}
         </div>
       </div>
     );
@@ -66,18 +90,27 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
       <OverviewSwitch shape="next" actions={actions} />
 
       <div className={`cn-ov-next-card cn-t-${KIND_TONE[row.kind]}`}>
+        {/* The pips are the whole queue and each is a way into it: a bar that only
+            reports a position, on a surface whose complaint about the rail was
+            that it could not be acted on, would be the same mistake one size
+            down. They carry the ask's tone, so the column also says what kind of
+            thing is waiting where. */}
         <div className="cn-ov-next-progress">
-          <span className="cn-ov-pips" aria-hidden="true">
-            {rows.map((r) => (
-              <i
+          <span className="cn-ov-pips">
+            {rows.map((r, i) => (
+              <button
                 key={r.id}
-                className={`cn-ov-pip ${r.id === row.id ? 'cn-ov-pip-here' : skipped.includes(r.id) ? 'cn-ov-pip-done' : ''}`}
+                type="button"
+                className={`cn-ov-pip cn-t-${KIND_TONE[r.kind]} ${i === at ? 'cn-ov-pip-here' : ''}`}
+                aria-label={`${i + 1} of ${rows.length} — ${KIND_LABEL[r.kind]}: ${r.title}`}
+                aria-current={i === at}
+                title={`${KIND_LABEL[r.kind]} — ${r.title}`}
+                onClick={() => go(i)}
               />
             ))}
           </span>
           <span>
-            {rows.length - live.length + 1} of {rows.length}
-            {answered > 0 && ` · ${answered} set aside in this sitting`}
+            {at + 1} of {rows.length}
           </span>
         </div>
 
@@ -119,13 +152,28 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             <div className="cn-ov-next-body">{body}</div>
 
             <footer className="cn-ov-next-foot">
-              <Button tone="secondary" ghost onClick={() => setSkipped([...skipped, row.id])}>
-                Skip for now
+              <Button
+                tone="secondary"
+                ghost
+                disabled={at === 0}
+                onClick={() => go(at - 1)}
+                title="The ask before this one (←)"
+              >
+                ‹ Prev
+              </Button>
+              <Button
+                tone="secondary"
+                ghost
+                disabled={at >= rows.length - 1}
+                onClick={() => go(at + 1)}
+                title="The ask after this one (→)"
+              >
+                Next ›
               </Button>
               <span className="cn-ov-next-rest">
-                {live.length - 1 === 0
+                {rows.length - at - 1 === 0
                   ? 'last one'
-                  : `${live.length - 1} more · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
+                  : `${rows.length - at - 1} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
               </span>
             </footer>
           </div>
