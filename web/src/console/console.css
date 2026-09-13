@@ -4847,6 +4847,18 @@ button.cn-grow {
    land the goal page's padding on a lane's segment.
    → docs/spec/17-cockpit.md#the-overview */
 
+/* The shape is a single object on an otherwise empty pane, so it is centred and
+   given a measure rather than run to the pane's left edge — at 1900px hard left
+   puts the ask a third of the way across a wide screen with nothing to its right,
+   which reads as a layout that failed rather than one that chose. The switch
+   shares the wrapper so the two line up.
+   → docs/spec/17-cockpit.md#the-overview */
+.cn-ov-next {
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-top: 8px;
+}
+
 .cn-ov-switch {
   display: flex;
   align-items: center;
@@ -4964,7 +4976,6 @@ button.cn-grow {
 /* ── One ask at a time, under the work it is about ── */
 
 .cn-ov-next-card {
-  max-width: 1240px;
   border: 1px solid var(--cn-tone-line, var(--cn-line));
   border-radius: var(--cn-r);
   background: var(--cn-panel);
