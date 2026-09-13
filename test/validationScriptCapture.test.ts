@@ -119,6 +119,9 @@ function spawnAgent(system: System, originRef: string): Agent {
 }
 
 async function plan(system: System, checks: unknown[]): Promise<{ isError: boolean; text: string }> {
+  // A check set is written against a delivered goal, and `validation_plan` refuses one that has not
+  // been — the fence that stops an assessor authoring before it has cast its verdict.
+  system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'every part merged', by: 'assessor' });
   const agent = spawnAgent(system, 'issue:12:validate-plan');
   const session = system.mcp.session(agent.id);
   assert.ok(session, 'a spawned agent has a live MCP credential');

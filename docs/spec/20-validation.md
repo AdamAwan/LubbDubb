@@ -113,9 +113,9 @@ the design's central problem, and [Amendment](#amendment) is the apparatus built
 rewordings, withdrawn readings, the band, a line on the close-out and a note on the ticket. All of it
 exists because the check set arrived too early to be right.
 
-So it arrives late instead. **The check set is authored once, by a validation planner dispatched after
-the assessor writes `delivered`**, against merged code, with every part settled and every pull request
-closed. What the planner contributes is a **hint**: prose saying what it thinks needs checking and
+So it arrives late instead. **The check set is authored once, by the assessor, in the turn it answers
+`delivered`** — against merged code, with every part settled and every pull request closed. What the
+planner contributes is a **hint**: prose saying what it thinks needs checking and
 why, carried on the plan document, read by an operator at the approval gate and handed to the
 validation planner as input. It is not executable, it declares no checks, and nothing runs it.
 
@@ -127,26 +127,65 @@ validation planner as input. It is not executable, it declares no checks, and no
 | Read by    | An operator deciding whether to approve | The validation planner, then the bench     |
 | Binds      | Nothing                                 | The sheet                                  |
 
-The machinery is five pieces and each one is named here so a later change cannot quietly drop one:
-rule `validation-plan` (`src/dispatcher/rules/validationPlan.ts`, a `DISPATCH_PIPELINE` entry
-registered in `STAGES`), the origin `issue:<n>:validate-plan` classified in `src/issueOrigins.ts`,
-the `validation-plan` prompt, the `validation_plan` tool, and the `validation_plans` row that records
-the answer. The rule dispatches a **code** agent into a read-only checkout of the default branch —
-the delivered state is what a check is written against — and it is gated on three things: the goal is
-parked as delivered, it has a plan, and its check set has not been authored. It ranks directly above
-`validate-check`, on that rule's own argument one step earlier: it produces the input every other
-validation rule reads, and validation blocks nothing, so it sits below every rule that makes product
-work.
+### One agent, two outputs
+
+The assessor and the validation planner were two dispatches asking one question of one checkout. Both
+are code agents in a read-only checkout of the default branch, both fire on a goal with nothing in
+flight, and the second one's trigger is literally the first having written `delivered` — so the second
+opened a fresh agent to re-derive what the first had just finished reading. It now writes both: the
+verdict, and — on `delivered` — the check set.
+
+**The order is the whole of the safety, and it is stated to the agent as such.** The verdict is cast
+first, with `assess_issue`; `validation_plan` comes after it. That makes every way the turn can end
+survivable:
+
+| The turn ends | What stands | What happens next |
+| --- | --- | --- |
+| Before the verdict | Nothing decided | The goal comes back round to an assessor, on the attempt cap it has always had — unchanged |
+| After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did |
+| After both | Parked and authored | Nothing further; `validation-plan` sees an authored set and stands down |
+
+So **rule `validation-plan` stays**, and is now the catch-up rather than the ordinary path. Removing it
+would put the check set behind a turn that has to reach its end, which is the one thing a crashed,
+killed or capped agent cannot promise. It costs nothing when the fold works: its gate is already
+_parked, has a plan, not authored_, and an authored set answers it.
+
+**On `more_work` the assessor writes nothing.** The goal goes back to the fleet, more pull requests
+land, and the code any check would have been written against moves underneath it — which is the
+original argument for late authoring, unchanged and now enforced one layer lower: `validation_plan`
+refuses a goal with **no standing delivery**, so an assessor cannot author a set it has not just
+delivered, and the ordering above is a fence rather than an instruction.
+
+The machinery is six pieces and each one is named here so a later change cannot quietly drop one:
+`checkSetAuthoringIssue` (`src/validation/authoring.ts`), which declares in **one place** which two
+dispatches may speak for a check set; rule `validation-plan`
+(`src/dispatcher/rules/validationPlan.ts`, a `DISPATCH_PIPELINE` entry registered in `STAGES`); the
+origin `issue:<n>:validate-plan` classified in `src/issueOrigins.ts`; the `validation-plan` prompt;
+the `validation_plan` tool; and the `validation_plans` row that records the answer. The rule
+dispatches a **code** agent into a read-only checkout of the default branch — the delivered state is
+what a check is written against — and it is gated on three things: the goal is parked as delivered, it
+has a plan, and its check set has not been authored. It ranks directly above `validate-check`, on that
+rule's own argument one step earlier: it produces the input every other validation rule reads, and
+validation blocks nothing, so it sits below every rule that makes product work.
+
+**What the assessor is handed is appended, never interpolated**, and it is the pair of gates
+`validation-plan` carries: `assessAuthoringNote` and `authoringBriefing` are added to the rendered
+`issue-assess` prompt only for a goal that **has a plan** and **has no check set**, so the prompt never
+asks for something the tool would refuse. `loadPromptTemplates` rejects only _unknown_ placeholders, so
+an interpolated `{token}` would be dropped silently by exactly the deployments that customised most —
+and because an override carries its own body regardless, **`assess_issue`'s own answer repeats the
+ask** on a `delivered` verdict that leaves a set owed. An agent hears it either way.
 
 **A goal already carrying checks is left alone, whoever wrote them.** A plan document from before
 this change ingested a set an operator may be halfway through, and a validation planner speaks for
 the whole set — dispatching one over those rows would supersede work in progress. So the rule's gate
 is _authored **or** already has live checks_, and only the first is a stamp.
 
-**Why after `delivered` and not at the last merged pull request.** "No open PR" is the assessor's own
+**Why on `delivered` and not at the last merged pull request.** "No open PR" is the assessor's own
 trigger, and the assessor may answer `more_work` — which sends the goal back round, lands more pull
 requests, and moves the code the check set was just written against. `delivered` is the first moment
-nothing further is coming. → [06](06-issue-pickup.md)
+nothing further is coming, which is why the set is written on that verdict and by the agent that casts
+it. → [06](06-issue-pickup.md)
 
 **Sheet assembly waits for it.** An arrival assembles a sheet from the check set
 ([36](36-remote-validation.md)), and a deployment fast enough to arrive before the validation planner

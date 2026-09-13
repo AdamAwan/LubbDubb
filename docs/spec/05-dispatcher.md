@@ -189,7 +189,7 @@ unconditional.
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                                                                                                                                                                                                                                                                        |
 | `issue-appraisal`          | Issue goal needs checking            | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `issue-plan`               | Issue needs a plan                   | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
-| `issue-assess`             | Issue may be finished                | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                                                                                                                                                                                                                                                                             |
+| `issue-assess`             | Issue may be finished                | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR. On `delivered` it writes the goal's validation check set too.                                                                                                                                                                                                                                                                                                                             |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                                                                                                                                                                                                                                                              |
 | `issue-retro`              | Delivered goal needs a retrospective | —                    | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.                                                                                                                                                                                                                                                                   |
 | `plan-approval`            | Plan needs your approval             | —                    | A planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                                                                                                                                                                                                                                                                                                            |
@@ -990,6 +990,16 @@ The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11
 `delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule `issue-shortfall` routes. See
 [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends it.
 
+**On `delivered` it writes the goal's validation check set too**, in the same turn, with
+`validation_plan`. It is the same reading: the assessor is already standing in the delivered code with
+the work graph in front of it, and `delivered` is by its own verdict the moment that code stops
+moving — so the validation planner that used to be dispatched next opened a fresh agent to re-derive
+what this one had just finished. The verdict is cast **first** and the check set after it, which is
+what makes every way the turn can end survivable; rule `validation-plan` stays as the catch-up for the
+one that ends between them. The briefing is **appended** to the rendered prompt, and only for a goal
+that has a plan and no check set — the two gates `validation-plan` itself refuses on.
+→ [20](20-validation.md#one-agent-two-outputs)
+
 ## `issue-shortfall` — routing a failed assessment
 
 The other end of the loop the assessor opens. Plan → Work → is the goal achieved? → No → re-plan:
@@ -1220,14 +1230,21 @@ tracker and nothing is scheduled from what it says.
 ## `validation-plan` — writing the check set
 
 `validation-plan` puts one code agent on a delivered goal that has no validation check set, to write
-it. Authoring is deliberately late and the argument for that is [20](20-validation.md#when-the-check-set-is-written);
-the dispatcher's half is:
+it. It is the **catch-up rather than the ordinary path**: the assessor writes the set in the turn it
+answers `delivered` ([20](20-validation.md#one-agent-two-outputs)), so this rule now fires for the
+turn that ended between the two calls — a crash, a kill, a spent attempt cap — and for a goal an
+operator parked by hand. It costs nothing when the fold works, because an authored set answers its own
+gate; and it cannot be dropped, because putting the check set behind a turn that has to reach its end
+is the one thing a dying agent cannot promise. Authoring is deliberately late and the argument for
+that is [20](20-validation.md#when-the-check-set-is-written); the dispatcher's half is:
 
 - A **code** agent in a **read-only checkout** of `defaultBranch`, leased under
   `validate-plan/issue/<n>`, origin `issue:<n>:validate-plan`. A check is written against the
   delivered code, which is what that checkout is; nothing here is committed or pushed.
 - **One origin per goal**, with no id on the suffix, because there is one check set and it is
-  written once — `assess` and `retro`'s shape rather than `validate:<checkId>`'s. Classified as
+  written once — `assess` and `retro`'s shape rather than `validate:<checkId>`'s. Which origins may
+  author a set at all is declared once, in `checkSetAuthoringIssue` (`src/validation/authoring.ts`):
+  this one and `issue:<n>:assess`, and nothing else. Classified as
   **evidence** in `src/issueOrigins.ts`: left unclassified it reads `unrecognised`, stops expanding
   under a goal's priority flag, and files its spend under "other", neither of which is red.
 - Fires for a goal **parked as delivered** that **has a plan** and whose check set is **not
