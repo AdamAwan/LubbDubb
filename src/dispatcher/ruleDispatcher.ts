@@ -41,7 +41,7 @@ import {
 import { liveParts } from '../plans/parts.js';
 import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
-import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
+import { isActive, type Candidate, type ConsiderOptions, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
 import { prConcerns } from './rules/prConcerns.js';
@@ -377,11 +377,21 @@ export class RuleDispatcher implements Dispatcher {
       else validationChecks.set(check.originRef, [check]);
     }
 
-    const consider = (candidate: Candidate, onEscalate: (attempts: number) => RawAction): void => {
-      const verdict = dispatchVerdict(candidate.origin, now, ctx.recentDecisions, this.cooldown);
-      if (verdict.kind === 'escalate') raw.push(onEscalate(verdict.attempts));
-      else if (verdict.kind === 'cooldown') candidates.push({ ...candidate, held: 'cooldown' });
-      else if (verdict.kind === 'dispatch') candidates.push(candidate);
+    const consider = (candidate: Candidate, opts?: ConsiderOptions): boolean => {
+      const verdict = dispatchVerdict(candidate.origin, now, opts?.decisions ?? ctx.recentDecisions, this.cooldown);
+      if (verdict.kind === 'escalate') {
+        if (opts?.escalate) raw.push(opts.escalate(verdict.attempts));
+        return false;
+      }
+      if (verdict.kind === 'cooldown') {
+        candidates.push({ ...candidate, held: 'cooldown' });
+        return true;
+      }
+      if (verdict.kind === 'dispatch') {
+        candidates.push(candidate);
+        return true;
+      }
+      return false;
     };
 
     return {

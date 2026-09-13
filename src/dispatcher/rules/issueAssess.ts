@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason, openPrForIssue } from '../issuePickup.js';
 import { assessBranch, assessOrigin, hasPriorWork } from '../../delivery/assessment.js';
 import { issueOrigin } from '../../plans/planning.js';
@@ -26,21 +25,16 @@ export function issueAssess(s: StageContext): void {
     const root = issueOrigin(issue.number);
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
-    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
-
-    s.assessing.add(issue.number);
     const branch = assessBranch(issue.number);
     const title = `Assess issue #${issue.number}`;
     const reason = `Issue #${issue.number} has had work and has nothing in flight; assess whether it is finished.`;
-    s.candidates.push({
+    const proposed = s.consider({
       origin,
       rule: 'issue-assess',
       title,
       kind: 'code',
       branch,
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(branch, s.defaultBranch),
@@ -58,5 +52,6 @@ export function issueAssess(s: StageContext): void {
         reason,
       } satisfies RawAction,
     });
+    if (proposed) s.assessing.add(issue.number);
   }
 }

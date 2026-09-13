@@ -11,6 +11,7 @@ import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../localValidation/policy.js';
 import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type {
+  Decision,
   FeatureSequence,
   Issue,
   IssueAppraisal,
@@ -69,7 +70,13 @@ export interface StageContext {
   redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
   assessing: Set<number>;
-  consider: (candidate: Candidate, onEscalate: (attempts: number) => RawAction) => void;
+  /**
+   * The cooldown gate every proposing rule shares: reads `dispatchVerdict` for the candidate's
+   * origin, queues it as `held: 'cooldown'` inside the gap, and drops it once the cap is spent.
+   * Returns whether it was proposed, for a rule that must record having claimed the origin.
+   * → docs/spec/05-dispatcher.md#the-re-dispatch-cooldown
+   */
+  consider: (candidate: Candidate, opts?: ConsiderOptions) => boolean;
 
   pickup: IssuePickupPolicy;
   cooldown: CooldownPolicy;
@@ -99,6 +106,13 @@ export interface StageContext {
   validationClaimMinutes: number;
   workItemStates: { inReviewState: string; pickupStates: string[] } | null;
   workItemInProgress: { inProgressState: string; pickupStates: string[] } | null;
+}
+
+export interface ConsiderOptions {
+  /** Raised at the attempt cap. A rule that omits it lets the origin fall silent instead. */
+  escalate?: (attempts: number) => RawAction;
+  /** Narrows the attempt window — the decisions since a reading, rather than all of them. */
+  decisions?: Decision[];
 }
 
 export type RawAction = Record<string, unknown> & {

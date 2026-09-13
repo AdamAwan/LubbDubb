@@ -56,18 +56,20 @@ export function issuePickup(s: StageContext): void {
       s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });
       continue;
     }
-    s.consider(candidate, (attempts) => ({
-      type: 'escalate_to_human',
-      escalationType: 'resolve_ambiguity',
-      prompt: s.templates.render('issue-pickup-escalation', {
-        number: issue.number,
-        title: issue.title,
-        attempts,
+    s.consider(candidate, {
+      escalate: (attempts) => ({
+        type: 'escalate_to_human',
+        escalationType: 'resolve_ambiguity',
+        prompt: s.templates.render('issue-pickup-escalation', {
+          number: issue.number,
+          title: issue.title,
+          attempts,
+        }),
+        context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
+        rule: 'issue-pickup',
+        admission: 'cooldown-escalate',
+        reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
       }),
-      context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
-      rule: 'issue-pickup',
-      admission: 'cooldown-escalate',
-      reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
-    }));
+    });
   }
 }
