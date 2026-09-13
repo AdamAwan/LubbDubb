@@ -36,8 +36,8 @@ export class WatchStore {
     this.ctx.db.transaction(() => {
       const keep = new Set(checks.map((c) => c.id));
       const mine = new Set<string>();
-      for (const row of this.ctx.db
-        .prepare(`SELECT check_id, authored FROM goal_watches WHERE goal_ref=? AND live=1`)
+      for (const row of this.ctx
+        .prep(`SELECT check_id, authored FROM goal_watches WHERE goal_ref=? AND live=1`)
         .all(originRef) as {
         check_id: string;
         authored: string;
@@ -47,13 +47,13 @@ export class WatchStore {
           continue;
         }
         if (keep.has(row.check_id)) continue;
-        this.ctx.db.prepare(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
-        this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
+        this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
+        this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
       }
       for (const check of checks) {
         if (mine.has(check.id)) continue;
-        this.ctx.db
-          .prepare(
+        this.ctx
+          .prep(
             `INSERT OR REPLACE INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why,
@@ -82,8 +82,8 @@ export class WatchStore {
       value: number | null;
     },
   ): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE goal_watches
             SET dry_run_environment=@environment, dry_run_at=@now, dry_run_verdict=@verdict,
                 dry_run_presence=@presence, dry_run_rows=@rows, dry_run_detail=@detail,
@@ -97,13 +97,13 @@ export class WatchStore {
 
   listGoalWatches(): GoalWatch[] {
     return (
-      this.ctx.db.prepare(`SELECT * FROM goal_watches WHERE live=1 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
+      this.ctx.prep(`SELECT * FROM goal_watches WHERE live=1 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
     ).map(hydrate);
   }
 
   listProposedGoalWatches(): GoalWatch[] {
     return (
-      this.ctx.db.prepare(`SELECT * FROM goal_watches WHERE live=0 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
+      this.ctx.prep(`SELECT * FROM goal_watches WHERE live=0 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
     ).map(hydrate);
   }
 
@@ -112,24 +112,24 @@ export class WatchStore {
     this.ctx.db.transaction(() => {
       const seqBase =
         (
-          this.ctx.db.prepare(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
+          this.ctx.prep(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
             top: number | null;
           }
         ).top ?? 0;
       for (const [index, check] of checks.entries()) {
         const declaration: GoalWatchInput = { ...check, seq: seqBase + index + 1 };
         const proposal: GoalWatchProposal = { at: now, note, declaration };
-        const existing = this.ctx.db
-          .prepare(`SELECT check_id FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+        const existing = this.ctx
+          .prep(`SELECT check_id FROM goal_watches WHERE goal_ref=? AND check_id=?`)
           .get(originRef, check.id);
         if (existing) {
-          this.ctx.db
-            .prepare(`UPDATE goal_watches SET proposal=?, updated_at=? WHERE goal_ref=? AND check_id=?`)
+          this.ctx
+            .prep(`UPDATE goal_watches SET proposal=?, updated_at=? WHERE goal_ref=? AND check_id=?`)
             .run(JSON.stringify(proposal), now, originRef, check.id);
           continue;
         }
-        this.ctx.db
-          .prepare(
+        this.ctx
+          .prep(
             `INSERT INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why,
@@ -154,25 +154,25 @@ export class WatchStore {
   }
 
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
-      .get(originRef, checkId) as GoalWatchRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`).get(originRef, checkId) as
+      | GoalWatchRow
+      | undefined;
     if (row === undefined || row.proposal === null) return null;
     const proposal = JSON.parse(row.proposal) as GoalWatchProposal;
     const now = this.ctx.now();
     this.ctx.db.transaction(() => {
       if (!accept) {
         if (row.live === 0) {
-          this.ctx.db.prepare(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+          this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
           return;
         }
-        this.ctx.db
-          .prepare(`UPDATE goal_watches SET proposal=NULL, updated_at=? WHERE goal_ref=? AND check_id=?`)
+        this.ctx
+          .prep(`UPDATE goal_watches SET proposal=NULL, updated_at=? WHERE goal_ref=? AND check_id=?`)
           .run(now, originRef, checkId);
         return;
       }
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `UPDATE goal_watches
               SET kind=@kind, title=@title, query=@query, presence=@presence, tolerate=@tolerate,
                   expect_under=@expectUnder, expect_over=@expectOver, expect_baseline=@expectBaseline,
@@ -189,10 +189,10 @@ export class WatchStore {
           checkId,
           now,
         });
-      this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+      this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
     })();
-    const after = this.ctx.db
-      .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+    const after = this.ctx
+      .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
       .get(originRef, checkId) as GoalWatchRow | undefined;
     return after === undefined ? null : hydrate(after);
   }
@@ -200,12 +200,12 @@ export class WatchStore {
   saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
     const now = this.ctx.now();
     this.ctx.db.transaction(() => {
-      const row = this.ctx.db
-        .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+      const row = this.ctx
+        .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
         .get(originRef, check.id) as GoalWatchRow | undefined;
       const asked = row !== undefined && row.query === check.query && row.presence === check.presence;
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `INSERT OR REPLACE INTO goal_watches
              (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
               expect_under, expect_over, expect_baseline, unit, why,
@@ -234,36 +234,35 @@ export class WatchStore {
           goalRef: originRef,
           now,
         });
-      if (!asked)
-        this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
+      if (!asked) this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
     })();
-    const saved = this.ctx.db
-      .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+    const saved = this.ctx
+      .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
       .get(originRef, check.id) as GoalWatchRow;
     return hydrate(saved);
   }
 
   deleteGoalWatch(originRef: string, checkId: string): boolean {
     return this.ctx.db.transaction(() => {
-      const gone = this.ctx.db
-        .prepare(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+      const gone = this.ctx
+        .prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`)
         .run(originRef, checkId).changes;
       if (gone === 0) return false;
-      this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+      this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
       return true;
     })();
   }
 
   private nextWatchSeq(originRef: string): number {
-    const { top } = this.ctx.db.prepare(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
+    const { top } = this.ctx.prep(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
       top: number | null;
     };
     return (top ?? 0) + 1;
   }
 
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO watch_windows (goal_ref, environment, opened_at, settles_at, settled_at, extended_at)
          VALUES (@goalRef, @environment, @openedAt, @settlesAt, NULL, NULL)`,
       )
@@ -271,28 +270,26 @@ export class WatchStore {
   }
 
   settleWatchWindow(goalRef: string, environment: string): void {
-    this.ctx.db
-      .prepare(`UPDATE watch_windows SET settled_at=? WHERE goal_ref=? AND environment=? AND settled_at IS NULL`)
+    this.ctx
+      .prep(`UPDATE watch_windows SET settled_at=? WHERE goal_ref=? AND environment=? AND settled_at IS NULL`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
   extendWatchWindow(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
     const now = this.ctx.now();
-    const changed = this.ctx.db
-      .prepare(
-        `UPDATE watch_windows SET settles_at=?, settled_at=NULL, extended_at=? WHERE goal_ref=? AND environment=?`,
-      )
+    const changed = this.ctx
+      .prep(`UPDATE watch_windows SET settles_at=?, settled_at=NULL, extended_at=? WHERE goal_ref=? AND environment=?`)
       .run(settlesAt, now, goalRef, environment).changes;
     if (changed === 0) return null;
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM watch_windows WHERE goal_ref=? AND environment=?`)
+    const row = this.ctx
+      .prep(`SELECT * FROM watch_windows WHERE goal_ref=? AND environment=?`)
       .get(goalRef, environment) as WatchWindowRow;
     return hydrateWindow(row);
   }
 
   listWatchWindows(): WatchWindow[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM watch_windows ORDER BY opened_at ASC, environment ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM watch_windows ORDER BY opened_at ASC, environment ASC`)
       .all() as WatchWindowRow[];
     return rows.map(hydrateWindow);
   }
@@ -306,8 +303,8 @@ export class WatchStore {
     value: number | null;
     detail: string | null;
   }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR REPLACE INTO watch_readings
            (goal_ref, environment, check_id, read_at, verdict, rows_read, value, detail)
          VALUES (@goalRef, @environment, @checkId, @readAt, @verdict, @rows, @value, @detail)`,
@@ -316,8 +313,8 @@ export class WatchStore {
   }
 
   listWatchReadings(): WatchReading[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM watch_readings ORDER BY read_at ASC, check_id ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM watch_readings ORDER BY read_at ASC, check_id ASC`)
       .all() as WatchReadingRow[];
     return rows.map((r) => ({
       goalRef: r.goal_ref,

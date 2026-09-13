@@ -89,16 +89,16 @@ export class RemoteValidationStore {
     return this.ctx.db.transaction(() => {
       const saved: string[] = [];
       for (const query of queries) {
-        const existing = this.ctx.db
-          .prepare(`SELECT * FROM remote_state_queries WHERE goal_ref=? AND query_id=?`)
+        const existing = this.ctx
+          .prep(`SELECT * FROM remote_state_queries WHERE goal_ref=? AND query_id=?`)
           .get(originRef, query.id) as StateQueryRow | undefined;
         if (existing !== undefined && existing.authored === 'operator' && authored !== 'operator') continue;
         const digest = queryDigest(query.query, query.presence);
         const unchanged = existing !== undefined && existing.digest === digest;
         if (existing !== undefined && !unchanged)
-          this.ctx.db.prepare(`DELETE FROM remote_query_approvals WHERE query_digest=?`).run(existing.digest);
-        this.ctx.db
-          .prepare(
+          this.ctx.prep(`DELETE FROM remote_query_approvals WHERE query_digest=?`).run(existing.digest);
+        this.ctx
+          .prep(
             `INSERT OR REPLACE INTO remote_state_queries
                (goal_ref, query_id, seq, title, query, presence, why, digest, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows,
@@ -130,26 +130,26 @@ export class RemoteValidationStore {
   }
 
   listStateQueries(): StateQuery[] {
-    return (
-      this.ctx.db.prepare(`SELECT * FROM remote_state_queries ORDER BY goal_ref, seq`).all() as StateQueryRow[]
-    ).map(hydrate);
+    return (this.ctx.prep(`SELECT * FROM remote_state_queries ORDER BY goal_ref, seq`).all() as StateQueryRow[]).map(
+      hydrate,
+    );
   }
 
   deleteStateQuery(originRef: string, queryId: string): boolean {
     return this.ctx.db.transaction(() => {
-      const row = this.ctx.db
-        .prepare(`SELECT digest FROM remote_state_queries WHERE goal_ref=? AND query_id=?`)
+      const row = this.ctx
+        .prep(`SELECT digest FROM remote_state_queries WHERE goal_ref=? AND query_id=?`)
         .get(originRef, queryId) as { digest: string } | undefined;
       if (row === undefined) return false;
-      this.ctx.db.prepare(`DELETE FROM remote_state_queries WHERE goal_ref=? AND query_id=?`).run(originRef, queryId);
-      this.ctx.db.prepare(`DELETE FROM remote_query_approvals WHERE query_digest=?`).run(row.digest);
+      this.ctx.prep(`DELETE FROM remote_state_queries WHERE goal_ref=? AND query_id=?`).run(originRef, queryId);
+      this.ctx.prep(`DELETE FROM remote_query_approvals WHERE query_digest=?`).run(row.digest);
       return true;
     })();
   }
 
   recordStateQueryDryRun(originRef: string, queryId: string, reading: StateQueryDryRun): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE remote_state_queries
             SET dry_run_environment=@environment, dry_run_at=@now, dry_run_verdict=@verdict,
                 dry_run_presence=@presence, dry_run_rows=@rows, dry_run_detail=@detail,
@@ -164,8 +164,8 @@ export class RemoteValidationStore {
    * safe here" is a statement about a place as much as about a query.
    */
   approveStateQuery(input: Omit<StateQueryApproval, 'approvedAt'>): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR REPLACE INTO remote_query_approvals
            (query_digest, environment, goal_ref, query_id, approved_at, approved_rows, approved_detail)
          VALUES (@digest, @environment, @originRef, @queryId, @now, @rows, @detail)`,
@@ -174,14 +174,12 @@ export class RemoteValidationStore {
   }
 
   declineStateQuery(digest: string, environment: string): void {
-    this.ctx.db
-      .prepare(`DELETE FROM remote_query_approvals WHERE query_digest=? AND environment=?`)
-      .run(digest, environment);
+    this.ctx.prep(`DELETE FROM remote_query_approvals WHERE query_digest=? AND environment=?`).run(digest, environment);
   }
 
   listStateQueryApprovals(): StateQueryApproval[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM remote_query_approvals ORDER BY approved_at ASC, environment ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_query_approvals ORDER BY approved_at ASC, environment ASC`)
       .all() as ApprovalRow[];
     return rows.map((row) => ({
       digest: row.query_digest,
@@ -199,8 +197,8 @@ export class RemoteValidationStore {
    * the original `assembled_at` is what the sheet is dated by.
    */
   openRemoteSheet(input: { goalRef: string; environment: string }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO remote_sheets (goal_ref, environment, assembled_at)
          VALUES (@goalRef, @environment, @assembledAt)`,
       )
@@ -208,8 +206,8 @@ export class RemoteValidationStore {
   }
 
   listRemoteSheets(): RemoteSheet[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM remote_sheets ORDER BY assembled_at DESC, environment ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_sheets ORDER BY assembled_at DESC, environment ASC`)
       .all() as SheetRow[];
     return rows.map((r) => ({ goalRef: r.goal_ref, environment: r.environment, assembledAt: r.assembled_at }));
   }
@@ -220,7 +218,7 @@ export class RemoteValidationStore {
     rows: readonly Omit<RemoteSheetRow, 'goalRef' | 'environment'>[],
   ): void {
     const now = this.ctx.now();
-    const write = this.ctx.db.prepare(
+    const write = this.ctx.prep(
       `INSERT OR REPLACE INTO remote_sheet_rows
          (goal_ref, environment, row_id, kind, seq, title, source_id, selected, blocked_reason,
           awaiting_approval, matched, updated_at)
@@ -251,7 +249,7 @@ export class RemoteValidationStore {
     verdicts: readonly { rowId: string; matched: number | null; blockedReason: string | null }[],
   ): void {
     const now = this.ctx.now();
-    const write = this.ctx.db.prepare(
+    const write = this.ctx.prep(
       `UPDATE remote_sheet_rows SET matched=@matched, blocked_reason=@blockedReason, updated_at=@now
         WHERE goal_ref=@goalRef AND environment=@environment AND row_id=@rowId`,
     );
@@ -261,16 +259,16 @@ export class RemoteValidationStore {
   }
 
   blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE remote_sheet_rows SET blocked_reason=?, updated_at=? WHERE goal_ref=? AND environment=? AND row_id=?`,
       )
       .run(reason, this.ctx.now(), goalRef, environment, rowId);
   }
 
   listRemoteSheetRows(): RemoteSheetRow[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM remote_sheet_rows ORDER BY goal_ref, environment, seq, row_id`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_sheet_rows ORDER BY goal_ref, environment, seq, row_id`)
       .all() as SheetRowRow[];
     return rows.map((r) => ({
       goalRef: r.goal_ref,
@@ -289,8 +287,8 @@ export class RemoteValidationStore {
 
   /** Append-only. A later reading supersedes the one before it; nothing is deleted. */
   recordRemoteReading(input: Omit<RemoteReading, 'readAt'>): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO remote_readings (goal_ref, environment, row_id, run_id, outcome, rows, value, detail,
            started_sha, ended_sha, executed, retries, duration_ms, artefacts, read_at)
          VALUES (@goalRef, @environment, @rowId, @runId, @outcome, @rows, @value, @detail,
@@ -300,7 +298,7 @@ export class RemoteValidationStore {
   }
 
   listRemoteReadings(): RemoteReading[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM remote_readings ORDER BY id ASC`).all() as ReadingRow[];
+    const rows = this.ctx.prep(`SELECT * FROM remote_readings ORDER BY id ASC`).all() as ReadingRow[];
     return rows.map((r) => ({
       goalRef: r.goal_ref,
       environment: r.environment,
@@ -331,8 +329,8 @@ export class RemoteValidationStore {
     live: RemoteRun | null;
   } {
     return this.ctx.db.transaction(() => {
-      const held = this.ctx.db
-        .prepare(`SELECT * FROM remote_runs WHERE environment=? AND tenant=? AND status IN ${LIVE_RUN_SQL} LIMIT 1`)
+      const held = this.ctx
+        .prep(`SELECT * FROM remote_runs WHERE environment=? AND tenant=? AND status IN ${LIVE_RUN_SQL} LIMIT 1`)
         .get(input.environment, input.tenant) as RunRow | undefined;
       if (held !== undefined) return { run: null, live: toRemoteRun(held) };
       const run: RemoteRun = {
@@ -350,8 +348,8 @@ export class RemoteValidationStore {
         reportPath: null,
         artefacts: null,
       };
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `INSERT INTO remote_runs (id, goal_ref, environment, tenant, status, started_sha, ended_sha,
              started_at, ended_at, note, task_id, report_path, artefacts)
            VALUES (@id, @goalRef, @environment, @tenant, @status, @startedSha, NULL, @startedAt,
@@ -385,8 +383,8 @@ export class RemoteValidationStore {
       artefacts?: string | null;
     },
   ): RemoteRun | null {
-    const info = this.ctx.db
-      .prepare(
+    const info = this.ctx
+      .prep(
         `UPDATE remote_runs SET status=@status, ended_sha=COALESCE(@endedSha, ended_sha),
             note=COALESCE(@note, note), report_path=COALESCE(@reportPath, report_path),
             artefacts=COALESCE(@artefacts, artefacts), ended_at=@now
@@ -412,8 +410,8 @@ export class RemoteValidationStore {
    */
   claimRemoteRun(id: string, taskId: string): RemoteRun | null {
     return this.ctx.db.transaction(() => {
-      const info = this.ctx.db
-        .prepare(`UPDATE remote_runs SET status=?, task_id=? WHERE id=? AND status=?`)
+      const info = this.ctx
+        .prep(`UPDATE remote_runs SET status=?, task_id=? WHERE id=? AND status=?`)
         .run(CLAIMED_RUN, taskId, id, OPEN_RUN);
       return info.changes === 0 ? null : this.getRemoteRun(id);
     })();
@@ -425,30 +423,30 @@ export class RemoteValidationStore {
    * was — nothing is deleted or rewritten but this one attribution.
    */
   attributeRemoteReadings(runId: string, endedSha: string | null): void {
-    this.ctx.db.prepare(`UPDATE remote_readings SET ended_sha=? WHERE run_id=?`).run(endedSha, runId);
+    this.ctx.prep(`UPDATE remote_readings SET ended_sha=? WHERE run_id=?`).run(endedSha, runId);
   }
 
   getRemoteRun(id: string): RemoteRun | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM remote_runs WHERE id=?`).get(id) as RunRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM remote_runs WHERE id=?`).get(id) as RunRow | undefined;
     return row === undefined ? null : toRemoteRun(row);
   }
 
   liveRemoteRun(environment: string, tenant: string): RemoteRun | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM remote_runs WHERE environment=? AND tenant=? AND status IN ${LIVE_RUN_SQL} LIMIT 1`)
+    const row = this.ctx
+      .prep(`SELECT * FROM remote_runs WHERE environment=? AND tenant=? AND status IN ${LIVE_RUN_SQL} LIMIT 1`)
       .get(environment, tenant) as RunRow | undefined;
     return row === undefined ? null : toRemoteRun(row);
   }
 
   listRemoteRuns(): RemoteRun[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM remote_runs ORDER BY started_at ASC`).all() as RunRow[];
+    const rows = this.ctx.prep(`SELECT * FROM remote_runs ORDER BY started_at ASC`).all() as RunRow[];
     return rows.map(toRemoteRun);
   }
 
   /** `{selected}` from the sheet's own control — a row that does not apply here, or that a person will do by hand. */
   setRemoteSheetRowSelected(goalRef: string, environment: string, rowId: string, selected: boolean): boolean {
-    const info = this.ctx.db
-      .prepare(`UPDATE remote_sheet_rows SET selected=?, updated_at=? WHERE goal_ref=? AND environment=? AND row_id=?`)
+    const info = this.ctx
+      .prep(`UPDATE remote_sheet_rows SET selected=?, updated_at=? WHERE goal_ref=? AND environment=? AND row_id=?`)
       .run(selected ? 1 : 0, this.ctx.now(), goalRef, environment, rowId);
     return info.changes > 0;
   }
@@ -456,11 +454,11 @@ export class RemoteValidationStore {
   /** The name is always the project's own — nothing here generates or infers a tenant identifier. */
   stampRemoteTenant(input: { environment: string; tenant: string; ensured?: boolean; reseeded?: boolean }): void {
     const now = this.ctx.now();
-    const existing = this.ctx.db
-      .prepare(`SELECT * FROM remote_tenants WHERE environment=? AND tenant=?`)
+    const existing = this.ctx
+      .prep(`SELECT * FROM remote_tenants WHERE environment=? AND tenant=?`)
       .get(input.environment, input.tenant) as TenantRow | undefined;
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR REPLACE INTO remote_tenants (environment, tenant, ensured_at, reseeded_at)
          VALUES (@environment, @tenant, @ensuredAt, @reseededAt)`,
       )
@@ -473,7 +471,7 @@ export class RemoteValidationStore {
   }
 
   listRemoteTenants(): RemoteTenant[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM remote_tenants ORDER BY environment, tenant`).all() as TenantRow[];
+    const rows = this.ctx.prep(`SELECT * FROM remote_tenants ORDER BY environment, tenant`).all() as TenantRow[];
     return rows.map((r) => ({
       environment: r.environment,
       tenant: r.tenant,
@@ -496,19 +494,19 @@ export class RemoteValidationStore {
     // The desk's own clock, not the store's: the refresh throttle reads `listed_at` back against the
     // clock it was written from, and two clocks make an interval that never elapses or always does.
     const now = listedAt ?? this.ctx.now();
-    const insert = this.ctx.db.prepare(
+    const insert = this.ctx.prep(
       `INSERT OR REPLACE INTO remote_selector_offerings (environment, selector, tests, listed_at)
        VALUES (@environment, @selector, @tests, @now)`,
     );
     this.ctx.db.transaction(() => {
-      this.ctx.db.prepare(`DELETE FROM remote_selector_offerings WHERE environment=?`).run(environment);
+      this.ctx.prep(`DELETE FROM remote_selector_offerings WHERE environment=?`).run(environment);
       for (const offer of offers) insert.run({ environment, selector: offer.selector, tests: offer.tests, now });
     })();
   }
 
   listSelectorOfferings(): SelectorOffering[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM remote_selector_offerings ORDER BY environment, selector`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_selector_offerings ORDER BY environment, selector`)
       .all() as SelectorOfferingRow[];
     return rows.map((r) => ({
       environment: r.environment,
@@ -524,15 +522,15 @@ export class RemoteValidationStore {
    * authority: it is what a listing last said, and the pre-flight asks again at assembly.
    */
   listOfferedAreas(): string[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT DISTINCT selector FROM remote_selector_offerings ORDER BY selector`)
-      .all() as { selector: string }[];
+    const rows = this.ctx.prep(`SELECT DISTINCT selector FROM remote_selector_offerings ORDER BY selector`).all() as {
+      selector: string;
+    }[];
     return rows.map((r) => r.selector);
   }
 
   private nextSeq(originRef: string): number {
-    const { top } = this.ctx.db
-      .prepare(`SELECT MAX(seq) AS top FROM remote_state_queries WHERE goal_ref=?`)
+    const { top } = this.ctx
+      .prep(`SELECT MAX(seq) AS top FROM remote_state_queries WHERE goal_ref=?`)
       .get(originRef) as { top: number | null };
     return (top ?? 0) + 1;
   }

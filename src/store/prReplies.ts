@@ -8,21 +8,21 @@ export class PrReplyStore implements SentPrReplies {
   constructor(private readonly ctx: StoreContext) {}
 
   recordPrReplySent(prNumber: number, threadId: string, commentRef: string): void {
-    this.ctx.db
-      .prepare(`INSERT OR IGNORE INTO pr_replies_sent (pr_number, thread_id, comment_ref, sent_at) VALUES (?,?,?,?)`)
+    this.ctx
+      .prep(`INSERT OR IGNORE INTO pr_replies_sent (pr_number, thread_id, comment_ref, sent_at) VALUES (?,?,?,?)`)
       .run(prNumber, threadId, commentRef, this.ctx.now());
   }
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {
-    const rows = this.ctx.db.prepare(`SELECT comment_ref FROM pr_replies_sent WHERE pr_number=?`).all(prNumber) as {
+    const rows = this.ctx.prep(`SELECT comment_ref FROM pr_replies_sent WHERE pr_number=?`).all(prNumber) as {
       comment_ref: string;
     }[];
     return new Set(rows.map((r) => r.comment_ref));
   }
 
   listPrRepliesSentSince(since: string): PrReplySent[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM pr_replies_sent WHERE sent_at > ? ORDER BY sent_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM pr_replies_sent WHERE sent_at > ? ORDER BY sent_at ASC`)
       .all(since) as PrReplyRow[];
     return rows.map((row) => ({
       prNumber: row.pr_number,

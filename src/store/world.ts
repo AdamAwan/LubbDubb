@@ -9,7 +9,7 @@ export class WorldStore {
 
   recordWorldEvents(inputs: WorldEventInput[]): WorldEvent[] {
     const at = this.ctx.now();
-    const stmt = this.ctx.db.prepare(
+    const stmt = this.ctx.prep(
       `INSERT INTO world_events (id, kind, ref, summary, created_at) VALUES (@id, @kind, @ref, @summary, @createdAt)`,
     );
     const events = inputs.map((input) => ({ id: `we_${nanoid(10)}`, createdAt: at, ...input }));
@@ -21,8 +21,8 @@ export class WorldStore {
   }
 
   listWorldEvents(limit = 200): WorldEvent[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM world_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM world_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as WorldEventRow[];
     return rows.map(rowToWorldEvent);
   }
@@ -50,9 +50,7 @@ export class WorldStore {
   }
 
   getWorldBaseline(): WorldSnapshot | null {
-    const row = this.ctx.db.prepare(`SELECT world FROM world_baseline WHERE id=1`).get() as
-      | { world: string }
-      | undefined;
+    const row = this.ctx.prep(`SELECT world FROM world_baseline WHERE id=1`).get() as { world: string } | undefined;
     return row ? (JSON.parse(row.world) as WorldSnapshot) : null;
   }
 
@@ -92,25 +90,21 @@ export class WorldStore {
   }
 
   setWorldBaseline(world: WorldSnapshot): void {
-    this.ctx.db
-      .prepare(
-        `INSERT INTO world_baseline (id, world) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET world=excluded.world`,
-      )
+    this.ctx
+      .prep(`INSERT INTO world_baseline (id, world) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET world=excluded.world`)
       .run(JSON.stringify(world));
   }
 
   getConnectorState(key: string): string | null {
-    const row = this.ctx.db.prepare(`SELECT value FROM connector_state WHERE key=?`).get(key) as
+    const row = this.ctx.prep(`SELECT value FROM connector_state WHERE key=?`).get(key) as
       | { value: string }
       | undefined;
     return row?.value ?? null;
   }
 
   setConnectorState(key: string, value: string): void {
-    this.ctx.db
-      .prepare(
-        `INSERT INTO connector_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-      )
+    this.ctx
+      .prep(`INSERT INTO connector_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
       .run(key, value);
   }
 }

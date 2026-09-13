@@ -37,8 +37,8 @@ export class JobStore {
       createdAt: ts,
       updatedAt: ts,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO jobs (id, title, prompt, kind, branch, status, origin_ref, task_id, created_at, updated_at)
          VALUES (@id, @title, @prompt, @kind, @branch, @status, @originRef, @taskId, @createdAt, @updatedAt)`,
       )
@@ -47,7 +47,7 @@ export class JobStore {
   }
 
   getJob(id: string): Job | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM jobs WHERE id=?`).get(id) as JobRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM jobs WHERE id=?`).get(id) as JobRow | undefined;
     return row ? rowToJob(row) : null;
   }
 
@@ -62,31 +62,29 @@ export class JobStore {
   }
 
   listJobs(limit = 100): Job[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?`).all(limit) as JobRow[];
+    const rows = this.ctx.prep(`SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?`).all(limit) as JobRow[];
     return rows.map(rowToJob);
   }
 
   listQueuedJobs(): Job[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM jobs WHERE status='queued' ORDER BY created_at ASC`)
-      .all() as JobRow[];
+    const rows = this.ctx.prep(`SELECT * FROM jobs WHERE status='queued' ORDER BY created_at ASC`).all() as JobRow[];
     return rows.map(rowToJob);
   }
 
   listStandingJobs(): Job[] {
-    return (this.ctx.db.prepare(STANDING_SQL).all() as JobRow[]).map(rowToJob);
+    return (this.ctx.prep(STANDING_SQL).all() as JobRow[]).map(rowToJob);
   }
 
   findStandingJobByOrigin(originRef: string): Job | null {
-    const row = this.ctx.db.prepare(`${STANDING_SQL} AND j.origin_ref=? LIMIT 1`).get(originRef) as JobRow | undefined;
+    const row = this.ctx.prep(`${STANDING_SQL} AND j.origin_ref=? LIMIT 1`).get(originRef) as JobRow | undefined;
     return row ? rowToJob(row) : null;
   }
 
   markJobDispatched(id: string, taskId: string): void {
     const existing = this.getJob(id);
     if (!existing) throw new Error(`Job ${id} not found`);
-    this.ctx.db
-      .prepare(`UPDATE jobs SET status='dispatched', task_id=?, updated_at=? WHERE id=?`)
+    this.ctx
+      .prep(`UPDATE jobs SET status='dispatched', task_id=?, updated_at=? WHERE id=?`)
       .run(taskId, this.ctx.now(), id);
   }
 
@@ -94,7 +92,7 @@ export class JobStore {
     const existing = this.getJob(id);
     if (!existing || existing.status !== 'queued') return null;
     const updatedAt = this.ctx.now();
-    this.ctx.db.prepare(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
+    this.ctx.prep(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
     return { ...existing, status: 'cancelled', updatedAt };
   }
 
@@ -113,7 +111,7 @@ export class JobStore {
       path: file.path,
       createdAt,
     }));
-    const insert = this.ctx.db.prepare(
+    const insert = this.ctx.prep(
       `INSERT INTO job_attachments (id, target_ref, idx, label, mime, bytes, path, created_at)
        VALUES (@id, @targetRef, @index, @label, @mime, @bytes, @path, @createdAt)`,
     );
@@ -122,26 +120,26 @@ export class JobStore {
   }
 
   listAttachments(targetRef: string): JobAttachment[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM job_attachments WHERE target_ref=? ORDER BY idx ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM job_attachments WHERE target_ref=? ORDER BY idx ASC`)
       .all(targetRef) as AttachmentRow[];
     return rows.map(rowToAttachment);
   }
 
   getAttachment(id: string): JobAttachment | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM job_attachments WHERE id=?`).get(id) as AttachmentRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM job_attachments WHERE id=?`).get(id) as AttachmentRow | undefined;
     return row ? rowToAttachment(row) : null;
   }
 
   listAllAttachments(): JobAttachment[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM job_attachments ORDER BY created_at ASC, idx ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM job_attachments ORDER BY created_at ASC, idx ASC`)
       .all() as AttachmentRow[];
     return rows.map(rowToAttachment);
   }
 
   deleteAttachments(targetRef: string): void {
-    this.ctx.db.prepare(`DELETE FROM job_attachments WHERE target_ref=?`).run(targetRef);
+    this.ctx.prep(`DELETE FROM job_attachments WHERE target_ref=?`).run(targetRef);
   }
 }
 

@@ -8,7 +8,7 @@
 The rule above is about **SQLite access, not about one class** (issue #221). `store.ts` was a
 2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
 depended on the surface of all of them. It is now a **composition root**: one domain module per
-group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
+group of related tables, each a class taking nothing but a `StoreContext` (`{db, now, prep}`), and a
 `Store` that instantiates them, holds the database handle, and runs the schema and migration pass.
 
 **`Store` forwards nothing.** Each domain module hangs off it as a public named member and callers
@@ -55,9 +55,9 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 - **Only `src/store/` imports `better-sqlite3`.** The constraint the split was careful to preserve,
   and now the one that fails a test when broken. (Matched on the _import_ — two modules elsewhere
   mention the driver in prose to explain why a synchronous write makes a read-then-write race-free.)
-- **A module is handed the database and nothing else.** `StoreContext` is `{db, now}` and no module
-  imports a sibling. That is not a rule imposed on the split so much as a fact discovered by it:
-  every method in the old class was `this.db.prepare(...)` plus `this.now()`, with no domain
+- **A module is handed the database and nothing else.** `StoreContext` is `{db, now, prep}` and no
+  module imports a sibling. That is not a rule imposed on the split so much as a fact discovered by
+  it: every method in the old class was a prepared statement plus `this.now()`, with no domain
   reaching another through class state, which is what made the move mechanical. A genuinely
   cross-domain read belongs _above_ the persistence layer, in the caller that already holds both.
 - **Each table is named by exactly one module.** Two writers to one table is how the invariants
@@ -97,6 +97,39 @@ are one module rather than scattered through 2,500 lines.
 Writes are **synchronous**, which is what keeps the harness logic race-free. Lean on that.
 
 The clock is injectable (`Clock`), so tests get deterministic timestamps.
+
+### Compiled statements are memoised per connection
+
+better-sqlite3 does **not** cache prepared statements: every `db.prepare(sql)` re-parses and re-plans
+the SQL. A point lookup like `getTask` is called inside loops — the end-of-run pass, the obstacle and
+recovery desks, the escalation inbox — so preparing it afresh each call dominated the call. Measured
+on this repo's driver, 20k point lookups cost 156 ms preparing each time against 38 ms re-using the
+compiled statement.
+
+So `StoreContext` carries a third member, `prep` (`createPrepare` in `context.ts`): a
+`Map<string, Statement>` keyed on the exact SQL text, compiled on first ask and handed back after.
+Domain modules read `this.ctx.prep(sql)` where they used to read `this.ctx.db.prepare(sql)`.
+
+Three things make that safe, and a new call site has to keep them true:
+
+- **The cache belongs to one connection.** It is built in the `Store` constructor over that store's
+  own handle and lives on that store's `StoreContext`, so nothing is shared between stores — which is
+  what tests need, since they build many `Store`s over `:memory:` and close them independently. A
+  statement compiled against a closed database is a statement nothing can run.
+- **It is built _after_ the migration pass**, and is lazy besides, so nothing is compiled against a
+  pre-migration schema. (better-sqlite3 recompiles on a schema change anyway; the ordering is belt as
+  well as braces.)
+- **Only constant SQL is memoised.** A cached statement is keyed on its text, so SQL assembled per
+  call — a variable-length `IN (?,?,?)` list, most of all — would grow the map without bound. Those
+  sites keep `this.ctx.db.prepare(...)` deliberately. Interpolating a _module-level_ constant
+  (`ACTIVE_TASK_STATUS_SQL`, `LIVE_SQL`, `OPEN_SQL`, `SUMMARY_COLUMNS`) still yields constant text and
+  is memoised; so does a column or table name chosen from a closed set, which is bounded by that set.
+
+A cached statement is also **stateful**, which is why none of this reaches `iterate`, `pluck`, `raw`,
+`expand` or `bind`: `iterate` leaves a statement busy while its consumer runs, and the other four
+mutate the statement permanently, so a later caller of the same SQL would get someone else's shape.
+`src/store/` uses none of them today, and a site that needs one must not go through `prep` — or must
+apply the modifier once, under a cache key of its own.
 
 ## Migrations
 

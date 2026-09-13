@@ -39,9 +39,9 @@ export class IssueVerdictStore {
   private recordVerdict<T extends { originRef: string }>(kind: VerdictKind, upsert: string, row: T): T {
     const clears = VERDICT_EXCLUSIONS[kind].map((k) => VERDICT_TABLES[k]);
     const write = this.ctx.db.transaction((r: T) => {
-      this.ctx.db.prepare(upsert).run(r);
+      this.ctx.prep(upsert).run(r);
       for (const table of clears) {
-        this.ctx.db.prepare(`DELETE FROM ${table} WHERE origin_ref=?`).run(r.originRef);
+        this.ctx.prep(`DELETE FROM ${table} WHERE origin_ref=?`).run(r.originRef);
       }
     });
     write(row);
@@ -80,19 +80,19 @@ export class IssueVerdictStore {
   }
 
   getIssueConclusion(originRef: string): IssueConclusion | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_conclusions WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM issue_conclusions WHERE origin_ref=?`).get(originRef) as
       | IssueConclusionRow
       | undefined;
     return row ? rowToIssueConclusion(row) : null;
   }
 
   listIssueConclusions(): IssueConclusion[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_conclusions`).all() as IssueConclusionRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_conclusions`).all() as IssueConclusionRow[];
     return rows.map(rowToIssueConclusion);
   }
 
   clearIssueConclusion(originRef: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(originRef).changes > 0;
+    return this.ctx.prep(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   recordDelivery(input: {
@@ -127,19 +127,19 @@ export class IssueVerdictStore {
   }
 
   getDelivery(originRef: string): IssueDelivery | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_deliveries WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM issue_deliveries WHERE origin_ref=?`).get(originRef) as
       | IssueDeliveryRow
       | undefined;
     return row ? rowToDelivery(row) : null;
   }
 
   listDeliveries(): IssueDelivery[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_deliveries`).all() as IssueDeliveryRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_deliveries`).all() as IssueDeliveryRow[];
     return rows.map(rowToDelivery);
   }
 
   clearDelivery(originRef: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(originRef).changes > 0;
+    return this.ctx.prep(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   recordShortfall(input: {
@@ -179,19 +179,19 @@ export class IssueVerdictStore {
   }
 
   getShortfall(originRef: string): IssueShortfall | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_shortfalls WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM issue_shortfalls WHERE origin_ref=?`).get(originRef) as
       | IssueShortfallRow
       | undefined;
     return row ? rowToShortfall(row) : null;
   }
 
   listShortfalls(): IssueShortfall[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_shortfalls`).all() as IssueShortfallRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_shortfalls`).all() as IssueShortfallRow[];
     return rows.map(rowToShortfall);
   }
 
   clearShortfall(originRef: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(originRef).changes > 0;
+    return this.ctx.prep(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   recordAppraisal(input: {
@@ -249,22 +249,22 @@ export class IssueVerdictStore {
   }
 
   getAppraisal(originRef: string): IssueAppraisal | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_appraisals WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM issue_appraisals WHERE origin_ref=?`).get(originRef) as
       | IssueAppraisalRow
       | undefined;
     return row ? rowToAppraisal(row) : null;
   }
 
   listAppraisals(): IssueAppraisal[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_appraisals`).all() as IssueAppraisalRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_appraisals`).all() as IssueAppraisalRow[];
     return rows.map(rowToAppraisal);
   }
 
   answerAppraisalProfile(originRef: string, goalRef: string): boolean {
     const ts = this.ctx.now();
     return (
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `UPDATE issue_appraisals SET profile_answered_at=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND profile_answered_at IS NULL`,
         )
         .run(ts, ts, originRef, goalRef).changes > 0
@@ -275,8 +275,8 @@ export class IssueVerdictStore {
     const column = field === 'parent' ? 'parent_settled_at' : 'area_path_settled_at';
     const ts = this.ctx.now();
     return (
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `UPDATE issue_appraisals SET ${column}=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND ${column} IS NULL`,
         )
         .run(ts, ts, originRef, goalRef).changes > 0
@@ -284,13 +284,13 @@ export class IssueVerdictStore {
   }
 
   setAppraisalComment(originRef: string, commentRef: string): void {
-    this.ctx.db
-      .prepare(`UPDATE issue_appraisals SET comment_ref=?, updated_at=? WHERE origin_ref=?`)
+    this.ctx
+      .prep(`UPDATE issue_appraisals SET comment_ref=?, updated_at=? WHERE origin_ref=?`)
       .run(commentRef, this.ctx.now(), originRef);
   }
 
   clearAppraisal(originRef: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM issue_appraisals WHERE origin_ref=?`).run(originRef).changes > 0;
+    return this.ctx.prep(`DELETE FROM issue_appraisals WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 }
 

@@ -23,13 +23,11 @@ export class HumanTaskStore {
   ): { task: HumanTask; created: boolean } {
     const ts = this.ctx.now();
     const kind: HumanTaskKind = input.kind ?? 'ask';
-    const existing = this.ctx.db
-      .prepare(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=? AND kind=?`)
+    const existing = this.ctx
+      .prep(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=? AND kind=?`)
       .get(input.agentId, input.originRef, input.title, kind) as HumanTaskRow | undefined;
     if (existing) {
-      this.ctx.db
-        .prepare(`UPDATE human_tasks SET detail=?, updated_at=? WHERE id=?`)
-        .run(input.detail, ts, existing.id);
+      this.ctx.prep(`UPDATE human_tasks SET detail=?, updated_at=? WHERE id=?`).run(input.detail, ts, existing.id);
       return { task: { ...rowToHumanTask(existing), detail: input.detail, updatedAt: ts }, created: false };
     }
     const task: HumanTask = {
@@ -48,8 +46,8 @@ export class HumanTaskStore {
       resolvedAt: null,
       dismissedAt: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO human_tasks (id, title, detail, origin_ref, part_id, kind, agent_id, task_id, status, resolution, created_at, updated_at, resolved_at, dismissed_at)
          VALUES (@id, @title, @detail, @originRef, @partId, @kind, @agentId, @taskId, @status, @resolution, @createdAt, @updatedAt, @resolvedAt, @dismissedAt)`,
       )
@@ -58,7 +56,7 @@ export class HumanTaskStore {
   }
 
   getHumanTask(id: string): HumanTask | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE id=?`).get(id) as HumanTaskRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM human_tasks WHERE id=?`).get(id) as HumanTaskRow | undefined;
     return row ? rowToHumanTask(row) : null;
   }
 
@@ -73,16 +71,14 @@ export class HumanTaskStore {
   }
 
   listHumanTasks(limit = 100): HumanTask[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM human_tasks ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM human_tasks ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as HumanTaskRow[];
     return rows.map(rowToHumanTask);
   }
 
   listAllHumanTasks(): HumanTask[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM human_tasks ORDER BY created_at ASC, rowid ASC`)
-      .all() as HumanTaskRow[];
+    const rows = this.ctx.prep(`SELECT * FROM human_tasks ORDER BY created_at ASC, rowid ASC`).all() as HumanTaskRow[];
     return rows.map(rowToHumanTask);
   }
 
@@ -96,16 +92,14 @@ export class HumanTaskStore {
   }
 
   listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
+    const rows = this.ctx.prep(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
     return rows.map(rowToHumanTask);
   }
 
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     const ts = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
-        `UPDATE human_tasks SET status=?, resolution=?, updated_at=?, resolved_at=? WHERE id=? AND status='open'`,
-      )
+    const result = this.ctx
+      .prep(`UPDATE human_tasks SET status=?, resolution=?, updated_at=?, resolved_at=? WHERE id=? AND status='open'`)
       .run(status, resolution, ts, ts, id);
     if (result.changes === 0) return null;
     return this.getHumanTask(id);
@@ -113,8 +107,8 @@ export class HumanTaskStore {
 
   reopenHumanTask(id: string, detail: string): HumanTask | null {
     const ts = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE human_tasks SET status='open', resolution=NULL, resolved_at=NULL, dismissed_at=NULL,
            detail=?, created_at=?, updated_at=? WHERE id=? AND status<>'open'`,
       )
@@ -125,8 +119,8 @@ export class HumanTaskStore {
 
   dismissHumanTask(id: string): HumanTask | null {
     const ts = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE human_tasks SET dismissed_at=?, updated_at=? WHERE id=? AND status<>'open' AND dismissed_at IS NULL`,
       )
       .run(ts, ts, id);

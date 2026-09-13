@@ -15,8 +15,8 @@ export class PrReviewRouteStore {
 
   recordPrReviewRoute(input: PrReviewRouteInput): PrReviewRoute {
     const decidedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pr_review_routes (pr_number, mode, skipped, reason, agent_id, decided_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(pr_number) DO UPDATE SET
@@ -31,7 +31,7 @@ export class PrReviewRouteStore {
   }
 
   listPrReviewRoutes(): PrReviewRoute[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM pr_review_routes ORDER BY decided_at DESC`).all() as Row[];
+    const rows = this.ctx.prep(`SELECT * FROM pr_review_routes ORDER BY decided_at DESC`).all() as Row[];
     return rows.map((row) => ({
       prNumber: row.pr_number,
       mode: row.mode,

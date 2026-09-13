@@ -105,8 +105,8 @@ export class ValidationStore {
       for (const row of all) this.writeCheck(row);
       for (const check of existing) {
         if (declared.has(check.id) || check.supersededReason !== null) continue;
-        this.ctx.db
-          .prepare(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE origin_ref=? AND id=?`)
+        this.ctx
+          .prep(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE origin_ref=? AND id=?`)
           .run(input.supersededReason, ts, originRef, check.id);
       }
     });
@@ -151,8 +151,8 @@ export class ValidationStore {
           result.unknown.push(id);
           continue;
         }
-        this.ctx.db
-          .prepare(
+        this.ctx
+          .prep(
             `UPDATE validation_checks SET superseded_reason=?, amend_note=?, amended_at=?, updated_at=?
              WHERE origin_ref=? AND id=?`,
           )
@@ -223,7 +223,7 @@ export class ValidationStore {
   private replaceValidationResources(originRef: string, resources: ValidationResourceInput[]): void {
     const existing = new Map(this.listValidationResources(originRef).map((r) => [r.name, r]));
     const write = this.ctx.db.transaction(() => {
-      this.ctx.db.prepare(`DELETE FROM validation_resources WHERE origin_ref=?`).run(originRef);
+      this.ctx.prep(`DELETE FROM validation_resources WHERE origin_ref=?`).run(originRef);
       for (const resource of resources) {
         this.writeResource(originRef, resource, existing.get(resource.name)?.humanTaskId ?? null);
       }
@@ -243,8 +243,8 @@ export class ValidationStore {
   }
 
   private writeResource(originRef: string, resource: ValidationResourceInput, humanTaskId: string | null): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO validation_resources (origin_ref, name, kind, note, provided, human_task_id)
          VALUES (@originRef, @name, @kind, @note, @provided, @humanTaskId)
          ON CONFLICT(origin_ref, name) DO UPDATE SET kind=excluded.kind, note=excluded.note,
@@ -261,8 +261,8 @@ export class ValidationStore {
   }
 
   linkValidationResourceTask(originRef: string, name: string, humanTaskId: string): void {
-    this.ctx.db
-      .prepare(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
+    this.ctx
+      .prep(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
       .run(humanTaskId, originRef, name);
   }
 
@@ -274,8 +274,8 @@ export class ValidationStore {
    */
   recordValidationHint(originRef: string, hint: string | null): ValidationPlanRecord {
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
          VALUES (?, ?, NULL, NULL, NULL, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET hint=excluded.hint, updated_at=excluded.updated_at`,
@@ -296,8 +296,8 @@ export class ValidationStore {
     input: { note: string; emptyReason: string | null },
   ): ValidationPlanRecord {
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
          VALUES (?, NULL, ?, ?, ?, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET note=excluded.note, empty_reason=excluded.empty_reason,
@@ -308,36 +308,34 @@ export class ValidationStore {
   }
 
   listValidationPlanRecords(): ValidationPlanRecord[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_plans ORDER BY origin_ref ASC`)
-      .all() as ValidationPlanRow[];
+    const rows = this.ctx.prep(`SELECT * FROM validation_plans ORDER BY origin_ref ASC`).all() as ValidationPlanRow[];
     return rows.map(rowToPlanRecord);
   }
 
   getValidationPlanRecord(originRef: string): ValidationPlanRecord | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
       | ValidationPlanRow
       | undefined;
     return row ? rowToPlanRecord(row) : null;
   }
 
   listValidationChecks(originRef: string): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? ORDER BY seq ASC, letter ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_checks WHERE origin_ref=? ORDER BY seq ASC, letter ASC`)
       .all(originRef) as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
 
   listAllValidationChecks(): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks ORDER BY origin_ref ASC, seq ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_checks ORDER BY origin_ref ASC, seq ASC`)
       .all() as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
 
   getValidationCheck(originRef: string, checkId: string): ValidationCheck | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? AND id=? AND superseded_reason IS NULL`)
+    const row = this.ctx
+      .prep(`SELECT * FROM validation_checks WHERE origin_ref=? AND id=? AND superseded_reason IS NULL`)
       .get(originRef, checkId) as ValidationCheckRow | undefined;
     return row ? rowToCheck(row) : null;
   }
@@ -400,8 +398,8 @@ export class ValidationStore {
   }
 
   liveClaims(staleBefore: string): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM validation_checks
          WHERE claimed_by IS NOT NULL AND claimed_at > ? AND superseded_reason IS NULL
          ORDER BY claimed_at ASC`,
@@ -411,15 +409,15 @@ export class ValidationStore {
   }
 
   listValidationResources(originRef: string): ValidationResource[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources WHERE origin_ref=? ORDER BY name ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_resources WHERE origin_ref=? ORDER BY name ASC`)
       .all(originRef) as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
 
   listAllValidationResources(): ValidationResource[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources ORDER BY origin_ref ASC, name ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_resources ORDER BY origin_ref ASC, name ASC`)
       .all() as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
@@ -473,14 +471,14 @@ export class ValidationStore {
    * @public the seam `RemoteValidationDesk`'s script grace sweep writes through
    */
   sweepValidationScripts(originRef: string, checkId: string, steps: readonly ValidationStep[]): void {
-    this.ctx.db
-      .prepare(`UPDATE validation_checks SET steps=?, updated_at=? WHERE origin_ref=? AND id=?`)
+    this.ctx
+      .prep(`UPDATE validation_checks SET steps=?, updated_at=? WHERE origin_ref=? AND id=?`)
       .run(JSON.stringify(steps), this.ctx.now(), originRef, checkId);
   }
 
   private writeCheck(check: ValidationCheck): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         // TECHDEBT: `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,

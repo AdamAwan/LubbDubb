@@ -23,8 +23,8 @@ export class DecisionStore {
       admission: input.action.admission ?? null,
       ...input,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, admission, created_at) VALUES (?,?,?,?,?,?,?,?)`,
       )
       .run(
@@ -41,15 +41,13 @@ export class DecisionStore {
   }
 
   listDecisions(limit = 200): Decision[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?`)
-      .all(limit) as DecisionRow[];
+    const rows = this.ctx.prep(`SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?`).all(limit) as DecisionRow[];
     return rows.map(rowToDecision);
   }
 
   listDecisionsForGoal(goalRef: string, limit = 200): Decision[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM decisions
          WHERE json_extract(action, '$.originRef') = ?
             OR json_extract(action, '$.originRef') LIKE ?
