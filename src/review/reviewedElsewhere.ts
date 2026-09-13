@@ -4,6 +4,7 @@ import type { Store } from '../store/store.js';
 import type { PrReview, PrReviewRoute, WorldSnapshot } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
 import { needsFleetReview, reviewReading } from './prReview.js';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/31-review-packs.md
 
@@ -62,11 +63,6 @@ interface ExecFailure extends Error {
   code?: number | string;
   killed?: boolean;
   signal?: NodeJS.Signals | null;
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }
 
 export async function askReviewedElsewhere(

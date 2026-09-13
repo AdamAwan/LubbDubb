@@ -276,3 +276,29 @@ test('the wire payload is the record plus the marks, never a second declaration'
   assert.equal(payload.pack.schema, REVIEW_PACK_SCHEMA);
   assert.equal(payload.marks.length, 1);
 });
+
+test('the current pack of every pull request is one row each, newest first per pull request', () => {
+  const store = new Store(':memory:', tickingClock());
+
+  store.reviewPacks.recordReviewPack({ ...fullPack('a1b2c3d'), prNumber: 12 });
+  store.reviewPacks.recordReviewPack({ ...fullPack('e5f6a7b'), prNumber: 12, headline: 'Newer on 12.' });
+  store.reviewPacks.recordReviewPack({ ...fullPack('c3d4e5f'), prNumber: 700, headline: 'Only pack on 700.' });
+  store.reviewPacks.recordReviewPack(fullPack('a1b2c3d'));
+  store.reviewPacks.recordReviewPack({ ...fullPack('b2c3d4e'), headline: 'Newer on 695.' });
+
+  const current = store.reviewPacks.listCurrentReviewPacks();
+
+  assert.deepEqual(
+    current.map((r) => [r.pack.prNumber, r.pack.headSha, r.pack.headline]),
+    [
+      [12, 'e5f6a7b', 'Newer on 12.'],
+      [695, 'b2c3d4e', 'Newer on 695.'],
+      [700, 'c3d4e5f', 'Only pack on 700.'],
+    ],
+    'one record per pull request, by pull request number, each the newest written',
+  );
+  for (const record of current) {
+    assert.equal(record.writtenAt, store.reviewPacks.getCurrentReviewPack(record.pack.prNumber)?.writtenAt);
+  }
+  store.close();
+});

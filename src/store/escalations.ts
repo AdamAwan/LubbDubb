@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Escalation, EscalationContext, EscalationSpan, Proposal } from '../types.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
@@ -52,13 +52,7 @@ export class EscalationStore {
   }
 
   escalationLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, prompt FROM escalations WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      prompt: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.prompt]));
+    return labelsById(this.ctx, 'escalations', ids);
   }
 
   listEscalations(): Escalation[] {

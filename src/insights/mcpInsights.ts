@@ -10,6 +10,7 @@ import {
   type InsightsWindowView,
   type ResolvedWindow,
 } from './insightsWindow.js';
+import { median } from '../primitives.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -446,12 +447,6 @@ function refusals(calls: readonly McpCall[]): McpRefusal[] {
 function earliestOf(input: McpInsightsInput): number | null {
   const first = input.calls[0];
   return first === undefined ? null : Date.parse(first.createdAt);
-}
-
-function median(samples: readonly number[]): number | null {
-  if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? null;
 }
 
 function round(value: number): number {

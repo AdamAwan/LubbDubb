@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { ACTIVE_TASK_STATUS_SQL } from '../tasks.js';
 import type { Job, JobAttachment } from '../types.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
 // → docs/spec/14-persistence.md
@@ -52,13 +52,7 @@ export class JobStore {
   }
 
   jobLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, title FROM jobs WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      title: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.title]));
+    return labelsById(this.ctx, 'jobs', ids);
   }
 
   listJobs(limit = 100): Job[] {

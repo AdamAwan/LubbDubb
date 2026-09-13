@@ -7,6 +7,7 @@ import {
   type InsightsWindowView,
   type ResolvedWindow,
 } from './insightsWindow.js';
+import { median, prNumberOf } from '../primitives.js';
 
 // → docs/spec/18-observability.md
 
@@ -184,17 +185,6 @@ interface ThroughputInput {
   replies: readonly PrReplySent[];
   window: ResolvedWindow;
   now: number;
-}
-
-function median(samples: readonly number[]): number | null {
-  if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? null;
-}
-
-function prNumberOf(ref: string): number | null {
-  const found = /^pr:(\d+)$/.exec(ref)?.[1];
-  return found === undefined ? null : Number(found);
 }
 
 export function buildThroughputInsights(input: ThroughputInput): ThroughputInsights {

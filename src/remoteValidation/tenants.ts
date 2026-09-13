@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { RemoteTenant, TenantStanding } from '../types.js';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/36-remote-validation.md#tenants
 
@@ -92,11 +93,6 @@ function failure(err: ExecFailure, stderr: string): string {
   if (err.killed === true || (err.signal !== null && err.signal !== undefined))
     return `the command was killed after ${err.signal ?? 'timeout'}`;
   return `the command exited ${String(err.code ?? 'unknown')}: ${firstLine(stderr) ?? err.message}`;
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }
 
 /** What a `tenantEnv`'s value is read out of. Injected so a test never reads the machine's own. */

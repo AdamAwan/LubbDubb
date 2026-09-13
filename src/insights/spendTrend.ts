@@ -4,6 +4,7 @@ import { roundUsd } from './issueSpend.js';
 import { PHASE_ORDER, phaseLabel, zeroPhases, type SpendGoal, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from '../world/worldDiff.js';
 import { runInstant, trendSpan, windowView, type InsightsWindowView, type ResolvedWindow } from './insightsWindow.js';
+import { median } from '../primitives.js';
 
 // → docs/spec/18-observability.md
 
@@ -80,12 +81,6 @@ interface SpendTrendInput {
   ciEvents: readonly WorldEvent[];
   window: ResolvedWindow;
   now: number;
-}
-
-function median(samples: readonly number[]): number | null {
-  if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? null;
 }
 
 function emptyWeek(startsAt: string, partial: boolean): SpendTrendBucket {

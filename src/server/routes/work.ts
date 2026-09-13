@@ -33,8 +33,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     WORK_RATE_LIMIT,
     checked({ params: RefParams }, async ({ params, reply }) => {
       const { ref } = params;
-      if (!store.graph.listWorkNodes().some((n) => n.ref === ref))
-        return reply.code(404).send({ error: 'no such work item' });
+      if (!store.graph.getWorkNode(ref)) return reply.code(404).send({ error: 'no such work item' });
       store.graph.ignoreWorkItem(ref);
       return { ok: true };
     }),
@@ -54,7 +53,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     WORK_RATE_LIMIT,
     checked({ params: RefParams }, async ({ params, req, reply }) => {
       const { ref } = params;
-      const node = store.graph.listWorkNodes().find((n) => n.ref === ref);
+      const node = store.graph.getWorkNode(ref);
       if (!node) return reply.code(404).send({ error: 'no such work item' });
 
       const filings = store.graph.listWorkItemFilings();
