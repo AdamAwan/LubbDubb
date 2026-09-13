@@ -5,6 +5,7 @@ import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -40,7 +41,7 @@ export function issuePlan(s: StageContext): void {
       held: supersededBy ? 'superseded' : waits ? 'sequenced' : route.planner === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
-        branch,
+        ...readOnlyDispatch(branch, s.defaultBranch),
         title,
         prompt:
           (replan
@@ -63,6 +64,10 @@ export function issuePlan(s: StageContext): void {
                 branch,
                 planFile: PLAN_FILE,
               })) +
+          readOnlyNote(
+            `Your plan needs neither: plan_submit records it directly, and ${PLAN_FILE} is read off disk where ` +
+              'you write it.',
+          ) +
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +

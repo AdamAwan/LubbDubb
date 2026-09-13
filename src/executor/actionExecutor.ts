@@ -54,6 +54,7 @@ import { dispatchFactScopes } from '../knowledge/block.js';
 import { corroborationGoal } from '../knowledge/knowledge.js';
 import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
+import { handoverNote, handoverResumeFor, type HandoverResume } from './handoverResume.js';
 import { isActiveTask } from '../tasks.js';
 import type {
   Action,
@@ -175,17 +176,30 @@ export class ActionExecutor {
               break;
             }
             let task: Task | null = null;
+            let evidence = '';
+            let retry: RetryResume | null = null;
             try {
               hold.at('ci-evidence');
-              const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
-              const retry = retryResumeFor(origin, store);
-              task = this.recordDispatchTask(action, evidence, retry);
+              evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
+              retry = retryResumeFor(origin, store);
+              const handover =
+                action.type === 'dispatch_code_agent' && retry === null
+                  ? handoverResumeFor(origin, store, store.world.getWorldBaseline()?.issues ?? [])
+                  : null;
               hold.at('slot-handover');
-              const cwd =
-                retry && action.type === 'dispatch_desk_agent'
-                  ? retry.previous.cwd
-                  : await this.workingDirectory(task, action);
-              const inherit = retry && retry.previous.cwd === cwd ? retry.previous.sessionId : null;
+              const slot =
+                action.type === 'dispatch_code_agent'
+                  ? await this.codeWorkingDirectory(action)
+                  : (retry?.previous.cwd ?? null);
+              const inherit = retry
+                ? slot !== null && retry.previous.cwd === slot
+                  ? retry.previous.sessionId
+                  : null
+                : handover !== null && handover.previous.cwd === slot
+                  ? handover.previous.sessionId
+                  : null;
+              task = this.recordDispatchTask(action, evidence, retry, inherit === null ? null : handover);
+              const cwd = slot ?? this.deskScratch(task);
               const agent = this.deps.agents.spawn(task, cwd, inherit);
               const resumed = inherit !== null && agent.sessionId === inherit;
               liveCount += 1;
@@ -205,11 +219,13 @@ export class ActionExecutor {
               record(
                 'executed',
                 resumed
-                  ? `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
+                  ? handover
+                    ? `Handed ${handover.from}'s conversation on to a ${kind} agent on task ${task.id} in ${cwd}.`
+                    : `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
                   : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`,
               );
             } catch (err) {
-              if (task) this.abandonUnstarted(task);
+              this.abandonUnstarted(task ?? this.recordDispatchTask(action, evidence, retry, null));
               record('rejected', `Failed to start agent: ${(err as Error).message}`);
             }
             break;
@@ -754,6 +770,7 @@ export class ActionExecutor {
     action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
     evidence: string,
     retry: RetryResume | null,
+    handover: HandoverResume | null,
   ): Task {
     const { store } = this.deps;
     const guidance = rejectionGuidance(
@@ -771,7 +788,11 @@ export class ActionExecutor {
       sequenceFeatureOrigin(action.originRef, store),
     );
     const attachments = attachmentsFor(action.originRef, store);
-    const note = retry ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent') : null;
+    const note = retry
+      ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent')
+      : handover
+        ? handoverNote()
+        : null;
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
     const obstacles = obstaclesFor(action, store);
     const witness = action.type === 'dispatch_code_agent' ? WITNESS_INSTRUCTION : null;
@@ -831,16 +852,14 @@ export class ActionExecutor {
     });
   }
 
-  private async workingDirectory(
-    task: Task,
-    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
-  ): Promise<string> {
-    if (action.type === 'dispatch_code_agent') {
-      const at = action.base ?? this.deps.defaultBranch;
-      return action.readOnly
-        ? this.deps.worktrees.ensureReadOnly(action.branch, at)
-        : this.deps.worktrees.ensure(action.branch, at);
-    }
+  private codeWorkingDirectory(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
+    const at = action.base ?? this.deps.defaultBranch;
+    return action.readOnly
+      ? this.deps.worktrees.ensureReadOnly(action.branch, at)
+      : this.deps.worktrees.ensure(action.branch, at);
+  }
+
+  private deskScratch(task: Task): string {
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });
     return cwd;

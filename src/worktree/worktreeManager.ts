@@ -240,6 +240,7 @@ export class WorktreeManager implements Worktrees {
     const onto = await this.switchOnto(req);
     this.mark(dir, null);
     try {
+      rmSync(resolve(dir, HARNESS_ARTEFACTS), { recursive: true, force: true });
       await runGit(dir, ['clean', warm ? '-ffd' : '-ffdx']);
       await runGit(dir, onto);
     } catch (err) {
@@ -422,6 +423,8 @@ interface Mark {
 }
 
 const MARKS_DIR = '.read-only';
+
+const HARNESS_ARTEFACTS = '.lubbdubb';
 
 function readMark(path: string): Mark | null {
   try {

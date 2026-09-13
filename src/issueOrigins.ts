@@ -68,6 +68,16 @@ const SUFFIXED: readonly {
 /** Every declared family, for the test that holds the vocabulary to its asserted strings. */
 export const issueOriginFamilies = Object.keys(FAMILIES) as readonly IssueOriginFamily[];
 
+const HANDOVERS = { plan: 'appraisal' } as const satisfies Partial<Record<IssueOriginFamily, IssueOriginFamily>>;
+
+/** The family whose conversation this origin's dispatch inherits, or null where none is declared. */
+export function handoverSource(originRef: string | null): { issueNumber: number; from: IssueOriginFamily } | null {
+  const parsed = parseIssueOrigin(originRef);
+  if (parsed === null) return null;
+  const from = (HANDOVERS as Partial<Record<IssueOriginFamily, IssueOriginFamily>>)[parsed.family];
+  return from === undefined ? null : { issueNumber: parsed.issueNumber, from };
+}
+
 export function issueOriginRef(family: PlainFamily, issueNumber: number): string;
 export function issueOriginRef(family: IdFamily, issueNumber: number, id: string | number): string;
 export function issueOriginRef(family: IssueOriginFamily, issueNumber: number, id?: string | number): string {

@@ -537,6 +537,20 @@ is no second list to keep in step with it. What each stage contributes:
 3. **Goal appraisals** (`issue-appraisal`) — asking whether a goal can be worked from comes before deciding
    _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes both** the planner and
    the pickup for that issue, from the pulse it is proposed on until the appraiser has answered.
+
+   The two are the same kind of agent doing the same read, which reads like an argument for one rule
+   answering both — and the saving would be real, a whole dispatch per goal. What refuses it is the
+   **profile**: the appraisal is the stage that _mints_ the pin ([02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)),
+   and a divergent proposal **holds the funnel until a human answers it**. So the appraiser runs on its
+   own `byRule` entry, deliberately cheap, and the planner resolves onto whatever the pin says. One
+   merged agent would have to pick a profile before anything about the goal is known: plan every goal at
+   the appraiser's cheap entry, or pay the deep one on every ticket the appraisal exists to refuse. A
+   fourth `unclear` verdict cannot recover that either, because the hold exists to be answered _before_
+   the money is spent and a planner that has planned has spent it. The appraisal is a **pricing and
+   admission gate**; the planner is what it prices. What the split costs is one cold read, and that is
+   paid back by [the handover](09-execution.md#handing-a-conversation-on) rather than by merging the
+   stages.
+
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
 5. **Assessors** (`issue-assess`) — an assessment decides whether an issue needs work at all, so it

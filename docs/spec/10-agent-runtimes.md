@@ -728,6 +728,39 @@ inside the launch directory's project dir, so a retry that lands anywhere else f
 re-attach to — and fails as a run that died for no visible reason. The executor compares the resolved
 cwd against the previous agent's and drops the inheritance if they differ.
 
+### Handing a conversation to the next stage
+
+The same `spawn` argument carries a **third** kind of inheritance, and the only one that crosses
+origins: the planner is launched into the **goal appraiser's** conversation rather than a cold one
+(`handoverResumeFor`, `src/executor/handoverResume.ts`). The two stages read the same ticket against
+the same repository one after the other, so the second read is bought and paid for; what the split
+buys instead is the pricing gate, which is
+[the dispatcher's argument](05-dispatcher.md#the-rule-order) rather than this one.
+
+Everything above about a re-dispatch holds unchanged — new agent row, two rows on one `sessionId`,
+nothing to tear down. Three things are this case's own:
+
+- **Which pairs may hand over is declared**, in `HANDOVERS` in `src/issueOrigins.ts`, beside the
+  families themselves and for the same reason: a pair built at a call site is in no declaration. Only
+  `plan` inherits, and only from `appraisal`.
+- **The previous agent is reached through the _verdict_, never through a scan of the origin.**
+  `IssueAppraisal.agentId` is the agent that wrote the appraisal; an agent that merely ran on
+  `issue:<n>:appraisal` is not evidence that this is the conversation in which the goal was read.
+- **Every uncertainty starts the planner cold**, and it is the ordinary posture rather than a
+  concession: no verdict, an `unclear` one, an operator's own confirmation (which has no agent), a
+  killed or crashed appraiser, a goal whose text has changed since — `goalFingerprint` again, because a
+  transcript that read other text is worse than no transcript — a planner that already has an agent of
+  its own, and a slot that is not the one the appraiser sat in. The last is the cwd rule above, and it
+  bites here: two read-only checkouts of one ref are usually the **same warm slot**
+  ([09](09-execution.md#the-read-only-checkout)), but "usually" is not "always", and a `--resume` into
+  a directory holding no transcript is the silent death this section opens with.
+
+Because the inheritance can be dropped at the slot, the note that tells the agent it has a memory is
+decided **after** the working directory is resolved and not before — a cold agent told that everything
+in its conversation is its own earlier work is being lied to about an empty transcript. That is why
+the executor resolves the slot ahead of writing the task row, and why a dispatch that fails to get one
+still writes the row it was going to run before abandoning it.
+
 ### Events emitted
 
 `output`, `waiting`, `autoAnswered`, `done`, `reaped`, `status`, `usage`, `flag`, `finding`,

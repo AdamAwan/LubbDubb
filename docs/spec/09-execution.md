@@ -998,13 +998,25 @@ else left to give ([below](#reclaiming-a-stranded-slot)).
 
 ### The read-only checkout
 
-Four dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
-assessment, a handed-over validation check ([20](20-validation.md)), and a local validation
-([32](32-local-validation.md)) — which is the one of them cut from a **commit** rather than a branch,
-because the branch it is about moves while it runs and a plan written against a different tree from
-the one being driven is the failure that feature's whole pin exists to prevent. Each is told in its prompt not
-to commit or push anything, and each is cut from the default branch for the reason it says out loud —
-the state it is asked about is _on_ it.
+Five dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
+**planner** ([08](08-planning.md)), the assessment, a handed-over validation check
+([20](20-validation.md)), and a local validation ([32](32-local-validation.md)) — which is the one of
+them cut from a **commit** rather than a branch, because the branch it is about moves while it runs
+and a plan written against a different tree from the one being driven is the failure that feature's
+whole pin exists to prevent. Each is told not to commit or push anything, and each is cut from the
+default branch for the reason it says out loud — the state it is asked about is _on_ it.
+
+The planner was the late one, and it had **never** been anything else. It reads the repository and
+decides a decomposition; what leaves the turn is `plan_submit`, or `.lubbdubb/plan.json` read off
+disk by the file-event ingestion ([08](08-planning.md)) — which is **gitignored**, so it is not a
+commit either. `plan/issue/<n>` was therefore a ref minted once per goal that never got a pull
+request, was never merged, and so was never reaped: #396's own accumulation, in the one rule #396
+did not look at. It is now a lease key like the other four.
+
+Its prompt says so through an **appended** `readOnlyNote`, not through the template body, for
+[the prompt templates' reason](05-dispatcher.md#prompt-templates) — the other four carry the
+instruction in a template, and a deployment that overrode `issue-plan` before this change would
+otherwise have a planner that still believes it is on a branch.
 
 Each used to mint a branch anyway, and **nothing ever reaped it**: `reapableBranches` deletes the
 branch of a **merged** pull request and refuses everything else, deliberately, so a ref that never
@@ -1035,6 +1047,13 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   what stops a queue of appraisals and checks paying for a cold install each, which the pool could never
   give work that warms nothing of its own. The mark is the whole of the evidence: it is written only by
   a read-only hand-over and cleared by every other, so a tree the harness cannot vouch for is wiped.
+- **What a warm tree keeps is the _source's_ build state, and never the _harness's_ own artefacts.**
+  `clean -ffd` spares ignored files, which is the whole point for `node_modules/` and `dist/` — and is
+  exactly wrong for `.lubbdubb/`, which is gitignored in every target repository and is where an agent
+  leaves what the harness reads back. So the hand-over removes that directory outright, ahead of the
+  clean. Without it the planner's read-only slot hands the **previous goal's** `plan.json` to the next
+  planner, sitting in its checkout as though it wrote it: ingestion fires on a write event and so never
+  looks at it, nothing is red, and the only reader is the agent it misleads.
 - **Reuse follows the ref, not the tree.** A key coming back to its own slot after the default branch
   has moved is re-pointed at the new commit. An assessor judging "was this delivered" against
   yesterday's tip answers the wrong question — where a branch's slot going stale is just its own
@@ -1054,6 +1073,20 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   follows it onto the same head under `review-pack-check/pr-<n>/<headSha>`, one slot for all the
   claims. The key carries the head because the task row has nowhere else to keep it.
   → [31](31-review-packs.md#when-a-pack-is-made), [the check](31-review-packs.md#the-check)
+
+### Handing a conversation on
+
+A read-only slot warm for the next checkout of the same ref is also the slot the **transcript** is
+keyed to, and that is what makes the appraisal → planner handover possible at all: the planner is
+launched into the appraiser's conversation instead of re-reading the ticket and the repository from
+cold. The mechanics, the declaration of which pairs may do it, and the list of things that start the
+planner cold instead are [10](10-agent-runtimes.md#handing-a-conversation-to-the-next-stage).
+
+What belongs here is the one coupling: `claude --resume` finds a transcript only in the directory it
+was written in, so the handover lands **only** when the planner is given the appraiser's own slot.
+The warm arm is what usually gives it — same ref, free slot, preferred over minting — and the cwd
+check is what makes the times it does not a cold start rather than an agent that dies reporting
+nothing.
 
 ### The checkout a local run uses
 
@@ -1330,7 +1363,7 @@ along with the task row it settles.
   components share the one clone and each refreshes on its own schedule, and git updates a
   remote-tracking ref as a compare-and-swap against the value it read when the fetch began. Two
   overlapping fetches therefore make the second fail the whole fetch with `cannot lock ref … is at X
-  but expected Y` — on a ref the first has already moved to the right place. The queue chains
+but expected Y` — on a ref the first has already moved to the right place. The queue chains
   callers rather than sharing one in-flight fetch, so every caller still gets a fetch that started
   after it asked; a failing fetch rejects its own caller only and the next in line still runs.
 - **`resolveCommit(repoRoot, ref)`** — resolves to a **SHA**, trying `refs/remotes/origin/<ref>`, then
