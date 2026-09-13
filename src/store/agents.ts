@@ -31,6 +31,10 @@ export const AGENT_COLUMNS: ColumnMigrations = {
   },
 };
 
+const LIVE: Agent['status'][] = ['starting', 'running', 'waiting'];
+
+const LIVE_SQL = `(${LIVE.map((s) => `'${s}'`).join(', ')})`;
+
 export class AgentStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -98,7 +102,7 @@ export class AgentStore {
   }
 
   listAgents(): Agent[] {
-    const rows = this.ctx.prep(`SELECT * FROM agents ORDER BY started_at DESC`).all() as AgentRow[];
+    const rows = this.ctx.prep(`SELECT * FROM agents ORDER BY started_at DESC, rowid ASC`).all() as AgentRow[];
     return rows.map(rowToAgent);
   }
 
@@ -159,11 +163,19 @@ export class AgentStore {
   }
 
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
-    return this.listAgents().filter((a) => statuses.includes(a.status));
+    if (statuses.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM agents WHERE status IN (${statuses.map(() => '?').join(', ')})
+         ORDER BY started_at DESC, rowid ASC`,
+      )
+      .all(...statuses) as AgentRow[];
+    return rows.map(rowToAgent);
   }
 
   countLiveAgents(): number {
-    return this.listAgentsByStatus('starting', 'running', 'waiting').length;
+    const row = this.ctx.prep(`SELECT COUNT(*) AS n FROM agents WHERE status IN ${LIVE_SQL}`).get() as { n: number };
+    return row.n;
   }
 
   recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {

@@ -114,9 +114,10 @@ export class RecoveryDesk {
 
   pending(): OrphanedWork[] {
     const out: OrphanedWork[] = [];
+    const all = this.deps.store.agents.listAgents();
     const staffed = new Set<string>();
-    for (const agent of this.deps.store.agents.listAgents()) staffed.add(agent.taskId);
-    for (const agent of this.deps.store.agents.listAgentsByStatus('crashed', 'interrupted')) {
+    for (const agent of all) staffed.add(agent.taskId);
+    for (const agent of all.filter((a) => a.status === 'crashed' || a.status === 'interrupted')) {
       const task = this.deps.store.tasks.getTask(agent.taskId);
       if (!isRecoveryCandidate(agent, task) || !task) continue;
       out.push(
