@@ -561,7 +561,17 @@ provider.
 
 `countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use: it
 counts `starting` / `running` / `waiting`. `crashed` is deliberately outside it — a row stamped by boot
-detection has no process behind it, so counting it would let dead agents eat the concurrency cap.
+detection has no process behind it, so counting it would let dead agents eat the concurrency cap. The
+three statuses are declared once in `LIVE` and the SQL derives its `IN` clause from it, as
+`local_runs` does; the reading is a `COUNT(*)` over that clause, because it sits on the dispatcher's
+headroom path and on every snapshot, where hydrating the whole table to take its length was the cost.
+`listAgentsByStatus` selects on the same column rather than filtering a full listing, and is one of
+the variable-length `IN` sites that keep `db.prepare`.
+
+Both listings, and `listAgents`, order `started_at DESC, rowid ASC`: the tie-break is explicit because
+agents started inside the same millisecond are ordinary — a fake clock in a test makes them the rule —
+and SQLite's sorter promises nothing about equal keys, so two readings of the same rows could disagree
+on which agent is "the live one" a caller takes first.
 
 `recordAgentUsage` writes the cumulative values onto the row **and** the cost delta into
 `usage_events`. It is the shape for a row with **one** session behind it; a local run's

@@ -6,10 +6,13 @@ import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
   EnvironmentHealthReading,
+  GoalArrival,
+  GoalWatch,
   Issue,
   IssueAppraisal,
   IssueDelivery,
   IssueInstruction,
+  IssueShortfall,
   LocalRun,
   LocalValidation,
   LocalRunReadings,
@@ -21,6 +24,7 @@ import type {
   TaskSummary,
   RemoteReading,
   WatchReading,
+  WorkNode,
   WorldSnapshot,
 } from '../types.js';
 import type { StateSection } from '../wire.js';
@@ -254,6 +258,7 @@ export function buildStateSections(
       return { ...resource, path, present: existsSync(path) };
     }),
   );
+  const goalWatches = once(() => store.watches.listGoalWatches());
   const conclusions = once(() => new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c])));
   const deliveries = once(() => store.verdicts.listDeliveries());
   const deliveriesByOrigin = once(() => new Map(deliveries().map((d) => [d.originRef, d])));
@@ -328,7 +333,9 @@ export function buildStateSections(
     };
   });
   const worldEvents = store.world.listWorldEvents(100);
-  const shiftLog = store.decisions.listDecisions(100).map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
+  const shiftLog = recentDecisions()
+    .slice(0, 100)
+    .map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
   const refUrls = buildRefUrls({
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
     issues: world.issues,
@@ -348,11 +355,12 @@ export function buildStateSections(
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
+  const workNodes = once(() => store.graph.listWorkNodes());
   const spend = once(() =>
     rollUpIssueSpend({
       agents: agents(),
       tasks,
-      nodes: store.graph.listWorkNodes(),
+      nodes: workNodes(),
       localRuns: store.localRuns.listLocalRuns(),
     }),
   );
@@ -529,55 +537,73 @@ export function buildStateSections(
     | 'environmentArrivals'
     | 'remoteSheets'
     | 'stackLandings'
-  > => ({
-    worldObservedAt: baseline?.takenAt ?? null,
-    world: {
-      ...world,
-      pullRequests: openPullRequests(),
-      closedPullRequests: world.closedPullRequests?.map(withReview),
-      issues: world.issues.map(enrichIssue),
-      parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
-    },
-    retainedRuns: retainedRuns(),
-    archivedPullRequests: archivedPullRequests.map(withReview),
-    stacks: stacks(),
-    environmentReach: buildEnvironmentReach(store, config.environments, remoteSheets(), plans, planParts()),
-    featureSequences: store.sequences.listFeatureSequences(),
-    environmentHealth: buildEnvironmentHealth(store, config.environments),
-    goalWatchWindows: buildGoalWatchWindows(store, config.environments),
-    environmentArrivals: config.environments.length === 0 ? [] : store.environments.listGoalArrivals().slice(0, 50),
-    remoteSheets: remoteSheets(),
-    stackLandings: [
-      ...stacks().map((stack) => {
-        const rungPrs = stack.rungs.flatMap((rung) => {
-          const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
-          return pr ? [pr] : [];
-        });
-        const landing = landingFor(
-          stack.rungs.map((r) => r.prNumber),
-          landings(),
-          openPrNumbers,
-        );
-        return {
-          ref: stack.ref,
-          ...landingReadiness(rungPrs),
-          landing,
-          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
-        };
-      }),
-      ...landings()
-        .filter(
-          (l) => l.status === 'standing' && !stacks().some((s) => s.rungs.some((r) => l.rungs.includes(r.prNumber))),
-        )
-        .map((landing) => ({
-          ref: landing.ref,
-          offer: false,
-          blockedBy: null,
-          landing,
-          landed: landedCount(landing, { ...world, merged: mergedPrs() }),
-        })),
-    ],
-  });
+  > => {
+    const environments = config.environments;
+    const arrivals = environments.length === 0 ? [] : store.environments.listGoalArrivals();
+    const prByNumber = new Map<number, PullRequest>();
+    for (const pr of world.pullRequests) if (!prByNumber.has(pr.number)) prByNumber.set(pr.number, pr);
+    const stackRungPrs = new Set(stacks().flatMap((s) => s.rungs.map((r) => r.prNumber)));
+    return {
+      worldObservedAt: baseline?.takenAt ?? null,
+      world: {
+        ...world,
+        pullRequests: openPullRequests(),
+        closedPullRequests: world.closedPullRequests?.map(withReview),
+        issues: world.issues.map(enrichIssue),
+        parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
+      },
+      retainedRuns: retainedRuns(),
+      archivedPullRequests: archivedPullRequests.map(withReview),
+      stacks: stacks(),
+      environmentReach:
+        environments.length === 0
+          ? []
+          : buildEnvironmentReach({
+              store,
+              environments,
+              sheets: remoteSheets(),
+              plans,
+              parts: planParts(),
+              arrivals,
+              nodes: workNodes(),
+              delivered: deliveries(),
+              shortfalled: shortfallsByOrigin(),
+            }),
+      featureSequences: store.sequences.listFeatureSequences(),
+      environmentHealth: buildEnvironmentHealth(store, environments),
+      goalWatchWindows: buildGoalWatchWindows(store, environments, goalWatches),
+      environmentArrivals: arrivals.slice(0, 50),
+      remoteSheets: remoteSheets(),
+      stackLandings: [
+        ...stacks().map((stack) => {
+          const rungPrs = stack.rungs.flatMap((rung) => {
+            const pr = prByNumber.get(rung.prNumber);
+            return pr ? [pr] : [];
+          });
+          const landing = landingFor(
+            stack.rungs.map((r) => r.prNumber),
+            landings(),
+            openPrNumbers,
+          );
+          return {
+            ref: stack.ref,
+            ...landingReadiness(rungPrs),
+            landing,
+            landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
+          };
+        }),
+        ...landings()
+          .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
+          .map((landing) => ({
+            ref: landing.ref,
+            offer: false,
+            blockedBy: null,
+            landing,
+            landed: landedCount(landing, { ...world, merged: mergedPrs() }),
+          })),
+      ],
+    };
+  };
 
   const plansSection = (): Pick<
     CockpitState,
@@ -598,7 +624,7 @@ export function buildStateSections(
     validationChecks: validationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
     validationResources: wireValidationResources(),
-    goalWatches: [...store.watches.listGoalWatches(), ...store.watches.listProposedGoalWatches()],
+    goalWatches: [...goalWatches(), ...store.watches.listProposedGoalWatches()],
     stateQueries: store.remoteValidation.listStateQueries(),
   });
 
@@ -755,38 +781,42 @@ function buildUsage(system: System, unattributedCostUsd: number) {
 }
 
 function buildEnvironmentHealth(store: System['store'], environments: EnvironmentConfig[]): EnvironmentHealthReading[] {
-  const readings = store.environments.listEnvironmentHealth();
-  return environments
-    .filter((env) => env.health !== undefined)
-    .flatMap((env) => readings.filter((r) => r.environment === env.name));
+  const byEnvironment = groupBy(store.environments.listEnvironmentHealth(), (r) => r.environment);
+  return environments.filter((env) => env.health !== undefined).flatMap((env) => byEnvironment.get(env.name) ?? []);
 }
 
-function buildEnvironmentReach(
-  store: System['store'],
-  environments: EnvironmentConfig[],
-  sheets: readonly RemoteSheetView[],
-  plans: Plan[],
-  parts: PlanPart[],
-): GoalReachView[] {
-  if (environments.length === 0) return [];
-  const arrivals = store.environments.listGoalArrivals();
+function buildEnvironmentReach(input: {
+  store: System['store'];
+  environments: EnvironmentConfig[];
+  sheets: readonly RemoteSheetView[];
+  plans: Plan[];
+  parts: PlanPart[];
+  arrivals: GoalArrival[];
+  nodes: WorkNode[];
+  delivered: readonly IssueDelivery[];
+  shortfalled: ReadonlyMap<string, IssueShortfall>;
+}): GoalReachView[] {
+  const { store, environments, sheets, plans, parts, arrivals, nodes } = input;
   const releases = store.environments.listEnvironmentGateReleases();
   const released = new Map(releases.map((r) => [r.goalRef, r]));
-  const delivered = new Set(store.verdicts.listDeliveries().map((d) => d.originRef));
-  const shortfalls = new Set(store.verdicts.listShortfalls().map((sf) => sf.originRef));
   const holds = new Map<string, string>();
   const gated = new Set<string>();
-  for (const goalRef of delivered) {
-    if (shortfalls.has(goalRef)) continue;
+  for (const { originRef: goalRef } of input.delivered) {
+    if (input.shortfalled.has(goalRef)) continue;
     const hold = environmentGateHold({ goalRef, environments, arrivals, releases });
     if (hold !== null) holds.set(goalRef, hold);
     if (hold !== null || released.has(goalRef)) gated.add(goalRef);
+  }
+  const sheetByGoalEnvironment = new Map<string, RemoteSheetView>();
+  for (const sheet of sheets) {
+    const key = `${sheet.goalRef} ${sheet.environment}`;
+    if (!sheetByGoalEnvironment.has(key)) sheetByGoalEnvironment.set(key, sheet);
   }
   return allGoalReach({
     held: gated,
     landings: store.environments.listGoalLandings(),
     readings: store.environments.listEnvironmentReach(),
-    nodes: store.graph.listWorkNodes(),
+    nodes,
     landed: store.environments.landedPrs(),
     plans,
     parts,
@@ -797,44 +827,55 @@ function buildEnvironmentReach(
     // → 36-remote-validation.md#the-cockpit
     environments: goal.environments.map((env) => ({
       ...env,
-      sheet: sheetFold(sheets, goal.goalRef, env.environment),
+      sheet: sheetFold(sheetByGoalEnvironment.get(`${goal.goalRef} ${env.environment}`)),
     })),
     gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));
 }
 
-function sheetFold(sheets: readonly RemoteSheetView[], goalRef: string, environment: string): string | null {
-  const sheet = sheets.find((s) => s.goalRef === goalRef && s.environment === environment);
+function sheetFold(sheet: RemoteSheetView | undefined): string | null {
   if (sheet === undefined) return null;
   return sheetFoldLine(
     sheet.rows.map((row) => ({ blockedReason: row.blockedReason, outcome: row.reading?.outcome ?? null })),
   );
 }
 
-function buildGoalWatchWindows(store: System['store'], environments: EnvironmentConfig[]): GoalWatchView[] {
+function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
+  const grouped = new Map<K, T[]>();
+  for (const row of rows) {
+    const held = grouped.get(key(row));
+    if (held) held.push(row);
+    else grouped.set(key(row), [row]);
+  }
+  return grouped;
+}
+
+function buildGoalWatchWindows(
+  store: System['store'],
+  environments: EnvironmentConfig[],
+  readGoalWatches: () => GoalWatch[],
+): GoalWatchView[] {
   if (!environments.some((e) => e.watch !== undefined)) return [];
   const windows = store.watches.listWatchWindows();
   if (windows.length === 0) return [];
   const newest = new Map<string, WatchReading>();
   for (const r of store.watches.listWatchReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
-  const checks = store.watches.listGoalWatches();
+  const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
   return windows.map((window) => ({
     ...window,
-    checks: checks
-      .filter((c) => c.originRef === window.goalRef)
-      .map((c) => ({
-        checkId: c.id,
-        title: c.title,
-        kind: c.kind,
-        tolerate: c.tolerate,
-        expectUnder: c.expectUnder,
-        expectOver: c.expectOver,
-        expectBaseline: c.expectBaseline,
-        unit: c.unit,
-        baselineValue: c.baselineValue,
-        reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
-      })),
+    checks: (checksByGoal.get(window.goalRef) ?? []).map((c) => ({
+      checkId: c.id,
+      title: c.title,
+      kind: c.kind,
+      tolerate: c.tolerate,
+      expectUnder: c.expectUnder,
+      expectOver: c.expectOver,
+      expectBaseline: c.expectBaseline,
+      unit: c.unit,
+      baselineValue: c.baselineValue,
+      reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
+    })),
   }));
 }
 
@@ -851,11 +892,18 @@ function buildRemoteSheets(store: System['store'], environments: EnvironmentConf
   const newest = new Map<string, RemoteReading>();
   for (const r of store.remoteValidation.listRemoteReadings())
     newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
-  const rows = store.remoteValidation.listRemoteSheetRows();
-  const runs = store.remoteValidation.listRemoteRuns();
+  const rowsByGoalEnvironment = groupBy(
+    store.remoteValidation.listRemoteSheetRows(),
+    (row) => `${row.goalRef} ${row.environment}`,
+  );
+  const runsByGoalEnvironment = groupBy(
+    store.remoteValidation.listRemoteRuns(),
+    (run) => `${run.goalRef} ${run.environment}`,
+  );
   const tenants = store.remoteValidation.listRemoteTenants();
   const now = Date.now();
   return sheets.map((sheet) => {
+    const key = `${sheet.goalRef} ${sheet.environment}`;
     const environment = environments.find((e) => e.name === sheet.environment);
     const validate = environment?.validate;
     // The `tenantEnv` value is never folded in: the standing carries the *variable's* name, and the
@@ -866,10 +914,11 @@ function buildRemoteSheets(store: System['store'], environments: EnvironmentConf
         : resolveTenant({ environment, stamped: tenants, now }).standing;
     return {
       ...sheet,
-      rows: rows
-        .filter((row) => row.goalRef === sheet.goalRef && row.environment === sheet.environment)
-        .map((row) => ({ ...row, reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null })),
-      run: runs.filter((r) => r.goalRef === sheet.goalRef && r.environment === sheet.environment).at(-1) ?? null,
+      rows: (rowsByGoalEnvironment.get(key) ?? []).map((row) => ({
+        ...row,
+        reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null,
+      })),
+      run: runsByGoalEnvironment.get(key)?.at(-1) ?? null,
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
