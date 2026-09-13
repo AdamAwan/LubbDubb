@@ -5067,13 +5067,28 @@ button.cn-grow {
 .cn-ov-next-body {
   margin-top: 16px;
 }
+/* The ask's own controls, given a place instead of ending wherever its prose
+   did. `needBody` writes the row; this anchors it as the column's action bar —
+   a rule above it, flush with the column's edges — so Done sits in the same
+   relation to the ask on every kind rather than floating mid-column with the
+   footer's rule stranded underneath.
+
+   Only where the row really is the body's last child, which is how the task
+   kinds end. The kinds that finish with a form of their own — an escalation's
+   answer box — keep their own shape, and the rule never lands mid-body. */
+.cn-ov-next-body > .cn-acts:last-child {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cn-line);
+}
+
+/* A caption under the bar rather than a second band: it is a reading, and a rule
+   of its own made the controls look like they belonged to neither side of it. */
 .cn-ov-next-foot {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--cn-line);
+  margin-top: 10px;
 }
 .cn-ov-next-rest {
   font-size: 11.5px;
