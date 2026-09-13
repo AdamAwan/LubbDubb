@@ -431,7 +431,14 @@ text rather than its index ([08](08-planning.md)).
 
 **Built.** A check's `steps` are one journey through the delivered goal, in order, and each step
 says who carries it out. Their shapes are `ValidationStepSchema` (`src/validation/checkDocument.ts`),
-resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. A `browser` step may
+resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. The vocabulary itself
+is `STEP_KINDS` (`src/validation/steps.ts`) and every schema over it reads from that list rather than
+restating it: the ingestion schema, and `validationStepsSchema` — the **tool-facing** test plan, the
+one described shape both `validation_plan` and `validation_amend` advertise
+([11](11-mcp-tools.md)). Those two tools differ deliberately in the prose on every other field, one
+speaking for a whole set and the other for the checks it names, but a step kind means the same thing
+in both, and a kind added to one copy and not the other would leave half the surface on the old
+vocabulary with nothing red. A `browser` step may
 carry a **one-off script**, which is the only step field that is a body of code and the only one that
 acts ([36](36-remote-validation.md#the-one-off-script)); a `screenshot` step reaches the `captured`
 state and asserts nothing ([36](36-remote-validation.md#handing-a-screen-back-to-look-at)). The
