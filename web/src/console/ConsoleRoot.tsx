@@ -10,7 +10,6 @@ import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 
 import { Overview, queueRow } from './Overview.js';
-import { LanesOverview } from './overviews/LanesOverview.js';
 import { NextOverview } from './overviews/NextOverview.js';
 import { projectName } from '../view/updateAsks.js';
 import { WorldSignals } from './WorldSignals.js';
@@ -161,8 +160,6 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
   switch (tab) {
     case 'overview':
       switch (view.overviewShape) {
-        case 'lanes':
-          return <LanesOverview view={view} actions={actions} />;
         case 'next':
           return <NextOverview view={view} actions={actions} />;
         default:

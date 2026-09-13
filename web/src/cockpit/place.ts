@@ -61,8 +61,8 @@ export interface Place {
  * goals, pull requests. The other three lead with what the operator must answer
  * rather than what the harness is doing.
  */
-export type OverviewShape = 'cards' | 'lanes' | 'next';
-export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'lanes', 'next'];
+export type OverviewShape = 'cards' | 'next';
+export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'next'];
 
 /**
  * How the feature board is read. `board` is every Feature at once, which answers

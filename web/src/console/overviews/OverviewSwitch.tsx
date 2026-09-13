@@ -7,13 +7,11 @@ import { OVERVIEW_SHAPES } from '../../cockpit/place.js';
 
 const SHAPE_LABEL: Record<OverviewShape, string> = {
   cards: 'Cards',
-  lanes: 'Lanes',
   next: 'Next',
 };
 
 const SHAPE_TITLE: Record<OverviewShape, string> = {
   cards: "Today's overview — fleet, goals in flight, pull requests",
-  lanes: 'One lane per goal in flight, with whose move it is on the right',
   next: 'The single ask holding the most work, and nothing else',
 };
 

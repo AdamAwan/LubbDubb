@@ -4840,8 +4840,8 @@ button.cn-grow {
 }
 
 /* ── The overview's alternative shapes ────────────────────────────────────────
-   Two surfaces that lead with what the operator must answer rather than what the
-   harness is doing, selected by `?overview=`. Everything here is namespaced
+   One surface that leads with what the operator must answer rather than what the
+   harness is doing, selected by `?overview=next`. Everything here is namespaced
    `cn-ov-`: `.cn-ask`, `.cn-desk`, `.cn-seg`, `.cn-sw` and `.cn-track` are all
    already taken further up this sheet, and an unnamespaced collision here would
    land the goal page's padding on a lane's segment.
@@ -4880,20 +4880,6 @@ button.cn-grow {
   color: var(--cn-fg);
 }
 
-.cn-ov-banner-count {
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-.cn-ov-banner-count em {
-  font-style: normal;
-  color: var(--cn-red-ink);
-}
-.cn-ov-banner-clear {
-  font-size: 21px;
-  font-weight: 600;
-  color: var(--cn-green-ink);
-}
 
 
 .cn-ov-ask-kind {
@@ -4917,145 +4903,68 @@ button.cn-grow {
 /* The name is the control and the ref sits beside it, never inside it.
    → docs/spec/17-cockpit.md#links */
 
-/* ── Lanes ── */
 
-.cn-ov-lanes-banner {
-  padding-bottom: 10px;
-}
-.cn-ov-lane {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.5fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 14px;
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  background: var(--cn-panel);
-  margin-bottom: 8px;
-}
-.cn-ov-lane-mine {
-  border-color: var(--cn-red-line);
-  background: var(--cn-red-fill);
-}
-.cn-ov-lane-goal {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.cn-ov-lane-name {
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--cn-fg);
-  background: none;
-  border: 0;
+.cn-ov-track {
+  list-style: none;
+  margin: 0;
   padding: 0;
-  cursor: pointer;
-  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cn-ov-seg {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 9px;
+  border-radius: 3px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-track);
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-ov-seg b {
+  font-weight: 500;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-seg-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cn-ov-lane-name:hover {
-  color: var(--cn-accent);
-}
-.cn-ov-lane-move {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  text-align: right;
-}
-.cn-ov-lane-who {
+.cn-ov-seg-state {
   font-size: var(--label-size-sm);
   letter-spacing: var(--label-track);
   text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
-.cn-ov-lane-yours {
-  color: var(--cn-red-ink);
-}
-.cn-ov-lane-facts {
-  font-size: 11px;
-  color: var(--cn-fg-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.cn-ov-track {
-  display: flex;
-  gap: 3px;
-  min-width: 0;
-}
-.cn-ov-seg {
-  flex: 1;
-  min-width: 0;
-  height: 24px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: var(--cn-fg-faint);
-  background: var(--cn-track);
-  border: 1px solid var(--cn-line);
-  overflow: hidden;
-  white-space: nowrap;
-}
-.cn-ov-seg-done {
+.cn-ov-seg-merged {
   background: var(--cn-green-fill);
   border-color: var(--cn-green-line);
   color: var(--cn-green-ink);
 }
-.cn-ov-seg-live {
+.cn-ov-seg-now {
   background: var(--cn-blue-fill);
   border-color: var(--cn-blue-line);
   color: var(--cn-blue-ink-hi);
 }
-.cn-ov-seg-stuck {
-  background: var(--cn-red-fill);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red-ink);
+.cn-ov-seg-waiting {
+  color: var(--cn-fg-faint);
 }
 .cn-ov-seg-held {
   background: var(--cn-amber-fill);
   border-color: var(--cn-amber-line);
   color: var(--cn-amber-ink);
 }
-.cn-ov-seg-none {
-  color: var(--cn-fg-faint);
-}
-.cn-ov-lane-legend {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--cn-fg-faint);
-  padding: 8px 2px 4px;
-}
-.cn-ov-lane-legend span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cn-ov-sw {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex: none;
-}
-.cn-ov-lanes-homeless {
-  font-size: 12px;
-  color: var(--cn-fg-faint);
-  margin: 12px 0 0;
-  max-width: 70ch;
-}
 
-/* ── One at a time ── */
+/* ── One ask at a time, under the work it is about ── */
 
 .cn-ov-next-card {
-  max-width: 680px;
+  max-width: 1240px;
   border: 1px solid var(--cn-tone-line, var(--cn-line));
   border-radius: var(--cn-r);
   background: var(--cn-panel);
@@ -5139,16 +5048,6 @@ button.cn-grow {
   margin: 0 0 16px;
 }
 
-@media (max-width: 900px) {
-  .cn-ov-lane {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .cn-ov-lane-move {
-    align-items: flex-start;
-    text-align: left;
-  }
-}
 
 /* The one-at-a-time shape absorbs the rail, so the body is one track rather than
    two and the situation area takes the width the rail was holding. The wide
@@ -5412,4 +5311,121 @@ button.cn-grow {
   background: var(--cn-blue-fill);
   border-color: var(--cn-blue-line);
   color: var(--cn-fg);
+}
+
+/* The work the ask is about, over the ask. It is a band rather than a card: the
+   ask is the subject and this is its setting, so it takes the quieter ground and
+   the thinner rule. */
+.cn-ov-ctx {
+  padding: 0;
+}
+.cn-ov-ctx-name {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.cn-ov-ctx-name:hover {
+  color: var(--cn-accent);
+}
+.cn-ov-ctx-state {
+  margin-left: auto;
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-ctx .cn-ov-track {
+  margin-top: 9px;
+}
+.cn-ov-ctx-more {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--cn-amber-ink);
+}
+.cn-ov-ctx-none {
+  font-size: 12.5px;
+  color: var(--cn-fg-faint);
+}
+/* The band and the ask are one object, so the seam between them is closed. */
+.cn-ov-ctx + .cn-ov-next-title {
+  margin-top: 16px;
+}
+.cn-ov-ctx-wide {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* Every region in the band wears its name, in the sheet's own label ramp. */
+.cn-ov-ctx-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-ctx-label span {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cn-fg-faint);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-ctx-label-sub {
+  margin-top: 12px;
+}
+.cn-ov-ask-label {
+  margin-top: 16px;
+  color: var(--cn-tone-ink, var(--cn-fg-faint));
+}
+
+/* The part the ask is about. It takes the ask's own tone rather than a colour of
+   its own: the mark means "this row and the ask below are the same thing". */
+.cn-ov-seg-here {
+  border-color: var(--cn-tone-line, var(--cn-blue-line));
+  box-shadow: inset 2px 0 0 var(--cn-tone, var(--cn-accent));
+  color: var(--cn-fg);
+}
+.cn-ov-seg-here .cn-ov-seg-state {
+  color: var(--cn-tone-ink, var(--cn-blue-ink-hi));
+}
+
+/* The setting and the act, side by side. The aside takes a share rather than a
+   fixed width so the ask keeps the room on a narrow desktop, and the rule
+   between them is the aside's own edge — one line, not a gap and a border. */
+.cn-ov-next-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 14px;
+}
+.cn-ov-next-aside {
+  min-width: 0;
+}
+.cn-ov-next-main {
+  min-width: 0;
+}
+.cn-ov-next-main > .cn-ov-ask-label:first-child {
+  margin-top: 0;
+}
+@media (min-width: 1100px) {
+  .cn-ov-next-split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 26px;
+    align-items: start;
+  }
+  .cn-ov-next-aside {
+    border-right: 1px solid var(--cn-line);
+    padding-right: 26px;
+  }
 }
