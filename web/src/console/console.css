@@ -4973,15 +4973,29 @@ button.cn-grow {
 .cn-ov-next-progress {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   font-size: 11px;
   color: var(--cn-fg-faint);
   letter-spacing: 0.06em;
+}
+/* The counter and the two controls, pinned to the card's top right so they are
+   in one place on every ask whatever its body's height. */
+.cn-ov-next-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+}
+.cn-ov-next-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .cn-ov-pips {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .cn-ov-pip {
   width: 20px;
@@ -5046,12 +5060,11 @@ button.cn-grow {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--cn-line);
 }
 .cn-ov-next-rest {
-  margin-left: auto;
   font-size: 11.5px;
   color: var(--cn-fg-faint);
   font-variant-numeric: tabular-nums;

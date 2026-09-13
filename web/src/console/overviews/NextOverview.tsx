@@ -109,8 +109,36 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
               />
             ))}
           </span>
-          <span>
-            {at + 1} of {rows.length}
+          {/* The controls sit with the counter rather than under the ask, because
+              the ask's own height is whatever its body happens to be — a footer
+              puts Next somewhere different on every one of them, and the operator
+              ends up hunting for the control they press most. Here it is the same
+              place on every ask, and beside the count that says what pressing it
+              does. */}
+          <span className="cn-ov-next-nav">
+            <span className="cn-ov-next-count">
+              {at + 1} of {rows.length}
+            </span>
+            <Button
+              tone="secondary"
+              ghost
+              size="small"
+              disabled={at === 0}
+              onClick={() => go(at - 1)}
+              title="The ask before this one (←)"
+            >
+              ‹ Prev
+            </Button>
+            <Button
+              tone="secondary"
+              ghost
+              size="small"
+              disabled={at >= rows.length - 1}
+              onClick={() => go(at + 1)}
+              title="The ask after this one (→)"
+            >
+              Next ›
+            </Button>
           </span>
         </div>
 
@@ -152,24 +180,6 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             <div className="cn-ov-next-body">{body}</div>
 
             <footer className="cn-ov-next-foot">
-              <Button
-                tone="secondary"
-                ghost
-                disabled={at === 0}
-                onClick={() => go(at - 1)}
-                title="The ask before this one (←)"
-              >
-                ‹ Prev
-              </Button>
-              <Button
-                tone="secondary"
-                ghost
-                disabled={at >= rows.length - 1}
-                onClick={() => go(at + 1)}
-                title="The ask after this one (→)"
-              >
-                Next ›
-              </Button>
               <span className="cn-ov-next-rest">
                 {rows.length - at - 1 === 0
                   ? 'last one'
