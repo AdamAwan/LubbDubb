@@ -10,7 +10,7 @@ import type {
   WorkNodeView,
   CaveatAnswerInput,
 } from '../types.js';
-import type { OverviewShape, Place } from './place.js';
+import type { FeatureMode, OverviewShape, Place } from './place.js';
 import type { GoalTab } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -144,6 +144,8 @@ export interface CockpitActions {
   setFeatureQuery(next: Partial<Pick<Place, 'featureCard' | 'featureSort' | 'featurePrs'>>): void;
   /** Which shape the overview draws in — a place, never a useState. */
   setOverviewShape(shape: OverviewShape): void;
+  /** Board or one Feature at a time — a place, never a useState. */
+  setFeatureMode(mode: FeatureMode): void;
   collapseFeature(issueNumber: number, collapsed: boolean): void;
   openGoalSection(section: string, open: boolean): void;
   /** Which pane of the goal page is open — a place, never a useState. Null hands it back to the lifecycle rule. */

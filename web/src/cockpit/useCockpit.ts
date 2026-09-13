@@ -272,6 +272,7 @@ export function useCockpit(): CockpitStatus {
         go(next);
       },
       setOverviewShape: (overview) => go({ overview }),
+      setFeatureMode: (featureMode) => go({ featureMode }),
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed
@@ -439,6 +440,7 @@ export function useCockpit(): CockpitStatus {
       featureCard: place.featureCard,
       featureSort: place.featureSort,
       overviewShape: place.overview,
+      featureMode: place.featureMode,
       featurePrs: place.featurePrs,
     }),
   };
