@@ -1,4 +1,4 @@
-import { MCP_TOOL_NAMES, type McpToolName } from './names.js';
+import { MCP_TOOL_NAMES, type McpToolName, toolsForRule } from './names.js';
 import type { McpTool } from './protocol.js';
 import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
@@ -82,5 +82,13 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
 
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {
   const ctx = buildToolContext(deps, identity);
-  return [...MCP_TOOL_NAMES.map((name) => ({ name, ...TOOLS[name](ctx) })), ...retiredTools()];
+  const advertised = toolsForRule(identity.task.rule ?? null);
+  return [
+    ...MCP_TOOL_NAMES.map((name) => ({
+      name,
+      ...TOOLS[name](ctx),
+      ...(advertised.has(name) ? {} : { hidden: true }),
+    })),
+    ...retiredTools(),
+  ];
 }

@@ -5664,8 +5664,18 @@ be a second opinion drawn inches from the first. The ladder, worst first:
 | **Named, never reached for**   | Agents were told and none called it. The job did not come up, or the wording is not landing.                              |
 | **No desktop session used it** | A person did not sit down and run one. A reading, and the one verdict with no remedy.                                     |
 
-**"Tools to answer for" is a fraction, so both halves count the advertised set.** `toolsAdvertised` is
-what `tools/list` offers and nothing else, and the quiet count is over the same names — a retired name
+**`toolsAdvertised` is the fleet's whole granted set, not what any one agent was shown.** Since the
+advertised set is scoped per dispatch by the rule that dispatched it
+([11](11-mcp-tools.md#which-tools-an-agent-is-advertised)), no single number could be "what agents saw",
+and the tab deliberately reads the grant instead. The consequence is on one verdict only: **Named, never
+reached for** on a `point-of-use` tool now has a third innocent cause beside "the job did not come up"
+and "the wording is not landing" — no dispatch in the window was advertised it at all. The verdict that
+means _broken channel_ is untouched, because every `addendum` tool is advertised to every agent by
+construction. The tab was not taught the per-rule table: it holds no per-agent record of which tools a
+run was shown, so the expectation would be a second opinion with nothing to check it against.
+
+**"Tools to answer for" is a fraction, so both halves count the same set.** `toolsAdvertised` is
+what the fleet is granted and nothing else, and the quiet count is over the same names — a retired name
 something is still calling is a _different_ finding from a live tool gone quiet, and counted in the
 numerator it read `24/20` in amber on precisely the deployment the "Retired, still called" verdict
 exists to help. Retired names still being called are counted apart and said beneath the fraction. The

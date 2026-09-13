@@ -220,6 +220,11 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
   **not** `--allowedTools`: that flag carries the `mcp__lubbdubb__*` grants, and mixing a Bash rule
   into it risks silently dropping them (the drift `src/mcp/names.ts` guards against). Two flags, two
   concerns — the operator cannot lose the MCP grants by adjusting Bash access, by construction.
+  `--allowedTools` carries the **whole** `mcp__lubbdubb__*` set on every launch, and it is deliberately
+  wider than what that agent's `tools/list` advertises
+  ([11](11-mcp-tools.md#which-tools-an-agent-is-advertised)): the grant is argv the operator never sees
+  and costs no context, while the advertised set is prose in every turn's window. Narrowing the grant to
+  match would buy nothing and would reintroduce the three-way drift `src/mcp/names.ts` exists to refuse.
 - **The backstop (`--permission-prompt-tool`).** Unconditional. Claude Code evaluates
   allow rules _before_ the permission-prompt tool, so an allowlisted command never reaches it and the
   unattended path stays synchronous; the backstop fires only for what the allow-list misses. See

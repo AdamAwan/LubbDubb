@@ -15,7 +15,11 @@ import {
   MCP_TOOL_NAMES,
   PERMISSION_PROMPT_TOOL,
   RETIRED_TOOL_NAMES,
+  RULE_TOOLS,
   TOOL_NAMING,
+  toolsForRule,
+  UNIVERSAL_TOOLS,
+  type McpToolName,
 } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
@@ -27,6 +31,7 @@ import { partConclusionOrigin } from '../src/mcp/partOutcome.js';
 import { planOriginIssue } from '../src/plans/planning.js';
 import { MAX_NOTE_LENGTH, normaliseNote } from '../src/mcp/progress.js';
 import { buildTools } from '../src/mcp/tools.js';
+import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { buildApp } from '../src/server/app.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -167,16 +172,54 @@ test('a retired name is answered, so an override that still names one is not a d
   }
 });
 
-test('tools/list advertises the live tools and never a retired one', async () => {
+test('a task carrying no rule is advertised the whole set, and never a retired one', async () => {
   const listed = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, retiredAwareTools());
   const names = ((listed?.result as { tools: { name: string }[] }).tools ?? []).map((t) => t.name);
-  assert.deepEqual(names, [...MCP_TOOL_NAMES], 'the advertised set is the granted set, in its own order');
+  assert.deepEqual(names, [...MCP_TOOL_NAMES], 'no rule means every tool, in its own order');
+  assert.deepEqual([...toolsForRule(null)], [...MCP_TOOL_NAMES], 'the fail-open default is the whole set');
+  assert.deepEqual([...toolsForRule('a-rule-no-release-ever-had')], [...MCP_TOOL_NAMES]);
   for (const name of RETIRED_TOOL_NAMES) assert.ok(!(names as string[]).includes(name));
 });
 
-function retiredAwareTools(): McpTool[] {
+test("tools/list is the dispatching rule's set, and every other tool is still callable", async () => {
+  const tools = retiredAwareTools('issue-retro');
+  const listed = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, tools);
+  const names = ((listed?.result as { tools: { name: string }[] }).tools ?? []).map((t) => t.name);
+  assert.deepEqual(
+    names,
+    MCP_TOOL_NAMES.filter((n) => toolsForRule('issue-retro').has(n)),
+  );
+  assert.ok(names.includes('retro_submit'), "the rule's own tool is advertised");
+  assert.ok(names.includes('escalate'), 'the addendum core is advertised to everyone');
+  assert.ok(!names.includes('split_assess'), 'another rule’s tool costs this agent no tokens');
+
+  for (const name of MCP_TOOL_NAMES) {
+    const tool = tools.find((t) => t.name === name);
+    assert.ok(tool, `${name} is still built`);
+    const answered = await handleRequest(
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: {} } },
+      tools,
+    );
+    const err = (answered?.error as { message?: string } | undefined)?.message ?? '';
+    assert.ok(!err.startsWith('unknown tool'), `${name} must stay callable even when unadvertised`);
+  }
+});
+
+test('every rule subset names a live rule and real tools, and the core is in every one', () => {
+  for (const [rule, extras] of Object.entries(RULE_TOOLS)) {
+    assert.ok(Object.hasOwn(DISPATCH_RULES, rule), `${rule} is a live dispatch rule`);
+    for (const tool of extras) assert.ok((MCP_TOOL_NAMES as readonly string[]).includes(tool), `${tool} is a tool`);
+    for (const core of UNIVERSAL_TOOLS) assert.ok(toolsForRule(rule).has(core), `${rule} keeps ${core}`);
+  }
+  for (const [name, naming] of Object.entries(TOOL_NAMING)) {
+    if (naming === 'addendum')
+      assert.ok(UNIVERSAL_TOOLS.includes(name as McpToolName), `${name} is named to every agent, so it is core`);
+  }
+});
+
+function retiredAwareTools(rule?: string): McpTool[] {
   const system = build();
-  const agent = spawnAgent(system, 'issue:12');
+  const agent = spawnAgent(system, 'issue:12', 'Big thing', rule);
   return buildTools(
     { store: system.store, agents: system.agents },
     { agent, task: system.store.tasks.getTask(agent.taskId)! },
@@ -416,7 +459,7 @@ function build(overrides: Record<string, unknown> = {}): System {
   });
 }
 
-function spawnAgent(system: System, originRef: string, title = 'Big thing'): Agent {
+function spawnAgent(system: System, originRef: string, title = 'Big thing', rule?: string): Agent {
   const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
@@ -424,6 +467,7 @@ function spawnAgent(system: System, originRef: string, title = 'Big thing'): Age
     branch: 'issue/12',
     originRef,
     originTitle: title,
+    rule,
   });
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 }
@@ -1156,7 +1200,7 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
   );
   assert.deepEqual(
     ((replies[1]!.result as { tools: { name: string }[] }).tools ?? []).map((tool) => tool.name).sort(),
-    [...MCP_TOOL_NAMES].sort(),
+    [...toolsForRule(system.store.tasks.getTask(agent.taskId)!.rule ?? null)].sort(),
   );
   assert.equal((replies[2]!.result as ToolResultText).isError, undefined);
   assert.equal(system.store.plans.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');

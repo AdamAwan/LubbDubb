@@ -1581,6 +1581,14 @@ leaves an unmatched token untouched.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
 
+A rule's prompt and the MCP tools advertised to the agent it dispatches are **two statements of the same
+intent**, and they must agree: what a template (or a note appended to it) names, the rule's row in
+`RULE_TOOLS` should advertise → [11](11-mcp-tools.md#which-tools-an-agent-is-advertised). Disagreement is
+not a broken channel — an override naming a tool the row omits is still answered, because an unadvertised
+tool is hidden from `tools/list` and never from `tools/call` — but the agent is being asked for something
+its own tool list does not show. An operator override is always free to name any tool; the agreement is
+asked of the built-in pair.
+
 ### What a CI-fix dispatch carries
 
 `pr-ci-fix` renders five lines naming the pull request and its branch. Appended after it, never
