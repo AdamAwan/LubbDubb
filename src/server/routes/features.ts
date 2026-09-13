@@ -29,6 +29,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }
 
       const runs = store.floor.listIssueRuns();
+      const plans = store.plans.listPlans();
+      const planParts = store.plans.listAllPlanParts();
+      const goalLandings = store.environments.listGoalLandings();
       const { goals } = buildSpendGoals({
         agents: store.agents.listAgents(),
         localRuns: store.localRuns.listLocalRuns(),
@@ -58,8 +61,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           conclusions: store.verdicts.listIssueConclusions(),
           deliveries,
           shortfalls,
-          plans: store.plans.listPlans(),
-          planParts: store.plans.listAllPlanParts(),
+          plans,
+          planParts,
         }),
         deliveries,
         shortfalls,
@@ -72,15 +75,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           runs.filter((r) => r.completedAt === null && r.dismissedAt === null).map((r) => [r.issueNumber, r.startedAt]),
         ),
         reach: allGoalReach({
-          landings: store.environments.listGoalLandings(),
+          landings: goalLandings,
           readings: store.environments.listEnvironmentReach(),
           nodes: store.graph.listWorkNodes(),
           landed: store.environments.landedPrs(),
-          plans: store.plans.listPlans(),
-          parts: store.plans.listAllPlanParts(),
+          plans,
+          parts: planParts,
           environments: config.environments,
         }),
-        landings: store.environments.listGoalLandings(),
+        landings: goalLandings,
         environments: config.environments.map((e) => e.name),
         containerTypes: config.issueContainerTypes,
         watchLabel: watchLabelFor(config.labelPrefix),
