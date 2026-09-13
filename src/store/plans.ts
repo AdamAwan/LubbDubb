@@ -222,6 +222,13 @@ export class PlanStore {
     return rows.map(rowToAmendment);
   }
 
+  listAllPlanAmendments(): PlanAmendment[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_amendments ORDER BY plan_id ASC, created_at DESC`)
+      .all() as PlanAmendmentRow[];
+    return rows.map(rowToAmendment);
+  }
+
   listPendingPlanAmendments(): PlanAmendment[] {
     const rows = this.ctx
       .prep(`SELECT * FROM plan_amendments WHERE status='pending' ORDER BY created_at ASC`)
@@ -368,6 +375,13 @@ export class PlanStore {
     });
     write(rows);
     return rows;
+  }
+
+  listPlanAtoms(planId: string): PlanAtom[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_atoms WHERE plan_id=? ORDER BY seq ASC`)
+      .all(planId) as PlanAtomRow[];
+    return rows.map(rowToPlanAtom);
   }
 
   listAllPlanAtoms(): PlanAtom[] {

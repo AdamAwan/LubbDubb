@@ -221,13 +221,15 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     if (parent !== null) node.parentRef = parent;
   }
 
+  const existingByRef = new Map(input.existing.map((n) => [n.ref, n]));
+
   for (const filing of input.filings) {
     if (filing.ticketRef === null) continue;
 
     const target = emitted.get(filing.targetRef);
     if (target) target.parentRef = filing.ticketRef;
     else {
-      const prior = input.existing.find((n) => n.ref === filing.targetRef);
+      const prior = existingByRef.get(filing.targetRef);
       if (!prior) continue;
       out.push({ ...prior, parentRef: filing.ticketRef });
     }

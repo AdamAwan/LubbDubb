@@ -132,7 +132,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const regrouped = regroupedDocument({
         plan,
         parts: store.plans.listPlanParts(plan.id),
-        atoms: store.plans.listAllPlanAtoms().filter((a) => a.planId === plan.id),
+        atoms: store.plans.listPlanAtoms(plan.id),
         groups: body.groups,
       });
       if (!regrouped.ok) return reply.code(400).send({ error: regrouped.error });

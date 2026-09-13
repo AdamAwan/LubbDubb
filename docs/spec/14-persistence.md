@@ -800,11 +800,20 @@ have cost that discipline its meaning.
 (merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
 
-`upsertPlanAtoms(planId, atoms)` and `listAllPlanAtoms()` are the atom side. Unlike
+`upsertPlanAtoms(planId, atoms)`, `listPlanAtoms(planId)` (ordered `seq ASC`, over
+`idx_plan_atoms_plan`) and `listAllPlanAtoms()` are the atom side. A reader that wants one plan's
+atoms asks for that plan's — filtering the whole table down to one plan reads every atom in the
+deployment to keep a handful. Unlike
 `upsertPlanParts`, `upsertPlanAtoms` **does delete**: an atom carries no progress — no branch, no
 pull request, no task — so the document it came from is the whole record of it, and an amendment
 that drops an atom drops its row. Retiring it instead would leave a declaration on the sheet that
 the current plan no longer makes.
+
+`listPlanAmendments(planId)` (`created_at DESC`) is the read beside one plan; `listAllPlanAmendments()`
+(`plan_id ASC, created_at DESC`, so the rows arrive grouped per plan exactly as a read per plan left
+them) is the one read `/api/usage` takes, because the insights row counts every amendment the
+deployment ever held and a read per plan scales that poll with the number of plans. Rows are never
+deleted and a plan is never deleted, so the two carry the same set.
 
 `recordPlanCaveatAnswers(planId, answers)`, `listPlanCaveatAnswers(planId)` and
 `listAllPlanCaveatAnswers()` are the operator's words beside a plan's caveats — appended at the accept,
