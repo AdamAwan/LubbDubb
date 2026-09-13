@@ -1,13 +1,20 @@
 import type { ReviewAnchor, ReviewClaim, ReviewIdea, ReviewPack, ReviewRange } from '../types.js';
-import { PLUMBING_IDEA_ID } from './hunks.js';
 
 // → docs/spec/31-review-packs.md
+
+/**
+ * The one idea id an author may name: the hunks that carry nothing to review.
+ * It is declared here rather than beside the diff parser because this module is
+ * the one both the companion and the cockpit read, and `src/reviewPacks/hunks.ts`
+ * is not — see [one copy of the derivations](docs/spec/31-review-packs.md).
+ */
+export const PLUMBING_IDEA_ID = 'plumbing';
 
 function ownedHunks(idea: ReviewIdea): ReviewRange[] {
   return idea.anchors.filter((a) => a.kind === 'hunk').map((a) => a.range);
 }
 
-interface NumberedIdea {
+export interface NumberedIdea {
   idea: ReviewIdea;
   number: number;
 }

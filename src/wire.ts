@@ -1089,3 +1089,30 @@ export interface ObstacleBoardPayload {
   dormantMs: number;
   canFileTickets: boolean;
 }
+
+/**
+ * The one runtime this contract carries, and the only value the cockpit imports
+ * from the harness: the review-pack derivations. They are pure functions of the
+ * pack document — the numbering, the false-claim list, the facts line, the code
+ * block, the highlighter — read by the HTML companion server-side and by the
+ * cockpit's page, which is why they may not be two copies.
+ * `src/reviewPacks/derive.ts` is a leaf: it imports `src/types.ts` for types and
+ * nothing else, so nothing server-only rides in with it. `test/wireRuntime.test.ts`
+ * holds that. → docs/spec/31-review-packs.md#one-copy-of-the-derivations
+ */
+export {
+  anchorWeight,
+  codeBlockLines,
+  codeLanguage,
+  falseClaims,
+  highlightCode,
+  ideaAtom,
+  ideaFlags,
+  numberIdeas,
+  packFacts,
+  plainSummary,
+  shortSha,
+  splitBody,
+  testScenarios,
+} from './reviewPacks/derive.js';
+export type { FalseClaim, NumberedIdea } from './reviewPacks/derive.js';
