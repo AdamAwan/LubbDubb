@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueForPr } from '../../pr/prIssue.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { currentPlanSummary, liveParts } from '../../plans/parts.js';
@@ -25,8 +24,6 @@ export function prSplit(s: StageContext): void {
 
     const origin = splitOrigin(issue.number, pr.number);
     if (s.activeOrigins.has(origin)) continue;
-    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     const plan = s.plansByOrigin.get(issueOrigin(issue.number));
     const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
@@ -35,14 +32,13 @@ export function prSplit(s: StageContext): void {
     const reason =
       `PR #${pr.number} changes ${breadth.files} files, past the budget of ${s.planning.fileBudget}; ` +
       'nothing has asked whether it holds more than one concept.';
-    s.candidates.push({
+    s.consider({
       origin,
       rule: 'pr-split',
       title,
       kind: 'code',
       branch,
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(branch, pr.branch),

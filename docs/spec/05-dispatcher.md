@@ -741,6 +741,28 @@ happened, and the agent it falls back to gets the origin's full budget. "Now" is
 snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` carrying the throttled rule as
 its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
 
+### Every proposing rule reads the verdict through `consider`
+
+`StageContext.consider(candidate, opts?)` is the one place a rule turns a verdict into a queue entry:
+`dispatch` pushes the candidate, `cooldown` pushes it `held: 'cooldown'`, `escalate` raises
+`opts.escalate` if the rule has one, and `hold` does nothing. It returns whether the candidate was
+proposed, which is what `issue-appraisal` and `issue-assess` gate their `appraising` / `assessing`
+writes on — the two sets a later stage reads to know an agent is already on the issue.
+
+Thirteen rules call it, and it is the only place any of them reads `dispatchVerdict`. `opts.escalate`
+is optional because most have nowhere to escalate _to_: a summary or a sequence that has spent
+its attempts falls silent rather than putting a question to an operator, and only `issue-pickup`,
+`plan-part`, `obstacle-repair` and the PR concerns raise one. `opts.decisions` narrows the attempt
+window — `validation-failed` counts only the decisions since the reading it is answering, so a check
+that fails again gets a fresh budget rather than inheriting the last failure's.
+
+**A rule that skips it is making a claim, not forgetting.** `remote-validation`, `manual-job`,
+`local-validation` and `local-validation-fix` propose from a row that is one press rather than a
+standing signal: re-proposed until it dispatches or the operator calls it off, with no attempt budget
+to spend. `issue-plan` reads its verdict off `PlanRouteVerdict.planner` instead, and `plan-part` folds
+the verdict against its own `capped` and `unapproved` holds. Nothing mechanical separates those from an
+omission, which is why the helper is a shared body rather than a gate.
+
 ### A re-dispatch inherits the last agent's conversation
 
 The cooldown stops a _loop_; it never stopped a _repeat_. Its three attempts were three cold sessions,

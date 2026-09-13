@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
 import {
@@ -28,19 +27,16 @@ export function validationPlan(s: StageContext): void {
     if (plan === null) continue;
 
     const planOrigin = validationPlanOrigin(issue.number);
-    const verdict = dispatchVerdict(planOrigin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     const title = `Write the validation check set for issue #${issue.number}`;
     const reason = `Issue #${issue.number} is delivered and nobody has written its validation check set.`;
-    s.candidates.push({
+    s.consider({
       origin: planOrigin,
       rule: 'validation-plan',
       title,
       kind: 'code',
       branch: validationPlanBranch(issue.number),
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(validationPlanBranch(issue.number), s.defaultBranch),

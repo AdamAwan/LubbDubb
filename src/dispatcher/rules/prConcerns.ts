@@ -343,7 +343,7 @@ export function prConcerns(s: StageContext): void {
           reason: top.dispatchReason,
         } satisfies RawAction,
       },
-      escalate,
+      { escalate },
     );
   }
 }

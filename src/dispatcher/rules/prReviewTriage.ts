@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import {
   charterNote,
   needsFleetReview,
@@ -23,21 +22,18 @@ export function prReviewTriage(s: StageContext): void {
 
     const origin = reviewTriageOrigin(pr.number);
     if (s.activeOrigins.has(origin)) continue;
-    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     const title = `Choose how to review PR #${pr.number}`;
     const reason = routesBetweenModes(s.review)
       ? `PR #${pr.number} has no review mode yet, and this project declares ${reviewModeNames(s.review).length}.`
       : `PR #${pr.number} has no routing yet, and this project lets the triage skip a review.`;
-    s.candidates.push({
+    s.consider({
       origin,
       rule: 'pr-review-triage',
       title,
       kind: 'desk',
       branch: null,
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_desk_agent',
         title,

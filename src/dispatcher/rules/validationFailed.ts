@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { claimIsLive } from '../../validation/desktop.js';
@@ -24,39 +23,38 @@ export function validationFailed(s: StageContext): void {
       if (claimIsLive(check, s.now, s.validationClaimMinutes)) continue;
 
       const checkOrigin = validationFailureOrigin(issue.number, check.id);
-      const verdict = dispatchVerdict(checkOrigin, s.now, sinceReading(ctx.recentDecisions, check), s.cooldown);
-      if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
-
       const title = `Look into failed validation check ${check.letter} on issue #${issue.number}`;
       const reason =
         `Check ${check.letter} ("${check.title}") on issue #${issue.number} was run against the delivered ` +
         `goal and failed.`;
-      s.candidates.push({
-        origin: checkOrigin,
-        rule: 'validation-failed',
-        title,
-        kind: 'code',
-        branch: validationFailureBranch(issue.number, check.id),
-        reason,
-        held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
-        action: {
-          type: 'dispatch_code_agent',
-          ...readOnlyDispatch(validationFailureBranch(issue.number, check.id), s.defaultBranch),
-          title,
-          prompt:
-            s.templates.render('validation-failed', {
-              number: issue.number,
-              title: issue.title,
-              letter: check.letter,
-              root: validationGoalDir(s.validationRoot, origin),
-            }) + failureBriefing(check),
-          originRef: checkOrigin,
-          originTitle: issue.title,
-          originSummary: issue.body,
+      s.consider(
+        {
+          origin: checkOrigin,
           rule: 'validation-failed',
+          title,
+          kind: 'code',
+          branch: validationFailureBranch(issue.number, check.id),
           reason,
-        } satisfies RawAction,
-      });
+          action: {
+            type: 'dispatch_code_agent',
+            ...readOnlyDispatch(validationFailureBranch(issue.number, check.id), s.defaultBranch),
+            title,
+            prompt:
+              s.templates.render('validation-failed', {
+                number: issue.number,
+                title: issue.title,
+                letter: check.letter,
+                root: validationGoalDir(s.validationRoot, origin),
+              }) + failureBriefing(check),
+            originRef: checkOrigin,
+            originTitle: issue.title,
+            originSummary: issue.body,
+            rule: 'validation-failed',
+            reason,
+          } satisfies RawAction,
+        },
+        { decisions: sinceReading(ctx.recentDecisions, check) },
+      );
     }
   }
 }
