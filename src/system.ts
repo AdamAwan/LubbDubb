@@ -817,8 +817,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     const task = store.tasks.getTask(taskId);
     const branch = task?.branch;
     if (!branch) return;
-    const active = (s: string): boolean => s === 'queued' || s === 'running' || s === 'waiting';
-    if (store.tasks.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
+    if (store.tasks.hasActiveTaskOnBranch(branch, taskId)) return;
     void worktrees.remove(branch).catch((err: Error) => {
       errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });

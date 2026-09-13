@@ -73,6 +73,15 @@ declaration — no SQLite, no `Store` — naming the four verdict tables so a te
 `issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` and
 `store.ts` itself are excluded for the same kind of reason: none of them owns a table.
 
+`context.ts` carries one read that crosses that line and is bounded on purpose: `labelsById`, the
+`id → label` lookup behind `escalationLabels`, `humanTaskLabels`, `jobLabels`, `landingLabels` and
+`planLabels` — one shape written five times, over five tables, differing only in which column is
+the label. It is a **read only**, and the table and column come from `LABEL_SOURCES`, a closed
+`as const` map in that file which the five public methods index by key; nothing caller-supplied
+reaches the SQL. Each of those tables is still written by exactly one module, which is the property
+that matters — but a search for who names `escalations.prompt` or `stack_landings.ref` has a second
+place to look.
+
 **Membership is settled by which invariants must be readable together, not by table count.**
 `issueVerdicts.ts` is the point of the exercise: the four verdict writers clear each other under
 rules that used to live hundreds of lines apart, related only by prose cross-references. Those
@@ -121,9 +130,12 @@ Three things make that safe, and a new call site has to keep them true:
   well as braces.)
 - **Only constant SQL is memoised.** A cached statement is keyed on its text, so SQL assembled per
   call — a variable-length `IN (?,?,?)` list, most of all — would grow the map without bound. Those
-  sites keep `this.ctx.db.prepare(...)` deliberately. Interpolating a _module-level_ constant
-  (`ACTIVE_TASK_STATUS_SQL`, `LIVE_SQL`, `OPEN_SQL`, `SUMMARY_COLUMNS`) still yields constant text and
-  is memoised; so does a column or table name chosen from a closed set, which is bounded by that set.
+  sites keep `this.ctx.db.prepare(...)` deliberately, `labelsById` and `listFilesForAgents` included:
+  the `db.prepare` there is the rule being followed, not a cache that was forgotten. Interpolating a
+  _module-level_ constant (`ACTIVE_TASK_STATUS_SQL`, `LIVE_SQL`, `OPEN_SQL`, `SUMMARY_COLUMNS`) still
+  yields constant text and is memoised; so does a column or table name chosen from a closed set, which
+  is bounded by that set — which is why `labelsById` may interpolate its table and column but not its
+  hole list.
 
 A cached statement is also **stateful**, which is why none of this reaches `iterate`, `pluck`, `raw`,
 `expand` or `bind`: `iterate` leaves a statement busy while its consumer runs, and the other four
@@ -447,8 +459,16 @@ lacked the index.
 ### Tasks
 
 `createTask`, `updateTask` (status / agentId / branch only), `getTask`, `listTasks`,
-`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`.
-"Active" is `queued`, `running` or `waiting`.
+`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
+`hasActiveTaskOnBranch(branch, exceptTaskId)`. "Active" is `queued`, `running` or `waiting`, spelled
+once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask`.
+
+`hasActiveTaskOnBranch` is the existence question `findActiveTaskByBranch` cannot ask: whether any
+task **other than** the one being asked about still holds the branch. The reaped-agent handler in
+`src/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
+and filtering in JS until it was an index-shaped `SELECT 1 … LIMIT 1`. There is no index on
+`tasks(branch)` — `idx_tasks_status` and `idx_tasks_origin` are the only two — so the query is a scan
+of `tasks` with an early exit, still strictly cheaper than hydrating every row.
 
 **`listTasks` returns `TaskSummary`, not `Task`: every column except `prompt`.** It is the only
 all-time reading of the table, and it names its columns rather than starring. A rendered agent prompt

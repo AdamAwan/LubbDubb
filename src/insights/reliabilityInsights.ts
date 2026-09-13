@@ -12,6 +12,7 @@ import {
   type ResolvedWindow,
   type TimelineSpan,
 } from './insightsWindow.js';
+import { median, prNumberOf } from '../primitives.js';
 
 // → docs/spec/18-observability.md
 
@@ -136,17 +137,6 @@ interface ReliabilityInput {
 
 function outcomeOf(status: AgentStatus): RunOutcome | null {
   return OUTCOME_ORDER.includes(status as RunOutcome) ? (status as RunOutcome) : null;
-}
-
-function median(samples: readonly number[]): number | null {
-  if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? null;
-}
-
-function prNumberOf(ref: string): number | null {
-  const found = /^pr:(\d+)$/.exec(ref)?.[1];
-  return found === undefined ? null : Number(found);
 }
 
 export function tallyRunOutcomes(agents: readonly Agent[]): RunTally {

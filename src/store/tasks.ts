@@ -160,6 +160,13 @@ export class TaskStore {
       .get(branch) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
+
+  hasActiveTaskOnBranch(branch: string, exceptTaskId: string): boolean {
+    const row = this.ctx
+      .prep(`SELECT 1 FROM tasks WHERE branch=? AND id<>? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
+      .get(branch, exceptTaskId);
+    return row !== undefined;
+  }
 }
 
 const SUMMARY_COLUMNS = [

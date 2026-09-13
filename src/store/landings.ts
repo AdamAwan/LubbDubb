@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { StackLanding, StackLandingStatus } from '../types.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
@@ -38,13 +38,7 @@ export class StackLandingStore {
   }
 
   landingLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, ref FROM stack_landings WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      ref: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.ref]));
+    return labelsById(this.ctx, 'stack_landings', ids);
   }
 
   listStackLandings(limit = 50): StackLanding[] {

@@ -2,6 +2,7 @@ import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import type { PullRequest, WorkNode, WorldSnapshot } from '../types.js';
 import { issueForPr } from '../pr/prIssue.js';
 import { prState } from '../pr/prHealth.js';
+import { prNumberOf } from '../primitives.js';
 
 // → docs/spec/24-environments.md
 
@@ -75,9 +76,4 @@ function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
 
 function isGoalRoot(ref: string): boolean {
   return issueOriginNumber('root', ref) !== null;
-}
-
-function prNumberOf(ref: string): number | null {
-  const m = /^pr:(\d+)$/.exec(ref);
-  return m?.[1] === undefined ? null : Number(m[1]);
 }
