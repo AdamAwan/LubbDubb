@@ -524,6 +524,40 @@ test('a linked filing re-emits a node whose job has aged out of the fold', () =>
   assert.equal(node(out, 'job:j7').title, 'Bump the linter', 're-emitted verbatim, not invented');
 });
 
+test('every linked filing finds its aged-out node, not just the first', () => {
+  const aged = (id: string): WorkNode => ({
+    ref: `job:${id}`,
+    kind: 'job',
+    parentRef: null,
+    baseRef: null,
+    title: `Job ${id}`,
+    status: 'dispatched',
+    terminal: false,
+    provenance: null,
+    firstSeenAt: '2026-07-28T09:00:00.000Z',
+    lastSeenAt: '2026-07-28T09:00:00.000Z',
+  });
+  const out = foldWorkGraph(
+    input({
+      jobs: [],
+      filings: [
+        filing({ targetRef: 'job:j7', ticketRef: 'issue:314' }),
+        filing({ targetRef: 'job:j8', ticketRef: 'issue:315' }),
+        filing({ targetRef: 'job:nope', ticketRef: 'issue:316' }),
+      ],
+      existing: [aged('j7'), aged('j8')],
+    }),
+  );
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:314');
+  assert.equal(node(out, 'job:j8').parentRef, 'issue:315', 'the lookup is keyed, so a later filing reaches its node');
+  assert.equal(node(out, 'job:j8').title, 'Job j8', 're-emitted verbatim, not invented');
+  assert.equal(
+    out.some((n) => n.ref === 'job:nope' || n.ref === 'issue:316'),
+    false,
+    'a filing whose target the graph has never held is skipped whole, placeholder and all',
+  );
+});
+
 test('the fold is the only writer: a second filing cannot re-parent an adopted node', () => {
   const store = new Store(':memory:');
   store.graph.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));

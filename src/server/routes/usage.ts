@@ -30,7 +30,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           upgrade: store.upgrades.readUpgradeIntent(),
           landings: store.landings.listStackLandings(ALL),
           plans,
-          amendments: plans.flatMap((plan) => store.plans.listPlanAmendments(plan.id)),
+          amendments: store.plans.listAllPlanAmendments(),
           checks: store.validation.listAllValidationChecks(),
           conclusions: store.verdicts.listIssueConclusions(),
           agents: store.agents.listAgents(),
