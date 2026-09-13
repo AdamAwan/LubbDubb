@@ -6,15 +6,14 @@ import { join } from 'node:path';
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { atomList, atomsForPr } from '../src/reviewPacks/atoms.js';
 import { renderReviewPackCompanion } from '../src/reviewPacks/companion.js';
-import { ideaAtom } from '../src/reviewPacks/derive.js';
-import { PLUMBING_IDEA_ID } from '../src/reviewPacks/hunks.js';
+import { ideaAtom, PLUMBING_IDEA_ID } from '../src/reviewPacks/derive.js';
 import { parseDiffHunks } from '../src/reviewPacks/hunks.js';
 import { packOrigin } from '../src/reviewPacks/origins.js';
 import { assemblePack, type Commission } from '../src/reviewPacks/submission.js';
@@ -209,9 +208,9 @@ async function packPrompt(withAtoms: boolean): Promise<string> {
       originRef: 'issue:390',
       title: 'Issue 390',
     });
-    const stored = system.store.listPlanParts(ingested.plan.id);
+    const stored = system.store.plans.listPlanParts(ingested.plan.id);
     assert.equal(stored.length, 1);
-    system.store.updatePlanPart(stored[0]!.id, { prNumber: 7, status: 'in_review' });
+    system.store.plans.updatePlanPart(stored[0]!.id, { prNumber: 7, status: 'in_review' });
   }
 
   const { app } = await buildApp(system);

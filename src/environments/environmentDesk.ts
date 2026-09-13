@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
@@ -44,11 +45,11 @@ export class EnvironmentDesk {
     try {
       for (const landing of unrecordedLandings({
         world,
-        nodes: store.listWorkNodes(),
-        landed: store.landedPrs(),
+        nodes: store.graph.listWorkNodes(),
+        landed: store.environments.landedPrs(),
         integrationBranch: this.deps.integrationBranch,
       }))
-        store.recordGoalLanding(landing);
+        store.environments.recordGoalLanding(landing);
     } catch (err) {
       errors?.record({ source: 'cycle', message: `recording goal landings failed: ${(err as Error).message}` });
     }
@@ -67,12 +68,12 @@ export class EnvironmentDesk {
     const { store, errors } = this.deps;
     const command = environment.health;
     if (command === undefined) return;
-    const standing = store.listEnvironmentHealth().find((r) => r.environment === environment.name);
+    const standing = store.environments.listEnvironmentHealth().find((r) => r.environment === environment.name);
     const floor = new Date(this.now() - this.deps.healthIntervalMs).toISOString();
     if (standing !== undefined && standing.observedAt > floor) return;
     try {
       const report = await this.deps.healthProber.check(environment.name, command);
-      store.recordEnvironmentHealth({ environment: environment.name, ...report });
+      store.environments.recordEnvironmentHealth({ environment: environment.name, ...report });
     } catch (err) {
       errors?.record({
         source: 'cycle',
@@ -83,7 +84,7 @@ export class EnvironmentDesk {
 
   private async reconcile(): Promise<void> {
     const { store, errors } = this.deps;
-    const pending = store
+    const pending = store.environments
       .listGoalLandings()
       .filter((l) => l.onIntegration === null)
       .slice(0, MAX_LANDINGS_PER_PULSE);
@@ -96,7 +97,7 @@ export class EnvironmentDesk {
       for (const landing of pending) {
         const answer = held.get(landing.sha) ?? null;
         if (answer === null) continue;
-        store.markLandingIntegration(landing.prNumber, answer);
+        store.environments.markLandingIntegration(landing.prNumber, answer);
       }
     } catch (err) {
       errors?.record({
@@ -111,13 +112,13 @@ export class EnvironmentDesk {
     if (errors === undefined) return;
     try {
       const stuck = stuckGoals({
-        delivered: store.listDeliveries().map((d) => d.originRef),
-        shortfalled: new Set(store.listShortfalls().map((sf) => sf.originRef)),
+        delivered: store.verdicts.listDeliveries().map((d) => d.originRef),
+        shortfalled: new Set(store.verdicts.listShortfalls().map((sf) => sf.originRef)),
         environments: this.deps.environments,
-        arrivals: store.listGoalArrivals(),
-        releases: store.listEnvironmentGateReleases(),
-        landings: store.listGoalLandings(),
-        readings: store.listEnvironmentReach(),
+        arrivals: store.environments.listGoalArrivals(),
+        releases: store.environments.listEnvironmentGateReleases(),
+        landings: store.environments.listGoalLandings(),
+        readings: store.environments.listEnvironmentReach(),
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });
@@ -150,7 +151,7 @@ export class EnvironmentDesk {
             );
       for (const landing of pending) {
         const answer = head.commits === null ? null : (held.get(landing.sha) ?? null);
-        store.recordEnvironmentReach({
+        store.environments.recordEnvironmentReach({
           sha: landing.sha,
           environment: environment.name,
           status: verdictOf(answer),
@@ -167,14 +168,14 @@ export class EnvironmentDesk {
 
   private due(environment: string): GoalLanding[] {
     const held = new Map(
-      this.deps.store
+      this.deps.store.environments
         .listEnvironmentReach()
         .filter((r) => r.environment === environment)
         .map((r) => [r.sha, r]),
     );
     const floor = new Date(this.now() - this.deps.probeIntervalMs).toISOString();
     const out: GoalLanding[] = [];
-    for (const landing of this.deps.store.listGoalLandings()) {
+    for (const landing of this.deps.store.environments.listGoalLandings()) {
       if (landing.onIntegration === false) continue;
       const reading = held.get(landing.sha);
       if (reading?.status === 'reached') continue;
@@ -189,16 +190,16 @@ export class EnvironmentDesk {
     const { store, errors } = this.deps;
     try {
       const reach = allGoalReach({
-        landings: store.listGoalLandings(),
-        readings: store.listEnvironmentReach(),
-        nodes: store.listWorkNodes(),
-        landed: store.landedPrs(),
-        plans: store.listPlans(),
-        parts: store.listAllPlanParts(),
+        landings: store.environments.listGoalLandings(),
+        readings: store.environments.listEnvironmentReach(),
+        nodes: store.graph.listWorkNodes(),
+        landed: store.environments.landedPrs(),
+        plans: store.plans.listPlans(),
+        parts: store.plans.listAllPlanParts(),
         environments: this.deps.environments,
       });
-      for (const arrival of newArrivals({ reach, recorded: store.listGoalArrivals() }))
-        store.recordGoalArrival(arrival);
+      for (const arrival of newArrivals({ reach, recorded: store.environments.listGoalArrivals() }))
+        store.environments.recordGoalArrival(arrival);
     } catch (err) {
       errors?.record({ source: 'cycle', message: `recording goal arrivals failed: ${(err as Error).message}` });
     }
@@ -206,11 +207,11 @@ export class EnvironmentDesk {
 
   private async announce(): Promise<void> {
     const { store, errors } = this.deps;
-    const landings = store.listGoalLandings();
+    const landings = store.environments.listGoalLandings();
     for (const { arrival, comment, workItemState } of announceableArrivals({
-      arrivals: store.listGoalArrivals(),
+      arrivals: store.environments.listGoalArrivals(),
       environments: this.deps.environments,
-      readings: store.listEnvironmentReach(),
+      readings: store.environments.listEnvironmentReach(),
       landings,
       probeIntervalMs: this.deps.probeIntervalMs,
       now: this.now(),
@@ -248,7 +249,7 @@ export class EnvironmentDesk {
           continue;
         }
       }
-      store.markArrivalAnnounced(arrival.goalRef, arrival.environment);
+      store.environments.markArrivalAnnounced(arrival.goalRef, arrival.environment);
     }
   }
 }
@@ -259,6 +260,5 @@ function verdictOf(answer: boolean | null): EnvironmentReachStatus {
 }
 
 function issueNumber(goalRef: string): number | null {
-  const m = /^issue:(\d+)$/.exec(goalRef);
-  return m?.[1] === undefined ? null : Number(m[1]);
+  return issueOriginNumber('root', goalRef);
 }

@@ -10,6 +10,15 @@ bundled. `test/wireContract.test.ts` asserts both halves — that the shared mod
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
+**One module is passed through by value, and it is a named exception rather than a crack.**
+`src/reviewPacks/derive.ts` — the review-pack derivations, pure functions of the pack document that
+the HTML companion and the cockpit's page both read — is re-exported by `src/wire.ts` and re-exported
+onward by `web/src/view/reviewPack.ts`, because the alternative was two byte-identical copies of three
+hundred lines including a syntax highlighter. It is a leaf: it imports `src/types.ts` for types and
+nothing else. `test/wireRuntime.test.ts` pins the list of modules the contract may pass a value
+through and walks what they import, because a re-export is not a declaration and slips past
+`test/wireContract.test.ts`. → [31](31-review-packs.md#one-copy-of-the-derivations)
+
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
 ## Layers
@@ -5326,7 +5335,7 @@ sharing a surface. It is drawn under the fleet's own scope only — see
 [Just me, or the pool](#just-me-or-the-pool).
 
 Six windows — `5h session`, `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by
-`resolveWindow` (`src/insightsWindow.ts`) and shipped back on every payload
+`resolveWindow` (`src/insights/insightsWindow.ts`) and shipped back on every payload
 ([18](18-observability.md#the-window)). **The page draws the window it was handed, never the one it
 asked with**: a caption derived from the key is free to disagree with the buckets the server actually
 cut, and the caption is the half a reader would believe. The resolution is stated beside the control —
@@ -5642,7 +5651,7 @@ What comes first is the two ways the channel fails without saying so:
   ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
 
 **A count of zero is four facts wearing one face, and the server says which.** This is the part that
-earns the tab. `src/mcpInsights.ts` ships a verdict per silent tool with the evidence behind it, rather
+earns the tab. `src/insights/mcpInsights.ts` ships a verdict per silent tool with the evidence behind it, rather
 than three numbers for the cockpit to interpret — the same rule `PHASE_COPY` and `OUTCOME_COPY` follow,
 and for the same reason: it is a claim about what the harness did, and a cockpit re-deriving it would
 be a second opinion drawn inches from the first. The ladder, worst first:
@@ -6389,7 +6398,9 @@ A pack whose `schema` this build does not know is refused whole at the top, neve
 is recognised. What a reviewer does rides the marks routes ([16](16-http-api.md#post-apiprsnumberreview-packideasidread))
 and the rows the write returns replace what the page holds, laid over the ideas by `layMarks`
 (`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so, and the same for
-`seen`.
+`seen`. `layMarks`, the schema number and the page's own place state are what that module still
+holds; every other derivation it exports is [the one copy](31-review-packs.md#one-copy-of-the-derivations),
+re-exported from the contract.
 
 **Three marks, and the third is under a finding.** Read and the attention override sit in the idea's
 own row; _I have taken this_ sits at the foot of each finding box and nowhere else, because it is a

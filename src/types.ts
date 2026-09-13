@@ -344,6 +344,11 @@ export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed'
 
 export type ReadyingStep = 'picked-up' | 'ci-evidence' | 'slot-handover' | 'authorizing';
 
+export interface ReadyingStepTiming {
+  step: ReadyingStep;
+  ms: number;
+}
+
 export interface ReadyingAction {
   id: string;
   cycleId: string;
@@ -352,6 +357,8 @@ export interface ReadyingAction {
   branch: string | null;
   step: ReadyingStep;
   startedAt: string;
+  stepStartedAt: string;
+  elapsed: ReadyingStepTiming[];
 }
 
 export interface Agent {

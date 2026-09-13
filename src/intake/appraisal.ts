@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { Issue, IssueAppraisal, TaskSummary } from '../types.js';
 import { hasPriorWork } from '../delivery/assessment.js';
+import { issueOriginRef } from '../issueOrigins.js';
 
 // → docs/spec/06-issue-pickup.md
 
 export function appraisalOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}:appraisal`;
+  return issueOriginRef('appraisal', issueNumber);
 }
 
 export function appraisalBranch(issueNumber: number): string {

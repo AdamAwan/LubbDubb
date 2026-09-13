@@ -1,3 +1,4 @@
+import { inIssueOriginFamily, issueOriginNumber, issueOriginRef, issueSubtreeNumber } from '../issueOrigins.js';
 import { SHORTFALL_CAUSES, SHORTFALL_CAUSE_HELP } from '../delivery/shortfall.js';
 import type { ShortfallCause } from '../types.js';
 
@@ -127,46 +128,45 @@ export function assessmentOrigin(
   originRef: string | null,
 ): { ok: true; originRef: string; issueOrigin: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const match = /^issue:(\d+):assess$/.exec(ref);
-  if (match) return { ok: true, originRef: ref, issueOrigin: `issue:${match[1]}` };
+  const assessing = issueOriginNumber('assess', ref);
+  if (assessing !== null) return { ok: true, originRef: ref, issueOrigin: issueOriginRef('root', assessing) };
 
-  const planner = /^issue:(\d+):plan$/.exec(ref);
-  if (planner) {
+  const planner = issueOriginNumber('plan', ref);
+  if (planner !== null) {
     return {
       ok: false,
       error:
-        `assess_issue is for an agent dispatched to judge whether issue #${planner[1]} is finished, and ` +
+        `assess_issue is for an agent dispatched to judge whether issue #${planner} is finished, and ` +
         `you are planning it rather than delivering it. Submit your decomposition with plan_submit ` +
         `instead; the harness assesses the issue once the work is done.`,
     };
   }
-  const part = /^issue:(\d+):part:/.exec(ref);
-  if (part) {
+  if (inIssueOriginFamily('part', ref)) {
     return {
       ok: false,
       error:
-        `assess_issue is for an agent dispatched to judge whether issue #${part[1]} is finished, and you ` +
+        `assess_issue is for an agent dispatched to judge whether issue #${issueSubtreeNumber(ref)} is finished, and you ` +
         `are working one part of its plan. Close your part with conclude_part — the plan roll-up is what ` +
         `concludes the issue, and the harness assesses it separately, which is the point.`,
     };
   }
-  const worker = /^issue:(\d+)$/.exec(ref);
-  if (worker) {
+  const worker = issueOriginNumber('root', ref);
+  if (worker !== null) {
     return {
       ok: false,
       error:
-        `assess_issue is for an agent dispatched to judge whether issue #${worker[1]} is finished, and ` +
+        `assess_issue is for an agent dispatched to judge whether issue #${worker} is finished, and ` +
         `you were dispatched to work on it. Use conclude_work to record what you believe you delivered; ` +
         `the harness assesses the issue separately, which is the point — it is not a judgement you make ` +
         `about your own work.`,
     };
   }
-  const appraiser = /^issue:(\d+):appraisal$/.exec(ref);
-  if (appraiser) {
+  const appraiser = issueOriginNumber('appraisal', ref);
+  if (appraiser !== null) {
     return {
       ok: false,
       error:
-        `assess_issue says whether issue #${appraiser[1]} was delivered, and you were dispatched to judge ` +
+        `assess_issue says whether issue #${appraiser} was delivered, and you were dispatched to judge ` +
         `whether its goal can be worked from at all, before anything was started. Cast your verdict with ` +
         `appraise_issue instead.`,
     };

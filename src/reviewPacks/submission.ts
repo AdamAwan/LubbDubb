@@ -11,7 +11,8 @@ import type {
   ReviewRange,
   ScratchEntry,
 } from '../types.js';
-import { coverageRefusal, ownsTestHunk, PLUMBING_IDEA_ID, testsOnlyIdea, type DiffHunk } from './hunks.js';
+import { PLUMBING_IDEA_ID } from './derive.js';
+import { coverageRefusal, ownsTestHunk, testsOnlyIdea, type DiffHunk } from './hunks.js';
 import { plainnessRefusal, readingEaseRefusal } from './plainness.js';
 
 // → docs/spec/31-review-packs.md

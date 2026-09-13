@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { isThroughputMeasure } from '../throughputInsights.js';
+import { isThroughputMeasure } from '../insights/throughputInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDocument } from '../types.js';
 
 // → docs/spec/28-cross-fleet-pool.md

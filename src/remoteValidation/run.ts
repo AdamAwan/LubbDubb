@@ -64,10 +64,12 @@ export class RemoteRunDesk {
         error: `"${environmentName}" declares no "validate" block, so there is no sheet here to press.`,
       };
     const { store } = this.deps;
-    if (!store.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName))
+    if (
+      !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
+    )
       return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
 
-    const rows = store
+    const rows = store.remoteValidation
       .listRemoteSheetRows()
       .filter((r) => r.goalRef === goalRef && r.environment === environmentName && r.selected);
     if (rows.length === 0)
@@ -81,20 +83,20 @@ export class RemoteRunDesk {
 
     const tenant = resolveTenant({
       environment,
-      stamped: store.listRemoteTenants(),
+      stamped: store.remoteValidation.listRemoteTenants(),
       now: this.now(),
       env: this.deps.env,
     });
     if (tenant.standing.blockedReason !== null) {
       for (const row of rows)
-        store.blockRemoteSheetRow(goalRef, environmentName, row.rowId, tenant.standing.blockedReason);
+        store.remoteValidation.blockRemoteSheetRow(goalRef, environmentName, row.rowId, tenant.standing.blockedReason);
       return { ok: false, code: 400, error: tenant.standing.blockedReason };
     }
     const key = tenant.standing.tenant ?? '';
 
     const pin = await this.pin(goalRef, environment);
 
-    const { run, live } = store.beginRemoteRun({
+    const { run, live } = store.remoteValidation.beginRemoteRun({
       goalRef,
       environment: environmentName,
       tenant: key,
@@ -111,7 +113,7 @@ export class RemoteRunDesk {
       };
 
     if (pin.abandon !== null) {
-      const ended = store.endRemoteRun(run.id, { status: 'abandoned', note: pin.abandon });
+      const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'abandoned', note: pin.abandon });
       return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
     }
 
@@ -132,8 +134,8 @@ export class RemoteRunDesk {
     if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
 
     const endedSha = await this.deployedSha(environment);
-    store.attributeRemoteReadings(run.id, endedSha);
-    const ended = store.endRemoteRun(run.id, { status: 'ended', endedSha });
+    store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
+    const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'ended', endedSha });
     return { ok: true, run: ended ?? run, abandoned: null, read, owed: 0 };
   }
 
@@ -145,14 +147,14 @@ export class RemoteRunDesk {
       tenantKey ??
       resolveTenant({
         environment,
-        stamped: this.deps.store.listRemoteTenants(),
+        stamped: this.deps.store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
       }).standing.tenant ??
       '';
-    const live = this.deps.store.liveRemoteRun(environmentName, key);
+    const live = this.deps.store.remoteValidation.liveRemoteRun(environmentName, key);
     if (live === null) return null;
-    return this.deps.store.endRemoteRun(live.id, {
+    return this.deps.store.remoteValidation.endRemoteRun(live.id, {
       status: 'abandoned',
       note: 'an operator called this run off from the sheet.',
     });
@@ -179,7 +181,7 @@ export class RemoteRunDesk {
     const standing = (): TenantStanding =>
       resolveTenant({
         environment,
-        stamped: this.deps.store.listRemoteTenants(),
+        stamped: this.deps.store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
       }).standing;
@@ -197,13 +199,17 @@ export class RemoteRunDesk {
           detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
           standing: standing(),
         };
-      this.deps.store.stampRemoteTenant({ environment: environmentName, tenant: provisioned.tenant, ensured: true });
+      this.deps.store.remoteValidation.stampRemoteTenant({
+        environment: environmentName,
+        tenant: provisioned.tenant,
+        ensured: true,
+      });
       said.push(`\`${provisioned.tenant}\` is provisioned`);
     }
 
     const resolved = resolveTenant({
       environment,
-      stamped: this.deps.store.listRemoteTenants(),
+      stamped: this.deps.store.remoteValidation.listRemoteTenants(),
       now: this.now(),
       env: this.deps.env,
     });
@@ -223,7 +229,7 @@ export class RemoteRunDesk {
       });
       if (reseeded.detail !== null)
         return { ok: false, detail: `the reseed did not run — ${reseeded.detail}`, standing: resolved.standing };
-      this.deps.store.stampRemoteTenant({
+      this.deps.store.remoteValidation.stampRemoteTenant({
         environment: environmentName,
         tenant: resolved.standing.tenant,
         reseeded: true,
@@ -267,7 +273,7 @@ export class RemoteRunDesk {
       };
     const deployedSha = deployed[0]!;
 
-    const landings = this.deps.store
+    const landings = this.deps.store.environments
       .listGoalLandings()
       .filter((l) => l.goalRef === goalRef && l.onIntegration !== false)
       .map((l) => l.sha);
@@ -317,7 +323,7 @@ export class RemoteRunDesk {
         const reading = await this.deps.desk.readRow(environment, goalRef, runs, row.sourceId);
         if (reading === null) continue;
         if (reading.outcome === 'blocked') {
-          this.deps.store.blockRemoteSheetRow(
+          this.deps.store.remoteValidation.blockRemoteSheetRow(
             goalRef,
             environment.name,
             row.rowId,
@@ -325,7 +331,7 @@ export class RemoteRunDesk {
           );
           continue;
         }
-        this.deps.store.recordRemoteReading({
+        this.deps.store.remoteValidation.recordRemoteReading({
           goalRef,
           environment: environment.name,
           rowId: row.rowId,

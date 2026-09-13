@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { isHarnessBranch, isOurPr, isSomeoneElsesPr } from '../src/prOwnership.js';
-import { prsToSeedWatch } from '../src/prWatch.js';
-import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
+import { isHarnessBranch, isOurPr, isSomeoneElsesPr } from '../src/pr/prOwnership.js';
+import { prsToSeedWatch } from '../src/pr/prWatch.js';
+import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
-import { renamablePrs } from '../src/prRename.js';
+import { renamablePrs } from '../src/pr/prRename.js';
 import type { PullRequest } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 
@@ -123,7 +123,7 @@ test('no rule fires on a watched pull request somebody else opened', async () =>
   system.connector.inject({ kind: 'pr_comment', prNumber: 42, author: 'priya', body: 'please rename this' });
   await system.harness.runCycle('manual');
 
-  const origins = system.store.listTasks().map((t) => t.originRef);
+  const origins = system.store.tasks.listTasks().map((t) => t.originRef);
   assert.equal(
     origins.some((o) => o?.startsWith('pr:42')),
     false,
@@ -152,7 +152,7 @@ test('the same pull request is worked once it is the harness’s own', async () 
   await system.harness.runCycle('manual');
 
   assert.equal(
-    system.store.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
     true,
   );
   system.store.close();

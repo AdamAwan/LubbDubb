@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -16,8 +16,8 @@ import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { sheetableArrivals } from '../src/environments/watchWindow.js';
 import { validationPlanNote } from '../src/validation/authoring.js';
 import { issueOriginRole } from '../src/issueOrigins.js';
-import { phaseOf } from '../src/spendInsights.js';
-import type { Agent, GoalArrival, Issue, IssueDelivery, Plan } from '../src/types.js';
+import { phaseOf } from '../src/insights/spendInsights.js';
+import type { Agent, GoalArrival, Issue, IssueDelivery, Plan, TaskSummary } from '../src/types.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written
 
@@ -65,8 +65,16 @@ function ingest(system: System, validation: Record<string, unknown> | undefined)
   ingestPlanDocument(system.store, { doc: parsed.document, originRef: GOAL, title: 'Ship it' });
 }
 
+/**
+ * A check set is written against a goal that has been delivered, and `validation_plan` refuses one
+ * that has not — the fence that stops an assessor authoring a set before it has cast its verdict.
+ */
+function park(system: System): void {
+  system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'every part merged', by: 'assessor' });
+}
+
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -159,18 +167,18 @@ test('a plan document carrying a full check set is ingested exactly as it always
   const system = build();
   ingest(system, { checks: [CHECK], resources: [{ name: 'fixture.tar.gz', kind: 'fixture' }] });
 
-  const checks = system.store.listValidationChecks(GOAL);
+  const checks = system.store.validation.listValidationChecks(GOAL);
   assert.deepEqual(
     checks.map((c) => [c.letter, c.id, c.state]),
     [['A', 'csv-opens', 'unrun']],
     'the rows are real and an operator may be halfway through them',
   );
   assert.deepEqual(
-    system.store.listValidationResources(GOAL).map((r) => r.name),
+    system.store.validation.listValidationResources(GOAL).map((r) => r.name),
     ['fixture.tar.gz'],
   );
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.authoredAt,
+    system.store.validation.getValidationPlanRecord(GOAL)?.authoredAt,
     null,
     'and a legacy plan is not an authoring — nothing pretends the validation planner ran',
   );
@@ -183,12 +191,12 @@ test('a hint-only block writes the hint and withdraws nothing', () => {
   ingest(system, { hint: 'worth checking: the upload path against a real store' });
 
   assert.deepEqual(
-    system.store.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
+    system.store.validation.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
     [['csv-opens', null]],
     'a hint is not an empty check set — re-reading it as one would delete a set somebody is using',
   );
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.hint,
+    system.store.validation.getValidationPlanRecord(GOAL)?.hint,
     'worth checking: the upload path against a real store',
   );
   system.store.close();
@@ -200,7 +208,7 @@ test('an explicit empty check set still withdraws every check, said out loud', (
   ingest(system, { checks: [] });
 
   assert.equal(
-    system.store.listValidationChecks(GOAL)[0]?.supersededReason !== null,
+    system.store.validation.listValidationChecks(GOAL)[0]?.supersededReason !== null,
     true,
     'withdrawing every check is "checks": [], which is the one reading of it that is honest',
   );
@@ -353,6 +361,7 @@ test('the origin is classified, so it expands under a priority flag and its spen
 test('validation_plan writes the whole set, with a note, and stamps the goal as authored', async () => {
   const system = build();
   ingest(system, { hint: 'the upload path' });
+  park(system);
   const agent = spawnAgent(system, 'issue:12:validate-plan');
 
   const res = await callTool(system, agent, 'validation_plan', {
@@ -361,10 +370,10 @@ test('validation_plan writes the whole set, with a note, and stamps the goal as 
   });
   assert.equal(res.isError, false, res.text);
   assert.deepEqual(
-    system.store.listValidationChecks(GOAL).map((c) => [c.letter, c.id]),
+    system.store.validation.listValidationChecks(GOAL).map((c) => [c.letter, c.id]),
     [['A', 'csv-opens']],
   );
-  const record = system.store.getValidationPlanRecord(GOAL);
+  const record = system.store.validation.getValidationPlanRecord(GOAL);
   assert.match(record?.note ?? '', /the suite already asserts them/, 'the departure from the hint is on the record');
   assert.notEqual(record?.authoredAt, null);
   assert.equal(record?.hint, 'the upload path', 'and writing the set does not un-write the plan’s intent');
@@ -374,13 +383,14 @@ test('validation_plan writes the whole set, with a note, and stamps the goal as 
 test('an empty check set is refused without a reason and accepted with one', async () => {
   const system = build();
   ingest(system, { hint: 'the upload path' });
+  park(system);
   const agent = spawnAgent(system, 'issue:12:validate-plan');
 
   const bare = await callTool(system, agent, 'validation_plan', { note: 'nothing needs a run' });
   assert.equal(bare.isError, true);
   assert.match(bare.text, /carries a reason/);
   assert.equal(
-    system.store.getValidationPlanRecord(GOAL)?.authoredAt,
+    system.store.validation.getValidationPlanRecord(GOAL)?.authoredAt,
     null,
     'a refused call authors nothing, so the sheet keeps waiting',
   );
@@ -390,7 +400,7 @@ test('an empty check set is refused without a reason and accepted with one', asy
     emptyReason: 'area `Checkout Tests` now asserts the confirmation step and nothing else needs a run',
   });
   assert.equal(reasoned.isError, false, reasoned.text);
-  const record = system.store.getValidationPlanRecord(GOAL);
+  const record = system.store.validation.getValidationPlanRecord(GOAL);
   assert.match(record?.emptyReason ?? '', /Checkout Tests/, 'null with no account of itself is the failure');
   assert.notEqual(record?.authoredAt, null, 'and declaring nothing is a complete answer');
   system.store.close();
@@ -469,6 +479,7 @@ test('the planner’s account reaches the cockpit, because an empty set has no r
   assert.equal(before?.hint, 'the upload path');
   assert.equal(before?.authoredAt, null, 'not authored yet is a third thing, and the section says which');
 
+  park(system);
   const agent = spawnAgent(system, 'issue:12:validate-plan');
   const res = await callTool(system, agent, 'validation_plan', {
     note: 'followed the hint',
@@ -480,5 +491,120 @@ test('the planner’s account reaches the cockpit, because an empty set has no r
   assert.match(after?.emptyReason ?? '', /Checkout Tests/, 'a required reason nobody can read bought nothing');
   assert.match(after?.note ?? '', /followed the hint/);
   assert.notEqual(after?.authoredAt, null);
+  system.store.close();
+});
+
+// → docs/spec/20-validation.md#when-the-check-set-is-written (the assessor writes it)
+
+function priorWork(): TaskSummary {
+  return {
+    id: 't-work',
+    kind: 'code',
+    title: 'Do it',
+    branch: 'issue/12',
+    originRef: GOAL,
+    originTitle: 'Ship it',
+    originSummary: null,
+    dispatchReason: null,
+    status: 'done',
+    agentId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+/** The context the assessor fires in: work behind it, nothing in flight, and no verdict yet. */
+function assessable(over: Partial<DispatchContext> = {}): DispatchContext {
+  return ctx({
+    deliveries: [],
+    tasks: [priorWork()],
+    plans: [{ ...plan(), status: 'complete' }],
+    ...over,
+  });
+}
+
+function assessPrompt(actions: { type: string }[]): string | null {
+  const hit = actions.find(
+    (a) => a.type === 'dispatch_code_agent' && (a as { originRef?: string }).originRef === 'issue:12:assess',
+  );
+  return hit ? ((hit as { prompt?: string }).prompt ?? '') : null;
+}
+
+test('the assessor is briefed to write the check set, and only where there is one to write', async () => {
+  const d = new RuleDispatcher();
+
+  const owed = assessPrompt((await d.decide(assessable())).actions);
+  assert.ok(owed !== null, 'the assessor fires for a goal with work behind it and no verdict');
+  assert.match(owed, /If you answer `delivered`, write the check set too/);
+  assert.match(owed, /What the plan said was worth checking/, 'and carries the briefing it is written from');
+
+  const noPlan = assessPrompt((await d.decide(assessable({ plans: [] }))).actions);
+  assert.ok(noPlan !== null, 'an unplanned goal is still assessed');
+  assert.doesNotMatch(
+    noPlan,
+    /write the check set too/,
+    '`covers` names live part slugs, so validation_plan would refuse it — asking is spend with no outcome',
+  );
+});
+
+test('an assessor may write the check set, and only for a goal it has just delivered', async () => {
+  const system = build();
+  ingest(system, { hint: 'the upload path' });
+  const agent = spawnAgent(system, 'issue:12:assess');
+
+  const early = await callTool(system, agent, 'validation_plan', { note: 'n', checks: [CHECK] });
+  assert.equal(early.isError, true, 'a set written before the verdict is written against code that may still move');
+  assert.match(early.text, /no standing delivery/);
+
+  park(system);
+  const res = await callTool(system, agent, 'validation_plan', { note: 'followed the hint', checks: [CHECK] });
+  assert.equal(res.isError, false, res.text);
+  assert.deepEqual(
+    system.store.validation.listValidationChecks(GOAL).map((c) => c.id),
+    ['csv-opens'],
+    'one agent, two outputs — the second agent that used to do this is not dispatched at all',
+  );
+  system.store.close();
+});
+
+test('the validation planner stays as the catch-up for a turn that ended before the second call', async () => {
+  const d = new RuleDispatcher();
+
+  const owed = await d.decide(ctx());
+  assert.deepEqual(
+    authoringDispatches(owed.actions),
+    ['issue:12:validate-plan'],
+    'a goal parked as delivered with no check set still gets a planner, whatever ended the assessor',
+  );
+});
+
+test('assess_issue asks for the check set itself, so an overridden prompt still hears the ask', async () => {
+  const system = build();
+  ingest(system, { hint: 'the upload path' });
+  const agent = spawnAgent(system, 'issue:12:assess');
+
+  const res = await callTool(system, agent, 'assess_issue', {
+    status: 'delivered',
+    summary: 'every part is on the default branch',
+  });
+  assert.equal(res.isError, false, res.text);
+  assert.match(
+    res.json().note as string,
+    /Declare it now with validation_plan/,
+    'the prompt is overridable and the tool’s own answer is not',
+  );
+
+  const wrote = await callTool(system, agent, 'validation_plan', { note: 'followed the hint', checks: [CHECK] });
+  assert.equal(wrote.isError, false, wrote.text);
+
+  const second = await callTool(system, spawnAgent(system, 'issue:12:assess'), 'assess_issue', {
+    status: 'delivered',
+    summary: 'still delivered',
+  });
+  assert.doesNotMatch(
+    second.json().note as string,
+    /validation_plan/,
+    'and it is silent once a set exists, rather than asking for one that would supersede it',
+  );
   system.store.close();
 });

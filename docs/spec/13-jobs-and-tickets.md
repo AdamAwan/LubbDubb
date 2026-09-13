@@ -96,7 +96,7 @@ Tests: `test/briefTicket.test.ts`, `test/attachmentsSurviveTicket.test.ts`.
 
 ### Dispatch — rule `manual-job`
 
-`DispatchContext.queuedJobs` is wired from `store.listQueuedJobs()` (oldest first). The dispatcher
+`DispatchContext.queuedJobs` is wired from `store.jobs.listQueuedJobs()` (oldest first). The dispatcher
 pushes them onto the **front** of the candidate list, **before any world-driven rule**, so the headroom
 cut dispatches them first: a manual request takes the next free slot. A job below the cut shows as
 `waiting` in the Up next queue and is retried next cycle.
@@ -129,7 +129,7 @@ A job **stands in** for its origin while it is `queued`, or while the task it be
 (`dispatched` is terminal for a job, so the task is the only thing that says whether the work is
 still going on). That predicate is stated once, in `src/store/jobs.ts`, and asked by both readers:
 
-- `DispatchContext.standingJobs` (`store.listStandingJobs()`) is folded into the dispatcher's
+- `DispatchContext.standingJobs` (`store.jobs.listStandingJobs()`) is folded into the dispatcher's
   `activeOrigins`, so no rule even produces a candidate for work a requeue is redoing.
 - `store.findStandingJobByOrigin` is the executor's half of the same gate, which closes the window a
   requeue filed **after** the snapshot the dispatcher decided on opens.

@@ -20,13 +20,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/prs/:number/threads/:threadId/reopen',
     checked({ params: ThreadParams, body: ReopenBody }, ({ params, body, reply }) => {
-      const baseline = store.getWorldBaseline();
+      const baseline = store.world.getWorldBaseline();
       const pr = baseline?.pullRequests.find((p) => p.number === params.number);
       if (pr === undefined) return reply.code(404).send({ error: 'no open pull request with that number' });
       if (!pr.reviewThreads?.some((t) => t.id === params.threadId))
         return reply.code(404).send({ error: 'that pull request carries no such review thread' });
 
-      store.setPrThreadReopened(params.number, params.threadId, body.reopened);
+      store.threadReopens.setPrThreadReopened(params.number, params.threadId, body.reopened);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
     }),

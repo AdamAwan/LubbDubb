@@ -1,5 +1,5 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
-import type { PrRefStyle } from '../prRef.js';
+import type { PrRefStyle } from '../pr/prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import type { Decision, Issue, SelectorOffering, ValidationCheck } from '../types.js';
@@ -14,7 +14,7 @@ import {
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
-import { DISPATCH_PIPELINE, type DispatchRuleId, type RuleConditions, type StageRuleId } from './rules.js';
+import { DISPATCH_PIPELINE, type DispatchRuleId, type OwnStageRuleId, type RuleConditions } from './rules.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import type { PrReviewCharters } from '../review/prReview.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
@@ -41,10 +41,10 @@ import {
 import { liveParts } from '../plans/parts.js';
 import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
-import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
+import { isActive, type Candidate, type ConsiderOptions, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
-import { prCiFailing } from './rules/prCiFailing.js';
+import { prConcerns } from './rules/prConcerns.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { prSplit } from './rules/prSplit.js';
 import { workItemInReview } from './rules/workItemInReview.js';
@@ -73,12 +73,12 @@ import { remoteValidation } from './rules/remoteValidation.js';
 
 // → docs/spec/05-dispatcher.md
 
-const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
+export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'manual-job': manualJob,
   'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
   'pr-split': prSplit,
-  'pr-ci-failing': prCiFailing,
+  'pr-ci-failing': prConcerns,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
@@ -103,6 +103,27 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'feature-sequence': featureSequence,
 };
 
+interface RuleDispatcherOptions {
+  pickup?: Partial<IssuePickupPolicy>;
+  cooldown?: Partial<CooldownPolicy>;
+  templates?: PromptTemplates;
+  defaultBranch?: string;
+  planning?: Partial<PlanningPolicy>;
+  ci?: Partial<CiPolicy>;
+  validation?: Partial<ValidationPolicy>;
+  validationRoot?: string;
+  prRefStyle?: PrRefStyle;
+  review?: Partial<PrReviewPolicy>;
+  reviewCharters?: PrReviewCharters;
+  watchNote?: string;
+  watchDeclareNote?: string;
+  localValidation?: () => LocalValidationPolicy;
+  testPartNote?: (areas: readonly SelectorOffering[]) => string;
+  stateDeclareNote?: string;
+  remoteValidationOn?: boolean;
+  validationPlanNote?: (areas: readonly SelectorOffering[]) => string;
+}
+
 export class RuleDispatcher implements Dispatcher {
   private readonly pickup: IssuePickupPolicy;
   private readonly cooldown: CooldownPolicy;
@@ -123,26 +144,27 @@ export class RuleDispatcher implements Dispatcher {
   private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
 
-  constructor(
-    pickup: Partial<IssuePickupPolicy> = {},
-    cooldown: Partial<CooldownPolicy> = {},
-    templates: PromptTemplates = defaultPromptTemplates(),
-    defaultBranch = 'main',
-    planning: Partial<PlanningPolicy> = {},
-    ci: Partial<CiPolicy> = {},
-    validation: Partial<ValidationPolicy> = {},
-    validationRoot = '.lubbdubb/validation',
-    prRefStyle: PrRefStyle = '#',
-    review: Partial<PrReviewPolicy> = {},
-    reviewCharters: PrReviewCharters = { routing: null, modes: {} },
-    watchNote = '',
-    watchDeclareNote = '',
-    localValidation: () => LocalValidationPolicy = () => DEFAULT_LOCAL_VALIDATION,
-    testPartNote: (areas: readonly SelectorOffering[]) => string = () => '',
-    stateDeclareNote = '',
-    remoteValidationOn = false,
-    validationPlanNote: (areas: readonly SelectorOffering[]) => string = () => '',
-  ) {
+  constructor(opts: RuleDispatcherOptions = {}) {
+    const {
+      pickup = {},
+      cooldown = {},
+      templates = defaultPromptTemplates(),
+      defaultBranch = 'main',
+      planning = {},
+      ci = {},
+      validation = {},
+      validationRoot = '.lubbdubb/validation',
+      prRefStyle = '#',
+      review = {},
+      reviewCharters = { routing: null, modes: {} },
+      watchNote = '',
+      watchDeclareNote = '',
+      localValidation = () => DEFAULT_LOCAL_VALIDATION,
+      testPartNote = () => '',
+      stateDeclareNote = '',
+      remoteValidationOn = false,
+      validationPlanNote = () => '',
+    } = opts;
     this.remoteValidationOn = remoteValidationOn;
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
@@ -197,8 +219,9 @@ export class RuleDispatcher implements Dispatcher {
       remoteValidation: this.remoteValidationOn,
     };
     for (const rule of DISPATCH_PIPELINE) {
+      if (rule.emittedBy !== undefined) continue;
       if (rule.enabled && !rule.enabled(conditions)) continue;
-      STAGES[rule.id]?.(s);
+      STAGES[rule.id](s);
     }
 
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
@@ -356,11 +379,21 @@ export class RuleDispatcher implements Dispatcher {
       else validationChecks.set(check.originRef, [check]);
     }
 
-    const consider = (candidate: Candidate, onEscalate: (attempts: number) => RawAction): void => {
-      const verdict = dispatchVerdict(candidate.origin, now, ctx.recentDecisions, this.cooldown);
-      if (verdict.kind === 'escalate') raw.push(onEscalate(verdict.attempts));
-      else if (verdict.kind === 'cooldown') candidates.push({ ...candidate, held: 'cooldown' });
-      else if (verdict.kind === 'dispatch') candidates.push(candidate);
+    const consider = (candidate: Candidate, opts?: ConsiderOptions): boolean => {
+      const verdict = dispatchVerdict(candidate.origin, now, opts?.decisions ?? ctx.recentDecisions, this.cooldown);
+      if (verdict.kind === 'escalate') {
+        if (opts?.escalate) raw.push(opts.escalate(verdict.attempts));
+        return false;
+      }
+      if (verdict.kind === 'cooldown') {
+        candidates.push({ ...candidate, held: 'cooldown' });
+        return true;
+      }
+      if (verdict.kind === 'dispatch') {
+        candidates.push(candidate);
+        return true;
+      }
+      return false;
     };
 
     return {

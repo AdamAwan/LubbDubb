@@ -49,8 +49,8 @@ export class EjectionStore {
       outcome: null,
       settleNote: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO ejections (${COLUMNS})
          VALUES (@id, @originRef, @branch, @worktreePath, @agentId, @taskId, @sessionId, @reason,
                  @ejectedAt, @lastSeenAt, @lastNote, @settledAt, @outcome, @settleNote)`,
@@ -60,52 +60,50 @@ export class EjectionStore {
   }
 
   getEjection(id: string): Ejection | null {
-    const row = this.ctx.db.prepare(`SELECT ${COLUMNS} FROM ejections WHERE id=?`).get(id) as Row | undefined;
+    const row = this.ctx.prep(`SELECT ${COLUMNS} FROM ejections WHERE id=?`).get(id) as Row | undefined;
     return row ? hydrate(row) : null;
   }
 
   listEjections(limit = 100): Ejection[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT ${COLUMNS} FROM ejections ORDER BY ejected_at DESC LIMIT ?`)
-      .all(limit) as Row[];
+    const rows = this.ctx.prep(`SELECT ${COLUMNS} FROM ejections ORDER BY ejected_at DESC LIMIT ?`).all(limit) as Row[];
     return rows.map(hydrate);
   }
 
   liveEjections(): Ejection[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT ${COLUMNS} FROM ejections WHERE settled_at IS NULL ORDER BY ejected_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT ${COLUMNS} FROM ejections WHERE settled_at IS NULL ORDER BY ejected_at ASC`)
       .all() as Row[];
     return rows.map(hydrate);
   }
 
   liveEjectionForOrigin(originRef: string): Ejection | null {
-    const row = this.ctx.db
-      .prepare(`SELECT ${COLUMNS} FROM ejections WHERE origin_ref=? AND settled_at IS NULL`)
+    const row = this.ctx
+      .prep(`SELECT ${COLUMNS} FROM ejections WHERE origin_ref=? AND settled_at IS NULL`)
       .get(originRef) as Row | undefined;
     return row ? hydrate(row) : null;
   }
 
   ejectionOnBranch(branch: string): Ejection | null {
-    const row = this.ctx.db
-      .prepare(`SELECT ${COLUMNS} FROM ejections WHERE branch=? AND settled_at IS NULL`)
-      .get(branch) as Row | undefined;
+    const row = this.ctx.prep(`SELECT ${COLUMNS} FROM ejections WHERE branch=? AND settled_at IS NULL`).get(branch) as
+      | Row
+      | undefined;
     return row ? hydrate(row) : null;
   }
 
   noteEjection(id: string, note: string | null): void {
     const ts = this.ctx.now();
     if (note === null) {
-      this.ctx.db.prepare(`UPDATE ejections SET last_seen_at=? WHERE id=? AND settled_at IS NULL`).run(ts, id);
+      this.ctx.prep(`UPDATE ejections SET last_seen_at=? WHERE id=? AND settled_at IS NULL`).run(ts, id);
       return;
     }
-    this.ctx.db
-      .prepare(`UPDATE ejections SET last_seen_at=?, last_note=? WHERE id=? AND settled_at IS NULL`)
+    this.ctx
+      .prep(`UPDATE ejections SET last_seen_at=?, last_note=? WHERE id=? AND settled_at IS NULL`)
       .run(ts, note, id);
   }
 
   settleEjection(id: string, outcome: EjectionOutcome, note: string | null): Ejection | null {
-    const changed = this.ctx.db
-      .prepare(`UPDATE ejections SET settled_at=?, outcome=?, settle_note=? WHERE id=? AND settled_at IS NULL`)
+    const changed = this.ctx
+      .prep(`UPDATE ejections SET settled_at=?, outcome=?, settle_note=? WHERE id=? AND settled_at IS NULL`)
       .run(this.ctx.now(), outcome, note, id).changes;
     return changed === 0 ? null : this.getEjection(id);
   }

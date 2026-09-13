@@ -35,7 +35,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const attach = (targetRef: string): void => {
         if (prepared.files.length === 0) return;
         const stored = system.attachments.write(targetRef, prepared.files);
-        store.addAttachments(
+        store.jobs.addAttachments(
           targetRef,
           stored.map((file) => ({
             index: file.index,
@@ -87,7 +87,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/upnext/order',
     checked({ body: UpNextOrderBody }, async ({ body }) => {
-      store.setPriorityOverrides(body.origins);
+      store.priority.setPriorityOverrides(body.origins);
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, report };
@@ -113,7 +113,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
               ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
               : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
         });
-      store.setProfileOverride(body.origin, wanted);
+      store.profileOverrides.setProfileOverride(body.origin, wanted);
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, profile: wanted, report };
@@ -123,9 +123,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/jobs/:id/cancel',
     checked({ params: IdParams }, async ({ params, reply }) => {
-      const job = store.cancelJob(params.id);
+      const job = store.jobs.cancelJob(params.id);
       if (!job) return reply.code(409).send({ error: 'job not found or no longer queued' });
-      store.deleteAttachments(`job:${job.id}`);
+      store.jobs.deleteAttachments(`job:${job.id}`);
       system.attachments.remove(`job:${job.id}`);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, job };

@@ -65,8 +65,6 @@ function stripPathPrefix(raw: string): string | null {
   return name.replace(/^[ab]\//, '');
 }
 
-export const PLUMBING_IDEA_ID = 'plumbing';
-
 function isTestPath(path: string): boolean {
   return /(^|\/)tests?\//.test(path) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(path);
 }

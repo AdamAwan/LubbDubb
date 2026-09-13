@@ -1,6 +1,6 @@
-import { PHASE_ORDER, type SpendPhase } from '../spendInsights.js';
+import { PHASE_ORDER, type SpendPhase } from '../insights/spendInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
-import { throughputMeasureLabel } from '../throughputInsights.js';
+import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 

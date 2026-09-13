@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -55,9 +55,9 @@ test('a stale slice never moves the world baseline, so recovery re-announces not
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  assert.deepEqual(system.store.listWorldEvents(), []);
+  assert.deepEqual(system.store.world.listWorldEvents(), []);
 
-  assert.equal(system.store.getWorldBaseline()?.pullRequests.length, 1);
+  assert.equal(system.store.world.getWorldBaseline()?.pullRequests.length, 1);
 
   system.store.close();
 });

@@ -33,8 +33,8 @@ export class JobScheduleStore {
       createdAt: ts,
       updatedAt: ts,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO job_schedules (id, title, prompt, kind, cron, enabled, next_run_at, last_fired_at, last_job_id, created_at, updated_at)
          VALUES (@id, @title, @prompt, @kind, @cron, 1, @nextRunAt, NULL, NULL, @createdAt, @updatedAt)`,
       )
@@ -43,12 +43,12 @@ export class JobScheduleStore {
   }
 
   getJobSchedule(id: string): JobSchedule | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM job_schedules WHERE id=?`).get(id) as ScheduleRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM job_schedules WHERE id=?`).get(id) as ScheduleRow | undefined;
     return row ? rowToSchedule(row) : null;
   }
 
   listJobSchedules(): JobSchedule[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM job_schedules ORDER BY created_at ASC`).all() as ScheduleRow[];
+    const rows = this.ctx.prep(`SELECT * FROM job_schedules ORDER BY created_at ASC`).all() as ScheduleRow[];
     return rows.map(rowToSchedule);
   }
 
@@ -59,8 +59,8 @@ export class JobScheduleStore {
     const existing = this.getJobSchedule(id);
     if (!existing) return null;
     const next: JobSchedule = { ...existing, ...patch, updatedAt: this.ctx.now() };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE job_schedules SET title=@title, prompt=@prompt, kind=@kind, cron=@cron,
            enabled=@enabledInt, next_run_at=@nextRunAt, updated_at=@updatedAt WHERE id=@id`,
       )
@@ -69,8 +69,8 @@ export class JobScheduleStore {
   }
 
   recordJobScheduleRun(id: string, run: { firedAt: string; jobId: string; nextRunAt: string | null }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE job_schedules SET last_fired_at=@firedAt, last_job_id=@jobId, next_run_at=@nextRunAt, updated_at=@firedAt
          WHERE id=@id`,
       )
@@ -78,7 +78,7 @@ export class JobScheduleStore {
   }
 
   deleteJobSchedule(id: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM job_schedules WHERE id=?`).run(id).changes > 0;
+    return this.ctx.prep(`DELETE FROM job_schedules WHERE id=?`).run(id).changes > 0;
   }
 }
 

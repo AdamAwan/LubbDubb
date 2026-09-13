@@ -29,7 +29,7 @@ export interface LiveTicketFacts {
   parent?: { number: number; title: string } | null;
 }
 
-export interface TrackerSweepMark {
+interface TrackerSweepMark {
   anchorAt: string;
   sweptTo: string | null;
   restatedAt: string | null;
@@ -41,14 +41,14 @@ export class TicketStore {
   ensureTrackerSweep(backfillMs: number): TrackerSweepMark {
     const ts = this.ctx.now();
     const anchor = new Date(new Date(ts).getTime() - backfillMs).toISOString();
-    this.ctx.db
-      .prepare(`INSERT OR IGNORE INTO tracker_sweep (id, anchor_at, swept_to, updated_at) VALUES (1, ?, NULL, ?)`)
+    this.ctx
+      .prep(`INSERT OR IGNORE INTO tracker_sweep (id, anchor_at, swept_to, updated_at) VALUES (1, ?, NULL, ?)`)
       .run(anchor, ts);
     return this.readTrackerSweep() ?? { anchorAt: anchor, sweptTo: null, restatedAt: null };
   }
 
   readTrackerSweep(): TrackerSweepMark | null {
-    const row = this.ctx.db.prepare(`SELECT anchor_at, swept_to, restated_at FROM tracker_sweep WHERE id = 1`).get() as
+    const row = this.ctx.prep(`SELECT anchor_at, swept_to, restated_at FROM tracker_sweep WHERE id = 1`).get() as
       | { anchor_at: string; swept_to: string | null; restated_at: string | null }
       | undefined;
     return row ? { anchorAt: row.anchor_at, sweptTo: row.swept_to, restatedAt: row.restated_at } : null;
@@ -56,7 +56,7 @@ export class TicketStore {
 
   recordSweep(askedFrom: string, items: readonly TrackerItem[], live: readonly LiveTicketFacts[] = []): void {
     const ts = this.ctx.now();
-    const upsert = this.ctx.db.prepare(
+    const upsert = this.ctx.prep(
       `INSERT INTO tracker_items (number, title, labels, state, work_item_state, url, added_at, changed_at, first_seen_at, updated_at)
        VALUES (@number, @title, @labels, @state, @workItemState, @url, @addedAt, @changedAt, @ts, @ts)
        ON CONFLICT(number) DO UPDATE SET
@@ -70,7 +70,7 @@ export class TicketStore {
          changed_at=excluded.changed_at,
          updated_at=excluded.updated_at`,
     );
-    const enrich = this.ctx.db.prepare(
+    const enrich = this.ctx.prep(
       `UPDATE tracker_items SET
          tracking='live',
          labels=@labels,
@@ -83,7 +83,7 @@ export class TicketStore {
          updated_at=@ts
        WHERE number=@number`,
     );
-    const mark = this.ctx.db.prepare(
+    const mark = this.ctx.prep(
       `UPDATE tracker_sweep SET swept_to = MAX(COALESCE(swept_to, ''), ?), restated_at = COALESCE(restated_at, ?), updated_at = ? WHERE id = 1`,
     );
     this.ctx.db.transaction(() => {
@@ -129,7 +129,7 @@ export class TicketStore {
   }
 
   ensureFeatureColors(numbers: readonly number[]): Map<number, number> {
-    const rows = this.ctx.db.prepare(`SELECT number, slot FROM feature_colors`).all() as {
+    const rows = this.ctx.prep(`SELECT number, slot FROM feature_colors`).all() as {
       number: number;
       slot: number;
     }[];
@@ -138,9 +138,7 @@ export class TicketStore {
     for (const slot of assigned.values()) if (slot >= 0 && slot < FEATURE_SLOTS) used[slot] = (used[slot] ?? 0) + 1;
 
     const ts = this.ctx.now();
-    const insert = this.ctx.db.prepare(
-      `INSERT OR IGNORE INTO feature_colors (number, slot, assigned_at) VALUES (?, ?, ?)`,
-    );
+    const insert = this.ctx.prep(`INSERT OR IGNORE INTO feature_colors (number, slot, assigned_at) VALUES (?, ?, ?)`);
     for (const number of [...new Set(numbers)].sort((a, b) => a - b)) {
       if (assigned.has(number)) continue;
       let pick = 0;
@@ -160,16 +158,14 @@ export class TicketStore {
   }
 
   listTicketsClosedSince(since: string): TicketClosure[] {
-    const rows = this.ctx.db
-      .prepare(
-        `SELECT number, changed_at FROM tracker_items WHERE state = 'closed' AND changed_at >= ? ORDER BY number`,
-      )
+    const rows = this.ctx
+      .prep(`SELECT number, changed_at FROM tracker_items WHERE state = 'closed' AND changed_at >= ? ORDER BY number`)
       .all(since) as { number: number; changed_at: string }[];
     return rows.map((r) => ({ number: r.number, closedAt: r.changed_at }));
   }
 
   listTrackerItems(): MirroredTicket[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM tracker_items ORDER BY number DESC`).all() as TrackerItemRow[];
+    const rows = this.ctx.prep(`SELECT * FROM tracker_items ORDER BY number DESC`).all() as TrackerItemRow[];
     return rows.map(rowToTicket);
   }
 
@@ -183,8 +179,8 @@ export class TicketStore {
 
   patchTicketLabels(patch: TicketLabelPatch): void {
     if (patch.label === '' || patch.numbers.length === 0) return;
-    const read = this.ctx.db.prepare(`SELECT labels FROM tracker_items WHERE number = ?`);
-    const write = this.ctx.db.prepare(`UPDATE tracker_items SET labels = ?, updated_at = ? WHERE number = ?`);
+    const read = this.ctx.prep(`SELECT labels FROM tracker_items WHERE number = ?`);
+    const write = this.ctx.prep(`UPDATE tracker_items SET labels = ?, updated_at = ? WHERE number = ?`);
     const ts = this.ctx.now();
     this.ctx.db.transaction(() => {
       for (const number of patch.numbers) {
@@ -199,8 +195,8 @@ export class TicketStore {
   }
 
   patchTicketState(patch: { number: number; state: string }): void {
-    this.ctx.db
-      .prepare(`UPDATE tracker_items SET work_item_state = ?, updated_at = ? WHERE number = ?`)
+    this.ctx
+      .prep(`UPDATE tracker_items SET work_item_state = ?, updated_at = ? WHERE number = ?`)
       .run(patch.state, this.ctx.now(), patch.number);
   }
 
@@ -217,8 +213,8 @@ export class TicketStore {
     const ts = this.ctx.now();
     const prev = this.getFeatureSummary(input.originRef);
     const row: FeatureSummary = { ...input, createdAt: prev?.createdAt ?? ts, updatedAt: ts };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO feature_summaries
            (origin_ref, standing, usable, blocked, remaining, standing_key, agent_id, task_id, created_at, updated_at)
          VALUES (@originRef, @standing, @usable, @blocked, @remaining, @standingKey, @agentId, @taskId, @createdAt, @updatedAt)
@@ -232,19 +228,19 @@ export class TicketStore {
   }
 
   getFeatureSummary(originRef: string): FeatureSummary | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM feature_summaries WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM feature_summaries WHERE origin_ref=?`).get(originRef) as
       | FeatureSummaryRow
       | undefined;
     return row ? rowToFeatureSummary(row) : null;
   }
 
   listFeatureSummaries(): FeatureSummary[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM feature_summaries`).all() as FeatureSummaryRow[];
+    const rows = this.ctx.prep(`SELECT * FROM feature_summaries`).all() as FeatureSummaryRow[];
     return rows.map(rowToFeatureSummary);
   }
 }
 
-export interface TicketLabelPatch {
+interface TicketLabelPatch {
   numbers: readonly number[];
   label: string;
   present: boolean;

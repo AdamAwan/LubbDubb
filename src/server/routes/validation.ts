@@ -26,8 +26,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       by: ValidationCheckResultBy | null;
       until?: string | null;
     },
-  ): ReturnType<typeof store.recordValidationResult> => {
-    const next = store.recordValidationResult(originRef, checkId, input);
+  ): ReturnType<typeof store.validation.recordValidationResult> => {
+    const next = store.validation.recordValidationResult(originRef, checkId, input);
     if (next) hub.broadcast({ type: 'world:changed' });
     return next;
   };
@@ -98,7 +98,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/validation/:checkId/handover',
     checked({ params: CheckParams, body: HandoverBody }, async ({ params, body, reply }) => {
-      const current = store.getValidationCheck(issueOrigin(params.number), params.checkId);
+      const current = store.validation.getValidationCheck(issueOrigin(params.number), params.checkId);
       if (!current)
         return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
       if (body.to === 'fleet' && current.state !== 'unrun') {
@@ -106,7 +106,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           error: `this check reads ${current.state}; reset it first if you want the fleet to run it again`,
         });
       }
-      const next = store.setValidationActor(issueOrigin(params.number), params.checkId, body.to);
+      const next = store.validation.setValidationActor(issueOrigin(params.number), params.checkId, body.to);
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, check: next };

@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { claimIsLive } from '../../validation/desktop.js';
@@ -35,19 +34,16 @@ export function validateCheck(s: StageContext): void {
       if (fleetCanStart(check.steps) === false) continue;
 
       const checkOrigin = validateOrigin(issue.number, check.id);
-      const verdict = dispatchVerdict(checkOrigin, s.now, ctx.recentDecisions, s.cooldown);
-      if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
       const title = `Run validation check ${check.letter} on issue #${issue.number}`;
       const reason = `Check ${check.letter} ("${check.title}") on issue #${issue.number} was handed to the fleet and has not been run.`;
-      s.candidates.push({
+      s.consider({
         origin: checkOrigin,
         rule: 'validate-check',
         title,
         kind: 'code',
         branch: validateBranch(issue.number, check.id),
         reason,
-        held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
         action: {
           type: 'dispatch_code_agent',
           ...readOnlyDispatch(validateBranch(issue.number, check.id), s.defaultBranch),

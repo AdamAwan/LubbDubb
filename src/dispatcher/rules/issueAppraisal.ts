@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { appraisalBranch, appraisalOrigin, hasWorkStarted, isAppraised } from '../../intake/appraisal.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
@@ -21,21 +20,16 @@ export function issueAppraisal(s: StageContext): void {
     const root = issueOrigin(issue.number);
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
-    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
-
-    s.appraising.add(issue.number);
     const branch = appraisalBranch(issue.number);
     const title = `Appraise issue #${issue.number}`;
     const reason = `Nothing has been started for issue #${issue.number}; check the goal can be worked from before dispatching against it.`;
-    s.candidates.push({
+    const proposed = s.consider({
       origin,
       rule: 'issue-appraisal',
       title,
       kind: 'code',
       branch,
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(branch, s.defaultBranch),
@@ -54,5 +48,6 @@ export function issueAppraisal(s: StageContext): void {
         reason,
       } satisfies RawAction,
     });
+    if (proposed) s.appraising.add(issue.number);
   }
 }

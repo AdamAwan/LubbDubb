@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+import { assessIssueNumber } from '../delivery/assessment.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 import type { SelectorOffering, ValidationCheck, ValidationPlanRecord } from '../types.js';
 
@@ -7,20 +9,30 @@ import type { SelectorOffering, ValidationCheck, ValidationPlanRecord } from '..
 /**
  * The validation planner's dispatch origin. One per goal — there is one check set and it is written
  * once — so the suffix carries no id, which is `assess` and `retro`'s shape rather than
- * `validate:<check>`'s. It is classified in `src/issueOrigins.ts`; left out it reads as
- * `unrecognised` and its spend files under "other".
+ * `validate:<check>`'s. It is declared, with its role, in `src/issueOrigins.ts`.
  */
 export function validationPlanOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}:validate-plan`;
+  return issueOriginRef('validationPlan', issueNumber);
 }
 
-export function validationPlanIssue(originRef: string | null): number | null {
-  const match = /^issue:(\d+):validate-plan$/.exec(originRef ?? '');
-  return match ? Number(match[1]) : null;
+function validationPlanIssue(originRef: string | null): number | null {
+  return issueOriginNumber('validationPlan', originRef);
 }
 
 export function validationPlanBranch(issueNumber: number): string {
   return `validate-plan/issue/${issueNumber}`;
+}
+
+/**
+ * Which dispatches may write a goal's check set, declared in one place so the tool's fence and the
+ * rules that brief for it cannot drift. Two do: the **assessor**, which writes it in the turn it
+ * answers `delivered` — one agent, two outputs, against code that by its own verdict is not moving
+ * again — and the **validation planner**, which is now the catch-up for a turn that ended before it
+ * got there. Widening this list is widening who may speak for the whole set.
+ * → docs/spec/20-validation.md#when-the-check-set-is-written
+ */
+export function checkSetAuthoringIssue(originRef: string | null): number | null {
+  return validationPlanIssue(originRef) ?? assessIssueNumber(originRef);
 }
 
 /**
@@ -101,6 +113,36 @@ export function authoringBriefing(input: {
   if (input.environments !== '') lines.push(input.environments);
   lines.push(TEST_PLAN_NOTE);
   return lines.join('\n');
+}
+
+/**
+ * The assessor's second output, **appended** to the rendered `issue-assess` prompt ahead of
+ * {@link authoringBriefing} rather than interpolated — an operator override that never learned a new
+ * `{token}` would drop the whole fold silently, on exactly the deployments that customised most.
+ * It is rendered only for a goal that has a plan and no check set, which is the pair of gates rule
+ * `validation-plan` was carrying on its own.
+ * → docs/spec/20-validation.md#when-the-check-set-is-written
+ */
+export function assessAuthoringNote(): string {
+  return `\n\n---\n
+## If you answer \`delivered\`, write the check set too
+
+You are the last agent on this goal, and a \`delivered\` verdict is the moment nothing further is
+coming. So the same reading that decides the verdict also settles what somebody should *run* against
+the finished thing — and doing it here saves a second agent re-deriving it tomorrow from the same
+checkout you are standing in.
+
+**Cast the verdict first, with \`assess_issue\`, and call \`validation_plan\` after it.** That order is
+not a style note: the verdict is what parks the goal, and a turn that ends between the two leaves the
+goal parked with the check set still owed, which rule \`validation-plan\` picks up on the next pulse.
+A turn that ends *before* the verdict has decided nothing, and the goal comes back round to an
+assessor — so never write a check set for a goal you have not just called delivered.
+
+**On \`more_work\`, write nothing.** The goal goes back to the fleet, more pull requests land, and the
+code any check you wrote was written against moves underneath it. Say what is missing and stop.
+
+The rest of this section is what the check set is written from.
+`;
 }
 
 /**

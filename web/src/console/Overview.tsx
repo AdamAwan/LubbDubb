@@ -8,6 +8,7 @@ import type {
   OpenPullRequest,
   QueueItem,
   ReadyingAction,
+  ReadyingStepTiming,
   ReadyingStep,
   SupplyState,
 } from '../types.js';
@@ -324,6 +325,16 @@ const READYING_WHY: Record<ReadyingStep, string> = {
   authorizing: 'Asking whether this act is already authorized, which is a read against the tracker.',
 };
 
+function readiedSoFar(steps: ReadyingStepTiming[]): string {
+  return steps.map((s) => `${s.step} ${readyingSpan(s.ms)}`).join(', ');
+}
+
+function readyingSpan(ms: number): string {
+  if (ms < 1_000) return `${ms}ms`;
+  if (ms < 60_000) return `${Math.round(ms / 1_000)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1_000)}s`;
+}
+
 function readyingRow(action: ReadyingAction, view: CockpitView): PanelRowModel {
   return {
     key: action.id,
@@ -333,6 +344,8 @@ function readyingRow(action: ReadyingAction, view: CockpitView): PanelRowModel {
     facts: [
       ...(action.branch === null ? [] : [{ label: 'branch', value: action.branch }]),
       { label: 'for', value: elapsed(action.startedAt, null, view.now) },
+      { label: action.step, value: elapsed(action.stepStartedAt, null, view.now) },
+      ...(action.elapsed.length === 0 ? [] : [{ label: 'before that', value: readiedSoFar(action.elapsed) }]),
     ],
     whyLabel: READYING_STEP[action.step],
     whyTone: 'quiet',

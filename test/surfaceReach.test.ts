@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { resolveWindow } from '../src/insightsWindow.js';
-import { buildSurfaceReach, type SurfaceVerdict } from '../src/surfaceReachInsights.js';
+import { resolveWindow } from '../src/insights/insightsWindow.js';
+import { buildSurfaceReach, type SurfaceVerdict } from '../src/insights/surfaceReachInsights.js';
 import { PLACE_KEYS, USAGE_SUBJECTS, VERBS_BY_SUBJECT } from '../src/usage/events.js';
 import type { SurfaceReach } from '../src/types.js';
 import type { UsagePayload } from '../src/wire.js';
@@ -168,7 +168,7 @@ test('an empty batch is accepted and stores nothing — a flush with nothing in 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'POST', url: '/api/usage/events', payload: { events: [] } });
   assert.equal(res.statusCode, 200);
-  assert.equal(system.store.listSurfaceReachSince(new Date(0).toISOString()).length, 0);
+  assert.equal(system.store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 0);
   await app.close();
   system.store.close();
 });
@@ -176,10 +176,10 @@ test('an empty batch is accepted and stores nothing — a flush with nothing in 
 test('the retention sweep drops from the back and keeps the ninety days it promises', () => {
   const system = build();
   const { store } = system;
-  store.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
-  assert.equal(store.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
-  store.pruneSurfaceReach(true);
-  assert.equal(store.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
+  store.surfaceReach.recordSurfaceReach([{ subject: 'goal', verb: 'view', place: 'goal', arrival: 'linked' }]);
+  assert.equal(store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
+  store.surfaceReach.pruneSurfaceReach(true);
+  assert.equal(store.surfaceReach.listSurfaceReachSince(new Date(0).toISOString()).length, 1);
   system.store.close();
 });
 

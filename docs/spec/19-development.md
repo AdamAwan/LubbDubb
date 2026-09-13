@@ -185,6 +185,9 @@ AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@p
   pre-commit hook below normally means it never fails.
 
 CI additionally runs `npm run smoke` and coverage, and there are CodeQL and security workflows.
+CodeQL is a hard gate: code scanning is enabled on the repository, the analysis uploads its
+results, and a failure fails the check. The security workflow is split — the runtime-dependency
+advisory gate blocks, while the full-tree scan and dependency review stay advisory.
 
 ## The pre-commit hook
 

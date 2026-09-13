@@ -5,8 +5,8 @@ import { validationCheckSetInputs, validationResourceInputs } from '../../valida
 import {
   AUTHORED_AMEND_NOTE,
   AUTHORED_SUPERSEDED_REASON,
+  checkSetAuthoringIssue,
   validateCheckSet,
-  validationPlanIssue,
 } from '../../validation/authoring.js';
 import { withdrawResourceAsks } from '../../validation/ask.js';
 import { NO_STEP_CAPABILITIES } from '../../validation/steps.js';
@@ -144,17 +144,24 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     }),
   ),
   handler: (args) => {
-    const issueNumber = validationPlanIssue(task.originRef);
+    const issueNumber = checkSetAuthoringIssue(task.originRef);
     if (issueNumber === null) {
       return toolError(
-        `validation_plan declares the whole check set for a goal whose validation plan you were dispatched ` +
-          `to write, and this task's origin is ${task.originRef ?? '(none)'}, which is not that dispatch. If a ` +
-          `check on the goal you are working is wrong, correct it with validation_amend, which speaks only for ` +
-          `the checks it names.`,
+        `validation_plan declares the whole check set for a goal, and only two dispatches may: the assessor ` +
+          `that has just answered "delivered" for it, and the validation planner sent to write one. This ` +
+          `task's origin is ${task.originRef ?? '(none)'}, which is neither. If a check on the goal you are ` +
+          `working is wrong, correct it with validation_amend, which speaks only for the checks it names.`,
       );
     }
     const origin = issueOrigin(issueNumber);
-    const plan = deps.store.getPlanByOrigin(origin);
+    if (deps.store.verdicts.getDelivery(origin) === null) {
+      return toolError(
+        `Issue #${issueNumber} has no standing delivery, so there is nothing to write a check set against yet. ` +
+          `A check set is authored once, against code that is not going to move again — call assess_issue ` +
+          `first, and write one only if that verdict is "delivered".`,
+      );
+    }
+    const plan = deps.store.plans.getPlanByOrigin(origin);
     if (!plan) {
       return toolError(
         `Issue #${issueNumber} has no plan, so a check set has nothing to hang off: "covers" names live part ` +
@@ -164,7 +171,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateCheckSet(args);
     if (!parsed.ok) return toolError(`Check set rejected: ${parsed.error}`);
     const set = parsed.set;
-    const slugs = deps.store.listPlanParts(plan.id).map((p) => p.slug);
+    const slugs = deps.store.plans.listPlanParts(plan.id).map((p) => p.slug);
 
     const resources = validationResourceInputs(set.resources);
     withdrawResourceAsks(
@@ -172,13 +179,13 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       origin,
       resources.filter((r) => !r.provided).map((r) => r.name),
     );
-    const written = deps.store.ingestValidation(origin, {
+    const written = deps.store.validation.ingestValidation(origin, {
       checks: validationCheckSetInputs(set.checks, set.resources, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
       resources,
       supersededReason: AUTHORED_SUPERSEDED_REASON,
       amendNote: AUTHORED_AMEND_NOTE,
     });
-    deps.store.recordValidationAuthoring(origin, {
+    deps.store.validation.recordValidationAuthoring(origin, {
       note: set.note,
       emptyReason: set.checks.length === 0 ? (set.emptyReason ?? null) : null,
     });

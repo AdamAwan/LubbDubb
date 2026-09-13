@@ -4,11 +4,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { buildAllowanceInsights } from '../src/allowanceInsights.js';
-import type { AllowanceInsights } from '../src/allowanceInsights.js';
+import { buildAllowanceInsights } from '../src/insights/allowanceInsights.js';
+import type { AllowanceInsights } from '../src/insights/allowanceInsights.js';
 import type { AccountRateLimits, Agent, TaskSummary, UsageEvent, WorldEvent } from '../src/types.js';
-import type { SpendGoal } from '../src/spendInsights.js';
-import type { InsightsWindowView } from '../src/insightsWindow.js';
+import type { SpendGoal } from '../src/insights/spendInsights.js';
+import type { InsightsWindowView } from '../src/insights/insightsWindow.js';
 
 const T0 = Date.parse('2026-08-27T12:00:00.000Z');
 const iso = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
@@ -23,53 +23,53 @@ function reading(minutes: number, fiveHour: number | null, sevenDay: number | nu
 
 test('every reading is kept, not just the freshest', () => {
   const store = new Store(':memory:');
-  store.recordRateLimits(reading(0, 10));
-  store.recordRateLimits(reading(5, 20));
-  store.recordRateLimits(reading(10, 30));
-  const kept = store.listRateLimitReadingsSince(iso(-1));
+  store.rateLimits.recordRateLimits(reading(0, 10));
+  store.rateLimits.recordRateLimits(reading(5, 20));
+  store.rateLimits.recordRateLimits(reading(10, 30));
+  const kept = store.rateLimits.listRateLimitReadingsSince(iso(-1));
   assert.deepEqual(
     kept.map((r) => r.fiveHour?.usedPercentage),
     [10, 20, 30],
   );
-  assert.equal(store.readRateLimits()?.fiveHour?.usedPercentage, 30);
+  assert.equal(store.rateLimits.readRateLimits()?.fiveHour?.usedPercentage, 30);
   store.close();
 });
 
 test('a reading that arrives late is kept, though it never becomes the chip', () => {
   const store = new Store(':memory:');
-  store.recordRateLimits(reading(0, 10));
-  store.recordRateLimits(reading(10, 30));
-  store.recordRateLimits(reading(5, 20));
+  store.rateLimits.recordRateLimits(reading(0, 10));
+  store.rateLimits.recordRateLimits(reading(10, 30));
+  store.rateLimits.recordRateLimits(reading(5, 20));
   assert.deepEqual(
-    store.listRateLimitReadingsSince(iso(-1)).map((r) => r.fiveHour?.usedPercentage),
+    store.rateLimits.listRateLimitReadingsSince(iso(-1)).map((r) => r.fiveHour?.usedPercentage),
     [10, 20, 30],
     'oldest first, with the late reading in its own place rather than at the end',
   );
-  assert.equal(store.readRateLimits()?.fiveHour?.usedPercentage, 30, 'the chip still holds the freshest');
+  assert.equal(store.rateLimits.readRateLimits()?.fiveHour?.usedPercentage, 30, 'the chip still holds the freshest');
   store.close();
 });
 
 test('two agents reporting one instant record one reading', () => {
   const store = new Store(':memory:');
-  store.recordRateLimits(reading(0, 42));
-  store.recordRateLimits(reading(0, 42));
-  assert.equal(store.listRateLimitReadingsSince(iso(-1)).length, 1);
+  store.rateLimits.recordRateLimits(reading(0, 42));
+  store.rateLimits.recordRateLimits(reading(0, 42));
+  assert.equal(store.rateLimits.listRateLimitReadingsSince(iso(-1)).length, 1);
   store.close();
 });
 
 test('the readings survive a restart, as the chip does', () => {
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-allowance-')), 'db.sqlite');
   const store = new Store(dbPath);
-  store.recordRateLimits(reading(0, 10));
-  store.recordRateLimits(reading(5, 20));
+  store.rateLimits.recordRateLimits(reading(0, 10));
+  store.rateLimits.recordRateLimits(reading(5, 20));
   store.close();
 
   const reopened = new Store(dbPath);
   assert.deepEqual(
-    reopened.listRateLimitReadingsSince(iso(-1)).map((r) => r.fiveHour?.usedPercentage),
+    reopened.rateLimits.listRateLimitReadingsSince(iso(-1)).map((r) => r.fiveHour?.usedPercentage),
     [10, 20],
   );
-  assert.equal(reopened.readRateLimits()?.fiveHour?.usedPercentage, 20);
+  assert.equal(reopened.rateLimits.readRateLimits()?.fiveHour?.usedPercentage, 20);
   reopened.close();
 });
 

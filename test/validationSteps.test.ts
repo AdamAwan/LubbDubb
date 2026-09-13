@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { VALIDATION_COLUMNS } from '../src/store/validation.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -101,7 +101,7 @@ function ingest(system: System): void {
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
     prompt: 'do it',
@@ -113,6 +113,9 @@ function spawnAgent(system: System, originRef: string): Agent {
 }
 
 async function plan(system: System, checks: unknown[]): Promise<{ isError: boolean; text: string }> {
+  // A check set is written against a delivered goal, and `validation_plan` refuses one that has not
+  // been — the fence that stops an assessor authoring before it has cast its verdict.
+  system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'every part merged', by: 'assessor' });
   const agent = spawnAgent(system, 'issue:12:validate-plan');
   const session = system.mcp.session(agent.id);
   assert.ok(session, 'a spawned agent has a live MCP credential');
@@ -224,7 +227,7 @@ test('a step is the fleet’s where the configuration declares what carries it, 
   ]);
   assert.equal(res.isError, false, res.text);
 
-  const check = system.store.listValidationChecks(GOAL)[0];
+  const check = system.store.validation.listValidationChecks(GOAL)[0];
   assert.deepEqual(
     check?.steps.map((s) => [s.kind, s.actor]),
     [
@@ -259,7 +262,7 @@ test('a step nothing declares comes back to a person, naming the configuration t
   ]);
   assert.equal(res.isError, false, res.text);
 
-  const steps = system.store.listValidationChecks(GOAL)[0]?.steps ?? [];
+  const steps = system.store.validation.listValidationChecks(GOAL)[0]?.steps ?? [];
   assert.deepEqual(
     steps.map((s) => [s.kind, s.actor]),
     [
@@ -495,7 +498,11 @@ test('a database from before the column reads as no steps, and nothing is backfi
     db.close();
 
     store = new Store(file);
-    assert.deepEqual(store.listValidationChecks(GOAL)[0]?.steps, [], 'null is "no steps", which stays true forever');
+    assert.deepEqual(
+      store.validation.listValidationChecks(GOAL)[0]?.steps,
+      [],
+      'null is "no steps", which stays true forever',
+    );
   } finally {
     store.close();
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });

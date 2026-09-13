@@ -8,9 +8,24 @@
 The rule above is about **SQLite access, not about one class** (issue #221). `store.ts` was a
 2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
 depended on the surface of all of them. It is now a **composition root**: one domain module per
-group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
-thin `Store` that instantiates them and delegates. Every public method name and signature is
-unchanged, so no call site anywhere knows.
+group of related tables, each a class taking nothing but a `StoreContext` (`{db, now, prep}`), and a
+`Store` that instantiates them, holds the database handle, and runs the schema and migration pass.
+
+**`Store` forwards nothing.** Each domain module hangs off it as a public named member and callers
+reach the method on the module that owns it — `store.tasks.getTask(id)`, `store.jobs.createJob(…)`,
+`store.pool.replaceFleetDigest(…)`. For a while the split kept a flat façade over the top: 434
+hand-written one-line forwarders, so that no call site had to know the split had happened. They are
+gone. A forwarder is a second copy of a signature that nothing keeps true — every new store method
+had to be written twice, five of the pool ones had already drifted to a different name at the
+façade, and the only thing that caught a forgotten one was the call site failing. Adding a method to
+a domain module is now the whole change.
+
+What stays on `Store` is what is not a forward: `close()` (it asks `TranscriptStore` to flush before
+the handle goes), and the three reads that genuinely span two modules —
+`sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's, and
+`writeUpObstacle`, which opens a job and records the write-up against the obstacle in one
+transaction. A composite belongs here because it is the caller that holds both modules; a method
+that only names one belongs on that one.
 
 | Module                | Tables                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |
@@ -40,9 +55,9 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 - **Only `src/store/` imports `better-sqlite3`.** The constraint the split was careful to preserve,
   and now the one that fails a test when broken. (Matched on the _import_ — two modules elsewhere
   mention the driver in prose to explain why a synchronous write makes a read-then-write race-free.)
-- **A module is handed the database and nothing else.** `StoreContext` is `{db, now}` and no module
-  imports a sibling. That is not a rule imposed on the split so much as a fact discovered by it:
-  every method in the old class was `this.db.prepare(...)` plus `this.now()`, with no domain
+- **A module is handed the database and nothing else.** `StoreContext` is `{db, now, prep}` and no
+  module imports a sibling. That is not a rule imposed on the split so much as a fact discovered by
+  it: every method in the old class was a prepared statement plus `this.now()`, with no domain
   reaching another through class state, which is what made the move mechanical. A genuinely
   cross-domain read belongs _above_ the persistence layer, in the caller that already holds both.
 - **Each table is named by exactly one module.** Two writers to one table is how the invariants
@@ -82,6 +97,39 @@ are one module rather than scattered through 2,500 lines.
 Writes are **synchronous**, which is what keeps the harness logic race-free. Lean on that.
 
 The clock is injectable (`Clock`), so tests get deterministic timestamps.
+
+### Compiled statements are memoised per connection
+
+better-sqlite3 does **not** cache prepared statements: every `db.prepare(sql)` re-parses and re-plans
+the SQL. A point lookup like `getTask` is called inside loops — the end-of-run pass, the obstacle and
+recovery desks, the escalation inbox — so preparing it afresh each call dominated the call. Measured
+on this repo's driver, 20k point lookups cost 156 ms preparing each time against 38 ms re-using the
+compiled statement.
+
+So `StoreContext` carries a third member, `prep` (`createPrepare` in `context.ts`): a
+`Map<string, Statement>` keyed on the exact SQL text, compiled on first ask and handed back after.
+Domain modules read `this.ctx.prep(sql)` where they used to read `this.ctx.db.prepare(sql)`.
+
+Three things make that safe, and a new call site has to keep them true:
+
+- **The cache belongs to one connection.** It is built in the `Store` constructor over that store's
+  own handle and lives on that store's `StoreContext`, so nothing is shared between stores — which is
+  what tests need, since they build many `Store`s over `:memory:` and close them independently. A
+  statement compiled against a closed database is a statement nothing can run.
+- **It is built _after_ the migration pass**, and is lazy besides, so nothing is compiled against a
+  pre-migration schema. (better-sqlite3 recompiles on a schema change anyway; the ordering is belt as
+  well as braces.)
+- **Only constant SQL is memoised.** A cached statement is keyed on its text, so SQL assembled per
+  call — a variable-length `IN (?,?,?)` list, most of all — would grow the map without bound. Those
+  sites keep `this.ctx.db.prepare(...)` deliberately. Interpolating a _module-level_ constant
+  (`ACTIVE_TASK_STATUS_SQL`, `LIVE_SQL`, `OPEN_SQL`, `SUMMARY_COLUMNS`) still yields constant text and
+  is memoised; so does a column or table name chosen from a closed set, which is bounded by that set.
+
+A cached statement is also **stateful**, which is why none of this reaches `iterate`, `pluck`, `raw`,
+`expand` or `bind`: `iterate` leaves a statement busy while its consumer runs, and the other four
+mutate the statement permanently, so a later caller of the same SQL would get someone else's shape.
+`src/store/` uses none of them today, and a site that needs one must not go through `prep` — or must
+apply the modifier once, under a cache key of its own.
 
 ## Migrations
 
@@ -527,7 +575,17 @@ provider.
 
 `countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use: it
 counts `starting` / `running` / `waiting`. `crashed` is deliberately outside it — a row stamped by boot
-detection has no process behind it, so counting it would let dead agents eat the concurrency cap.
+detection has no process behind it, so counting it would let dead agents eat the concurrency cap. The
+three statuses are declared once in `LIVE` and the SQL derives its `IN` clause from it, as
+`local_runs` does; the reading is a `COUNT(*)` over that clause, because it sits on the dispatcher's
+headroom path and on every snapshot, where hydrating the whole table to take its length was the cost.
+`listAgentsByStatus` selects on the same column rather than filtering a full listing, and is one of
+the variable-length `IN` sites that keep `db.prepare`.
+
+Both listings, and `listAgents`, order `started_at DESC, rowid ASC`: the tie-break is explicit because
+agents started inside the same millisecond are ordinary — a fake clock in a test makes them the rule —
+and SQLite's sorter promises nothing about equal keys, so two readings of the same rows could disagree
+on which agent is "the live one" a caller takes first.
 
 `recordAgentUsage` writes the cumulative values onto the row **and** the cost delta into
 `usage_events`. It is the shape for a row with **one** session behind it; a local run's

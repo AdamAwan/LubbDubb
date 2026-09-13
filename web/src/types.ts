@@ -128,6 +128,7 @@ export type {
   QueueItem,
   ReadyingAction,
   ReadyingStep,
+  ReadyingStepTiming,
   RecoveryVerdict,
   BuildReading,
   BuildStanding,

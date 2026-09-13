@@ -1,10 +1,11 @@
 import { join } from 'node:path';
+import { issueOriginId, issueOriginRef } from '../issueOrigins.js';
 import { validationGoalDir } from '../validation/resources.js';
 
 // → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
 
 export function remoteValidationOrigin(issueNumber: number, runId: string): string {
-  return `issue:${issueNumber}:validate-remote:${runId}`;
+  return issueOriginRef('remoteValidation', issueNumber, runId);
 }
 
 /**
@@ -15,9 +16,8 @@ export function remoteValidationOrigin(issueNumber: number, runId: string): stri
  * `validation_report`.
  */
 export function remoteValidationOriginParts(originRef: string | null): { issueNumber: number; runId: string } | null {
-  const match = /^issue:(\d+):validate-remote:([A-Za-z0-9-]+)$/.exec(originRef ?? '');
-  if (!match) return null;
-  return { issueNumber: Number(match[1]), runId: match[2] as string };
+  const parts = issueOriginId('remoteValidation', originRef);
+  return parts === null ? null : { issueNumber: parts.issueNumber, runId: parts.id };
 }
 
 /** The lease key the read-only checkout is taken under. It is a key, and no ref is minted for it. */

@@ -130,7 +130,7 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
 });
 
 test('with a pickup label set, only issues carrying it are dispatched', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
+  const d = new RuleDispatcher({ pickup: { watchLabel: 'agent-ready' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -176,14 +176,14 @@ test("the container-type gate the dispatcher applies is the operator's, not the 
     },
   ];
 
-  const off = await new RuleDispatcher({ containerTypes: [] }).decide(ctx({ issues }));
+  const off = await new RuleDispatcher({ pickup: { containerTypes: [] } }).decide(ctx({ issues }));
   assert.deepEqual(
     off.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
     ['issue:101', 'issue:102'],
     'an empty list turns the gate off for both',
   );
 
-  const renamed = await new RuleDispatcher({ containerTypes: ['Widget'] }).decide(ctx({ issues }));
+  const renamed = await new RuleDispatcher({ pickup: { containerTypes: ['Widget'] } }).decide(ctx({ issues }));
   assert.deepEqual(
     renamed.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
     ['issue:101'],
@@ -192,7 +192,7 @@ test("the container-type gate the dispatcher applies is the operator's, not the 
 });
 
 test('requireOwnLabel: a pickup tag added by someone else does not dispatch', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready', requireOwnLabel: true });
+  const d = new RuleDispatcher({ pickup: { watchLabel: 'agent-ready', requireOwnLabel: true } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -240,8 +240,10 @@ test('with no pickup label configured, all open issues stay eligible (no regress
 
 test('higher-priority issues win limited headroom; equal priority breaks by issue number', async () => {
   const d = new RuleDispatcher({
-    priorityLabels: { 'priority:high': 3, 'priority:low': 1 },
-    defaultPriority: 2,
+    pickup: {
+      priorityLabels: { 'priority:high': 3, 'priority:low': 1 },
+      defaultPriority: 2,
+    },
   });
   const { actions } = await d.decide(
     ctx(
@@ -524,7 +526,7 @@ test("a direct base update keeps the origin's cooldown and attempt cap", async (
 });
 
 test('a PR with no reported base falls back to the configured defaultBranch', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'trunk');
+  const d = new RuleDispatcher({ defaultBranch: 'trunk' });
   const { actions } = await d.decide(ctx({ pullRequests: [behindPr({ baseBranch: undefined })] }));
   assert.equal((actions[0] as { base: string }).base, 'trunk');
   assert.match((actions[0] as { reason: string }).reason, /behind trunk/);
@@ -938,7 +940,7 @@ test('does not duplicate work already in flight for the same origin', async () =
 });
 
 test('state gate: only work items in a pickup state are dispatched', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'] });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'] } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -994,7 +996,7 @@ test('state gate: only work items in a pickup state are dispatched', async () =>
 });
 
 test('in-review back-off: an open PR on a work item branch moves it to the review state', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1021,7 +1023,7 @@ test('in-review back-off: an open PR on a work item branch moves it to the revie
 });
 
 test('in-review back-off: matches via linkedPrNumber when the branch differs', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1045,7 +1047,7 @@ test('in-review back-off: matches via linkedPrNumber when the branch differs', a
 });
 
 test('in-review back-off: an item already in the review state is not re-transitioned', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1069,7 +1071,7 @@ test('in-review back-off: an item already in the review state is not re-transiti
 });
 
 test('in-review back-off is off unless both pickupStates and inReviewState are set', async () => {
-  const d = new RuleDispatcher({ inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1124,7 +1126,7 @@ function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' |
 }
 
 test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94)));
   assert.ok(
     !actions.some((a) => a.type === 'set_work_item_state'),
@@ -1133,13 +1135,13 @@ test('return-from-review: an undeclared item whose PR merged stays parked in rev
 });
 
 test('return-from-review: a concluded-done item stays parked in review', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'done')] }));
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
 test('return-from-review: a more_work verdict moves the item back to the first pickup state', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work')] }));
   const transition = actions.find((a) => a.type === 'set_work_item_state');
   assert.ok(transition, 'the agent said work is outstanding, so the item returns to pickup');
@@ -1148,7 +1150,7 @@ test('return-from-review: a more_work verdict moves the item back to the first p
 });
 
 test("return-from-review: an operator's more_work verdict moves it back too", async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work', 'operator')] }),
   );
@@ -1158,13 +1160,13 @@ test("return-from-review: an operator's more_work verdict moves it back too", as
 });
 
 test('return-from-review: a verdict on another issue does not release this one', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
 test('return-from-review: an item whose PR is still open stays in review', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1188,7 +1190,7 @@ test('return-from-review: an item whose PR is still open stays in review', async
 });
 
 test('return-from-review: a closed item is left in the review state', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1209,7 +1211,7 @@ test('return-from-review: a closed item is left in the review state', async () =
 });
 
 test('return-from-review: an ignore-tagged open PR keeps the item in review', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx(
       {
@@ -1245,7 +1247,7 @@ test('return-from-review: an ignore-tagged open PR keeps the item in review', as
 });
 
 test('return-from-review is off unless both pickupStates and inReviewState are set', async () => {
-  const d = new RuleDispatcher({ inReviewState: 'In Review' });
+  const d = new RuleDispatcher({ pickup: { inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -1301,7 +1303,7 @@ function runningTask(id: string, originRef: string): Task {
 }
 
 test('in-progress: a live work agent moves the item to the in-progress state', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   const move = actions.find((a) => a.type === 'set_work_item_state');
   assert.ok(move, 'a transition is emitted');
@@ -1310,13 +1312,13 @@ test('in-progress: a live work agent moves the item to the in-progress state', a
 });
 
 test('in-progress: a plan part counts as work on the goal', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30:part:api')] }));
   assert.ok(actions.some((a) => a.type === 'set_work_item_state'));
 });
 
 test('in-progress: an appraisal, a planner or an assessor is not work on the goal', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   for (const origin of ['issue:30:appraisal', 'issue:30:plan', 'issue:30:assess', 'issue:30:retro']) {
     const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', origin)] }));
     assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), `${origin} moved the item`);
@@ -1324,7 +1326,7 @@ test('in-progress: an appraisal, a planner or an assessor is not work on the goa
 });
 
 test('in-progress: no agent, an open PR, or the state already reached, moves nothing', async () => {
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   const idle = await d.decide(ctx(tracked(30, 'Ready')));
   assert.ok(!idle.actions.some((a) => a.type === 'set_work_item_state'), 'a dispatch candidate is not a live agent');
 
@@ -1346,11 +1348,11 @@ test('in-progress: no agent, an open PR, or the state already reached, moves not
 });
 
 test('in-progress is off unless both pickupStates and inProgressState are set', async () => {
-  const noStates = new RuleDispatcher({ inProgressState: 'Doing' });
+  const noStates = new RuleDispatcher({ pickup: { inProgressState: 'Doing' } });
   const a = await noStates.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   assert.ok(!a.actions.some((x) => x.type === 'set_work_item_state'));
 
-  const noProgress = new RuleDispatcher({ pickupStates: ['Ready'] });
+  const noProgress = new RuleDispatcher({ pickup: { pickupStates: ['Ready'] } });
   const b = await noProgress.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   assert.ok(!b.actions.some((x) => x.type === 'set_work_item_state'));
 });
@@ -1366,7 +1368,7 @@ test('the in-progress state keeps an item pickup-eligible, but does not lift a d
     decidedAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
   };
-  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   const parked = await d.decide(ctx(tracked(31, 'Doing'), { deliveries: [delivered] }));
   assert.ok(
     !parked.actions.some((a) => a.type === 'dispatch_code_agent'),

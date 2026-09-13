@@ -1,3 +1,4 @@
+import { issueOriginId, issueOriginNumber } from '../issueOrigins.js';
 import { bySlug, liveParts, partBase, partBranch } from '../plans/parts.js';
 import type { Issue, Plan, PlanPart } from '../types.js';
 
@@ -22,13 +23,11 @@ export interface OpenPrContext {
 export function resolveOpenPr(originRef: string | null, ctx: OpenPrContext): OpenPrTarget | { error: string } {
   if (originRef === null) return { error: 'This agent has no origin, so there is no work to open a pull request for.' };
 
-  const part = /^issue:(\d+):part:([^:]+)$/.exec(originRef);
-  if (part?.[1] !== undefined && part[2] !== undefined) {
-    return partTarget(Number(part[1]), part[2], ctx);
-  }
+  const part = issueOriginId('part', originRef);
+  if (part !== null) return partTarget(part.issueNumber, part.id, ctx);
 
-  const pickup = /^issue:(\d+)$/.exec(originRef);
-  if (pickup?.[1] !== undefined) return pickupTarget(Number(pickup[1]), ctx);
+  const pickup = issueOriginNumber('root', originRef);
+  if (pickup !== null) return pickupTarget(pickup, ctx);
 
   return {
     error:

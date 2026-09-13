@@ -919,7 +919,7 @@ CREATE TABLE IF NOT EXISTS remote_readings (
   environment TEXT NOT NULL,
   row_id      TEXT NOT NULL,
   run_id      TEXT,
-  outcome     TEXT NOT NULL,   -- 'passed' | 'failed' | 'blocked'
+  outcome     TEXT NOT NULL,   -- 'passed' | 'failed' | 'blocked' | 'captured'
   rows        INTEGER,
   value       REAL,
   detail      TEXT,

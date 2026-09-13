@@ -113,9 +113,11 @@ A local cycle runs **everything derived from the store** — the plan funnel, th
 the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
 and skips **every pass whose subject is the world snapshot**:
 
-`connector.getState`, `recordWorldChanges`, `plans.reconcile`, `prWatch`, `prWorkItems`, `naming`,
-`branchReaps`, `updates`, `environments`, `notices`, `pool`, `appraisals.announce`,
-`areaPaths.refresh`, `askReviewedElsewhere` and `tickets`.
+`connector.getState` and `recordWorldChanges` — plus every pass the
+[pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
+`prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
+and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
+`reviewedElsewhere` and `tickets` at the phases below it.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
@@ -124,9 +126,10 @@ run with `prev === next` it would read every notice as settled by a world that h
 `recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
 would be a write, on every local cycle, asserting the world was read when it was not.
 
-The line is easy to hold in the code: with the executor's one deliberate exception, **every awaited
-call in the body talks to the outside world and every synchronous one does not**, so the guard sits on
-exactly the awaits.
+The line is held as **data, not as line shape**: each pass declares `readWorld` once in the registry
+and the walk skips it, so there is no `if (readWorld)` for a new one to be written without. The only two guards left are the world reading itself — `connector.getState` and
+`recordWorldChanges`, which are not passes over the world but the reading of it and the record of
+what it changed.
 
 **Why deciding against a cached world is mostly safe.** Almost every gate that stops the fleet doing a
 thing twice — the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is
@@ -390,7 +393,8 @@ flowchart TD
    writes — and is idempotent by `recordHumanTask`'s refresh, so a pulse over a goal it has already
    asked about writes nothing new.
 
-   Immediately after it, `validationReady.run(world)` files the obligation those resources are _for_:
+   Below it in the same pulse — not adjacent to it, since the graph, the environments and the sheet
+   run between the two — `validationReady.run(world)` files the obligation those resources are _for_:
    a delivered goal with checks a person still has to run says so on the bench
    ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)). It settles itself as
    the results are recorded, the close-out's asymmetry — the check rows are ones the harness reads
@@ -448,7 +452,8 @@ flowchart TD
      local cycle**: a local cycle takes no diff, and run with `previousWorld === world` it would read
      every transition as new, or every one as none.
 
-   In order:
+   In order — the order itself being a [registry entry](#the-pulse-registry) each, all of them at the
+   registry's `reconcile` phase, not a line in `runCycle`:
 
    `graduations.run()` follows what became of the documentation pull requests an operator opened for
    a claim, and takes a landed claim out of every prompt because the repository now says it. **Below
@@ -460,44 +465,41 @@ flowchart TD
    **not** load-bearing at all: nothing waits on a cluster, it takes its own cadence, and the page an
    operator opens is the only reader of what it writes.
 
-   `obstacleVoice.run(prev, world)` records what the harness has seen for itself on the board the
-   agents read — a check red on a branch other pull requests are based on, a check flapping
-   red-then-green on one commit. **The harness is one of the two voices**, so a row it files is
-   standing from the first agent's report rather than the second, which is what makes the two-goal
-   gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). Skipped on a local
-   cycle, and **above the three obstacle desks below it**: a row filed here is one the notice desk
-   may tell a running agent about, one the ownership desk may take up, and one the endings desk
-   promises to watch a condition for — all on the pulse that saw it rather than the next.
+   `obstacles.run(pass)` is the whole obstacle subsystem, five stages on one pulse slot and in one
+   order ([27](27-obstacles.md#one-desk-on-the-pulse)). The **voice** records what the harness has seen
+   for itself on the board the agents read — a check red on a branch other pull requests are based on,
+   a check flapping red-then-green on one commit. **The harness is one of the two voices**, so a row it
+   files is standing from the first agent's report rather than the second, which is what makes the
+   two-goal gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). It runs first
+   because a row filed there is one the same pass goes on to tell a running agent about, take up, and
+   promise to watch a condition for — on the pulse that saw it rather than the next.
 
-   `obstacleDesk.run()` is what a model may decide about the rows the board has not had read since a
-   voice last landed words on one. It is **not awaited**, alone among these desks, and that is the
-   whole of what its position means: a model round trip is not a provider's, nothing below waits on a
-   reading, and a pulse that blocked on one would hold every dispatch behind a call this subsystem
-   makes for its own convenience. What it writes is read by the pulse that finds it written, which
-   for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse either way. It
-   runs one pass at a time and never rejects.
+   The **reading** is what a model may decide about the rows no voice has landed words on since. It is
+   the one thing here the pulse does not wait for: a model round trip is not a provider's, nothing
+   below waits on a reading, and a pulse that blocked on one would hold every dispatch behind a call
+   this subsystem makes for its own convenience. What it writes is read by the pulse that finds it
+   written, which for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse
+   either way.
 
-   `obstacleNotices.run()` tells the agents now running what has changed about an obstacle since they
-   were dispatched — their own reports being taken up or settled, and what a second voice has since
-   corroborated. Above the launch line for `notices`' reason exactly.
+   The **notices** tell the agents now running what has changed about an obstacle since they were
+   dispatched — their own reports being taken up or settled, and what a second voice has since
+   corroborated. The **ownership** then records who owns each row and which goals the board has let
+   back out. The whole pass is **above `decide`**, and both halves matter: a block cleared here is a
+   goal rule `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in
+   the prompt of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the
+   pulse the ticket was filed. The desk also sits **below `notices`** for the reason it sits above
+   `decide`: an agent whose report was taken up is told so by the pulse that took it. Awaited but never
+   blocking — every failure inside is recorded and non-fatal, and a tracker that will not answer costs
+   the ticket and nothing else.
 
-   `obstacleOwnership.run(world)` records who owns each row and which goals the board has let back
-   out. **Above `decide`**, and both halves matter: a block cleared here is a goal rule
-   `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in the prompt
-   of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the pulse the
-   ticket was filed. **Below the notices** for the same reason they sit above `decide`: an agent
-   whose report was taken up is told so by the pulse that took it. Awaited but never blocking — every
-   failure inside is recorded and non-fatal, and a tracker that will not answer costs the ticket and
-   nothing else.
-
-   `obstacleEndings.run(world)` is how each of them ends: a condition the harness promised to watch,
-   the owner landing, the reporter's clock, or nothing having said it for a week. **Skipped on a
-   local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
+   The **endings** are how each row finishes: a condition the harness promised to watch, the owner
+   landing, the reporter's clock, or nothing having said it for a week. Like the voice, it is **skipped
+   on a local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
    consecutive _real_ world readings, and the resolving read is never one a local cycle served — a
    local cycle re-serves the snapshot the last real one read, so counting it would take one reading
    twice and close an obstacle that is still live, the fleet pays for it again, and nothing is red.
-   **Below the ownership desk**, because it reads the owner that desk may have just written. Every
-   failure inside is recorded and non-fatal.
+   It runs last, because it reads the owner the ownership stage may have just written. Every failure
+   inside is recorded and non-fatal.
 
    `pool.run()` is the distance above `fleet`: what other fleets have vouched for, landed here, and
    what this fleet has vouched for, sent out ([28](28-cross-fleet-pool.md)). Above the launch line,
@@ -508,8 +510,17 @@ flowchart TD
    place, and a publish that fails leaves the document dirty for the next pulse. A fleet with an
    unreachable pool works exactly as a fleet without one.
 
-9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
-   and the most recent 200 decisions. Immediately **above** the whole read,
+9. **Read the fleet and the store** — tasks, agents, queued jobs, plans, plan parts, the verdicts,
+   the retrospective origins, the issue runs, the reviews and their routes, and the most recent 200
+   decisions. These are the rows the **pulse itself** works from: the sweeps are handed them, `busy`
+   and the runway reading are computed from them, and the dispatch inputs take them as given. Every
+   other row the dispatcher wants is read one step below, at
+   [`buildDispatchInputs`](05-dispatcher.md#assembling-the-context). **Each of these rows is read
+   once per cycle and the result reused.** Nothing inside a cycle writes them — the issue runs
+   recorded above are the cycle's only write to a table it goes on to read, and that write is above
+   the read — so a second read of `listAllPlanParts`, `listIssueRuns`, `listPrReviews` or
+   `listPrReviewRoutes` could only ever return the same rows, at the cost of another query and of a
+   reader having to wonder which of the two the decision was made against. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
    the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
    clock ([10](10-agent-runtimes.md#ending-it-on-the-clock)). Its position is the point: an agent it
@@ -523,8 +534,8 @@ flowchart TD
    make, made for them ([10](10-agent-runtimes.md#when-nobody-answers-the-stop)). Its position is the
    resume's argument in reverse: an agent it settles must **stop** counting as live for the rest of
    this pulse, so the slot it was holding is one the dispatch below can use. It settles agents and
-   dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Immediately above
-   the escalation read,
+   dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Above the
+   escalation read the dispatch inputs take,
    `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
    backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
    off "Needs you" on this pulse rather than never
@@ -533,12 +544,21 @@ flowchart TD
    `escalations.tidySettledMerges()` runs beside it and in the same register, for the other card
    nobody can answer: a merge ask whose pull request has already merged
    ([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). It reads the work graph, so its
-   position is below `graph.record` above and above the escalation read below.
+   position is below `graph.record` above and above the escalation read the dispatch inputs take.
+
+   Each of these — and the burn watch, the ejection expiries, the review waits, the appraisal
+   announcement, the issue runs, the reviewed-elsewhere probe, the local validations and the ticket
+   filer below the executor — is a [registry](#the-pulse-registry) entry rather than a line in
+   `runCycle`, and which gap in the read it sits in is the `phase` it declares.
+
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on
     the watch tag and on whose pull request it is.
-12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+12. **Assemble the context and `dispatcher.decide(ctx)`** — `buildDispatchInputs(store, pulse)`
+    ([05](05-dispatcher.md#assembling-the-context)) takes the readings above as `pulse` and reads the
+    rest of the `DispatchContext` itself. Every one of those reads is of a table nothing between step
+    9 and here writes, so it is the same row set step 9 would have read.
 13. **Take the runway reading** — `runway.run()` asks whether there is anything left for the fleet to
     do, and whether the reason there is not is upstream of it ([25](25-supply.md)). Positioned
     **below `decide`** for both neighbours: it needs every read `decide` needs — the plan funnel, the
@@ -560,6 +580,78 @@ flowchart TD
 18. **Clear `cycleInFlight`**, and fire the [trailing `manual` cycle](#the-trailing-edge) if one was
     refused while this one ran.
 
+### The pulse registry
+
+Every pass the cycle makes over its own bookkeeping — the desks between the world reading and the
+store read, and the sweeps between those reads and `decide` — is **declared, not written out**:
+`src/pulseDesks.ts` holds `PULSE_PIPELINE`, one entry per pass **in the order they run**, and
+`runCycle` walks it. It is the same answer `DISPATCH_PIPELINE` (`src/dispatcher/rules.ts`) gives one
+layer over, for the same reason — an order that is load-bearing must be a thing a test can read — and
+it is derived the same way: the ordered array **is** the registry, so there is no second list of ids
+to fall out of step with it.
+
+There is one entry type, because a desk is a sweep that runs at its own phase. An entry declares:
+
+- **`id`** — what the pass is called. It is usually its dependency's name on `PulseDeps` (which
+  `HarnessDeps` extends, so the composition root is unchanged), but it need not be: one dependency can
+  carry two passes at two positions — `fleet` carries `parks` and `stalls`, `escalations` carries
+  `deadAgents` and `settledMerges` — so the registry names the passes, not the deps.
+- **`phase`** — the gap in the cycle's own reads the pass sits in, written **once per phase rather than
+  once per pass**: the entries are grouped by a `phase(name, [...])` helper that stamps the phase onto a
+  run of passes and splices them into the one flat array in order, so the phase is stated eight times and
+  not thirty-six, and the list stays the single ordered source of truth. `runCycle` reads the store between
+  the passes, and [those reads happen once](#ordering) with the result reused — the pulse's own reads,
+  that is; the dispatcher's are taken together below the last phase. So the walk is run once per phase,
+  handed that phase's reading: `reconcile` first, above everything the cycle reads off the store, where
+  the desks run against the world and the world before it; then `open` before the store read, then
+  `afterTasks`, `afterAgents`, `afterVerdicts`, `afterOrigins`, `afterReviews`, and `afterExecute` below
+  the executor, where the ticket filer runs. A pass is handed what the cycle has already read rather
+  than reading it again, which is what keeps "which of the two reads was this decided against?" a
+  question nobody has to ask. The reading each phase is handed is its own — `PulseReadings` maps phase
+  to reading, so `reconcile`'s `{ world, previousWorld }` costs the other seven nothing.
+  `PULSE_PHASES` states the phase order and `test/pulsePipeline.test.ts` asserts the pipeline is
+  grouped by it, so a pass given the wrong phase is a failing test rather than a pass that quietly
+  moved.
+- **`readWorld`** — whether the pass's subject is the world snapshot, and so whether it is skipped on a
+  [local cycle](#what-runs-and-what-does-not). One flag per pass, in one place, instead of the guard
+  repeated at every call site.
+  The walk **awaits every pass**, sync or async alike, and there is no flag to opt out of that. A pass
+  with work the pulse must not block on starts that work itself and returns — `obstacles` is the one
+  that does, for its model reading ([27](27-obstacles.md#one-desk-on-the-pulse)) — which keeps the
+  decision beside the call it is about rather than in a registry flag every other pass has to be read
+  against.
+- **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not
+  wire is skipped and never an error. The desks that take a **narrowed** view of the world
+  (`ValidationReadyWorld`, `CloseOutWorld`) keep it: a full snapshot structurally satisfies the narrow
+  type, and widening them to `WorldSnapshot` to make the entries look alike would give each desk reach
+  it has no use for.
+
+**`test/pulsePipeline.test.ts` is what makes the order safe.** It asserts the orderings below **by id
+against the declared list**, so moving a pass that must stay below another fails a test instead of
+breaking silently:
+
+| Constraint                                                             | Why                                                                                                                                                                      |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `graph` → `environments`, immediately                                  | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                          |
+| `environments` → `remoteValidation`                                    | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                       |
+| `remoteValidation` → `validationReady`                                 | the validate row's detail carries **this** pulse's sheet                                                                                                                 |
+| `validationAsks` → `validationReady` → `closeOuts`                     | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                 |
+| `plans` → `graph`                                                      | the part→PR observations the reconciler just made are the ones recorded                                                                                                  |
+| `graph` → `graduations` → `pool`                                       | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md)) |
+| `notices` → `obstacles`                                               | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
+| `prWatch` → `prWorkItems`                                              | one pass says the pull request is the fleet's, the other which work item it is for                                                                                       |
+
+The same test asserts the walk reaches every entry in the declared order, and that no id is walked
+twice — a duplicate is what would make a position, and so every one of those constraints, mean
+nothing. What it no longer has to assert is that a registry and an ordering agree: there is one list,
+so a pass wired in `src/system.ts` and left out of it cannot sit there dead, and a pass declared and
+never walked cannot exist. Adding a pass is therefore two things and no more: a field on `PulseDeps`,
+and an entry in its phase's group at the position it should run.
+
+A pass that records its own failures does so inside its own body — `parks` recording a resume that
+failed, `issueRuns` its `errors.record` around the whole loop — for the reason every other caught
+failure is recorded rather than swallowed ([18](18-observability.md)).
+
 ## Failure handling
 
 The whole body is wrapped. A throw anywhere is recorded through `errors.record({ source: 'cycle' })`
@@ -572,7 +664,7 @@ uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight`
 
 `recordWorldChanges` keeps the harness's memory of the last world:
 
-- The previous snapshot is `this.prevWorld`, falling back to `store.getWorldBaseline()` on the first
+- The previous snapshot is `this.prevWorld`, falling back to `store.world.getWorldBaseline()` on the first
   cycle after a restart — so a restart neither blinds the diff nor floods the feed with "everything
   is new".
 - With no baseline at all (a fresh store), **only** the baseline is written: no diff, no events.
@@ -626,7 +718,8 @@ pull request without one and the only thing that used to clear it was a dispatch
 
 ## `DispatchContext`
 
-What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
+What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`), assembled by
+`src/dispatcher/dispatchInputs.ts` ([05](05-dispatcher.md#assembling-the-context)):
 
 | Field                | Contents                                                                |
 | -------------------- | ----------------------------------------------------------------------- |

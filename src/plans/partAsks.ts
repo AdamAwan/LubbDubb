@@ -5,8 +5,8 @@ import type { PlanPart } from '../types.js';
 
 export function withdrawPartAsks(store: Store, retired: readonly PlanPart[], resolution: string): void {
   if (retired.length === 0) return;
-  for (const task of store.listHumanTasksForParts(retired.map((p) => p.id))) {
-    if (task.status === 'open') store.settleHumanTask(task.id, 'declined', resolution);
+  for (const task of store.humanTasks.listHumanTasksForParts(retired.map((p) => p.id))) {
+    if (task.status === 'open') store.humanTasks.settleHumanTask(task.id, 'declined', resolution);
   }
 }
 

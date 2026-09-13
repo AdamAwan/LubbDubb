@@ -23,8 +23,8 @@ export class FloorStore {
     complete: boolean;
   }): void {
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO issue_runs (origin_ref, issue_number, title, body, labels, linked_pr, work_item_state,
                                  started_at, completed_at, outcome, dismissed_at, updated_at)
          VALUES (@originRef, @issueNumber, @title, @body, @labels, @linkedPrNumber, @workItemState,
@@ -53,8 +53,8 @@ export class FloorStore {
 
   dismissIssueRun(originRef: string, note: string | null = null): boolean {
     const ts = this.ctx.now();
-    const info = this.ctx.db
-      .prepare(
+    const info = this.ctx
+      .prep(
         `UPDATE issue_runs
             SET dismissed_at=?, updated_at=?, dismiss_note=?,
                 outcome=CASE WHEN completed_at IS NULL THEN 'abandoned' ELSE 'judged' END
@@ -65,7 +65,7 @@ export class FloorStore {
   }
 
   listIssueRuns(): IssueRun[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_runs ORDER BY started_at DESC`).all() as IssueRunRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_runs ORDER BY started_at DESC`).all() as IssueRunRow[];
     return rows.map(rowToIssueRun);
   }
 }

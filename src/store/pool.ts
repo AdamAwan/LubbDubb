@@ -11,8 +11,8 @@ export class PoolStore {
 
   replaceFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
     const write = this.ctx.db.transaction(() => {
-      this.ctx.db.prepare(`DELETE FROM pool_digest_rows WHERE fleet_id=?`).run(fleetId);
-      const insert = this.ctx.db.prepare(
+      this.ctx.prep(`DELETE FROM pool_digest_rows WHERE fleet_id=?`).run(fleetId);
+      const insert = this.ctx.prep(
         `INSERT INTO pool_digest_rows (fleet_id, project, day, section, key, count, cost_usd, partial)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       );
@@ -26,8 +26,8 @@ export class PoolStore {
   }
 
   recordFleetReading(reading: Omit<PoolFleetReading, 'seenAt' | 'stale'>): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pool_fleets (fleet_id, project, digest_at, ahead, seen_at)
          VALUES (@fleetId, @project, @digestAt, @ahead, @seenAt)
          ON CONFLICT(fleet_id) DO UPDATE SET
@@ -41,7 +41,7 @@ export class PoolStore {
 
   listPoolFleets(): PoolFleetReading[] {
     const before = poolStaleBefore(this.ctx.now());
-    const rows = this.ctx.db.prepare(`SELECT * FROM pool_fleets ORDER BY fleet_id ASC`).all() as FleetRow[];
+    const rows = this.ctx.prep(`SELECT * FROM pool_fleets ORDER BY fleet_id ASC`).all() as FleetRow[];
     return rows.map((r) => ({
       fleetId: r.fleet_id,
       project: r.project,
@@ -54,15 +54,15 @@ export class PoolStore {
 
   expireStaleDigests(): string[] {
     const before = poolStaleBefore(this.ctx.now());
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT f.fleet_id AS fleet_id FROM pool_fleets f
           WHERE f.digest_at IS NOT NULL AND f.digest_at < ?
             AND EXISTS (SELECT 1 FROM pool_digest_rows r WHERE r.fleet_id = f.fleet_id)`,
       )
       .all(before) as { fleet_id: string }[];
     const write = this.ctx.db.transaction(() => {
-      const drop = this.ctx.db.prepare(`DELETE FROM pool_digest_rows WHERE fleet_id=?`);
+      const drop = this.ctx.prep(`DELETE FROM pool_digest_rows WHERE fleet_id=?`);
       for (const row of rows) drop.run(row.fleet_id);
     });
     write();
@@ -72,8 +72,8 @@ export class PoolStore {
   listDigestRows(project: string | null): PoolDigestMirrorRow[] {
     const rows = (
       project === null
-        ? this.ctx.db.prepare(`SELECT * FROM pool_digest_rows ORDER BY day ASC`).all()
-        : this.ctx.db.prepare(`SELECT * FROM pool_digest_rows WHERE project=? ORDER BY day ASC`).all(project)
+        ? this.ctx.prep(`SELECT * FROM pool_digest_rows ORDER BY day ASC`).all()
+        : this.ctx.prep(`SELECT * FROM pool_digest_rows WHERE project=? ORDER BY day ASC`).all(project)
     ) as DigestRow[];
     return rows.map((r) => ({
       fleetId: r.fleet_id,
@@ -88,9 +88,7 @@ export class PoolStore {
   }
 
   getPublication(kind: PoolClockKind): PoolPublication {
-    const row = this.ctx.db.prepare(`SELECT * FROM pool_publications WHERE kind=?`).get(kind) as
-      | PublicationRow
-      | undefined;
+    const row = this.ctx.prep(`SELECT * FROM pool_publications WHERE kind=?`).get(kind) as PublicationRow | undefined;
     if (!row) return { kind, contentHash: null, publishedAt: null, dirty: false, checkedAt: null };
     return {
       kind,
@@ -102,8 +100,8 @@ export class PoolStore {
   }
 
   markPoolDirty(kind: PoolClockKind): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pool_publications (kind, content_hash, published_at, dirty, checked_at)
          VALUES (?, NULL, NULL, 1, NULL)
          ON CONFLICT(kind) DO UPDATE SET dirty = 1`,
@@ -113,8 +111,8 @@ export class PoolStore {
 
   recordPoolPublish(kind: PoolClockKind, contentHash: string): void {
     const at = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pool_publications (kind, content_hash, published_at, dirty, checked_at)
          VALUES (?, ?, ?, 0, ?)
          ON CONFLICT(kind) DO UPDATE SET
@@ -127,8 +125,8 @@ export class PoolStore {
   }
 
   recordPoolChecked(kind: PoolClockKind): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pool_publications (kind, content_hash, published_at, dirty, checked_at)
          VALUES (?, NULL, NULL, 0, ?)
          ON CONFLICT(kind) DO UPDATE SET checked_at = excluded.checked_at, dirty = 0`,

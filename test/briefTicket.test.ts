@@ -8,7 +8,7 @@ import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { briefTicketFields } from '../src/briefTicket.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import type { Job } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
@@ -65,7 +65,7 @@ test('a code brief with a tracker is filed as a watched ticket, not dispatched',
   const body = res.json() as { ticketRef: string; job?: Job };
 
   assert.equal(body.job, undefined);
-  assert.equal(system.store.listJobs().length, 0);
+  assert.equal(system.store.jobs.listJobs().length, 0);
   assert.ok(body.ticketRef.startsWith('issue:'));
 
   const world = await system.connector.getState();

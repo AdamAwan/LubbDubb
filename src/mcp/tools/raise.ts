@@ -89,9 +89,9 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       const kind: ObstacleKind =
         (args as Record<string, unknown> | undefined)?.fix_makes_it_go_away === true ? 'obstacle' : 'note';
       const world = buildObstacleWorld({
-        reported: reportedChecks(deps.store.getWorldBaseline()),
+        reported: reportedChecks(deps.store.world.getWorldBaseline()),
         dispatchChecks: task.ciChecks ?? [],
-        branchPaths: goalRef === null ? [] : deps.store.listGoalFiles(goalRef).map((file) => file.path),
+        branchPaths: goalRef === null ? [] : deps.store.agents.listGoalFiles(goalRef).map((file) => file.path),
         repoRoot: deps.repoRoot ?? null,
       });
       const keys = gateKeys(
@@ -100,7 +100,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       );
       const mine = ownBreakage(
         keys,
-        deps.store.listFiles(agent.id).map((file) => file.path),
+        deps.store.agents.listFiles(agent.id).map((file) => file.path),
       );
       if (mine !== null) {
         return toolError(
@@ -109,7 +109,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
             `and if it is in your diff, fix it: an agent fixes what its own session broke.`,
         );
       }
-      const outcome = deps.store.recordObstacleSighting(
+      const outcome = deps.store.obstacles.recordObstacleSighting(
         { what: report.what, kind, keys, untilHours: report.untilHours },
         {
           agentId: agent.id,
@@ -127,7 +127,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
         ...lookupFor({
           obstacle: outcome.obstacle,
           voices: outcome.voices,
-          sightings: deps.store.listObstacleSightings(outcome.obstacle.id),
+          sightings: deps.store.obstacles.listObstacleSightings(outcome.obstacle.id),
           mine: outcome.sightingId,
           near: outcome.near,
           blocksMe: report.blocksMe,

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
+import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import type { AppState } from '../web/src/types.js';

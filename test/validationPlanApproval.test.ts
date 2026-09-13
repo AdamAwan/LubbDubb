@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -290,7 +290,7 @@ test('an empty set is proposed too — declaring nothing is the verdict worth a 
 
 test('accepting releases the set; rejecting takes the stamp off and leaves the rows to amend', async () => {
   const system = build();
-  system.store.ingestValidation(GOAL, {
+  system.store.validation.ingestValidation(GOAL, {
     checks: [
       {
         id: 'csv-opens',
@@ -308,29 +308,32 @@ test('accepting releases the set; rejecting takes the stamp off and leaves the r
     supersededReason: 'withdrawn',
     amendNote: '',
   });
-  system.store.recordValidationAuthoring(GOAL, { note: 'two checks', emptyReason: null });
-  const authored = system.store.getValidationPlanRecord(GOAL);
+  system.store.validation.recordValidationAuthoring(GOAL, { note: 'two checks', emptyReason: null });
+  const authored = system.store.validation.getValidationPlanRecord(GOAL);
   assert.equal(authored?.releasedAt, null, 'authoring alone releases nothing');
-  assert.equal(checkSetReleased({ record: authored, checks: system.store.listValidationChecks(GOAL) }), false);
+  assert.equal(
+    checkSetReleased({ record: authored, checks: system.store.validation.listValidationChecks(GOAL) }),
+    false,
+  );
 
-  const released = system.store.releaseValidationPlan(GOAL);
+  const released = system.store.validation.releaseValidationPlan(GOAL);
   assert.ok(released?.releasedAt, 'the accept writes the release stamp');
   assert.equal(
-    checkSetReleased({ record: released, checks: system.store.listValidationChecks(GOAL) }),
+    checkSetReleased({ record: released, checks: system.store.validation.listValidationChecks(GOAL) }),
     true,
     'and from then on the bench rows are work',
   );
 
-  const sentBack = system.store.withdrawValidationAuthoring(GOAL);
+  const sentBack = system.store.validation.withdrawValidationAuthoring(GOAL);
   assert.equal(sentBack?.authoredAt, null, 'a reject takes the stamp off');
   assert.equal(sentBack?.releasedAt, null);
   assert.deepEqual(
-    system.store.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
+    system.store.validation.listValidationChecks(GOAL).map((c) => [c.id, c.supersededReason]),
     [['csv-opens', null]],
     'the rows it wrote stay, so the next planner amends them rather than starting over',
   );
   assert.equal(
-    checkSetAuthored({ record: sentBack, checks: system.store.listValidationChecks(GOAL) }),
+    checkSetAuthored({ record: sentBack, checks: system.store.validation.listValidationChecks(GOAL) }),
     false,
     'and the validation planner is dispatchable again — a refused set nobody rewrites is the quiet failure',
   );

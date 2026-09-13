@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSpendInsights } from '../src/spendInsights.js';
+import { buildSpendInsights } from '../src/insights/spendInsights.js';
 import type { Agent, CostDelta, Issue, IssueRun, LocalRun, Task, WorkNode, WorldEvent } from '../src/types.js';
-import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
+import { resolveWindow, type InsightsWindow } from '../src/insights/insightsWindow.js';
 
 const T = '2026-08-04T09:00:00.000Z';
 const NOW = Date.parse('2026-08-04T12:00:00.000Z');

@@ -51,14 +51,14 @@ export class LocalRunStore {
       numTurns: null,
     };
     const write = this.ctx.db.transaction(() => {
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `UPDATE local_runs SET status = 'stopped', ended_at = ?, note = COALESCE(note, ?)
              WHERE status IN ${LIVE_SQL}`,
         )
         .run(now, 'superseded by a run of another goal');
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `INSERT INTO local_runs (id, origin_ref, ref, dir, pid, status, url, note, started_at, ended_at,
              last_seen_at, commit_sha)
            VALUES (?, ?, ?, ?, NULL, 'starting', ?, NULL, ?, NULL, ?, ?)`,
@@ -70,53 +70,53 @@ export class LocalRunStore {
   }
 
   setLocalRunCommit(id: string, commit: string): void {
-    this.ctx.db.prepare(`UPDATE local_runs SET commit_sha = ? WHERE id = ?`).run(commit, id);
+    this.ctx.prep(`UPDATE local_runs SET commit_sha = ? WHERE id = ?`).run(commit, id);
   }
 
   markLocalRunPid(id: string, pid: number | null): void {
-    this.ctx.db.prepare(`UPDATE local_runs SET pid = ? WHERE id = ?`).run(pid, id);
+    this.ctx.prep(`UPDATE local_runs SET pid = ? WHERE id = ?`).run(pid, id);
   }
 
   markLocalRunInterrupted(id: string, at: string | null): void {
-    this.ctx.db.prepare(`UPDATE local_runs SET interrupted_at = ? WHERE id = ?`).run(at, id);
+    this.ctx.prep(`UPDATE local_runs SET interrupted_at = ? WHERE id = ?`).run(at, id);
   }
 
   markLocalRunSeen(id: string, at: string): void {
-    this.ctx.db.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(at, id);
+    this.ctx.prep(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(at, id);
   }
 
   setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
     const ended = status === 'stopped' || status === 'failed' ? this.ctx.now() : null;
-    this.ctx.db
-      .prepare(`UPDATE local_runs SET status = ?, note = COALESCE(?, note), ended_at = ? WHERE id = ?`)
+    this.ctx
+      .prep(`UPDATE local_runs SET status = ?, note = COALESCE(?, note), ended_at = ? WHERE id = ?`)
       .run(status, note ?? null, ended, id);
   }
 
   liveLocalRun(): LocalRun | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM local_runs WHERE status IN ${LIVE_SQL} ORDER BY started_at DESC LIMIT 1`)
+    const row = this.ctx
+      .prep(`SELECT * FROM local_runs WHERE status IN ${LIVE_SQL} ORDER BY started_at DESC LIMIT 1`)
       .get() as LocalRunRow | undefined;
     return row ? toLocalRun(row) : null;
   }
 
   currentLocalRun(): LocalRun | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM local_runs ORDER BY started_at DESC LIMIT 1`).get() as
+    const row = this.ctx.prep(`SELECT * FROM local_runs ORDER BY started_at DESC LIMIT 1`).get() as
       | LocalRunRow
       | undefined;
     return row ? toLocalRun(row) : null;
   }
 
   addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
-    const existing = this.ctx.db
-      .prepare(
+    const existing = this.ctx
+      .prep(
         `SELECT cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, num_turns
            FROM local_runs WHERE id = ?`,
       )
       .get(id) as LocalRunUsageRow | undefined;
     if (existing === undefined) throw new Error(`Local run ${id} not found`);
     const add = (was: number | null, more: number | null): number | null => (more === null ? was : (was ?? 0) + more);
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE local_runs SET cost_usd = @costUsd, input_tokens = @inputTokens, output_tokens = @outputTokens,
                 cache_read_tokens = @cacheReadTokens, cache_creation_tokens = @cacheCreationTokens,
                 num_turns = @numTurns WHERE id = @id`,
@@ -131,27 +131,27 @@ export class LocalRunStore {
         numTurns: add(existing.num_turns, delta.numTurns),
       });
     if (delta.costUsd !== null && delta.costUsd > 0)
-      this.ctx.db
-        .prepare(`INSERT INTO local_run_cost_deltas (local_run_id, cost_usd, at) VALUES (?, ?, ?)`)
+      this.ctx
+        .prep(`INSERT INTO local_run_cost_deltas (local_run_id, cost_usd, at) VALUES (?, ?, ?)`)
         .run(id, delta.costUsd, this.ctx.now());
   }
 
   sumLocalRunCostSince(sinceIso: string): number {
-    const row = this.ctx.db
-      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM local_run_cost_deltas WHERE at >= ?`)
+    const row = this.ctx
+      .prep(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM local_run_cost_deltas WHERE at >= ?`)
       .get(sinceIso) as { total: number };
     return row.total;
   }
 
   listLocalRunCostDeltasSince(sinceIso: string): CostDelta[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT cost_usd, at FROM local_run_cost_deltas WHERE at >= ? ORDER BY at`)
+    const rows = this.ctx
+      .prep(`SELECT cost_usd, at FROM local_run_cost_deltas WHERE at >= ? ORDER BY at`)
       .all(sinceIso) as { cost_usd: number; at: string }[];
     return rows.map((r) => ({ costUsd: r.cost_usd, at: r.at }));
   }
 
   listLocalRuns(): LocalRun[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM local_runs ORDER BY started_at DESC`).all() as LocalRunRow[];
+    const rows = this.ctx.prep(`SELECT * FROM local_runs ORDER BY started_at DESC`).all() as LocalRunRow[];
     return rows.map(toLocalRun);
   }
 }

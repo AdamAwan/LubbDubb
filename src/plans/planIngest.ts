@@ -31,8 +31,8 @@ export function ingestPlanDocument(
   },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
-  const existingPlan = store.getPlanByOrigin(originRef);
-  const existing = existingPlan ? store.listPlanParts(existingPlan.id) : [];
+  const existingPlan = store.plans.getPlanByOrigin(originRef);
+  const existing = existingPlan ? store.plans.listPlanParts(existingPlan.id) : [];
   const declared = planPartInputs(doc);
   const retire = partsToRetire(
     existing,
@@ -41,15 +41,15 @@ export function ingestPlanDocument(
   const status: PlanStatus = input.approved === true ? 'active' : 'awaiting_approval';
 
   const narrative = planNarrative(doc);
-  const plan = store.upsertPlan({ originRef, title, status, ...narrative });
-  store.recordPlanRevision(plan.id, { narrative, parts: declared });
-  for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  const plan = store.plans.upsertPlan({ originRef, title, status, ...narrative });
+  store.plans.recordPlanRevision(plan.id, { narrative, parts: declared });
+  for (const part of retire) store.plans.updatePlanPart(part.id, { status: 'retired' });
   withdrawPartAsks(store, retire, AMENDED_PART_RESOLUTION);
-  store.upsertPlanAtoms(plan.id, planAtomInputs(doc));
-  const written = store.upsertPlanParts(plan.id, declared);
+  store.plans.upsertPlanAtoms(plan.id, planAtomInputs(doc));
+  const written = store.plans.upsertPlanParts(plan.id, declared);
   const issueNumber = planIssueNumber(originRef);
   for (const part of written.filter(partIsHuman)) {
-    store.recordHumanTask({
+    store.humanTasks.recordHumanTask({
       title: part.title,
       detail: part.acceptance ?? part.scope,
       originRef: issueNumber === null ? null : partOrigin(issueNumber, part.slug),
@@ -59,7 +59,7 @@ export function ingestPlanDocument(
     });
   }
 
-  if (doc.validation) store.recordValidationHint(originRef, doc.validation.hint ?? null);
+  if (doc.validation) store.validation.recordValidationHint(originRef, doc.validation.hint ?? null);
 
   // A `validation` block that declares only a hint writes no check set. Reading a hint-only block as
   // `checks: []` would supersede a check set an operator may be halfway through — the omission rule
@@ -71,7 +71,7 @@ export function ingestPlanDocument(
       originRef,
       resources.filter((r) => !r.provided).map((r) => r.name),
     );
-    store.ingestValidation(originRef, {
+    store.validation.ingestValidation(originRef, {
       checks: validationCheckInputs(
         doc.validation,
         written.map((p) => p.slug),
@@ -82,11 +82,11 @@ export function ingestPlanDocument(
     });
   }
 
-  if (doc.watch) store.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
+  if (doc.watch) store.watches.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
 
-  if (doc.state) store.saveStateQueries(originRef, stateQueryInputs(doc.state), 'plan');
+  if (doc.state) store.remoteValidation.saveStateQueries(originRef, stateQueryInputs(doc.state), 'plan');
 
-  const rolled = input.approved === true ? store.rollUpPlanStatus(plan.id) : null;
+  const rolled = input.approved === true ? store.plans.rollUpPlanStatus(plan.id) : null;
 
   return { plan: rolled ?? plan, status: rolled?.status ?? status, retired: retire.map((p) => p.slug) };
 }

@@ -4,10 +4,10 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleVoiceDesk } from '../src/obstacles/voiceDesk.js';
+import { obstacleDesk } from './support/obstacles.js';
 import { harnessSightings } from '../src/obstacles/voice.js';
 import type { CiCheck, PullRequest, WorldSnapshot } from '../src/types.js';
 
@@ -83,7 +83,7 @@ function build(): System {
 }
 
 function agentReport(system: System, goalRef: string): void {
-  system.store.recordObstacleSighting(
+  system.store.obstacles.recordObstacleSighting(
     {
       what: 'the windows runner wedges before the suite starts',
       kind: 'obstacle',
@@ -107,21 +107,21 @@ function agentReport(system: System, goalRef: string): void {
 
 test('a harness voice and one agent voice reach standing, and the harness alone does not', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
+  const desk = obstacleDesk(system.store);
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()])));
 
-  const filed = system.store.listObstacles();
+  const filed = system.store.obstacles.listObstacles();
   assert.equal(filed.length, 1);
   assert.equal(filed[0]!.state, 'sighted');
-  const board = system.store.obstacleBoard();
+  const board = system.store.obstacles.obstacleBoard();
   assert.equal(board[0]!.voices, 1);
-  const sighting = system.store.listObstacleSightings(filed[0]!.id)[0]!;
+  const sighting = system.store.obstacles.listObstacleSightings(filed[0]!.id)[0]!;
   assert.equal(sighting.goalRef, null);
   assert.equal(sighting.agentId, null);
   assert.equal(sighting.transition, 'base-red:test (windows)@base/one');
 
   agentReport(system, 'issue:900');
-  const after = system.store.obstacleBoard();
+  const after = system.store.obstacles.obstacleBoard();
   assert.equal(after.length, 1);
   assert.equal(after[0]!.voices, 2);
   assert.equal(after[0]!.obstacle.state, 'standing');
@@ -129,12 +129,12 @@ test('a harness voice and one agent voice reach standing, and the harness alone 
 
 test('two harness readings of one transition are one voice and never two rows', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
+  const desk = obstacleDesk(system.store);
   const before = world(stack([check({ status: 'passing' })], 2));
   const after = world(stack([check()], 2));
-  desk.run(before, after);
-  desk.run(before, after);
-  const board = system.store.obstacleBoard();
+  desk.voice(before, after);
+  desk.voice(before, after);
+  const board = system.store.obstacles.obstacleBoard();
   assert.equal(board.length, 1);
   assert.equal(board[0]!.voices, 1);
   assert.equal(board[0]!.obstacle.state, 'sighted');
@@ -142,24 +142,24 @@ test('two harness readings of one transition are one voice and never two rows', 
 
 test("the harness's own key goes through the gates, and a check the world does not report is dropped", () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
+  const desk = obstacleDesk(system.store);
   const after = world(stack([check()]));
-  desk.run(world(stack([check({ status: 'passing' })])), {
+  desk.voice(world(stack([check({ status: 'passing' })])), {
     ...after,
     pullRequests: after.pullRequests.map((p) => ({ ...p, ciChecks: p.ciChecks && [] })),
   });
-  assert.deepEqual(system.store.listObstacles(), []);
+  assert.deepEqual(system.store.obstacles.listObstacles(), []);
 });
 
 test('the key the harness files binds, but does not resolve a row on its own', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
-  const [row] = system.store.obstacleBoard();
+  const desk = obstacleDesk(system.store);
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()])));
+  const [row] = system.store.obstacles.obstacleBoard();
   assert.deepEqual(
     row!.keys.map((key) => [key.kind, key.value, key.binds]),
     [['check', 'test (windows)', true]],
   );
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()], 2)));
-  assert.equal(system.store.listObstacles().length, 1);
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()], 2)));
+  assert.equal(system.store.obstacles.listObstacles().length, 1);
 });

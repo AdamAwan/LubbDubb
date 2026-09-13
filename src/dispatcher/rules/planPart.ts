@@ -14,7 +14,7 @@ import {
   planIssueNumber,
   siblingContext,
 } from '../../plans/parts.js';
-import { budgetNote } from '../../prSplit.js';
+import { budgetNote } from '../../pr/prSplit.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `plan-part`)

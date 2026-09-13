@@ -8,10 +8,10 @@ type OverruleOutcome =
   | { ok: false; error: string };
 
 export function overruleShortfall(store: OverruleStore, originRef: string, text: string): OverruleOutcome {
-  if (!store.getShortfall(originRef)) return { ok: false, error: 'no standing shortfall to overrule' };
-  const delivery = store.recordDelivery({ originRef, summary: text, by: 'operator' });
-  const instruction = store.addIssueInstruction({ originRef, text });
+  if (!store.verdicts.getShortfall(originRef)) return { ok: false, error: 'no standing shortfall to overrule' };
+  const delivery = store.verdicts.recordDelivery({ originRef, summary: text, by: 'operator' });
+  const instruction = store.instructions.addIssueInstruction({ originRef, text });
   return { ok: true, delivery, instruction };
 }
 
-type OverruleStore = Pick<Store, 'getShortfall' | 'recordDelivery' | 'addIssueInstruction'>;
+type OverruleStore = Pick<Store, 'verdicts' | 'instructions'>;

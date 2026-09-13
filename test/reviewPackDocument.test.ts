@@ -164,13 +164,13 @@ test('a full pack round-trips through review_packs unchanged', () => {
   const store = new Store(':memory:', tickingClock());
   const pack = fullPack('a1b2c3d');
 
-  const written = store.recordReviewPack(pack);
-  const current = store.getCurrentReviewPack(695);
+  const written = store.reviewPacks.recordReviewPack(pack);
+  const current = store.reviewPacks.getCurrentReviewPack(695);
 
   assert.ok(current);
   assert.deepEqual(current.pack, pack);
   assert.equal(current.writtenAt, written.writtenAt);
-  assert.equal(store.getCurrentReviewPack(1), null);
+  assert.equal(store.reviewPacks.getCurrentReviewPack(1), null);
   store.close();
 });
 
@@ -179,12 +179,12 @@ test('a pack for a newer head becomes current and the older row is kept', () => 
   const first = fullPack('a1b2c3d');
   const second = { ...fullPack('e5f6a7b'), headline: 'Second head.' };
 
-  store.recordReviewPack(first);
-  store.recordReviewPack(second);
+  store.reviewPacks.recordReviewPack(first);
+  store.reviewPacks.recordReviewPack(second);
 
-  assert.deepEqual(store.getCurrentReviewPack(695)?.pack, second);
+  assert.deepEqual(store.reviewPacks.getCurrentReviewPack(695)?.pack, second);
   assert.deepEqual(
-    store.listReviewPacks(695).map((r) => r.pack.headSha),
+    store.reviewPacks.listReviewPacks(695).map((r) => r.pack.headSha),
     ['e5f6a7b', 'a1b2c3d'],
     'newest first, and the older head is still there',
   );
@@ -192,28 +192,33 @@ test('a pack for a newer head becomes current and the older row is kept', () => 
 
 test('asking again on the same head replaces the pack rather than duplicating it', () => {
   const store = new Store(':memory:', tickingClock());
-  store.recordReviewPack(fullPack('a1b2c3d'));
+  store.reviewPacks.recordReviewPack(fullPack('a1b2c3d'));
   const rewritten = { ...fullPack('a1b2c3d'), headline: 'Rewritten from a fuller log.' };
 
-  store.recordReviewPack(rewritten);
+  store.reviewPacks.recordReviewPack(rewritten);
 
-  assert.equal(store.listReviewPacks(695).length, 1);
-  assert.equal(store.getCurrentReviewPack(695)?.pack.headline, 'Rewritten from a fuller log.');
+  assert.equal(store.reviewPacks.listReviewPacks(695).length, 1);
+  assert.equal(store.reviewPacks.getCurrentReviewPack(695)?.pack.headline, 'Rewritten from a fuller log.');
 });
 
 test('a mark keyed to a hunk survives the pack being rewritten', () => {
   const store = new Store(':memory:', tickingClock());
-  store.recordReviewPack(fullPack('a1b2c3d'));
+  store.reviewPacks.recordReviewPack(fullPack('a1b2c3d'));
   const idea = fullPack('a1b2c3d').ideas[0]!;
   const hunks = idea.anchors.filter((a) => a.kind === 'hunk').map((a) => a.range);
 
-  store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: true });
-  store.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks: [STORE_HUNK], attention: 'decide' });
+  store.reviewPacks.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: true });
+  store.reviewPacks.overrideReviewAttention({
+    prNumber: 695,
+    headSha: 'a1b2c3d',
+    hunks: [STORE_HUNK],
+    attention: 'decide',
+  });
 
-  store.recordReviewPack({ ...fullPack('a1b2c3d'), headline: 'Rewritten.' });
-  store.recordReviewPack(fullPack('e5f6a7b'));
+  store.reviewPacks.recordReviewPack({ ...fullPack('a1b2c3d'), headline: 'Rewritten.' });
+  store.reviewPacks.recordReviewPack(fullPack('e5f6a7b'));
 
-  const marks = store.listReviewMarks(695);
+  const marks = store.reviewPacks.listReviewMarks(695);
   assert.deepEqual(
     marks.map((m) => [m.hunk, m.read, m.attention]),
     [
@@ -230,17 +235,17 @@ test('reading an idea and overriding its label are two columns on one row', () =
   const store = new Store(':memory:', tickingClock());
   const hunks = [STORE_HUNK];
 
-  store.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks, attention: 'skim' });
-  store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: true });
+  store.reviewPacks.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks, attention: 'skim' });
+  store.reviewPacks.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: true });
   assert.deepEqual(
-    store.listReviewMarks(695).map((m) => [m.read, m.attention]),
+    store.reviewPacks.listReviewMarks(695).map((m) => [m.read, m.attention]),
     [[true, 'skim']],
   );
 
-  store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: false });
-  store.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks, attention: null });
+  store.reviewPacks.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks, read: false });
+  store.reviewPacks.overrideReviewAttention({ prNumber: 695, headSha: 'a1b2c3d', hunks, attention: null });
   assert.deepEqual(
-    store.listReviewMarks(695).map((m) => [m.read, m.attention]),
+    store.reviewPacks.listReviewMarks(695).map((m) => [m.read, m.attention]),
     [[false, null]],
   );
 });
@@ -248,20 +253,20 @@ test('reading an idea and overriding its label are two columns on one row', () =
 test('a pack stating a schema this build does not write is refused, not stored', () => {
   const store = new Store(':memory:', tickingClock());
   assert.throws(
-    () => store.recordReviewPack({ ...fullPack('a1b2c3d'), schema: REVIEW_PACK_SCHEMA + 1 }),
+    () => store.reviewPacks.recordReviewPack({ ...fullPack('a1b2c3d'), schema: REVIEW_PACK_SCHEMA + 1 }),
     /schema 2 is not the 1 this build writes/,
   );
-  assert.equal(store.getCurrentReviewPack(695), null);
+  assert.equal(store.reviewPacks.getCurrentReviewPack(695), null);
 });
 
 test('the wire payload is the record plus the marks, never a second declaration', () => {
   const store = new Store(':memory:', tickingClock());
-  const record = store.recordReviewPack(fullPack('a1b2c3d'));
-  store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks: [SPEC_HUNK], read: true });
+  const record = store.reviewPacks.recordReviewPack(fullPack('a1b2c3d'));
+  store.reviewPacks.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks: [SPEC_HUNK], read: true });
 
   const payload: ReviewPackPayload = {
     ...record,
-    marks: store.listReviewMarks(695),
+    marks: store.reviewPacks.listReviewMarks(695),
     head: 'a1b2c3d',
     stale: null,
     checking: false,

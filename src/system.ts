@@ -1,7 +1,8 @@
 import { tmpdir } from 'node:os';
-import { prRefStyle } from './prRef.js';
+import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
+import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
-import { configFilePath, projectConfigFilePath, type Config } from './config.js';
+import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations, buildPoolTransport, worldScope } from './integrations/registry.js';
@@ -15,6 +16,7 @@ import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
+import { PrewarmDesk } from './worktree/prewarmDesk.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { ReviewPackAuthor } from './reviewPacks/author.js';
@@ -39,13 +41,9 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
-import { ObstacleModelDesk, type ObstacleReader } from './obstacles/desk.js';
-import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
-import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
-import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
-import { ObstacleVoiceDesk } from './obstacles/voiceDesk.js';
+import { ObstacleDesk, type ObstacleReader } from './obstacles/desk.js';
 import { trackerCoordinates } from './mcp/findings.js';
-import { PrNamingDesk } from './prNamingDesk.js';
+import { PrNamingDesk } from './pr/prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
@@ -70,8 +68,8 @@ import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './p
 import { validationPlanNote } from './validation/authoring.js';
 import { stepCapabilities } from './validation/steps.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
-import { PrWatchDesk } from './prWatchDesk.js';
-import { PrWorkItemDesk } from './prWorkItemDesk.js';
+import { PrWatchDesk } from './pr/prWatchDesk.js';
+import { PrWorkItemDesk } from './pr/prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
@@ -106,7 +104,7 @@ import { CommandPortLister, type PortLister } from './localRun/ports.js';
 import { FakePortLister } from './localRun/fakePortLister.js';
 import { localRunChoices } from './localRun/ref.js';
 import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
-import { LiveConfig } from './configApply.js';
+import { LiveConfig } from './config/configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
 
@@ -190,8 +188,8 @@ interface BuildOptions {
 
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
-  store.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
-  store.pruneSurfaceReach(true);
+  store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
+  store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
   const ingressInbox = new IngressInbox();
@@ -214,9 +212,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         get size() {
           // Grown by the ejections, not shared with them: a held slot the cap did not
           // account for is a dispatch refused for want of a directory, forever.
-          return defaultPoolSize(runtimeControl.cap) + store.liveEjections().length;
+          return defaultPoolSize(runtimeControl.cap) + store.ejections.liveEjections().length;
         },
-        held: (branch) => store.findActiveTaskByBranch(branch) !== null || store.ejectionOnBranch(branch) !== null,
+        held: (branch) =>
+          store.tasks.findActiveTaskByBranch(branch) !== null || store.ejections.ejectionOnBranch(branch) !== null,
       },
       config.localRunRoot,
       errors,
@@ -395,25 +394,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         ? {
             effective: (issueOrigin: string): string | null => {
               const models = config.agentModels;
-              const number = Number(/^issue:(\d+)$/.exec(issueOrigin)?.[1]);
-              const issue = Number.isFinite(number)
-                ? store.getWorldBaseline()?.issues.find((i) => i.number === number)
-                : undefined;
+              const number = issueOriginNumber('root', issueOrigin);
+              const issue =
+                number === null ? undefined : store.world.getWorldBaseline()?.issues.find((i) => i.number === number);
               return resolveModelTag(issue?.labels, config.labelPrefix, models).profile ?? models?.default ?? null;
             },
           }
         : undefined,
     featureStanding: featureBoard
       ? (featureOrigin: string): string | null =>
-          featureRecords(store, featureBoard).find((f) => `issue:${f.number}` === featureOrigin)?.key ?? null
+          featureRecords(store, featureBoard).find((f) => issueOriginRef('root', f.number) === featureOrigin)?.key ??
+          null
       : undefined,
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(
-        store.getWorldBaseline()?.issues ?? [],
+        store.world.getWorldBaseline()?.issues ?? [],
         config.issueContainerTypes,
         (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
         config.issueSequenceMaxChildren,
-      ).find((f) => `issue:${f.feature.number}` === featureOrigin);
+      ).find((f) => issueOriginRef('root', f.feature.number) === featureOrigin);
       return found ? { key: found.key, members: found.members } : null;
     },
     createSession: agentSetup.factory,
@@ -518,26 +517,24 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sequencing: config.issueSequencing,
     sequenceMaxChildren: config.issueSequenceMaxChildren,
   };
-  const rules = new RuleDispatcher(
-    issuePickup,
-    {},
-    prompts,
-    config.defaultBranch,
-    config.planning,
-    config.ci,
-    config.validation,
-    config.validationRoot,
-    prRefStyle(config.integrations.sourceControl),
-    config.review,
+  const rules = new RuleDispatcher({
+    pickup: issuePickup,
+    templates: prompts,
+    defaultBranch: config.defaultBranch,
+    planning: config.planning,
+    ci: config.ci,
+    validation: config.validation,
+    validationRoot: config.validationRoot,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
+    review: config.review,
     reviewCharters,
-    watchNote(config.environments),
-    watchDeclareNote(config.environments),
-    undefined,
-    (offerings) => testPartNote(config.environments, offerings),
-    stateDeclareNote(config.environments),
-    config.environments.some((env) => env.validate !== undefined),
-    (offerings) => validationPlanNote(config.environments, offerings),
-  );
+    watchNote: watchNote(config.environments),
+    watchDeclareNote: watchDeclareNote(config.environments),
+    testPartNote: (offerings) => testPartNote(config.environments, offerings),
+    stateDeclareNote: stateDeclareNote(config.environments),
+    remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
+    validationPlanNote: (offerings) => validationPlanNote(config.environments, offerings),
+  });
   const dispatcher: Dispatcher = rules;
 
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
@@ -682,25 +679,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const tickets = new TicketSweep({ store, source: connector, errors });
 
-  const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
-
-  const obstacleDesk = opts.obstacleReader
-    ? new ObstacleModelDesk({ store, reader: opts.obstacleReader, repoRoot: config.repoRoot, errors })
-    : undefined;
-
-  const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
-
-  const obstacleOwnership = new ObstacleOwnershipDesk({
+  const obstacles = new ObstacleDesk({
     store,
+    fleet: agents,
+    dormantMs: config.obstacleDormantMs,
+    watchLabel,
+    reader: opts.obstacleReader,
+    repoRoot: config.repoRoot,
     filing: trackerCoordinates(config) ? filing : undefined,
     ticketBody: (vars) => prompts.render('obstacle-ticket-body', vars),
-    watchLabel,
-    errors,
-  });
-
-  const obstacleEndings = new ObstacleEndingsDesk({
-    store,
-    dormantMs: config.obstacleDormantMs,
     docsPrompt: (vars) => prompts.render('docs-change', vars),
     errors,
   });
@@ -775,11 +762,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     ejections,
     escalations,
     fleet: agents,
-    obstacleVoice,
-    obstacleDesk,
-    obstacleNotices,
-    obstacleOwnership,
-    obstacleEndings,
+    obstacles,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
@@ -796,15 +779,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
-    if (store.listOpenEscalations().some((e) => e.agentId === agentId)) return;
-    const task = store.getTask(taskId);
+    if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
+    const task = store.tasks.getTask(taskId);
     escalations.create({
       type: escalationTypeForAsk(ask?.kind),
       prompt: reason,
       context: {
         taskTitle: task?.title,
         originRef: task?.originRef ?? null,
-        recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+        recentOutput: recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
         ...(ask?.options ? { options: ask.options } : {}),
         ...(ask?.detail ? { detail: ask.detail } : {}),
         ...(ask?.questions ? { questions: ask.questions } : {}),
@@ -831,11 +814,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   agents.on('reaped', ({ taskId }) => {
-    const task = store.getTask(taskId);
+    const task = store.tasks.getTask(taskId);
     const branch = task?.branch;
     if (!branch) return;
     const active = (s: string): boolean => s === 'queued' || s === 'running' || s === 'waiting';
-    if (store.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
+    if (store.tasks.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
     void worktrees.remove(branch).catch((err: Error) => {
       errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });
@@ -864,12 +847,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const pets = new PetKeeper(store, config.pets);
+  const prewarm = new PrewarmDesk({
+    worktrees,
+    upcoming: () => harness.upcoming?.items ?? [],
+    enabled: () => config.prewarmWorktrees && harness.running && !runtimeControl.paused,
+    errors,
+  });
   harness.on('cycle:end', () => {
     try {
       pets.scan();
     } catch (err) {
       errors.record({ source: 'cycle', message: `Pet scan failed: ${(err as Error).message}` });
     }
+    // Deliberately not awaited: a cycle that waited for the warming would have moved the wait it
+    // exists to remove back onto the critical path. → docs/spec/09-execution.md
+    prewarm.run();
   });
 
   const localRun = new LocalRunner({
@@ -882,12 +874,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     permissionMode: config.agentPermissionMode,
     defaultBranch: config.defaultBranch,
     choicesFor: (originRef) => {
-      const plan = store.getPlanByOrigin(originRef);
+      const plan = store.plans.getPlanByOrigin(originRef);
       const number = planIssueNumber(originRef);
-      const world = store.getWorldBaseline();
+      const world = store.world.getWorldBaseline();
       const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
       const own = issue ? (openPrForIssue(issue, world?.pullRequests ?? [])?.branch ?? null) : null;
-      return localRunChoices(plan ? store.listPlanParts(plan.id) : [], own);
+      return localRunChoices(plan ? store.plans.listPlanParts(plan.id) : [], own);
     },
     reap: reapTree,
     errors,
@@ -900,11 +892,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     baseFor: (originRef, ref) => {
       if (ref === config.defaultBranch) return null;
       const number = planIssueNumber(originRef);
-      const plan = store.getPlanByOrigin(originRef);
-      const parts = plan ? store.listPlanParts(plan.id) : [];
+      const plan = store.plans.getPlanByOrigin(originRef);
+      const parts = plan ? store.plans.listPlanParts(plan.id) : [];
       const part = parts.find((p) => p.branch === ref);
       if (part !== undefined && number !== null) return partBase(part, bySlug(parts), number, config.defaultBranch);
-      const pr = store.getWorldBaseline()?.pullRequests.find((p) => p.branch === ref);
+      const pr = store.world.getWorldBaseline()?.pullRequests.find((p) => p.branch === ref);
       return pr?.baseBranch ?? config.defaultBranch;
     },
     fetchIntervalMs: config.planning.gitFetchIntervalMs,

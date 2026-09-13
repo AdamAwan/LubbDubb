@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bugFilingType, filingType } from '../src/ticketTypes.js';
-import { defaultConfig } from '../src/config.js';
-import type { Config } from '../src/config.js';
+import { defaultConfig } from '../src/config/config.js';
+import type { Config } from '../src/config/config.js';
 
 function azure(extra: Partial<Config> = {}): Config {
   return {

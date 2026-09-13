@@ -36,8 +36,8 @@ export class SequenceStore {
       updatedAt: ts,
     };
     this.ctx.db.transaction(() => {
-      this.ctx.db
-        .prepare(
+      this.ctx
+        .prep(
           `INSERT INTO feature_sequences
              (origin_ref, status, reason, unsure, standing_key, members, answered_by, answered_at,
               agent_id, task_id, created_at, updated_at)
@@ -66,8 +66,8 @@ export class SequenceStore {
           row.createdAt,
           row.updatedAt,
         );
-      this.ctx.db.prepare(`DELETE FROM feature_sequence_edges WHERE origin_ref = ?`).run(row.originRef);
-      const insert = this.ctx.db.prepare(
+      this.ctx.prep(`DELETE FROM feature_sequence_edges WHERE origin_ref = ?`).run(row.originRef);
+      const insert = this.ctx.prep(
         `INSERT INTO feature_sequence_edges (origin_ref, issue, depends_on, source, reason)
          VALUES (?, ?, ?, ?, ?)`,
       );
@@ -80,8 +80,8 @@ export class SequenceStore {
 
   answerFeatureSequence(originRef: string, status: 'accepted' | 'declined', by: string): FeatureSequence | null {
     const ts = this.ctx.now();
-    const changed = this.ctx.db
-      .prepare(
+    const changed = this.ctx
+      .prep(
         `UPDATE feature_sequences SET status = ?, answered_by = ?, answered_at = ?, updated_at = ?
          WHERE origin_ref = ?`,
       )
@@ -90,18 +90,16 @@ export class SequenceStore {
   }
 
   getFeatureSequence(originRef: string): FeatureSequence | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM feature_sequences WHERE origin_ref = ?`).get(originRef) as
-      | Row
-      | undefined;
+    const row = this.ctx.prep(`SELECT * FROM feature_sequences WHERE origin_ref = ?`).get(originRef) as Row | undefined;
     return row ? this.hydrate(row, this.edgesFor(originRef)) : null;
   }
 
   listFeatureSequences(): FeatureSequence[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM feature_sequences ORDER BY origin_ref`).all() as Row[];
+    const rows = this.ctx.prep(`SELECT * FROM feature_sequences ORDER BY origin_ref`).all() as Row[];
     if (rows.length === 0) return [];
     const edges = new Map<string, FeatureSequenceEdge[]>();
-    for (const edge of this.ctx.db
-      .prepare(`SELECT * FROM feature_sequence_edges ORDER BY issue, depends_on`)
+    for (const edge of this.ctx
+      .prep(`SELECT * FROM feature_sequence_edges ORDER BY issue, depends_on`)
       .all() as EdgeRow[]) {
       const group = edges.get(edge.origin_ref);
       if (group) group.push(mapEdge(edge));
@@ -111,8 +109,8 @@ export class SequenceStore {
   }
 
   private edgesFor(originRef: string): FeatureSequenceEdge[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM feature_sequence_edges WHERE origin_ref = ? ORDER BY issue, depends_on`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM feature_sequence_edges WHERE origin_ref = ? ORDER BY issue, depends_on`)
       .all(originRef) as EdgeRow[];
     return rows.map(mapEdge);
   }

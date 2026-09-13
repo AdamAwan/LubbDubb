@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { Store } from '../src/store/store.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildDesktopTools } from '../src/mcp/desktopTools.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import {
@@ -71,7 +71,7 @@ function queued(upcoming: QueueItem[] | undefined, origin: string): QueueItem | 
 }
 
 function full(): RuleDispatcher {
-  return new RuleDispatcher({ sequencing: 'full' });
+  return new RuleDispatcher({ pickup: { sequencing: 'full' } });
 }
 
 function sequence(over: Partial<FeatureSequence> = {}): FeatureSequence {
@@ -247,7 +247,9 @@ test('a declined order stops holding it off once the Feature gains a story', asy
 });
 
 test('links alone runs no sequencer — every edge there was drawn by a person', async () => {
-  const { upcoming } = await new RuleDispatcher({ sequencing: 'links' }).decide(ctx([story(11), story(12)]));
+  const { upcoming } = await new RuleDispatcher({ pickup: { sequencing: 'links' } }).decide(
+    ctx([story(11), story(12)]),
+  );
   assert.equal(queued(upcoming, 'issue:500:sequence'), undefined);
 });
 
@@ -293,7 +295,7 @@ test('a declined order holds nothing', async () => {
 
 test('an order is written as a set, never merged', () => {
   const store = new Store(':memory:');
-  store.recordFeatureSequence({
+  store.sequences.recordFeatureSequence({
     originRef: 'issue:500',
     status: 'proposed',
     reason: 'first',
@@ -307,12 +309,12 @@ test('an order is written as a set, never merged', () => {
     agentId: 'a1',
     taskId: 't1',
   });
-  const first = store.listFeatureSequences()[0]!;
-  const answered = store.answerFeatureSequence('issue:500', 'accepted', 'adam');
+  const first = store.sequences.listFeatureSequences()[0]!;
+  const answered = store.sequences.answerFeatureSequence('issue:500', 'accepted', 'adam');
   assert.equal(answered?.status, 'accepted');
   assert.equal(answered?.answeredBy, 'adam');
 
-  store.recordFeatureSequence({
+  store.sequences.recordFeatureSequence({
     originRef: 'issue:500',
     status: 'proposed',
     reason: 'second',
@@ -323,7 +325,7 @@ test('an order is written as a set, never merged', () => {
     agentId: 'a2',
     taskId: 't2',
   });
-  const second = store.listFeatureSequences()[0]!;
+  const second = store.sequences.listFeatureSequences()[0]!;
   assert.equal(second.edges.length, 1, 'the dropped edge is gone, not left behind');
   assert.equal(second.status, 'proposed');
   assert.equal(second.answeredBy, null, 'a new order over a different set is a new question');
@@ -332,7 +334,7 @@ test('an order is written as a set, never merged', () => {
 
 test('answering a Feature with no order is a refusal, not a row conjured to hold it', () => {
   const store = new Store(':memory:');
-  assert.equal(store.answerFeatureSequence('issue:500', 'accepted', 'adam'), null);
+  assert.equal(store.sequences.answerFeatureSequence('issue:500', 'accepted', 'adam'), null);
 });
 
 test('the sequencer is shown the Feature and every open story under it', () => {
@@ -417,7 +419,7 @@ function desktopDeck(): {
   store: Store;
 } {
   const store = new Store(':memory:');
-  store.setWorldBaseline({
+  store.world.setWorldBaseline({
     takenAt: NOW,
     pullRequests: [],
     issues: [story(11), story(12), story(13)],
@@ -466,7 +468,7 @@ test('an amendment lands accepted, marked as the operator’s own', async () => 
     ],
   });
   assert.equal(done.isError, false, done.text as string);
-  const stored = deck.store.getFeatureSequence('issue:500');
+  const stored = deck.store.sequences.getFeatureSequence('issue:500');
   assert.equal(stored?.status, 'accepted', 'the person making it is the person who would have accepted it');
   assert.equal(stored?.answeredBy, 'adam');
   assert.deepEqual(
@@ -485,7 +487,7 @@ test('an empty amendment releases the order rather than being refused', async ()
   });
   const done = await deck.call('sequence_amend', { issue: 500, reason: 'they are independent after all', order: [] });
   assert.equal(done.isError, false, done.text as string);
-  assert.deepEqual(deck.store.getFeatureSequence('issue:500')?.edges, []);
+  assert.deepEqual(deck.store.sequences.getFeatureSequence('issue:500')?.edges, []);
 });
 
 test('an amendment naming a story the Feature does not have is refused', async () => {

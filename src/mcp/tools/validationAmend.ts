@@ -156,7 +156,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     const goal = validationAmendIssue(task.originRef);
     if (!goal.ok) return toolError(goal.error);
     const origin = issueOrigin(goal.issueNumber);
-    const plan = deps.store.getPlanByOrigin(origin);
+    const plan = deps.store.plans.getPlanByOrigin(origin);
     if (!plan) {
       return toolError(
         `Issue #${goal.issueNumber} has no plan yet, so it has no validation plan to amend. Say what should be ` +
@@ -166,22 +166,25 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateAmendment(args);
     if (!parsed.ok) return toolError(`Amendment rejected: ${parsed.error}`);
     const amendment = parsed.amendment;
-    const slugs = deps.store.listPlanParts(plan.id).map((p) => p.slug);
+    const slugs = deps.store.plans.listPlanParts(plan.id).map((p) => p.slug);
 
     const resources = validationResourceInputs(amendment.resources);
     const known = [
-      ...new Set([...deps.store.listValidationResources(origin).map((r) => r.name), ...resources.map((r) => r.name)]),
+      ...new Set([
+        ...deps.store.validation.listValidationResources(origin).map((r) => r.name),
+        ...resources.map((r) => r.name),
+      ]),
     ];
     const nowProvided = new Set(resources.filter((r) => r.provided).map((r) => r.name));
     withdrawResourceAsks(
       deps.store,
       origin,
-      deps.store
+      deps.store.validation
         .listValidationResources(origin)
         .filter((r) => !nowProvided.has(r.name))
         .map((r) => r.name),
     );
-    const result = deps.store.amendValidation(origin, {
+    const result = deps.store.validation.amendValidation(origin, {
       checks: validationCheckAmendments(amendment.checks, known, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
       withdraw: amendment.withdraw.map((w) => ({ id: w.id, reason: withdrawalReason(w.reason) })),
       resources,
