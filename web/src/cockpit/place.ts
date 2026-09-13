@@ -50,7 +50,17 @@ export interface Place {
   featureCard: number | null;
   featureSort: FeatureSort;
   featurePrs: FeaturePrFilter;
+  /** Which shape the overview draws in — the demo's four alternatives. */
+  overview: OverviewShape;
 }
+
+/**
+ * The overview's shape. `cards` is what the deployment has always drawn — fleet,
+ * goals, pull requests. The other three lead with what the operator must answer
+ * rather than what the harness is doing.
+ */
+export type OverviewShape = 'cards' | 'lanes' | 'next';
+export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'lanes', 'next'];
 
 export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
 export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
@@ -121,6 +131,7 @@ export const NOWHERE: Place = {
   featureCard: null,
   featureSort: 'wants-you',
   featurePrs: 'open',
+  overview: 'cards',
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -208,6 +219,7 @@ export function readPlace(search: string): Place {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
+    overview: OVERVIEW_SHAPES.find((o) => o === param(query, 'overview')) ?? 'cards',
   };
 }
 
@@ -350,6 +362,7 @@ export function placeQuery(place: Place): string {
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
+  if (place.overview !== 'cards') query.set('overview', place.overview);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

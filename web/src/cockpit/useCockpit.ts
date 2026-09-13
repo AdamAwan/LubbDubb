@@ -271,6 +271,7 @@ export function useCockpit(): CockpitStatus {
         logUsage('feature.filter');
         go(next);
       },
+      setOverviewShape: (overview) => go({ overview }),
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed
@@ -437,6 +438,7 @@ export function useCockpit(): CockpitStatus {
       ticketColumns: place.ticketColumns,
       featureCard: place.featureCard,
       featureSort: place.featureSort,
+      overviewShape: place.overview,
       featurePrs: place.featurePrs,
     }),
   };

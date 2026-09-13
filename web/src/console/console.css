@@ -4838,3 +4838,333 @@ button.cn-grow {
 .cn-lv-passed .cn-sub {
   color: var(--cn-fg-dim);
 }
+
+/* ── The overview's alternative shapes ────────────────────────────────────────
+   Two surfaces that lead with what the operator must answer rather than what the
+   harness is doing, selected by `?overview=`. Everything here is namespaced
+   `cn-ov-`: `.cn-ask`, `.cn-desk`, `.cn-seg`, `.cn-sw` and `.cn-track` are all
+   already taken further up this sheet, and an unnamespaced collision here would
+   land the goal page's padding on a lane's segment.
+   → docs/spec/17-cockpit.md#the-overview */
+
+.cn-ov-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.cn-ov-switch-label {
+  font-size: var(--label-size);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  margin-right: 6px;
+}
+.cn-ov-switch button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--cn-r);
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-ov-switch button:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-ov-switch button.cn-ov-switch-on {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-fg);
+}
+
+.cn-ov-banner-count {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.cn-ov-banner-count em {
+  font-style: normal;
+  color: var(--cn-red-ink);
+}
+.cn-ov-banner-clear {
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--cn-green-ink);
+}
+
+
+.cn-ov-ask-kind {
+  color: var(--cn-tone-ink, var(--cn-fg-dim));
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  background: var(--cn-tone-fill, var(--cn-panel-2));
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.cn-ov-ask-subject {
+  color: var(--cn-fg-dim);
+}
+.cn-ov-ask-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+
+/* The name is the control and the ref sits beside it, never inside it.
+   → docs/spec/17-cockpit.md#links */
+
+/* ── Lanes ── */
+
+.cn-ov-lanes-banner {
+  padding-bottom: 10px;
+}
+.cn-ov-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.5fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  margin-bottom: 8px;
+}
+.cn-ov-lane-mine {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+}
+.cn-ov-lane-goal {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.cn-ov-lane-name {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--cn-fg);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ov-lane-name:hover {
+  color: var(--cn-accent);
+}
+.cn-ov-lane-move {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  text-align: right;
+}
+.cn-ov-lane-who {
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-lane-yours {
+  color: var(--cn-red-ink);
+}
+.cn-ov-lane-facts {
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cn-ov-track {
+  display: flex;
+  gap: 3px;
+  min-width: 0;
+}
+.cn-ov-seg {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--cn-fg-faint);
+  background: var(--cn-track);
+  border: 1px solid var(--cn-line);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cn-ov-seg-done {
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+}
+.cn-ov-seg-live {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-blue-ink-hi);
+}
+.cn-ov-seg-stuck {
+  background: var(--cn-red-fill);
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-ov-seg-held {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+.cn-ov-seg-none {
+  color: var(--cn-fg-faint);
+}
+.cn-ov-lane-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  padding: 8px 2px 4px;
+}
+.cn-ov-lane-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cn-ov-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+.cn-ov-lanes-homeless {
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+  margin: 12px 0 0;
+  max-width: 70ch;
+}
+
+/* ── One at a time ── */
+
+.cn-ov-next-card {
+  max-width: 680px;
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  padding: 22px 24px;
+}
+.cn-ov-next-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  letter-spacing: 0.06em;
+}
+.cn-ov-pips {
+  display: flex;
+  gap: 4px;
+}
+.cn-ov-pip {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cn-inert);
+}
+.cn-ov-pip-done {
+  background: var(--cn-green);
+}
+.cn-ov-pip-here {
+  background: var(--cn-tone, var(--cn-accent));
+}
+.cn-ov-next-title {
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 14px 0 0;
+  text-wrap: balance;
+}
+.cn-ov-next-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  margin-top: 8px;
+}
+.cn-ov-next-cost {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--cn-amber-ink);
+}
+.cn-ov-next-body {
+  margin-top: 16px;
+}
+.cn-ov-next-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cn-line);
+}
+.cn-ov-next-rest {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-next-clear {
+  max-width: 620px;
+  padding: 34px 4px;
+}
+.cn-ov-next-clear h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--cn-green-ink);
+}
+.cn-ov-next-clear p {
+  color: var(--cn-fg-dim);
+  margin: 0 0 16px;
+}
+
+@media (max-width: 900px) {
+  .cn-ov-lane {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .cn-ov-lane-move {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* The one-at-a-time shape absorbs the rail, so the body is one track rather than
+   two and the situation area takes the width the rail was holding. The wide
+   arrangement places its children by grid line, so both have to be re-placed
+   here: `.cn-sit` is written to start at column 2 and the vivarium to sit in the
+   rail column's floor, and left alone in one column they land on top of each
+   other. */
+.cn-body-railless {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1100px) {
+  .cn-body-railless .cn-sit {
+    grid-area: 1 / 1 / 2 / 2;
+  }
+  .cn-body-railless .cn-viv {
+    grid-area: 2 / 1 / 3 / 2;
+    border-right: 0;
+  }
+}

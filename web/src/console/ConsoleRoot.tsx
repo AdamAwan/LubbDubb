@@ -10,6 +10,8 @@ import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 
 import { Overview, queueRow } from './Overview.js';
+import { LanesOverview } from './overviews/LanesOverview.js';
+import { NextOverview } from './overviews/NextOverview.js';
 import { projectName } from '../view/updateAsks.js';
 import { WorldSignals } from './WorldSignals.js';
 import { EnvironmentsPanel } from './EnvironmentsPanel.js';
@@ -110,10 +112,18 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
     <div className="cn">
       <TopBar view={view} actions={actions} />
       {recovery}
-      <div className="cn-body">
-        <aside className="cn-rail">
-          <QueueRail view={view} actions={actions} />
-        </aside>
+      {/* The next shape *is* the rail's top ask, at full width and carrying its own
+          controls, so drawing the rail beside it is the same queue twice — and the
+          copy on the rail is the one with no room for the reason. Only while the
+          overview is the surface: a goal page reached from it still wants the queue
+          where it has always been.
+          → docs/spec/17-cockpit.md#the-overview */}
+      <div className={`cn-body ${railless(view) ? 'cn-body-railless' : ''}`}>
+        {!railless(view) && (
+          <aside className="cn-rail">
+            <QueueRail view={view} actions={actions} />
+          </aside>
+        )}
         <main className="cn-sit">{situation}</main>
         {/* Last in the body rather than inside the rail, because document order is
             what decides where it lands when the shell collapses to one column: the
@@ -141,10 +151,23 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   );
 }
 
+/** Whether the overview's shape has absorbed the queue rail. */
+function railless(view: CockpitView): boolean {
+  if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
+  return view.overviewShape === 'next';
+}
+
 function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {
   switch (tab) {
     case 'overview':
-      return <Overview view={view} actions={actions} />;
+      switch (view.overviewShape) {
+        case 'lanes':
+          return <LanesOverview view={view} actions={actions} />;
+        case 'next':
+          return <NextOverview view={view} actions={actions} />;
+        default:
+          return <Overview view={view} actions={actions} />;
+      }
     case 'insights':
       return (
         <>

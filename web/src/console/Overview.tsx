@@ -24,6 +24,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime, timeLeft } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { StaleChip, waitedFor } from './GoalPage.js';
+import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { Who } from '../components/who.js';
@@ -40,11 +41,14 @@ import { Tag } from '../components/tag.js';
 
 export function Overview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
-    <div className="cn-grid">
-      <Fleet view={view} actions={actions} />
-      <GoalsInFlight view={view} actions={actions} />
-      <Rack view={view} actions={actions} />
-    </div>
+    <>
+      <OverviewSwitch shape="cards" actions={actions} />
+      <div className="cn-grid">
+        <Fleet view={view} actions={actions} />
+        <GoalsInFlight view={view} actions={actions} />
+        <Rack view={view} actions={actions} />
+      </div>
+    </>
   );
 }
 
@@ -416,7 +420,8 @@ function ejectedRow(held: EjectionView, view: CockpitView, actions: CockpitActio
   };
 }
 
-const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
+/** @public shared with the overview's alternative shapes, which draw the same set. */
+export const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
 
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showKept, setShowKept] = useState(false);
@@ -522,7 +527,14 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
   };
 }
 
-const PICKUP_WORD: Record<string, string> = {
+/**
+ * The pickup kind in the operator's words. The kind is an identifier the
+ * dispatcher passes between its own rules; `has_pr` reaching the glass unedited
+ * asks the operator to know the enum before the row means anything.
+ *
+ * @public shared with the overview's alternative shapes.
+ */
+export const PICKUP_WORD: Record<string, string> = {
   has_pr: 'in review',
   active: 'working',
   eligible: 'up next',
