@@ -1,15 +1,16 @@
 import { fleetCanStart } from './steps.js';
+import { validationPlanOrigin } from './authoring.js';
 import type { ProposedCheck, Proposal, ValidationCheck, ValidationPlanRecord } from '../types.js';
 
 // → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
 
 /**
- * The proposal's ref is the validation planner's own dispatch origin, which is already one per goal
- * and already classified in `src/issueOrigins.ts`. `issue:<n>:plan` is the code plan's and cannot be
+ * The proposal's ref is the validation planner's own dispatch origin, minted through the family that
+ * declares it: one per goal, already classified. `issue:<n>:plan` is the code plan's and cannot be
  * shared: two proposals on one ref would hold each other.
  */
 export function validationPlanProposalRef(issueNumber: number): string {
-  return `issue:${issueNumber}:validate-plan`;
+  return validationPlanOrigin(issueNumber);
 }
 
 export function validationPlanProposalHold(ref: string, proposals: readonly Proposal[]): string | null {
