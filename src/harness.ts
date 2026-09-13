@@ -98,11 +98,25 @@ export class Harness extends EventEmitter {
     return this.busy ? heartbeatIntervalMs : Math.max(idleHeartbeatIntervalMs, heartbeatIntervalMs);
   }
 
+  /**
+   * Whether the harness is on its own clock. Between-cycles work — warming a worktree slot for the
+   * queue — has nowhere to happen without it: a single `runCycle` has no "between".
+   *
+   * @public — read by the prewarm desk's gate in {@link buildSystem}.
+   */
+  get running(): boolean {
+    return this.onClock;
+  }
+
+  private onClock = false;
+
   start(): void {
+    this.onClock = true;
     this.heartbeat.start();
   }
 
   stop(): void {
+    this.onClock = false;
     this.stopped = true;
     this.pendingManual = false;
     this.heartbeat.stop();

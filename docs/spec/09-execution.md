@@ -52,6 +52,19 @@ authorization read holds its dispatches exactly as a handover does. The step say
 | `slot-handover` | `workingDirectory` → `WorktreeManager.ensure`. The minutes-long one. |
 | `authorizing`   | `authorize`: whether the outbound act is already authorized. A read. |
 
+**Each step carries its own duration.** A row has `stepStartedAt` for the wait it is in and `elapsed`
+for the ones behind it, so the reading answers _which_ wait rather than only _that_ there is one — the
+two are different questions, and the step name alone never distinguished a two-minute handover from a
+two-minute authorization read that preceded it. The Fleet row draws both.
+
+**And the audit keeps the breakdown after the row is gone.** The board is in memory and a row leaves
+the moment the agent starts, so a finished wait would be unreadable ten seconds later — the reason
+nobody could say where a slow dispatch spent its time. `readyingBreakdown` renders the steps onto the
+decision the executor already writes (`Spawned code agent … Readied in 2m 3s (slot-handover 2m 1s).`),
+on the rejected path as well as the executed one, since a handover that took two minutes and _then_
+threw is the reading that matters most. Steps under 100ms are left out: a dispatch that waited on
+nothing should audit as it always did.
+
 The synchronous steps between them are deliberately unnamed: nothing yields there, so no reader can
 observe one. An action whose whole body is synchronous therefore goes on and off the board inside a
 single tick and is never drawn — which is correct, since nothing was waiting for it.
@@ -1143,6 +1156,49 @@ not exist.
 
 A failure at either step is a **rejected dispatch naming the branch and the slot**, never a silent
 fall back to a fresh directory — which would put two agents in one tree.
+
+### Warming a slot ahead of the dispatch
+
+[Handing a slot over](#handing-a-slot-over) is the executor's long pole, and the loop it runs on is
+serial: three dispatches pay for three wipes and three cold checkouts one after another, which is what
+[the readying board](#what-is-being-readied) exists to make visible. Making it visible does not make it
+shorter. `PrewarmDesk` (`src/worktree/prewarmDesk.ts`) does that, by moving the work to where nothing
+is queued behind it.
+
+It runs on `cycle:end` and **is never awaited by a cycle** — a pulse that waited for the warming would
+have put the wait back exactly where it was taken from. One pass at a time (`inFlight`), and a pass
+that throws is recorded through `errors.record` and nothing else: a slot that could not be warmed is
+not a dispatch that failed, it is a dispatch that pays what it always paid.
+
+It reads the **Up next** queue — `harness.upcoming` — and passes `Worktrees.prewarm` the branches of
+the code items that are neither `unapproved` nor `superseded`, deduped and in queue order. `prewarm`
+readies **at most one slot per pass**, taking the first branch that qualifies, and is `acquire` with
+three things removed:
+
+- **No lease.** Nothing is in flight on the slot, so a dispatch that wants it for another branch must
+  still be able to take it first. What comes back is an unleased slot checked out on the branch, which
+  `ensure`'s reuse arm hands back at once and which `survey` otherwise reads as merely `evictable` —
+  behind every spare. Warming is never in the way of the work it guessed wrong about.
+- **No eviction and no salvage.** Both cost another branch something, and this is a guess about what
+  dispatches next. Only a `spare` is taken; with none, the pass ends having done nothing.
+- **No branch is created.** A branch that does not already exist locally is skipped, because
+  `ensure` is reuse-first and **ignores `base` once the branch exists** — warming a name the dispatch
+  would have cut from its own base would hand the agent a branch rooted at HEAD instead, with nothing
+  red. The queue does not carry the base, so the only safe answer is not to guess one. A fresh issue's
+  first dispatch therefore warms nothing; a re-dispatch, a retry, a CI fix and a review round — every
+  repeat onto a branch that exists — is warmed.
+
+**Minting still follows work, not the cap.** A slot is created only for a branch the queue actually
+named, so [Growing the ceiling mints nothing](#exhaustion) holds exactly as before: warming brings the
+slot forward in time, never into existence on a deployment that was not going to run that wide.
+
+`prewarm`, `ensure`, `ensureReadOnly` and `deleteBranch` are **serialised on `worktreeRoot`**
+(`runSerial`), which they did not need to be while the executor's serial loop was the only caller.
+Warming runs between cycles and a manual cycle can start under it, so two `git worktree` mutations on
+one repository are now reachable; the queue is what keeps them from being concurrent.
+
+`prewarmWorktrees` ([02](02-configuration.md#repository)) turns it off, and warming is skipped while
+dispatch is paused — there is nothing to be early for.
 
 ### Exhaustion
 

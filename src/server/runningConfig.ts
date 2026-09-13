@@ -47,6 +47,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'sendPrRepliesWithoutApproval',
       'closedPrWindowMs',
       'upNextOverrideTtlMs',
+      'prewarmWorktrees',
     ],
   },
   {

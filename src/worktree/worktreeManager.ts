@@ -2,12 +2,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
+import { runSerial } from '../git/serialQueue.js';
 
 // → docs/spec/09-execution.md#worktrees
 
 export interface Worktrees {
   ensure(branch: string, base?: string): Promise<string>;
   ensureReadOnly(key: string, of: string): Promise<string>;
+  prewarm(branches: string[]): Promise<string | null>;
   ensurePreview(ref: string): Promise<{ dir: string; commit: string }>;
   previewCommit(ref: string): Promise<string>;
   remove(branch: string): Promise<void>;
@@ -29,11 +31,52 @@ export class WorktreeManager implements Worktrees {
   ) {}
 
   ensure(branch: string, base?: string): Promise<string> {
-    return this.acquire({ readOnly: false, name: branch, base });
+    return this.serialised(() => this.acquire({ readOnly: false, name: branch, base }));
   }
 
   ensureReadOnly(key: string, of: string): Promise<string> {
-    return this.acquire({ readOnly: true, name: key, of });
+    return this.serialised(() => this.acquire({ readOnly: true, name: key, of }));
+  }
+
+  prewarm(branches: string[]): Promise<string | null> {
+    return this.serialised(() => this.warm(branches));
+  }
+
+  private async warm(branches: string[]): Promise<string | null> {
+    await this.git(['worktree', 'prune']).catch(() => {});
+    mkdirSync(this.worktreeRoot, { recursive: true });
+    const slots = await this.slots();
+
+    for (const branch of branches) {
+      if (this.pool.held(branch)) continue;
+      if ((await this.findExisting(branch)) !== null) continue;
+      // Never speculatively *create* a branch: `ensure` is reuse-first and ignores `base` once one
+      // exists, so warming a name the dispatch would have cut from its own base would silently hand
+      // the agent a branch rooted at HEAD instead.
+      if (!(await this.branchExists(branch))) continue;
+      const req: Request = { readOnly: false, name: branch };
+
+      const minted = this.nextSlotPath(slots);
+      if (minted !== null) {
+        await this.reclaim(minted);
+        await this.create(minted, req);
+        return minted;
+      }
+
+      // Neither eviction nor salvage on speculation: both cost another branch something, and this
+      // is a guess about what dispatches next. A spare is the only slot going spare.
+      const survey = await this.survey(slots, req);
+      if (survey.spare === null) return null;
+      await this.handOver(survey.spare, req);
+      // No lease: nothing is in flight on it, so a dispatch that wants the slot for another branch
+      // must still be able to take it ahead of this one.
+      return survey.spare;
+    }
+    return null;
+  }
+
+  private serialised<T>(work: () => Promise<T>): Promise<T> {
+    return runSerial(`worktrees:${resolve(this.worktreeRoot)}`, work);
   }
 
   previewCommit(ref: string): Promise<string> {
@@ -115,7 +158,11 @@ export class WorktreeManager implements Worktrees {
     return Promise.resolve();
   }
 
-  async deleteBranch(branch: string): Promise<void> {
+  deleteBranch(branch: string): Promise<void> {
+    return this.serialised(() => this.reap(branch));
+  }
+
+  private async reap(branch: string): Promise<void> {
     const holding = await this.findExisting(branch);
     if (holding !== null && isUnder(this.worktreeRoot, holding)) {
       const heldBy = this.leaseOn(holding) ?? (this.pool.held(branch) ? branch : null);

@@ -15,6 +15,7 @@ export class FakeWorktreeManager implements Worktrees {
   readonly ensured: FakeWorktreeCall[] = [];
   readonly removed: string[] = [];
   readonly deleted: string[] = [];
+  readonly warmed: string[][] = [];
   readonly previewed: string[] = [];
   readonly resolved: string[] = [];
   failPreview: Error | null = null;
@@ -40,6 +41,11 @@ export class FakeWorktreeManager implements Worktrees {
   ensureReadOnly(key: string, of: string): Promise<string> {
     this.ensured.push({ branch: key, base: of, readOnly: true });
     return this.slotFor(key, of);
+  }
+
+  prewarm(branches: string[]): Promise<string | null> {
+    this.warmed.push(branches);
+    return Promise.resolve(null);
   }
 
   ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
