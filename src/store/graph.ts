@@ -85,6 +85,11 @@ export class GraphStore {
     return rows.map(rowToWorkNode);
   }
 
+  getWorkNode(ref: string): WorkNode | null {
+    const row = this.ctx.prep(`SELECT * FROM work_nodes WHERE ref = ?`).get(ref) as WorkNodeRow | undefined;
+    return row ? rowToWorkNode(row) : null;
+  }
+
   mergedPrs(): ReadonlySet<number> {
     const rows = this.ctx.prep(`SELECT ref FROM work_nodes WHERE kind = 'pr' AND status = 'merged'`).all() as {
       ref: string;

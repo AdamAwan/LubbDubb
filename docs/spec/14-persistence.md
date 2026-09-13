@@ -1049,7 +1049,8 @@ handed origins and digests only, `retrospectives`' rule, and for its reason.
 
 `recordWorkGraph(observations)`, `listWorkRoots()` (nodes with no parent, most recently seen first),
 `listWorkSubtree(rootRef)` (one recursive CTE bounded to the requested root, `UNION` rather than
-`UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat).
+`UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat),
+`getWorkNode(ref)` (one row by primary key, or null).
 
 `mergedPrs()` and `settledPrs()` read the terminal PR rows — the first as a set of merged numbers, the
 second as a map of merged **and** closed. Both exist because the table is upsert-only and the world's
@@ -1063,6 +1064,11 @@ beside it is what ran underneath — rebuilding the table from roots plus a subt
 for something one `SELECT` answers. Note what it is deliberately **not** wired into: the recorder still
 builds its `existing` set the roots-then-subtrees way, so the backfill-reach limitation below stands
 unchanged. Closing that is a separate decision, not a side effect of this method existing.
+
+`getWorkNode` is the same read narrowed to one ref, for the callers that only want to know whether a
+node exists or want that node alone — `POST /api/work/:ref/ignore` and `POST /api/work/:ref/file`.
+`ref` is the table's primary key, so it is an index lookup where the list read hydrated every row to
+discard all but one.
 
 A node is keyed on the ref vocabulary that already exists — `issue:12`, `issue:12:plan`,
 `issue:12:part:schema`, `pr:41`, `pr:41:ci`, `job:7` — so it joins to every gate, override and proposal

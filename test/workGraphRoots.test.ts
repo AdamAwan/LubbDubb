@@ -301,6 +301,19 @@ test('listWorkNodes reads the whole table, roots and descendants alike', () => {
   store.close();
 });
 
+test('getWorkNode answers one ref with the row listWorkNodes would have hydrated', () => {
+  const store = new Store(':memory:');
+  store.graph.recordWorkGraph(
+    foldWorkGraph(
+      input({ world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }), jobs: [job()] }),
+    ),
+  );
+  for (const listed of store.graph.listWorkNodes())
+    assert.deepEqual(store.graph.getWorkNode(listed.ref), listed, 'the single-ref read is the list read, narrowed');
+  assert.equal(store.graph.getWorkNode('issue:999'), null, 'a ref the table does not hold resolves to null');
+  store.close();
+});
+
 function recorded(over: Partial<WorkGraphInput> = {}): { store: Store; nodes: WorkNode[] } {
   const store = new Store(':memory:');
   store.graph.recordWorkGraph(foldWorkGraph(input(over)));

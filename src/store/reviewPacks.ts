@@ -72,10 +72,18 @@ export class ReviewPackStore {
   }
 
   listCurrentReviewPacks(): ReviewPackRecord[] {
-    const numbers = this.ctx.prep(`SELECT DISTINCT pr_number FROM review_packs`).all() as { pr_number: number }[];
-    return numbers
-      .map((r) => this.getCurrentReviewPack(r.pr_number))
-      .filter((record): record is ReviewPackRecord => record !== null);
+    const rows = this.ctx
+      .prep(
+        `SELECT p.document, p.written_at FROM review_packs p
+         JOIN (
+           SELECT rowid AS rid,
+                  ROW_NUMBER() OVER (PARTITION BY pr_number ORDER BY written_at DESC, rowid DESC) AS seq
+           FROM review_packs
+         ) newest ON newest.rid = p.rowid AND newest.seq = 1
+         ORDER BY p.pr_number ASC`,
+      )
+      .all() as PackRow[];
+    return rows.map((r) => ({ pack: JSON.parse(r.document) as ReviewPack, writtenAt: r.written_at }));
   }
 
   getReviewPackAt(prNumber: number, headSha: string): ReviewPackRecord | null {
