@@ -15,28 +15,28 @@ export class ErrorStore {
       message: input.message,
       detail: input.detail ?? null,
     };
-    this.ctx.db
-      .prepare(`INSERT INTO error_events (id, source, message, detail, created_at) VALUES (?,?,?,?,?)`)
+    this.ctx
+      .prep(`INSERT INTO error_events (id, source, message, detail, created_at) VALUES (?,?,?,?,?)`)
       .run(entry.id, entry.source, entry.message, entry.detail, entry.createdAt);
     return entry;
   }
 
   listErrorsSince(since: string): ErrorLogEntry[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM error_events WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM error_events WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
       .all(since) as ErrorEventRow[];
     return rows.map(rowToErrorEntry);
   }
 
   listErrors(limit = 100): ErrorLogEntry[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as ErrorEventRow[];
     return rows.map(rowToErrorEntry);
   }
 
   clearErrors(): number {
-    return this.ctx.db.prepare(`DELETE FROM error_events`).run().changes;
+    return this.ctx.prep(`DELETE FROM error_events`).run().changes;
   }
 }
 

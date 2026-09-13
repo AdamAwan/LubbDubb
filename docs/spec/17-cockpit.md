@@ -10,6 +10,15 @@ bundled. `test/wireContract.test.ts` asserts both halves — that the shared mod
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
+**One module is passed through by value, and it is a named exception rather than a crack.**
+`src/reviewPacks/derive.ts` — the review-pack derivations, pure functions of the pack document that
+the HTML companion and the cockpit's page both read — is re-exported by `src/wire.ts` and re-exported
+onward by `web/src/view/reviewPack.ts`, because the alternative was two byte-identical copies of three
+hundred lines including a syntax highlighter. It is a leaf: it imports `src/types.ts` for types and
+nothing else. `test/wireRuntime.test.ts` pins the list of modules the contract may pass a value
+through and walks what they import, because a re-export is not a declaration and slips past
+`test/wireContract.test.ts`. → [31](31-review-packs.md#one-copy-of-the-derivations)
+
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
 ## Layers
@@ -6389,7 +6398,9 @@ A pack whose `schema` this build does not know is refused whole at the top, neve
 is recognised. What a reviewer does rides the marks routes ([16](16-http-api.md#post-apiprsnumberreview-packideasidread))
 and the rows the write returns replace what the page holds, laid over the ideas by `layMarks`
 (`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so, and the same for
-`seen`.
+`seen`. `layMarks`, the schema number and the page's own place state are what that module still
+holds; every other derivation it exports is [the one copy](31-review-packs.md#one-copy-of-the-derivations),
+re-exported from the contract.
 
 **Three marks, and the third is under a finding.** Read and the attention override sit in the idea's
 own row; _I have taken this_ sits at the foot of each finding box and nowhere else, because it is a

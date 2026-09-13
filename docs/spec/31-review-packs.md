@@ -207,8 +207,8 @@ separately is how a whole class of the sharp edges gets missed.
 ### An idea names the atom it corresponds to
 
 _Built._ `src/reviewPacks/atoms.ts` finds the atoms and writes what the author is told;
-`readAtom` in `src/reviewPacks/submission.ts` takes the field; `ideaAtom` in the two copies of the
-derivations draws it; `test/reviewPackAtoms.test.ts` holds it.
+`readAtom` in `src/reviewPacks/submission.ts` takes the field; `ideaAtom` in
+[the derivations](#one-copy-of-the-derivations) draws it; `test/reviewPackAtoms.test.ts` holds it.
 
 An **atom** is the smallest piece of a change that could land, be reviewed and be rolled back on its
 own ([08](08-planning.md#atoms--the-pieces-a-part-is-made-of)) — and that is the same unit an idea
@@ -360,12 +360,12 @@ and still read like a legal notice, and that is the failure a reader actually re
 tells me nothing". So the same enforcement the cap gets, plainness gets: four rules, checked when the
 pack is submitted, refused with the exact sentence that broke one.
 
-| Rule                         | Why it is a rule and not advice                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| no semicolon                 | it is a full stop that will not admit it, and it is how two ideas get one line          |
-| no clause hung off a dash    | a dash with a space each side is how a long sentence hides that it is two               |
-| no sentence over **24** words | one idea per sentence, and the count is what makes an author choose which idea         |
-| reading ease at least **60** | the backstop for the register itself, which no per-field rule catches                   |
+| Rule                          | Why it is a rule and not advice                                                |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| no semicolon                  | it is a full stop that will not admit it, and it is how two ideas get one line |
+| no clause hung off a dash     | a dash with a space each side is how a long sentence hides that it is two      |
+| no sentence over **24** words | one idea per sentence, and the count is what makes an author choose which idea |
+| reading ease at least **60**  | the backstop for the register itself, which no per-field rule catches          |
 
 The first three are per-field and their refusal quotes the sentence, so the fix is obvious. The
 fourth is one Flesch reading-ease score over **every prose field the reader is shown unfolded**,
@@ -420,7 +420,7 @@ page shows which, because the reader weighs them differently.
 
 ### The code block
 
-_Built._ `codeBlockLines` in `src/reviewPacks/derive.ts` and its cockpit twin decide it.
+_Built._ `codeBlockLines` in `src/reviewPacks/derive.ts` decides it, for both renderings.
 
 A hunk's lines are embedded as git printed them, each carrying a leading `+`, `-` or space
 ([The document carries its code](#the-document-carries-its-code)). Printed inline that marker **is
@@ -444,7 +444,7 @@ copyable, and the fold is a `<details>` because the companion runs no script.
 
 ### How hard to look at one stop
 
-_Built._ `anchorWeight` in `src/reviewPacks/derive.ts` and its cockpit twin decide it.
+_Built._ `anchorWeight` in `src/reviewPacks/derive.ts` decides it, for both renderings.
 
 The idea carries the checker's [attention](#attention). Under it, a walk mixes an import block and a
 fifty-line function and draws them as equals, which is what makes a long walk unreadable: the reader
@@ -452,11 +452,11 @@ spends the same on the stop that costs nothing as on the one the change turns on
 
 So each stop is weighed, **from the code and never from a field**:
 
-| Weight   | What                                                                   | Drawn                            |
-| -------- | ---------------------------------------------------------------------- | -------------------------------- |
-| `key`    | the author's own `mark`, which nothing here second-guesses             | ruled in the accent, in the rail |
-| `minor`  | a hunk whose changed lines are all imports or all comments, or two short changed lines | dimmed, quiet, code folded |
-| `normal` | everything else                                                        | as it always was                 |
+| Weight   | What                                                                                   | Drawn                            |
+| -------- | -------------------------------------------------------------------------------------- | -------------------------------- |
+| `key`    | the author's own `mark`, which nothing here second-guesses                             | ruled in the accent, in the rail |
+| `minor`  | a hunk whose changed lines are all imports or all comments, or two short changed lines | dimmed, quiet, code folded       |
+| `normal` | everything else                                                                        | as it always was                 |
 
 Three things the rule gets right on purpose. **A region is never `minor`** — it is in the pack because
 somebody decided the change could not be judged without it. **The author's `key` wins over every
@@ -543,7 +543,7 @@ two callers" is.
 | `text`       | the sentence                                                                                                                                                                                               |
 | `provenance` | where it came from ([Provenance](#provenance))                                                                                                                                                             |
 | `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has                                                                                                                                  |
-| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has. **Folded on both pages**: it is the working, not the answer, and it runs to a paragraph of paths and greps    |
+| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has. **Folded on both pages**: it is the working, not the answer, and it runs to a paragraph of paths and greps     |
 | `finding`    | on a `false` claim and on nothing else: what is wrong and what follows ([What a false claim does](#what-a-false-claim-does)); null until it has, and null on every claim that held or could not be decided |
 
 ### Provenance
@@ -1014,6 +1014,7 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
    file answers exactly one question a reviewer has — what does it cover — and a wall of `using`
    lines answers it nowhere. The names are the code's own, humanised; the code stays a fold away, all
    of it, because the document [carries its code](#the-document-carries-its-code).
+
 5. **Covered by.** Under the walk and above the claims, the idea's `coverage` as bare bullets — the
    scenarios its tests cover, named and not explained. Absent where the list is empty. It sits here
    rather than in a section of its own for [the reason tests are never an idea](#tests-are-never-an-idea).
@@ -1098,8 +1099,9 @@ The page fetches the two pads the author was handed — the pull request's own a
 per open, and draws the entry a `witnessed` or `disputed` claim cites verbatim beside it; an entry
 neither pad carries is said to be missing rather than left blank. The renderer's own copy of the
 schema number is `KNOWN_REVIEW_PACK_SCHEMA` in `web/src/view/reviewPack.ts`, restated there because
-the cockpit may name nothing of the harness but `src/wire.ts`, which carries no runtime; the test
-pins it to `REVIEW_PACK_SCHEMA`.
+the harness's `REVIEW_PACK_SCHEMA` lives in `src/store/reviewPacks.ts` — a store module, which is the
+one thing [the contract](#one-copy-of-the-derivations) may not pass through to the browser; the test
+pins the two together.
 
 **The HTML companion** — _built_, stage 6. `renderReviewPackCompanion` in
 `src/reviewPacks/companion.ts` is a single self-contained file rendered by the harness from the pack
@@ -1116,18 +1118,39 @@ earlier shape and is rejected for the reason [20](20-validation.md#the-skill) ke
 the checkout: a copy that travels with a checkout is the stale one, and this renderer's one job is to
 not be.
 
-**It draws the same page, from a second copy of the derivations.** The numbering, the false-claim
-list and the facts line are in `src/reviewPacks/derive.ts` for the companion and
-`web/src/view/reviewPack.ts` for the cockpit, and neither can import the other: `web/src/` may name
-no server module but `src/wire.ts`, which carries no runtime, so there is no one place both can
-reach. The arrangement is the one `KNOWN_REVIEW_PACK_SCHEMA` already has and the defence is the same
-— `test/reviewPackCompanion.test.ts` runs both over one pack and asserts they agree, so a rule
-changed on one side and not the other fails there rather than shipping two pages that disagree about
-which idea is number one. Two differences are deliberate and are the absence of a harness rather than
+**It draws the same page, from the same derivations.** Two differences are deliberate and are the absence of a harness rather than
 a second design: every idea is open, because there is no address bar to hold which one is not — which
 is why its [contents rail](#the-contents-rail) lists every stop where the cockpit's lists the open
 idea's; and a `witnessed` claim's pad entry is **said to have stayed behind** rather than drawn,
 because a shared pack carries the document and nothing else.
+
+### One copy of the derivations
+
+_Built._ `src/reviewPacks/derive.ts`, re-exported by `src/wire.ts`, re-exported onward by
+`web/src/view/reviewPack.ts`; `test/wireRuntime.test.ts` holds it.
+
+The numbering, the false-claim list, the facts line, the code block, the stop weights, the
+highlighter and the test scenarios are **one module**, read by the companion server-side and by the
+cockpit's page. They were two byte-identical copies — some three hundred lines, a syntax highlighter
+among them — because `web/src/` may name no server module but `src/wire.ts` and the contract carried
+no runtime at all, so there was no one place both could reach. The defence was a test
+(`test/reviewPackCompanion.test.ts`) that ran both over one pack and asserted they agreed, which
+catches drift only in what it thought to compare.
+
+So the contract carries **one** runtime module, deliberately. `src/reviewPacks/derive.ts` is a leaf:
+pure functions of the pack document, importing `src/types.ts` for types and nothing else, so nothing
+server-only rides into the SPA bundle with it. That is the whole permission — `src/wire.ts` is
+otherwise still type-only, and `test/wireContract.test.ts` still holds that it declares no runtime of
+its own. What that test cannot see is a **re-export**, which is not a declaration: a
+`export { … } from './store/…'` would pass it with the harness behind it. `test/wireRuntime.test.ts`
+is the one that reads the re-exports — it pins the list of modules the contract may pass a value
+through, walks each one's imports for a node builtin or a value import, and holds that nothing under
+`web/src/` re-exports from a server module other than the contract.
+
+`layMarks` is **not** here. Its rule is stated a second time, partially, in
+`src/reviewPacks/calibration.ts` ([whether prominence works](#whether-prominence-works)); the two
+shapes differ enough that folding them is a change rather than a move, and this door now makes that
+possible rather than doing it.
 
 ### The contents rail
 
@@ -1293,9 +1316,10 @@ the window — one pack per pull request, so a pull request asked three times is
 times, and the pack counted is the one the page draws. Every mark on that pull request is laid over it
 whenever it was made, by the rule [`layMarks`](#what-a-reviewer-does-is-not-part-of-the-pack) lays
 them: an idea is overridden only when every hunk it owns agrees on one label, and seen only when every
-hunk it owns is. That rule is stated twice — once server-side and once in the cockpit — for
-`KNOWN_REVIEW_PACK_SCHEMA`'s reason: `web/src/` may name no server module but `src/wire.ts`, which
-carries no runtime.
+hunk it owns is. That rule is stated twice — `layMarks` in the cockpit and a narrower reading of
+the same marks here — and, unlike the rest of the derivations, has not been folded into
+[the one copy](#one-copy-of-the-derivations): this side needs no `read`, and the two shapes differ
+enough that folding them would be a change rather than a move.
 
 Two details that are easy to get wrong:
 

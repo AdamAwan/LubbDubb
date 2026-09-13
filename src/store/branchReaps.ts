@@ -6,13 +6,13 @@ export class BranchReapStore {
   constructor(private readonly ctx: StoreContext) {}
 
   recordBranchReap(prNumber: number, branch: string): void {
-    this.ctx.db
-      .prepare(`INSERT OR REPLACE INTO branch_reaps (pr_number, branch, at) VALUES (?, ?, ?)`)
+    this.ctx
+      .prep(`INSERT OR REPLACE INTO branch_reaps (pr_number, branch, at) VALUES (?, ?, ?)`)
       .run(prNumber, branch, this.ctx.now());
   }
 
   reapedPrs(): ReadonlySet<number> {
-    const rows = this.ctx.db.prepare(`SELECT pr_number FROM branch_reaps`).all() as { pr_number: number }[];
+    const rows = this.ctx.prep(`SELECT pr_number FROM branch_reaps`).all() as { pr_number: number }[];
     return new Set(rows.map((r) => r.pr_number));
   }
 }

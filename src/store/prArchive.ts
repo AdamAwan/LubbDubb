@@ -9,7 +9,7 @@ export class PrArchiveStore {
   archiveClosedPrs(prs: readonly PullRequest[]): void {
     if (prs.length === 0) return;
     const at = this.ctx.now();
-    const stmt = this.ctx.db.prepare(
+    const stmt = this.ctx.prep(
       `INSERT INTO pr_archive (number, closed_at, first_seen_at, updated_at, snapshot)
        VALUES (@number, @closedAt, @at, @at, @snapshot)
        ON CONFLICT(number) DO UPDATE SET
@@ -26,8 +26,8 @@ export class PrArchiveStore {
   }
 
   listArchivedPrs(): PullRequest[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT snapshot FROM pr_archive ORDER BY COALESCE(closed_at, first_seen_at) DESC, number DESC`)
+    const rows = this.ctx
+      .prep(`SELECT snapshot FROM pr_archive ORDER BY COALESCE(closed_at, first_seen_at) DESC, number DESC`)
       .all() as { snapshot: string }[];
     return rows.map((row) => JSON.parse(row.snapshot) as PullRequest);
   }

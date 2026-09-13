@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
-import { systemClock, type Clock, type StoreContext } from './context.js';
+import { createPrepare, systemClock, type Clock, type StoreContext } from './context.js';
 import { dropRetiredTables, ensureColumns, rebuildTables, renameTables } from './migrate.js';
 import { POOL_RETIRED_TABLES, PoolStore } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
@@ -169,7 +169,7 @@ export class Store {
       this.db,
       partialGoalRefs.map((row) => row.goal_ref),
     );
-    const ctx: StoreContext = { db: this.db, now: clock };
+    const ctx: StoreContext = { db: this.db, now: clock, prep: createPrepare(this.db) };
     this.tasks = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);

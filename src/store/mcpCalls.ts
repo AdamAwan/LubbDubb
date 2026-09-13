@@ -26,8 +26,8 @@ export class McpCallStore {
       argsDropped: false,
       createdAt: this.ctx.now(),
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO mcp_calls (id, channel, tool, agent_id, task_id, origin_ref, ok, error, duration_ms, args, args_bytes, args_dropped, created_at)
          VALUES (@id, @channel, @tool, @agentId, @taskId, @originRef, @ok, @error, @durationMs, @args, @argsBytes, 0, @createdAt)`,
       )
@@ -47,29 +47,29 @@ export class McpCallStore {
 
   private clearArgs(cutoff: string | null): number {
     const bound = cutoff === null ? '' : 'created_at < ? AND ';
-    const result = this.ctx.db
-      .prepare(`UPDATE mcp_calls SET args=NULL, args_dropped=1 WHERE ${bound}args_dropped=0 AND args IS NOT NULL`)
+    const result = this.ctx
+      .prep(`UPDATE mcp_calls SET args=NULL, args_dropped=1 WHERE ${bound}args_dropped=0 AND args IS NOT NULL`)
       .run(...(cutoff === null ? [] : [cutoff]));
     return result.changes;
   }
 
   listMcpCallsSince(since: string): McpCall[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM mcp_calls WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM mcp_calls WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
       .all(since) as McpCallRow[];
     return rows.map(rowToCall);
   }
 
   lastMcpCallByTool(): Map<string, string> {
-    const rows = this.ctx.db
-      .prepare(`SELECT channel, tool, MAX(created_at) AS last FROM mcp_calls GROUP BY channel, tool`)
+    const rows = this.ctx
+      .prep(`SELECT channel, tool, MAX(created_at) AS last FROM mcp_calls GROUP BY channel, tool`)
       .all() as { channel: string; tool: string; last: string }[];
     return new Map(rows.map((r) => [`${r.channel}:${r.tool}`, r.last]));
   }
 
   countMcpCallsByAgent(): Map<string, number> {
-    const rows = this.ctx.db
-      .prepare(`SELECT agent_id AS agentId, COUNT(*) AS n FROM mcp_calls WHERE agent_id IS NOT NULL GROUP BY agent_id`)
+    const rows = this.ctx
+      .prep(`SELECT agent_id AS agentId, COUNT(*) AS n FROM mcp_calls WHERE agent_id IS NOT NULL GROUP BY agent_id`)
       .all() as { agentId: string; n: number }[];
     return new Map(rows.map((r) => [r.agentId, r.n]));
   }

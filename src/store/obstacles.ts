@@ -165,28 +165,28 @@ export class ObstacleStore {
   }
 
   claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
-    const result = this.ctx.db
-      .prepare(`INSERT OR IGNORE INTO obstacle_notices (obstacle_id, agent_id, reason, created_at) VALUES (?,?,?,?)`)
+    const result = this.ctx
+      .prep(`INSERT OR IGNORE INTO obstacle_notices (obstacle_id, agent_id, reason, created_at) VALUES (?,?,?,?)`)
       .run(obstacleId, agentId, reason, this.ctx.now());
     return result.changes > 0;
   }
 
   obstaclesNoticedBy(agentId: string): Set<string> {
-    const rows = this.ctx.db.prepare(`SELECT obstacle_id FROM obstacle_notices WHERE agent_id=?`).all(agentId) as {
+    const rows = this.ctx.prep(`SELECT obstacle_id FROM obstacle_notices WHERE agent_id=?`).all(agentId) as {
       obstacle_id: string;
     }[];
     return new Set(rows.map((row) => row.obstacle_id));
   }
 
   obstacleNoticesSent(): number {
-    const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
+    const row = this.ctx.prep(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
     return row.n;
   }
 
   claimObstacle(id: string): boolean {
     const at = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE obstacles SET state='owned', updated_at=?
            WHERE id=? AND state='standing' AND owner_ref IS NULL`,
       )
@@ -195,14 +195,14 @@ export class ObstacleStore {
   }
 
   setObstacleOwner(id: string, ownerRef: string): void {
-    this.ctx.db
-      .prepare(`UPDATE obstacles SET owner_ref=?, updated_at=? WHERE id=? AND state='owned'`)
+    this.ctx
+      .prep(`UPDATE obstacles SET owner_ref=?, updated_at=? WHERE id=? AND state='owned'`)
       .run(ownerRef, this.ctx.now(), id);
   }
 
   releaseObstacle(id: string): void {
-    this.ctx.db
-      .prepare(`UPDATE obstacles SET state='standing', updated_at=? WHERE id=? AND state='owned' AND owner_ref IS NULL`)
+    this.ctx
+      .prep(`UPDATE obstacles SET state='standing', updated_at=? WHERE id=? AND state='owned' AND owner_ref IS NULL`)
       .run(this.ctx.now(), id);
   }
 
@@ -214,8 +214,8 @@ export class ObstacleStore {
     note: string;
   }): ObstacleBlock {
     const at = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO obstacle_blocks (origin_ref, obstacle_id, agent_id, task_id, note, created_at)
          VALUES (?,?,?,?,?,?)
          ON CONFLICT(origin_ref) DO UPDATE SET
@@ -227,9 +227,7 @@ export class ObstacleStore {
   }
 
   listObstacleBlocks(): ObstacleBlock[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacle_blocks ORDER BY created_at ASC, rowid ASC`)
-      .all() as BlockRow[];
+    const rows = this.ctx.prep(`SELECT * FROM obstacle_blocks ORDER BY created_at ASC, rowid ASC`).all() as BlockRow[];
     return rows.map((row) => ({
       originRef: row.origin_ref,
       obstacleId: row.obstacle_id,
@@ -241,8 +239,8 @@ export class ObstacleStore {
   }
 
   endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE obstacles SET state=?, ended_by=?, updated_at=?
            WHERE id=? AND state IN ('sighted','standing','owned')`,
       )
@@ -253,21 +251,21 @@ export class ObstacleStore {
   muteObstacle(id: string, muted: boolean): boolean {
     const at = this.ctx.now();
     const result = muted
-      ? this.ctx.db
-          .prepare(
+      ? this.ctx
+          .prep(
             `UPDATE obstacles SET state='muted', ended_by=NULL, updated_at=?
                WHERE id=? AND state IN ('sighted','standing','owned')`,
           )
           .run(at, id)
-      : this.ctx.db
-          .prepare(`UPDATE obstacles SET state='standing', ended_by=NULL, updated_at=? WHERE id=? AND state='muted'`)
+      : this.ctx
+          .prep(`UPDATE obstacles SET state='standing', ended_by=NULL, updated_at=? WHERE id=? AND state='muted'`)
           .run(at, id);
     return result.changes > 0;
   }
 
   watchObstacleCondition(input: { obstacleId: string; kind: 'check-green'; checkName: string; branch: string }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO obstacle_conditions (id, obstacle_id, kind, check_name, branch, met_at, created_at)
          VALUES (?,?,?,?,?,NULL,?)`,
       )
@@ -275,25 +273,23 @@ export class ObstacleStore {
   }
 
   listObstacleConditions(obstacleId: string): ObstacleCondition[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacle_conditions WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM obstacle_conditions WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
       .all(obstacleId) as ConditionRow[];
     return rows.map(toCondition);
   }
 
   setObstacleConditionMet(id: string, met: boolean): void {
     if (!met) {
-      this.ctx.db.prepare(`UPDATE obstacle_conditions SET met_at=NULL WHERE id=? AND met_at IS NOT NULL`).run(id);
+      this.ctx.prep(`UPDATE obstacle_conditions SET met_at=NULL WHERE id=? AND met_at IS NOT NULL`).run(id);
       return;
     }
-    this.ctx.db
-      .prepare(`UPDATE obstacle_conditions SET met_at=? WHERE id=? AND met_at IS NULL`)
-      .run(this.ctx.now(), id);
+    this.ctx.prep(`UPDATE obstacle_conditions SET met_at=? WHERE id=? AND met_at IS NULL`).run(this.ctx.now(), id);
   }
 
   recordObstacleWriteUp(obstacleId: string, jobId: string): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO obstacle_writeups (obstacle_id, job_id, pr_ref, outcome, created_at, settled_at)
          VALUES (?,?,NULL,NULL,?,NULL)`,
       )
@@ -301,44 +297,44 @@ export class ObstacleStore {
   }
 
   obstaclesWrittenUp(): Set<string> {
-    const rows = this.ctx.db.prepare(`SELECT obstacle_id FROM obstacle_writeups`).all() as { obstacle_id: string }[];
+    const rows = this.ctx.prep(`SELECT obstacle_id FROM obstacle_writeups`).all() as { obstacle_id: string }[];
     return new Set(rows.map((row) => row.obstacle_id));
   }
 
   openObstacleWriteUps(): ObstacleWriteUp[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacle_writeups WHERE outcome IS NULL ORDER BY created_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM obstacle_writeups WHERE outcome IS NULL ORDER BY created_at ASC`)
       .all() as WriteUpRow[];
     return rows.map(toWriteUp);
   }
 
   noteObstacleWriteUpPr(obstacleId: string, prRef: string): void {
-    this.ctx.db
-      .prepare(`UPDATE obstacle_writeups SET pr_ref=? WHERE obstacle_id=? AND pr_ref IS NULL AND outcome IS NULL`)
+    this.ctx
+      .prep(`UPDATE obstacle_writeups SET pr_ref=? WHERE obstacle_id=? AND pr_ref IS NULL AND outcome IS NULL`)
       .run(prRef, obstacleId);
   }
 
   settleObstacleWriteUp(obstacleId: string, outcome: ObstacleWriteUpOutcome): boolean {
-    const result = this.ctx.db
-      .prepare(`UPDATE obstacle_writeups SET outcome=?, settled_at=? WHERE obstacle_id=? AND outcome IS NULL`)
+    const result = this.ctx
+      .prep(`UPDATE obstacle_writeups SET outcome=?, settled_at=? WHERE obstacle_id=? AND outcome IS NULL`)
       .run(outcome, this.ctx.now(), obstacleId);
     return result.changes > 0;
   }
 
   clearObstacleBlock(originRef: string): void {
-    this.ctx.db.prepare(`DELETE FROM obstacle_blocks WHERE origin_ref=?`).run(originRef);
+    this.ctx.prep(`DELETE FROM obstacle_blocks WHERE origin_ref=?`).run(originRef);
   }
 
   obstacleInbox(): ObstacleStanding[] {
     const read = new Map(
-      (this.ctx.db.prepare(`SELECT obstacle_id, read_at FROM obstacle_readings`).all() as ReadingRow[]).map((row) => [
+      (this.ctx.prep(`SELECT obstacle_id, read_at FROM obstacle_readings`).all() as ReadingRow[]).map((row) => [
         row.obstacle_id,
         row.read_at,
       ]),
     );
     const spoken = new Set(
       (
-        this.ctx.db.prepare(`SELECT DISTINCT obstacle_id FROM obstacle_sightings WHERE transition IS NULL`).all() as {
+        this.ctx.prep(`SELECT DISTINCT obstacle_id FROM obstacle_sightings WHERE transition IS NULL`).all() as {
           obstacle_id: string;
         }[]
       ).map((row) => row.obstacle_id),
@@ -352,7 +348,7 @@ export class ObstacleStore {
   }
 
   obstacleReading(obstacleId: string): ObstacleDeskReading | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM obstacle_readings WHERE obstacle_id=?`).get(obstacleId) as
+    const row = this.ctx.prep(`SELECT * FROM obstacle_readings WHERE obstacle_id=?`).get(obstacleId) as
       | ReadingRow
       | undefined;
     return row ? toReading(row) : null;
@@ -365,8 +361,8 @@ export class ObstacleStore {
     title: string | null;
     body: string | null;
   }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO obstacle_readings (obstacle_id, read_at, taken_at, purpose, title, body)
            VALUES (?,?,?,?,?,?)
          ON CONFLICT(obstacle_id) DO UPDATE SET
@@ -379,7 +375,7 @@ export class ObstacleStore {
   addObstacleKeys(obstacleId: string, keys: readonly GatedKey[]): { added: number; taken: string[] } {
     return this.ctx.db.transaction((): { added: number; taken: string[] } => {
       const at = this.ctx.now();
-      const insert = this.ctx.db.prepare(
+      const insert = this.ctx.prep(
         `INSERT OR IGNORE INTO obstacle_keys (id, obstacle_id, kind, value, binds, confirmations, created_at)
          VALUES (?,?,?,?,?,0,?)`,
       );
@@ -402,16 +398,16 @@ export class ObstacleStore {
   suggestObstacleMerge(obstacleId: string, suggestedId: string, source: 'model' | 'key'): void {
     if (obstacleId === suggestedId) return;
     if (this.getObstacle(suggestedId) === null) return;
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO obstacle_suggestions (obstacle_id, suggested_id, source, created_at) VALUES (?,?,?,?)`,
       )
       .run(obstacleId, suggestedId, source, this.ctx.now());
   }
 
   listObstacleSuggestions(obstacleId: string): NearCandidate[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT o.id AS id, o.what AS what FROM obstacle_suggestions s
            JOIN obstacles o ON o.id = CASE WHEN s.obstacle_id=? THEN s.suggested_id ELSE s.obstacle_id END
          WHERE s.obstacle_id=? OR s.suggested_id=?
@@ -422,8 +418,8 @@ export class ObstacleStore {
   }
 
   setObstacleKind(id: string, kind: ObstacleKind): boolean {
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE obstacles SET kind=?, updated_at=?
            WHERE id=? AND kind<>? AND owner_ref IS NULL AND state IN ('sighted','standing')
              AND NOT EXISTS (SELECT 1 FROM obstacle_writeups WHERE obstacle_id=?)`,
@@ -446,27 +442,25 @@ export class ObstacleStore {
   }
 
   getObstacle(id: string): Obstacle | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM obstacles WHERE id=?`).get(id) as ObstacleRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM obstacles WHERE id=?`).get(id) as ObstacleRow | undefined;
     return row ? toObstacle(row) : null;
   }
 
   listObstacles(): Obstacle[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacles ORDER BY last_seen_at DESC, rowid DESC`)
-      .all() as ObstacleRow[];
+    const rows = this.ctx.prep(`SELECT * FROM obstacles ORDER BY last_seen_at DESC, rowid DESC`).all() as ObstacleRow[];
     return rows.map(toObstacle);
   }
 
   listObstacleKeys(obstacleId: string): ObstacleKey[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacle_keys WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM obstacle_keys WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
       .all(obstacleId) as KeyRow[];
     return rows.map(toKey);
   }
 
   listObstacleSightings(obstacleId: string): ObstacleSighting[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM obstacle_sightings WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM obstacle_sightings WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
       .all(obstacleId) as SightingRow[];
     return rows.map(toSighting);
   }
@@ -508,8 +502,8 @@ export class ObstacleStore {
       lastSeenAt: at,
       endedBy: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO obstacles (id, what, kind, state, owner_ref, until, created_at, updated_at, last_seen_at)
          VALUES (?,?,?,?,?,?,?,?,?)`,
       )
@@ -519,7 +513,7 @@ export class ObstacleStore {
 
   private attachKeys(obstacleId: string, keys: readonly GatedKey[], at: string): string {
     const movable = new Set(resolvingKeys(keys).map((key) => key.value));
-    const insert = this.ctx.db.prepare(
+    const insert = this.ctx.prep(
       `INSERT OR IGNORE INTO obstacle_keys (id, obstacle_id, kind, value, binds, confirmations, created_at)
        VALUES (?,?,?,?,?,0,?)`,
     );
@@ -533,16 +527,16 @@ export class ObstacleStore {
   }
 
   private obstacleIdForKey(value: string): string | null {
-    const row = this.ctx.db.prepare(`SELECT obstacle_id FROM obstacle_keys WHERE value=?`).get(value) as
+    const row = this.ctx.prep(`SELECT obstacle_id FROM obstacle_keys WHERE value=?`).get(value) as
       | { obstacle_id: string }
       | undefined;
     return row?.obstacle_id ?? null;
   }
 
   private foldInto(from: string, to: string): void {
-    this.ctx.db.prepare(`UPDATE obstacle_keys SET obstacle_id=? WHERE obstacle_id=?`).run(to, from);
-    this.ctx.db
-      .prepare(
+    this.ctx.prep(`UPDATE obstacle_keys SET obstacle_id=? WHERE obstacle_id=?`).run(to, from);
+    this.ctx
+      .prep(
         `DELETE FROM obstacles WHERE id=? AND NOT EXISTS
        (SELECT 1 FROM obstacle_sightings WHERE obstacle_id=?)`,
       )
@@ -550,7 +544,7 @@ export class ObstacleStore {
   }
 
   private insertSighting(obstacleId: string, observer: ObstacleObserver, matchedBy: string, at: string): string {
-    const statement = this.ctx.db.prepare(
+    const statement = this.ctx.prep(
       `INSERT INTO obstacle_sightings
            (id, obstacle_id, agent_id, task_id, goal_ref, session_id, transition, words, why_not_mine, matched_by, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
@@ -573,8 +567,8 @@ export class ObstacleStore {
   }
 
   private setState(obstacle: Obstacle, state: ObstacleState, at: string): Obstacle {
-    this.ctx.db
-      .prepare(`UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=? WHERE id=?`)
+    this.ctx
+      .prep(`UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=? WHERE id=?`)
       .run(state, at, at, obstacle.id);
     return { ...obstacle, state, endedBy: null, updatedAt: at, lastSeenAt: at };
   }

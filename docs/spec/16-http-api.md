@@ -2280,6 +2280,13 @@ Four properties hold it together:
   about what gets bundled; `import type` is erased first. `test/wireContract.test.ts` asserts it
   structurally rather than trusting it: the shared modules must declare no runtime and import nothing
   by value, and `src/wire.ts` must be the **only** server module anything under `web/src/` names.
+  The declaration half still holds, but "imports nothing by value" is no longer the whole rule:
+  `src/wire.ts` also **re-exports** a named allow-list of pure derivations, so that the cockpit and the
+  server share one copy rather than two
+  ([31](31-review-packs.md#one-copy-of-the-derivations)). A re-export is invisible to the checks
+  above — they read declarations and `import` lines — so what a re-export may reach is pinned
+  separately by `test/wireRuntime.test.ts`, which walks each allowed module's transitive relative
+  imports and refuses a node builtin or a package value import.
 - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
   `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
   file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`
@@ -2396,11 +2403,16 @@ of the deployment.
 
 #### How a patch reaches the cockpit
 
-`buildStateSections(system, want, opts)` assembles one section literal per requested name. The shared
-reads keep the snapshot's "read once and share, so two parts of the UI cannot disagree" discipline;
-the derivations that only some sections need — the enriched open-PR list, the spend roll-up, the
-overlap detection, the spend roll-up — are `once()` thunks, so a section nobody asked for pays for
-nothing while a value two sections share is still taken once.
+`buildStateSections(system, want, opts)` assembles one section literal per requested name. What it
+reads eagerly is only what every call owes whatever `want` says — the world baseline and the rows
+`refUrls` is keyed from. **Everything else is a `once()` thunk, called at its use site**, so a store
+read happens only when a requested section actually needs it, while the snapshot's "read once and
+share, so two parts of the UI cannot disagree" discipline still holds for a value two sections want:
+the enriched open-PR list, the plan parts and their per-plan index, the pickup and PR-attention
+contexts, the fleet history, the spend roll-up, the overlap detection, the validation checks, the
+goal verdict rows and the remote sheets are all taken that way. A value added to the prologue belongs
+behind `once()` too — read eagerly it is paid for by `?sections=control`, which ships nothing else at
+all.
 
 The browser holds **one complete `AppState`** and merges each patch over it, so `buildViewModel` and
 every surface under it go on receiving a whole object and never learn that anything arrived in parts.

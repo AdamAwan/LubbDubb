@@ -8,8 +8,8 @@ export class UpgradeStore {
   constructor(private readonly ctx: StoreContext) {}
 
   readUpgradeIntent(): UpgradeIntent {
-    const row = this.ctx.db
-      .prepare(`SELECT state, target_sha, requested_at, paused_by_drain FROM upgrade_intent WHERE id = 1`)
+    const row = this.ctx
+      .prep(`SELECT state, target_sha, requested_at, paused_by_drain FROM upgrade_intent WHERE id = 1`)
       .get() as UpgradeRow | undefined;
     if (!row) return IDLE_INTENT;
     return {
@@ -21,8 +21,8 @@ export class UpgradeStore {
   }
 
   writeUpgradeIntent(intent: UpgradeIntent): UpgradeIntent {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO upgrade_intent (id, state, target_sha, requested_at, paused_by_drain, updated_at)
          VALUES (1, @state, @targetSha, @requestedAt, @pausedByDrain, @updatedAt)
          ON CONFLICT(id) DO UPDATE SET

@@ -14,6 +14,7 @@ import type {
   LocalValidation,
   LocalRunReadings,
   LocalRunTurn,
+  Plan,
   PlanPart,
   Retrospective,
   ScratchPadSummary,
@@ -143,11 +144,11 @@ export function buildStateSections(
   };
   const archivedPullRequests = store.prArchive.listArchivedPrs();
   const tasks = store.tasks.listTasks();
-  const agents = store.agents.listAgents();
-  const history = once(() => fleetHistory(agents, tasks));
+  const agents = once(() => store.agents.listAgents());
+  const history = once(() => fleetHistory(agents(), tasks));
   const control = runtimeControl.snapshot();
-  const flags = store.agents.listAllFlags();
-  const attachments = store.jobs.listAllAttachments();
+  const flags = once(() => store.agents.listAllFlags());
+  const attachments = once(() => store.jobs.listAllAttachments());
   const humanTasks = store.humanTasks.listHumanTasks();
   const ejectionViews = (): EjectionView[] =>
     store.ejections.listEjections(EJECTION_ROWS).map((row) => ({
@@ -157,139 +158,175 @@ export function buildStateSections(
         row.lastSeenAt === null &&
         Date.now() - Date.parse(row.ejectedAt) >= config.ejection.contactGraceMinutes * 60_000,
     }));
-  const allHumanTasks = store.humanTasks.listAllHumanTasks();
+  const allHumanTasks = once(() => store.humanTasks.listAllHumanTasks());
   const proposals = store.escalations.listProposals();
   const bugFilings = store.bugFilings.listBugFilings();
-  const overlapAgents = agents.slice(0, OVERLAP_AGENT_WINDOW);
-  const overlaps = once(() =>
-    detectFileOverlaps({
+  const overlaps = once(() => {
+    const overlapAgents = agents().slice(0, OVERLAP_AGENT_WINDOW);
+    return detectFileOverlaps({
       files: store.agents.listFilesForAgents(overlapAgents.map((a) => a.id)),
       agents: overlapAgents,
       tasks,
-    }),
-  );
+    });
+  });
   const plans = store.plans.listPlans();
-  const planParts = store.plans.listAllPlanParts();
-  const stacks = buildStacks(world.pullRequests, plans, planParts, config.defaultBranch);
-  const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
-  const mergedPrs = store.graph.mergedPrs();
-  const landings = store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
-  const planPartsOf = (origin: string): PlanPart[] => {
-    const plan = plans.find((p) => p.originRef === origin);
-    return plan ? planParts.filter((p) => p.planId === plan.id) : [];
-  };
-  const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
-  const partOrigins = new Set(
-    plans.flatMap((plan) => {
-      const issueNumber = planIssueNumber(plan.originRef);
-      if (issueNumber === null) return [];
-      return planParts.filter((p) => p.planId === plan.id).map((p) => partOrigin(issueNumber, p.slug));
-    }),
-  );
-  const driftFiles = store.agents.listFilesForAgents([
-    ...new Set(
-      tasks.flatMap((t) =>
-        t.originRef !== null && partOrigins.has(t.originRef) && t.agentId !== null ? [t.agentId] : [],
-      ),
-    ),
-  ]);
-  const drift = new Map<string, string[]>();
-  for (const plan of plans) {
-    const issueNumber = planIssueNumber(plan.originRef);
-    if (issueNumber === null) continue;
-    for (const d of planScopeDrift(
-      issueNumber,
-      planParts.filter((p) => p.planId === plan.id),
-      tasks,
-      driftFiles,
-    )) {
-      drift.set(d.partId, d.paths);
+  const planParts = once(() => store.plans.listAllPlanParts());
+  const partsByPlan = once(() => {
+    const byPlan = new Map<string, PlanPart[]>();
+    for (const part of planParts()) {
+      const held = byPlan.get(part.planId);
+      if (held) held.push(part);
+      else byPlan.set(part.planId, [part]);
     }
-  }
-  const partIndexes = new Map(plans.map((plan) => [plan.id, bySlug(planParts.filter((p) => p.planId === plan.id))]));
-  const wirePlanParts: PlanPartView[] = planParts.map((part) => ({
-    ...part,
-    depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
-    acceptanceCriteria: acceptanceCriteria(part),
-    outsideScope: drift.get(part.id) ?? [],
-  }));
+    return byPlan;
+  });
+  const partsOfPlan = (planId: string): PlanPart[] => partsByPlan().get(planId) ?? [];
+  const planByOrigin = once(() => {
+    const byOrigin = new Map<string, Plan>();
+    for (const plan of plans) if (!byOrigin.has(plan.originRef)) byOrigin.set(plan.originRef, plan);
+    return byOrigin;
+  });
+  const planPartsOf = (origin: string): PlanPart[] => {
+    const plan = planByOrigin().get(origin);
+    return plan ? partsOfPlan(plan.id) : [];
+  };
+  const stacks = once(() => buildStacks(world.pullRequests, plans, planParts(), config.defaultBranch));
+  const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
+  const mergedPrs = once(() => store.graph.mergedPrs());
+  const landings = once(() =>
+    store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped'),
+  );
+  const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
+  const drift = once(() => {
+    const partOrigins = new Set(
+      plans.flatMap((plan) => {
+        const issueNumber = planIssueNumber(plan.originRef);
+        if (issueNumber === null) return [];
+        return partsOfPlan(plan.id).map((p) => partOrigin(issueNumber, p.slug));
+      }),
+    );
+    const driftFiles = store.agents.listFilesForAgents([
+      ...new Set(
+        tasks.flatMap((t) =>
+          t.originRef !== null && partOrigins.has(t.originRef) && t.agentId !== null ? [t.agentId] : [],
+        ),
+      ),
+    ]);
+    const drifted = new Map<string, string[]>();
+    for (const plan of plans) {
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null) continue;
+      for (const d of planScopeDrift(issueNumber, partsOfPlan(plan.id), tasks, driftFiles)) {
+        drifted.set(d.partId, d.paths);
+      }
+    }
+    return drifted;
+  });
+  const wirePlanParts = once((): PlanPartView[] => {
+    const partIndexes = new Map(plans.map((plan) => [plan.id, bySlug(partsOfPlan(plan.id))]));
+    const drifted = drift();
+    return planParts().map((part) => ({
+      ...part,
+      depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
+      acceptanceCriteria: acceptanceCriteria(part),
+      outsideScope: drifted.get(part.id) ?? [],
+    }));
+  });
   const claimNow = new Date().toISOString();
-  const validationChecks: ValidationCheckView[] = store.validation
-    .listAllValidationChecks()
-    .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes))
-    .map((check) => ({ ...check, captureUrl: captureUrl(check, opts?.validationCaptureSigner) }));
-  const checksByGoal = new Map<string, typeof validationChecks>();
-  for (const check of validationChecks) {
-    const list = checksByGoal.get(check.originRef);
-    if (list) list.push(check);
-    else checksByGoal.set(check.originRef, [check]);
-  }
-  const wireValidationResources: ValidationResourceView[] = store.validation
-    .listAllValidationResources()
-    .map((resource) => {
+  const validationChecks = once((): ValidationCheckView[] =>
+    store.validation
+      .listAllValidationChecks()
+      .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes))
+      .map((check) => ({ ...check, captureUrl: captureUrl(check, opts?.validationCaptureSigner) })),
+  );
+  const checksByGoal = once(() => {
+    const byGoal = new Map<string, ValidationCheckView[]>();
+    for (const check of validationChecks()) {
+      const list = byGoal.get(check.originRef);
+      if (list) list.push(check);
+      else byGoal.set(check.originRef, [check]);
+    }
+    return byGoal;
+  });
+  const wireValidationResources = once((): ValidationResourceView[] =>
+    store.validation.listAllValidationResources().map((resource) => {
       const path = validationResourcePath(config.validationRoot, resource.originRef, resource.name);
       return { ...resource, path, present: existsSync(path) };
-    });
-  const conclusions = new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c]));
-  const deliveries = store.verdicts.listDeliveries();
-  const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
-  const deliveryWindow = deliverySignalQuery(deliveries);
+    }),
+  );
+  const conclusions = once(() => new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c])));
+  const deliveries = once(() => store.verdicts.listDeliveries());
+  const deliveriesByOrigin = once(() => new Map(deliveries().map((d) => [d.originRef, d])));
+  const deliverySignals = once(() => {
+    const query = deliverySignalQuery(deliveries());
+    return query ? store.world.listWorldEventsSince(query.since, query.refs) : [];
+  });
   const issueRuns = store.floor.listIssueRuns();
   const runByOrigin = new Map(issueRuns.map((r) => [r.originRef, r]));
-  const shortfalls = store.verdicts.listShortfalls();
-  const shortfallsByOrigin = new Map(shortfalls.map((s) => [s.originRef, s]));
-  const padsByOrigin = new Map(store.scratch.listScratchPadSummaries().map((p) => [p.padRef, p]));
-  const instructionsByOrigin = new Map<string, IssueInstruction[]>();
-  for (const instruction of store.instructions.listAllStandingInstructions()) {
-    const held = instructionsByOrigin.get(instruction.originRef);
-    if (held) held.push(instruction);
-    else instructionsByOrigin.set(instruction.originRef, [instruction]);
-  }
+  const shortfallsByOrigin = once(() => new Map(store.verdicts.listShortfalls().map((s) => [s.originRef, s])));
+  const padsByOrigin = once(() => new Map(store.scratch.listScratchPadSummaries().map((p) => [p.padRef, p])));
+  const instructionsByOrigin = once(() => {
+    const byOrigin = new Map<string, IssueInstruction[]>();
+    for (const instruction of store.instructions.listAllStandingInstructions()) {
+      const held = byOrigin.get(instruction.originRef);
+      if (held) held.push(instruction);
+      else byOrigin.set(instruction.originRef, [instruction]);
+    }
+    return byOrigin;
+  });
   const appraisals = store.verdicts.listAppraisals();
-  const appraisalsByOrigin = new Map(appraisals.map((a) => [a.originRef, a]));
-  const goalPauses = store.pauses.listGoalPauses();
-  const pickupCtx: IssuePickupContext = {
-    policy: {
-      ...system.issuePickup,
-      pausedIssues: pausedIssueNumbers(goalPauses, world.issues, system.issuePickup.containerTypes),
-    },
-    cooldown: DEFAULT_COOLDOWN,
-    now: world.takenAt,
-    tasks,
-    recentDecisions: store.decisions.listDecisions(200),
-    openPrs: world.pullRequests,
-    plans,
-    planParts,
-    deliveries,
-    deliverySignals: deliveryWindow ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
-    appraisals,
-    obstacleBlocks: store.obstacles.listObstacleBlocks(),
-    obstacles: store.obstacles.obstacleBoard(),
-    runs: issueRuns,
-    headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
-    paused: control.paused,
-  };
-  const reviewRows = {
+  const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
+  const recentDecisions = once(() => store.decisions.listDecisions(200));
+  const pickupCtx = once(
+    (): IssuePickupContext => ({
+      policy: {
+        ...system.issuePickup,
+        pausedIssues: pausedIssueNumbers(
+          store.pauses.listGoalPauses(),
+          world.issues,
+          system.issuePickup.containerTypes,
+        ),
+      },
+      cooldown: DEFAULT_COOLDOWN,
+      now: world.takenAt,
+      tasks,
+      recentDecisions: recentDecisions(),
+      openPrs: world.pullRequests,
+      plans,
+      planParts: planParts(),
+      deliveries: deliveries(),
+      deliverySignals: deliverySignals(),
+      appraisals,
+      obstacleBlocks: store.obstacles.listObstacleBlocks(),
+      obstacles: store.obstacles.obstacleBoard(),
+      runs: issueRuns,
+      headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
+      paused: control.paused,
+    }),
+  );
+  const reviewRows = once(() => ({
     prReviews: new Map(store.prReviews.listPrReviews().map((review) => [review.prNumber, review])),
     prReviewRoutes: new Map(store.prReviewRoutes.listPrReviewRoutes().map((route) => [route.prNumber, route])),
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
-  };
-  const signals = rejectionSignalQuery(proposals);
-  const attentionCtx: PrAttentionContext = {
-    openPrs: world.pullRequests,
-    defaultBranch: config.defaultBranch,
-    watchLabel,
-    tasks,
-    proposals,
-    rejectionSignals: signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [],
-    recentDecisions: pickupCtx.recentDecisions,
-    cooldown: DEFAULT_COOLDOWN,
-    ci: config.ci,
-    now: world.takenAt,
-    reviewWaits: store.reviewWaits.reviewWaits(),
-    review: config.review,
-    ...reviewRows,
-  };
+  }));
+  const attentionCtx = once((): PrAttentionContext => {
+    const signals = rejectionSignalQuery(proposals);
+    return {
+      openPrs: world.pullRequests,
+      defaultBranch: config.defaultBranch,
+      watchLabel,
+      tasks,
+      proposals,
+      rejectionSignals: signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [],
+      recentDecisions: recentDecisions(),
+      cooldown: DEFAULT_COOLDOWN,
+      ci: config.ci,
+      now: world.takenAt,
+      reviewWaits: store.reviewWaits.reviewWaits(),
+      review: config.review,
+      ...reviewRows(),
+    };
+  });
   const worldEvents = store.world.listWorldEvents(100);
   const shiftLog = store.decisions.listDecisions(100).map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
   const refUrls = buildRefUrls({
@@ -313,19 +350,21 @@ export function buildStateSections(
   });
   const spend = once(() =>
     rollUpIssueSpend({
-      agents,
+      agents: agents(),
       tasks,
       nodes: store.graph.listWorkNodes(),
       localRuns: store.localRuns.listLocalRuns(),
     }),
   );
-  const goalPriorities = new Map(store.priority.listGoalPriorities().map((g) => [g.originRef, { since: g.since }]));
+  const goalPriorities = once(
+    () => new Map(store.priority.listGoalPriorities().map((g) => [g.originRef, { since: g.since }])),
+  );
   const localValidations = once(
     () => new Map(store.localValidations.listLatestLocalValidations().map((v) => [v.originRef, v])),
   );
   const liveLocalRun = once(() => store.localRuns.liveLocalRun());
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
-    const checks = checksByGoal.get(origin) ?? [];
+    const checks = checksByGoal().get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
   };
   const placementCtx: PlacementContext = {
@@ -359,23 +398,23 @@ export function buildStateSections(
     const run = runByOrigin.get(origin);
     return {
       ...issue,
-      pickup: issuePickupStatus(issue, pickupCtx),
+      pickup: issuePickupStatus(issue, pickupCtx()),
       conclusion: resolveIssueConclusion(
-        conclusions.get(origin) ?? null,
-        plans.find((p) => p.originRef === origin) ?? null,
+        conclusions().get(origin) ?? null,
+        planByOrigin().get(origin) ?? null,
         planPartsOf(origin),
-        shortfallsByOrigin.get(origin) ?? null,
+        shortfallsByOrigin().get(origin) ?? null,
       ),
-      shortfall: shortfallsByOrigin.get(origin) ?? null,
-      delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
-      appraisal: appraisalVerdictOf(appraisalsByOrigin.get(origin), issue, placementCtx),
+      shortfall: shortfallsByOrigin().get(origin) ?? null,
+      delivery: standingDelivery(deliveriesByOrigin().get(origin), issue, pickupCtx()),
+      appraisal: appraisalVerdictOf(appraisalsByOrigin().get(origin), issue, placementCtx),
       modelPin: (({ profile, ignored }) => ({ profile, ignoredTags: ignored }))(
         resolveModelTag(issue.labels, config.labelPrefix, config.agentModels),
       ),
-      priority: goalPriorities.get(origin) ?? null,
+      priority: goalPriorities().get(origin) ?? null,
       retrospective: retroReading(store.scratch.getRetrospective(origin)),
-      scratchpad: padReading(padsByOrigin.get(origin)),
-      instructions: instructionsByOrigin.get(origin) ?? [],
+      scratchpad: padReading(padsByOrigin().get(origin)),
+      instructions: instructionsByOrigin().get(origin) ?? [],
       run: run
         ? {
             startedAt: run.startedAt,
@@ -395,7 +434,7 @@ export function buildStateSections(
     };
   };
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
-    prReviewState(pr.number, reviewReading(reviewRows, pr.number), config.review, pr.reviewThreads) ?? undefined;
+    prReviewState(pr.number, reviewReading(reviewRows(), pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
   const packHeads = once(() => new Map(store.reviewPacks.listReviewPackHeads().map((head) => [head.prNumber, head])));
   const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
@@ -406,7 +445,7 @@ export function buildStateSections(
     world.pullRequests.map((pr) => ({
       ...pr,
       health: prHealth(pr, world.pullRequests),
-      attention: prAttentionStatus(pr, attentionCtx),
+      attention: prAttentionStatus(pr, attentionCtx()),
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
       pack: packStandingFor(pr),
@@ -474,7 +513,7 @@ export function buildStateSections(
 
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
-  const remoteSheets = buildRemoteSheets(store, config.environments);
+  const remoteSheets = once(() => buildRemoteSheets(store, config.environments));
 
   const goalsSection = (): Pick<
     CockpitState,
@@ -501,41 +540,41 @@ export function buildStateSections(
     },
     retainedRuns: retainedRuns(),
     archivedPullRequests: archivedPullRequests.map(withReview),
-    stacks,
-    environmentReach: buildEnvironmentReach(store, config.environments, remoteSheets),
+    stacks: stacks(),
+    environmentReach: buildEnvironmentReach(store, config.environments, remoteSheets(), plans, planParts()),
     featureSequences: store.sequences.listFeatureSequences(),
     environmentHealth: buildEnvironmentHealth(store, config.environments),
     goalWatchWindows: buildGoalWatchWindows(store, config.environments),
     environmentArrivals: config.environments.length === 0 ? [] : store.environments.listGoalArrivals().slice(0, 50),
-    remoteSheets,
+    remoteSheets: remoteSheets(),
     stackLandings: [
-      ...stacks.map((stack) => {
+      ...stacks().map((stack) => {
         const rungPrs = stack.rungs.flatMap((rung) => {
           const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
           return pr ? [pr] : [];
         });
         const landing = landingFor(
           stack.rungs.map((r) => r.prNumber),
-          landings,
+          landings(),
           openPrNumbers,
         );
         return {
           ref: stack.ref,
           ...landingReadiness(rungPrs),
           landing,
-          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs }) : 0,
+          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
         };
       }),
-      ...landings
+      ...landings()
         .filter(
-          (l) => l.status === 'standing' && !stacks.some((s) => s.rungs.some((r) => l.rungs.includes(r.prNumber))),
+          (l) => l.status === 'standing' && !stacks().some((s) => s.rungs.some((r) => l.rungs.includes(r.prNumber))),
         )
         .map((landing) => ({
           ref: landing.ref,
           offer: false,
           blockedBy: null,
           landing,
-          landed: landedCount(landing, { ...world, merged: mergedPrs }),
+          landed: landedCount(landing, { ...world, merged: mergedPrs() }),
         })),
     ],
   });
@@ -553,12 +592,12 @@ export function buildStateSections(
     | 'stateQueries'
   > => ({
     plans: wirePlans,
-    planParts: wirePlanParts,
+    planParts: wirePlanParts(),
     planAtoms: store.plans.listAllPlanAtoms(),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
-    validationChecks,
+    validationChecks: validationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
-    validationResources: wireValidationResources,
+    validationResources: wireValidationResources(),
     goalWatches: [...store.watches.listGoalWatches(), ...store.watches.listProposedGoalWatches()],
     stateQueries: store.remoteValidation.listStateQueries(),
   });
@@ -587,13 +626,13 @@ export function buildStateSections(
     readying: readying.list(),
     parkedOnLimit: fleet.limitedAgentIds(),
     stallParks: fleet.stallDeadlines(),
-    flags,
-    artifactUrls: artifactUrls(flags, opts?.artifactSigner),
-    attachments,
-    attachmentUrls: attachmentUrls(attachments, opts?.attachmentSigner),
+    flags: flags(),
+    artifactUrls: artifactUrls(flags(), opts?.artifactSigner),
+    attachments: attachments(),
+    attachmentUrls: attachmentUrls(attachments(), opts?.attachmentSigner),
     overlaps: overlaps(),
     usage: buildUsage(system, spend().unattributedCostUsd),
-    runOutcomes: tallyRunOutcomes(agents),
+    runOutcomes: tallyRunOutcomes(agents()),
   });
 
   const queueSection = (): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> => ({
@@ -603,12 +642,12 @@ export function buildStateSections(
     runway: readRunway({
       policy: config.runway,
       issues: world.issues,
-      pickup: pickupCtx,
+      pickup: pickupCtx(),
       runs: issueRuns,
-      humanTasks: allHumanTasks,
+      humanTasks: allHumanTasks(),
       escalations: store.escalations.listEscalationSpans(),
       cap: control.cap,
-      standing: allHumanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
+      standing: allHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
     }),
   });
 
@@ -726,6 +765,8 @@ function buildEnvironmentReach(
   store: System['store'],
   environments: EnvironmentConfig[],
   sheets: readonly RemoteSheetView[],
+  plans: Plan[],
+  parts: PlanPart[],
 ): GoalReachView[] {
   if (environments.length === 0) return [];
   const arrivals = store.environments.listGoalArrivals();
@@ -747,8 +788,8 @@ function buildEnvironmentReach(
     readings: store.environments.listEnvironmentReach(),
     nodes: store.graph.listWorkNodes(),
     landed: store.environments.landedPrs(),
-    plans: store.plans.listPlans(),
-    parts: store.plans.listAllPlanParts(),
+    plans,
+    parts,
     environments,
   }).map((goal) => ({
     ...goal,

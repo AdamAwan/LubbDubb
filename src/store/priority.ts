@@ -9,8 +9,8 @@ export class PriorityStore {
   setPriorityOverrides(origins: string[]): void {
     const ts = this.ctx.now();
     const tx = this.ctx.db.transaction((rows: string[]) => {
-      this.ctx.db.prepare(`DELETE FROM priority_overrides`).run();
-      const insert = this.ctx.db.prepare(
+      this.ctx.prep(`DELETE FROM priority_overrides`).run();
+      const insert = this.ctx.prep(
         `INSERT INTO priority_overrides (origin, rank, updated_at, last_seen_at) VALUES (?, ?, ?, ?)`,
       );
       rows.forEach((origin, rank) => insert.run(origin, rank, ts, ts));
@@ -19,8 +19,8 @@ export class PriorityStore {
   }
 
   listPriorityOverrides(): PriorityOverride[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT origin, rank FROM priority_overrides ORDER BY rank ASC`)
+    const rows = this.ctx
+      .prep(`SELECT origin, rank FROM priority_overrides ORDER BY rank ASC`)
       .all() as PriorityOverride[];
     return rows.map((r) => ({ origin: r.origin, rank: r.rank }));
   }
@@ -36,7 +36,7 @@ export class PriorityStore {
       }
       if (ttlMs > 0) {
         const cutoff = new Date(Date.parse(now) - ttlMs).toISOString();
-        this.ctx.db.prepare(`DELETE FROM priority_overrides WHERE last_seen_at < ?`).run(cutoff);
+        this.ctx.prep(`DELETE FROM priority_overrides WHERE last_seen_at < ?`).run(cutoff);
       }
     });
     tx();
@@ -44,18 +44,19 @@ export class PriorityStore {
 
   setGoalPriority(originRef: string, priority: boolean): void {
     if (!priority) {
-      this.ctx.db.prepare(`DELETE FROM goal_priorities WHERE origin=?`).run(originRef);
+      this.ctx.prep(`DELETE FROM goal_priorities WHERE origin=?`).run(originRef);
       return;
     }
-    this.ctx.db
-      .prepare(`INSERT INTO goal_priorities (origin, created_at) VALUES (?, ?) ON CONFLICT(origin) DO NOTHING`)
+    this.ctx
+      .prep(`INSERT INTO goal_priorities (origin, created_at) VALUES (?, ?) ON CONFLICT(origin) DO NOTHING`)
       .run(originRef, this.ctx.now());
   }
 
   listGoalPriorities(): GoalPriority[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT origin, created_at FROM goal_priorities ORDER BY created_at ASC`)
-      .all() as { origin: string; created_at: string }[];
+    const rows = this.ctx.prep(`SELECT origin, created_at FROM goal_priorities ORDER BY created_at ASC`).all() as {
+      origin: string;
+      created_at: string;
+    }[];
     return rows.map((r) => ({ originRef: r.origin, since: r.created_at }));
   }
 }
