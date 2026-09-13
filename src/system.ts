@@ -16,6 +16,7 @@ import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
+import { PrewarmDesk } from './worktree/prewarmDesk.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { ReviewPackAuthor } from './reviewPacks/author.js';
@@ -846,12 +847,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const pets = new PetKeeper(store, config.pets);
+  const prewarm = new PrewarmDesk({
+    worktrees,
+    upcoming: () => harness.upcoming?.items ?? [],
+    enabled: () => config.prewarmWorktrees && harness.running && !runtimeControl.paused,
+    errors,
+  });
   harness.on('cycle:end', () => {
     try {
       pets.scan();
     } catch (err) {
       errors.record({ source: 'cycle', message: `Pet scan failed: ${(err as Error).message}` });
     }
+    // Deliberately not awaited: a cycle that waited for the warming would have moved the wait it
+    // exists to remove back onto the critical path. → docs/spec/09-execution.md
+    prewarm.run();
   });
 
   const localRun = new LocalRunner({

@@ -862,6 +862,7 @@ export type {
   Proposal,
   ReadyingAction,
   ReadyingStep,
+  ReadyingStepTiming,
   Retrospective,
   ReviewAnchor,
   ReviewAttention,

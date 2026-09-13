@@ -11,7 +11,7 @@ import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js'
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
-import type { ReadyingBoard } from './readying.js';
+import { readyingBreakdown, type ReadyingBoard } from './readying.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
   authorityOf,
@@ -218,15 +218,18 @@ export class ActionExecutor {
               const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
               record(
                 'executed',
-                resumed
+                (resumed
                   ? handover
                     ? `Handed ${handover.from}'s conversation on to a ${kind} agent on task ${task.id} in ${cwd}.`
                     : `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
-                  : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`,
+                  : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`) + readyingBreakdown(hold.timings()),
               );
             } catch (err) {
               this.abandonUnstarted(task ?? this.recordDispatchTask(action, evidence, retry, null));
-              record('rejected', `Failed to start agent: ${(err as Error).message}`);
+              record(
+                'rejected',
+                `Failed to start agent: ${(err as Error).message}${readyingBreakdown(hold.timings())}`,
+              );
             }
             break;
           }

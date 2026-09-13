@@ -129,3 +129,41 @@ test('the board announces itself, so a cockpit sees the row without waiting for 
 
   system.store.close();
 });
+
+const REPORTABLE_WAIT_MS = 150;
+
+test('the row says how long each step took, and the decision keeps the breakdown after the row is gone', async () => {
+  const worktrees = new ParkedWorktrees();
+  const system = buildSystem(testConfig(), { worktrees, backend: new FakePtyBackend() });
+
+  system.store.jobs.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
+  const cycle = system.harness.runCycle('manual');
+  await worktrees.reached;
+
+  const row = buildStateSnapshot(system).readying[0]!;
+  assert.equal(row.step, 'slot-handover');
+  assert.ok(Date.parse(row.stepStartedAt) > 0, 'the current step is measured from its own start');
+  assert.deepEqual(
+    row.elapsed.map((e) => e.step),
+    ['picked-up', 'ci-evidence'],
+    'and the steps behind it carry what they cost',
+  );
+  assert.ok(
+    row.elapsed.every((e) => e.ms >= 0),
+    'each as a duration',
+  );
+
+  await new Promise((done) => setTimeout(done, REPORTABLE_WAIT_MS));
+  worktrees.letThrough();
+  await cycle;
+
+  assert.deepEqual(buildStateSnapshot(system).readying, [], 'the board keeps nothing');
+  const executed = system.store.decisions.listDecisions().find((d) => d.outcome === 'executed')!;
+  assert.match(
+    executed.detail,
+    /Readied in [\d.ms ]+\(slot-handover /,
+    'so the audit is where a wait the board no longer holds can be read back',
+  );
+
+  system.store.close();
+});

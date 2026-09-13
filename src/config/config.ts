@@ -92,6 +92,7 @@ export interface Config {
   docsFolderPrefix?: string | string[];
   promptTemplatesDir: string;
   worktreeRoot: string;
+  prewarmWorktrees: boolean;
   deskRoot: string;
   attachmentRoot: string;
   validationRoot: string;
@@ -250,6 +251,7 @@ const DEFAULTS: Config = {
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',
   worktreeRoot: '.lubbdubb/worktrees',
+  prewarmWorktrees: true,
   deskRoot: '.lubbdubb/desk',
   attachmentRoot: '.lubbdubb/attachments',
   validationRoot: '.lubbdubb/validation',

@@ -699,6 +699,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'The integration branch. Not auto-detected.',
   },
   { path: 'worktreeRoot', type: 'string', access: 'advanced', why: 'Root for the pool of worktree slot directories.' },
+  {
+    path: 'prewarmWorktrees',
+    type: 'boolean',
+    access: 'advanced',
+    why: 'Ready one pool slot between cycles, so a dispatch finds it already wiped and checked out instead of paying for that on the serial executor loop. Off means every dispatch prepares its own slot.',
+  },
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
   { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where brief attachments are written.' },
   { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },

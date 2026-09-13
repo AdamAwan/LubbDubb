@@ -40,6 +40,9 @@ class WedgedWorktrees implements Worktrees {
       );
     return this.inner.ensureReadOnly(key, of);
   }
+  prewarm(branches: string[]): Promise<string | null> {
+    return this.inner.prewarm(branches);
+  }
   ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
     return this.inner.ensurePreview(ref);
   }
