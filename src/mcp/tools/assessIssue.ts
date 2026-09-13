@@ -4,9 +4,25 @@ import { toolSchema } from '../schema.js';
 import { SHORTFALL_CAUSE_HELP, SHORTFALL_CAUSES, shortfallRecordedNote } from '../../delivery/shortfall.js';
 import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
-import type { ToolFactory } from './context.js';
+import { checkSetAuthored } from '../../validation/authoring.js';
+import type { McpToolDeps, ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
+
+/**
+ * What a `delivered` verdict leaves owed. The assessor writes the goal's check set in the same turn
+ * ([20](docs/spec/20-validation.md#when-the-check-set-is-written)), and the tool's own answer says so
+ * as well as the prompt does — an operator override of `issue-assess` carries its own body, and this
+ * is what makes the fold reach one anyway. Silent for a goal with no plan or a set somebody has
+ * already written, which are the two gates `validation_plan` itself refuses on.
+ */
+function checkSetOwed(deps: McpToolDeps, origin: string): boolean {
+  if (deps.store.plans.getPlanByOrigin(origin) === null) return false;
+  return !checkSetAuthored({
+    record: deps.store.validation.getValidationPlanRecord(origin),
+    checks: deps.store.validation.listValidationChecks(origin),
+  });
+}
 
 export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
   description:
@@ -83,7 +99,13 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
             'stays a human decision.'
           : shortfallRecordedNote(parsed.cause)) +
         ' ' +
-        DONE_REMINDER,
+        (parsed.verdict === 'delivered' && checkSetOwed(deps, result.issueOrigin)
+          ? 'One thing is still owed: this goal has no validation check set, and you are standing in the ' +
+            'delivered code it is written against. Declare it now with validation_plan — the whole set in ' +
+            'one call — and then finish. If you cannot, say so and stop: a validation planner is dispatched ' +
+            'for a delivered goal that has none, so nothing is lost. ' +
+            DONE_REMINDER
+          : DONE_REMINDER),
     });
   },
 });

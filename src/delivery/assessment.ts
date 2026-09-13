@@ -7,7 +7,7 @@ export function assessOrigin(issueNumber: number): string {
   return issueOriginRef('assess', issueNumber);
 }
 
-export function assessIssueNumber(ref: string): number | null {
+export function assessIssueNumber(ref: string | null): number | null {
   return issueOriginNumber('assess', ref);
 }
 
