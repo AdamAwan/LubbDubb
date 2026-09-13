@@ -6,6 +6,7 @@ import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
+import { checkSetReleased } from '../validation/planApproval.js';
 import { sweptScripts } from '../validation/steps.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
@@ -138,8 +139,10 @@ export class RemoteValidationDesk {
         arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
         authored: (goalRef) =>
-          store.validation.getValidationPlanRecord(goalRef)?.authoredAt != null ||
-          store.validation.listValidationChecks(goalRef).length > 0,
+          checkSetReleased({
+            record: store.validation.getValidationPlanRecord(goalRef),
+            checks: store.validation.listValidationChecks(goalRef),
+          }),
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });

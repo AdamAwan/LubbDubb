@@ -498,6 +498,13 @@ written through `.../watch-queries/:queryId` and read by the desk exactly as a `
 - **An unapproved query is `blocked`, never `failed`**, and the row says what it is waiting for.
 - **Approval is a property of the query, not of the run.** Approve once per environment, run on every
   arrival.
+- **Accepting a goal's check set does not approve its queries.** The check set has a gate of its own now
+  ([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)), and folding this consent into it
+  would key a per-environment statement to a per-goal press: the same query would arrive pre-approved
+  against production because somebody accepted a plan. So the check-set ask **names** the checks carrying
+  a `state` step and says out loud that they are not covered — leaving them off it is the other half of
+  the same failure, where an operator accepts a set and meets a `blocked` row they believed they had
+  cleared.
 - **`presence` gets the same treatment**, for the reason it exists: an unapproved presence query
   cannot distinguish a healthy release from a query naming a column that is not there.
 
@@ -517,15 +524,18 @@ nothing to run, reads as a misconfiguration, and is not one. It is this document
 failure in a new place, and it takes the same remedy: an explicit gate rather than a race that has
 not been lost yet.
 
-The gate is an `authored` predicate on `sheetableArrivals` — `validation_plans.authored_at`, or live
-checks a plan document ingested before authoring moved — and its **position among the cuts is
-load-bearing**. Authoring routinely takes longer than the two probe intervals the freshness guard
+The gate is an `authored` predicate on `sheetableArrivals` — `checkSetReleased`, which is
+`validation_plans.released_at`, or live checks no gate of the operator's ever stood in front of (a set a
+plan document ingested, or a record holding only a hint). **The accept is part of the gate**: an authored
+set is a proposal until the operator answers it, and a sheet assembled off one would offer rows nobody
+agreed to run ([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Its **position among
+the cuts is load-bearing**. Authoring routinely takes longer than the two probe intervals the freshness guard
 allows, so an arrival deferred for the planner and then aged out by that guard would be stamped
 without a sheet and lose it for good. So the staleness cut runs **first**: the arrivals that would
 flood in on the pulse an operator adds a `validate` block are stamped and not assembled before
 authoring is consulted at all, and the backfill guard is intact. Only an arrival that entered fresh
 waits on the planner, and it waits as long as the planner takes — deferred unstamped, the cap's own
-arrangement, and re-considered every pulse until the set exists.
+arrangement, and re-considered every pulse until the set exists and has been accepted.
 
 An arrival assembles a sheet and **never starts a browser run**. That gate is the only moment in a
 goal's life when somebody looks at the list of checks with the delivered thing actually in front of

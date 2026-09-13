@@ -37,6 +37,7 @@ function EmptySet({ plan }: { plan: ValidationPlanRecord | null }) {
     return (
       <p className="empty">
         The validation planner read the delivered goal and declared no checks.
+        {plan.releasedAt == null && ' That is a verdict, and it is with you to accept in “Needs you”.'}
         <span className="pm-vnote">{plan.emptyReason}</span>
       </p>
     );
@@ -116,6 +117,17 @@ export function ValidationSection({
 
   return (
     <>
+      {/* A set the planner has written and nobody has accepted. The rows are real and an operator may
+          read one by hand; what waits on the accept is everything the *harness* would do with them —
+          a sheet assembled off them, and rule `validate-check` putting an agent on one.
+          → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */}
+      {plan?.authoredAt != null && plan.releasedAt == null && (
+        <div className="pm-vflag">
+          <b>With you for acceptance</b> — this set was written against the delivered code and nothing in the fleet
+          reads it as work yet. The card is in “Needs you”; accepting releases it, rejecting sends it back to be written
+          again.
+        </div>
+      )}
       {/* One amber line, not two. The unsettled count and the amendment count were
           separate bands on the plan sheet; on a card this size they are the same
           sentence, and two stacked warnings only invite a reader to rank them.

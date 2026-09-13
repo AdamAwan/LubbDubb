@@ -23,6 +23,7 @@ type PromptId =
   | 'feature-summary'
   | 'validation-plan'
   | 'validation-check'
+  | 'validation-plan-approval'
   | 'validation-failed'
   | 'local-validation'
   | 'local-validation-fix'
@@ -369,6 +370,15 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Open the full plan for the parts, what it cites and what it leaves out. If you want a different one, use ' +
       'Replan there: that asks the planner again and comes back here.',
     doc: "Put to a human when a plan has landed, whatever its size (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting do is appended by the rule for the same reason. {list} is the parts in dispatch order; the built-in template no longer uses it (they are one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (how many parts the plan has) {reason} {list}.",
+  },
+  'validation-plan-approval': {
+    placeholders: ['number', 'title', 'checks'],
+    template:
+      '{checks} check(s) written against the delivered code for issue #{number} ("{title}"), and nothing runs ' +
+      'them until you accept.\n\n' +
+      'Accepting releases the set — the bench draws it and a check you hand to the fleet can be dispatched. ' +
+      'Rejecting sends it back to be written again; say what is wrong and the next planner is given your words.',
+    doc: "Put to a human when the validation planner has authored a goal's check set (rule `validation-plan-approval`). A proposal, not a question: accepting releases the set and nothing reads it as work before that. Deliberately short, because the set is *not* prose: every check, its journey and who each step falls to ride on the action as structure and are drawn as rows, so an override cannot bury the thing the verdict is actually about. The planner's own note is carried beside it as the escalation's `detail`. Placeholders: {number} {title} {checks} (how many checks the set declares).",
   },
   'plan-amendment': {
     placeholders: ['number', 'title', 'who', 'note'],

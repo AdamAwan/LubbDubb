@@ -11173,3 +11173,146 @@ button.pk.pk {
 .ug-ev b {
   color: var(--muted);
 }
+
+/* The validation check set as it is proposed (`CheckSetAsk`). Rows rather than
+   prose: the verdict is on the set, so two checks have to be comparable at a
+   glance — which one a person has to carry, which reads the store, what each
+   journey actually is. Every colour is a token; a literal here is a colour no
+   theme can reach. → docs/spec/17-cockpit.md#tokens */
+.vp-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+.vp-note,
+.vp-hint,
+.vp-expect {
+  margin: 0;
+  max-width: 82ch;
+}
+/* The label sits on the line it introduces, so it needs the space a block would
+   have given it — without one, "What the planner says" runs straight into the
+   planner's first word. */
+.vp-note .lb,
+.vp-hint .lb,
+.vp-expect .lb {
+  margin-right: 7px;
+}
+.vp-hint {
+  color: var(--muted);
+}
+.vp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-lo);
+  border: 1px solid var(--border-lo);
+}
+/* The body is held to a reading measure and the flags sit *against* it, not
+   against the card's right edge: this card is as wide as the panel it is in, and
+   a chip pinned 900px from the text it belongs to reads as decoration. */
+.vp-row {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 74ch) auto;
+  justify-content: start;
+  gap: 12px;
+  align-items: start;
+  padding: 9px 10px;
+  background: var(--panel-2);
+}
+.vp-letter {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+}
+.vp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.vp-title {
+  font-weight: 600;
+}
+.vp-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vp-steps li {
+  display: grid;
+  grid-template-columns: 11ch 1fr 5ch;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.vp-kind {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--blue);
+  padding-right: 8px;
+}
+/* A `state` step is the one kind whose consent this card does not carry, so it
+   is the one kind drawn apart from the others.
+   → docs/spec/36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run */
+.vp-kind-state {
+  color: var(--amber);
+}
+.vp-do {
+  color: var(--muted);
+  min-width: 0;
+}
+.vp-who {
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: right;
+}
+.vp-fleet {
+  color: var(--green);
+}
+.vp-expect,
+.vp-said,
+.vp-queries,
+.vp-empty {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.vp-said {
+  font-style: italic;
+}
+.vp-queries {
+  margin: 0;
+  max-width: 82ch;
+}
+.vp-queries b {
+  color: var(--amber);
+}
+.vp-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+  padding-top: 1px;
+}
+@media (max-width: 640px) {
+  .vp-row {
+    grid-template-columns: 2ch 1fr;
+  }
+  .vp-flags {
+    grid-column: 2;
+  }
+  .vp-steps li {
+    grid-template-columns: 11ch 1fr;
+  }
+  .vp-who {
+    grid-column: 2;
+    text-align: left;
+  }
+}

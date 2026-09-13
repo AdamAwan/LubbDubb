@@ -17,7 +17,12 @@ import { McpCallStore } from './mcpCalls.js';
 import { SurfaceReachStore } from './surfaceReach.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
-import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
+import {
+  releaseValidationPlansFromBeforeTheGate,
+  ValidationStore,
+  VALIDATION_COLUMNS,
+  VALIDATION_REBUILDS,
+} from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore, SCRATCH_COLUMNS } from './scratch.js';
 import { ReviewPackStore, REVIEW_PACK_COLUMNS } from './reviewPacks.js';
@@ -149,6 +154,7 @@ export class Store {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
     if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
+    if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(this.db);
     if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(this.db, clock());
     adoptFloorCompletions(this.db);
     absorbSinglePlanStatus(this.db);

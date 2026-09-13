@@ -272,7 +272,11 @@ test('the rule dispatches for a delivered goal with no check set, and for nothin
   );
 
   const written = await d.decide(
-    ctx({ validationPlans: [{ originRef: GOAL, hint: null, note: 'considered', emptyReason: 'x', authoredAt: NOW }] }),
+    ctx({
+      validationPlans: [
+        { originRef: GOAL, hint: null, note: 'considered', emptyReason: 'x', authoredAt: NOW, releasedAt: NOW },
+      ],
+    }),
   );
   assert.deepEqual(
     authoringDispatches(written.actions),
@@ -303,6 +307,7 @@ test('the prompt appends the hint, the coverage part and the environments rather
           note: null,
           emptyReason: null,
           authoredAt: null,
+          releasedAt: null,
         },
       ],
       planParts: [
