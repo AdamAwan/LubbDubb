@@ -559,9 +559,22 @@ prompt.
 - **Scoped by `goalOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
-  widening rule at the level of a whole goal. The **retro origin is excluded** though `goalOriginFor`
-  accepts it: `retroBriefing` already hands it the pad and the whole dossier, both bounded on their own
-  terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
+  widening rule at the level of a whole goal.
+- **Four families under a goal are excluded though `goalOriginFor` accepts them**, declared as one set
+  (`WITHOUT_PRIOR_WORK` in `src/executor/actionExecutor.ts`, keyed on `parseIssueOrigin`'s family so a
+  hand-rolled origin match can never drift from the vocabulary — [05](05-dispatcher.md#the-issue-origin-vocabulary)).
+  Each is an agent that does none of the goal's work and reads none of its pad, and for each the briefing
+  is either a second copy or a briefing about the wrong ticket:
+  - **`retro`** — `retroBriefing` already hands it the pad and the whole dossier, both bounded on their
+    own terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
+  - **`split`** — rule `pr-split` already interpolates the plan as `{plan}`, rendered for a corrector by
+    `currentPlanSummary`, so the briefing's plan section is the same document twice. The agent reads a
+    diff to say whether a pull request holds one concept; the pad is not its input.
+  - **`summary`** and **`sequence`** — the origin's issue number is a **Feature's**, not a goal's, so
+    `goalOriginFor` resolves to the Feature ticket. Their real input is appended separately
+    (`renderFeatureDossier`, and `sequenceBriefing` — [33](33-story-sequencing.md)); what the briefing
+    would add is whatever happens to be stored against the Feature ticket, which is not the work being
+    summarised or ordered.
 - **A part agent gets no parts section**, because `plan-part` renders every sibling through
   `siblingContext`; and the conclusion is omitted when the outstanding-work note already carries it, so
   one fact is never rendered twice in one prompt.

@@ -12,6 +12,8 @@ import { gitRepo } from './support/gitRepo.js';
 import { planWithOnePart } from './support/plans.js';
 import type { GoalFile, GoalNeighbour, Plan, ScratchEntry } from '../src/types.js';
 import { findTask } from './support/tasks.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 
 function bare(): PriorWorkInput {
   return {
@@ -487,6 +489,90 @@ test('an agent on a different goal is handed none of it', async () => {
     const prTask = findTask(system.store, (t) => t.originRef?.startsWith('pr:7') === true);
     assert.ok(prTask, 'the CI concern dispatched');
     assert.doesNotMatch(prTask.prompt, /a note about issue one/);
+  } finally {
+    system.store.close();
+  }
+});
+
+function systemWithWorktrees(): System {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prior-excl-'));
+  return buildSystem(
+    loadConfig({
+      selfUpdate: { enabled: false } as never,
+      labelPrefix: '',
+      dbPath: ':memory:',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      heartbeatIntervalMs: 999_999,
+      maxConcurrentAgents: 6,
+    }),
+    { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(), errorMirror: () => {} },
+  );
+}
+
+function goalWithSomethingToSay(system: System): void {
+  system.store.plans.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Ship the thing',
+    status: 'active',
+    reason: 'One PR.',
+    document: 'THE PLANNERS WRITE UP',
+  });
+  system.store.scratch.appendScratchEntry({
+    padRef: 'issue:12',
+    authorOriginRef: 'issue:12:plan',
+    agentId: 'a_prior',
+    taskId: 't_prior',
+    topic: 'gotcha',
+    note: 'THE PAD NOTE',
+    decision: null,
+  });
+}
+
+async function promptAt(system: System, originRef: string, kind: 'code' | 'desk'): Promise<string> {
+  const plan = {
+    rationale: 'test',
+    rejected: [],
+    actions: [
+      {
+        type: kind === 'code' ? 'dispatch_code_agent' : 'dispatch_desk_agent',
+        title: `work at ${originRef}`,
+        prompt: 'THE TASK ITSELF',
+        ...(kind === 'code'
+          ? { branch: `wip/${originRef.replace(/[^a-z0-9]+/gi, '-')}`, base: 'main', readOnly: true }
+          : {}),
+        originRef,
+        reason: 'r',
+        rule: 'issue-assess',
+      },
+    ],
+  } as unknown as DispatchResult;
+  await system.executor.execute(`cyc_${originRef}`, plan);
+  const task = system.store.tasks.listTasks().find((t) => t.originRef === originRef);
+  assert.ok(task, `nothing was dispatched at ${originRef}`);
+  return system.store.tasks.getTask(task.id)?.prompt ?? '';
+}
+
+test('the families that do none of the goal’s work are handed none of its prior work', async () => {
+  const system = systemWithWorktrees();
+  try {
+    goalWithSomethingToSay(system);
+
+    const worker = await promptAt(system, 'issue:12:part:whole', 'code');
+    assert.match(worker, /THE PAD NOTE/, 'an agent that works the goal still gets the pad');
+    assert.match(worker, /THE PLANNERS WRITE UP/, 'and the plan document');
+
+    for (const [origin, kind] of [
+      ['issue:12:split:44', 'code'],
+      ['issue:12:summary', 'desk'],
+      ['issue:12:sequence', 'desk'],
+    ] as const) {
+      const prompt = await promptAt(system, origin, kind);
+      assert.match(prompt, /THE TASK ITSELF/, `${origin} was dispatched`);
+      assert.doesNotMatch(prompt, /THE PAD NOTE/, `${origin} is handed no pad`);
+      assert.doesNotMatch(prompt, /THE PLANNERS WRITE UP/, `${origin} is handed no plan document`);
+    }
   } finally {
     system.store.close();
   }

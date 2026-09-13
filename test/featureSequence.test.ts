@@ -354,6 +354,26 @@ test('a link the board already states is drawn as the board’s own', () => {
   assert.match(brief ?? '', /The board already states/);
 });
 
+test('the story list is capped, and the dossier says how many it withheld', () => {
+  const many = Array.from({ length: 45 }, (_, i) => story(100 + i));
+  const brief = sequenceBriefing('issue:500:sequence', many);
+  assert.ok(brief);
+  assert.match(brief, /## Its 45 open stories/, 'the count is the true one, not the shown one');
+  assert.match(brief, /#139/, 'the fortieth story is in it');
+  assert.ok(!brief.includes('#140'), 'the forty-first is not');
+  assert.match(brief, /5 of the 45 stories are not shown here/, 'and the elision is stated');
+});
+
+test('a Feature inside the cap renders exactly what it always did', () => {
+  const brief = sequenceBriefing(
+    'issue:500:sequence',
+    Array.from({ length: 40 }, (_, i) => story(100 + i)),
+  );
+  assert.ok(brief);
+  assert.ok(!brief.includes('not shown here'), 'nothing was dropped, so nothing is claimed to have been');
+  assert.match(brief, /#139/);
+});
+
 test('nothing is appended for a caller that is not a sequencer', () => {
   assert.equal(sequenceBriefing('issue:12', [story(11), story(12)]), null);
 });
