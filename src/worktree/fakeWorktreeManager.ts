@@ -24,6 +24,7 @@ export class FakeWorktreeManager implements Worktrees {
   private readonly size: number;
   private readonly leases = new Map<string, string>();
   private readonly occupants = new Map<string, string>();
+  private readonly marks = new Map<string, string>();
   private readonly slots: string[] = [];
 
   constructor(root?: string, size = DEFAULT_POOL_SIZE) {
@@ -38,7 +39,7 @@ export class FakeWorktreeManager implements Worktrees {
 
   ensureReadOnly(key: string, of: string): Promise<string> {
     this.ensured.push({ branch: key, base: of, readOnly: true });
-    return this.slotFor(key);
+    return this.slotFor(key, of);
   }
 
   ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
@@ -67,19 +68,23 @@ export class FakeWorktreeManager implements Worktrees {
     return hash.toString(16).padStart(8, '0').repeat(5);
   }
 
-  private slotFor(branch: string): Promise<string> {
+  private slotFor(branch: string, readOnlyOf?: string): Promise<string> {
     const warm = this.leases.get(branch) ?? this.slots.find((dir) => this.occupants.get(dir) === branch);
-    if (warm !== undefined) return Promise.resolve(this.lease(branch, warm));
+    if (warm !== undefined) return Promise.resolve(this.lease(branch, warm, readOnlyOf));
+    if (readOnlyOf !== undefined) {
+      const sameRef = this.slots.find((dir) => !this.isLeased(dir) && this.marks.get(dir) === readOnlyOf);
+      if (sameRef !== undefined) return Promise.resolve(this.lease(branch, sameRef, readOnlyOf));
+    }
     const spare = this.slots.find((dir) => !this.isLeased(dir) && !this.occupants.has(dir));
-    if (spare !== undefined) return Promise.resolve(this.lease(branch, spare));
+    if (spare !== undefined) return Promise.resolve(this.lease(branch, spare, readOnlyOf));
     if (this.slots.length < this.size) {
       const dir = resolve(this.root, slotDirName(this.slots.length));
       mkdirSync(dir, { recursive: true });
       this.slots.push(dir);
-      return Promise.resolve(this.lease(branch, dir));
+      return Promise.resolve(this.lease(branch, dir, readOnlyOf));
     }
     const evictable = this.slots.find((dir) => !this.isLeased(dir));
-    if (evictable !== undefined) return Promise.resolve(this.lease(branch, evictable));
+    if (evictable !== undefined) return Promise.resolve(this.lease(branch, evictable, readOnlyOf));
     return Promise.reject(
       new Error(`No free worktree slot for branch ${branch}: all ${this.size} slots under ${this.root} are leased.`),
     );
@@ -98,9 +103,11 @@ export class FakeWorktreeManager implements Worktrees {
     return Promise.resolve();
   }
 
-  private lease(branch: string, dir: string): string {
+  private lease(branch: string, dir: string, readOnlyOf?: string): string {
     this.leases.set(branch, dir);
     this.occupants.set(dir, branch);
+    if (readOnlyOf === undefined) this.marks.delete(dir);
+    else this.marks.set(dir, readOnlyOf);
     return dir;
   }
 

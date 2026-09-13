@@ -238,10 +238,25 @@ that already has parts has a plan to fall back on, and `unplanned` would point r
 | `planOriginIssue(originRef)` | The issue number behind a **planner's** origin, else null  |
 | `planIssueNumber(originRef)` | The issue number behind an `issue:<n>` plan ref, else null |
 
-The planner branch namespace is deliberately separate. Git stores refs as files, so
+The planner name is deliberately separate, and since this change it is a **lease key rather than a
+ref** — but the reason it is shaped this way outlives the branch. Git stores refs as files, so
 `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist — the second needs the first to be
 a directory. A planner branch under `issue/<n>/…` would collide with the parts of the
 very plan it is writing.
+
+**The planner mints nothing.** It was never going to: what leaves its turn is `plan_submit`, or the
+`plan.json` below read off disk — and that file is gitignored in every target repository, so it is not
+a commit either. `plan/issue/<n>` was a ref created once per goal that never got a pull request, so
+was never merged, so was never reaped — the accumulation #396 found and fixed for the appraisal, the
+assessment and the checks, in the one rule it did not look at. The prompt says not to commit through an
+**appended** note rather than the template body, because a deployment that has already overridden
+`issue-plan` would otherwise keep a planner that believes it is on a branch
+([05](05-dispatcher.md#prompt-templates)).
+
+Being read-only is also what lets the planner be **handed the goal appraiser's conversation** instead
+of reading the same ticket against the same repository a second time: both are read-only checkouts of
+the default branch, so the warm arm usually gives the planner the very slot the appraiser sat in, which
+is where its transcript is. → [10](10-agent-runtimes.md#handing-a-conversation-to-the-next-stage)
 
 The planner branch namespace also has to stay clear of the part branches, which is the same fact from
 the other side: `plan/issue/<n>` cannot live under `issue/<n>/…` without colliding with the very parts
@@ -271,7 +286,8 @@ second concurrent planner.
 
 ## Rule `issue-plan` — the planner
 
-Dispatches a **code** agent (it needs a worktree to read the repo) on `plan/issue/<n>`, origin
+Dispatches a **code** agent (it needs a checkout to read the repo) into a **read-only** one
+([09](09-execution.md#the-read-only-checkout)) leased under `plan/issue/<n>`, origin
 `issue:<n>:plan`, from the `issue-plan` template — or `issue-replan`, carrying `currentPlanSummary`,
 when the plan row is back in `planning`. Skipped when an active task already holds the origin, which
 is what stops one goal ever getting a second planner. There is **no escalation arm**.

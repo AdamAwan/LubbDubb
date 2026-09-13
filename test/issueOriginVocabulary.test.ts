@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { issueOriginFamilies, issueOriginRef, issueOriginRole, parseIssueOrigin } from '../src/issueOrigins.js';
+import {
+  handoverSource,
+  issueOriginFamilies,
+  issueOriginRef,
+  issueOriginRole,
+  parseIssueOrigin,
+} from '../src/issueOrigins.js';
 
 // Every string here is persisted — `tasks.origin_ref`, `decisions.rule`, plan part refs, escalation
 // origins, `agentModels.byRule` prices — so each is spelled out rather than built.
@@ -94,4 +100,15 @@ test('a role is judged on the suffix, so a malformed id is still that family', a
   assert.equal(issueOriginRole(12, 'issue:12:validate-local-fix:no such id'), 'work');
   assert.equal(issueOriginRole(12, 'issue:12:part:'), 'work');
   assert.equal(issueOriginRole(12, 'issue:12:validate-plan:extra'), 'unrecognised');
+});
+
+test('the handover pairs are declared, and only the planner inherits one', async () => {
+  assert.deepEqual(handoverSource('issue:12:plan'), { issueNumber: 12, from: 'appraisal' });
+  for (const family of issueOriginFamilies) {
+    if (family === 'plan') continue;
+    const ref = MINTED[family];
+    assert.equal(handoverSource(ref!), null, `${ref} inherits nothing — a pair not declared here is no pair`);
+  }
+  assert.equal(handoverSource('issue:12:something-added-later'), null);
+  assert.equal(handoverSource(null), null);
 });
