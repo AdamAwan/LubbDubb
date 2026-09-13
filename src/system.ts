@@ -40,11 +40,7 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
-import { ObstacleModelDesk, type ObstacleReader } from './obstacles/desk.js';
-import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
-import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
-import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
-import { ObstacleVoiceDesk } from './obstacles/voiceDesk.js';
+import { ObstacleDesk, type ObstacleReader } from './obstacles/desk.js';
 import { trackerCoordinates } from './mcp/findings.js';
 import { PrNamingDesk } from './pr/prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
@@ -682,25 +678,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const tickets = new TicketSweep({ store, source: connector, errors });
 
-  const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
-
-  const obstacleDesk = opts.obstacleReader
-    ? new ObstacleModelDesk({ store, reader: opts.obstacleReader, repoRoot: config.repoRoot, errors })
-    : undefined;
-
-  const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
-
-  const obstacleOwnership = new ObstacleOwnershipDesk({
+  const obstacles = new ObstacleDesk({
     store,
+    fleet: agents,
+    dormantMs: config.obstacleDormantMs,
+    watchLabel,
+    reader: opts.obstacleReader,
+    repoRoot: config.repoRoot,
     filing: trackerCoordinates(config) ? filing : undefined,
     ticketBody: (vars) => prompts.render('obstacle-ticket-body', vars),
-    watchLabel,
-    errors,
-  });
-
-  const obstacleEndings = new ObstacleEndingsDesk({
-    store,
-    dormantMs: config.obstacleDormantMs,
     docsPrompt: (vars) => prompts.render('docs-change', vars),
     errors,
   });
@@ -775,11 +761,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     ejections,
     escalations,
     fleet: agents,
-    obstacleVoice,
-    obstacleDesk,
-    obstacleNotices,
-    obstacleOwnership,
-    obstacleEndings,
+    obstacles,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,

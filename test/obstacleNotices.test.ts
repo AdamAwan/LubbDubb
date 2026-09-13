@@ -7,7 +7,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleNoticeDesk } from '../src/obstacles/noticeDesk.js';
+import { obstacleDesk } from './support/obstacles.js';
 import { obstacleNotices, type NoticeAgent } from '../src/obstacles/notices.js';
 import type { DeliverableObstacle } from '../src/obstacles/delivery.js';
 import type { Agent, Obstacle, ObstacleKey, ObstacleState } from '../src/types.js';
@@ -151,8 +151,7 @@ test('once per agent per obstacle, ever: a second pulse sends nothing', () => {
   const live = spawnAgent(system, 'issue:12');
   stand(system, 'the windows runner wedges before the suite starts', 'test (windows)');
   const sent: { agentId: string; text: string }[] = [];
-  const desk = new ObstacleNoticeDesk({
-    store: system.store,
+  const desk = obstacleDesk(system.store, {
     fleet: {
       isLive: (id) => system.agents.isLive(id),
       notify: (agentId, text) => {
@@ -162,9 +161,9 @@ test('once per agent per obstacle, ever: a second pulse sends nothing', () => {
     },
   });
 
-  desk.run();
-  desk.run();
-  desk.run();
+  desk.notices();
+  desk.notices();
+  desk.notices();
 
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.agentId, live.id);
@@ -181,7 +180,7 @@ test('a notice reaches a live session only, and never ends a park', () => {
   const live = spawnAgent(system, 'issue:12');
   stand(system, 'the windows runner wedges before the suite starts', 'test (windows)');
 
-  new ObstacleNoticeDesk({ store: system.store, fleet: system.agents }).run();
+  obstacleDesk(system.store, { fleet: system.agents }).notices();
   assert.deepEqual(
     [...system.store.obstacles.obstaclesNoticedBy(live.id)],
     [system.store.obstacles.listObstacles()[0]!.id],

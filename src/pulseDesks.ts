@@ -23,11 +23,16 @@ import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { RemoteValidationDesk } from './remoteValidation/desk.js';
+import type { ObstacleDesk } from './obstacles/desk.js';
 import type { PoolDesk } from './pool/poolDesk.js';
 
 // → docs/spec/04-harness-cycle.md
 
-export interface PulseDeskDeps {
+export interface PulseDeps {
+  store: Store;
+  errors: ErrorRecorder;
+  review: PrReviewPolicy;
+  reviewProber?: ReviewProber;
   plans?: PlanReconciler;
   prWatch?: PrWatchDesk;
   prWorkItems?: PrWorkItemDesk;
@@ -45,93 +50,8 @@ export interface PulseDeskDeps {
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   graduations?: { run(): void };
   clusters?: { run(): void };
-  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
-  obstacleDesk?: { run(): Promise<void> };
-  obstacleNotices?: { run(): void };
-  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
-  obstacleEndings?: { run(world: WorldSnapshot): void };
+  obstacles?: ObstacleDesk;
   pool?: PoolDesk;
-}
-
-export type PulseDeskId = keyof PulseDeskDeps;
-
-export interface PulseReading {
-  world: WorldSnapshot;
-  previousWorld: WorldSnapshot | null;
-}
-
-interface PulseDesk {
-  readWorld: boolean;
-  awaited: boolean;
-  run(deps: PulseDeskDeps, at: PulseReading): unknown;
-}
-
-export const PULSE_DESKS: Record<PulseDeskId, PulseDesk> = {
-  plans: { readWorld: true, awaited: true, run: (d, at) => d.plans?.reconcile(at.world) },
-  prWatch: { readWorld: true, awaited: true, run: (d, at) => d.prWatch?.run(at.world) },
-  prWorkItems: { readWorld: true, awaited: true, run: (d, at) => d.prWorkItems?.run(at.world) },
-  naming: { readWorld: true, awaited: true, run: (d, at) => d.naming?.run(at.world) },
-  branchReaps: { readWorld: true, awaited: true, run: (d, at) => d.branchReaps?.run(at.world) },
-  landings: { readWorld: false, awaited: true, run: (d, at) => d.landings?.settle(at.world) },
-  validationAsks: { readWorld: false, awaited: true, run: (d) => d.validationAsks?.run() },
-  schedules: { readWorld: false, awaited: true, run: (d) => d.schedules?.run() },
-  updates: { readWorld: true, awaited: true, run: (d) => d.updates?.run() },
-  graph: { readWorld: false, awaited: true, run: (d, at) => d.graph?.record(at.world) },
-  environments: { readWorld: true, awaited: true, run: (d, at) => d.environments?.run(at.world) },
-  remoteValidation: { readWorld: true, awaited: true, run: (d) => d.remoteValidation?.run() },
-  validationReady: { readWorld: false, awaited: true, run: (d, at) => d.validationReady?.run(at.world) },
-  closeOuts: { readWorld: false, awaited: true, run: (d, at) => d.closeOuts?.run(at.world) },
-  notices: { readWorld: true, awaited: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
-  graduations: { readWorld: false, awaited: true, run: (d) => d.graduations?.run() },
-  clusters: { readWorld: false, awaited: true, run: (d) => d.clusters?.run() },
-  obstacleVoice: { readWorld: true, awaited: true, run: (d, at) => d.obstacleVoice?.run(at.previousWorld, at.world) },
-  obstacleDesk: { readWorld: false, awaited: false, run: (d) => d.obstacleDesk?.run() },
-  obstacleNotices: { readWorld: false, awaited: true, run: (d) => d.obstacleNotices?.run() },
-  obstacleOwnership: { readWorld: false, awaited: true, run: (d, at) => d.obstacleOwnership?.run(at.world) },
-  obstacleEndings: { readWorld: true, awaited: true, run: (d, at) => d.obstacleEndings?.run(at.world) },
-  pool: { readWorld: true, awaited: true, run: (d) => d.pool?.run() },
-};
-
-export const PULSE_PIPELINE: readonly PulseDeskId[] = [
-  'plans',
-  'prWatch',
-  'prWorkItems',
-  'naming',
-  'branchReaps',
-  'landings',
-  'validationAsks',
-  'schedules',
-  'updates',
-  'graph',
-  'environments',
-  'remoteValidation',
-  'validationReady',
-  'closeOuts',
-  'notices',
-  'graduations',
-  'clusters',
-  'obstacleVoice',
-  'obstacleDesk',
-  'obstacleNotices',
-  'obstacleOwnership',
-  'obstacleEndings',
-  'pool',
-];
-
-export async function runPulseDesks(deps: PulseDeskDeps, at: PulseReading, readWorld: boolean): Promise<void> {
-  for (const id of PULSE_PIPELINE) {
-    const desk = PULSE_DESKS[id];
-    if (desk.readWorld && !readWorld) continue;
-    if (desk.awaited) await desk.run(deps, at);
-    else void desk.run(deps, at);
-  }
-}
-
-export interface PulseSweepDeps {
-  store: Store;
-  errors: ErrorRecorder;
-  review: PrReviewPolicy;
-  reviewProber?: ReviewProber;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
   burn?: SpendBurnDesk;
@@ -142,7 +62,8 @@ export interface PulseSweepDeps {
   tickets?: { run(): Promise<void> };
 }
 
-type PulseSweepPhase =
+type PulsePhase =
+  | 'reconcile'
   | 'open'
   | 'afterTasks'
   | 'afterAgents'
@@ -151,7 +72,8 @@ type PulseSweepPhase =
   | 'afterReviews'
   | 'afterExecute';
 
-interface PulseSweepReadings {
+interface PulseReadings {
+  reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null; readWorld: boolean };
   open: Record<string, never>;
   afterTasks: { world: WorldSnapshot; tasks: TaskSummary[] };
   afterAgents: { tasks: TaskSummary[]; agents: Agent[] };
@@ -161,79 +83,78 @@ interface PulseSweepReadings {
   afterExecute: Record<string, never>;
 }
 
-type PulseSweepId =
-  | 'parks'
-  | 'stalls'
-  | 'ejectionExpiries'
-  | 'reviewWaits'
-  | 'burn'
-  | 'deadAgents'
-  | 'settledMerges'
-  | 'appraisals'
-  | 'areaPaths'
-  | 'issueRuns'
-  | 'reviewedElsewhere'
-  | 'localValidations'
-  | 'tickets';
-
-interface PulseSweep<P extends PulseSweepPhase = PulseSweepPhase> {
-  phase: P;
+interface PulsePass<P extends PulsePhase = PulsePhase, I extends string = string> {
+  id: I;
   readWorld: boolean;
-  awaited: boolean;
-  run(deps: PulseSweepDeps, at: PulseSweepReadings[P]): unknown;
+  run(deps: PulseDeps, at: PulseReadings[P]): unknown;
 }
 
-function sweep<P extends PulseSweepPhase>(entry: PulseSweep<P>): PulseSweep<P> {
-  return entry;
+interface PulseEntry<P extends PulsePhase = PulsePhase, I extends string = string> extends PulsePass<P, I> {
+  phase: P;
 }
 
-export const PULSE_SWEEPS: Record<PulseSweepId, PulseSweep> = {
-  parks: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => resumeExpiredParks(d) }),
-  stalls: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => d.fleet?.completeExpiredStalls() }),
-  ejectionExpiries: sweep({ phase: 'open', readWorld: false, awaited: true, run: (d) => d.ejections?.sweepExpiries() }),
-  reviewWaits: sweep({ phase: 'afterTasks', readWorld: false, awaited: true, run: (d, at) => foldReviewWaits(d, at) }),
-  burn: sweep({
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }),
-  }),
-  deadAgents: sweep({
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.escalations?.tidyDeadAgents(),
-  }),
-  settledMerges: sweep({
-    phase: 'afterAgents',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.escalations?.tidySettledMerges(),
-  }),
-  appraisals: sweep({
-    phase: 'afterVerdicts',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => d.appraisals?.announce(at.world),
-  }),
-  areaPaths: sweep({ phase: 'afterVerdicts', readWorld: true, awaited: true, run: (d) => d.areaPaths?.refresh() }),
-  issueRuns: sweep({ phase: 'afterOrigins', readWorld: false, awaited: true, run: (d, at) => recordIssueRuns(d, at) }),
-  reviewedElsewhere: sweep({
-    phase: 'afterReviews',
-    readWorld: true,
-    awaited: true,
-    run: (d, at) => askReviewedElsewhere(d, at),
-  }),
-  localValidations: sweep({
-    phase: 'afterReviews',
-    readWorld: false,
-    awaited: true,
-    run: (d) => d.localValidations?.sweep(),
-  }),
-  tickets: sweep({ phase: 'afterExecute', readWorld: true, awaited: true, run: (d) => d.tickets?.run() }),
-};
+function phase<P extends PulsePhase, const T extends readonly PulsePass<P>[]>(
+  name: P,
+  passes: T,
+): { [K in keyof T]: T[K] & { phase: P } } {
+  return passes.map((entry) => ({ ...entry, phase: name })) as { [K in keyof T]: T[K] & { phase: P } };
+}
 
-export const PULSE_SWEEP_PHASES: readonly PulseSweepPhase[] = [
+const ENTRIES = [
+  ...phase('reconcile', [
+    { id: 'plans', readWorld: true, run: (d, at) => d.plans?.reconcile(at.world) },
+    { id: 'prWatch', readWorld: true, run: (d, at) => d.prWatch?.run(at.world) },
+    { id: 'prWorkItems', readWorld: true, run: (d, at) => d.prWorkItems?.run(at.world) },
+    { id: 'naming', readWorld: true, run: (d, at) => d.naming?.run(at.world) },
+    { id: 'branchReaps', readWorld: true, run: (d, at) => d.branchReaps?.run(at.world) },
+    { id: 'landings', readWorld: false, run: (d, at) => d.landings?.settle(at.world) },
+    { id: 'validationAsks', readWorld: false, run: (d) => d.validationAsks?.run() },
+    { id: 'schedules', readWorld: false, run: (d) => d.schedules?.run() },
+    { id: 'updates', readWorld: true, run: (d) => d.updates?.run() },
+    { id: 'graph', readWorld: false, run: (d, at) => d.graph?.record(at.world) },
+    { id: 'environments', readWorld: true, run: (d, at) => d.environments?.run(at.world) },
+    { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
+    { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },
+    { id: 'closeOuts', readWorld: false, run: (d, at) => d.closeOuts?.run(at.world) },
+    { id: 'notices', readWorld: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
+    { id: 'graduations', readWorld: false, run: (d) => d.graduations?.run() },
+    { id: 'clusters', readWorld: false, run: (d) => d.clusters?.run() },
+    {
+      id: 'obstacles',
+      readWorld: false,
+      run: (d, at) => d.obstacles?.run({ previousWorld: at.previousWorld, world: at.world, readWorld: at.readWorld }),
+    },
+    { id: 'pool', readWorld: true, run: (d) => d.pool?.run() },
+  ]),
+  ...phase('open', [
+    { id: 'parks', readWorld: false, run: (d) => resumeExpiredParks(d) },
+    { id: 'stalls', readWorld: false, run: (d) => d.fleet?.completeExpiredStalls() },
+    { id: 'ejectionExpiries', readWorld: false, run: (d) => d.ejections?.sweepExpiries() },
+  ]),
+  ...phase('afterTasks', [{ id: 'reviewWaits', readWorld: false, run: (d, at) => foldReviewWaits(d, at) }]),
+  ...phase('afterAgents', [
+    { id: 'burn', readWorld: false, run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }) },
+    { id: 'deadAgents', readWorld: false, run: (d) => d.escalations?.tidyDeadAgents() },
+    { id: 'settledMerges', readWorld: false, run: (d) => d.escalations?.tidySettledMerges() },
+  ]),
+  ...phase('afterVerdicts', [
+    { id: 'appraisals', readWorld: true, run: (d, at) => d.appraisals?.announce(at.world) },
+    { id: 'areaPaths', readWorld: true, run: (d) => d.areaPaths?.refresh() },
+  ]),
+  ...phase('afterOrigins', [{ id: 'issueRuns', readWorld: false, run: (d, at) => recordIssueRuns(d, at) }]),
+  ...phase('afterReviews', [
+    { id: 'reviewedElsewhere', readWorld: true, run: (d, at) => askReviewedElsewhere(d, at) },
+    { id: 'localValidations', readWorld: false, run: (d) => d.localValidations?.sweep() },
+  ]),
+  ...phase('afterExecute', [{ id: 'tickets', readWorld: true, run: (d) => d.tickets?.run() }]),
+];
+
+export type PulseId = (typeof ENTRIES)[number]['id'];
+
+export const PULSE_PIPELINE: readonly PulseEntry[] = ENTRIES;
+
+export const PULSE_PHASES: readonly PulsePhase[] = [
+  'reconcile',
   'open',
   'afterTasks',
   'afterAgents',
@@ -243,38 +164,20 @@ export const PULSE_SWEEP_PHASES: readonly PulseSweepPhase[] = [
   'afterExecute',
 ];
 
-export const PULSE_SWEEP_PIPELINE: readonly PulseSweepId[] = [
-  'parks',
-  'stalls',
-  'ejectionExpiries',
-  'reviewWaits',
-  'burn',
-  'deadAgents',
-  'settledMerges',
-  'appraisals',
-  'areaPaths',
-  'issueRuns',
-  'reviewedElsewhere',
-  'localValidations',
-  'tickets',
-];
-
-export async function runPulseSweeps<P extends PulseSweepPhase>(
+export async function runPulse<P extends PulsePhase>(
   phase: P,
-  deps: PulseSweepDeps,
-  at: PulseSweepReadings[P],
+  deps: PulseDeps,
+  at: PulseReadings[P],
   readWorld: boolean,
 ): Promise<void> {
-  for (const id of PULSE_SWEEP_PIPELINE) {
-    const entry = PULSE_SWEEPS[id];
+  for (const entry of PULSE_PIPELINE) {
     if (entry.phase !== phase) continue;
     if (entry.readWorld && !readWorld) continue;
-    if (entry.awaited) await entry.run(deps, at);
-    else void entry.run(deps, at);
+    await entry.run(deps, at);
   }
 }
 
-function resumeExpiredParks(deps: PulseSweepDeps): void {
+function resumeExpiredParks(deps: PulseDeps): void {
   for (const { agentId, error } of deps.fleet?.resumeExpiredParks() ?? [])
     deps.errors.record({
       source: 'agent',
@@ -283,7 +186,7 @@ function resumeExpiredParks(deps: PulseSweepDeps): void {
     });
 }
 
-function foldReviewWaits(deps: PulseSweepDeps, at: PulseSweepReadings['afterTasks']): void {
+function foldReviewWaits(deps: PulseDeps, at: PulseReadings['afterTasks']): void {
   deps.store.reviewWaits.foldReviewWaits(
     at.world.pullRequests
       .filter((pr) =>
@@ -296,7 +199,7 @@ function foldReviewWaits(deps: PulseSweepDeps, at: PulseSweepReadings['afterTask
   );
 }
 
-function recordIssueRuns(deps: PulseSweepDeps, at: PulseSweepReadings['afterOrigins']): void {
+function recordIssueRuns(deps: PulseDeps, at: PulseReadings['afterOrigins']): void {
   try {
     for (const r of runsToRecord(at.world.issues, at.tasks, at.signals)) deps.store.floor.recordIssueRun(r);
   } catch (err) {

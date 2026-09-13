@@ -19,7 +19,7 @@ import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
-import { runPulseDesks, runPulseSweeps, type PulseDeskDeps, type PulseSweepDeps } from './pulseDesks.js';
+import { runPulse, type PulseDeps } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 
@@ -27,7 +27,7 @@ import { isActiveTask } from './tasks.js';
 
 const READ_PLAN_EVENTS = 200;
 
-interface HarnessDeps extends PulseDeskDeps, PulseSweepDeps {
+interface HarnessDeps extends PulseDeps {
   connector: Connector;
   dispatcher: Dispatcher;
   executor: ActionExecutor;
@@ -168,12 +168,12 @@ export class Harness extends EventEmitter {
       const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
-      await runPulseDesks(this.deps, { world, previousWorld }, readWorld);
-      await runPulseSweeps('open', this.deps, {}, readWorld);
+      await runPulse('reconcile', this.deps, { world, previousWorld, readWorld }, readWorld);
+      await runPulse('open', this.deps, {}, readWorld);
       const tasks = store.tasks.listTasks();
-      await runPulseSweeps('afterTasks', this.deps, { world, tasks }, readWorld);
+      await runPulse('afterTasks', this.deps, { world, tasks }, readWorld);
       const agents = store.agents.listAgents();
-      await runPulseSweeps('afterAgents', this.deps, { tasks, agents }, readWorld);
+      await runPulse('afterAgents', this.deps, { tasks, agents }, readWorld);
       const queuedJobs = store.jobs.listQueuedJobs();
       const plans = store.plans.listPlans();
       const planParts = store.plans.listAllPlanParts();
@@ -185,9 +185,9 @@ export class Harness extends EventEmitter {
         ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
       const appraisals = store.verdicts.listAppraisals();
-      await runPulseSweeps('afterVerdicts', this.deps, { world }, readWorld);
+      await runPulse('afterVerdicts', this.deps, { world }, readWorld);
       const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
-      await runPulseSweeps(
+      await runPulse(
         'afterOrigins',
         this.deps,
         { world, tasks, signals: { retrospectiveOrigins, conclusions, deliveries, shortfalls, plans, planParts } },
@@ -216,7 +216,7 @@ export class Harness extends EventEmitter {
 
       const prReviews = store.prReviews.listPrReviews();
       const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
-      await runPulseSweeps('afterReviews', this.deps, { dispatchWorld, prReviews, prReviewRoutes }, readWorld);
+      await runPulse('afterReviews', this.deps, { dispatchWorld, prReviews, prReviewRoutes }, readWorld);
 
       const plan = await this.deps.dispatcher.decide(
         buildDispatchInputs(store, {
@@ -292,7 +292,7 @@ export class Harness extends EventEmitter {
       });
 
       const summary = await this.deps.executor.execute(cycleId, plan);
-      await runPulseSweeps('afterExecute', this.deps, {}, readWorld);
+      await runPulse('afterExecute', this.deps, {}, readWorld);
       const report: CycleReport = {
         cycleId,
         source,

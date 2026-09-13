@@ -169,7 +169,7 @@ cheaply. The rule that governs where they may be used is not about trust:
 | Deciding what an obstacle is for — a ticket, a documentation change | Yes    | A wrong ticket is a ticket, and a ticket is visible.                                                                                                                                                       |
 | Writing the ticket from the sightings                               | Yes    | It is prose, read by whoever reads any other ticket.                                                                                                                                                       |
 
-The desk that does this work is `src/obstacles/desk.ts`, on the pulse, and only where the inbox is
+The stage that does this work is the desk's reading (`src/obstacles/desk.ts`), on the pulse, and only where the inbox is
 non-empty. It is the harness's secretary and it is deliberately not its judge.
 
 **The inbox is a comparison and never a clock.** A reading records the row's own `last_seen_at`, so a
@@ -216,6 +216,42 @@ which is what the harness did before this desk existed. `test/obstacleDesk.test.
 properties that fail silently — a merge is unreachable from here, the gates are the same ones, and
 the pass moves no state.
 
+## One desk on the pulse
+
+The subsystem is **one desk in one pulse slot** (`ObstacleDesk`, `src/obstacles/desk.ts`), running
+five stages in a fixed order:
+
+| Stage       | What it does                                                     | Needs a world read |
+| ----------- | ---------------------------------------------------------------- | ------------------ |
+| `voice`     | Files what the harness has seen for itself                       | Yes                |
+| `model`     | Reads the rows no voice has landed words on since                | No                 |
+| `notices`   | Tells running agents what has changed about an obstacle          | No                 |
+| `ownership` | Records who owns each row, and which goals the board has let out | No                 |
+| `endings`   | Ends rows: condition, landing, clock, decay                      | Yes                |
+
+**The order is the subsystem's own, not the pulse's.** It was five consecutive pulse entries, which
+made a local ordering constraint into global state: five things every reader of the pipeline had to
+hold, and five places a later pass could be inserted between. It is one entry now, and
+`test/pulsePipeline.test.ts` keeps only the constraint that actually crosses subsystems — the desk
+runs below `notices`, so an agent whose report was taken up is told so by the pulse that took it.
+
+**`readWorld` is a field on the pass, not a property of the desk.** The entry itself declares
+`readWorld: false`, so the desk runs on every cycle, and `run` gates the two stages that need a real
+world read. They need it for different reasons, and both are load-bearing:
+
+- **`voice`** works on the _diff_ between the previous world and this one, and a local cycle has no
+  new one to diff against.
+- **`endings`** must not count a re-served snapshot twice. A resolution fires on two consecutive real
+  readings; a local cycle re-serves the last real one, so counting it would close an obstacle that is
+  still live, with nothing red.
+
+**The reading is started, never awaited.** `run` calls `void this.model()`: a model round trip is not
+a provider's, nothing below it waits on a reading, and a pulse that blocked on one would hold every
+dispatch behind a call this subsystem makes for its own convenience. That is why the three stages
+that can still be running when the next pulse arrives — the reading, the ownership and the endings —
+each keep **their own** re-entry guard. One shared flag would let a slow reading lock out the
+ownership stage, which is the stage the dispatch below it reads.
+
 ## States
 
 | State      | Means                                                       | Reaches an agent                                   |
@@ -243,8 +279,7 @@ mis-diagnosing its own breakage, which is why `sighted` reaches nobody.
 The states and their exits are declared in `src/obstacles/lifecycle.ts`. A report moves a row to
 `sighted` on the first voice, `standing` on the second, and back to `standing` from a terminal state
 on a re-report; `owned` is written on the pulse by the ownership desk
-(`src/obstacles/ownershipDesk.ts`), and `resolved` and `dormant` by the endings desk
-(`src/obstacles/endingsDesk.ts`) below.
+(the desk's ownership stage), and `resolved` and `dormant` by its endings stage below.
 
 ### The harness is a voice
 
@@ -279,7 +314,7 @@ deliberately two corroborators to the retired store's notices — the transition
 and the base branch and never the rung, and `Store.obstacleVoices` folds by it besides.
 
 The readings are `src/obstacles/voice.ts`, pure over the pair of snapshots, and the desk that files
-them is `src/obstacles/voiceDesk.ts`, on the pulse above the notice, ownership and endings desks so
+them is the desk's voice stage, which runs above its notice, ownership and endings stages so
 a row it files is told, owned and watched on the pulse that saw it. Neither reading is new: both are
 `src/pr/prHealth.ts`' — `recoveredOnSameCommit` and `newlyFailingChecks`, shared with the knowledge
 notices rather than copied, because a second copy of a provider reading is a second thing to be
@@ -439,7 +474,7 @@ change alters what that agent should do: an obstacle it reported becomes `owned`
 reaches `standing` whose keys match the checks its dispatch is about. It lands at the next turn
 boundary; a turn cannot be interrupted, and one turn is a latency worth accepting rather than
 designing around. The decision is `src/obstacles/notices.ts` and the desk that sends it is
-`src/obstacles/noticeDesk.ts`, on the pulse above `decide` for the reason the notice desk sits there:
+the desk's notice stage, on the pulse above `decide` for the reason the world notices sit there:
 an agent dispatched on this pulse reads the board in its own prompt rather than being told it again a
 moment later.
 
@@ -546,7 +581,7 @@ allowance on it.
 ## How an obstacle ends
 
 Four endings, on the pulse, in `src/obstacles/endings.ts` (the readings) and
-`src/obstacles/endingsDesk.ts` (the desk that acts on them), below the ownership desk so it reads
+the desk's endings stage (which acts on them), below its ownership stage so it reads
 the owner that desk may have just written. Which one took a row is recorded on it as `endedBy`,
 because the four are not interchangeable to anybody reading the board afterwards.
 

@@ -1,39 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  PULSE_DESKS,
-  PULSE_PIPELINE,
-  PULSE_SWEEP_PHASES,
-  PULSE_SWEEP_PIPELINE,
-  PULSE_SWEEPS,
-  runPulseDesks,
-  runPulseSweeps,
-  type PulseDeskId,
-  type PulseReading,
-  type PulseSweepDeps,
-} from '../src/pulseDesks.js';
+import { PULSE_PHASES, PULSE_PIPELINE, runPulse, type PulseDeps, type PulseId } from '../src/pulseDesks.js';
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
 import type { Store } from '../src/store/store.js';
 import type { WorldSnapshot } from '../src/types.js';
 
 const WORLD: WorldSnapshot = { takenAt: '2026-09-12T00:00:00.000Z', pullRequests: [], issues: [] };
 const PREV: WorldSnapshot = { takenAt: '2026-09-11T00:00:00.000Z', pullRequests: [], issues: [] };
-const AT: PulseReading = { world: WORLD, previousWorld: PREV };
+const AT = { world: WORLD, previousWorld: PREV, readWorld: true };
+const AT_LOCAL = { ...AT, readWorld: false };
 
-function position(id: PulseDeskId): number {
-  const at = PULSE_PIPELINE.indexOf(id);
+const RECONCILE: PulseId[] = PULSE_PIPELINE.filter((e) => e.phase === 'reconcile').map((e) => e.id as PulseId);
+
+function position(id: PulseId): number {
+  const at = PULSE_PIPELINE.findIndex((e) => e.id === id);
   assert.notEqual(at, -1, `${id} takes a position in the pipeline`);
   return at;
 }
 
-function below(lower: PulseDeskId, upper: PulseDeskId, why: string): void {
+function entry(id: PulseId): (typeof PULSE_PIPELINE)[number] {
+  return PULSE_PIPELINE[position(id)]!;
+}
+
+function below(lower: PulseId, upper: PulseId, why: string): void {
   assert.ok(position(lower) > position(upper), `${lower} runs below ${upper}: ${why}`);
 }
 
-function stubs(): { deps: Record<string, unknown>; calls: { id: string; args: unknown[] }[] } {
+function deskDeps(): { deps: PulseDeps; calls: { id: string; args: unknown[] }[] } {
   const calls: { id: string; args: unknown[] }[] = [];
   const deps: Record<string, unknown> = {};
-  for (const id of Object.keys(PULSE_DESKS)) {
+  for (const id of RECONCILE) {
     const record =
       (name: string) =>
       (...args: unknown[]): undefined => {
@@ -47,55 +43,67 @@ function stubs(): { deps: Record<string, unknown>; calls: { id: string; args: un
       settle: record('settle'),
     };
   }
-  return { deps, calls };
+  return { deps: { ...bareDeps(), ...deps } as PulseDeps, calls };
 }
 
-test('every declared desk takes exactly one position, and the pipeline names nothing else', () => {
-  const declared = Object.keys(PULSE_DESKS).sort();
-  const walked = [...PULSE_PIPELINE].sort();
-  assert.deepEqual(walked, declared, 'a desk declared and never walked is a desk that is silently dead');
-  assert.equal(new Set(PULSE_PIPELINE).size, PULSE_PIPELINE.length, 'no desk is walked twice');
+test('every entry takes its own position — an id walked twice is a pass nothing can assert about', () => {
+  const ids = PULSE_PIPELINE.map((e) => e.id);
+  assert.equal(new Set(ids).size, ids.length);
 });
 
 test('every desk in the registry is reached, in the declared order', async () => {
-  const { deps, calls } = stubs();
-  await runPulseDesks(deps, AT, true);
+  const { deps, calls } = deskDeps();
+  await runPulse('reconcile', deps, AT, true);
   assert.deepEqual(
     calls.map((c) => c.id),
-    [...PULSE_PIPELINE],
+    RECONCILE,
     'each entry calls the dependency it declares — a registry naming a desk it never runs is the same dead desk',
   );
 });
 
 test('a desk needing a fresh world read is skipped on a local cycle, and no other is', async () => {
-  const { deps, calls } = stubs();
-  await runPulseDesks(deps, AT, false);
+  const { deps, calls } = deskDeps();
+  await runPulse('reconcile', deps, AT_LOCAL, false);
   const ran = new Set(calls.map((c) => c.id));
-  for (const id of PULSE_PIPELINE)
-    assert.equal(ran.has(id), !PULSE_DESKS[id].readWorld, `${id} on a local cycle follows its own readWorld flag`);
+  for (const id of RECONCILE)
+    assert.equal(ran.has(id), !entry(id).readWorld, `${id} on a local cycle follows its own readWorld flag`);
 });
 
 test('a missing desk is skipped, never an error — every dependency is optional', async () => {
-  await runPulseDesks({}, AT, true);
-  await runPulseDesks({}, AT, false);
+  await runPulse('reconcile', bareDeps(), AT, true);
+  await runPulse('reconcile', bareDeps(), AT_LOCAL, false);
 });
 
 test('the desks handed the diff are handed the pair the diff was taken from', async () => {
-  const { deps, calls } = stubs();
-  await runPulseDesks(deps, AT, true);
-  for (const id of ['notices', 'obstacleVoice'] as const) {
-    const call = calls.find((c) => c.id === id);
-    assert.deepEqual(call?.args, ['run', PREV, WORLD], `${id} reads the previous world and this one`);
-  }
+  const { deps, calls } = deskDeps();
+  await runPulse('reconcile', deps, AT, true);
+  const call = calls.find((c) => c.id === 'notices');
+  assert.deepEqual(call?.args, ['run', PREV, WORLD], 'notices reads the previous world and this one');
+  const obstacles = calls.find((c) => c.id === 'obstacles');
+  assert.deepEqual(
+    obstacles?.args,
+    ['run', { previousWorld: PREV, world: WORLD, readWorld: true }],
+    'the obstacle desk is handed the pair the diff was taken from, and whether the world was read',
+  );
 });
 
-test('the obstacle reading desk is the one desk the pulse does not wait on', () => {
-  for (const id of PULSE_PIPELINE)
-    assert.equal(
-      PULSE_DESKS[id].awaited,
-      id !== 'obstacleDesk',
-      `${id}: a model round trip is the only thing the pulse declines to block on`,
-    );
+test('every pass is awaited — a pass that must not block the pulse starts its own work itself', async () => {
+  const order: string[] = [];
+  const slow = (id: string) => async () => {
+    await Promise.resolve();
+    order.push(id);
+  };
+  const deps = {
+    ...bareDeps(),
+    graph: { record: slow('graph') },
+    obstacles: { run: slow('obstacles') },
+  } as unknown as PulseDeps;
+  await runPulse('reconcile', deps, AT, true);
+  assert.deepEqual(
+    order,
+    ['graph', 'obstacles'],
+    "an async pass finishes before the next one starts; declining to block is the pass's own business",
+  );
 });
 
 test('the validation chain runs in the order the bench is read in', () => {
@@ -105,7 +113,7 @@ test('the validation chain runs in the order the bench is read in', () => {
   below('closeOuts', 'validationReady', 'the bench asks for one thing at a time');
   below('validationReady', 'validationAsks', 'the resources are asked for before the obligation they are for');
   assert.equal(
-    PULSE_PIPELINE[position('graph') + 1],
+    PULSE_PIPELINE[position('graph') + 1]?.id,
     'environments',
     'the environment desk runs *immediately* below the graph record',
   );
@@ -117,19 +125,24 @@ test('the graph is recorded after the reconciler and before anything that reads 
   below('pool', 'graduations', 'a claim that left for the repository is out of the document before it is derived');
 });
 
-test('the obstacle desks run below the voice that files their rows', () => {
-  for (const id of ['obstacleDesk', 'obstacleNotices', 'obstacleOwnership', 'obstacleEndings'] as const)
-    below(id, 'obstacleVoice', 'a row the harness filed is told, owned and watched on the pulse that saw it');
-  below('obstacleOwnership', 'notices', 'an agent whose report was taken up is told so by the pulse that took it');
-  below('obstacleOwnership', 'obstacleNotices', 'the notices go out above the ownership the pulse may write');
-  below('obstacleEndings', 'obstacleOwnership', 'it reads the owner that desk may have just written');
+test('the obstacle desk runs below the world notices it answers', () => {
+  below('obstacles', 'notices', 'an agent whose report was taken up is told so by the pulse that took it');
 });
 
 test('the pull request register is tagged before it is linked', () => {
   below('prWorkItems', 'prWatch', 'one pass says the pull request is the fleet’s, the other which work item it is for');
 });
 
-function sweepDeps(): { deps: PulseSweepDeps; calls: string[] } {
+function bareDeps(): PulseDeps {
+  const store = {
+    reviewWaits: { foldReviewWaits: () => [] },
+    floor: { recordIssueRun: () => [] },
+    prReviewExternals: { prsReviewedElsewhere: () => [], recordPrReviewedElsewhere: () => [] },
+  } as unknown as Store;
+  return { store, errors: { record: () => [] } as unknown as PulseDeps['errors'], review: DEFAULT_PR_REVIEW };
+}
+
+function sweepDeps(): { deps: PulseDeps; calls: string[] } {
   const calls: string[] = [];
   const note = (name: string) => (): [] => {
     calls.push(name);
@@ -143,29 +156,29 @@ function sweepDeps(): { deps: PulseSweepDeps; calls: string[] } {
       recordPrReviewedElsewhere: note('recordPrReviewedElsewhere'),
     },
   } as unknown as Store;
-  const deps: PulseSweepDeps = {
+  const deps: PulseDeps = {
     store,
-    errors: { record: note('errors') } as unknown as PulseSweepDeps['errors'],
+    errors: { record: note('errors') } as unknown as PulseDeps['errors'],
     review: { ...DEFAULT_PR_REVIEW, reviewedElsewhere: 'true' },
     reviewProber: { check: async () => ({ verdict: 'not-reviewed', detail: null }) },
     fleet: { resumeExpiredParks: note('parks'), completeExpiredStalls: note('stalls') },
     ejections: { sweepExpiries: note('ejectionExpiries') },
-    burn: { run: note('burn') } as unknown as PulseSweepDeps['burn'],
+    burn: { run: note('burn') } as unknown as PulseDeps['burn'],
     escalations: { tidyDeadAgents: note('deadAgents'), tidySettledMerges: note('settledMerges') },
-    appraisals: { announce: async () => void calls.push('appraisals') } as unknown as PulseSweepDeps['appraisals'],
-    areaPaths: { refresh: async () => void calls.push('areaPaths') } as unknown as PulseSweepDeps['areaPaths'],
+    appraisals: { announce: async () => void calls.push('appraisals') } as unknown as PulseDeps['appraisals'],
+    areaPaths: { refresh: async () => void calls.push('areaPaths') } as unknown as PulseDeps['areaPaths'],
     localValidations: { sweep: note('localValidations') },
     tickets: { run: async () => void calls.push('tickets') },
   };
   return { deps, calls };
 }
 
-async function walkSweeps(deps: PulseSweepDeps, readWorld: boolean): Promise<void> {
-  await runPulseSweeps('open', deps, {}, readWorld);
-  await runPulseSweeps('afterTasks', deps, { world: WORLD, tasks: [] }, readWorld);
-  await runPulseSweeps('afterAgents', deps, { tasks: [], agents: [] }, readWorld);
-  await runPulseSweeps('afterVerdicts', deps, { world: WORLD }, readWorld);
-  await runPulseSweeps(
+async function walkSweeps(deps: PulseDeps, readWorld: boolean): Promise<void> {
+  await runPulse('open', deps, {}, readWorld);
+  await runPulse('afterTasks', deps, { world: WORLD, tasks: [] }, readWorld);
+  await runPulse('afterAgents', deps, { tasks: [], agents: [] }, readWorld);
+  await runPulse('afterVerdicts', deps, { world: WORLD }, readWorld);
+  await runPulse(
     'afterOrigins',
     deps,
     {
@@ -175,27 +188,19 @@ async function walkSweeps(deps: PulseSweepDeps, readWorld: boolean): Promise<voi
     },
     readWorld,
   );
-  await runPulseSweeps('afterReviews', deps, { dispatchWorld: WORLD, prReviews: [], prReviewRoutes: [] }, readWorld);
-  await runPulseSweeps('afterExecute', deps, {}, readWorld);
+  await runPulse('afterReviews', deps, { dispatchWorld: WORLD, prReviews: [], prReviewRoutes: [] }, readWorld);
+  await runPulse('afterExecute', deps, {}, readWorld);
 }
 
-test('every declared sweep takes exactly one position, and the sweep pipeline names nothing else', () => {
-  assert.deepEqual(
-    [...PULSE_SWEEP_PIPELINE].sort(),
-    Object.keys(PULSE_SWEEPS).sort(),
-    'a sweep declared and never walked is a sweep that is silently dead',
-  );
-  assert.equal(new Set(PULSE_SWEEP_PIPELINE).size, PULSE_SWEEP_PIPELINE.length, 'no sweep is walked twice');
-});
-
-test('the sweep pipeline is grouped by phase, in the phase order the cycle walks', () => {
-  const phases = PULSE_SWEEP_PIPELINE.map((id) => PULSE_SWEEPS[id].phase);
+test('the pipeline is grouped by phase, in the phase order the cycle walks', () => {
+  const phases = PULSE_PIPELINE.map((e) => e.phase);
   const reached = [...new Set(phases)];
   assert.deepEqual(
     reached,
-    PULSE_SWEEP_PHASES.filter((p) => phases.includes(p)),
-    'a phase whose sweeps are split across the list runs them out of the order the list states',
+    PULSE_PHASES.filter((p) => phases.includes(p)),
+    'a phase whose passes are split across the list runs them out of the order the list states',
   );
+  assert.equal(reached[0], 'reconcile', 'the desks run between the world read and everything read off the store');
 });
 
 test('a sweep needing a fresh world read is skipped on a local cycle, and no other is', async () => {
@@ -203,7 +208,7 @@ test('a sweep needing a fresh world read is skipped on a local cycle, and no oth
   await walkSweeps(fresh.deps, true);
   const local = sweepDeps();
   await walkSweeps(local.deps, false);
-  const worldFacing = PULSE_SWEEP_PIPELINE.filter((id) => PULSE_SWEEPS[id].readWorld);
+  const worldFacing = PULSE_PIPELINE.filter((e) => e.phase !== 'reconcile' && e.readWorld).map((e) => e.id);
   assert.deepEqual(worldFacing, ['appraisals', 'areaPaths', 'reviewedElsewhere', 'tickets']);
   for (const id of worldFacing) {
     assert.ok(fresh.calls.includes(id), `${id} runs on a cycle that read the world`);
@@ -214,6 +219,5 @@ test('a sweep needing a fresh world read is skipped on a local cycle, and no oth
 });
 
 test('a missing sweep dependency is skipped, never an error', async () => {
-  const { deps } = sweepDeps();
-  await walkSweeps({ store: deps.store, errors: deps.errors, review: deps.review }, true);
+  await walkSweeps(bareDeps(), true);
 });

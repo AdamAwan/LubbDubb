@@ -7,7 +7,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { ObstacleVoiceDesk } from '../src/obstacles/voiceDesk.js';
+import { obstacleDesk } from './support/obstacles.js';
 import { harnessSightings } from '../src/obstacles/voice.js';
 import type { CiCheck, PullRequest, WorldSnapshot } from '../src/types.js';
 
@@ -107,8 +107,8 @@ function agentReport(system: System, goalRef: string): void {
 
 test('a harness voice and one agent voice reach standing, and the harness alone does not', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
+  const desk = obstacleDesk(system.store);
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()])));
 
   const filed = system.store.obstacles.listObstacles();
   assert.equal(filed.length, 1);
@@ -129,11 +129,11 @@ test('a harness voice and one agent voice reach standing, and the harness alone 
 
 test('two harness readings of one transition are one voice and never two rows', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
+  const desk = obstacleDesk(system.store);
   const before = world(stack([check({ status: 'passing' })], 2));
   const after = world(stack([check()], 2));
-  desk.run(before, after);
-  desk.run(before, after);
+  desk.voice(before, after);
+  desk.voice(before, after);
   const board = system.store.obstacles.obstacleBoard();
   assert.equal(board.length, 1);
   assert.equal(board[0]!.voices, 1);
@@ -142,9 +142,9 @@ test('two harness readings of one transition are one voice and never two rows', 
 
 test("the harness's own key goes through the gates, and a check the world does not report is dropped", () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
+  const desk = obstacleDesk(system.store);
   const after = world(stack([check()]));
-  desk.run(world(stack([check({ status: 'passing' })])), {
+  desk.voice(world(stack([check({ status: 'passing' })])), {
     ...after,
     pullRequests: after.pullRequests.map((p) => ({ ...p, ciChecks: p.ciChecks && [] })),
   });
@@ -153,13 +153,13 @@ test("the harness's own key goes through the gates, and a check the world does n
 
 test('the key the harness files binds, but does not resolve a row on its own', () => {
   const system = build();
-  const desk = new ObstacleVoiceDesk({ store: system.store });
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()])));
+  const desk = obstacleDesk(system.store);
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()])));
   const [row] = system.store.obstacles.obstacleBoard();
   assert.deepEqual(
     row!.keys.map((key) => [key.kind, key.value, key.binds]),
     [['check', 'test (windows)', true]],
   );
-  desk.run(world(stack([check({ status: 'passing' })])), world(stack([check()], 2)));
+  desk.voice(world(stack([check({ status: 'passing' })])), world(stack([check()], 2)));
   assert.equal(system.store.obstacles.listObstacles().length, 1);
 });

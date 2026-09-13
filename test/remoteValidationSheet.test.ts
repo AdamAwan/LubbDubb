@@ -14,7 +14,7 @@ import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatchInput, StateQueryInput, ValidationCheckInput } from '../src/types.js';
-import { PULSE_PIPELINE, type PulseDeskId } from '../src/pulseDesks.js';
+import { PULSE_PIPELINE, type PulseId } from '../src/pulseDesks.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -516,8 +516,8 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
 });
 
 test('the desk assembles below EnvironmentDesk and above ValidationReadyDesk', () => {
-  const at = (id: PulseDeskId): number => {
-    const found = PULSE_PIPELINE.indexOf(id);
+  const at = (id: PulseId): number => {
+    const found = PULSE_PIPELINE.findIndex((entry) => entry.id === id);
     assert.ok(found >= 0, `${id} takes a position in the pulse`);
     return found;
   };
