@@ -17,7 +17,7 @@ import {
 import { linkEdges } from '../src/sequence/readiness.js';
 import { heldByAccepting, waitingOnThis, waitsOn, waveOf, wavesOf } from '../web/src/view/sequence.js';
 import { pastTheFunnel } from './support/plans.js';
-import { sequenceBriefing } from '../src/sequence/dossier.js';
+import { predecessorNote, sequenceBriefing } from '../src/sequence/dossier.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
 import type { FeatureSequence, FeatureSequenceEdge, Issue, IssueRelative } from '../src/types.js';
 
@@ -610,4 +610,58 @@ test('a declined order is not quoted back as something to preserve', () => {
   assert.ok(brief);
   assert.ok(!brief.includes('The order that stands'));
   assert.ok(!brief.includes('The order proposed last time'));
+});
+
+test('a story under a feature with no order is told its siblings may be building what it names', () => {
+  const issues = [story(11), story(12), story(13)];
+  const note = predecessorNote(issues[1]!, issues, new Map(), []);
+  assert.match(note, /one of 3 open under Feature #500/);
+  assert.match(note, /#11, #13/);
+  assert.doesNotMatch(note, /#12/, 'it does not name itself as its own sibling');
+  assert.match(note, /is not a gap in the ticket/);
+});
+
+test('an unaccepted order names the predecessors it would hold behind, and says it is holding nothing', () => {
+  const issues = [story(11), story(12)];
+  const note = predecessorNote(
+    issues[1]!,
+    issues,
+    new Map([['issue:500:sequence', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
+    [],
+  );
+  assert.match(note, /waiting on #11/);
+  assert.match(note, /nobody has accepted/);
+  assert.match(note, /not in the checkout you are reading/);
+});
+
+test('a predecessor that has pushed a branch is not named — there is nothing left to warn about', () => {
+  const issues = [story(11), story(12)];
+  const note = predecessorNote(
+    issues[1]!,
+    issues,
+    new Map([['issue:500:sequence', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
+    [{ id: 'p7', number: 7, title: 'x', branch: 'issue/11', ciStatus: 'passing', unresolvedComments: [] }],
+  );
+  assert.doesNotMatch(note, /waiting on #11/);
+  assert.match(note, /nobody has put them in an order/, 'it falls back to the general reading');
+});
+
+test('an accepted order contributes no note — it is the hold that covers that story', () => {
+  const issues = [story(11), story(12)];
+  const note = predecessorNote(issues[1]!, issues, new Map([['issue:500:sequence', sequence()]]), []);
+  assert.doesNotMatch(note, /waiting on #11/);
+});
+
+test('a story with no parent, or no open siblings, is told nothing', () => {
+  assert.equal(predecessorNote(story(12, { parent: undefined }), [story(12)], new Map(), []), '');
+  assert.equal(predecessorNote(story(12), [story(12), story(11, { state: 'closed' })], new Map(), []), '');
+});
+
+test('the appraisal prompt carries the note, appended rather than interpolated', async () => {
+  const issues = [story(11), story(12)];
+  const { actions } = await full().decide(ctx(issues));
+  const appraisal = actions.find((a) => a.type === 'dispatch_code_agent' && a.originRef === 'issue:12:appraisal');
+  assert.ok(appraisal && 'prompt' in appraisal);
+  assert.match(appraisal.prompt, /What this story may be waiting on/);
+  assert.match(appraisal.prompt, /is not a gap in the ticket/);
 });

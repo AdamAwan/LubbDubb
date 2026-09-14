@@ -1,5 +1,6 @@
-import type { FeatureSequence, Issue } from '../types.js';
-import { featureSequenceSubmitOrigin } from './sequence.js';
+import type { FeatureSequence, Issue, PullRequest } from '../types.js';
+import { featureSequenceOrigin, featureSequenceSubmitOrigin } from './sequence.js';
+import { sequenceReadiness } from './readiness.js';
 
 // → docs/spec/33-story-sequencing.md
 
@@ -81,4 +82,62 @@ function standingOrder(standing: FeatureSequence, fresh: ReadonlySet<number>): s
     );
   }
   return lines;
+}
+
+const MAX_SIBLINGS_NAMED = 12;
+
+/**
+ * What the appraiser is told about work this story expects to arrive from elsewhere. The hold
+ * covers a declared predecessor; this covers the one nobody has declared yet.
+ * → docs/spec/33-story-sequencing.md#what-the-appraiser-is-told
+ */
+export function predecessorNote(
+  issue: Issue,
+  issues: readonly Issue[],
+  sequences: ReadonlyMap<string, FeatureSequence>,
+  openPrs: readonly PullRequest[],
+): string {
+  const parent = issue.parent;
+  if (!parent) return '';
+  const siblings = issues.filter(
+    (i) => i.parent?.number === parent.number && i.number !== issue.number && i.state === 'open',
+  );
+  if (siblings.length === 0) return '';
+
+  const standing = sequences.get(featureSequenceOrigin(parent.number)) ?? null;
+  const proposed =
+    standing !== null && standing.status === 'proposed'
+      ? standing.edges.map((e) => ({ issue: e.issue, dependsOn: e.dependsOn }))
+      : [];
+  const waiting = sequenceReadiness(proposed, { issues, openPrs: [...openPrs] }).get(issue.number) ?? [];
+
+  const lines =
+    waiting.length > 0
+      ? [
+          `An order proposed for Feature #${parent.number} — which nobody has accepted, so it is holding nothing and ` +
+            `you were dispatched anyway — has this story waiting on ${waiting.map((n) => `#${n}`).join(', ')}. ` +
+            `${waiting.length === 1 ? 'It has' : 'None of them has'} landed, so whatever ` +
+            `${waiting.length === 1 ? 'it was' : 'they were'} going to build is not in the checkout you are reading.`,
+        ]
+      : [
+          `This story is one of ${siblings.length + 1} open under Feature #${parent.number}, and nobody has put them ` +
+            `in an order. Something this ticket names may be another story's to build rather than this one's.`,
+          ...(siblings.length <= MAX_SIBLINGS_NAMED
+            ? [`Those are: ${siblings.map((s) => `#${s.number}`).join(', ')}.`]
+            : []),
+        ];
+
+  lines.push(
+    'Work that has not happened yet is not a gap in the ticket. You are judging whether the author said enough for ' +
+      'somebody to start — `unclear` is for a ticket you cannot tell "done" from "not done" for, one that ' +
+      'contradicts itself, or one that contradicts something already true of the code. A ticket that reads clearly ' +
+      'and names something a sibling story is going to build is **workable**: say in your summary what you took to ' +
+      'be arriving from elsewhere, so a wrong reading is visible before an agent acts on it. Mark it `unclear` over ' +
+      'a dependency only when the ticket does not say enough for you to tell what it expects that dependency to ' +
+      'provide.',
+    'If you conclude this story has to wait for another, say so on the scratchpad and name it. Nothing here reads ' +
+      'your verdict as an order and you cannot draw one, but it is what an operator needs in order to.',
+  );
+
+  return `\n\nWhat this story may be waiting on:\n\n${lines.join('\n\n')}`;
 }

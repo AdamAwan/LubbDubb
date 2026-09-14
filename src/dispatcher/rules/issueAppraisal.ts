@@ -1,6 +1,8 @@
 import { appraisalBranch, appraisalOrigin, hasWorkStarted, isAppraised } from '../../intake/appraisal.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { predecessorNote } from '../../sequence/dossier.js';
+import { sequenceHoldReason } from '../../sequence/readiness.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -23,11 +25,11 @@ export function issueAppraisal(s: StageContext): void {
     const branch = appraisalBranch(issue.number);
     const title = `Appraise issue #${issue.number}`;
     const reason = `Nothing has been started for issue #${issue.number}; check the goal can be worked from before dispatching against it.`;
-    const proposed = s.consider({
+    const candidate = {
       origin,
-      rule: 'issue-appraisal',
+      rule: 'issue-appraisal' as const,
       title,
-      kind: 'code',
+      kind: 'code' as const,
       branch,
       reason,
       action: {
@@ -40,14 +42,22 @@ export function issueAppraisal(s: StageContext): void {
             title: issue.title,
             body: issue.body,
             branch,
-          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes),
+          }) +
+          relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
+          predecessorNote(issue, ctx.world.issues, s.sequences, s.openPrs),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,
         rule: 'issue-appraisal',
         reason,
       } satisfies RawAction,
-    });
-    if (proposed) s.appraising.add(issue.number);
+    };
+
+    const waits = s.sequenceWaits.get(issue.number);
+    if (waits) {
+      s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });
+      continue;
+    }
+    if (s.consider(candidate)) s.appraising.add(issue.number);
   }
 }

@@ -650,6 +650,28 @@ distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 | `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands, and posts the author's checklist on the ticket. |
 | _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                           |
 
+### It is held behind a story's predecessors
+
+The appraisal reads the ticket against the default branch, and the rubric asks it to check that the
+things the ticket names exist. Those two together mean a story whose predecessor has not landed is
+judged against a repository missing exactly what that predecessor was going to build — and the
+schema, interface or migration the ticket names is genuinely absent, which is `unclear`'s own
+wording: *names things that do not exist*.
+
+So `issue-appraisal` reads `StageContext.sequenceWaits` and is held with `held: 'sequenced'` like
+`issue-plan` and `issue-pickup`, queued in Up next with the reason naming what it waits behind
+([33](33-story-sequencing.md#the-appraiser-is-held-as-well)). It is held **in front of** the verdict
+rather than informed after it, because an appraisal is a record and this hold is not: `appraisalHold`
+keys on the ticket's text, so an `unclear` cast for a missing predecessor survives that predecessor
+landing and ends only when somebody rewrites a ticket that was never wrong. A held appraiser writes
+no row, and appraises the goal on its merits once the predecessor has a branch.
+
+Nothing is held where nobody declared the dependency, which is the ordinary state of a Feature filed
+an hour ago. That case is the appraiser's prompt rather than the dispatcher's: `predecessorNote`
+tells it what the Feature's siblings are, what an unaccepted order would put this story behind, and
+that work which has not happened yet is not a gap in the ticket
+([33](33-story-sequencing.md#what-the-appraiser-is-told)).
+
 ### What the appraiser judges against
 
 A story an agent can start on says three things, always — **the problem** (who has it, why it
