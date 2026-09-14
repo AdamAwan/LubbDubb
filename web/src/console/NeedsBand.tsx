@@ -561,15 +561,18 @@ function WatchFinding({
         onDone={(id, note) => actions.completeHumanTask(id, note)}
         onDecline={(id, note) => actions.declineHumanTask(id, note)}
         onCloseTicket={null}
+        extra={
+          canRaise ? (
+            <Button
+              tone="secondary"
+              onClick={() => setRaising(true)}
+              title="Raise a bug from this reading — the numbers ride as your own report, and the bug is related back to this goal"
+            >
+              Raise a bug…
+            </Button>
+          ) : null
+        }
       />
-      {canRaise && (
-        <Button
-          onClick={() => setRaising(true)}
-          title="Raise a bug from this reading — the numbers ride as your own report, and the bug is related back to this goal"
-        >
-          Raise a bug…
-        </Button>
-      )}
       {raising && issue && (
         <RaiseBugModal
           issueNumber={issue.number}

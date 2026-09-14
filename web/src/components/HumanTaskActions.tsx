@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button, ButtonRow, expected, refusing } from './button.js';
@@ -26,6 +27,7 @@ export function HumanTaskActions({
   onDone,
   onDecline,
   onCloseTicket = null,
+  extra = null,
 }: {
   task: HumanTask;
   look?: ButtonLook;
@@ -33,6 +35,7 @@ export function HumanTaskActions({
   onDone: (id: string, note?: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;
   onCloseTicket?: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
+  extra?: ReactNode;
 }) {
   useEffect(() => {
     logUsage('human-task.view');
@@ -98,6 +101,7 @@ export function HumanTaskActions({
         <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
           Decline
         </Button>
+        {extra}
       </ButtonRow>
       {saying !== null && (
         <div className="human-task-decline">

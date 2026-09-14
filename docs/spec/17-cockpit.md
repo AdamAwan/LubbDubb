@@ -562,7 +562,10 @@ already holding the row's own detail: the check, what it expected and what it re
 a payload, so what is filed is still what the operator sends and the fleet is handed the numbers
 rather than a paraphrase somebody retyped ([13](13-jobs-and-tickets.md#the-other-filing-kind--a-bug-the-operator-raised)).
 It is drawn only where there is a tracker to file into and a goal to relate the bug back to, and a
-false draws no button rather than a disabled one.
+false draws no button rather than a disabled one. It rides **inside** the settling row, through
+`HumanTaskActions`' `extra` slot, rather than beside it: a third answer to the same ask belongs on the same
+line as the two it stands with, and a button left outside the `ButtonRow` wraps under it as a second
+row of controls that reads as a second ask.
 
 That click is the whole bound on the subsystem: nothing under `src/dispatcher/` may read a watch, so
 no reading ever dispatches an agent, and the route from a number to new work is a person deciding the
