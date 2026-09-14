@@ -17,6 +17,11 @@ export function validationVerdict(checks: readonly ValidationCheck[]): Validatio
     // Not folded into `unrun`. A captured row is one somebody has to look at, which is a different
     // ask from one nobody has started, and the close-out line says so.
     captured: count('captured'),
+    // Not clear, and not folded into `waived`. A row the operator struck at the gate is settled and
+    // is owed to nobody, but a set whose only interesting check was declined has not been validated
+    // — so the flag says so and the close-out line names it.
+    // → docs/spec/20-validation.md#declining-a-single-row
+    declined: count('declined'),
     waived,
   };
 }

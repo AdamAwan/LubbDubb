@@ -65,6 +65,8 @@ function checkMark(check: ValidationCheck): string {
       return '⏸️';
     case 'captured':
       return '📷';
+    case 'declined':
+      return '🚫';
     default:
       return '⬜';
   }

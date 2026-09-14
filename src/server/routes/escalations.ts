@@ -129,11 +129,38 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         { invalid_type_error: 'answers must be an array of {id, answer}' },
       )
       .optional(),
+    // One entry per row the operator struck out of the set they are accepting. The reason is
+    // required for the same reason `validation_plan` requires a note on every call: a null with no
+    // account of itself is the failure that document keeps meeting.
+    // → docs/spec/20-validation.md#declining-a-single-row
+    declined: z
+      .array(
+        z.object(
+          {
+            letter: z
+              .string({ invalid_type_error: 'each decline names the check letter it declines' })
+              .min(1, 'each decline names the check letter it declines'),
+            reason: z
+              .string({ invalid_type_error: 'each decline carries your reason, as text' })
+              .trim()
+              .min(1, 'a declined check carries your reason — it is the only account of why it is not being run'),
+          },
+          { invalid_type_error: 'each decline must be an object of {letter, reason}' },
+        ),
+        { invalid_type_error: 'declined must be an array of {letter, reason}' },
+      )
+      .optional(),
   });
   app.post(
     '/api/proposals/:id/accept',
     checked({ params: IdParams, body: AcceptBody }, async ({ params, body, reply }) => {
-      const result = await proposals.accept(params.id, body.note, body.acknowledged ?? [], body.answers ?? []);
+      const result = await proposals.accept(
+        params.id,
+        body.note,
+        body.acknowledged ?? [],
+        body.answers ?? [],
+        body.declined ?? [],
+      );
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
       if ('unacknowledged' in result)
         return reply.code(400).send({

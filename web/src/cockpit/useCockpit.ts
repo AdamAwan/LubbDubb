@@ -212,8 +212,12 @@ export function useCockpit(): CockpitStatus {
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
       answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
-      decideProposal: (id, verdict, note, acknowledged, answers) =>
-        then(verdict === 'accept' ? api.acceptProposal(id, note, acknowledged, answers) : api.rejectProposal(id, note)),
+      decideProposal: (id, verdict, note, acknowledged, answers, declined) =>
+        then(
+          verdict === 'accept'
+            ? api.acceptProposal(id, note, acknowledged, answers, declined)
+            : api.rejectProposal(id, note),
+        ),
       backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
       overruleShortfall: (issueNumber, proposalId, text) =>
         then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),

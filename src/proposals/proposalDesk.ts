@@ -1,7 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionExecutor } from '../executor/actionExecutor.js';
-import type { PlanCaveat, Proposal } from '../types.js';
+import type { CheckDecline, PlanCaveat, Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
 import { declinePlanAmendment } from '../plans/planAmendment.js';
 import {
@@ -11,6 +11,7 @@ import {
   type CaveatAnswerInput,
 } from '../plans/planCaveats.js';
 import { backOutOfPlan, type BackOutContext, type BackOutVerdict } from '../plans/planBackOut.js';
+import { resolveDeclines, wholeSetNote } from '../validation/planDecline.js';
 import { readProposedAct } from './proposals.js';
 
 // → docs/spec/16-http-api.md
@@ -38,6 +39,7 @@ export class ProposalDesk {
     note?: string,
     acknowledged: readonly string[] = [],
     answers: readonly CaveatAnswerInput[] = [],
+    declined: readonly CheckDecline[] = [],
   ): Promise<DecideResult | UnacknowledgedCaveats | null> {
     const standing = this.store.escalations.getProposal(id);
     const raised = standing ? proposedCaveats(standing) : [];
@@ -45,11 +47,18 @@ export class ProposalDesk {
       const unacknowledged = unacknowledgedCaveats(raised, acknowledged);
       if (unacknowledged.length > 0) return { unacknowledged };
     }
+    const wholeSet = this.declinedWholeSet(standing, declined, note);
+    // Declining every row is not an accept of nothing. A released set of no rows reads exactly like
+    // a planner that legitimately declared none with an `emptyReason`, and the two must stay
+    // distinguishable — so the press lands on the machinery that already exists for *send it back*,
+    // carrying the operator's row-by-row words to the next planner.
+    // → docs/spec/20-validation.md#declining-a-single-row
+    if (wholeSet !== null) return this.reject(id, wholeSet);
     const proposal = this.store.escalations.decideProposal(id, 'accepted', note?.trim() || null, 'human');
     if (!proposal) return null;
     this.recordAnswers(proposal, raised, answers);
     this.closeEscalation(proposal, `Accepted${proposal.note ? `: ${proposal.note}` : '.'}`);
-    const run = await this.executor.runAuthorized(proposal);
+    const run = await this.executor.runAuthorized(proposal, undefined, declined);
     return { proposal, outcome: run.outcome === 'executed' ? 'performed' : 'failed', detail: run.detail };
   }
 
@@ -91,6 +100,24 @@ export class ProposalDesk {
       detail,
     });
     return { proposal, outcome: 'none', detail };
+  }
+
+  /**
+   * The note a whole-set decline is rejected with, or null where this press is not one. Read off the
+   * goal's own live rows rather than the ask, because the ask is what was proposed and the rows are
+   * what would be released — a row superseded since must not make four declines look like five.
+   */
+  private declinedWholeSet(
+    standing: Proposal | null,
+    declined: readonly CheckDecline[],
+    note: string | undefined,
+  ): string | null {
+    if (declined.length === 0) return null;
+    if (!standing || standing.status !== 'pending' || standing.kind !== 'validation_plan') return null;
+    const read = readProposedAct(standing);
+    if (!read.ok || read.act.kind !== 'validation_plan') return null;
+    const resolution = resolveDeclines(this.store.validation.listValidationChecks(read.act.originRef), declined);
+    return resolution.whole ? wholeSetNote(resolution.resolved, note) : null;
   }
 
   private recordAnswers(proposal: Proposal, raised: PlanCaveat[], answers: readonly CaveatAnswerInput[]): void {

@@ -15,6 +15,7 @@ import type {
   UpgradeAction,
   SnoozeTarget,
   CaveatAnswerInput,
+  CheckDecline,
 } from './types.js';
 import type {
   AgentFilesPayload,
@@ -260,8 +261,13 @@ const realApi = {
     post<{ ok: true; dismissedAs: string }>(`/api/escalations/${id}/dismiss`, { note }),
   decidePermission: (id: string, allow: boolean, note?: string) =>
     post<{ ok: true; allowed: boolean }>(`/api/escalations/${id}/permission`, { allow, note }),
-  acceptProposal: (id: string, note?: string, acknowledged?: string[], answers?: CaveatAnswerInput[]) =>
-    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note, acknowledged, answers }),
+  acceptProposal: (
+    id: string,
+    note?: string,
+    acknowledged?: string[],
+    answers?: CaveatAnswerInput[],
+    declined?: CheckDecline[],
+  ) => post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note, acknowledged, answers, declined }),
   rejectProposal: (id: string, note?: string) =>
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/reject`, { note }),
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
