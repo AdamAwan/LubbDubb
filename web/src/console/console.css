@@ -4888,7 +4888,7 @@ button.cn-grow {
    which reads as a layout that failed rather than one that chose. The switch
    shares the wrapper so the two line up.
    → docs/spec/17-cockpit.md#the-overview */
-.cn-ov-next {
+.cn-ov-focus {
   max-width: 1240px;
   margin-inline: auto;
   padding-top: 8px;
@@ -5007,13 +5007,13 @@ button.cn-grow {
 
 /* ── One ask at a time, under the work it is about ── */
 
-.cn-ov-next-card {
+.cn-ov-focus-card {
   border: 1px solid var(--cn-tone-line, var(--cn-line));
   border-radius: var(--cn-r);
   background: var(--cn-panel);
   padding: 22px 24px;
 }
-.cn-ov-next-progress {
+.cn-ov-focus-progress {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -5023,13 +5023,13 @@ button.cn-grow {
 }
 /* The counter and the two controls, pinned to the card's top right so they are
    in one place on every ask whatever its body's height. */
-.cn-ov-next-nav {
+.cn-ov-focus-nav {
   margin-top: 0;
   margin-left: auto;
   flex: none;
   flex-wrap: nowrap;
 }
-.cn-ov-next-count {
+.cn-ov-focus-count {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -5073,7 +5073,7 @@ button.cn-grow {
   height: 5px;
   opacity: 1;
 }
-.cn-ov-next-title {
+.cn-ov-focus-title {
   font-size: 19px;
   line-height: 1.3;
   font-weight: 600;
@@ -5081,7 +5081,7 @@ button.cn-grow {
   margin: 14px 0 0;
   text-wrap: balance;
 }
-.cn-ov-next-meta {
+.cn-ov-focus-meta {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -5090,79 +5090,81 @@ button.cn-grow {
   color: var(--cn-fg-faint);
   margin-top: 8px;
 }
-.cn-ov-next-cost {
+.cn-ov-focus-cost {
   margin: 14px 0 0;
   font-size: 13px;
   color: var(--cn-amber-ink);
 }
-.cn-ov-next-body {
+.cn-ov-focus-body {
   margin-top: 16px;
 }
 
 /* A caption under the bar rather than a second band: it is a reading, and a rule
    of its own made the controls look like they belonged to neither side of it. */
-.cn-ov-next-foot {
+.cn-ov-focus-foot {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 10px;
 }
-.cn-ov-next-rest {
+.cn-ov-focus-rest {
   font-size: 11.5px;
   color: var(--cn-fg-faint);
   font-variant-numeric: tabular-nums;
 }
-.cn-ov-next-clear {
-  max-width: 620px;
+.cn-ov-focus-clear {
+  max-width: 980px;
   padding: 34px 4px;
 }
-.cn-ov-next-clear h2 {
+.cn-ov-focus-clear h2 {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 600;
   color: var(--cn-green-ink);
 }
-.cn-ov-next-clear p {
+.cn-ov-focus-clear p {
   color: var(--cn-fg-dim);
   margin: 0 0 16px;
+  max-width: 620px;
 }
 
 /* ── Worth a look: the clear state's leads ───────────────────────────────────
-   Bands rather than cards, for the overview's own reason — this is a list of
-   readings, and a grid of tiles would make five of them look like a dashboard
-   somebody has to take in before they can press anything.
+   Tiles in a grid, the first of them spanning it. The list was bands, and the
+   grid is what it is because these are five *different* readings rather than
+   five of one thing: side by side they are taken in at a glance, where a column
+   is read down. What the tiles cost is measure — a name in a 290px column
+   truncates, and a name is the thing you click — so the first lead, whose names
+   are the ones the operator most wants whole, takes the full width and the rest
+   are two or three up.
 
-   Each band wears its lead's tone as a rule down its left edge and on its
-   figure, and nothing else: a fill behind five rows is a page of colour, while
-   the rule is enough to say *whose* each row is at a glance — amber the
-   operator's own, blue the fleet's supply, red something wrong, and the plain
-   line where the reading is none of those. The rule is the tone's *line*
-   rather than its ink, because five saturated edges down one panel is the
-   loudest thing on a surface whose whole subject is that nothing is urgent. The figures share a right-aligned column so
-   the eye reads down them, and the waits share another at the far edge.
+   Each tile wears its lead's tone as a rule along its top edge and on its
+   figure, and nothing else: a fill behind five tiles is a page of colour. The
+   rule is the tone's *line* rather than its ink, because five saturated edges is
+   the loudest thing on a surface whose whole subject is that nothing is urgent.
    → docs/spec/17-cockpit.md#when-nothing-needs-you */
 
 .cn-ov-leads {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 10px;
+  align-items: stretch;
 }
 .cn-ov-lead {
-  padding: 11px 12px 12px 13px;
-  border-radius: var(--cn-r-sm);
-  box-shadow: inset 2px 0 0 var(--cn-tone-line, var(--cn-line));
-  transition: background 120ms ease;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 13px 14px 11px;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line-soft);
+  border-radius: var(--cn-r);
+  box-shadow: inset 0 2px 0 var(--cn-tone-line, var(--cn-line));
+  transition: box-shadow 120ms ease;
 }
-/* The ground arrives on hover rather than sitting under every band: five filled
-   strips is the shape an eye learns to skip, and what wants marking here is the
-   one the pointer is on — which is also where the rule comes up to its full
-   tone, the softer line being what the band wears at rest. */
 .cn-ov-lead:hover {
-  background: var(--cn-panel-2);
-  box-shadow: inset 2px 0 0 var(--cn-tone, var(--cn-line));
+  box-shadow: inset 0 2px 0 var(--cn-tone, var(--cn-line));
 }
 .cn-ov-lead-head {
   display: flex;
@@ -5170,50 +5172,48 @@ button.cn-grow {
   gap: 10px;
 }
 .cn-ov-lead-n {
-  min-width: 26px;
-  text-align: right;
-  font-size: 18px;
+  font-size: 23px;
+  line-height: 1;
   font-weight: 600;
-  line-height: 1.1;
   color: var(--cn-tone, var(--cn-fg));
   font-variant-numeric: tabular-nums;
 }
 .cn-ov-lead-title {
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--cn-fg);
 }
-/* Pinned right, so the control is in the same place on every lead however long
-   the phrase beside the figure runs. */
-.cn-ov-lead-go {
-  margin-left: auto;
-  flex: none;
-  white-space: nowrap;
-}
 .cn-ov-lead-say {
-  margin: 5px 0 0 36px;
-  font-size: 12px;
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
   color: var(--cn-fg-dim);
-  max-width: 62ch;
+  max-width: 60ch;
 }
 .cn-ov-lead-items {
   list-style: none;
-  margin: 9px 0 0 36px;
-  padding: 0;
+  margin: 11px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--cn-line-soft);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  /* Capped rather than filled on the spanning tile: the wait is read against the
+     name it belongs to, and across a 940px row it ends up a column away from it. */
+  max-width: 620px;
 }
 .cn-ov-lead-items > li {
   display: flex;
   align-items: baseline;
   gap: 8px;
   min-width: 0;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
 }
 .cn-ov-lead-name {
   padding: 0;
   border: 0;
   background: none;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--cn-fg-dim);
   text-align: left;
   cursor: pointer;
@@ -5221,12 +5221,13 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The far edge, so several waits read as a column rather than as a tail on each
-   name — the figure they are being compared against is each other. */
+/* The far edge of the item list, so several waits read as a column rather than
+   as a tail on each name — the figure they are being compared against is each
+   other's. */
 .cn-ov-lead-wait {
   margin-left: auto;
   padding-left: 10px;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--cn-fg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -5237,6 +5238,17 @@ button.cn-grow {
 .cn-ov-lead-name:focus-visible {
   outline: 2px solid var(--cn-accent);
   outline-offset: 2px;
+}
+/* Pinned to the tile's floor, so the controls line up across a row of tiles
+   whose bodies are different heights. */
+.cn-ov-lead-foot {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+}
+.cn-ov-lead-go {
+  flex: none;
+  white-space: nowrap;
 }
 
 /* The one-at-a-time shape absorbs the rail, so the body is one track rather than
@@ -5543,7 +5555,7 @@ button.cn-grow {
   color: var(--cn-fg-faint);
 }
 /* The band and the ask are one object, so the seam between them is closed. */
-.cn-ov-ctx + .cn-ov-next-title {
+.cn-ov-ctx + .cn-ov-focus-title {
   margin-top: 16px;
 }
 .cn-ov-ctx-wide {
@@ -5593,28 +5605,28 @@ button.cn-grow {
 /* The setting and the act, side by side. The aside takes a share rather than a
    fixed width so the ask keeps the room on a narrow desktop, and the rule
    between them is the aside's own edge — one line, not a gap and a border. */
-.cn-ov-next-split {
+.cn-ov-focus-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   margin-top: 14px;
 }
-.cn-ov-next-aside {
+.cn-ov-focus-aside {
   min-width: 0;
 }
-.cn-ov-next-main {
+.cn-ov-focus-main {
   min-width: 0;
 }
-.cn-ov-next-main > .cn-ov-ask-label:first-child {
+.cn-ov-focus-main > .cn-ov-ask-label:first-child {
   margin-top: 0;
 }
 @media (min-width: 1100px) {
-  .cn-ov-next-split {
+  .cn-ov-focus-split {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     gap: 26px;
     align-items: start;
   }
-  .cn-ov-next-aside {
+  .cn-ov-focus-aside {
     border-right: 1px solid var(--cn-line);
     padding-right: 26px;
   }

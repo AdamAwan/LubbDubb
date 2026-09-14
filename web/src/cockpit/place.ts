@@ -58,11 +58,16 @@ export interface Place {
 
 /**
  * The overview's shape. `cards` is what the deployment has always drawn — fleet,
- * goals, pull requests. The other three lead with what the operator must answer
- * rather than what the harness is doing.
+ * goals, pull requests. `focus` leads with what the operator must answer rather
+ * than what the harness is doing.
  */
-export type OverviewShape = 'cards' | 'next';
-export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'next'];
+export type OverviewShape = 'cards' | 'focus';
+export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'focus'];
+
+/* `overview=next` is what this shape was called, and a link naming it is one an
+   operator saved or sent — so it lands on the shape rather than falling back to
+   Cards, which is the wrong surface and says nothing about why. */
+const OVERVIEW_WAS: Record<string, OverviewShape> = { next: 'focus' };
 
 /**
  * How the feature board is read. `board` is every Feature at once, which answers
@@ -230,7 +235,7 @@ export function readPlace(search: string): Place {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
-    overview: OVERVIEW_SHAPES.find((o) => o === param(query, 'overview')) ?? 'cards',
+    overview: readOverview(param(query, 'overview')),
     featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
 }
@@ -378,4 +383,9 @@ export function placeQuery(place: Place): string {
   if (place.featureMode !== 'board') query.set('fmode', place.featureMode);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
+}
+
+function readOverview(value: string | null): OverviewShape {
+  if (value === null) return 'cards';
+  return OVERVIEW_SHAPES.find((o) => o === value) ?? OVERVIEW_WAS[value] ?? 'cards';
 }

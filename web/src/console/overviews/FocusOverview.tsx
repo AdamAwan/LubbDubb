@@ -38,7 +38,7 @@ import { buildLeads, type Lead, type LeadWhere } from './leads.js';
  * and where it is gone — answered, withdrawn — the position it held is the one
  * the next ask falls into.
  */
-export function NextOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+export function FocusOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = [...view.needsYou].sort(byWeight);
   const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
   const held = partsHeld(rows);
@@ -75,16 +75,16 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
   const subject = subjectLabel(row);
 
   return (
-    <div className="cn-ov-next">
-      <OverviewSwitch shape="next" actions={actions} />
+    <div className="cn-ov-focus">
+      <OverviewSwitch shape="focus" actions={actions} />
 
-      <div className={`cn-ov-next-card cn-t-${KIND_TONE[row.kind]}`}>
+      <div className={`cn-ov-focus-card cn-t-${KIND_TONE[row.kind]}`}>
         {/* The pips are the whole queue and each is a way into it: a bar that only
             reports a position, on a surface whose complaint about the rail was
             that it could not be acted on, would be the same mistake one size
             down. They carry the ask's tone, so the column also says what kind of
             thing is waiting where. */}
-        <div className="cn-ov-next-progress">
+        <div className="cn-ov-focus-progress">
           <span className="cn-ov-pips">
             {rows.map((r, i) => (
               <button
@@ -104,8 +104,8 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
               ends up hunting for the control they press most. Here it is the same
               place on every ask, and beside the count that says what pressing it
               does. */}
-          <ButtonRow className="cn-ov-next-nav">
-            <span className="cn-ov-next-count">
+          <ButtonRow className="cn-ov-focus-nav">
+            <span className="cn-ov-focus-count">
               {at + 1} of {rows.length}
             </span>
             <Button
@@ -136,21 +136,21 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             argument is that the thing to do is in front of you, with the thing to
             do scrolled off. They collapse back into one column below 1100px,
             where the height is cheaper than the width. */}
-        <div className="cn-ov-next-split">
-          <aside className="cn-ov-next-aside">
+        <div className="cn-ov-focus-split">
+          <aside className="cn-ov-focus-aside">
             <Context row={row} view={view} actions={actions} />
           </aside>
 
-          <div className="cn-ov-next-main">
+          <div className="cn-ov-focus-main">
             <h3 className="cn-ov-ctx-label cn-ov-ask-label">Your move</h3>
-            <h2 className="cn-ov-next-title">
+            <h2 className="cn-ov-focus-title">
               <span className="cn-sym" aria-hidden="true">
                 {KIND_SYMBOL[row.kind]}
               </span>
               {row.title}
             </h2>
 
-            <div className="cn-ov-next-meta">
+            <div className="cn-ov-focus-meta">
               <span className="cn-ov-ask-kind">{KIND_LABEL[row.kind]}</span>
               {subject !== null && <span className="cn-ov-ask-subject">{subject}</span>}
               {row.goalRef !== null && <Ref to={row.goalRef} />}
@@ -159,17 +159,17 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             </div>
 
             {row.holding > 0 && (
-              <p className="cn-ov-next-cost">
+              <p className="cn-ov-focus-cost">
                 <b>{holdingLabel(row.holding)}</b> waiting on this answer.
               </p>
             )}
 
             {row.note !== undefined && <p className="cn-ov-ask-note">{row.note}</p>}
 
-            <div className="cn-ov-next-body">{body}</div>
+            <div className="cn-ov-focus-body">{body}</div>
 
-            <footer className="cn-ov-next-foot">
-              <span className="cn-ov-next-rest">
+            <footer className="cn-ov-focus-foot">
+              <span className="cn-ov-focus-rest">
                 {rows.length - at - 1 === 0
                   ? 'last one'
                   : `${rows.length - at - 1} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
@@ -306,9 +306,9 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const working = view.live.length;
 
   return (
-    <div className="cn-ov-next">
-      <OverviewSwitch shape="next" actions={actions} />
-      <div className="cn-ov-next-clear">
+    <div className="cn-ov-focus">
+      <OverviewSwitch shape="focus" actions={actions} />
+      <div className="cn-ov-focus-clear">
         <h2>Nothing needs you.</h2>
         <p>
           {working} {working === 1 ? 'agent is' : 'agents are'} working
@@ -335,7 +335,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
             </h3>
             <ul className="cn-ov-leads">
               {leads.map((lead) => (
-                <LeadRow key={lead.key} lead={lead} now={view.now} actions={actions} />
+                <LeadTile key={lead.key} lead={lead} now={view.now} actions={actions} />
               ))}
             </ul>
           </>
@@ -346,26 +346,18 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
 }
 
 /**
- * One lead: the figure, what it counts, why it is worth a look, and the way
- * there. The things it names are drawn as their own controls with their refs
- * beside them — a name with no way to it is the dead end this document keeps
- * naming, and a ref inside a button is the other half of the same rule.
+ * One lead as a tile: the figure, what it counts, why it is worth a look, the
+ * things it names, and the way there on its floor. The names are their own
+ * controls with their refs beside them — a name with no way to it is the dead
+ * end this document keeps naming, and a ref inside a button is the other half of
+ * the same rule.
  */
-function LeadRow({ lead, now, actions }: { lead: Lead; now: number; actions: CockpitActions }): JSX.Element {
+function LeadTile({ lead, now, actions }: { lead: Lead; now: number; actions: CockpitActions }): JSX.Element {
   return (
     <li className={`cn-ov-lead ${lead.tone === null ? '' : `cn-t-${lead.tone}`}`}>
       <div className="cn-ov-lead-head">
         <b className="cn-ov-lead-n">{lead.count}</b>
         <span className="cn-ov-lead-title">{lead.title}</span>
-        <Button
-          tone="secondary"
-          ghost
-          size="small"
-          className="cn-ov-lead-go"
-          onClick={() => goLead(lead.where, actions)}
-        >
-          {lead.go} →
-        </Button>
       </div>
       <p className="cn-ov-lead-say">{lead.say}</p>
       {lead.items.length > 0 && (
@@ -387,6 +379,17 @@ function LeadRow({ lead, now, actions }: { lead: Lead; now: number; actions: Coc
           ))}
         </ul>
       )}
+      <footer className="cn-ov-lead-foot">
+        <Button
+          tone="secondary"
+          ghost
+          size="small"
+          className="cn-ov-lead-go"
+          onClick={() => goLead(lead.where, actions)}
+        >
+          {lead.go} →
+        </Button>
+      </footer>
     </li>
   );
 }

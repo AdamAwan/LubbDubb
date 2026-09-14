@@ -7,7 +7,7 @@ import { IN_FLIGHT } from '../Overview.js';
 /**
  * Where a lead goes. A union rather than a callback, so a lead is a value the
  * tests can read and every lead has somewhere to go — the routing is one
- * `switch` in `NextOverview`, total over this type, and a lead added with no
+ * `switch` in `FocusOverview`, total over this type, and a lead added with no
  * route fails the typecheck rather than drawing a control that does nothing.
  */
 export type LeadWhere =

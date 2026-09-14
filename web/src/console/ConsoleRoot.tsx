@@ -10,7 +10,7 @@ import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 
 import { Overview, queueRow } from './Overview.js';
-import { NextOverview } from './overviews/NextOverview.js';
+import { FocusOverview } from './overviews/FocusOverview.js';
 import { projectName } from '../view/updateAsks.js';
 import { WorldSignals } from './WorldSignals.js';
 import { EnvironmentsPanel } from './EnvironmentsPanel.js';
@@ -153,15 +153,15 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
 /** Whether the overview's shape has absorbed the queue rail. */
 function railless(view: CockpitView): boolean {
   if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
-  return view.overviewShape === 'next';
+  return view.overviewShape === 'focus';
 }
 
 function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {
   switch (tab) {
     case 'overview':
       switch (view.overviewShape) {
-        case 'next':
-          return <NextOverview view={view} actions={actions} />;
+        case 'focus':
+          return <FocusOverview view={view} actions={actions} />;
         default:
           return <Overview view={view} actions={actions} />;
       }

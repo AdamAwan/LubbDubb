@@ -90,6 +90,16 @@ test('every config section the type admits round-trips through the URL', () => {
   }
 });
 
+/* The shape was `next` before it was Focus mode, and a link naming it is one
+   somebody saved or sent — so it lands on the shape, not back on Cards. */
+test('a saved link to the old overview name lands on Focus mode', () => {
+  assert.equal(readPlace('?overview=focus').overview, 'focus');
+  assert.equal(readPlace('?overview=next').overview, 'focus');
+  assert.equal(readPlace('?overview=cards').overview, 'cards');
+  assert.equal(readPlace('?overview=nonsense').overview, 'cards');
+  assert.equal(readPlace('').overview, 'cards');
+});
+
 test('a value that names no destination reads as the overview', () => {
   assert.equal(readPlace('?tab=nowhere').tab, 'overview');
   assert.equal(readPlace('?panel=nowhere').panel, null);

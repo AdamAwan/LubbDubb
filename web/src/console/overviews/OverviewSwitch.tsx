@@ -7,16 +7,16 @@ import { OVERVIEW_SHAPES } from '../../cockpit/place.js';
 
 const SHAPE_LABEL: Record<OverviewShape, string> = {
   cards: 'Cards',
-  next: 'Next',
+  focus: 'Focus mode',
 };
 
 const SHAPE_TITLE: Record<OverviewShape, string> = {
   cards: "Today's overview — fleet, goals in flight, pull requests",
-  next: 'The single ask holding the most work, and nothing else',
+  focus: 'The single ask holding the most work, and nothing else — and where nothing is asking, what is worth a look',
 };
 
 /**
- * Which of the four overview shapes is drawn. The shape is a
+ * Which of the two overview shapes is drawn. The shape is a
  * [place](../../cockpit/place.ts), so a link to one is a link somebody can send.
  */
 export function OverviewSwitch({ shape, actions }: { shape: OverviewShape; actions: CockpitActions }): JSX.Element {
