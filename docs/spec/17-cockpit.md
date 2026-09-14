@@ -1447,9 +1447,21 @@ and it is the one the codebase reaches for most.
 
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
 toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
-[the review mark](#the-fleet-reviews-mark) already makes with `t-green`. A station that composes on top
-of a caller's tone uses `withShape`, so the caller's half and the station's half stay two things:
-`withShape(look, onCloseTicket === null && 'go')`.
+[the review mark](#the-fleet-reviews-mark) already makes with `t-green`.
+
+**A station that composes on its caller's tone does it with a tone**, which this rule used to be
+demonstrated with the counter-example of. `HumanTaskActions` marked the verb its row expects by adding
+a `go` class to the look, and the one that refuses with `no` — and **neither class had a rule behind it
+in either sheet**. So the only thing the cockpit had for saying _this is the act_ drew as nothing, and
+`Done` was pixel-identical to `Decline` everywhere the row is embedded: the rail, the ask panel, the
+goal page, the overview's one-at-a-time shape. Two grey buttons, and nothing saying which one the row
+was asking for. Being spelled as shape is why it went unseen — shape is a station's own geometry and is
+allowed to be a class, so a class with no rule reads as geometry this surface happens not to need.
+
+They are `expected(look)` and `refusing(look)` now, in `button.tsx`, and they return a look with
+`tone` set — `primary` for the verb the row wants, `danger` for the refusal. The caller's half and the
+station's half stay two things exactly as before; what changed is that the station's half is the same
+prop the rule above says tone must travel as, and so resolves to a rule that is already written.
 
 **A row of buttons is a thing too** — `ButtonRow`, dressed by `.btn-row`. The button was settled and
 the group it sits in was not, so the cockpit carried at least three spellings of "two controls side by

@@ -9,7 +9,7 @@ import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { Button, buttonClass, withShape } = await import('../web/src/components/button.js');
+const { Button, buttonClass, expected, refusing } = await import('../web/src/components/button.js');
 
 test('the base is written twice, so one rule dresses a button anywhere', () => {
   assert.equal(buttonClass({}), 'btn btn');
@@ -31,9 +31,27 @@ test('a destructive button can also be a quiet one', () => {
 
 test('shape rides beside the tone, never through it', () => {
   assert.equal(buttonClass({ ghost: true, className: 'work-root-head' }), 'btn btn ghost work-root-head');
-  assert.deepEqual(withShape({ ghost: true }, 'go'), { ghost: true, className: 'go' });
-  assert.deepEqual(withShape({ ghost: true, className: 'go' }, 'no'), { ghost: true, className: 'go no' });
-  assert.deepEqual(withShape({ className: 'go' }, false, null, undefined), { className: 'go' });
+});
+
+/**
+ * The verb a row expects and the one that refuses are *tones*, and the reason is
+ * that they were classes with no rule behind them: `Done` drew identically to
+ * `Decline` on every surface embedding the row. A tone resolves to a rule that is
+ * already written, so the assertion is that each reaches the sheet.
+ */
+test('the verb a row expects is a tone, so it reaches a rule', () => {
+  assert.deepEqual(expected({}), { tone: 'primary' });
+  assert.deepEqual(refusing({}), { tone: 'danger' });
+  assert.equal(buttonClass(expected({})), 'btn btn primary');
+  assert.equal(buttonClass(refusing({})), 'btn btn danger');
+  assert.notEqual(buttonClass(expected({})), buttonClass({}), 'the expected verb must not draw as the plain one');
+});
+
+test('the station composes on the caller, keeping the caller’s weight', () => {
+  assert.deepEqual(expected({ ghost: true, size: 'small' }), { ghost: true, size: 'small', tone: 'primary' });
+  assert.equal(buttonClass(expected({ ghost: true, size: 'small' })), 'btn btn primary ghost small');
+  // The caller's own tone is what the station overrides, and only that.
+  assert.deepEqual(expected({ tone: 'secondary' }), { tone: 'primary' });
 });
 
 test('a button is a button, never a form submit', () => {

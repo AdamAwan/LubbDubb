@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { Button, withShape } from './button.js';
+import { Button, expected, refusing } from './button.js';
 import type { ButtonLook } from './button.js';
 import { logUsage } from '../cockpit/usage.js';
 
@@ -55,7 +55,7 @@ export function HumanTaskActions({
         {onCloseTicket !== null &&
           (noteOnDone === null ? (
             <AsyncButton
-              {...withShape(look, 'go')}
+              {...expected(look)}
               onClick={() => {
                 setRefusal(null);
                 return onCloseTicket(task.id);
@@ -67,7 +67,7 @@ export function HumanTaskActions({
             </AsyncButton>
           ) : (
             <Button
-              {...withShape(look, 'go')}
+              {...expected(look)}
               onClick={() => open('close')}
               title="Close the item in the tracker — and say what you are doing about what is outstanding"
             >
@@ -76,7 +76,7 @@ export function HumanTaskActions({
           ))}
         {noteOnDone === null ? (
           <AsyncButton
-            {...withShape(look, onCloseTicket === null && 'go')}
+            {...(onCloseTicket === null ? expected(look) : look)}
             onClick={() => {
               setRefusal(null);
               return onDone(task.id);
@@ -88,7 +88,7 @@ export function HumanTaskActions({
           </AsyncButton>
         ) : (
           <Button
-            {...withShape(look, onCloseTicket === null && 'go')}
+            {...(onCloseTicket === null ? expected(look) : look)}
             onClick={() => open('done')}
             title="You did it — and this one asks what you are doing about what is outstanding"
           >
@@ -117,7 +117,7 @@ export function HumanTaskActions({
             onChange={(e) => setNote(e.currentTarget.value)}
           />
           <AsyncButton
-            {...withShape(look, saying === 'declined' ? 'no' : 'go')}
+            {...(saying === 'declined' ? refusing(look) : expected(look))}
             disabled={note.trim().length === 0}
             onRefused={setRefusal}
             onClick={async () => {
