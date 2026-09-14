@@ -2,10 +2,17 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import { FEATURE_SORTS, type FeaturePrFilter, type FeatureSort } from '../cockpit/place.js';
+import {
+  FEATURE_MODES,
+  FEATURE_SORTS,
+  type FeatureMode,
+  type FeaturePrFilter,
+  type FeatureSort,
+} from '../cockpit/place.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { featureHolds, goalPullRequests } from '../view/featureHolds.js';
 import type { FeatureHold, FeatureHolds, FeaturePresence, GoalPullRequest } from '../view/featureHolds.js';
+import { FeatureFocus } from './FeatureFocus.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AgentOnIt } from './AgentOnIt.js';
@@ -87,30 +94,36 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             {orphans !== null && orphans.costUsd !== null && ` · ${fmtUsd(orphans.costUsd)} spent under no Feature`}
             {board.backfilling ? ' · still filling' : ''}
           </span>
-          <SortControl sort={view.featureSort} actions={actions} />
+          <ModeControl mode={view.featureMode} actions={actions} />
+          {view.featureMode === 'board' && <SortControl sort={view.featureSort} actions={actions} />}
         </div>
 
-        {cards.map((card) =>
-          card.kind === 'feature' ? (
-            <FeatureCard
-              key={`f:${card.rollup.number}`}
-              card={card}
-              view={view}
-              actions={actions}
-              onAnswered={() => void read()}
-            />
-          ) : (
-            <GoalCard
-              key={`g:${card.row.number}`}
-              card={card}
-              environments={board.environments}
-              view={view}
-              actions={actions}
-            />
-          ),
+        {view.featureMode === 'focus' && (
+          <FeatureFocus board={board} view={view} actions={actions} onAnswered={() => void read()} />
         )}
 
-        {unresolved > 0 && (
+        {view.featureMode === 'board' &&
+          cards.map((card) =>
+            card.kind === 'feature' ? (
+              <FeatureCard
+                key={`f:${card.rollup.number}`}
+                card={card}
+                view={view}
+                actions={actions}
+                onAnswered={() => void read()}
+              />
+            ) : (
+              <GoalCard
+                key={`g:${card.row.number}`}
+                card={card}
+                environments={board.environments}
+                view={view}
+                actions={actions}
+              />
+            ),
+          )}
+
+        {view.featureMode === 'board' && unresolved > 0 && (
           <p className="cn-psub cn-fb-unresolved">
             {unresolved} {unresolved === 1 ? 'item’s' : 'items’'} parent link could not be read, so{' '}
             {unresolved === 1 ? 'it is' : 'they are'} counted nowhere above.
@@ -145,6 +158,29 @@ function buildCards(board: FeatureBoardPayload, view: CockpitView): Card[] {
     });
   }
   return cards;
+}
+
+function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitActions }): JSX.Element {
+  return (
+    <span className="cn-fb-mode">
+      {FEATURE_MODES.map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={m === mode}
+          className={m === mode ? 'cn-fb-mode-on' : ''}
+          title={
+            m === 'board'
+              ? 'Every Feature at once — how the work is going'
+              : 'One Feature at a time, with its asks in front — what to do about it'
+          }
+          onClick={() => actions.setFeatureMode(m)}
+        >
+          {m === 'board' ? 'Board' : 'Focus'}
+        </button>
+      ))}
+    </span>
+  );
 }
 
 function orderCards(cards: Card[], sort: FeatureSort): Card[] {

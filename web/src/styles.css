@@ -11316,3 +11316,25 @@ button.pk.pk {
     text-align: left;
   }
 }
+
+/* A row of buttons — the group the `.btn` block was missing. Written once here
+   rather than per surface, for the reason the button itself is: two controls
+   side by side are the same object wherever they are, and a gap that depends on
+   which panel you are in is a decision nobody made.
+   → docs/spec/17-cockpit.md#the-button */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* The group that settles the thing above it. The rule is what separates a
+   control from the prose it acts on; without it the two buttons read as the
+   last line of the body and end wherever that body happened to stop. */
+.btn-row.bar {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
