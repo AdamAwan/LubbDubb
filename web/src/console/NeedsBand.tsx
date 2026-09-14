@@ -13,7 +13,8 @@ import { ParentPicker } from '../components/ParentPicker.js';
 import { proposedParentTitle } from '../view/orphanGoal.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
-import { goalIssue } from '../view/goalPage.js';
+import { ValidationSection } from '../components/ValidationSection.js';
+import { buildGoalPage, goalIssue } from '../view/goalPage.js';
 import { refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
@@ -86,13 +87,12 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
     if (!task) return null;
     return <WatchFinding task={task} view={view} actions={actions} />;
   }
-  if (
-    row.kind === 'bench' ||
-    row.kind === 'close_out' ||
-    row.kind === 'burn' ||
-    row.kind === 'validate' ||
-    row.kind === 'supply'
-  ) {
+  if (row.kind === 'validate') {
+    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
+    if (!task) return null;
+    return <ValidateAsk task={task} view={view} actions={actions} />;
+  }
+  if (row.kind === 'bench' || row.kind === 'close_out' || row.kind === 'burn' || row.kind === 'supply') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return (
@@ -292,6 +292,76 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onExtend={(id) => actions.extendStall(id)}
       onViewPlan={(id) => actions.viewPlan(id)}
     />
+  );
+}
+
+/**
+ * The bench row that asks for the goal's checks, drawn as the checks themselves.
+ *
+ * Every other ask on this surface is answered by the ask: a verdict, a pick, a
+ * sentence. This one is answered somewhere else — somebody runs the checks and
+ * records what they saw — so a body that only names them is a page that tells the
+ * operator to go and find the work, on the one surface whose whole argument is
+ * that the thing to do is in front of you. So the goal's own check rows are drawn
+ * here, from the same {@link ValidationSection} the goal page manages them with,
+ * with the ones still owed already open: the steps, the resources and the four
+ * readings are where the ask is rather than a goal page away.
+ *
+ * The prose stays above them. It is the desk's own refreshed statement of what the
+ * goal owes — the sheet assembled for an environment, the ticket's link — and it is
+ * what the row says everywhere the checks are not in front of the reader.
+ *
+ * Where the snapshot holds no checks for the goal, the prose is the whole body, as
+ * it was: a row filed against a goal this cockpit cannot see the checks of is still
+ * a row somebody has to settle.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function ValidateAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const page = task.originRef === null ? null : buildGoalPage(view.state, task.originRef, view.needsYou, null);
+  const number = Number(/^issue:(\d+)$/.exec(task.originRef ?? '')?.[1]);
+  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
+  return (
+    <>
+      <p>{task.title}</p>
+      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      {page !== null && Number.isFinite(number) && live.length > 0 && (
+        <div className="cn-ask-checks">
+          <ValidationSection
+            checks={page.checks}
+            plan={page.checkPlan}
+            issueNumber={number}
+            resources={page.checkResources}
+            refUrls={view.state.refUrls}
+            desktopFolder={view.state.config.desktopFolder}
+            look={{ tone: 'secondary' }}
+            openOutstanding
+            onResult={(checkId, result, note) =>
+              actions.setValidation(number, checkId, { kind: 'result', result, note })
+            }
+            onDefer={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'defer', reason })}
+            onWaive={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'waive', reason })}
+            onReset={(checkId) => actions.setValidation(number, checkId, { kind: 'reset' })}
+            onHandover={(checkId, to) => actions.setValidation(number, checkId, { kind: 'handover', to })}
+          />
+        </div>
+      )}
+      <HumanTaskActions
+        task={task}
+        look={{ tone: 'secondary' }}
+        noteOnDone={null}
+        onDone={(id, note) => actions.completeHumanTask(id, note)}
+        onDecline={(id, note) => actions.declineHumanTask(id, note)}
+        onCloseTicket={null}
+      />
+    </>
   );
 }
 

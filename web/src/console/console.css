@@ -1700,6 +1700,12 @@ a.cn-qbody {
   font-size: 14px;
   line-height: 1.55;
 }
+/* The goal's check rows inside the ask that asks for them. `ValidationSection` is
+   a shared component and dresses itself; what an ask adds is the gap that keeps
+   the rows off the sentence above them and the row's own verbs below. */
+.cn-ask-checks {
+  margin: 11px 0;
+}
 /* The validation card — full width, and now below the plan that writes its checks
    rather than above it. Full width because a check draws its steps and what to
    expect side by side and carries a row of five verbs, and both are cramped in a

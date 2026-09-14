@@ -1033,6 +1033,32 @@ when quiet is indistinguishable from one that broke, and a column that came and 
 whole shell every time the last ask was answered. A group with no rows draws no heading, though — an
 empty "Yours to do" under a full "Blocking" is furniture.
 
+### An ask that asks for work draws the work
+
+Almost every ask on this surface is answered *by* the ask: a verdict, a pick, a sentence in a box. The
+`validate` bench row is not — it asks somebody to go and run a delivered goal's checks and record what
+they saw ([20](20-validation.md#saying-so-on-the-bench)) — and its body used to be the desk's prose and
+nothing else: a paragraph, a line per outstanding check naming it, and the ticket's link. On the rail
+that is a reasonable summary. In "One ask at a time" it is the surface's own argument failing: the
+whole of the situation area given to an ask, and the ask telling the operator to go and find the work.
+
+So the body draws the goal's **own check rows**, from the same `ValidationSection`
+(`web/src/components/ValidationSection.tsx`) the goal page manages them with — the steps, the
+resources, and the four readings — with every check still owed **already open**. One component, so a
+check cannot read one way in the ask and another on the goal page, and recording a result here is the
+same write it is there. It is `needBody`, so the ask panel and the goal page's band get it too: this
+is one ask drawn three ways, not a fourth ask.
+
+The desk's prose stays above the rows. It is the harness's own refreshed statement of what the goal
+owes — the sheet assembled for an environment, the ticket's link — and it is what the row says
+everywhere the rows are not in front of the reader. Where the snapshot holds no checks for the goal,
+the prose is the whole body, as it was: a row filed against a goal whose checks this cockpit cannot
+see is still a row somebody has to settle.
+
+**A settled check is drawn closed.** Open is what "this one is yours" looks like here, so opening the
+passed and waived ones with them would say nothing, and the rows still owed would be the ones nobody
+could find. `test/validateAsk.test.ts` pins both halves off the row's own disclosure.
+
 ### The action bar
 
 **Everything a card can _do_ is in one bar across the bottom of it.** `CardFoot`

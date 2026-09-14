@@ -2623,6 +2623,35 @@ export function buildDemoState(): DemoSeed {
         resolvedAt: ago(52),
         dismissedAt: null,
       },
+      // The bench row that asks for a delivered goal's checks. It is here because it is the one ask
+      // whose body is not the ask — the cockpit draws issue #395's own check rows under it, with the
+      // ones still owed already open. → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+      {
+        id: 'hum-5',
+        title: 'Run the validation checks for issue #395',
+        detail:
+          '**Snapshot downloads 401 in the review console** is delivered, and its validation plan has 5 checks ' +
+          'for you to run — of 9 checks in all.\n\n' +
+          'B. **With auth off, snapshot downloads still serve** — unrun\n' +
+          'C. **A tampered capability is refused** — unrun\n' +
+          'E. **The download link is reachable on a narrow viewport** — unrun (handed back — An agent could not ' +
+          'run this check: it needs a browser at a set viewport, and I have none.)\n' +
+          'G. **A pruned snapshot mints no capability** — failed\n' +
+          'H. **A download survives a signer key rotation** — deferred\n\n' +
+          'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates ' +
+          'no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+        originRef: 'issue:395',
+        partId: null,
+        kind: 'validate',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        resolution: null,
+        createdAt: ago(20),
+        updatedAt: ago(1),
+        resolvedAt: null,
+        dismissedAt: null,
+      },
       {
         id: 'hum-4',
         title: 'Close issue #364 in the tracker',
