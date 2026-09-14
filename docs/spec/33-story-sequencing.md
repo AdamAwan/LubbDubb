@@ -169,13 +169,39 @@ in.
 The verdict rides on `StageContext.sequenceWaits` for later stages to read, and it is computed
 **once**, in the
 dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
-formed inside a rule: `issue-plan` and `issue-pickup` both consult it and must never disagree about
-whether a story is ready, exactly as they must never disagree about which plan arm it is on
-([05](05-dispatcher.md#the-rule-book)).
+formed inside a rule: `issue-appraisal`, `issue-plan` and `issue-pickup` all consult it and must
+never disagree about whether a story is ready, exactly as they must never disagree about which plan
+arm it is on ([05](05-dispatcher.md#the-rule-book)).
+
+### The appraiser is held as well
+
+`issue-appraisal` is the third reader, and it is held for a reason the other two are not: it is the
+only gate that asks about **content** ([06](06-issue-pickup.md)). It reads the ticket against a
+read-only checkout of the default branch and is told to check that the things it names exist — so a
+story whose predecessor has not landed is read against a repository missing exactly what that
+predecessor was going to build, and a schema or an interface the ticket names is simply absent. That
+reads as `unclear`: *names things that do not exist*.
+
+The cost of getting it wrong there is worse than a wasted dispatch, because **an appraisal is a
+record and the hold is not**. `appraisalHold` keys on `goalFingerprint(title, body)`
+(`src/intake/appraisal.ts`), so an `unclear` clears only when somebody rewrites the ticket or an
+operator overrides it. The predecessor landing does not clear it. The sequence's own hold is
+recomputed from the world every pulse and has nothing to clear; an `unclear` cast for a reason the
+sequence already knew about outlives that reason, with a checklist posted on the author's ticket
+asking them to explain things that by then exist.
+
+So the hold runs in front of the verdict rather than after it. Held, the appraiser is not dispatched
+and **no verdict is written**, which is what keeps this reversible: the story is appraised on its
+merits once its predecessor has a branch, against a repository that holds what it depends on.
+
+A held appraisal is not added to `StageContext.appraising` — nothing is running, and the stages below
+read that set to know an issue is already claimed
+([05](05-dispatcher.md#the-rule-book)). `issue-plan` is held by the same waits in the same pulse, so
+the two do not disagree.
 
 ### A held story is queued, not skipped
 
-`issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
+`issue-appraisal`, `issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
 what it waits behind — `Held: waits on #593, which has not pushed a branch yet.`, appended to the
 rule's own reason so the row still says what the work _is_ before it says why it is not going out
 (`sequenceHoldReason`). It is a new
@@ -189,6 +215,40 @@ candidate stays in Up next with its reason attached.
 out this cycle for a different reason entirely, and spending an attempt cap on a suppressed dispatch
 would blame the pickup for the sequence's hold — the same argument `issue-pickup` already makes for
 `superseded`.
+
+## What the appraiser is told
+
+The hold covers a predecessor somebody has **declared** — a board link, or an accepted order. It
+covers nothing where the dependency is real and nobody has written it down, which is the ordinary
+state of a Feature filed an hour ago: no links, no accepted order, `sequenceWaits` empty, and every
+story appraised at once against a repository where none of them has been built.
+
+`predecessorNote` (`src/sequence/dossier.ts`) is what the appraiser gets for that case, appended to
+its prompt rather than interpolated ([05](05-dispatcher.md#prompt-templates)). It fires for a story
+with an open sibling under the same Feature, and it says one of two things:
+
+- where an order has been **proposed and not answered**, the predecessors it would put this story
+  behind, by number, and that they have not landed. That order holds nothing — that is the whole
+  point of `proposed` — so the appraiser was dispatched anyway, and this is the only place its
+  reading reaches the agent at all.
+- otherwise, that the story is one of several under a Feature nobody has ordered, and that something
+  it names may be another story's to build.
+
+Then, in both cases, the calibration that is the actual fix: **work that has not happened yet is not
+a gap in the ticket.** `unclear` is for a ticket whose "done" cannot be told from its "not done",
+one that contradicts itself, or one that contradicts something already true of the code — not one
+that reads clearly and depends on a sibling. A ticket in the last case is `workable`, and the
+appraiser is asked to name in its summary what it took to be arriving from elsewhere, so a wrong
+reading is visible before an agent acts on it.
+
+It narrows the verdict rather than excusing it. A ticket that does not say enough for the appraiser
+to tell *what it expects the dependency to provide* is still `unclear`, and that is the same
+question the rubric already asks.
+
+The note draws no edge and schedules nothing. Where the appraiser concludes a story does have to
+wait, it is asked to say so on the scratchpad and name what — an observation for an operator to act
+on, in a subsystem where **nothing the fleet says about its own output may hold work**
+([below](#precedence)).
 
 ## Fail open
 
@@ -206,6 +266,11 @@ This is `resolvePlanRoute`'s discipline ([08](08-planning.md#the-four-arms)): a 
 falls through to `single` rather than parking the issue. A mechanism that adds ordering must never be
 able to park a Feature, because the failure it would cause — a feature nobody works, with nothing
 red — is worse than the disorder it exists to fix.
+
+The appraiser inherits every arm of that unchanged: with no edges `sequenceWaits` is empty, so the
+goal is appraised exactly as it is today. `predecessorNote` fails open in the same direction — it is
+a note, so the worst a wrong one does is tell an agent about a sibling it did not need to know
+about, and a story with no parent or no open sibling is told nothing at all.
 
 Fails **silent**, `feature-summary`'s rule: no escalation is raised for a sequence that did not
 happen. There is nothing a person can do about it that they cannot do by reading the board, and an

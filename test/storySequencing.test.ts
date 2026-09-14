@@ -159,3 +159,41 @@ test('the planner is held by the order too, and says so rather than blaming a co
   assert.equal(planner.status, 'sequenced');
   assert.match(planner.reason, /waits on #11/);
 });
+
+test('the appraiser is held by the order too, rather than judging a goal against a repository that is missing its predecessor', async () => {
+  const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
+  const { upcoming, actions } = await linksOn().decide(ctx(issues, { recentDecisions: [] }));
+
+  const appraisal = queued(upcoming, 'issue:12:appraisal');
+  assert.ok(appraisal, 'it is in Up next rather than gone');
+  assert.equal(appraisal.status, 'sequenced');
+  assert.equal(appraisal.rule, 'issue-appraisal');
+  assert.match(appraisal.reason, /waits on #11/);
+  assert.ok(
+    !actions.some((a) => a.type === 'dispatch_code_agent' && a.originRef === 'issue:12:appraisal'),
+    'and no appraiser goes out to read a half-built repository and call the goal unclear',
+  );
+  assert.equal(
+    queued(upcoming, 'issue:11:appraisal')?.status,
+    'dispatching',
+    'the story nothing waits behind is appraised as it always was',
+  );
+});
+
+test('the appraisal hold clears itself the moment the predecessor pushes a branch', async () => {
+  const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
+  const { upcoming } = await linksOn().decide(
+    ctx(issues, { recentDecisions: [], world: { takenAt: NOW, pullRequests: [pr(7, 'issue/11')], issues } }),
+  );
+  assert.equal(
+    queued(upcoming, 'issue:12:appraisal')?.status,
+    'dispatching',
+    'nothing was recorded, so nothing has to be cleared',
+  );
+});
+
+test('with sequencing off the appraiser is held by nothing, as it is today', async () => {
+  const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
+  const { upcoming } = await new RuleDispatcher().decide(ctx(issues, { recentDecisions: [] }));
+  assert.equal(queued(upcoming, 'issue:12:appraisal')?.status, 'dispatching');
+});
