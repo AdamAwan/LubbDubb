@@ -5,6 +5,8 @@ import { childrenFirst, type SlotProcess, type SlotProcesses } from './slotProce
 
 export class FakeSlotProcesses implements SlotProcesses {
   readonly asked: string[] = [];
+  /** The paths each probe was asked about, in the order the probes were made. */
+  readonly askedPaths: string[][] = [];
   readonly killed: number[] = [];
   private readonly holders = new Map<string, SlotProcess[]>();
   private readonly survives = new Set<number>();
@@ -29,9 +31,10 @@ export class FakeSlotProcesses implements SlotProcesses {
     return this;
   }
 
-  holding(dir: string): Promise<SlotProcess[] | null> {
+  holding(dir: string, paths?: string[]): Promise<SlotProcess[] | null> {
     const key = resolve(dir);
     this.asked.push(key);
+    this.askedPaths.push(paths ?? []);
     if (this.unanswerable.has(key)) return Promise.resolve(null);
     return Promise.resolve(this.holders.get(key) ?? []);
   }
