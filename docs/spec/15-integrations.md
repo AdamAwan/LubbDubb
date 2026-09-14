@@ -613,19 +613,22 @@ Behaviour worth knowing:
   writes the stale list back. The **modify matches case-insensitively**: Azure tags are matched
   case-insensitively and stored under the casing of whichever tag definition the project already
   holds, so a tag the harness wrote as `lubbdubb-watch` can come back as `LubbDubb-Watch`, and an
-  exact-match removal drops nothing while the PATCH still returns 200. The **write clears the field
-  before it writes the survivors**: Azure reads a `System.Tags` value as the set of tag names to
-  *apply*, a merge rather than a replacement of the field, so an `add` of the tags being kept is a
-  no-op — they are already on the item, and the tag left out of it is never touched. A removal
-  expressed as the survivors alone therefore comes back 200 with the tag still there, for every item
-  that carries another tag; an `add` of the empty string, which is what dropping an item's *last* tag
-  would be, changes nothing for the same reason. So every write is the two-op patch
-  `[{ op: 'remove', path: '/fields/System.Tags' }, { op: 'add', path: '/fields/System.Tags', value:
-  <the tags being kept> }]` — correct whichever semantics Azure applies, and one path rather than a
-  last-tag case beside a general one. A write is skipped altogether when the fresh read
+  exact-match removal drops nothing while the PATCH still returns 200. The **write is a single
+  operation on the field**: Azure refuses a JSON-patch that names one field twice — `VS403691: a
+  field cannot be updated more than once in the same update` — so the two-op `remove`-then-`add`
+  that an earlier fix used never reached the board at all, and the watch tag could neither go on nor
+  come off. The op is chosen from what the fresh read found, because Azure's three verbs mean
+  different things on `System.Tags`: an `add` is a **merge** of the names given into the ones the
+  item holds, so it can only ever add; a `replace` is the field's new value, which is the only verb
+  that can drop a name while keeping the rest; and a `remove` clears the field, which is how the
+  last tag comes off, since replacing with the empty string is read as a merge of nothing. So
+  `tagWriteOp` sends `remove` when nothing is left, `add` when the item carries no tags today (the
+  merge and the replacement are the same write there, and `replace` on a field with no value is the
+  riskier of the two), and `replace` otherwise. A write is skipped altogether when the fresh read
   already says what was asked for, which is also what keeps a `remove` off an item that carries no
-  tags. A fake that models the field as *replaced* makes the whole suite pass while the deployment
-  fails, so `test/azureWorkItemTags.test.ts` merges the written value into what it holds. And the
+  tags. A fake that models every verb as *replacing* the field makes the whole suite pass while the
+  deployment fails, so `test/azureWorkItemTags.test.ts` models each verb as Azure does and answers
+  a patch naming `System.Tags` twice with the 400 Azure answers. And the
   **write is verified**
   against the tags on the item Azure returns: a tag write that Azure accepts without applying throws,
   because the alternative is the quietest failure the harness has — dropping a watch tag reports
