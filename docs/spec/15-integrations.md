@@ -58,6 +58,39 @@ asserts every provider the registry can build has an entry, because a new provid
 without one defaults to _unfiltered_: safe, but it drops that fleet's output from the
 pool with nothing red.
 
+## The closed pull request read
+
+Both real providers fetch, beside the open pull requests, the ones that have recently **left** the open
+set — `WorldSnapshot.closedPullRequests`. It is the only place a merge is ever seen: the retarget of a
+stacked rung ([07](07-pull-requests.md)), the branch reap, the landing sweep ([24](24-environments.md))
+and the closed-PR archive ([14](14-persistence.md#the-closed-pull-request-archive)) are all fed from
+this one list.
+
+**The window is the ordinary reach; the sweep mark is what makes it a floor rather than a claim.**
+`closedPrWindowMs` (6h) asks the provider for everything closed since `now - window`, which quietly
+assumes the harness has been running throughout that window. When it has not, every close that happened
+during the gap is already out of reach on the first pulse back — and never comes within reach again,
+because the window only ever moves forward. Everything fed from the list loses those merges together,
+and each loss is silent in its own way: a rung stranded on a merged parent for ever, a branch never
+reaped, a landing never attributed, an archive row never written. The Azure stack in
+[#898](https://github.com/AdamAwan/LubbDubb/issues/898) was lost to a three-minute gap.
+
+So `closedReadSince` (`src/integrations/closedWindow.ts`) reads from the **older** of the window and
+`closed_pr_sweep.swept_to` — how far the closed set has actually been swept
+([14](14-persistence.md#how-far-the-closed-set-has-been-swept)) — floored at `closedPrCatchUpMs` (7d)
+so a month-long outage is not an unbounded query. Three properties carry the behaviour:
+
+- **The mark never shortens the window.** A mark _inside_ the window is ignored, so the ordinary pulse
+  asks exactly what it asked before and every consumer still sees each merge for the full window.
+- **The mark is written only after a read the provider answered**, and only ever forward
+  (`MAX` in the upsert). A mark ahead of a read that failed would skip the closes that read never
+  carried, which is the direction that loses data for good; a mark behind costs one wider read.
+- **The mark is the read's own clock, not the newest close seen.** That is safe only because every
+  read overlaps the last `closedPrWindowMs` anyway, so a close the provider reported late is still
+  picked up by the following pulse.
+
+A deployment where the lookup is disabled (`closedPrWindowMs: 0`) reads nothing and writes no mark.
+
 ## Capabilities and providers
 
 | Capability      | Owns                | Providers registered      |
@@ -153,14 +186,14 @@ each of them composed a `gh`/`az` command as a string and spent a desk agent typ
 ([13](13-jobs-and-tickets.md#filing-a-ticket)). Its input is provider-neutral and every provider
 answers the parts it has:
 
-| Field       | GitHub                                                    | Azure DevOps                                          |
-| ----------- | --------------------------------------------------------- | ----------------------------------------------------- |
-| `title`     | the issue title                                           | `System.Title`                                        |
+| Field       | GitHub                                                    | Azure DevOps                                                                                       |
+| ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `title`     | the issue title                                           | `System.Title`                                                                                     |
 | `body`      | the issue body                                            | `System.Description` (reads fold in every content field — [below](#where-a-work-items-body-lives)) |
-| `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create        |
-| `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                     |
-| `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)              |
-| `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation |
+| `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create                                                     |
+| `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                                                                  |
+| `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)                                                           |
+| `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation                                              |
 
 Two of those rows are the whole point. Labels and the assignee ride on the **create** rather than on
 follow-up writes, because an item that exists for a moment untagged is one the pickup gate can miss
@@ -615,7 +648,7 @@ Behaviour worth knowing:
   holds, so a tag the harness wrote as `lubbdubb-watch` can come back as `LubbDubb-Watch`, and an
   exact-match removal drops nothing while the PATCH still returns 200. The **write is a single
   operation on the field**: Azure refuses a JSON-patch that names one field twice — `VS403691: a
-  field cannot be updated more than once in the same update` — so the two-op `remove`-then-`add`
+field cannot be updated more than once in the same update` — so the two-op `remove`-then-`add`
   that an earlier fix used never reached the board at all, and the watch tag could neither go on nor
   come off. The op is chosen from what the fresh read found, because Azure's three verbs mean
   different things on `System.Tags`: an `add` is a **merge** of the names given into the ones the
@@ -626,7 +659,7 @@ Behaviour worth knowing:
   merge and the replacement are the same write there, and `replace` on a field with no value is the
   riskier of the two), and `replace` otherwise. A write is skipped altogether when the fresh read
   already says what was asked for, which is also what keeps a `remove` off an item that carries no
-  tags. A fake that models every verb as *replacing* the field makes the whole suite pass while the
+  tags. A fake that models every verb as _replacing_ the field makes the whole suite pass while the
   deployment fails, so `test/azureWorkItemTags.test.ts` models each verb as Azure does and answers
   a patch naming `System.Tags` twice with the 400 Azure answers. And the
   **write is verified**

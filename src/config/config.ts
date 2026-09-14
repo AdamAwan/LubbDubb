@@ -68,6 +68,7 @@ export interface Config {
   localRun: LocalRunPolicy;
   localValidation: LocalValidationPolicy;
   closedPrWindowMs: number;
+  closedPrCatchUpMs: number;
   obstacleDormantMs: number;
   environments: EnvironmentConfig[];
   environmentProbeIntervalMs: number;
@@ -215,6 +216,7 @@ const DEFAULTS: Config = {
   localRun: DEFAULT_LOCAL_RUN,
   localValidation: DEFAULT_LOCAL_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  closedPrCatchUpMs: 7 * 24 * 60 * 60 * 1000,
   obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { FakeConnector } from '../src/connector/fakeConnector.js';
-import { closedWindowStart, withinClosedWindow } from '../src/integrations/closedWindow.js';
+import { closedReadSince, withinClosedWindow } from '../src/integrations/closedWindow.js';
 import { GitHubSourceControlIntegration, mapClosedPull } from '../src/integrations/github/sourceControl.js';
 import {
   AzureDevOpsSourceControlIntegration,
@@ -70,8 +70,27 @@ function part(over: Partial<PlanPart> = {}): PlanPart {
   };
 }
 
-test('closedWindowStart is the window measured back from the caller‑supplied clock', () => {
-  assert.equal(closedWindowStart(NOW, 6 * HOUR), '2026-07-25T06:00:00.000Z');
+test('closedReadSince is the window measured back from the caller‑supplied clock when nothing has been swept', () => {
+  assert.equal(closedReadSince(NOW, 6 * HOUR, null, 7 * 24 * HOUR), '2026-07-25T06:00:00.000Z');
+});
+
+test('closedReadSince never shortens the window: a mark inside it is ignored', () => {
+  const mark = '2026-07-25T11:00:00.000Z';
+  assert.equal(closedReadSince(NOW, 6 * HOUR, mark, 7 * 24 * HOUR), '2026-07-25T06:00:00.000Z');
+});
+
+test('closedReadSince reaches back to a mark older than the window — the closes an outage hid', () => {
+  const mark = '2026-07-24T09:00:00.000Z';
+  assert.equal(closedReadSince(NOW, 6 * HOUR, mark, 7 * 24 * HOUR), mark);
+});
+
+test('closedReadSince caps the catch-up, so a long outage is not an unbounded query', () => {
+  const mark = '2026-01-01T00:00:00.000Z';
+  assert.equal(closedReadSince(NOW, 6 * HOUR, mark, 24 * HOUR), '2026-07-24T12:00:00.000Z');
+});
+
+test('closedReadSince falls back to the window when the mark is unreadable', () => {
+  assert.equal(closedReadSince(NOW, 6 * HOUR, 'not a date', 7 * 24 * HOUR), '2026-07-25T06:00:00.000Z');
 });
 
 test('withinClosedWindow keeps the boundary and drops a PR with no recorded close time', () => {
@@ -220,6 +239,50 @@ test('the github provider reports recently-closed PRs, marked merged vs closed-u
     ],
   );
   assert.deepEqual(slice.pullRequests, [], 'closed PRs never join the open list');
+});
+
+test('the github provider reaches back to the sweep mark, so a merge during an outage is still read', async () => {
+  const since: string[] = [];
+  const store = new Store(':memory:');
+  store.prArchive.recordClosedSweep('2026-07-24T09:00:00.000Z');
+  const integration = new GitHubSourceControlIntegration({
+    api: ghApi([ghClosed()], since),
+    closedPrWindowMs: 6 * HOUR,
+    closedPrCatchUpMs: 7 * 24 * HOUR,
+    closedSweep: store.prArchive,
+    now: () => NOW,
+  });
+
+  await integration.snapshot();
+
+  assert.deepEqual(since, ['2026-07-24T09:00:00.000Z'], 'the read asks from the mark, not from the window');
+  assert.equal(store.prArchive.readClosedSweep(), new Date(NOW).toISOString(), 'the mark moves to the read');
+});
+
+test('the sweep mark only moves forward, and a failed read never moves it at all', async () => {
+  const store = new Store(':memory:');
+  store.prArchive.recordClosedSweep('2026-07-25T10:00:00.000Z');
+  store.prArchive.recordClosedSweep('2026-07-24T10:00:00.000Z');
+  assert.equal(store.prArchive.readClosedSweep(), '2026-07-25T10:00:00.000Z', 'an older mark is not written');
+
+  const integration = new GitHubSourceControlIntegration({
+    api: {
+      ...ghApi([], []),
+      listRecentlyClosedPulls: async () => {
+        throw new Error('provider is down');
+      },
+    } as unknown as GitHubApi,
+    closedPrWindowMs: 6 * HOUR,
+    closedPrCatchUpMs: 7 * 24 * HOUR,
+    closedSweep: store.prArchive,
+    now: () => NOW,
+  });
+  await assert.rejects(integration.snapshot(), /provider is down/);
+  assert.equal(
+    store.prArchive.readClosedSweep(),
+    '2026-07-25T10:00:00.000Z',
+    'a read that never answered has swept nothing',
+  );
 });
 
 test('the github provider skips the extra request entirely when the window is disabled', async () => {

@@ -1151,6 +1151,22 @@ CREATE TABLE IF NOT EXISTS pr_archive (
   snapshot      TEXT NOT NULL   -- the whole PullRequest as the world last reported it, JSON
 );
 
+-- How far the closed pull request set has actually been swept, as one row (id 1).
+-- The provider asks its window back from *now*, which is a claim about wall clock
+-- rather than about what the harness has seen: every close that happened while the
+-- harness was down falls out of reach on the first pulse back and never comes
+-- within reach again, because the window only moves forward. The retarget, the
+-- branch reap, the landing sweep and the archive all lose those merges together.
+-- The mark turns the window into a floor on the *read*: the next read asks from the
+-- older of the window and this mark, capped by closedPrCatchUpMs so a long outage
+-- is not an unbounded query. Written only after a read the provider completed, and
+-- only ever forward. See src/store/prArchive.ts.
+CREATE TABLE IF NOT EXISTS closed_pr_sweep (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  swept_to   TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decisions (
   id         TEXT PRIMARY KEY,
   cycle_id   TEXT NOT NULL,

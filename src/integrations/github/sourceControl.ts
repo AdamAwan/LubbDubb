@@ -32,7 +32,7 @@ import type {
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
-import { closedWindowStart } from '../closedWindow.js';
+import { closedReadSince, type ClosedPrSweep } from '../closedWindow.js';
 import type {
   GhAnnotation,
   GhCheckRun,
@@ -78,6 +78,8 @@ interface GitHubSourceControlOpts {
   owner?: string;
   repo?: string;
   closedPrWindowMs?: number;
+  closedPrCatchUpMs?: number;
+  closedSweep?: ClosedPrSweep;
   now?: () => number;
   sentReplies?: SentPrReplies;
 }
@@ -223,10 +225,17 @@ export class GitHubSourceControlIntegration
   }
 
   private async recentlyClosed(viewer: string): Promise<PullRequest[]> {
-    const { api, prAuthor, closedPrWindowMs } = this.opts;
+    const { api, prAuthor, closedPrWindowMs, closedSweep } = this.opts;
     if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
-    const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
+    const now = (this.opts.now ?? Date.now)();
+    const since = closedReadSince(
+      now,
+      closedPrWindowMs,
+      closedSweep?.readClosedSweep() ?? null,
+      this.opts.closedPrCatchUpMs ?? 0,
+    );
     const closed = await api.listRecentlyClosedPulls(since);
+    closedSweep?.recordClosedSweep(new Date(now).toISOString());
     return closed
       .filter((p) => !prAuthor || p.authorLogin === prAuthor)
       .map((p) => {
