@@ -1212,6 +1212,17 @@ one layer down.
   image and a live process's cwd quite happily), so the sweep is for the other half of the release —
   a watcher that would go on writing into the tree the next occupant is about to be handed — and
   reads `/proc/<pid>/cwd` and `/proc/<pid>/exe` where `/proc` exists.
+- **A probe that could not answer is `null`, and never an empty list.** `holding` is three-valued:
+  the processes, none, or _could not tell_ — a process table that refused, a `powershell` walk killed
+  at its timeout, a `ps` that was not there. Fold the third into the second and the slot is condemned
+  reading "nothing is holding it", which is the one condemnation that is
+  [never revived](#a-slot-that-cannot-be-emptied): a slot lost for the lifetime of the harness on a
+  reading that was never taken. The warning that goes with it names the **reason** — killed at the
+  timeout, the exit code, the shell's own first line of stderr — because `execFile`'s message is the
+  whole script and no reason at all, and a timeout arrives with an empty stderr.
+- **The Windows walk reads `Get-Process` once.** Asked per pid it re-walks the entire process list
+  each time, so a machine with a few hundred processes pays a few hundred full walks and the probe
+  goes past its timeout — which presents as the fold above.
 - **A kill returns before the handles do.** `taskkill /F` is an ask, and the images come back as the
   process is torn down rather than as it answers. So a wipe refused after a sweep that actually took
   something is retried once, half a second later, before anything is concluded from it.
@@ -1245,7 +1256,9 @@ from the survey, so the retry terminates at the pool's size with no counter to t
   Each condemned slot is asked again, and one nothing is holding any more is taken back into the
   pool with the return recorded. A condemnation where **no process was involved at all** is never
   revived: nothing on disk would have to change for the retry to fail in exactly the same way, and
-  re-offering it is the loop this exists to stop.
+  re-offering it is the loop this exists to stop. A sweep that **could not say** is not that
+  condemnation — it is process-bound, and asked again — and a revival probe that cannot answer
+  leaves the slot condemned rather than taking it back on no reading.
 - **A proposal that keeps repeating is caught one layer up, and stays there.** A dispatch rejected on
   three separate pulses running raises a `dispatch` row on the queue rail
   ([above](#a-refusal-that-keeps-repeating)), keyed on the outcome rather than on the sentence — so
