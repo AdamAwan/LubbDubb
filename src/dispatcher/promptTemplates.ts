@@ -88,7 +88,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '     {"slug": "wire-up", "title": "...", "scope": "...", "touches": ["src/system.ts"], "size": "m",\n' +
       '      "dependsOn": ["schema"], "rationale": "...", "acceptance": "..."}\n' +
       '   ],\n' +
-      '   "validation": {"resources": [...], "checks": [...]}}\n\n' +
+      '   "validation": {"hint": "..."}}\n\n' +
       'Nothing here needs to be guessed at: submit it, and a rejection tells you exactly which field was wrong.\n\n' +
       '## What the fields mean\n\n' +
       '**`diagnosis`, `approach` and `verification` are a quick overview, not the argument.** Write each as ' +
@@ -147,78 +147,31 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'gave the fleet an account for, plugging something in, looking at a rendered screen. A "human" part is ' +
       'never dispatched, and anything naming it in "dependsOn" waits for a person to mark it done.\n\n' +
       '## How anyone checks it worked\n\n' +
-      'Beside "verification", and different from it: `verification` is the sentence, `validation` is the ' +
-      'steps. Two rules decide the block. The first is what a check is. The second is how many of them one ' +
-      'goal gets, and it is the one plans get wrong.\n\n' +
-      '**A check is something that can only be found out by running the delivered goal.** If the diff, the ' +
-      'test suite, the type checker or a green build settles it, it is not a check — all four have already ' +
-      'happened, on every branch, before anybody opens this sheet. "The unit tests pass", "the build is ' +
-      'green", "CI passes", "the old helper is no longer called anywhere", "the new module is wired into ' +
-      'the composition root", "the function returns an empty list for an empty input" — each of those is ' +
-      'either a test somebody is writing anyway or a line a reviewer reads straight off the diff, and ' +
-      'putting it here sends a person out to redo work that is already done. It is worse than writing ' +
-      'nothing: a sheet of them buries the one check that genuinely had to be carried out by hand. ' +
-      'Per-part "acceptance" is where "a reviewer can see this in the diff" belongs — do not restate those ' +
-      'here either.\n\n' +
-      'What is left is what only a running system, a real environment or a person’s eyes can answer:\n\n' +
-      '- Drive the built thing end to end somewhere real, and watch what it actually does.\n' +
-      '- Look at the state it left behind: rows in a database, what a migration did to a database that ' +
-      'existed *before* this change, files on disk, refs in a repository, a queued job.\n' +
-      '- Read the logs, the error records and the metrics — for what should be there, and for what should ' +
-      'not be.\n' +
-      '- Open the screen: what renders against real data, what survives a reload, where the back button ' +
-      'goes, what it does at a narrow width.\n' +
-      '- Conditions no test stages: a restart mid-run, two of them at once, a dependency that is slow or ' +
-      'gone, a real credential, real volume, a cold start.\n' +
-      '- The judgement call: whether the wording reads right, whether the number is believable beside the ' +
-      'source it came from.\n\n' +
-      '**One run of the thing is one check.** Those are six ways of looking, not six checks — everything a ' +
-      'single run settles belongs to the one check that performs it: the screen it drew, the rows it wrote, ' +
-      'the line in the log, the file it left behind. "Check the new page renders" and "check the row is ' +
-      'written" are one check, because the setup is the expensive part and splitting them writes it twice ' +
-      'and makes somebody perform it twice to look at the same run from two angles. Write the "do" once, ' +
-      'end to end, and let "expect" carry every observation that run has to satisfy — a short list is a ' +
-      'good "expect". Split only when the second look genuinely needs a *different* run: another ' +
-      'environment, a fresh database, a restart, a second person.\n\n' +
-      '**So most goals get one check, two is ordinary, and three wants a reason.** A sheet of six is ' +
-      'almost always one journey cut into six looks at it. Nothing counts checks and nothing rewards a ' +
-      'longer list; a filler check costs somebody an afternoon and buries the one that mattered. ' +
-      '**Declaring none is a legitimate answer**: a refactor whose whole claim is that behaviour did not ' +
-      'change, or a documentation change, has nothing left for a person to run once the suite is green, ' +
-      'and an empty block says so honestly.\n\n' +
-      '**What running it needs is stated on the check, never asked for as a separate errand.** A login on ' +
-      'the test environment, a database you can query, a customer account, a flag that has to be on, a ' +
-      'second device — put it in the opening line of "do", in the words that let the reader go and get it: ' +
-      '"you need read access to the staging database (connection string in the team vault)". There it is ' +
-      'read by the person running the check, at the moment they need it. Filed as anything else it becomes ' +
-      'a row in somebody else’s queue, and a delivered goal that opens by asking four people for four ' +
-      'things is a goal nobody validates.\n\n' +
-      'The shape, with one check that clears the bar — it runs the thing once and looks at everything that ' +
-      'run touched:\n\n' +
-      '  "validation": {\n' +
-      '    "resources": [{"name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author"}],\n' +
-      '    "checks": [{"id": "reap-merged-branch", "title": "A squash-merged part branch is reaped, everywhere it shows",\n' +
-      '                "do": "Needs git and a checkout — no login and no browser. Unpack the fixture repo, point a local harness at it, merge the seeded PR, and let one pulse run.",\n' +
-      '                "expect": "No issue/284/reap ref locally or on the remote; the part reads merged on the goal page; one \\"reaped\\" line in the log and no error record.",\n' +
-      '                "uses": ["fixture-repo.tar.gz"], "covers": ["reap-writer", "reap-desk"],\n' +
-      '                "fleetCandidate": true, "why": "reads the repo and runs git; no login, no browser"}]}\n\n' +
-      '- **"id"** is kebab-case, unique and *stable* — an amended plan merges on it, like a part slug.\n' +
-      '- **"do"** is the procedure — what it needs, then the commands, the URL, the clicks, in enough ' +
-      'detail that somebody who has not read your plan can follow it. **"expect"** is what they would ' +
-      '*see*, and where: the row, the log line, the ref that is gone, the screen. A check that cannot say ' +
-      'what a pass looks like is not a check.\n' +
-      '- **"covers"** names the part slugs a check exercises, so the sheet can show which parts nothing ' +
-      'checks. Validation is per *goal*, so one check covering every part is the normal shape, not a ' +
-      'sign you have merged too much.\n' +
-      '- **"resources"** are **files** a check needs that the repository does not have: a seeded fixture, ' +
-      'a reference screenshot, a dump of real data. Name them; never write paths, and never name a login, ' +
-      'an account or an environment — those are preconditions and belong in "do" with everything else the ' +
-      'reader needs. `"provided": false` says you need a file you cannot produce, and asks a person to put ' +
-      'it on disk, so it is worth writing only when the check truly cannot run without one.\n' +
-      '- **"fleetCandidate"** is a *suggestion* that an agent could run this one, with "why". Every check is ' +
-      'a person’s until they say otherwise, and you cannot say otherwise: you do not know whether this ' +
-      'deployment’s fleet has a browser, a login or an environment. **There is no "actor" field and a ' +
-      'document carrying one is refused.**\n\n' +
+      'Beside "verification", and different from it: `verification` is the sentence, `validation` is what you ' +
+      'would most want somebody to go and *run*. **You are not writing the checks.** They are written after the ' +
+      'goal is delivered, by an agent reading the code that actually shipped — because a check written here is ' +
+      'written against code that does not exist yet, and by the second part it is describing a screen that ' +
+      'moved. What you write is one prose **hint**, and it binds nothing:\n\n' +
+      '  "validation": {"hint": "..."}\n\n' +
+      '**There is no "checks" array and no "resources" array.** A document carrying them is on the shape from ' +
+      'before authoring moved; it still parses, and everything it declares is superseded by the set written ' +
+      'against the delivered code.\n\n' +
+      'The hint is read twice: by the operator deciding whether to approve this plan, and by the agent that ' +
+      'writes the check set weeks later. So say what you believe **only running the finished thing** could ' +
+      'settle — a real environment, the state it wrote, the logs, the screen, a person’s eyes — and say what ' +
+      'you think is already covered without it. Anything the diff, the test suite, the type checker or a green ' +
+      'build settles is not that: all four have already happened, on every branch, before anybody opens the ' +
+      'sheet, and naming one here sends a person out to redo work that is done. Per-part "acceptance" is ' +
+      'where "a reviewer can see this in the diff" belongs.\n\n' +
+      'Write it as one short paragraph aimed at the person who will run it. Do not enumerate, do not number ' +
+      'them, and do not reach for coverage: **declaring no hint is an ordinary answer** — a refactor whose ' +
+      'whole claim is that behaviour did not change has nothing left once the suite is green, and saying so ' +
+      'honestly is worth more than a list somebody has to read past.\n\n' +
+      'A hint that clears the bar:\n\n' +
+      '  "validation": {"hint": "Worth running end to end against a seeded repository with a pull request by ' +
+      'another author: merge it, let one pulse run, and look at whether the part branch is actually gone — the ' +
+      'ref locally and on the remote, what the goal page says, and the log line. The reaping logic is covered ' +
+      'by unit tests; what nothing covers is a real git remote refusing the delete."}\n\n' +
       '## The write-up\n\n' +
       '"document" is not optional in practice: a human reads it and decides whether this work happens. The ' +
       'fields above are the summary; this is the argument. Do not repeat them back — cover how you got to the ' +
@@ -240,7 +193,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'raise it instead.\n\n' +
       'Do not implement anything and do not open a pull request. Writing the plan is the whole job — you are ' +
       'on branch {branch} only so you have the repository to read.',
-    doc: "Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own stating the bar and the grouping rule — a check is what only running the delivered goal can answer, never the suite, the diff or a green build; one run of the thing is one check, so what that run settles is listed in a single `expect` rather than split into a check per place you look; what the check needs to be runnable is a line in its `do` rather than a resource, since a resource is a file and an unprovided one becomes somebody’s errand; and declaring none is a legitimate answer. A closing section names the planner's *other* verdict, `plan_not_needed` — the goal is already met, so no plan is written at all — and says what the bar for it is, because the failure it exists to stop is a plan with an invented part in it. Placeholders: {number} {title} {body} {branch} {planFile}.",
+    doc: "Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own, and what it asks for is a prose **hint** and nothing executable: the check set is written after delivery, against the code that shipped, so a `checks` array here is written against code that does not exist yet and carries no `steps` — and therefore no `area`, which is what lets the browser half run at all. The section says so in as many words, states the bar the hint answers to — what only running the finished thing can settle, never the suite, the diff or a green build — and says that declaring no hint is an ordinary answer. `checks` and `resources` still parse, for a plan document and an operator override written before authoring moved; what they declare is superseded by the authored set. A closing section names the planner's *other* verdict, `plan_not_needed` — the goal is already met, so no plan is written at all — and says what the bar for it is, because the failure it exists to stop is a plan with an invented part in it. Placeholders: {number} {title} {body} {branch} {planFile}.",
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -258,7 +211,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '     {"slug": "schema", "title": "...", "scope": "...", "touches": ["src/store/"], "size": "s",\n' +
       '      "dependsOn": [], "rationale": "...", "acceptance": "..."}\n' +
       '   ],\n' +
-      '   "validation": {"resources": [...], "checks": [...]}}\n\n' +
+      '   "validation": {"hint": "..."}}\n\n' +
       'Rules that make an amendment safe:\n\n' +
       '- **Slugs are the merge key.** Re-use the exact slug of every part you are keeping, whatever else you change ' +
       'about it. A part you re-declare under a new slug is not the same part: the old one is treated as dropped and ' +
@@ -273,19 +226,12 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- **The part count is not the point.** Amending an eight-part plan down to one part, or one part up to ' +
       'three, is an ordinary amendment either way — a plan with one part is a plan. Change the split because the ' +
       'work wants a different split, not to move the number.\n' +
-      '- **Validation checks answer to the same bar as a cold plan.** A check is something that can only be ' +
-      'found out by running the delivered goal — a real environment, the state it wrote, the logs, the ' +
-      'screen. Anything the diff, the suite, the type checker or a green build settles is not one, and a ' +
-      'replan is the moment to drop the checks that turned out to be that. **One run of the thing is one ' +
-      'check**, so a replan is also the moment to fold a sheet of them back together: two checks that begin ' +
-      'with the same setup are one check with a longer "expect". Fold by keeping one id, widening it, and ' +
-      'leaving the others out. What a check needs to be runnable — a login, a database, an account — is ' +
-      'stated in its "do", never declared as a resource: "resources" are files. **Ids are a merge key too.** ' +
-      'Re-use the exact "id" of every check you are keeping. A ' +
-      'check you leave out is *superseded*, not deleted — it stays on the record, greyed, with its letter ' +
-      'retired. Rewording a check’s "title", "do" or "expect" withdraws whatever result it had, which is ' +
-      'correct: you have changed what a pass means. Re-state the whole "validation" block, and omitting it ' +
-      'entirely leaves the existing checks exactly as they are.\n' +
+      '- **The validation hint is prose, and re-stating it replaces it.** You are not writing checks here ' +
+      'either: the check set is written after the goal is delivered, against the code that shipped. `hint` is ' +
+      'one paragraph saying what you believe only running the finished thing could settle, and a replan is ' +
+      'the moment to re-aim it at where the work actually went. Omitting the `validation` block entirely ' +
+      'leaves the hint that is on file standing. A document carrying `checks` or `resources` is on the shape ' +
+      'from before authoring moved, and what it declares is superseded once the goal is delivered.\n' +
       '- **Re-state the whole narrative.** `diagnosis`, `approach`, `alternatives`, `openQuestions`, ' +
       '`verification`, `evidence`, `risks`, `outOfScope` and `document` are replaced by what you submit, not ' +
       'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +
@@ -302,7 +248,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Per part, `touches` is the paths that part owns and `size` is `s`/`m`/`l` — how big it is to review.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the whole narrative is replaced rather than merged. It also tells the agent its amendment is read as a diff, so the write-up should say what changed its mind. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the whole narrative is replaced rather than merged. Its `validation` bullet asks for the same prose **hint** {issue-plan} does and says the check set is written after delivery, so a replan re-aims the hint rather than editing checks. It also tells the agent its amendment is read as a diff, so the write-up should say what changed its mind. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'discuss-plan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],

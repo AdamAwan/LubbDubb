@@ -17,7 +17,7 @@ import { sheetableArrivals } from '../src/environments/watchWindow.js';
 import { validationPlanNote } from '../src/validation/authoring.js';
 import { issueOriginRole } from '../src/issueOrigins.js';
 import { phaseOf } from '../src/insights/spendInsights.js';
-import type { Agent, GoalArrival, Issue, IssueDelivery, Plan, TaskSummary } from '../src/types.js';
+import type { Agent, GoalArrival, Issue, IssueDelivery, Plan, TaskSummary, ValidationCheck } from '../src/types.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written
 
@@ -215,6 +215,45 @@ test('an explicit empty check set still withdraws every check, said out loud', (
   system.store.close();
 });
 
+/**
+ * One check as a plan document leaves it: no steps, and therefore no area. Every field the rule's
+ * gate reads is overridable, because what the gate cuts on is the *reading* and not the row.
+ */
+function planTimeCheck(patch: Partial<ValidationCheck>): ValidationCheck {
+  return {
+    originRef: GOAL,
+    id: 'csv-opens',
+    letter: 'A',
+    seq: 1,
+    title: 'The export opens',
+    do: 'Export.',
+    expect: 'It opens.',
+    uses: [],
+    covers: [],
+    steps: [],
+    capture: null,
+    fleetCandidate: false,
+    candidateWhy: null,
+    actor: 'human',
+    handbackNote: null,
+    claimedBy: null,
+    claimedAt: null,
+    state: 'unrun',
+    resultNote: null,
+    resultBy: null,
+    resultAt: null,
+    deferUntil: null,
+    supersededReason: null,
+    revision: null,
+    amendedAt: null,
+    amendNote: null,
+    area: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...patch,
+  };
+}
+
 test('the rule dispatches for a delivered goal with no check set, and for nothing else', async () => {
   const d = new RuleDispatcher();
 
@@ -228,47 +267,39 @@ test('the rule dispatches for a delivered goal with no check set, and for nothin
     'the assessor writing `delivered` is the trigger',
   );
 
-  const legacy = await d.decide(
-    ctx({
-      validationChecks: [
-        {
-          originRef: GOAL,
-          id: 'csv-opens',
-          letter: 'A',
-          seq: 1,
-          title: 'The export opens',
-          do: 'Export.',
-          expect: 'It opens.',
-          uses: [],
-          covers: [],
-          steps: [],
-          capture: null,
-          fleetCandidate: false,
-          candidateWhy: null,
-          actor: 'human',
-          handbackNote: null,
-          claimedBy: null,
-          claimedAt: null,
-          state: 'unrun',
-          resultNote: null,
-          resultBy: null,
-          resultAt: null,
-          deferUntil: null,
-          supersededReason: null,
-          revision: null,
-          amendedAt: null,
-          amendNote: null,
-          area: null,
-          createdAt: NOW,
-          updatedAt: NOW,
-        },
-      ],
-    }),
+  // A plan-time set carries no steps and so no area, so counting it as authored leaves every check on
+  // the goal a person's for good, with nothing red.
+  // → docs/spec/20-validation.md#a-plan-time-check-set-that-nobody-has-run
+  const untouched = await d.decide(ctx({ validationChecks: [planTimeCheck({})] }));
+  assert.deepEqual(
+    authoringDispatches(untouched.actions),
+    ['issue:12:validate-plan'],
+    'a plan-time set nobody has run has no reading to lose, so the planner writes one against the merged code',
+  );
+
+  for (const [what, patch] of [
+    ['passed', { state: 'passed' as const, resultBy: 'operator' as const, resultAt: NOW }],
+    ['failed', { state: 'failed' as const, resultBy: 'operator' as const, resultAt: NOW }],
+    ['waived', { state: 'waived' as const }],
+    ['deferred', { state: 'deferred' as const, deferUntil: NOW }],
+    ['claimed', { claimedBy: 'desktop', claimedAt: NOW }],
+    ['handed to the fleet', { actor: 'fleet' as const }],
+  ] as const) {
+    const halfway = await d.decide(ctx({ validationChecks: [planTimeCheck(patch)] }));
+    assert.deepEqual(
+      authoringDispatches(halfway.actions),
+      [],
+      `a set somebody is halfway through is left alone — re-authoring a ${what} check withdraws a reading`,
+    );
+  }
+
+  const superseded = await d.decide(
+    ctx({ validationChecks: [planTimeCheck({ state: 'passed', supersededReason: 'a replan dropped it' })] }),
   );
   assert.deepEqual(
-    authoringDispatches(legacy.actions),
-    [],
-    'a goal already carrying checks is left alone, whoever wrote them',
+    authoringDispatches(superseded.actions),
+    ['issue:12:validate-plan'],
+    'a superseded row is already off the bench and is nobody’s work in progress',
   );
 
   const written = await d.decide(

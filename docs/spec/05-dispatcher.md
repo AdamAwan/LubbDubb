@@ -1295,8 +1295,10 @@ that is [20](20-validation.md#when-the-check-set-is-written); the dispatcher's h
   authored**. The plan gate is not caution: `covers` names live part slugs, so `validation_plan`
   refuses a goal with no plan in as many words, and dispatching an agent to be refused by the tool it
   was sent to call is spend with no outcome. The authoring gate is the `validation_plans` stamp **or**
-  live checks a plan document ingested before this change — a set an operator may be halfway through
-  is not a goal waiting for one.
+  a plan-time set somebody is **halfway through** — any check on it passed, failed, waived, deferred,
+  claimed or handed to the fleet. A plan-time set whose live checks are every one of them unrun is not that: it carries no
+  steps and so no area, and counted as authored it leaves the goal manual for ever with nothing red,
+  so this rule comes for it. → [20](20-validation.md#a-plan-time-check-set-that-nobody-has-run)
 - Ranks directly **above `validate-check`**, which is that rule's own argument one step earlier: it
   produces the input every other validation rule reads. Everything `validate-check` says about
   ranking below work applies unchanged — validation blocks nothing.

@@ -129,6 +129,18 @@ export function ValidationSection({
           read one by hand; what waits on the accept is everything the *harness* would do with them —
           a sheet assembled off them, and rule `validate-check` putting an agent on one.
           → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */}
+      {/* A set the plan document wrote, before the code existed. It carries no `steps` and so no
+          `area`, which is what lets the browser half run at all — so every row on it is a person's,
+          on a deployment that may be configured to automate them. Said out loud because the rows
+          themselves look exactly like an ordinary manual set, which is how a fleet-wide skip goes
+          four weeks unnoticed. → docs/spec/20-validation.md#a-plan-time-check-set-that-nobody-has-run */}
+      {plan?.authoredAt == null && (
+        <div className="pm-vflag">
+          <b>Written at plan time</b> — this set was written before the code existed, not against what shipped, so no
+          check on it carries a test plan and nothing here can be run by the fleet. Once nobody is part-way through it,
+          the validation planner writes a fresh set against the delivered code and these rows are superseded.
+        </div>
+      )}
       {plan?.authoredAt != null && plan.releasedAt == null && (
         <div className="pm-vflag">
           <b>With you for acceptance</b> — this set was written against the delivered code and nothing in the fleet
