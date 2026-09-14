@@ -104,6 +104,7 @@ interface DeclaredStep {
   kind: ValidationStepKind;
   do: string;
   area?: string | undefined;
+  expects?: string[] | undefined;
   when?: 'inline' | 'deferred' | undefined;
   script?: string | undefined;
 }
@@ -120,6 +121,7 @@ export function resolveSteps(declared: readonly DeclaredStep[], caps: StepCapabi
       kind: step.kind,
       do: step.do,
       area: step.kind === 'suite' ? (step.area ?? null) : null,
+      expects: step.kind === 'suite' ? (step.expects ?? null) : null,
       when: step.kind === 'manual' ? (step.when ?? 'inline') : 'inline',
       script: step.kind === 'browser' ? (step.script ?? null) : null,
       scriptSweptAt: null,
@@ -138,6 +140,20 @@ export function resolveSteps(declared: readonly DeclaredStep[], caps: StepCapabi
 export function stepArea(steps: readonly ValidationStep[]): string | null {
   for (const step of steps) {
     if (step.kind === 'suite' && step.area !== null && step.area !== '') return step.area;
+  }
+  return null;
+}
+
+/**
+ * The concrete spec names the check expects its area to run: the first `suite` step that names any.
+ * An empty list normalises to null, because an author who wrote `expects: []` named no expectation
+ * and did not say the area runs nothing — the two readings are a pass and a block apart.
+ * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+ */
+export function stepExpects(steps: readonly ValidationStep[]): string[] | null {
+  for (const step of steps) {
+    const expects = step.expects ?? null;
+    if (step.kind === 'suite' && expects !== null && expects.length > 0) return expects;
   }
   return null;
 }

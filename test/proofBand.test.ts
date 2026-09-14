@@ -260,6 +260,7 @@ function check(over: Partial<ValidationCheck> & { id: string }): ValidationCheck
     amendedAt: null,
     amendNote: null,
     area: null,
+    expects: null,
     createdAt: 'then',
     updatedAt: 'then',
     ...over,

@@ -193,6 +193,13 @@ before them, and prose in a \`do\` cannot say that to anything but a reader.
 | \`measure\` | Reads a metric. |
 | \`manual\` | Something only a person can do. |
 
+**A \`suite\` step also takes \`expects\`: the concrete spec names you expect that area to run**, copied
+from the listing exactly as the area is. Write them down — it is the only thing that can catch a spec
+**deleted or renamed** since you wrote the check: the area goes on running whatever it now holds, and
+the count of what it holds moves down with the deletion, so a name nobody wrote down simply goes
+missing and the row reports a pass for coverage that no longer exists. A name the runner does not
+offer blocks the row rather than passing on what remains.
+
 **Who carries each step is not yours to say.** It is read off what the deployment declares above: a
 step whose kind nothing here can drive comes back to a person, with the configuration that would have
 carried it named on the row. That is a fact rather than a nomination, which is why you write the

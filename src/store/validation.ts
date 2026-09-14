@@ -32,6 +32,13 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // The selector a runner offers for this check. Null means *no area declared*, which is true of
     // every row written before the column existed and stays true — so nothing is backfilled.
     area: 'TEXT',
+    // The concrete spec names the planner expected that area to run, JSON. Null means *the planner
+    // named no expectation* — true of every row written before the column and of every check whose
+    // author named none — and it must never fold into "expected nothing": the difference between
+    // what was expected and what the runner offers is computed **only** where an expectation
+    // exists, so nothing is backfilled and there is no `runOnce`.
+    // → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+    expects: 'TEXT',
     // The check's test plan, JSON. Null means *no steps* — true of every row written before the
     // column existed and of every check whose author declared only prose, and it stays true, so
     // nothing is backfilled. A null read as `[]` and a null read as "unknown" are the same answer
@@ -212,6 +219,9 @@ export class ValidationStore {
       // author that moved the step, or dropped it, moves this with it rather than leaving a
       // selector nothing offers. → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
       area: input.area ?? null,
+      // Written by the same `suite` step, recomputed the same way, and null-means-unnamed all the
+      // way through. → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+      expects: input.expects ?? null,
       // Resolved from the configuration at ingestion and recomputed on every amendment, exactly as
       // `area` is — a check's assignment is a fact about what the deployment declares, and a step
       // whose kind nothing declares is a step the fleet cannot carry.
@@ -523,12 +533,12 @@ export class ValidationStore {
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
-           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area, steps,
-           capture, created_at, updated_at)
+           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area, expects,
+           steps, capture, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
-           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area, @steps,
-           @capture, @createdAt, @updatedAt)
+           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area, @expects,
+           @steps, @capture, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
@@ -538,7 +548,7 @@ export class ValidationStore {
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note, area=excluded.area,
-           steps=excluded.steps, capture=excluded.capture, updated_at=excluded.updated_at`,
+           expects=excluded.expects, steps=excluded.steps, capture=excluded.capture, updated_at=excluded.updated_at`,
       )
       .run({
         ...check,
@@ -546,6 +556,7 @@ export class ValidationStore {
         covers: JSON.stringify(check.covers),
         fleetCandidate: check.fleetCandidate ? 1 : 0,
         revision: check.revision === null ? null : JSON.stringify(check.revision),
+        expects: check.expects === null ? null : JSON.stringify(check.expects),
         steps: check.steps.length === 0 ? null : JSON.stringify(check.steps),
       });
   }
@@ -597,6 +608,7 @@ interface ValidationCheckRow {
   amended_at: string | null | undefined;
   amend_note: string | null | undefined;
   area: string | null | undefined;
+  expects: string | null | undefined;
   steps: string | null | undefined;
   capture: string | null | undefined;
   created_at: string;
@@ -639,6 +651,7 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     amendedAt: r.amended_at ?? null,
     amendNote: r.amend_note ?? null,
     area: r.area ?? null,
+    expects: parseExpects(r.expects ?? null),
     steps: parseSteps(r.steps ?? null),
     capture: r.capture ?? null,
     createdAt: r.created_at,
@@ -716,6 +729,18 @@ function parseSteps(raw: string | null): ValidationStep[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Null stays **null**, which is the whole of this column's reading rule: *the planner named no
+ * expectation* is not *the planner expected nothing*, and only the first is true of every row written
+ * before the column. An empty or unreadable list is the same answer, because an expectation of
+ * nothing is not one. → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+ */
+function parseExpects(raw: string | null): string[] | null {
+  if (raw === null) return null;
+  const names = parseStringArray(raw);
+  return names.length === 0 ? null : names;
 }
 
 function parseStringArray(raw: string | null): string[] {

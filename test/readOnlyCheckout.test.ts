@@ -151,6 +151,7 @@ function handedOverCheck(): ValidationCheck {
     amendedAt: null,
     amendNote: null,
     area: null,
+    expects: null,
     createdAt: NOW,
     updatedAt: NOW,
   };

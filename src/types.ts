@@ -873,6 +873,13 @@ export interface ValidationStep {
   do: string;
   /** `suite` only: the area of the project's own browser suite this step runs. Sets the check's `area`. */
   area: string | null;
+  /**
+   * `suite` only: the concrete spec names this step expects the area to run. Null is *the author
+   * named no expectation* and is never "expected nothing" — the difference is computed only where
+   * there is one. Sets the check's `expects`.
+   * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+   */
+  expects: string[] | null;
   when: ValidationStepWhen;
   /**
    * `browser` only: the one-off script's source, run as it stands. It is the browser-shaped member of
@@ -939,6 +946,14 @@ export interface ValidationCheck {
    */
   area: string | null;
   /**
+   * The concrete spec names the planner expected this check's area to run, written down so that a
+   * spec **deleted** since the check was authored is visible: the count cannot catch that on its own,
+   * because a deleted spec lowers the listing's own denominator with it. Null is *no expectation was
+   * named*, which is every row written before the column and every check whose author named none —
+   * never "expected nothing". → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+   */
+  expects: string[] | null;
+  /**
    * The check's test plan: one ordered journey through the delivered goal. Empty is **no steps**,
    * which is every check written before the column existed and every check whose author declared
    * only prose — `fleetCandidate` keeps its meaning there and nowhere else.
@@ -982,6 +997,13 @@ export interface ValidationCheckInput {
    * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
    */
   area?: string | null;
+  /**
+   * The concrete spec names the area is expected to run. It comes from the same `suite` step the
+   * area does, and from nothing else. Null and omitted are the same fact — *no expectation named* —
+   * and neither is "expected nothing".
+   * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+   */
+  expects?: string[] | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
   steps?: ValidationStep[];
 }

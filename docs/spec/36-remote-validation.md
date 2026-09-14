@@ -40,7 +40,10 @@
 > ([Artefacts](#artefacts-and-making-worth-observable)), and the **reading-shaped half of the
 > cockpit** with the Environments card's folded line ([The cockpit](#the-cockpit)); and — as of the
 > sweep — **the sweep's arm**, which settles a `dispatched` run whose task is no longer active and
-> releases the `(environment, tenant)` lock it was holding ([The desk](#the-desk)).
+> releases the `(environment, tenant)` lock it was holding ([The desk](#the-desk)); and — as of the
+> named expectations — **`validation_checks.expects`**, the concrete spec names a check wrote down for
+> its area, with the pre-flight arm that blocks a row whose runner no longer offers one of them
+> ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)).
 >
 > The **test part** landed in another goal: `plan_parts.coverage`'s
 > bar on `issue-plan` and `issue-replan`, and the critical path's allow-list rule
@@ -172,10 +175,11 @@ Rows keep their own downstream consequences. A failed `check` still reaches `val
 | `blocked`  | **No reading was taken.** Nothing was learned about the goal.                                               | Nothing at all                                                                                                                                                                  |
 | `captured` | A `screenshot` step handed a **screen** back. Nothing was asserted and nothing is green.                    | `captured` plus the image, `resultBy` the assertion's instrument or `agent` where nothing asserted — see [A screen from the sheet's own run](#a-screen-from-the-sheets-own-run) |
 
-Ten things produce `blocked`, and the number of roads into it is the point:
+Eleven things produce `blocked`, and the number of roads into it is the point:
 
 - the row's query is **not approved for this environment**;
 - the selector **matched zero tests**, or **matched more than it ran**;
+- the runner offers **no spec the check named** as one it expects its area to run;
 - the check's area holds the **selector delimiter**, so it could never be passed as one selector;
 - the environment does not `permit` that row kind;
 - there is no private network, no credential or no tenant;
@@ -576,6 +580,14 @@ What runs at assembly, without asking:
   selector that matched nothing reads as a clean pass. It is written onto `remote_sheet_rows.matched`
   and read from nowhere else.
 
+  **It blocks a row on four counts, in this order**, and the order is the argument each arm makes:
+  the listing **could not be taken** at all; the listing holds **no offer** for the area the check
+  names; the offer it holds is **empty**, which is a selector that matched zero tests and must not read
+  as a clean pass; and the check named **specs the listing does not offer**
+  ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)). The
+  fourth is last because the three before it are about the area itself, and a name inside an area is
+  only worth asking after about an area that exists and holds something.
+
   **The listing is read from the operator's own checkout, and that skew is accepted.** The run itself
   happens in a checkout pinned to the deployed commit; `listSelectors` runs with `cwd` at `repoRoot`,
   which is whatever branch the harness's own checkout is on. Usually they are the same commit. Where
@@ -617,6 +629,54 @@ and four things happen there:
   every arrival, including the ones nobody was going to read.
 
 The tenant's age is drawn at the gate too, which is where an operator can act on it. → [Tenants](#tenants)
+
+### An expected spec the runner does not offer
+
+**A check may write down the concrete spec names it expects its area to run, and one the runner does
+not offer blocks the row.** `validation_checks.expects` is a JSON list of them. It rides on the
+`suite` step exactly as the area does and is written from there and nowhere else — `stepExpects`
+(`src/validation/steps.ts`) reads the first `suite` step that names any and `checkAmendment` writes
+the column, recomputed on every ingest and every amendment. One writer, for the reason `area` has one
+([How a check comes to have an area](#how-a-check-comes-to-have-an-area)): these are strings the
+pre-flight compares **character for character**, and a second author for one of them is a silent undo.
+`resolveSteps` normalises the field the same way — a `suite` step's names, null on every other kind.
+
+**Naming them up front is the only thing that can see a spec that has been deleted.** A check selects
+an area; the runner runs whatever that area holds **today**; the row goes green on what remains. A
+spec deleted or renamed since the check was written therefore disappears in silence, and the row
+reports a pass for coverage that no longer exists — which is this document's own worst outcome, a
+green row standing for nothing.
+
+**The counts cannot reach this, and that is why the field exists.** `matched` is the denominator the
+listing gives _today_ ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)),
+so a deleted spec lowers the executed side and the listed side **together** and the consistency
+check's `executed < matched` ([The runner contract](#the-runner-contract)) never fires. Every number
+on the row moves with the deletion. Only a name somebody wrote down can be missed. It is also why a
+loose expectation would be decoration: _the checkout journey_ misses nothing, where four named specs
+miss one. The planner is told to name them rather than describe them — in the test-plan note
+(`TEST_PLAN_NOTE`, `src/validation/authoring.ts`) and in the tool schema's own description of the
+field, which is the same string in both places for the reason every step field is
+([20](20-validation.md#the-test-plan)).
+
+**Null is _no expectation was named_, and never _expected nothing_.** It is true of every row written
+before the column and of every check whose author named none, and the difference the pre-flight takes
+is computed **only** where there is an expectation to take it against. Fold the two readings together
+and every check on every deployment blocks on an empty expectation the moment the column ships — a
+whole bench of rows refusing to run, naming nothing missing, with nothing red. An empty list is the
+same fact said a second way and normalises to null at both ends, in `stepExpects` on the way in and in
+`parseExpects` on read-back, so no route into the column can produce one. Nothing is backfilled and
+there is no `runOnce` ([Migrations](#migrations)).
+
+**It blocks rather than reporting on the remainder**, and the reason is the `empty` arm's reason one
+step on: a pass on what is left is a pass for coverage that is gone, exactly as a selector matching
+zero tests is not a clean pass. The reason names the missing specs and what the runner does offer, so
+the operator meets the two lists side by side and can tell a renamed spec from a deleted one without
+leaving the sheet. Amendment is the remedy, at the bench, where a check whose selector the pre-flight
+could not find is already sent ([20](20-validation.md#amendment)).
+
+**`matched` is unchanged by any of it.** It still comes from the area's own offer and from nowhere
+else — a blocked row carries the count the listing gave, because the count is a reading of the
+listing and not a verdict on the check.
 
 ## The press
 
@@ -1634,6 +1694,18 @@ table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alt
   `remote_sheet_rows.matched` is the same case one table over, declared in
   `REMOTE_VALIDATION_COLUMNS` — a column on a table that was new one release ago, which is exactly
   what that entry exists for.
+- **`validation_checks.expects`** is the same case one column over and is **built**: declared in
+  `VALIDATION_COLUMNS` beside `area`, additive, guarded by `PRAGMA table_info`, and invisible without
+  the entry on every database from before it existed — every check's named expectation silently
+  unheld, which is the one thing the row's counts cannot report for themselves
+  ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)). It is
+  JSON, written by the same `suite` step that writes the area. **Its null is not the other column's
+  null repeated, and the difference is the whole of the reading rule**: `area` null is _no area
+  declared_ and takes the row out of the runner's hands, where `expects` null is _no expectation was
+  named_ and must never be read as _expected nothing_. The second reading blocks every check written
+  before the column on an expectation nobody stated, so the difference against the listing is taken
+  **only** where the column holds one, and an empty list normalises to null on the way in and on
+  read-back rather than being stored as an expectation of nothing.
 - **`remote_selector_offerings`** is a **new table**, so `CREATE TABLE IF NOT EXISTS` is the whole of
   it and its `REMOTE_VALIDATION_COLUMNS` entry is empty — the entry exists because the table being new
   **once** does not keep it exempt, and the next column on it needs one. It holds no verdict and no
@@ -1647,9 +1719,10 @@ table_info` like every other entry there. `CREATE TABLE IF NOT EXISTS` never alt
   guarded by `PRAGMA table_info` like every other entry there.
 - **No backfill is needed, and each for a stated reason rather than by luck.**
   `validation_checks.area` null means _no area declared_, which is true of every row written before
-  the column existed and stays true; `plan_parts.coverage` the same. What the area **join** does at
-  boot is not a backfill and takes no `runOnce` id: it recomputes a derived column nothing else
-  writes, so it is idempotent by construction and runs on every boot deliberately
+  the column existed and stays true; `validation_checks.expects` null means _no expectation was
+  named_, which is true of the same rows for the same reason and is never _expected nothing_;
+  `plan_parts.coverage` the same. Neither column is repaired at boot, and that is the point: a pass
+  that recomputed one would overwrite what a `suite` step named, on every boot, with nothing red
   ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). `goal_arrivals.sheeted_at` null
   means _not considered yet_, and an arrival considered for the first time is assembled only if its
   confirming reading is fresh — so a database full of nulls is walked once, stamped, and assembles

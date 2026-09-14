@@ -15,7 +15,14 @@ import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
 import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { checkBriefing } from '../src/validation/fleet.js';
-import { fleetCanStart, segmentBoundary, stepCapabilities } from '../src/validation/steps.js';
+import {
+  fleetCanStart,
+  resolveSteps,
+  segmentBoundary,
+  stepArea,
+  stepCapabilities,
+  stepExpects,
+} from '../src/validation/steps.js';
 import { validationCheckSetInputs } from '../src/validation/checkDocument.js';
 import { sheetRows } from '../src/remoteValidation/sheet.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
@@ -155,6 +162,7 @@ function fleetCheck(steps: ValidationCheck['steps']): ValidationCheck {
     amendedAt: null,
     amendNote: null,
     area: null,
+    expects: null,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -300,6 +308,77 @@ test('with nothing configured every step is a person’s, which is the direction
   assert.equal(written[0]?.steps?.[0]?.actor, 'human', 'a step given to a fleet that cannot carry it is lost silently');
 });
 
+// ------------------------------------------- the area, and the specs it is expected to run
+
+test('stepExpects takes the first suite step that names any, and only a suite step can name one', () => {
+  const steps = resolveSteps(
+    [
+      { kind: 'manual', do: 'Seed a supplier account', expects: ['seeded.spec.ts'] },
+      { kind: 'suite', do: 'Run the checkout area', area: 'checkout' },
+      { kind: 'suite', do: 'Run the refunds area', area: 'refunds', expects: ['refunds/full.spec.ts'] },
+      { kind: 'suite', do: 'Run the loyalty area', area: 'loyalty', expects: ['loyalty/points.spec.ts'] },
+    ],
+    stepCapabilities([FULL]),
+  );
+  assert.equal(
+    steps[0]?.expects,
+    null,
+    'a step of another kind runs no named spec of the suite, so what it declared is dropped at resolution — ' +
+      'a second author for a string the pre-flight compares character for character is a silent undo',
+  );
+  assert.deepEqual(
+    stepExpects(steps),
+    ['refunds/full.spec.ts'],
+    'the first suite step that names an expectation is the check’s, exactly as the first one naming an ' +
+      'area is — a suite step that named none is passed over rather than answering "expected nothing"',
+  );
+  assert.equal(
+    stepArea(steps),
+    'checkout',
+    'and the area is still the first suite step naming one, whatever it expected',
+  );
+});
+
+test('an empty expects list is no expectation at all, never “expected nothing”', () => {
+  const steps = resolveSteps(
+    [{ kind: 'suite', do: 'Run the checkout area', area: 'checkout', expects: [] }],
+    stepCapabilities([FULL]),
+  );
+  assert.deepEqual(steps[0]?.expects, [], 'the step keeps what its author wrote');
+  assert.equal(
+    stepExpects(steps),
+    null,
+    'but the check’s expectation normalises to null: an author who wrote "expects: []" named no expectation ' +
+      'and did not say the area runs nothing, and the two readings are a pass and a block apart',
+  );
+});
+
+test('a suite step’s expects becomes the check’s, written once through the amendment', async () => {
+  const system = build([FULL]);
+  ingest(system);
+  const res = await plan(system, [
+    {
+      ...CHECK,
+      steps: [
+        { kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests', expects: ['checkout/places.spec.ts'] },
+        { kind: 'state', do: 'Read the order row back' },
+      ],
+    },
+  ]);
+  assert.equal(res.isError, false, res.text);
+
+  const check = system.store.validation.listValidationChecks(GOAL)[0];
+  assert.equal(check?.area, 'Checkout Tests');
+  assert.deepEqual(
+    check?.expects,
+    ['checkout/places.spec.ts'],
+    'the expectation rides on the same step the area does and is recomputed with it, so an author who ' +
+      'moves or drops the step moves both rather than leaving a name nothing offers',
+  );
+  assert.equal(check?.steps[1]?.expects, null, 'and the state step carries none');
+  system.store.close();
+});
+
 // -------------------------------------------------------- the segment boundary
 
 test('an inline person’s step segments the check and a deferred one does not', () => {
@@ -307,6 +386,7 @@ test('an inline person’s step segments the check and a deferred one does not',
     kind: 'browser',
     do: 'x',
     area: null,
+    expects: null,
     when: 'inline',
     script: null,
     scriptSweptAt: null,
@@ -346,6 +426,7 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
         kind: 'browser',
         do: 'Fill the basket',
         area: null,
+        expects: null,
         when: 'inline',
         script: null,
         scriptSweptAt: null,
@@ -356,6 +437,7 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
         kind: 'manual',
         do: 'Approve the payment in the finance system',
         area: null,
+        expects: null,
         when: 'inline',
         script: null,
         scriptSweptAt: null,
@@ -366,6 +448,7 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
         kind: 'state',
         do: 'Read the order row back',
         area: null,
+        expects: null,
         when: 'inline',
         script: null,
         scriptSweptAt: null,
@@ -389,6 +472,7 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
     amendedAt: null,
     amendNote: null,
     area: null,
+    expects: null,
     capture: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -411,6 +495,7 @@ test('a check whose first step is a person’s is never dispatched — it would 
     kind: 'manual' as const,
     do: 'Log in with the finance account',
     area: null,
+    expects: null,
     when: 'inline' as const,
     script: null,
     scriptSweptAt: null,
@@ -454,6 +539,7 @@ test('a check’s state step is not a sheet row — it is read where it sits, no
           kind: 'state',
           do: 'Read the order row back',
           area: null,
+          expects: null,
           when: 'inline',
           script: null,
           scriptSweptAt: null,

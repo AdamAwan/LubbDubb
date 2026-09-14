@@ -404,6 +404,7 @@ one at boot, `id` and `letter` untouched
 | `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                    |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                            |
 | `area`           | The suite area a remote run selects this check by, set by a `suite` step naming one. Null is a check no suite area runs — which is now the ordinary case rather than a failure. → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
+| `expects`        | The concrete spec names that area is expected to run, set by the same `suite` step. Null is _no expectation was named_ — never _expected nothing_. → [36](36-remote-validation.md#an-expected-spec-the-runner-does-not-offer)                     |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                               |
 | `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                      |
 | `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                  |
@@ -479,15 +480,27 @@ ordering is the point: a database or log reading whose subject is _what
 the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
 to anything but a reader.
 
-| Step kind    | What it does                                                                         |
-| ------------ | ------------------------------------------------------------------------------------ |
-| `browser`    | Drives the application — navigate, upload, click, wait.                              |
-| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`.       |
-| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`. |
-| `state`      | Reads the deployed store through the environment's `state.run`.                      |
-| `signal`     | Reads logs and error records.                                                        |
-| `measure`    | Reads a metric.                                                                      |
-| `manual`     | A person does something the fleet cannot.                                            |
+| Step kind    | What it does                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `browser`    | Drives the application — navigate, upload, click, wait.                                           |
+| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`, and its `expects`. |
+| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`.              |
+| `state`      | Reads the deployed store through the environment's `state.run`.                                   |
+| `signal`     | Reads logs and error records.                                                                     |
+| `measure`    | Reads a metric.                                                                                   |
+| `manual`     | A person does something the fleet cannot.                                                         |
+
+**A `suite` step also carries `expects`: the concrete spec names the planner expects that area to
+run**, copied from the runner's listing exactly as the area is, and optional on it. It is the only
+thing that can see a spec **deleted or renamed** since the check was written — the area goes on
+running whatever it now holds, the count of what it holds moves down with the deletion, and a name
+nobody wrote down goes missing with a green row over it. A name the runner does not offer blocks the
+row rather than reporting on what remains, and a check that named none is untouched: null is _no
+expectation was named_, never _expected nothing_
+([36](36-remote-validation.md#an-expected-spec-the-runner-does-not-offer)). `expects` belongs to a
+`suite` step and is refused on every other kind, as `area` is; it is written from the step and from
+nowhere else, and the tool-facing schema says all of that in the field's own description so that
+`validation_plan` and `validation_amend` advertise one shape.
 
 Everything one journey settles belongs to one check, on the rule
 [One run is one check](#one-run-is-one-check) states: the setup is the expensive part, and a journey
@@ -1484,7 +1497,11 @@ third time for `spec` — the column existed and only gained values it may hold.
 case and has a real entry: it is a column on an **existing** table, so without one it is invisible on
 every database from before it existed, every check reads as unautomatable and every remote sheet is
 all-manual, with nothing red. Its null means _no area declared_, which is true of every older row and
-stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `steps` is the same case one change later, and its null is the same kind of fact: a check written
+stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `expects`
+is the same case beside it and takes the same reading one degree more carefully: null there is _no
+expectation was named_, and read instead as _expected nothing_ it would block every check written
+before the column ([36](36-remote-validation.md#an-expected-spec-the-runner-does-not-offer)).
+`steps` is the same case one change later, and its null is the same kind of fact: a check written
 before test plans existed genuinely had none, so null reads as `[]` and stays that way. `parseSteps`
 answers `[]` for anything it cannot read back, which is the reading rule this column shares with
 `revision` — a half-written test plan the fleet acts on would be worse than none.

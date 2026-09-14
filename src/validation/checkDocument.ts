@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import type { ValidationCheckAmendment, ValidationCheckInput, ValidationResourceInput } from '../types.js';
-import { NO_STEP_CAPABILITIES, resolveSteps, STEP_KINDS, stepArea, type StepCapabilities } from './steps.js';
+import {
+  NO_STEP_CAPABILITIES,
+  resolveSteps,
+  STEP_KINDS,
+  stepArea,
+  stepExpects,
+  type StepCapabilities,
+} from './steps.js';
 import type { ValidationStepKind } from '../types.js';
 
 // → docs/spec/20-validation.md
@@ -39,11 +46,13 @@ const ValidationStepSchema = z
     kind: z.enum(STEP_KINDS as unknown as [ValidationStepKind, ...ValidationStepKind[]]),
     do: z.string().min(1),
     area: z.string().min(1).optional(),
+    expects: z.array(z.string().min(1)).optional(),
     when: z.enum(['inline', 'deferred']).optional(),
     script: z.string().min(1).max(MAX_SCRIPT_LENGTH).optional(),
   })
   .strict(
-    'a step declares only kind/do/area/when/script — who carries it is read off the configuration, not yours to say',
+    'a step declares only kind/do/area/expects/when/script — who carries it is read off the configuration, ' +
+      'not yours to say',
   )
   .superRefine((step, ctx) => {
     const add = (message: string, path: string): void => {
@@ -55,6 +64,10 @@ const ValidationStepSchema = z
       add(`"area" belongs to a "suite" step — a ${step.kind} step runs no named area of the suite`, 'area');
     if (step.kind === 'suite' && step.area === undefined)
       add('a "suite" step names the area it runs, copied exactly from what the runner offers', 'area');
+    // The same string the pre-flight compares character for character, one level down; and the same
+    // rule about a second author, for the same reason.
+    if (step.expects !== undefined && step.kind !== 'suite')
+      add(`"expects" belongs to a "suite" step — a ${step.kind} step runs no named spec of the suite`, 'expects');
     // Inline and deferred are the same word on any other kind: a step that runs, runs where it sits.
     if (step.when !== undefined && step.kind !== 'manual')
       add(`"when" belongs to a "manual" step — a ${step.kind} step is taken where it sits`, 'when');
@@ -94,6 +107,16 @@ export const validationStepsSchema = z
           'A "suite" step only, and required on one: the area to run, copied **exactly** from what the ' +
             'runner was listed as offering. It is compared character for character, so an area the ' +
             'suite does not offer can never run. It is also what gives the check its area.',
+        )
+        .optional(),
+      expects: z
+        .array(z.string())
+        .describe(
+          'A "suite" step only, and optional on one: the **concrete spec names** you expect that area to ' +
+            'run, copied exactly from the listing. Writing them down is the only thing that can catch a ' +
+            'spec that has been **deleted or renamed** since — the area still runs whatever it now holds, ' +
+            'and the count moves with it, so a name you did not write down goes missing in silence. A ' +
+            'name the runner does not offer blocks the row instead of passing on what remains.',
         )
         .optional(),
       when: z
@@ -265,6 +288,10 @@ function checkAmendment(
     // part the check happened to `covers`, which made a check automatable by accident.
     // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
     area: stepArea(steps),
+    // Written by the same `suite` step, for the same reason: a second author for a string the
+    // pre-flight compares character for character is a silent undo.
+    // → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+    expects: stepExpects(steps),
     steps,
   };
 }

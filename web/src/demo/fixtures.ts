@@ -84,6 +84,7 @@ function demoCheck(
     supersededReason: null,
     revision: null,
     area: null,
+    expects: null,
     amendedAt: null,
     amendNote: null,
     ...seed,
@@ -93,6 +94,7 @@ function demoCheck(
 function demoStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 'do'>): ValidationStep {
   return {
     area: null,
+    expects: null,
     when: 'inline',
     script: null,
     scriptSweptAt: null,
@@ -2040,6 +2042,7 @@ export function buildDemoState(): DemoSeed {
         expect: 'The file downloads. No 401, and no bearer token anywhere in the URL bar.',
         covers: ['route', 'e2e-download'],
         area: 'Snapshots',
+        expects: null,
         state: 'passed',
         resultNote: 'Opened last night’s handbook snapshot in a new tab — served straight through.',
         resultBy: 'operator',

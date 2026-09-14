@@ -586,6 +586,7 @@ function handedOver(over: Partial<ValidationCheck> = {}): ValidationCheck {
     amendedAt: null,
     amendNote: null,
     area: null,
+    expects: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...over,
