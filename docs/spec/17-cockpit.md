@@ -1469,6 +1469,13 @@ side": `.cn-acts` in the console, the feature board's own, and a bare flex row w
 one. That is the same drift `.cn-btn` was, one level up — the gap between two controls depended on which
 panel you were looking at, and nobody had decided it.
 
+**A station that has a button row renders the group itself**, and its caller does not wrap it. The
+settling row went out as `<ButtonRow bar><HumanTaskActions/></ButtonRow>`, and `HumanTaskActions`
+drew its own `<span>` around both buttons — so the group's gap reached that one span and the two
+buttons touched. A group whose only child is another element styles nothing, and it renders as
+*almost* right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
+pins it: the buttons are the group's own children, with nothing in between.
+
 `bar` is the group **at the foot of something it settles**: an ask, a form. It takes a rule above it and
 the room to go with it, so the controls read as the end of that thing rather than as the last paragraph
 of it. It is a property of the group and not of the surface, which is the whole reason it is a prop

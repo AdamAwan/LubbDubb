@@ -83,3 +83,48 @@ test('no surface writes a button family of its own', () => {
     }
   }
 });
+
+/**
+ * The row that settles an ask is the cockpit's most-embedded control group, and
+ * its appearance has now been wrong three ways: the buttons drew identically to
+ * each other, the group had no rule separating it from the prose above, and the
+ * group's gap reached a wrapper rather than the buttons — `.btn-row` held one
+ * `<span>` holding both, so `Done` and `Decline` touched.
+ *
+ * That last one is the shape this pins. A group whose only child is another
+ * element is a group that styles nothing, and it renders as *almost* right,
+ * which is why it survived two passes over the same row.
+ */
+test('a button group reaches the buttons, never a wrapper around them', async () => {
+  const { HumanTaskActions } = await import('../web/src/components/HumanTaskActions.js');
+  const task = {
+    id: 't1',
+    title: 'Re-point the staging watchers',
+    detail: null,
+    originRef: 'issue:390',
+    partId: null,
+    kind: 'bench',
+    agentId: null,
+    taskId: null,
+    status: 'open',
+    resolution: null,
+    createdAt: '2026-05-02T00:00:00.000Z',
+    updatedAt: '2026-05-02T00:00:00.000Z',
+    resolvedAt: null,
+    dismissedAt: null,
+  };
+  const html = renderToStaticMarkup(
+    createElement(HumanTaskActions, {
+      task,
+      look: { tone: 'secondary' },
+      onDone: () => undefined,
+      onDecline: () => undefined,
+    } as never),
+  );
+
+  assert.match(html, /<div class="btn-row bar"><button/, 'the buttons are the group’s own children');
+  assert.doesNotMatch(html, /<div class="btn-row[^"]*"><(?!button)/, 'nothing sits between the group and its buttons');
+  // And the two verbs are told apart, which is what the tones are for.
+  assert.match(html, /class="btn btn primary"[^>]*>Done</);
+  assert.match(html, /class="btn btn">Decline</);
+});

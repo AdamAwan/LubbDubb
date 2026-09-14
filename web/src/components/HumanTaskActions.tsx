@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { Button, expected, refusing } from './button.js';
+import { Button, ButtonRow, expected, refusing } from './button.js';
 import type { ButtonLook } from './button.js';
 import { logUsage } from '../cockpit/usage.js';
 
@@ -48,7 +48,7 @@ export function HumanTaskActions({
 
   return (
     <>
-      <span className="human-task-actions">
+      <ButtonRow bar>
         {/* The act, ahead of the two records of it. A close-out row asks for one
             thing, and this is it — so it leads, and the note rule it may owe is
             the same one Done owes, asked in the same box. */}
@@ -98,7 +98,7 @@ export function HumanTaskActions({
         <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
           Decline
         </Button>
-      </span>
+      </ButtonRow>
       {saying !== null && (
         <div className="human-task-decline">
           {/* The reason, in front of the box that answers it. Drawn from what the
