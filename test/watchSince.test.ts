@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -75,8 +75,8 @@ function build(observer: FakeEnvironmentObserver, environments: EnvironmentConfi
 }
 
 function arrived(system: System, checks: GoalWatchInput[] = [SIGNAL]): void {
-  system.store.ingestGoalWatch('issue:12', checks);
-  system.store.recordGoalArrival({
+  system.store.watches.ingestGoalWatch('issue:12', checks);
+  system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'testUk',
     arrivedAt: new Date(Date.now() - 60_000).toISOString(),
@@ -90,7 +90,7 @@ test('a window’s reading is bounded to the arrival that opened it', async () =
 
   await system.harness.runCycle();
 
-  const [window] = system.store.listWatchWindows();
+  const [window] = system.store.watches.listWatchWindows();
   assert.ok(window !== undefined);
   assert.deepEqual(
     [...new Set(observer.asked.map((a) => a.since))],
@@ -116,17 +116,17 @@ test('a query nothing bounds is unknown, never the regression it would otherwise
 
   await system.harness.runCycle();
 
-  const [reading] = system.store.listWatchReadings();
+  const [reading] = system.store.watches.listWatchReadings();
   assert.equal(reading?.verdict, 'unknown', 'not regressed — the rows it counted are from before the work');
   assert.match(reading!.detail!, /\{since\}/, 'and it says what is missing');
-  assert.deepEqual(system.store.listHumanTasksOfKind('watch'), [], 'an unknown files nothing');
+  assert.deepEqual(system.store.humanTasks.listHumanTasksOfKind('watch'), [], 'an unknown files nothing');
   system.store.close();
 });
 
 test('a dry run reads one window’s length back, which is the span the baseline is taken over', async () => {
   const observer = new FakeEnvironmentObserver(FIRING);
   const system = build(observer, [{ ...TEST_UK, watch: { ...TEST_UK.watch!, forMs: 60 * 60 * 1000 } }]);
-  system.store.ingestGoalWatch('issue:12', [SIGNAL]);
+  system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
 
   await system.watch.run('issue:12');
 

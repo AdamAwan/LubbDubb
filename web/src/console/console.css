@@ -3407,12 +3407,6 @@ button.cn-grow {
   border-color: var(--cn-accent);
   background: var(--cn-blue-bg);
 }
-.cn-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
 /* The console has no button family of its own. One `.btn` in `styles.css` dresses
    every button in the cockpit, so `primary` is one hue and one shape wherever it
    is pressed. What used to be here — `.cn-btn` and its four modifiers — was a
@@ -4837,4 +4831,642 @@ button.cn-grow {
 .cn-lv-passed .cn-name,
 .cn-lv-passed .cn-sub {
   color: var(--cn-fg-dim);
+}
+
+/* ── The overview's alternative shapes ────────────────────────────────────────
+   One surface that leads with what the operator must answer rather than what the
+   harness is doing, selected by `?overview=next`. Everything here is namespaced
+   `cn-ov-`: `.cn-ask`, `.cn-desk`, `.cn-seg`, `.cn-sw` and `.cn-track` are all
+   already taken further up this sheet, and an unnamespaced collision here would
+   land the goal page's padding on a lane's segment.
+   → docs/spec/17-cockpit.md#the-overview */
+
+/* The shape is a single object on an otherwise empty pane, so it is centred and
+   given a measure rather than run to the pane's left edge — at 1900px hard left
+   puts the ask a third of the way across a wide screen with nothing to its right,
+   which reads as a layout that failed rather than one that chose. The switch
+   shares the wrapper so the two line up.
+   → docs/spec/17-cockpit.md#the-overview */
+.cn-ov-next {
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-top: 8px;
+}
+
+.cn-ov-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.cn-ov-switch-label {
+  font-size: var(--label-size);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  margin-right: 6px;
+}
+.cn-ov-switch button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--cn-r);
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-ov-switch button:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-ov-switch button.cn-ov-switch-on {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-fg);
+}
+
+
+
+.cn-ov-ask-kind {
+  color: var(--cn-tone-ink, var(--cn-fg-dim));
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  background: var(--cn-tone-fill, var(--cn-panel-2));
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.cn-ov-ask-subject {
+  color: var(--cn-fg-dim);
+}
+.cn-ov-ask-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+
+/* The name is the control and the ref sits beside it, never inside it.
+   → docs/spec/17-cockpit.md#links */
+
+
+.cn-ov-track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cn-ov-seg {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 9px;
+  border-radius: 3px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-track);
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-ov-seg b {
+  font-weight: 500;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-seg-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ov-seg-state {
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-seg-merged {
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+}
+.cn-ov-seg-now {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-blue-ink-hi);
+}
+.cn-ov-seg-waiting {
+  color: var(--cn-fg-faint);
+}
+.cn-ov-seg-held {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+
+/* ── One ask at a time, under the work it is about ── */
+
+.cn-ov-next-card {
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  padding: 22px 24px;
+}
+.cn-ov-next-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  letter-spacing: 0.06em;
+}
+/* The counter and the two controls, pinned to the card's top right so they are
+   in one place on every ask whatever its body's height. */
+.cn-ov-next-nav {
+  margin-top: 0;
+  margin-left: auto;
+  flex: none;
+  flex-wrap: nowrap;
+}
+.cn-ov-next-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cn-ov-pips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.cn-ov-pip {
+  width: 20px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+/* The mark is drawn inside the button rather than as it: a 3px target is not one
+   a pointer can hit, so the button keeps a touchable height and the bar it draws
+   stays the height it reads best at. */
+.cn-ov-pip::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cn-tone, var(--cn-inert));
+  opacity: 0.4;
+}
+.cn-ov-pip:hover::after {
+  opacity: 0.75;
+}
+.cn-ov-pip:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 1px;
+}
+.cn-ov-pip-here::after {
+  height: 5px;
+  opacity: 1;
+}
+.cn-ov-next-title {
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 14px 0 0;
+  text-wrap: balance;
+}
+.cn-ov-next-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  margin-top: 8px;
+}
+.cn-ov-next-cost {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--cn-amber-ink);
+}
+.cn-ov-next-body {
+  margin-top: 16px;
+}
+
+/* A caption under the bar rather than a second band: it is a reading, and a rule
+   of its own made the controls look like they belonged to neither side of it. */
+.cn-ov-next-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.cn-ov-next-rest {
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-next-clear {
+  max-width: 620px;
+  padding: 34px 4px;
+}
+.cn-ov-next-clear h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--cn-green-ink);
+}
+.cn-ov-next-clear p {
+  color: var(--cn-fg-dim);
+  margin: 0 0 16px;
+}
+
+
+/* The one-at-a-time shape absorbs the rail, so the body is one track rather than
+   two and the situation area takes the width the rail was holding. The wide
+   arrangement places its children by grid line, so both have to be re-placed
+   here: `.cn-sit` is written to start at column 2 and the vivarium to sit in the
+   rail column's floor, and left alone in one column they land on top of each
+   other. */
+.cn-body-railless {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1100px) {
+  .cn-body-railless .cn-sit {
+    grid-area: 1 / 1 / 2 / 2;
+  }
+  .cn-body-railless .cn-viv {
+    grid-area: 2 / 1 / 3 / 2;
+    border-right: 0;
+  }
+}
+
+/* ── Features, worked one at a time ──────────────────────────────────────────
+   The board's own readings, re-ordered for somebody sitting down to act: the
+   Feature's account above, its asks in front, its goals under. Namespaced
+   `cn-ff-` beside the board's `cn-fb-`, whose standing colours it reuses.
+   → docs/spec/17-cockpit.md#the-feature-board */
+
+.cn-ff-pick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cn-ff-pick button {
+  font: inherit;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: var(--cn-r);
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-ff-pick button:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-ff-pick button.cn-ff-on {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-fg);
+}
+.cn-ff-n {
+  font-style: normal;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--cn-red-fill);
+  border: 1px solid var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+
+.cn-ff-head h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.cn-ff-account {
+  max-width: 78ch;
+}
+.cn-ff-account p {
+  margin: 0 0 6px;
+  color: var(--cn-fg-dim);
+  font-size: 13.5px;
+}
+.cn-ff-blocked {
+  color: var(--cn-amber-ink);
+}
+.cn-ff-counts {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--cn-line);
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+.cn-ff-counts b {
+  color: var(--cn-fg-dim);
+  font-weight: 500;
+}
+.cn-ff-courts {
+  margin-left: auto;
+}
+.cn-ff-you {
+  color: var(--cn-red-ink);
+}
+.cn-ff-of {
+  color: var(--cn-fg-faint);
+}
+
+.cn-ff-move {
+  margin-top: 18px;
+}
+.cn-ff-move h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ff-progress {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cn-fg-faint);
+  margin-left: auto;
+}
+.cn-ff-move-clear h3 {
+  color: var(--cn-green-ink);
+}
+
+.cn-ff-ask {
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  border-left: 3px solid var(--cn-tone, var(--cn-inert));
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  padding: 14px 16px;
+}
+.cn-ff-ask-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cn-ff-ask-title {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.cn-ff-ask-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-ff-kind {
+  color: var(--cn-tone-ink, var(--cn-fg-dim));
+  border: 1px solid var(--cn-tone-line, var(--cn-line));
+  background: var(--cn-tone-fill, var(--cn-panel-2));
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 10.5px;
+}
+.cn-ff-holding {
+  color: var(--cn-amber-ink);
+}
+.cn-ff-ask-body {
+  margin-top: 12px;
+}
+.cn-ff-ask-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cn-line);
+}
+
+.cn-ff-goals {
+  margin-top: 22px;
+}
+.cn-ff-goals h3 {
+  margin: 0 0 8px;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ff-lane {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+.cn-ff-lane-mine {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+}
+.cn-ff-standing {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  flex: none;
+}
+.cn-ff-lane-name {
+  font: inherit;
+  font-size: 13px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ff-lane-name:hover {
+  color: var(--cn-accent);
+}
+.cn-ff-lane-move {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.cn-ff-lane-move b {
+  font-weight: 500;
+}
+
+.cn-fb-mode {
+  display: inline-flex;
+  gap: 4px;
+}
+.cn-fb-mode button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--cn-r);
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-fb-mode button:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-fb-mode button.cn-fb-mode-on {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-fg);
+}
+
+/* The work the ask is about, over the ask. It is a band rather than a card: the
+   ask is the subject and this is its setting, so it takes the quieter ground and
+   the thinner rule. */
+.cn-ov-ctx {
+  padding: 0;
+}
+.cn-ov-ctx-name {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.cn-ov-ctx-name:hover {
+  color: var(--cn-accent);
+}
+.cn-ov-ctx-state {
+  margin-left: auto;
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-ctx .cn-ov-track {
+  margin-top: 9px;
+}
+.cn-ov-ctx-more {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--cn-amber-ink);
+}
+.cn-ov-ctx-none {
+  font-size: 12.5px;
+  color: var(--cn-fg-faint);
+}
+/* The band and the ask are one object, so the seam between them is closed. */
+.cn-ov-ctx + .cn-ov-next-title {
+  margin-top: 16px;
+}
+.cn-ov-ctx-wide {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* Every region in the band wears its name, in the sheet's own label ramp. */
+.cn-ov-ctx-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-ctx-label span {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cn-fg-faint);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-ctx-label-sub {
+  margin-top: 12px;
+}
+.cn-ov-ask-label {
+  margin-top: 16px;
+  color: var(--cn-tone-ink, var(--cn-fg-faint));
+}
+
+/* The part the ask is about. It takes the ask's own tone rather than a colour of
+   its own: the mark means "this row and the ask below are the same thing". */
+.cn-ov-seg-here {
+  border-color: var(--cn-tone-line, var(--cn-blue-line));
+  box-shadow: inset 2px 0 0 var(--cn-tone, var(--cn-accent));
+  color: var(--cn-fg);
+}
+.cn-ov-seg-here .cn-ov-seg-state {
+  color: var(--cn-tone-ink, var(--cn-blue-ink-hi));
+}
+
+/* The setting and the act, side by side. The aside takes a share rather than a
+   fixed width so the ask keeps the room on a narrow desktop, and the rule
+   between them is the aside's own edge — one line, not a gap and a border. */
+.cn-ov-next-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 14px;
+}
+.cn-ov-next-aside {
+  min-width: 0;
+}
+.cn-ov-next-main {
+  min-width: 0;
+}
+.cn-ov-next-main > .cn-ov-ask-label:first-child {
+  margin-top: 0;
+}
+@media (min-width: 1100px) {
+  .cn-ov-next-split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 26px;
+    align-items: start;
+  }
+  .cn-ov-next-aside {
+    border-right: 1px solid var(--cn-line);
+    padding-right: 26px;
+  }
 }

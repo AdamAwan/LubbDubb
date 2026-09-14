@@ -25,12 +25,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/escalations/:id/answer',
     checked({ params: IdParams, body: AnswerBody }, async ({ params, body, reply }) => {
       const { id } = params;
-      const pending = store.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+      const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
       if (pending)
         return reply.code(409).send({
           error: `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`,
         });
-      const item = store.getEscalation(id);
+      const item = store.escalations.getEscalation(id);
       if (item?.context?.permission)
         return reply.code(409).send({
           error: `this item is a permission request — allow or deny it via /api/escalations/${id}/permission`,
@@ -74,7 +74,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { id } = params;
       const reason = body.note;
 
-      const pending = store.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+      const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
       if (pending) {
         const result = proposals.reject(pending.id, reason);
         if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
@@ -82,7 +82,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return { ok: true, dismissedAs: 'proposal_rejected', proposal: result.proposal };
       }
 
-      const item = store.getEscalation(id);
+      const item = store.escalations.getEscalation(id);
       if (item?.context?.permission && permissions.decide(id, false, reason)) {
         hub.broadcast({ type: 'dirty' });
         return { ok: true, dismissedAs: 'permission_denied' };

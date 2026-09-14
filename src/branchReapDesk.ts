@@ -24,8 +24,8 @@ export class BranchReapDesk {
     const wanted = reapableBranches(world.pullRequests, world.closedPullRequests ?? [], {
       defaultBranch: this.deps.defaultBranch,
       prAuthorConfigured: this.deps.prAuthorConfigured,
-      tasks: store.listTasks(),
-      reaped: store.reapedPrs(),
+      tasks: store.tasks.listTasks(),
+      reaped: store.branchReaps.reapedPrs(),
     });
 
     for (const { prNumber, branch } of wanted) {
@@ -47,7 +47,7 @@ export class BranchReapDesk {
         });
         continue;
       }
-      store.recordBranchReap(prNumber, branch);
+      store.branchReaps.recordBranchReap(prNumber, branch);
     }
   }
 }

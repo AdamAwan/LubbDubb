@@ -21,12 +21,12 @@ export class PetStore {
   constructor(private readonly ctx: StoreContext) {}
 
   listPets(): Pet[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM pets ORDER BY hatched_at DESC`).all() as PetRow[];
+    const rows = this.ctx.prep(`SELECT * FROM pets ORDER BY hatched_at DESC`).all() as PetRow[];
     return rows.map(rowToPet);
   }
 
   getPet(id: string): Pet | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM pets WHERE id=?`).get(id) as PetRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM pets WHERE id=?`).get(id) as PetRow | undefined;
     return row ? rowToPet(row) : null;
   }
 
@@ -39,8 +39,8 @@ export class PetStore {
     builtSha?: string | null;
     builtClean?: boolean;
   }): Pet {
-    const existing = this.ctx.db
-      .prepare(`SELECT * FROM pets WHERE origin_kind=? AND origin_ref=?`)
+    const existing = this.ctx
+      .prep(`SELECT * FROM pets WHERE origin_kind=? AND origin_ref=?`)
       .get(input.originKind, input.originRef) as PetRow | undefined;
     if (existing) return rowToPet(existing);
     const id = `pet_${nanoid(10)}`;
@@ -60,8 +60,8 @@ export class PetStore {
       builtClean: input.builtClean ?? false,
       chain: chainLink(this.lastChain(), { id, ...input }),
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO pets
            (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, opened_at, placed, built_sha, built_clean, chain)
          VALUES
@@ -72,15 +72,15 @@ export class PetStore {
   }
 
   private lastChain(): string | null {
-    const row = this.ctx.db.prepare(`SELECT chain FROM pets ORDER BY rowid DESC LIMIT 1`).get() as
+    const row = this.ctx.prep(`SELECT chain FROM pets ORDER BY rowid DESC LIMIT 1`).get() as
       | { chain: string | null }
       | undefined;
     return row?.chain ?? null;
   }
 
   petChainLog(): { id: string; chain: string | null; link: ChainInput }[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT id, species, seed, origin_kind, origin_ref, hatched_at, chain FROM pets ORDER BY rowid`)
+    const rows = this.ctx
+      .prep(`SELECT id, species, seed, origin_kind, origin_ref, hatched_at, chain FROM pets ORDER BY rowid`)
       .all() as (ChainRow & { id: string; chain: string | null })[];
     return rows.map((row) => ({
       id: row.id,
@@ -97,23 +97,23 @@ export class PetStore {
   }
 
   placedCount(): number {
-    const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM pets WHERE placed=1`).get() as { n: number };
+    const row = this.ctx.prep(`SELECT COUNT(*) AS n FROM pets WHERE placed=1`).get() as { n: number };
     return row.n;
   }
 
   recordPetAction(action: PetAction): void {
-    this.ctx.db
-      .prepare(`INSERT OR IGNORE INTO pet_actions (kind, ref, at, pet_id) VALUES (@kind, @ref, @at, @petId)`)
+    this.ctx
+      .prep(`INSERT OR IGNORE INTO pet_actions (kind, ref, at, pet_id) VALUES (@kind, @ref, @at, @petId)`)
       .run(action);
   }
 
   petActionKeys(): Set<string> {
-    const rows = this.ctx.db.prepare(`SELECT kind, ref FROM pet_actions`).all() as { kind: string; ref: string }[];
+    const rows = this.ctx.prep(`SELECT kind, ref FROM pet_actions`).all() as { kind: string; ref: string }[];
     return new Set(rows.map((row) => `${row.kind}:${row.ref}`));
   }
 
   petActionLog(): PetAction[] {
-    const rows = this.ctx.db.prepare(`SELECT kind, ref, at, pet_id FROM pet_actions ORDER BY rowid`).all() as {
+    const rows = this.ctx.prep(`SELECT kind, ref, at, pet_id FROM pet_actions ORDER BY rowid`).all() as {
       kind: string;
       ref: string;
       at: string;
@@ -128,7 +128,7 @@ export class PetStore {
   }
 
   petActionIndex(): Map<string, { at: string; petId: string | null }> {
-    const rows = this.ctx.db.prepare(`SELECT kind, ref, at, pet_id FROM pet_actions`).all() as {
+    const rows = this.ctx.prep(`SELECT kind, ref, at, pet_id FROM pet_actions`).all() as {
       kind: string;
       ref: string;
       at: string;
@@ -138,15 +138,15 @@ export class PetStore {
   }
 
   petPaidTotals(): Map<string, number> {
-    const rows = this.ctx.db
-      .prepare(`SELECT pet_id, COALESCE(SUM(beats), 0) AS total FROM pet_purchases GROUP BY pet_id`)
+    const rows = this.ctx
+      .prep(`SELECT pet_id, COALESCE(SUM(beats), 0) AS total FROM pet_purchases GROUP BY pet_id`)
       .all() as { pet_id: string; total: number }[];
     return new Map(rows.map((row) => [row.pet_id, row.total]));
   }
 
   petActionsSinceHatch(since: string): Map<PetActionKind, number> {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT kind, COUNT(*) AS n FROM pet_actions AS a
           WHERE a.at >= @since
             AND a.rowid > (SELECT COALESCE(MAX(b.rowid), 0)
@@ -159,14 +159,14 @@ export class PetStore {
   }
 
   petRolledSince(since: string): boolean {
-    const row = this.ctx.db.prepare(`SELECT 1 AS n FROM pet_actions WHERE at >= ? LIMIT 1`).get(since) as
+    const row = this.ctx.prep(`SELECT 1 AS n FROM pet_actions WHERE at >= ? LIMIT 1`).get(since) as
       | { n: number }
       | undefined;
     return row !== undefined;
   }
 
   vivariumStart(): string | null {
-    const row = this.ctx.db.prepare(`SELECT started_at FROM pet_vivarium WHERE id=1`).get() as
+    const row = this.ctx.prep(`SELECT started_at FROM pet_vivarium WHERE id=1`).get() as
       | { started_at: string }
       | undefined;
     return row?.started_at ?? null;
@@ -176,9 +176,9 @@ export class PetStore {
     const begin = this.ctx.db.transaction((): string => {
       const existing = this.vivariumStart();
       if (existing !== null) return existing;
-      const row = this.ctx.db.prepare(`SELECT MIN(at) AS at FROM pet_actions`).get() as { at: string | null };
+      const row = this.ctx.prep(`SELECT MIN(at) AS at FROM pet_actions`).get() as { at: string | null };
       const at = row.at ?? this.ctx.now();
-      this.ctx.db.prepare(`INSERT OR IGNORE INTO pet_vivarium (id, started_at) VALUES (1, ?)`).run(at);
+      this.ctx.prep(`INSERT OR IGNORE INTO pet_vivarium (id, started_at) VALUES (1, ?)`).run(at);
       return at;
     });
     return begin();
@@ -186,10 +186,10 @@ export class PetStore {
 
   feedPet(id: string, beats: number): Pet | null {
     const feed = this.ctx.db.transaction((): Pet | null => {
-      const changed = this.ctx.db.prepare(`UPDATE pets SET fed = fed + ? WHERE id=?`).run(beats, id).changes;
+      const changed = this.ctx.prep(`UPDATE pets SET fed = fed + ? WHERE id=?`).run(beats, id).changes;
       if (changed === 0) return null;
-      this.ctx.db
-        .prepare(`INSERT INTO pet_purchases (id, pet_id, beats, created_at) VALUES (?,?,?,?)`)
+      this.ctx
+        .prep(`INSERT INTO pet_purchases (id, pet_id, beats, created_at) VALUES (?,?,?,?)`)
         .run(`buy_${nanoid(10)}`, id, beats, this.ctx.now());
       return this.getPet(id);
     });
@@ -197,23 +197,23 @@ export class PetStore {
   }
 
   openPet(id: string): Pet | null {
-    this.ctx.db.prepare(`UPDATE pets SET opened_at=? WHERE id=? AND opened_at IS NULL`).run(this.ctx.now(), id);
+    this.ctx.prep(`UPDATE pets SET opened_at=? WHERE id=? AND opened_at IS NULL`).run(this.ctx.now(), id);
     return this.getPet(id);
   }
 
   renamePet(id: string, name: string | null): Pet | null {
-    const changed = this.ctx.db.prepare(`UPDATE pets SET name=? WHERE id=?`).run(name, id).changes;
+    const changed = this.ctx.prep(`UPDATE pets SET name=? WHERE id=?`).run(name, id).changes;
     return changed === 0 ? null : this.getPet(id);
   }
 
   placePet(id: string, placed: boolean): Pet | null {
-    const changed = this.ctx.db.prepare(`UPDATE pets SET placed=? WHERE id=?`).run(placed ? 1 : 0, id).changes;
+    const changed = this.ctx.prep(`UPDATE pets SET placed=? WHERE id=?`).run(placed ? 1 : 0, id).changes;
     return changed === 0 ? null : this.getPet(id);
   }
 
   livePetsOfSpecies(species: PetSpecies): number {
-    const row = this.ctx.db
-      .prepare(`SELECT COUNT(*) AS n FROM pets WHERE species=? AND dissolved_at IS NULL`)
+    const row = this.ctx
+      .prep(`SELECT COUNT(*) AS n FROM pets WHERE species=? AND dissolved_at IS NULL`)
       .get(species) as { n: number };
     return row.n;
   }
@@ -221,12 +221,12 @@ export class PetStore {
   blendPet(id: string, beats: number): Pet | null {
     const blend = this.ctx.db.transaction((): Pet | null => {
       const ts = this.ctx.now();
-      const changed = this.ctx.db
-        .prepare(`UPDATE pets SET dissolved_at=?, placed=0 WHERE id=? AND dissolved_at IS NULL`)
+      const changed = this.ctx
+        .prep(`UPDATE pets SET dissolved_at=?, placed=0 WHERE id=? AND dissolved_at IS NULL`)
         .run(ts, id).changes;
       if (changed === 0) return null;
-      this.ctx.db
-        .prepare(`INSERT INTO pet_blends (id, pet_id, beats, created_at) VALUES (?,?,?,?)`)
+      this.ctx
+        .prep(`INSERT INTO pet_blends (id, pet_id, beats, created_at) VALUES (?,?,?,?)`)
         .run(`bld_${nanoid(10)}`, id, beats, ts);
       return this.getPet(id);
     });
@@ -234,38 +234,38 @@ export class PetStore {
   }
 
   petBlendCredits(): number {
-    const row = this.ctx.db.prepare(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_blends`).get() as {
+    const row = this.ctx.prep(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_blends`).get() as {
       total: number;
     };
     return row.total;
   }
 
   petBeatsSpent(): number {
-    const row = this.ctx.db.prepare(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_purchases`).get() as {
+    const row = this.ctx.prep(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_purchases`).get() as {
       total: number;
     };
     return row.total;
   }
 
   petResetAt(id: string): string | null {
-    const row = this.ctx.db.prepare(`SELECT at FROM pet_resets WHERE id=?`).get(id) as { at: string } | undefined;
+    const row = this.ctx.prep(`SELECT at FROM pet_resets WHERE id=?`).get(id) as { at: string } | undefined;
     return row?.at ?? null;
   }
 
   petEpoch(): string | null {
-    const row = this.ctx.db.prepare(`SELECT MAX(at) AS at FROM pet_resets`).get() as { at: string | null };
+    const row = this.ctx.prep(`SELECT MAX(at) AS at FROM pet_resets`).get() as { at: string | null };
     return row.at;
   }
 
   clearVivarium(id: string): PetReset {
     const wipe = this.ctx.db.transaction((): PetReset => {
       const at = this.ctx.now();
-      const cleared = this.ctx.db.prepare(`DELETE FROM pets`).run().changes;
-      this.ctx.db.prepare(`DELETE FROM pet_purchases`).run();
-      this.ctx.db.prepare(`DELETE FROM pet_blends`).run();
-      this.ctx.db.prepare(`INSERT OR IGNORE INTO pet_resets (id, at, cleared) VALUES (?,?,?)`).run(id, at, cleared);
-      this.ctx.db
-        .prepare(
+      const cleared = this.ctx.prep(`DELETE FROM pets`).run().changes;
+      this.ctx.prep(`DELETE FROM pet_purchases`).run();
+      this.ctx.prep(`DELETE FROM pet_blends`).run();
+      this.ctx.prep(`INSERT OR IGNORE INTO pet_resets (id, at, cleared) VALUES (?,?,?)`).run(id, at, cleared);
+      this.ctx
+        .prep(
           `INSERT INTO pet_vivarium (id, started_at) VALUES (1, ?)
              ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at`,
         )

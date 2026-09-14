@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/36-remote-validation.md#the-runner-contract
 
@@ -284,9 +285,4 @@ interface ExecFailure extends Error {
   code?: number | string;
   killed?: boolean;
   signal?: NodeJS.Signals | null;
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }

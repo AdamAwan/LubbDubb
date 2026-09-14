@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../issueOrigins.js';
 import type {
   Job,
   Plan,
@@ -10,7 +11,7 @@ import type {
 } from '../types.js';
 import { planIssueNumber, partOrigin, partSettled } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
-import { basePrOf, prState } from '../prHealth.js';
+import { basePrOf, prState } from '../pr/prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { jobBranch } from '../jobs.js';
 
@@ -168,7 +169,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   const assessTasks = new Map<string, TaskSummary[]>();
   for (const task of input.tasks) {
     if (task.originRef === null) continue;
-    if (!/^issue:\d+:assess$/.test(task.originRef)) continue;
+    if (issueOriginNumber('assess', task.originRef) === null) continue;
     const bucket = assessTasks.get(task.originRef);
     if (bucket) bucket.push(task);
     else assessTasks.set(task.originRef, [task]);
@@ -220,13 +221,15 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     if (parent !== null) node.parentRef = parent;
   }
 
+  const existingByRef = new Map(input.existing.map((n) => [n.ref, n]));
+
   for (const filing of input.filings) {
     if (filing.ticketRef === null) continue;
 
     const target = emitted.get(filing.targetRef);
     if (target) target.parentRef = filing.ticketRef;
     else {
-      const prior = input.existing.find((n) => n.ref === filing.targetRef);
+      const prior = existingByRef.get(filing.targetRef);
       if (!prior) continue;
       out.push({ ...prior, parentRef: filing.ticketRef });
     }

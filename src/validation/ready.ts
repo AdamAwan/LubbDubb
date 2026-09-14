@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../issueOrigins.js';
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import { sheetBenchLine } from '../remoteValidation/sheet.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, RemoteSheetRow, ValidationCheck } from '../types.js';
@@ -24,7 +25,7 @@ interface ValidationReadyInput {
 
 export function validationReadyPass(input: ValidationReadyInput): ValidationReadyStep[] {
   const byOrigin = new Map(input.existing.map((t) => [t.originRef ?? '', t]));
-  const inWorld = new Map(input.issues.map((i) => [`issue:${i.number}`, i]));
+  const inWorld = new Map(input.issues.map((i) => [issueOriginRef('root', i.number), i]));
   const shortfalls = new Set(input.shortfalls.map((s) => s.originRef));
   const delivered = new Set(input.deliveries.map((d) => d.originRef));
   const steps: ValidationReadyStep[] = [];

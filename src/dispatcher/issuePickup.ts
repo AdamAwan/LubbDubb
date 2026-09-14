@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../issueOrigins.js';
 import type {
   Decision,
   Issue,
@@ -197,7 +198,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const openPr = openPrForIssue(issue, ctx.openPrs);
   if (openPr) return { eligible: false, status: 'has_pr', reasons: [`has open PR #${openPr.number}`] };
 
-  const origin = `issue:${issue.number}`;
+  const origin = issueOriginRef('root', issue.number);
   const active = ctx.tasks.find((t) => t.originRef === origin && isActiveTask(t));
   if (active) {
     const reason =
@@ -276,7 +277,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 }
 
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
-  const origin = `issue:${issue.number}`;
+  const origin = issueOriginRef('root', issue.number);
   const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
   const held = appraisalHold(stored, issue);
   if (held) return held;

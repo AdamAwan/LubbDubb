@@ -165,9 +165,9 @@ export class McpBridgeServer {
     const agentId = this.identities.get(token);
     if (agentId === undefined) return { ok: false, error: 'unknown or revoked agent credential' };
     if (agentId === null) return { ok: false, error: 'agent credential is not bound yet; retry' };
-    const agent = this.opts.store.getAgent(agentId);
+    const agent = this.opts.store.agents.getAgent(agentId);
     if (!agent) return { ok: false, error: 'agent no longer exists' };
-    const task = this.opts.store.getTask(agent.taskId);
+    const task = this.opts.store.tasks.getTask(agent.taskId);
     if (!task) return { ok: false, error: 'agent has no task' };
     return { ok: true, identity: { agent, task } };
   }

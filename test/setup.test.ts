@@ -3,8 +3,8 @@ import test from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, type Config } from '../src/config.js';
-import { diffConfig } from '../src/configApply.js';
+import { loadConfig, type Config } from '../src/config/config.js';
+import { diffConfig } from '../src/config/configApply.js';
 import type { SetupProbes } from '../src/setup/probes.js';
 import {
   defaultPromptTemplates,

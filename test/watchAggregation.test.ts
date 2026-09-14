@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -114,7 +114,7 @@ test('the fake observer answers an aggregating query as an engine does — one r
   });
   const system = build(observer);
   const aggregating = { ...SIGNAL, query: `${SIGNAL.query} | count` };
-  system.store.ingestGoalWatch('issue:12', [watchCheckInput({ ...aggregating, kind: 'signal' }, 1)]);
+  system.store.watches.ingestGoalWatch('issue:12', [watchCheckInput({ ...aggregating, kind: 'signal' }, 1)]);
 
   const refusals = await new WatchDryRun({
     store: system.store,
@@ -122,7 +122,7 @@ test('the fake observer answers an aggregating query as an engine does — one r
     observer,
   }).run('issue:12');
 
-  const check = system.store.listGoalWatches()[0]!;
+  const check = system.store.watches.listGoalWatches()[0]!;
   assert.equal(check.dryRunRows, 1, 'nothing matched, and the aggregate still answered one row');
   assert.equal(refusals.length, 1, 'the dry run notices the scalar shape rather than reading it as one occurrence');
   assert.match(refusals[0]!, /one row carrying one number/);
@@ -135,9 +135,9 @@ test('a signal answering rows is untouched by any of it', async () => {
     'no-timeouts:signal': JSON.stringify([watchRow('no-timeouts', { role: 'worker', message: 'timed out' })]),
   });
   const system = build(observer);
-  system.store.ingestGoalWatch('issue:12', [watchCheckInput({ ...SIGNAL, kind: 'signal' }, 1)]);
+  system.store.watches.ingestGoalWatch('issue:12', [watchCheckInput({ ...SIGNAL, kind: 'signal' }, 1)]);
   const refusals = await new WatchDryRun({ store: system.store, environments: [TEST_UK], observer }).run('issue:12');
   assert.deepEqual(refusals, []);
-  assert.equal(system.store.listGoalWatches()[0]!.dryRunRows, 1);
+  assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
   system.store.close();
 });

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
@@ -14,7 +14,7 @@ import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { issuePickupStatus, type IssuePickupContext } from '../src/dispatcher/issuePickup.js';
-import { basePrOf, inheritedCiFailure, prHealth } from '../src/prHealth.js';
+import { basePrOf, inheritedCiFailure, prHealth } from '../src/pr/prHealth.js';
 import { DEFAULT_PLANNING, resolvePlanRoute, plannerVerdict } from '../src/plans/planning.js';
 import { currentPlanSummary, partsToRetire, planProgress } from '../src/plans/parts.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
@@ -239,9 +239,13 @@ test('a conflict on an inheriting PR is still notified to its running agent', as
 });
 
 test('a part held by the per-plan cap is queued as `capped`, not skipped', async () => {
-  const dispatcher = new RuleDispatcher({ priorityLabels: {}, defaultPriority: 0 }, {}, undefined, 'main', {
-    ...enabled,
-    maxConcurrentPartsPerIssue: 2,
+  const dispatcher = new RuleDispatcher({
+    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    defaultBranch: 'main',
+    planning: {
+      ...enabled,
+      maxConcurrentPartsPerIssue: 2,
+    },
   });
   const parts = [part('a', 1), part('b', 2), part('c', 3)];
   const result = await dispatcher.decide(context([issue(12)], { plans: [plan()], planParts: parts }));
@@ -293,7 +297,11 @@ test('a replan carries the current plan into the prompt, slugs included', async 
     part('a', 1, { status: 'merged', prNumber: 40, branch: 'issue/12/a' }),
     part('b', 2, { status: 'ready', dependsOn: ['a'] }),
   ];
-  const dispatcher = new RuleDispatcher({ priorityLabels: {}, defaultPriority: 0 }, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({
+    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    defaultBranch: 'main',
+    planning: enabled,
+  });
   const result = await dispatcher.decide(
     context([issue(12)], { plans: [plan({ status: 'planning' })], planParts: parts }),
   );
@@ -426,13 +434,13 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
   const { system } = systemWithPlans();
   const { app } = await buildApp(system);
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.' });
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -471,9 +479,9 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
 
   const replanned = await app.inject({ method: 'POST', url: `/api/plans/${stored.id}/replan` });
   assert.equal(replanned.statusCode, 200);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'planning');
+  assert.equal(system.store.plans.getPlanByOrigin('issue:12')?.status, 'planning');
   assert.deepEqual(
-    system.store.listPlanParts(stored.id).map((p) => p.slug),
+    system.store.plans.listPlanParts(stored.id).map((p) => p.slug),
     ['schema', 'api'],
   );
   const planner = findTask(system.store, (t) => t.originRef === 'issue:12:plan');

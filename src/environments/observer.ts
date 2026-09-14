@@ -1,5 +1,6 @@
 import { exec } from 'node:child_process';
 import { parseWatchResult, preparedQuery, unanswered, type WatchQueryKind, type WatchResult } from './watchResult.js';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/24-environments.md
 
@@ -63,9 +64,4 @@ function failure(err: ExecFailure, stderr: string): WatchResult {
     return unanswered(`the observation was killed after ${err.signal ?? 'timeout'}`);
   const why = firstLine(stderr);
   return unanswered(`the observation exited ${String(err.code ?? 'unknown')}: ${why ?? err.message}`);
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -105,7 +105,7 @@ test('a goal’s state queries reach the cockpit beside its watches', () => {
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() },
   );
 
-  system.store.saveStateQueries(
+  system.store.remoteValidation.saveStateQueries(
     'issue:395',
     [
       {

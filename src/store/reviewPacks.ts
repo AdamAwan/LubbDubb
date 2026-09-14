@@ -33,8 +33,8 @@ export class ReviewPackStore {
       throw new Error(`review pack schema ${pack.schema} is not the ${REVIEW_PACK_SCHEMA} this build writes`);
     }
     const writtenAt = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO review_packs (pr_number, head_sha, document, written_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(pr_number, head_sha) DO UPDATE SET
@@ -50,15 +50,15 @@ export class ReviewPackStore {
   }
 
   listReviewPacks(prNumber: number): ReviewPackRecord[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT document, written_at FROM review_packs WHERE pr_number=? ORDER BY written_at DESC, rowid DESC`)
+    const rows = this.ctx
+      .prep(`SELECT document, written_at FROM review_packs WHERE pr_number=? ORDER BY written_at DESC, rowid DESC`)
       .all(prNumber) as PackRow[];
     return rows.map((r) => ({ pack: JSON.parse(r.document) as ReviewPack, writtenAt: r.written_at }));
   }
 
   listReviewPackHeads(): ReviewPackHead[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT pr_number, head_sha, written_at FROM review_packs
          ORDER BY pr_number ASC, written_at DESC, rowid DESC`,
       )
@@ -72,23 +72,31 @@ export class ReviewPackStore {
   }
 
   listCurrentReviewPacks(): ReviewPackRecord[] {
-    const numbers = this.ctx.db.prepare(`SELECT DISTINCT pr_number FROM review_packs`).all() as { pr_number: number }[];
-    return numbers
-      .map((r) => this.getCurrentReviewPack(r.pr_number))
-      .filter((record): record is ReviewPackRecord => record !== null);
+    const rows = this.ctx
+      .prep(
+        `SELECT p.document, p.written_at FROM review_packs p
+         JOIN (
+           SELECT rowid AS rid,
+                  ROW_NUMBER() OVER (PARTITION BY pr_number ORDER BY written_at DESC, rowid DESC) AS seq
+           FROM review_packs
+         ) newest ON newest.rid = p.rowid AND newest.seq = 1
+         ORDER BY p.pr_number ASC`,
+      )
+      .all() as PackRow[];
+    return rows.map((r) => ({ pack: JSON.parse(r.document) as ReviewPack, writtenAt: r.written_at }));
   }
 
   getReviewPackAt(prNumber: number, headSha: string): ReviewPackRecord | null {
-    const row = this.ctx.db
-      .prepare(`SELECT document, written_at FROM review_packs WHERE pr_number=? AND head_sha=?`)
+    const row = this.ctx
+      .prep(`SELECT document, written_at FROM review_packs WHERE pr_number=? AND head_sha=?`)
       .get(prNumber, headSha) as PackRow | undefined;
     return row ? { pack: JSON.parse(row.document) as ReviewPack, writtenAt: row.written_at } : null;
   }
 
   recordReviewPackShare(input: { prNumber: number; headSha: string; refusal?: string | null }): ReviewPackShare {
     const requestedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO review_pack_shares (pr_number, head_sha, requested_at, published_at, refusal)
          VALUES (?, ?, ?, NULL, ?)
          ON CONFLICT(pr_number) DO UPDATE SET
@@ -108,36 +116,36 @@ export class ReviewPackStore {
       this.deleteReviewPackShare(prNumber);
       return null;
     }
-    this.ctx.db.prepare(`UPDATE review_pack_shares SET withdrawn_at=? WHERE pr_number=?`).run(this.ctx.now(), prNumber);
+    this.ctx.prep(`UPDATE review_pack_shares SET withdrawn_at=? WHERE pr_number=?`).run(this.ctx.now(), prNumber);
     return this.getReviewPackShare(prNumber);
   }
 
   recordReviewPackShared(prNumber: number): void {
-    this.ctx.db
-      .prepare(`UPDATE review_pack_shares SET published_at=?, refusal=NULL WHERE pr_number=?`)
+    this.ctx
+      .prep(`UPDATE review_pack_shares SET published_at=?, refusal=NULL WHERE pr_number=?`)
       .run(this.ctx.now(), prNumber);
   }
 
   recordReviewPackShareRefusal(prNumber: number, refusal: string): void {
-    this.ctx.db
-      .prepare(`UPDATE review_pack_shares SET refusal=?, published_at=NULL WHERE pr_number=?`)
+    this.ctx
+      .prep(`UPDATE review_pack_shares SET refusal=?, published_at=NULL WHERE pr_number=?`)
       .run(refusal, prNumber);
   }
 
   getReviewPackShare(prNumber: number): ReviewPackShare | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM review_pack_shares WHERE pr_number=?`).get(prNumber) as
+    const row = this.ctx.prep(`SELECT * FROM review_pack_shares WHERE pr_number=?`).get(prNumber) as
       | ShareRow
       | undefined;
     return row ? rowToShare(row) : null;
   }
 
   listReviewPackShares(): ReviewPackShare[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM review_pack_shares ORDER BY pr_number ASC`).all() as ShareRow[];
+    const rows = this.ctx.prep(`SELECT * FROM review_pack_shares ORDER BY pr_number ASC`).all() as ShareRow[];
     return rows.map(rowToShare);
   }
 
   deleteReviewPackShare(prNumber: number): void {
-    this.ctx.db.prepare(`DELETE FROM review_pack_shares WHERE pr_number=?`).run(prNumber);
+    this.ctx.prep(`DELETE FROM review_pack_shares WHERE pr_number=?`).run(prNumber);
   }
 
   markReviewIdeaRead(input: { prNumber: number; headSha: string; hunks: ReviewRange[]; read: boolean }): ReviewMark[] {
@@ -163,15 +171,15 @@ export class ReviewPackStore {
   }
 
   listAllReviewMarks(): ReviewMark[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM review_marks ORDER BY pr_number ASC, path ASC, start_line ASC, end_line ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM review_marks ORDER BY pr_number ASC, path ASC, start_line ASC, end_line ASC`)
       .all() as MarkRow[];
     return rows.map(rowToMark);
   }
 
   listReviewMarks(prNumber: number): ReviewMark[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM review_marks WHERE pr_number=? ORDER BY path ASC, start_line ASC, end_line ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM review_marks WHERE pr_number=? ORDER BY path ASC, start_line ASC, end_line ASC`)
       .all(prNumber) as MarkRow[];
     return rows.map(rowToMark);
   }
@@ -184,7 +192,7 @@ export class ReviewPackStore {
   ): ReviewMark[] {
     const markedAt = this.ctx.now();
     const column = 'read' in patch ? 'read' : 'seen' in patch ? 'seen' : 'attention';
-    const write = this.ctx.db.prepare(
+    const write = this.ctx.prep(
       `INSERT INTO review_marks (pr_number, path, start_line, end_line, head_sha, attention, read, seen, marked_at)
        VALUES (@prNumber, @path, @start, @end, @headSha, @attention, @read, @seen, @markedAt)
        ON CONFLICT(pr_number, path, start_line, end_line) DO UPDATE SET
@@ -192,7 +200,7 @@ export class ReviewPackStore {
          marked_at = excluded.marked_at,
          ${column} = excluded.${column}`,
     );
-    const read = this.ctx.db.prepare(
+    const read = this.ctx.prep(
       `SELECT * FROM review_marks WHERE pr_number=? AND path=? AND start_line=? AND end_line=?`,
     );
     return this.ctx.db.transaction(() =>

@@ -36,14 +36,14 @@ const CaptureName = z
 export const ReportSchema = z
   .object({
     result: z
-      .enum(['passed', 'failed', 'handback', 'captured'], {
-        required_error: 'result must be "passed", "failed", "captured" or "handback"',
-        invalid_type_error: 'result must be "passed", "failed", "captured" or "handback"',
+      .enum(['passed', 'failed', 'blocked', 'captured'], {
+        required_error: 'result must be "passed", "failed", "captured" or "blocked"',
+        invalid_type_error: 'result must be "passed", "failed", "captured" or "blocked"',
       })
       .describe(
         '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
           'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you took ' +
-          'the picture and a person judges it, so you state no outcome at all. "handback" — you could not run ' +
+          'the picture and a person judges it, so you state no outcome at all. "blocked" — you could not run ' +
           'it, so nothing is recorded and a person gets it back.',
       ),
     capture: CaptureName.describe(
@@ -86,7 +86,24 @@ export const ReportSchema = z
 
 type ParsedReport = z.infer<typeof ReportSchema>;
 
+/**
+ * `handback` was this verdict's name until the three validation paths were given one word for it. A
+ * word withdrawn from a tool contract is answered with a refusal that points at what replaced it,
+ * `RETIRED_TOOL_NAMES`' rule one layer down: the templates that carry the word are
+ * operator-overridable, so the deployments that customised most are exactly the ones that still say
+ * it, and a generic enum rejection leaves an agent guessing at which of four words it wanted.
+ */
+const RETIRED_RESULT = 'handback';
+
 export function validateReport(args: unknown): { ok: true; report: ParsedReport } | { ok: false; error: string } {
+  if (typeof args === 'object' && args !== null && (args as { result?: unknown }).result === RETIRED_RESULT)
+    return {
+      ok: false,
+      error:
+        'report "blocked" rather than "handback" — the verdict was renamed, and "blocked" is now the one word ' +
+        'every validation path takes for a check an agent could not carry out. Nothing was recorded. Call again ' +
+        'with the same note and result "blocked".',
+    };
   const parsed = ReportSchema.safeParse(args);
   if (parsed.success) return { ok: true, report: parsed.data };
   const first = parsed.error.errors[0];

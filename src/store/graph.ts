@@ -26,7 +26,7 @@ export class GraphStore {
 
   recordWorkGraph(observations: WorkNodeObservation[]): void {
     const ts = this.ctx.now();
-    const stmt = this.ctx.db.prepare(`
+    const stmt = this.ctx.prep(`
       INSERT INTO work_nodes
         (ref, kind, parent_ref, base_ref, title, status, terminal, provenance, first_seen_at, last_seen_at)
       VALUES
@@ -59,15 +59,15 @@ export class GraphStore {
   }
 
   listWorkRoots(): WorkNode[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM work_nodes WHERE parent_ref IS NULL ORDER BY last_seen_at DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM work_nodes WHERE parent_ref IS NULL ORDER BY last_seen_at DESC`)
       .all() as WorkNodeRow[];
     return rows.map(rowToWorkNode);
   }
 
   listWorkSubtree(rootRef: string): WorkNode[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `WITH RECURSIVE sub(ref) AS (
            SELECT ref FROM work_nodes WHERE ref = ?
            UNION
@@ -81,12 +81,17 @@ export class GraphStore {
   }
 
   listWorkNodes(): WorkNode[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM work_nodes ORDER BY first_seen_at ASC`).all() as WorkNodeRow[];
+    const rows = this.ctx.prep(`SELECT * FROM work_nodes ORDER BY first_seen_at ASC`).all() as WorkNodeRow[];
     return rows.map(rowToWorkNode);
   }
 
+  getWorkNode(ref: string): WorkNode | null {
+    const row = this.ctx.prep(`SELECT * FROM work_nodes WHERE ref = ?`).get(ref) as WorkNodeRow | undefined;
+    return row ? rowToWorkNode(row) : null;
+  }
+
   mergedPrs(): ReadonlySet<number> {
-    const rows = this.ctx.db.prepare(`SELECT ref FROM work_nodes WHERE kind = 'pr' AND status = 'merged'`).all() as {
+    const rows = this.ctx.prep(`SELECT ref FROM work_nodes WHERE kind = 'pr' AND status = 'merged'`).all() as {
       ref: string;
     }[];
     const out = new Set<number>();
@@ -98,8 +103,8 @@ export class GraphStore {
   }
 
   settledPrs(): ReadonlyMap<number, 'merged' | 'closed'> {
-    const rows = this.ctx.db
-      .prepare(`SELECT ref, status FROM work_nodes WHERE kind = 'pr' AND status IN ('merged', 'closed')`)
+    const rows = this.ctx
+      .prep(`SELECT ref, status FROM work_nodes WHERE kind = 'pr' AND status IN ('merged', 'closed')`)
       .all() as { ref: string; status: string }[];
     const out = new Map<number, 'merged' | 'closed'>();
     for (const row of rows) {
@@ -118,8 +123,8 @@ export class GraphStore {
       createdAt: ts,
       updatedAt: ts,
     };
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `INSERT OR IGNORE INTO work_item_filings (target_ref, status, ticket_ref, created_at, updated_at)
          VALUES (@targetRef, @status, @ticketRef, @createdAt, @updatedAt)`,
       )
@@ -128,42 +133,40 @@ export class GraphStore {
   }
 
   listWorkItemFilings(): WorkItemFiling[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM work_item_filings ORDER BY created_at ASC`)
-      .all() as WorkItemFilingRow[];
+    const rows = this.ctx.prep(`SELECT * FROM work_item_filings ORDER BY created_at ASC`).all() as WorkItemFilingRow[];
     return rows.map(rowToWorkItemFiling);
   }
 
   linkWorkItemFiling(targetRef: string, ticketRef: string): WorkItemFiling | null {
     const updatedAt = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE work_item_filings SET status='filed', ticket_ref=?, updated_at=? WHERE target_ref=? AND status='filing'`,
       )
       .run(ticketRef, updatedAt, targetRef);
     if (result.changes === 0) return null;
-    const row = this.ctx.db.prepare(`SELECT * FROM work_item_filings WHERE target_ref=?`).get(targetRef) as
+    const row = this.ctx.prep(`SELECT * FROM work_item_filings WHERE target_ref=?`).get(targetRef) as
       | WorkItemFilingRow
       | undefined;
     return row ? rowToWorkItemFiling(row) : null;
   }
 
   dropWorkItemFiling(targetRef: string): void {
-    this.ctx.db.prepare(`DELETE FROM work_item_filings WHERE target_ref=? AND status='filing'`).run(targetRef);
+    this.ctx.prep(`DELETE FROM work_item_filings WHERE target_ref=? AND status='filing'`).run(targetRef);
   }
 
   ignoreWorkItem(targetRef: string): void {
-    this.ctx.db
-      .prepare(`INSERT OR IGNORE INTO work_item_ignores (target_ref, created_at) VALUES (?, ?)`)
+    this.ctx
+      .prep(`INSERT OR IGNORE INTO work_item_ignores (target_ref, created_at) VALUES (?, ?)`)
       .run(targetRef, this.ctx.now());
   }
 
   unignoreWorkItem(targetRef: string): void {
-    this.ctx.db.prepare(`DELETE FROM work_item_ignores WHERE target_ref=?`).run(targetRef);
+    this.ctx.prep(`DELETE FROM work_item_ignores WHERE target_ref=?`).run(targetRef);
   }
 
   listWorkItemIgnores(): string[] {
-    const rows = this.ctx.db.prepare(`SELECT target_ref FROM work_item_ignores`).all() as { target_ref: string }[];
+    const rows = this.ctx.prep(`SELECT target_ref FROM work_item_ignores`).all() as { target_ref: string }[];
     return rows.map((r) => r.target_ref);
   }
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginHead, issueOriginNumber } from '../issueOrigins.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 
 // → docs/spec/20-validation.md
@@ -11,8 +12,8 @@ export function validationAmendIssue(
   originRef: string | null,
 ): { ok: true; issueNumber: number } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const match = /^issue:(\d+)(?::(.+))?$/.exec(ref);
-  if (!match) {
+  const head = issueOriginHead(ref);
+  if (head === null) {
     return {
       ok: false,
       error:
@@ -24,17 +25,17 @@ export function validationAmendIssue(
   // set; the validation planner writes it now, and it has a transport that speaks for the whole set.
   // Two ways to say one thing that disagree about what an omission means is the drift the split
   // exists to prevent. → docs/spec/20-validation.md#validation_amend
-  if (match[2] === 'validate-plan') {
+  if (issueOriginNumber('validationPlan', ref) !== null) {
     return {
       ok: false,
       error:
-        `You are writing the validation plan for issue #${match[1]}, so the check set is yours to *write*, ` +
+        `You are writing the validation plan for issue #${head.issueNumber}, so the check set is yours to *write*, ` +
         `not to amend. Declare the whole thing in one validation_plan call — that transport speaks for the ` +
         `entire check set, which is what the validation planner is entitled to do and an agent halfway ` +
         `through a part is not.`,
     };
   }
-  return { ok: true, issueNumber: Number(match[1]) };
+  return { ok: true, issueNumber: head.issueNumber };
 }
 
 const WithdrawSchema = z.object({

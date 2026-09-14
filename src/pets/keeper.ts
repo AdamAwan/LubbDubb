@@ -28,17 +28,17 @@ export class PetKeeper {
 
   scan(): Pet[] {
     if (!this.policy.enabled) return [];
-    const since = this.store.beginVivarium();
-    const seen = this.store.petActionKeys();
+    const since = this.store.pets.beginVivarium();
+    const seen = this.store.pets.petActionKeys();
     const fresh = collectActions(this.store)
       .filter((action) => !seen.has(`${action.kind}:${action.ref}`))
       .sort((a, b) => a.at.localeCompare(b.at));
     const hatched: Pet[] = [];
-    const sinceHatch = this.store.petActionsSinceHatch(since);
-    let anyRolled = this.store.petRolledSince(since);
+    const sinceHatch = this.store.pets.petActionsSinceHatch(since);
+    let anyRolled = this.store.pets.petRolledSince(since);
     for (const action of fresh) {
       if (action.at < since) {
-        this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: null });
+        this.store.pets.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: null });
         continue;
       }
       const firstEver = !anyRolled;
@@ -49,7 +49,7 @@ export class PetKeeper {
       const pet =
         build === null
           ? null
-          : this.store.hatchPet({
+          : this.store.pets.hatchPet({
               species: roll.species,
               seed: `${action.kind}:${action.ref}`,
               originKind: action.kind,
@@ -58,7 +58,7 @@ export class PetKeeper {
               builtSha: build.sha,
               builtClean: build.clean,
             });
-      this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
+      this.store.pets.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
       anyRolled = true;
       if (pet) hatched.push(pet);
       sinceHatch.set(action.kind, pet ? 0 : missed + 1);
@@ -68,29 +68,29 @@ export class PetKeeper {
 
   resetOnce(): PetReset | null {
     if (!this.policy.enabled) return null;
-    if (this.store.petResetAt(VIVARIUM_RESET) !== null) return null;
-    return this.store.clearVivarium(VIVARIUM_RESET);
+    if (this.store.pets.petResetAt(VIVARIUM_RESET) !== null) return null;
+    return this.store.pets.clearVivarium(VIVARIUM_RESET);
   }
 
   state(): PetState | null {
     if (!this.policy.enabled || !this.policy.visible) return null;
     const ledger = this.ledger();
-    const pets = this.store.listPets();
+    const pets = this.store.pets.listPets();
     const labels = this.originLabels(pets);
     return {
       pets: pets.map((pet) => this.view(pet, ledger, labels)),
       wallet: this.wallet(),
       slots: VIVARIUM_SLOTS,
-      startedAt: this.store.vivariumStart(),
+      startedAt: this.store.pets.vivariumStart(),
     };
   }
 
   open(id: string): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
-    const existing = this.store.getPet(id);
+    const existing = this.store.pets.getPet(id);
     if (existing === null) return { ok: false, error: 'no such pet' };
     if (existing.openedAt !== null) return { ok: true, pet: existing };
-    const pet = this.store.openPet(id);
+    const pet = this.store.pets.openPet(id);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
 
@@ -100,54 +100,54 @@ export class PetKeeper {
     const wallet = this.wallet();
     if (beats > wallet.balance)
       return { ok: false, error: `only ${wallet.balance} beats to spend — the fleet has not earned that many yet` };
-    const existing = this.store.getPet(id);
+    const existing = this.store.pets.getPet(id);
     if (existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet keeps its record but stops growing' };
     const flawed = existing === null ? null : this.refuseFlawed(existing, 'fed');
     if (flawed !== null) return flawed;
     if (existing !== null && existing.openedAt === null)
       return { ok: false, error: 'that one is still an egg — open it before you feed it' };
-    const pet = this.store.feedPet(id, beats);
+    const pet = this.store.pets.feedPet(id, beats);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
 
   rename(id: string, name: string | null): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
-    const pet = this.store.renamePet(id, name);
+    const pet = this.store.pets.renamePet(id, name);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
 
   place(id: string, placed: boolean): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
-    if (placed && this.store.placedCount() >= VIVARIUM_SLOTS) {
-      const already = this.store.getPet(id);
+    if (placed && this.store.pets.placedCount() >= VIVARIUM_SLOTS) {
+      const already = this.store.pets.getPet(id);
       if (already !== null && !already.placed)
         return { ok: false, error: `the vivarium holds ${VIVARIUM_SLOTS} — take one out first` };
     }
-    const existing = this.store.getPet(id);
+    const existing = this.store.pets.getPet(id);
     if (placed && existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet cannot stand in the vivarium' };
     const flawed = placed && existing !== null ? this.refuseFlawed(existing, 'put out') : null;
     if (flawed !== null) return flawed;
-    const pet = this.store.placePet(id, placed);
+    const pet = this.store.pets.placePet(id, placed);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
 
   blend(id: string): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
-    const pet = this.store.getPet(id);
+    const pet = this.store.pets.getPet(id);
     if (pet === null) return { ok: false, error: 'no such pet' };
     if (pet.dissolvedAt !== null) return { ok: false, error: 'that one has already been blended' };
     const flawed = this.refuseFlawed(pet, 'blended');
     if (flawed !== null) return flawed;
     if (pet.openedAt === null)
       return { ok: false, error: 'that one is still an egg — open it before you decide it is a duplicate' };
-    if (this.store.livePetsOfSpecies(pet.species) < 2) {
+    if (this.store.pets.livePetsOfSpecies(pet.species) < 2) {
       const { display } = SPECIES[pet.species];
       const which = petStage(pet.species, pet.fed) === 'hatchling' ? 'one of these' : display;
       return { ok: false, error: `this is your only ${which} — blending is for duplicates` };
     }
-    const blended = this.store.blendPet(id, blendValue(pet.species, this.rules.blendYield));
+    const blended = this.store.pets.blendPet(id, blendValue(pet.species, this.rules.blendYield));
     return blended ? { ok: true, pet: blended } : { ok: false, error: 'no such pet' };
   }
 
@@ -159,19 +159,19 @@ export class PetKeeper {
 
   private ledger(): PetLedger {
     return {
-      actions: this.store.petActionIndex(),
-      paid: this.store.petPaidTotals(),
-      chain: replayChain(this.store.petChainLog()),
-      barren: replayBarren(this.store.petActionLog(), this.rules, this.store.vivariumStart() ?? EPOCH),
+      actions: this.store.pets.petActionIndex(),
+      paid: this.store.pets.petPaidTotals(),
+      chain: replayChain(this.store.pets.petChainLog()),
+      barren: replayBarren(this.store.pets.petActionLog(), this.rules, this.store.pets.vivariumStart() ?? EPOCH),
       build: this.stamp(),
     };
   }
 
   private wallet(): PetWallet {
     const earned =
-      Math.floor(this.store.sumUsageCostSince(this.store.petEpoch() ?? EPOCH) * this.rules.beatsPerDollar) +
-      this.store.petBlendCredits();
-    const spent = this.store.petBeatsSpent();
+      Math.floor(this.store.sumUsageCostSince(this.store.pets.petEpoch() ?? EPOCH) * this.rules.beatsPerDollar) +
+      this.store.pets.petBlendCredits();
+    const spent = this.store.pets.petBeatsSpent();
     return { earned, spent, balance: Math.max(0, earned - spent) };
   }
 
@@ -184,11 +184,11 @@ export class PetKeeper {
     }
     const ids = (kind: PetActionKind): string[] => [...(byKind.get(kind) ?? [])];
     const read: [PetActionKind, Map<string, string>][] = [
-      ['escalation', this.store.escalationLabels(ids('escalation'))],
-      ['human-task', this.store.humanTaskLabels(ids('human-task'))],
-      ['plan', this.store.planLabels(ids('plan'))],
-      ['landing', this.store.landingLabels(ids('landing'))],
-      ['job', this.store.jobLabels(ids('job'))],
+      ['escalation', this.store.escalations.escalationLabels(ids('escalation'))],
+      ['human-task', this.store.humanTasks.humanTaskLabels(ids('human-task'))],
+      ['plan', this.store.plans.planLabels(ids('plan'))],
+      ['landing', this.store.landings.landingLabels(ids('landing'))],
+      ['job', this.store.jobs.jobLabels(ids('job'))],
     ];
     const out = new Map<string, string>();
     for (const [kind, found] of read) {

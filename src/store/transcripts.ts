@@ -26,14 +26,12 @@ export class TranscriptStore {
     this.buffers.delete(agentId);
     const chunk = buf.chunks.join('');
     const seq = (
-      this.ctx.db
-        .prepare(`SELECT COALESCE(MAX(seq),-1)+1 AS n FROM agent_transcripts WHERE agent_id=?`)
-        .get(agentId) as {
+      this.ctx.prep(`SELECT COALESCE(MAX(seq),-1)+1 AS n FROM agent_transcripts WHERE agent_id=?`).get(agentId) as {
         n: number;
       }
     ).n;
-    this.ctx.db
-      .prepare(`INSERT INTO agent_transcripts (agent_id, seq, chunk, at) VALUES (?,?,?,?)`)
+    this.ctx
+      .prep(`INSERT INTO agent_transcripts (agent_id, seq, chunk, at) VALUES (?,?,?,?)`)
       .run(agentId, seq, chunk, this.ctx.now());
   }
 
@@ -43,9 +41,7 @@ export class TranscriptStore {
 
   getTranscript(agentId: string): string {
     this.flushTranscript(agentId);
-    const rows = this.ctx.db
-      .prepare(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`)
-      .all(agentId) as {
+    const rows = this.ctx.prep(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`).all(agentId) as {
       chunk: string;
     }[];
     return rows.map((r) => r.chunk).join('');

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -208,7 +208,7 @@ test('rule `plan-part` dispatches a ready part on its own branch, based on its d
     part('schema', 1, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 }),
     part('dispatcher', 2, { dependsOn: ['schema'], status: 'ready' }),
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: parts }),
   );
   assert.equal(result.actions.length, 1);
@@ -230,7 +230,7 @@ test('a part stacks on its dependency while that dependency is still open', asyn
     part('schema', 1, { status: 'in_review', branch: 'issue/12/schema', prNumber: 40 }),
     part('dispatcher', 2, { dependsOn: ['schema'], status: 'ready' }),
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: parts }),
   );
   const action = result.actions[0]!;
@@ -248,7 +248,7 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },
     { ...part('a', 1), id: 'plan_9:a', planId: 'plan_9' },
   ];
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(7), issue(9), issue(14)], {
       plans,
       planParts: parts,
@@ -269,7 +269,10 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
 
 test('maxConcurrentPartsPerIssue caps how many parts of one plan get agents', async () => {
   const parts = [part('a', 1), part('b', 2), part('c', 3)];
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', { ...enabled, maxConcurrentPartsPerIssue: 2 });
+  const dispatcher = new RuleDispatcher({
+    defaultBranch: 'main',
+    planning: { ...enabled, maxConcurrentPartsPerIssue: 2 },
+  });
   const result = await dispatcher.decide(context([issue(12)], { plans: [plan()], planParts: parts }));
   assert.deepEqual(
     result.actions.map((a) => (a.type === 'dispatch_code_agent' ? a.branch : a.type)),
@@ -307,7 +310,10 @@ test('a cooling part does not consume a concurrency slot', async () => {
     admission: null,
     createdAt: '2026-07-25T11:50:00.000Z',
   };
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', { ...enabled, maxConcurrentPartsPerIssue: 2 });
+  const dispatcher = new RuleDispatcher({
+    defaultBranch: 'main',
+    planning: { ...enabled, maxConcurrentPartsPerIssue: 2 },
+  });
   const result = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -333,7 +339,7 @@ test('each part gets its own throttle, and a repeatedly failing one escalates', 
     admission: null,
     createdAt: '2026-07-25T00:00:00.000Z',
   }));
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: [part('a', 1), part('b', 2)], recentDecisions: attempts }),
   );
   assert.deepEqual(
@@ -359,7 +365,7 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
     priorityLabels: {},
     defaultPriority: 0,
   };
-  const dispatcher = new RuleDispatcher(pickup, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({ pickup, defaultBranch: 'main', planning: enabled });
   const watched = issue(12, { labels: ['lubbdubb-watch'] });
 
   const linked = { ...watched, linkedPrNumber: 41 };
@@ -467,13 +473,13 @@ function systemWithParts(): { system: System; repoRoot: string } {
 test('a persisted plan turns into real part branches, and the rows record it', async () => {
   const { system, repoRoot } = systemWithParts();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.' });
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'schema',
       seq: 1,
@@ -501,7 +507,7 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   ]);
   await system.harness.runCycle('manual');
 
-  const parts = system.store.listPlanParts(stored.id);
+  const parts = system.store.plans.listPlanParts(stored.id);
   assert.deepEqual(
     parts.map((p) => [p.slug, p.status, p.branch]),
     [
@@ -516,8 +522,8 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
-  assert.deepEqual(system.store.listProposals(), []);
-  assert.deepEqual(system.store.listOpenEscalations(), []);
+  assert.deepEqual(system.store.escalations.listProposals(), []);
+  assert.deepEqual(system.store.escalations.listOpenEscalations(), []);
   system.store.close();
 });
 
@@ -560,13 +566,13 @@ test('a part planned to produce no code is told how to finish, appended not inte
 
 test('a part concludes without a PR, its plan completes, and a second call changes nothing', () => {
   const { system } = systemWithParts();
-  const stored = system.store.upsertPlan({
+  const stored = system.store.plans.upsertPlan({
     originRef: 'issue:12',
     title: 'Investigate',
     status: 'active',
     reason: 'Measure before building.',
   });
-  system.store.upsertPlanParts(stored.id, [
+  system.store.plans.upsertPlanParts(stored.id, [
     {
       slug: 'probe',
       seq: 1,
@@ -580,12 +586,12 @@ test('a part concludes without a PR, its plan completes, and a second call chang
       expectedKind: 'report',
     },
   ]);
-  const row = system.store.listPlanParts(stored.id)[0]!;
+  const row = system.store.plans.listPlanParts(stored.id)[0]!;
   assert.equal(row.expectedKind, 'report');
   assert.equal(row.outcomeKind, null);
 
-  system.store.updatePlanPart(row.id, { status: 'dispatched' });
-  const done = system.store.concludePlanPart(row.id, {
+  system.store.plans.updatePlanPart(row.id, { status: 'dispatched' });
+  const done = system.store.plans.concludePlanPart(row.id, {
     kind: 'determination',
     ref: 'finding:f_1',
     summary: 'Already fixed by #98.',
@@ -595,17 +601,17 @@ test('a part concludes without a PR, its plan completes, and a second call chang
   assert.equal(done?.outcomeRef, 'finding:f_1');
   assert.equal(done?.outcomeSummary, 'Already fixed by #98.');
 
-  assert.equal(system.store.rollUpPlanStatus(stored.id)?.status, 'complete');
+  assert.equal(system.store.plans.rollUpPlanStatus(stored.id)?.status, 'complete');
 
-  assert.equal(system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'again' }), null);
+  assert.equal(system.store.plans.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'again' }), null);
   system.store.close();
 });
 
 test('an amendment re-declaring a concluded part leaves what it produced alone', () => {
   const { system } = systemWithParts();
-  const stored = system.store.upsertPlan({ originRef: 'issue:12', title: 'T', status: 'active', reason: 'r' });
+  const stored = system.store.plans.upsertPlan({ originRef: 'issue:12', title: 'T', status: 'active', reason: 'r' });
   const declare = (expectedKind: 'code' | 'report' | null) =>
-    system.store.upsertPlanParts(stored.id, [
+    system.store.plans.upsertPlanParts(stored.id, [
       {
         slug: 'probe',
         seq: 1,
@@ -620,12 +626,12 @@ test('an amendment re-declaring a concluded part leaves what it produced alone',
       },
     ]);
   declare('report');
-  const row = system.store.listPlanParts(stored.id)[0]!;
-  system.store.updatePlanPart(row.id, { status: 'dispatched' });
-  system.store.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
+  const row = system.store.plans.listPlanParts(stored.id)[0]!;
+  system.store.plans.updatePlanPart(row.id, { status: 'dispatched' });
+  system.store.plans.concludePlanPart(row.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
 
   declare('code');
-  const after = system.store.listPlanParts(stored.id)[0]!;
+  const after = system.store.plans.listPlanParts(stored.id)[0]!;
   assert.equal(after.expectedKind, 'code');
   assert.equal(after.outcomeKind, 'report');
   assert.equal(after.outcomeSummary, 'Findings in docs/perf.md');
@@ -680,7 +686,7 @@ function wedgedParts(): PlanPart[] {
 }
 
 test('every part blocked asks a human once, and dispatches nobody', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [plan()], planParts: wedgedParts() }),
   );
   assert.deepEqual(
@@ -696,7 +702,7 @@ test('every part blocked asks a human once, and dispatches nobody', async () => 
 });
 
 test('the wedge is asked once — an open item or a recent one both settle it', async () => {
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
+  const dispatcher = new RuleDispatcher({ defaultBranch: 'main', planning: enabled });
   const open = await dispatcher.decide(
     context([issue(12)], {
       plans: [plan()],
@@ -730,7 +736,7 @@ test('the wedge is asked once — an open item or a recent one both settle it', 
 });
 
 test('an unapproved wedged plan is not escalated — the ask already carries it', async () => {
-  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
     context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
   );
   assert.deepEqual(

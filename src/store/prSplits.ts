@@ -8,8 +8,8 @@ export class PrSplitStore {
 
   recordPrSplitVerdict(input: PrSplitVerdictInput): PrSplitVerdict {
     const decidedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pr_splits (pr_number, issue_number, verdict, concepts, reason, files, agent_id, decided_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(pr_number) DO UPDATE SET
@@ -35,7 +35,7 @@ export class PrSplitStore {
   }
 
   listPrSplitVerdicts(): PrSplitVerdict[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM pr_splits ORDER BY decided_at DESC`).all() as Row[];
+    const rows = this.ctx.prep(`SELECT * FROM pr_splits ORDER BY decided_at DESC`).all() as Row[];
     return rows.map((row) => ({
       prNumber: row.pr_number,
       issueNumber: row.issue_number,

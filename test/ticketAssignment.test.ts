@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ticketAssignee } from '../src/ticketAssignment.js';
-import type { Config } from '../src/config.js';
+import type { Config } from '../src/config/config.js';
 
 function github(userId?: string): Config {
   return {

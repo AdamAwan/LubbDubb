@@ -15,8 +15,8 @@ export class PrReviewStore {
 
   recordPrReview(input: PrReviewInput): PrReview {
     const reviewedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO pr_reviews (pr_number, head_sha, verdict, summary, findings, agent_id, reviewed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(pr_number) DO UPDATE SET
@@ -44,11 +44,11 @@ export class PrReviewStore {
   }
 
   recordPrReviewPublished(prNumber: number, threadId: string): void {
-    this.ctx.db.prepare(`UPDATE pr_reviews SET published_thread=? WHERE pr_number=?`).run(threadId, prNumber);
+    this.ctx.prep(`UPDATE pr_reviews SET published_thread=? WHERE pr_number=?`).run(threadId, prNumber);
   }
 
   listPrReviews(): PrReview[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM pr_reviews ORDER BY reviewed_at DESC`).all() as Row[];
+    const rows = this.ctx.prep(`SELECT * FROM pr_reviews ORDER BY reviewed_at DESC`).all() as Row[];
     return rows.map(hydrate);
   }
 }

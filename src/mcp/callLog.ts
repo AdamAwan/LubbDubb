@@ -18,8 +18,8 @@ export function buildCallLog(deps: { store: Store; argsRetentionDays?: number; e
   return {
     record(input) {
       try {
-        deps.store.recordMcpCall(input, retain);
-        deps.store.compactMcpCallArgs(retain);
+        deps.store.mcpCalls.recordMcpCall(input, retain);
+        deps.store.mcpCalls.compactMcpCallArgs(retain);
       } catch (err) {
         deps.errors?.record({
           source: 'agent',

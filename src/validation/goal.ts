@@ -10,7 +10,7 @@ export interface GoalValidation {
 }
 
 export function goalValidation(store: Store, originRef: string): GoalValidation | null {
-  const checks = store.listValidationChecks(originRef);
+  const checks = store.validation.listValidationChecks(originRef);
   if (checks.length === 0) return null;
   return { verdict: validationVerdict(checks), outstanding: outstandingChecks(checks) };
 }

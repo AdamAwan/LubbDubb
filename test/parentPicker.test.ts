@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { buildSystem, type System } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { candidateParents, relatedWorkNote, DEFAULT_CONTAINER_TYPES } from '../src/issueRelations.js';
@@ -95,7 +95,7 @@ function build(): System {
 test('the snapshot carries the candidate containers, derived once for the whole world', () => {
   const system = build();
   try {
-    system.store.setWorldBaseline({
+    system.store.world.setWorldBaseline({
       takenAt: '2026-08-01T00:00:00.000Z',
       pullRequests: [],
       closedPullRequests: [],

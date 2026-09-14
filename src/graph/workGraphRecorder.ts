@@ -16,15 +16,15 @@ export class WorkGraphRecorder {
   record(world: WorldSnapshot): void {
     const { store, errors } = this.deps;
     try {
-      store.recordWorkGraph(
+      store.graph.recordWorkGraph(
         foldWorkGraph({
           world,
-          tasks: store.listTasks(),
-          plans: store.listPlans(),
-          parts: store.listAllPlanParts(),
-          jobs: store.listJobs(),
-          filings: store.listWorkItemFilings(),
-          existing: store.listWorkRoots().flatMap((root) => store.listWorkSubtree(root.ref)),
+          tasks: store.tasks.listTasks(),
+          plans: store.plans.listPlans(),
+          parts: store.plans.listAllPlanParts(),
+          jobs: store.jobs.listJobs(),
+          filings: store.graph.listWorkItemFilings(),
+          existing: store.graph.listWorkRoots().flatMap((root) => store.graph.listWorkSubtree(root.ref)),
         }),
       );
     } catch (err) {

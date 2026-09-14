@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { Button, withShape } from './button.js';
+import { Button, ButtonRow, expected, refusing } from './button.js';
 import type { ButtonLook } from './button.js';
 import { logUsage } from '../cockpit/usage.js';
 
@@ -48,14 +48,14 @@ export function HumanTaskActions({
 
   return (
     <>
-      <span className="human-task-actions">
+      <ButtonRow bar>
         {/* The act, ahead of the two records of it. A close-out row asks for one
             thing, and this is it — so it leads, and the note rule it may owe is
             the same one Done owes, asked in the same box. */}
         {onCloseTicket !== null &&
           (noteOnDone === null ? (
             <AsyncButton
-              {...withShape(look, 'go')}
+              {...expected(look)}
               onClick={() => {
                 setRefusal(null);
                 return onCloseTicket(task.id);
@@ -67,7 +67,7 @@ export function HumanTaskActions({
             </AsyncButton>
           ) : (
             <Button
-              {...withShape(look, 'go')}
+              {...expected(look)}
               onClick={() => open('close')}
               title="Close the item in the tracker — and say what you are doing about what is outstanding"
             >
@@ -76,7 +76,7 @@ export function HumanTaskActions({
           ))}
         {noteOnDone === null ? (
           <AsyncButton
-            {...withShape(look, onCloseTicket === null && 'go')}
+            {...(onCloseTicket === null ? expected(look) : look)}
             onClick={() => {
               setRefusal(null);
               return onDone(task.id);
@@ -88,7 +88,7 @@ export function HumanTaskActions({
           </AsyncButton>
         ) : (
           <Button
-            {...withShape(look, onCloseTicket === null && 'go')}
+            {...(onCloseTicket === null ? expected(look) : look)}
             onClick={() => open('done')}
             title="You did it — and this one asks what you are doing about what is outstanding"
           >
@@ -98,7 +98,7 @@ export function HumanTaskActions({
         <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
           Decline
         </Button>
-      </span>
+      </ButtonRow>
       {saying !== null && (
         <div className="human-task-decline">
           {/* The reason, in front of the box that answers it. Drawn from what the
@@ -117,7 +117,7 @@ export function HumanTaskActions({
             onChange={(e) => setNote(e.currentTarget.value)}
           />
           <AsyncButton
-            {...withShape(look, saying === 'declined' ? 'no' : 'go')}
+            {...(saying === 'declined' ? refusing(look) : expected(look))}
             disabled={note.trim().length === 0}
             onRefused={setRefusal}
             onClick={async () => {

@@ -9,7 +9,7 @@ import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { Button, buttonClass, withShape } = await import('../web/src/components/button.js');
+const { Button, buttonClass, expected, refusing } = await import('../web/src/components/button.js');
 
 test('the base is written twice, so one rule dresses a button anywhere', () => {
   assert.equal(buttonClass({}), 'btn btn');
@@ -31,9 +31,27 @@ test('a destructive button can also be a quiet one', () => {
 
 test('shape rides beside the tone, never through it', () => {
   assert.equal(buttonClass({ ghost: true, className: 'work-root-head' }), 'btn btn ghost work-root-head');
-  assert.deepEqual(withShape({ ghost: true }, 'go'), { ghost: true, className: 'go' });
-  assert.deepEqual(withShape({ ghost: true, className: 'go' }, 'no'), { ghost: true, className: 'go no' });
-  assert.deepEqual(withShape({ className: 'go' }, false, null, undefined), { className: 'go' });
+});
+
+/**
+ * The verb a row expects and the one that refuses are *tones*, and the reason is
+ * that they were classes with no rule behind them: `Done` drew identically to
+ * `Decline` on every surface embedding the row. A tone resolves to a rule that is
+ * already written, so the assertion is that each reaches the sheet.
+ */
+test('the verb a row expects is a tone, so it reaches a rule', () => {
+  assert.deepEqual(expected({}), { tone: 'primary' });
+  assert.deepEqual(refusing({}), { tone: 'danger' });
+  assert.equal(buttonClass(expected({})), 'btn btn primary');
+  assert.equal(buttonClass(refusing({})), 'btn btn danger');
+  assert.notEqual(buttonClass(expected({})), buttonClass({}), 'the expected verb must not draw as the plain one');
+});
+
+test('the station composes on the caller, keeping the caller’s weight', () => {
+  assert.deepEqual(expected({ ghost: true, size: 'small' }), { ghost: true, size: 'small', tone: 'primary' });
+  assert.equal(buttonClass(expected({ ghost: true, size: 'small' })), 'btn btn primary ghost small');
+  // The caller's own tone is what the station overrides, and only that.
+  assert.deepEqual(expected({ tone: 'secondary' }), { tone: 'primary' });
 });
 
 test('a button is a button, never a form submit', () => {
@@ -64,4 +82,49 @@ test('no surface writes a button family of its own', () => {
       );
     }
   }
+});
+
+/**
+ * The row that settles an ask is the cockpit's most-embedded control group, and
+ * its appearance has now been wrong three ways: the buttons drew identically to
+ * each other, the group had no rule separating it from the prose above, and the
+ * group's gap reached a wrapper rather than the buttons — `.btn-row` held one
+ * `<span>` holding both, so `Done` and `Decline` touched.
+ *
+ * That last one is the shape this pins. A group whose only child is another
+ * element is a group that styles nothing, and it renders as *almost* right,
+ * which is why it survived two passes over the same row.
+ */
+test('a button group reaches the buttons, never a wrapper around them', async () => {
+  const { HumanTaskActions } = await import('../web/src/components/HumanTaskActions.js');
+  const task = {
+    id: 't1',
+    title: 'Re-point the staging watchers',
+    detail: null,
+    originRef: 'issue:390',
+    partId: null,
+    kind: 'bench',
+    agentId: null,
+    taskId: null,
+    status: 'open',
+    resolution: null,
+    createdAt: '2026-05-02T00:00:00.000Z',
+    updatedAt: '2026-05-02T00:00:00.000Z',
+    resolvedAt: null,
+    dismissedAt: null,
+  };
+  const html = renderToStaticMarkup(
+    createElement(HumanTaskActions, {
+      task,
+      look: { tone: 'secondary' },
+      onDone: () => undefined,
+      onDecline: () => undefined,
+    } as never),
+  );
+
+  assert.match(html, /<div class="btn-row bar"><button/, 'the buttons are the group’s own children');
+  assert.doesNotMatch(html, /<div class="btn-row[^"]*"><(?!button)/, 'nothing sits between the group and its buttons');
+  // And the two verbs are told apart, which is what the tones are for.
+  assert.match(html, /class="btn btn primary"[^>]*>Done</);
+  assert.match(html, /class="btn btn">Decline</);
 });

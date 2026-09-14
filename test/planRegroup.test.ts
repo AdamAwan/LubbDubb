@@ -11,7 +11,7 @@ import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { regroupedDocument, regroupRefusal } from '../src/plans/regroup.js';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { System } from '../src/system.js';
@@ -88,7 +88,7 @@ function planned(system: System, raw = planDocument()): { plan: ReturnType<typeo
 }
 
 function plannedPlan(system: System) {
-  const plan = system.store.getPlanByOrigin(ORIGIN);
+  const plan = system.store.plans.getPlanByOrigin(ORIGIN);
   assert.ok(plan, 'the plan was not stored');
   return plan;
 }
@@ -96,8 +96,8 @@ function plannedPlan(system: System) {
 function held(system: System): { parts: PlanPart[]; atoms: PlanAtom[] } {
   const plan = plannedPlan(system);
   return {
-    parts: system.store.listPlanParts(plan.id),
-    atoms: system.store.listAllPlanAtoms().filter((a) => a.planId === plan.id),
+    parts: system.store.plans.listPlanParts(plan.id),
+    atoms: system.store.plans.listAllPlanAtoms().filter((a) => a.planId === plan.id),
   };
 }
 
@@ -210,7 +210,7 @@ test('the route regroups an awaiting-approval plan in place, and the sheet offer
   const { app } = await buildApp(system);
 
   const drawn = sheet({
-    parts: system.store.listPlanParts(plan.id).map(asView),
+    parts: system.store.plans.listPlanParts(plan.id).map(asView),
     atoms: held(system).atoms,
     status: 'awaiting_approval',
   });
@@ -279,9 +279,9 @@ test('a part in flight is not regrouped — the surface does not offer it and th
   const system = harness();
   planned(system);
   const plan = plannedPlan(system);
-  const working = system.store.listPlanParts(plan.id).find((p) => p.slug === 'catalog');
+  const working = system.store.plans.listPlanParts(plan.id).find((p) => p.slug === 'catalog');
   assert.ok(working);
-  system.store.updatePlanPart(working.id, { status: 'in_review', branch: 'issue/412/catalog', prNumber: 77 });
+  system.store.plans.updatePlanPart(working.id, { status: 'in_review', branch: 'issue/412/catalog', prNumber: 77 });
 
   const { parts, atoms } = held(system);
   const refusal = regroupRefusal(plannedPlan(system), parts, atoms);
@@ -308,7 +308,7 @@ test('an active plan is not regrouped in place — the refusal names the route t
   const system = harness();
   planned(system);
   const plan = plannedPlan(system);
-  system.store.setPlanStatus(plan.id, 'active');
+  system.store.plans.setPlanStatus(plan.id, 'active');
   const { parts, atoms } = held(system);
   const refusal = regroupRefusal(plannedPlan(system), parts, atoms) ?? '';
   assert.match(refusal, /"active"/);

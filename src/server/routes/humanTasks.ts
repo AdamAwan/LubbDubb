@@ -21,7 +21,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ body: CreateBody }, async ({ body, reply }) => {
       const parsed = validateHumanTask(body);
       if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
-      const { task } = store.recordHumanTask({
+      const { task } = store.humanTasks.recordHumanTask({
         ...parsed.input,
         originRef: body.originRef ?? null,
         agentId: null,
@@ -62,7 +62,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/human-tasks/:id/close-ticket',
     checked({ params: IdParams, body: CloseTicketBody }, async ({ params, body, reply }) => {
-      const task = store.getHumanTask(params.id);
+      const task = store.humanTasks.getHumanTask(params.id);
       if (!task || task.kind !== 'close_out' || task.status !== 'open')
         return reply.code(409).send({ error: 'human task not found, not a close-out, or already settled' });
       const number = closeOutIssueNumber(task.originRef);
@@ -86,7 +86,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(400).send({ error: message });
       }
 
-      const settled = store.settleHumanTask(params.id, 'done', closeTicketResolution(number, body.note ?? null));
+      const settled = store.humanTasks.settleHumanTask(
+        params.id,
+        'done',
+        closeTicketResolution(number, body.note ?? null),
+      );
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, humanTask: settled, report };
@@ -96,7 +100,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/human-tasks/:id/dismiss',
     checked({ params: IdParams }, async ({ params, reply }) => {
-      const task = store.dismissHumanTask(params.id);
+      const task = store.humanTasks.dismissHumanTask(params.id);
       if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
       hub.broadcast({ type: 'dirty' });
       return { ok: true, humanTask: task };

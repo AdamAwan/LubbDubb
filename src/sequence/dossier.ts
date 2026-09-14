@@ -5,6 +5,8 @@ import { featureSequenceSubmitOrigin } from './sequence.js';
 
 const MAX_BODY = 1_200;
 
+const MAX_STORIES = 40;
+
 export function sequenceBriefing(
   originRef: string | null | undefined,
   issues: readonly Issue[],
@@ -23,13 +25,22 @@ export function sequenceBriefing(
     standing?.members == null
       ? new Set<number>()
       : new Set(children.map((c) => c.number).filter((n) => !covered.has(n)));
+  const dropped = Math.max(0, children.length - MAX_STORIES);
+  const shown = dropped > 0 ? children.slice(0, MAX_STORIES) : children;
   const lines = [
     `## Feature #${feature.number} — ${feature.title}`,
     feature.body ? feature.body.trim() : '_The Feature carries no description._',
     '',
     `## Its ${children.length} open stories`,
   ];
-  for (const child of children) {
+  if (dropped > 0) {
+    lines.push(
+      '',
+      `(${dropped} of the ${children.length} stories are not shown here — the highest-numbered went first. ` +
+        'Order the ones you were given and say nothing about the rest.)',
+    );
+  }
+  for (const child of shown) {
     lines.push('', `### #${child.number} — ${child.title}${fresh.has(child.number) ? ' — **new**' : ''}`);
     if (child.issueType) lines.push(`_${child.issueType}${child.workItemState ? ` · ${child.workItemState}` : ''}_`);
     const stated = (child.dependsOn ?? []).filter((d) => children.some((c) => c.number === d.number));

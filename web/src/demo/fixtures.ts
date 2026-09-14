@@ -12,6 +12,7 @@ import type {
   PlanRevision,
   ValidationCheck,
   ValidationCheckView,
+  ValidationStep,
 } from '../types.js';
 
 // → docs/spec/17-cockpit.md
@@ -85,6 +86,18 @@ function demoCheck(
     area: null,
     amendedAt: null,
     amendNote: null,
+    ...seed,
+  };
+}
+
+function demoStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 'do'>): ValidationStep {
+  return {
+    area: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'human',
+    why: null,
     ...seed,
   };
 }
@@ -731,6 +744,16 @@ export function buildDemoState(): DemoSeed {
             by: 'agent' as const,
             note: 'architecture.md gained the section; the console warns on one watcher.',
             at: ago(95),
+          },
+          validation: {
+            state: 'flagged',
+            total: 3,
+            passed: 0,
+            failed: 0,
+            unrun: 3,
+            deferred: 0,
+            captured: 0,
+            waived: 0,
           },
           retrospective: {
             summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
@@ -1957,6 +1980,21 @@ export function buildDemoState(): DemoSeed {
         note: 'The hint asked for three journeys; the tampered link is two checks here, because a signature the signer refuses and one it has expired fail in different places.',
         emptyReason: null,
         authoredAt: ago(12),
+        releasedAt: ago(11),
+      },
+      // The other half of the gate: a set written against the delivered code and still a proposal.
+      // Nothing dispatches off it and no sheet assembles from it until the card in "Needs you" is
+      // answered. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+      {
+        originRef: 'issue:364',
+        hint: 'Worth checking that a single watcher actually warns, and that the note says what the console says.',
+        note:
+          'The hint asked for the console warning and the note to agree; they do, so that is check B rather than ' +
+          'two. Where I went a different way: the deadlock itself is not reachable from outside, so C reads the ' +
+          'audit rows instead of trying to provoke it.',
+        emptyReason: null,
+        authoredAt: ago(18),
+        releasedAt: null,
       },
     ],
     validationChecks: [
@@ -2121,6 +2159,60 @@ export function buildDemoState(): DemoSeed {
         supersededReason:
           'Folded into check A when the capability replaced the token: there is no longer a token that could be ' +
           'put in a URL, so this checked for the absence of something that cannot exist.',
+      }),
+      // Issue #364's set: written, proposed, and waiting on the card in "Needs you". Every row is
+      // `unrun` and nothing has been handed to the fleet, because a set nobody has accepted is not
+      // work yet. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+      demoCheck({
+        originRef: 'issue:364',
+        id: 'one-watcher-warns',
+        createdAt: ago(18),
+        updatedAt: ago(18),
+        letter: 'A',
+        seq: 1,
+        title: 'A deployment with one watcher warns on the console',
+        do: 'Bring the stack up with `WATCHERS=1` and open the console.',
+        expect: 'The warning names the watcher count and links the deadlock note.',
+        covers: ['docs', 'console-warning'],
+        steps: [
+          demoStep({ kind: 'browser', do: 'Open the console with one watcher configured', actor: 'fleet' }),
+          demoStep({ kind: 'screenshot', do: 'The warning as it draws', actor: 'fleet' }),
+        ],
+        fleetCandidate: true,
+        candidateWhy: 'drives the console and reads a banner; writes nothing',
+      }),
+      demoCheck({
+        originRef: 'issue:364',
+        id: 'note-and-console-agree',
+        createdAt: ago(18),
+        updatedAt: ago(18),
+        letter: 'B',
+        seq: 2,
+        title: 'The architecture note and the console warning say the same thing',
+        do: 'Read the deadlock section against the warning text.',
+        expect: 'Both say two watchers, and neither describes a retry that does not exist.',
+        covers: ['docs'],
+        steps: [demoStep({ kind: 'manual', do: 'Read the two side by side', when: 'deferred' })],
+      }),
+      demoCheck({
+        originRef: 'issue:364',
+        id: 'audit-rows-for-a-starved-job',
+        createdAt: ago(18),
+        updatedAt: ago(18),
+        letter: 'C',
+        seq: 3,
+        title: 'A starved maintenance job is recorded once, not per retry',
+        do: 'Read the audit rows for the job the single watcher starved.',
+        expect: 'One row per starved job, with the watcher count on it.',
+        covers: ['console-warning'],
+        steps: [
+          demoStep({
+            kind: 'state',
+            do: 'Count `job_audit` rows for the starved job',
+            actor: 'fleet',
+            why: null,
+          }),
+        ],
       }),
     ],
     validationResources: [],
@@ -2743,6 +2835,65 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(14),
       },
       {
+        id: 'prop-4',
+        kind: 'validation_plan',
+        ref: 'issue:364:validate-plan',
+        status: 'pending',
+        action: {
+          type: 'propose_validation_plan',
+          reason:
+            'Issue #364 has a validation check set of 3 check(s) and nothing reads it as work until you accept it.',
+          originRef: 'issue:364',
+          issueNumber: 364,
+          checks: 3,
+          note:
+            'The hint asked for the console warning and the note to agree; they do, so that is check B rather than ' +
+            'two. Where I went a different way: the deadlock itself is not reachable from outside, so C reads the ' +
+            'audit rows instead of trying to provoke it.',
+          hint: 'Worth checking that a single watcher actually warns, and that the note says what the console says.',
+          set: [
+            {
+              letter: 'A',
+              title: 'A deployment with one watcher warns on the console',
+              expect: 'The warning names the watcher count and links the deadlock note.',
+              steps: [
+                { kind: 'browser', do: 'Open the console with one watcher configured', actor: 'fleet', why: null },
+                { kind: 'screenshot', do: 'The warning as it draws', actor: 'fleet', why: null },
+              ],
+              fleetCandidate: true,
+              candidateWhy: 'drives the console and reads a banner; writes nothing',
+              fleetBlocked: false,
+              carriesQuery: false,
+            },
+            {
+              letter: 'B',
+              title: 'The architecture note and the console warning say the same thing',
+              expect: 'Both say two watchers, and neither describes a retry that does not exist.',
+              steps: [{ kind: 'manual', do: 'Read the two side by side', actor: 'human', why: null }],
+              fleetCandidate: false,
+              candidateWhy: null,
+              fleetBlocked: true,
+              carriesQuery: false,
+            },
+            {
+              letter: 'C',
+              title: 'A starved maintenance job is recorded once, not per retry',
+              expect: 'One row per starved job, with the watcher count on it.',
+              steps: [{ kind: 'state', do: 'Count job_audit rows for the starved job', actor: 'fleet', why: null }],
+              fleetCandidate: true,
+              candidateWhy: 'reads the store and nothing else',
+              fleetBlocked: false,
+              carriesQuery: true,
+            },
+          ],
+        },
+        note: null,
+        decidedBy: null,
+        decidedAt: null,
+        escalationId: 'esc-8',
+        createdAt: ago(18),
+      },
+      {
         id: 'prop-3',
         kind: 'merge',
         ref: 'pr:413:merge',
@@ -2756,6 +2907,31 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     escalations: [
+      {
+        id: 'esc-8',
+        type: 'approve_change',
+        status: 'open',
+        prompt:
+          '3 check(s) written against the delivered code for issue #364 ("Document the two-watcher requirement for ' +
+          'maintenance jobs"), and nothing runs them until you accept.\n\n' +
+          'Accepting releases the set — the bench draws it and a check you hand to the fleet can be dispatched. ' +
+          'Rejecting sends it back to be written again; say what is wrong and the next planner is given your ' +
+          'words.',
+        context: {
+          originRef: 'issue:364',
+          issueNumber: 364,
+          detailFrom: 'What the planner says',
+          detail:
+            'The hint asked for the console warning and the note to agree; they do, so that is check B rather ' +
+            'than two. Where I went a different way: the deadlock itself is not reachable from outside, so C ' +
+            'reads the audit rows instead of trying to provoke it.',
+        },
+        agentId: null,
+        taskId: null,
+        response: null,
+        createdAt: ago(18),
+        answeredAt: null,
+      },
       {
         id: 'esc-2',
         type: 'review_reply',

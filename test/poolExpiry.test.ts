@@ -73,7 +73,7 @@ test("a renamed fleet's abandoned document stops being summed a week after its l
   transport.seed(digest('bob-old@acme-api', '2026-08-24T09:00:00.000Z'));
   await desk.run();
   assert.equal(
-    foldPoolDigest(s.listPoolDigestRows('acme-api'), { project: 'acme-api' }).byPhase[0]?.count,
+    foldPoolDigest(s.pool.listDigestRows('acme-api'), { project: 'acme-api' }).byPhase[0]?.count,
     4,
     'inside the window it is an ordinary fleet',
   );
@@ -83,12 +83,12 @@ test("a renamed fleet's abandoned document stops being summed a week after its l
   advance(8);
   await desk.run();
 
-  assert.deepEqual(s.listPoolDigestRows('acme-api'), [], 'its rows count in no total');
-  const rollup = foldPoolDigest(s.listPoolDigestRows('acme-api'), { project: 'acme-api' });
+  assert.deepEqual(s.pool.listDigestRows('acme-api'), [], 'its rows count in no total');
+  const rollup = foldPoolDigest(s.pool.listDigestRows('acme-api'), { project: 'acme-api' });
   assert.deepEqual(rollup.byPhase, []);
   assert.deepEqual(rollup.fleets, []);
 
-  const fleet = s.listPoolFleets().find((f) => f.fleetId === 'bob-old@acme-api');
+  const fleet = s.pool.listPoolFleets().find((f) => f.fleetId === 'bob-old@acme-api');
   assert.ok(fleet, 'the fleet is still named, never dropped without a word');
   assert.equal(fleet.stale, true);
   assert.equal(fleet.digestAt, '2026-08-24T09:00:00.000Z', 'with the last digest it did publish');
@@ -100,20 +100,20 @@ test('an expired document is not re-landed, so the sweep does not fight the poll
   advance(8);
   await desk.run();
   await desk.run();
-  assert.deepEqual(s.listPoolDigestRows(null), []);
+  assert.deepEqual(s.pool.listDigestRows(null), []);
 });
 
 test('a failed fetch never expires anything', async () => {
   const { s, transport, desk, advance } = harness();
   transport.seed(digest('bob-old@acme-api', '2026-08-24T09:00:00.000Z'));
   await desk.run();
-  assert.equal(s.listPoolDigestRows(null).length, 1);
+  assert.equal(s.pool.listDigestRows(null).length, 1);
 
   advance(8);
   transport.fetchError = new Error('the pool is unreachable');
   await desk.run();
   assert.equal(
-    s.listPoolDigestRows(null).length,
+    s.pool.listDigestRows(null).length,
     1,
     'an outage leaves the last-known-good mirror in place — it is never read as an expiry',
   );
@@ -124,12 +124,12 @@ test('republishing brings an expired fleet back, with no tombstone to clear', as
   transport.seed(digest('bob@acme-api', '2026-08-24T09:00:00.000Z'));
   advance(8);
   await desk.run();
-  assert.deepEqual(s.listPoolDigestRows(null), []);
+  assert.deepEqual(s.pool.listDigestRows(null), []);
 
   transport.seed(digest('bob@acme-api', '2026-09-01T09:00:00.000Z'));
   await desk.run();
-  assert.equal(s.listPoolDigestRows('acme-api').length, 1);
-  assert.equal(s.listPoolFleets().find((f) => f.fleetId === 'bob@acme-api')?.stale, false);
+  assert.equal(s.pool.listDigestRows('acme-api').length, 1);
+  assert.equal(s.pool.listPoolFleets().find((f) => f.fleetId === 'bob@acme-api')?.stale, false);
 });
 
 test('a fleet ahead of this build ages on seenAt, the only stamp it has', async () => {
@@ -140,10 +140,10 @@ test('a fleet ahead of this build ages on seenAt, the only stamp it has', async 
   });
   advance(8);
   await desk.run();
-  const fleet = s.listPoolFleets().find((f) => f.fleetId === 'carol@acme-api');
+  const fleet = s.pool.listPoolFleets().find((f) => f.fleetId === 'carol@acme-api');
   assert.equal(fleet?.ahead, true);
   assert.equal(fleet?.stale, false, 'it is still publishing — this build simply cannot read it');
-  assert.deepEqual(s.listPoolDigestRows(null), [], 'and it contributes nothing either way');
+  assert.deepEqual(s.pool.listDigestRows(null), [], 'and it contributes nothing either way');
 });
 
 test('a publishedAt that is not a timestamp is malformed rather than an ageless document', () => {

@@ -18,8 +18,8 @@ with it: no `claims.json`, no importer, no mirror of other fleets' prose, and no
 What is documented below as the mechanism — one writer per namespace, a whole-document put, an
 envelope with the version on the outside — is unchanged and carries the digest alone.
 
-**It is a distribution problem and not a measurement one.** `src/issueSpend.ts` already prices a goal;
-`src/remedyInsights.ts` already folds why the fleet came back and what it cost; `src/spendInsights.ts`
+**It is a distribution problem and not a measurement one.** `src/insights/issueSpend.ts` already prices a goal;
+`src/insights/remedyInsights.ts` already folds why the fleet came back and what it cost; `src/insights/spendInsights.ts`
 already partitions spend by phase. Nothing here measures anything new. It moves what exists.
 
 ## What it is not
@@ -352,16 +352,16 @@ publish from rows the fleet already holds, so the envelope carries it and nothin
 
 Every dimension is a closed vocabulary that already exists, and none of them is a provider identifier.
 
-| Section        | Keyed by                                          | Measures                                |
-| -------------- | ------------------------------------------------- | --------------------------------------- |
-| `byPhase`      | `SpendPhase` (`src/spendInsights.ts`)             | costUsd, runs                           |
-| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`      | accounts, costUsd                       |
-| `byCheck`      | the check's own name                              | accounts, costUsd                       |
-| `unaccounted`  | —                                                 | return dispatches that filed no account |
-| `unmeasured`   | —                                                 | runs that reported no usage at all      |
-| `byUsage`      | `UsageSubject` × `UsageVerb`                      | times a person did it (no cost)         |
-| `byThroughput` | `ThroughputMeasure` (`src/throughputInsights.ts`) | times it happened (no cost)             |
-| `byFault`      | `ErrorLogEntry['source']`                         | faults recorded (no cost)               |
+| Section        | Keyed by                                                   | Measures                                |
+| -------------- | ---------------------------------------------------------- | --------------------------------------- |
+| `byPhase`      | `SpendPhase` (`src/insights/spendInsights.ts`)             | costUsd, runs                           |
+| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`               | accounts, costUsd                       |
+| `byCheck`      | the check's own name                                       | accounts, costUsd                       |
+| `unaccounted`  | —                                                          | return dispatches that filed no account |
+| `unmeasured`   | —                                                          | runs that reported no usage at all      |
+| `byUsage`      | `UsageSubject` × `UsageVerb`                               | times a person did it (no cost)         |
+| `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`) | times it happened (no cost)             |
+| `byFault`      | `ErrorLogEntry['source']`                                  | faults recorded (no cost)               |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns
@@ -382,7 +382,7 @@ spend and the total is their sum. A total shipped beside them would be a second 
 free to disagree with the one that adds up.
 
 **`unaccounted` and `unmeasured` are not optional.** Without the first, every share is a share of a
-minority and reads as authoritative once summed across nine fleets — `src/remedyInsights.ts` already
+minority and reads as authoritative once summed across nine fleets — `src/insights/remedyInsights.ts` already
 refuses to draw the causes without it. Without the second, a fleet running on a PTY contributes real
 work and no dollars and is drawn as a cheap fleet; a window in which nothing was measured answers null
 and never `$0.00`: unmeasured is never free, and a confident zero is the one reading that would be a
@@ -753,7 +753,7 @@ of the answer, spelled out, for a field whose whole job is to be an address nobo
 ### A fleet with no name yet
 
 **A pool selected with no `fleetId` boots.** The other coordinates are refused at load
-(`validatePool`, `src/config.ts`) and this one deliberately is not, because of who each of them
+(`validatePool`, `src/config/config.ts`) and this one deliberately is not, because of who each of them
 belongs to: `pool.project`, `pool.remote` and `pool.branch` arrive in the **committed**
 `lubbdubb.project.json`, so a missing one is a mis-committed file every clone shares and every clone
 should refuse. The fleet's own name is the **deployment's**, per machine — so the day a team commits
@@ -780,7 +780,7 @@ So there are three things instead, and they have to be read together:
   is why the row is `bad` rather than a gap: without it, a fleet that was configured into the pool and
   never named it would be indistinguishable from one that never opted in.
 
-`fleetId` has no arm in `src/configApply.ts`, so writing it lands in the file and the desk stays out
+`fleetId` has no arm in `src/config/configApply.ts`, so writing it lands in the file and the desk stays out
 until a restart — which the reading restates rather than suppresses, in the shape
 [26](26-setup.md#a-fault-the-file-has-already-answered) describes for every other restart-only key.
 

@@ -1,12 +1,13 @@
 import { z } from 'zod';
-import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
+import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
-import { prTitleFields, renderPrTitle } from '../../prTitle.js';
+import { prTitleFields, renderPrTitle } from '../../pr/prTitle.js';
 import { openPrFailure, resolveOpenPr } from '../openPr.js';
-import { linkPrWorkItem } from '../../prWorkItemDesk.js';
-import { seedPrWatch } from '../../prWatchDesk.js';
+import { linkPrWorkItem } from '../../pr/prWorkItemDesk.js';
+import { seedPrWatch } from '../../pr/prWatchDesk.js';
 import { toolError } from '../protocol.js';
-import type { PrRefStyle } from '../../prRef.js';
+import type { PrRefStyle } from '../../pr/prRef.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -67,12 +68,12 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
 
-    const issueNumber = originIssueNumber(task.originRef);
-    const plan = issueNumber === null ? null : deps.store.getPlanByOrigin(issueOrigin(issueNumber));
+    const issueNumber = issueSubtreeNumber(task.originRef);
+    const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
     const target = resolveOpenPr(task.originRef, {
-      issues: deps.store.getWorldBaseline()?.issues ?? [],
+      issues: deps.store.world.getWorldBaseline()?.issues ?? [],
       plan,
-      parts: plan ? deps.store.listPlanParts(plan.id) : [],
+      parts: plan ? deps.store.plans.listPlanParts(plan.id) : [],
       defaultBranch: wiring.defaultBranch,
     });
     if ('error' in target) return toolError(target.error);

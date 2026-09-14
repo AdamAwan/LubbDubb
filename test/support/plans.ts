@@ -62,18 +62,23 @@ export function failAppraisalOpen(store: Store, issueNumber: number): void {
 
 function record(store: Store, decisions: Decision[]): void {
   for (const decision of decisions) {
-    store.recordDecision({ cycleId: decision.cycleId, action: decision.action, outcome: 'executed', detail: '' });
+    store.decisions.recordDecision({
+      cycleId: decision.cycleId,
+      action: decision.action,
+      outcome: 'executed',
+      detail: '',
+    });
   }
 }
 
 export function planWithOnePart(store: Store, issueNumber: number, title = `Issue #${issueNumber}`): Plan {
-  const plan = store.upsertPlan({
+  const plan = store.plans.upsertPlan({
     originRef: `issue:${issueNumber}`,
     title,
     status: 'active',
     reason: 'One pull request of work.',
   });
-  store.upsertPlanParts(plan.id, [
+  store.plans.upsertPlanParts(plan.id, [
     {
       slug: 'whole',
       seq: 1,

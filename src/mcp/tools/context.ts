@@ -26,7 +26,7 @@ import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
 import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
 import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
-import type { PrRefStyle } from '../../prRef.js';
+import type { PrRefStyle } from '../../pr/prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
@@ -38,7 +38,8 @@ import type { LocalValidationDesk } from '../../localValidation/desk.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
 import type { StepCapabilities } from '../../validation/steps.js';
-import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
+import { issueOrigin } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -186,18 +187,18 @@ interface StatusEnvelope {
 }
 
 function statusEnvelope(store: Store, agent: Agent, task: Task): StatusEnvelope {
-  const open = store.listOpenEscalations().find((e) => e.agentId === agent.id) ?? null;
+  const open = store.escalations.listOpenEscalations().find((e) => e.agentId === agent.id) ?? null;
   const env: StatusEnvelope = {
     origin: task.originRef,
     task: { title: task.title, status: task.status },
     awaitingHuman: open ? { prompt: open.prompt } : null,
   };
-  const issue = originIssueNumber(task.originRef);
-  const plan = issue === null ? null : store.getPlanByOrigin(issueOrigin(issue));
+  const issue = issueSubtreeNumber(task.originRef);
+  const plan = issue === null ? null : store.plans.getPlanByOrigin(issueOrigin(issue));
   if (plan) {
     env.plan = {
       status: plan.status,
-      parts: store.listPlanParts(plan.id).map((p) => ({ slug: p.slug, status: p.status })),
+      parts: store.plans.listPlanParts(plan.id).map((p) => ({ slug: p.slug, status: p.status })),
     };
   }
   return env;

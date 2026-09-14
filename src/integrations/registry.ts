@@ -1,4 +1,4 @@
-import type { AzureDevOpsConfig, GitHubConfig } from '../config.js';
+import type { AzureDevOpsConfig, GitHubConfig } from '../config/config.js';
 import { resolve } from 'node:path';
 import type { Integration, IntegrationContext, IntegrationSelection, WorldCapability } from './integration.js';
 import type { PoolTransport } from '../pool/transport.js';
@@ -35,7 +35,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
-        sentReplies: ctx.store,
+        sentReplies: ctx.store.prReplies,
       });
     },
     azure: (ctx) => {
@@ -49,7 +49,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         repository: az.repository,
         policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
-        sentReplies: ctx.store,
+        sentReplies: ctx.store.prReplies,
       });
     },
   },

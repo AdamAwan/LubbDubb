@@ -919,7 +919,7 @@ CREATE TABLE IF NOT EXISTS remote_readings (
   environment TEXT NOT NULL,
   row_id      TEXT NOT NULL,
   run_id      TEXT,
-  outcome     TEXT NOT NULL,   -- 'passed' | 'failed' | 'blocked'
+  outcome     TEXT NOT NULL,   -- 'passed' | 'failed' | 'blocked' | 'captured'
   rows        INTEGER,
   value       REAL,
   detail      TEXT,
@@ -1369,6 +1369,7 @@ CREATE TABLE IF NOT EXISTS validation_plans (
   note         TEXT,                  -- where the planner departed from the hint, and why
   empty_reason TEXT,                  -- why nothing was declared; null where checks were
   authored_at  TEXT,                  -- null is "the check set has not been written yet"
+  released_at  TEXT,                  -- null is "authored, and still a proposal an operator has not accepted"
   updated_at   TEXT NOT NULL
 );
 

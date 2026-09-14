@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../src/server/stateSnapshot.js';
 import type { StateSection } from '../src/wire.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { failPlanningOpen } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -102,6 +103,34 @@ test('a section patch overlaid on a full snapshot changes only that section', ()
 
   for (const key of Object.keys(full) as (keyof typeof full)[]) {
     assert.deepEqual(merged[key], full[key], `${key} survived the merge unchanged`);
+  }
+
+  system.store.close();
+});
+
+test('a section asked for alone answers exactly what a full snapshot answers for it', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat/x' });
+  system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
+  failPlanningOpen(system.store, 13);
+  system.store.tasks.createTask({
+    kind: 'code',
+    title: 'Resolve issue #13',
+    prompt: 'p',
+    branch: 'issue/13',
+    originRef: 'issue:13',
+  });
+  system.store.world.recordWorldEvents([{ kind: 'pr_merged', ref: 'pr:91', summary: 'PR #91 merged' }]);
+  system.store.world.setWorldBaseline(await system.connector.getState());
+
+  const full = buildStateSnapshot(system) as unknown as Record<string, unknown>;
+  for (const section of STATE_SECTIONS) {
+    const patch = buildStateSections(system, new Set([section])) as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(patch)) {
+      // `build` carries the moment it was read, so two reads of it never compare equal.
+      if (key === 'refUrls' || key === 'build') continue;
+      assert.deepEqual(value, full[key], `${key} differs when only '${section}' is asked for`);
+    }
   }
 
   system.store.close();

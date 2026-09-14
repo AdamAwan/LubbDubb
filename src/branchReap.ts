@@ -1,5 +1,5 @@
-import { isOurPr } from './prOwnership.js';
-import { prState } from './prHealth.js';
+import { isOurPr } from './pr/prOwnership.js';
+import { prState } from './pr/prHealth.js';
 import type { PullRequest, TaskSummary } from './types.js';
 
 // → docs/spec/09-execution.md

@@ -11,3 +11,6 @@ lubbdubb.config.json
 
 # Superpowers brainstorming scratch (mockups, session state)
 .superpowers/
+
+# Isolated worktrees used by background agents (transient checkouts)
+.claude/worktrees/

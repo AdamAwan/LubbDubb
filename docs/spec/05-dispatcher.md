@@ -11,6 +11,33 @@ interface Dispatcher {
 
 `DispatchResult` is `{ actions, rejected, rationale, upcoming? }`.
 
+## Assembling the context
+
+`buildDispatchInputs(store, pulse)` in `src/dispatcher/dispatchInputs.ts` is what produces a
+`DispatchContext`, and it lives here rather than in `src/harness.ts` on purpose: the harness's job is
+the pulse, and a rule that wants a new kind of row is otherwise an edit to the harness before a line
+of dispatch logic is written. With the assembly beside the rules, a new row type is the store module,
+this function, `DispatchContext`, the `StageContext` and the rule — none of them the pulse.
+
+The split between what it reads and what it is handed is not taste, it is the
+[read-once rule](04-harness-cycle.md#ordering). `pulse` carries every reading the cycle already took
+for its own work — the world split, the fleet, the queued jobs, the plan graph, the verdicts and
+their signals, the retrospective origins, the reviews and their routes, the decision window, the
+feature standings and the headroom — because a second read of those would be another query, and
+worse, a second answer to "which reading was this decided against?". Everything whose **only**
+consumer is `decide` is read here, at one point, below the last sweep phase: the escalations and
+proposals, the standing jobs and ejections, the plan atoms and amendments, the validation checks and
+plans, the local run and its validations, the selector offerings, the feature summaries and
+sequences, the priority, pause and profile overrides, the prior remedies, the PR splits and the
+reviewed-elsewhere set, and the obstacle board.
+
+Reading them here rather than where the pulse reads its own is safe for one stated reason: **no desk
+and no sweep between the two points writes any of those tables.** The sweeps that do write — the
+escalation tidies, the ejection expiries, the issue runs, the reviewed-elsewhere probe, the local
+validation sweep — all sit above this point, so the rows are the rows step 9 would have read. A new
+desk or sweep that writes one of these tables must therefore sit above `decide` like every other
+writer, or the dispatch decides against a reading it invalidated.
+
 ## The action vocabulary
 
 `src/dispatcher/actions.ts` defines the complete set as a zod discriminated union on `type`. This is
@@ -41,6 +68,62 @@ became of it, and both are lifted into their own decision columns (see
 `parseActions(raw)` validates an array, partitioning into `actions` and `rejected` (each rejected item
 keeps its raw value and a joined zod error path/message).
 
+## The issue-origin vocabulary
+
+A dispatch origin under an issue is `issue:<n>`, or `issue:<n>:<suffix>` with an optional id —
+`issue:412`, `issue:412:plan`, `issue:412:part:schema`, `issue:412:validate:some-check`. The strings
+are **persisted**: `tasks.origin_ref`, `decisions.rule`, a plan's part refs, an escalation's own
+origin, a bench row's ref, and the keys `agentModels.byRule` prices work under. A string that changes
+shape silently orphans every row already written in the old one.
+
+`src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
+`issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `assess`, `retro`,
+`validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
+`validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall` — and the entry carries
+three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
+family whose suffix is the whole of it), and its **role**.
+
+Both halves come off that one entry. `issueOriginRef(family, n, id?)` mints; `parseIssueOrigin`,
+`issueOriginId`, `issueOriginNumber`, `inIssueOriginFamily` and `issueSubtreeNumber` read; and
+`issueOriginRole` classifies. **A family cannot exist without a role**: the table is a
+`Record<IssueOriginFamily, …>` over the family union and `role` is a required field, so a new family
+without one does not compile, and `test/issueOriginVocabulary.test.ts` holds every family to the exact
+string it mints.
+
+`validate-plan` carries no id where `validate:<check>` does, and that is the shape of the thing rather
+than an inconsistency: there is one check set per goal and it is written once, so there is nothing to
+name — `assess` and `retro`'s shape.
+
+### The three roles
+
+The `issue:<n>:*` subtree holds materially different things, and `issueOriginRole(n, ref)` is what
+tells them apart — `null` for an origin that is not under issue `n` at all, and one of:
+
+- **`work`** — the pickup root and a plan's parts, plus `validate-local-fix:<id>`. Something was built.
+- **`evidence`** — `assess`, `retro`, `validate-plan`, `validate:<check>`,
+  `validate-failure:<check>`, `validate-local:<id>` and `validate-remote:<run>`. Not work, but only
+  ever downstream of some.
+- **`deliberation`** — `plan`, `appraisal`, `sequence` and `split:<pr>`. The harness thinking about the
+  issue; a task on one says it has been thought about, never that anything was built.
+
+Matching the whole subtree instead was a real defect: the planner's own task made every issue that
+reached pickup look worked, so it was assessed instead of picked up, the assessor honestly reported
+nothing delivered, rule `issue-shortfall` replanned, and the issue cycled the funnel without a line of
+its work ever being written.
+
+An **unrecognised** suffix is its own answer rather than a silent default — that is exactly how
+`:plan` slipped through. It is also a role a family may be **declared** with, which is what `summary`
+and `shortfall` carry today: both are read as unrecognised by every consumer, and both are suspected
+defects rather than a decision the vocabulary endorses — `issue:<n>:summary` in particular is a real
+dispatch origin (rule `feature-summary`), so it does not expand under a goal's priority flag and its
+spend files under "other". Declaring the role, rather than leaving the family out of the table, is
+what makes that visible instead of invisible.
+
+A role is judged on the **suffix**, never on the id: `issue:<n>:validate-local:` with no id is still
+that family and still `evidence`, because a role that fell back to `unrecognised` on a malformed id
+would lose exactly the origin an operator needs to see. The stricter parsers — the ones that hand a
+caller the id — are the ones that refuse it.
+
 ## The rule book
 
 `src/dispatcher/rules.ts` holds the registry as data. Every action the `RuleDispatcher` emits carries
@@ -67,6 +150,20 @@ The registry keeps all three because `decisions.rule` is **persisted**: a row na
 `cooldown-escalate` must still resolve years later. So the registry is the display vocabulary and the
 pipeline is the ordered subset that runs.
 
+`emittedBy` is the fourth field, and it is what makes the pipeline's coverage checkable. A rule of
+kind `rule` either has a **stage of its own** — a module under `src/dispatcher/rules/` registered in
+`STAGES` under its id — or it names, in `emittedBy`, the rule whose stage produces it. Nothing else is
+a legal third state, and that is carried by the types rather than by a convention: `OwnStageRuleId` is
+the rule ids with no `emittedBy`, `STAGES` is a **total** `Record<OwnStageRuleId, …>` so a rule with
+neither fails `typecheck`, and `DISPATCH_PIPELINE`'s element type declares `emittedBy` as an
+`OwnStageRuleId` so an `emittedBy` naming a rule that is itself emitted — or naming nothing — fails
+there. Both arms matter: `STAGES` was `Partial` for as long as the PR pass was the only shared one, and
+under a `Partial` map a rule added to `DISPATCH_PIPELINE` with no stage is **silently inert** — walked
+every cycle, proposing nothing, with nothing red and nothing to read. The walk skips an `emittedBy`
+entry outright, which is why a shared pass runs once per cycle rather than once per id it can emit;
+pointing all of them at the same function instead would run it seven times over. `test/dispatchPipeline.test.ts`
+asserts the same shape at runtime, against the loosening of the type rather than against the types.
+
 ### The rules, in evaluation order
 
 `enabled` is the predicate that switches an optional rule into the pipeline; a rule with none is
@@ -92,7 +189,7 @@ unconditional.
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                                                                                                                                                                                                                                                                        |
 | `issue-appraisal`          | Issue goal needs checking            | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `issue-plan`               | Issue needs a plan                   | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
-| `issue-assess`             | Issue may be finished                | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                                                                                                                                                                                                                                                                             |
+| `issue-assess`             | Issue may be finished                | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR. On `delivered` it writes the goal's validation check set too.                                                                                                                                                                                                                                                               |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                                                                                                                                                                                                                                                              |
 | `issue-retro`              | Delivered goal needs a retrospective | —                    | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.                                                                                                                                                                                                                                                                   |
 | `plan-approval`            | Plan needs your approval             | —                    | A planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                                                                                                                                                                                                                                                                                                            |
@@ -101,6 +198,7 @@ unconditional.
 | `local-validation-fix`     | Fix what a local validation found    | —                    | A local validation was reported `failed` with findings: one writable code agent on the branch that was validated. Once per reading, latched on the row. Never a shortfall. → [32](32-local-validation.md#when-it-fails)                                                                                                                                                                                                         |
 | `plan-part`                | Plan part ready                      | —                    | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                                                                                                                                                                                                              |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                                                                                                                                                                                                   |
+| `validation-plan-approval` | A check set needs your acceptance    | —                    | A delivered goal's validation check set has been authored and not yet accepted. Raises a proposal and dispatches nobody; until it is answered no sheet assembles off the set and `validate-check` dispatches nothing for it. Below `validation-plan`, which writes its input; above `validate-check`, which reads what it releases. → [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)                        |
 | `validate-check`           | Handed-over validation check         | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed             | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed  | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
@@ -119,11 +217,27 @@ has not turned the feature on, rather than as a rule that looks live and never f
 
 The seven PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than eight,
 because at most one agent works a branch and the fold that picks the top concern has to see them
-together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
-The pass is registered in `STAGES` under `pr-ci-failing` and stays there whatever the order inside the
-group: the seven are contiguous, so nothing runs between them and the pass contributes at the same
-point in the walk whichever id carries it. Moving the registration to track "the first of them" would
-be a second copy of the ordering.
+together. That pass is `src/dispatcher/rules/prConcerns.ts` — it gathers every concern on a watched
+pull request, collapses them to one per pull request, and ranks across pull requests. Its relative
+urgency inside the group is still the pipeline order: `concernUrgency` looks up the index.
+
+Each concern is **built by its own module** under `src/dispatcher/rules/prConcerns/`, one per rule,
+each answering with a concern or with nothing; `prConcerns.ts` holds the order it calls them in, the
+branch-notify, the merge-ready check and the single dispatch tail. The order of those calls _is_ the
+priority order — the fold takes `concerns[0]` — so a builder moved in that list is a behaviour change,
+not a tidy-up. The `pr-ci-blocked` escalation is the one builder that answers with an action rather
+than a concern: it is the other arm of the failing-CI branch and never produces both.
+
+The pass is registered in `STAGES` under `pr-ci-failing`, and the other seven ids declare
+`emittedBy: 'pr-ci-failing'`. It stays under that id whatever the order inside the group: the eight are
+contiguous, so nothing runs between them and the pass contributes at the same point in the walk
+whichever id carries it. Moving the registration to track "the first of them" would be a second copy of
+the ordering. The module is named for what it does rather than for the id it is registered under — it
+was `prCiFailing.ts` while `pr-ci-failing` was the only one of the eight anybody could find from the
+`STAGES` map, and that name read as "the failing-CI rule" to every later reader. The **rule ids** did
+not move with it: they are persisted in `decisions.rule`, matched as origin patterns in
+`src/store/tasks.ts`, and priced in `agentModels.byRule`, so a rename there is a data migration and not
+a tidy-up.
 
 `pr-review-triage` is deliberately **not** in that group: it dispatches a desk agent rather than a branch
 agent, so the one-agent-per-branch fold does not apply to it, and it runs as its own stage above the
@@ -294,8 +408,9 @@ verdict to act on, prior work, a plan row, a spent attempt cap — writes nothin
 the issue to the funnel rather than holding it.
 
 Adding a rule is still two things and not three: a registry entry in the position it should run, and a
-module registered in `STAGES` under that id. An id with no entry was covered by an earlier pass (the
-PR pass above), and nothing anywhere renders a position.
+module registered in `STAGES` under that id — or, where an earlier pass already produces it, an
+`emittedBy` naming that pass instead of a module. There is no third option: a rule with neither does
+not compile. Nothing anywhere renders a position.
 
 ### Not rules
 
@@ -430,6 +545,20 @@ is no second list to keep in step with it. What each stage contributes:
 3. **Goal appraisals** (`issue-appraisal`) — asking whether a goal can be worked from comes before deciding
    _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes both** the planner and
    the pickup for that issue, from the pulse it is proposed on until the appraiser has answered.
+
+   The two are the same kind of agent doing the same read, which reads like an argument for one rule
+   answering both — and the saving would be real, a whole dispatch per goal. What refuses it is the
+   **profile**: the appraisal is the stage that _mints_ the pin ([02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)),
+   and a divergent proposal **holds the funnel until a human answers it**. So the appraiser runs on its
+   own `byRule` entry, deliberately cheap, and the planner resolves onto whatever the pin says. One
+   merged agent would have to pick a profile before anything about the goal is known: plan every goal at
+   the appraiser's cheap entry, or pay the deep one on every ticket the appraisal exists to refuse. A
+   fourth `unclear` verdict cannot recover that either, because the hold exists to be answered _before_
+   the money is spent and a planner that has planned has spent it. The appraisal is a **pricing and
+   admission gate**; the planner is what it prices. What the split costs is one cold read, and that is
+   paid back by [the handover](09-execution.md#handing-a-conversation-on) rather than by merging the
+   stages.
+
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
 5. **Assessors** (`issue-assess`) — an assessment decides whether an issue needs work at all, so it
@@ -619,6 +748,28 @@ is the same loop a dispatch that leaves it behind is. A _failed_ one is not an a
 happened, and the agent it falls back to gets the origin's full budget. "Now" is the world
 snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` carrying the throttled rule as
 its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
+
+### Every proposing rule reads the verdict through `consider`
+
+`StageContext.consider(candidate, opts?)` is the one place a rule turns a verdict into a queue entry:
+`dispatch` pushes the candidate, `cooldown` pushes it `held: 'cooldown'`, `escalate` raises
+`opts.escalate` if the rule has one, and `hold` does nothing. It returns whether the candidate was
+proposed, which is what `issue-appraisal` and `issue-assess` gate their `appraising` / `assessing`
+writes on — the two sets a later stage reads to know an agent is already on the issue.
+
+Thirteen rules call it, and it is the only place any of them reads `dispatchVerdict`. `opts.escalate`
+is optional because most have nowhere to escalate _to_: a summary or a sequence that has spent
+its attempts falls silent rather than putting a question to an operator, and only `issue-pickup`,
+`plan-part`, `obstacle-repair` and the PR concerns raise one. `opts.decisions` narrows the attempt
+window — `validation-failed` counts only the decisions since the reading it is answering, so a check
+that fails again gets a fresh budget rather than inheriting the last failure's.
+
+**A rule that skips it is making a claim, not forgetting.** `remote-validation`, `manual-job`,
+`local-validation` and `local-validation-fix` propose from a row that is one press rather than a
+standing signal: re-proposed until it dispatches or the operator calls it off, with no attempt budget
+to spend. `issue-plan` reads its verdict off `PlanRouteVerdict.planner` instead, and `plan-part` folds
+the verdict against its own `capped` and `unapproved` holds. Nothing mechanical separates those from an
+omission, which is why the helper is a shared body rather than a gate.
 
 ### A re-dispatch inherits the last agent's conversation
 
@@ -855,19 +1006,12 @@ otherwise claim: no prior tasks means the work has not started, so rule `issue-p
 with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
 this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it — one judging, one redoing.
 
-**Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
-the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
-the **work**; `issue:N:assess`, `issue:N:retro` and `issue:N:validate-plan` are not work but only
-ever happen downstream of some, so they count as **evidence**; `issue:N:plan`, `issue:N:appraisal` and `issue:N:split:<pr>` are the harness
-**deliberating**, and a task on one of those says the issue has been thought about, never that anything
-was built. Matching the whole
-subtree was a real defect: the planner's own task made every issue that reached pickup look worked, so
-it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
-replanned, and the issue cycled the funnel without a line of its work ever being written. An
-**unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
-slipped through — and `hasPriorWork` does not count it, failing toward a redundant pickup an operator
-can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the whole known
-vocabulary, so the next origin added has to be classified rather than inherited.
+**Which origins count is decided in one place**, `issueOriginRole` — and it answers off the same
+declaration that mints them, so a family cannot reach the dispatcher unclassified
+([The issue-origin vocabulary](#the-issue-origin-vocabulary)). `hasPriorWork` counts **work** and
+**evidence**, and does not count an **unrecognised** suffix, failing toward a redundant pickup an
+operator can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the
+vocabulary from the assessor's side and `test/issueOriginVocabulary.test.ts` from the vocabulary's.
 
 It is answered from `ctx.tasks`, **never from the work graph**. The graph is keyed on these same
 origin strings, which is why it reads like a graph query; it is the same question asked of the source
@@ -889,6 +1033,16 @@ second account of the run.
 The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11-mcp-tools.md)):
 `delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule `issue-shortfall` routes. See
 [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends it.
+
+**On `delivered` it writes the goal's validation check set too**, in the same turn, with
+`validation_plan`. It is the same reading: the assessor is already standing in the delivered code with
+the work graph in front of it, and `delivered` is by its own verdict the moment that code stops
+moving — so the validation planner that used to be dispatched next opened a fresh agent to re-derive
+what this one had just finished. The verdict is cast **first** and the check set after it, which is
+what makes every way the turn can end survivable; rule `validation-plan` stays as the catch-up for the
+one that ends between them. The briefing is **appended** to the rendered prompt, and only for a goal
+that has a plan and no check set — the two gates `validation-plan` itself refuses on.
+→ [20](20-validation.md#one-agent-two-outputs)
 
 ## `issue-shortfall` — routing a failed assessment
 
@@ -1120,14 +1274,21 @@ tracker and nothing is scheduled from what it says.
 ## `validation-plan` — writing the check set
 
 `validation-plan` puts one code agent on a delivered goal that has no validation check set, to write
-it. Authoring is deliberately late and the argument for that is [20](20-validation.md#when-the-check-set-is-written);
-the dispatcher's half is:
+it. It is the **catch-up rather than the ordinary path**: the assessor writes the set in the turn it
+answers `delivered` ([20](20-validation.md#one-agent-two-outputs)), so this rule now fires for the
+turn that ended between the two calls — a crash, a kill, a spent attempt cap — and for a goal an
+operator parked by hand. It costs nothing when the fold works, because an authored set answers its own
+gate; and it cannot be dropped, because putting the check set behind a turn that has to reach its end
+is the one thing a dying agent cannot promise. Authoring is deliberately late and the argument for
+that is [20](20-validation.md#when-the-check-set-is-written); the dispatcher's half is:
 
 - A **code** agent in a **read-only checkout** of `defaultBranch`, leased under
   `validate-plan/issue/<n>`, origin `issue:<n>:validate-plan`. A check is written against the
   delivered code, which is what that checkout is; nothing here is committed or pushed.
 - **One origin per goal**, with no id on the suffix, because there is one check set and it is
-  written once — `assess` and `retro`'s shape rather than `validate:<checkId>`'s. Classified as
+  written once — `assess` and `retro`'s shape rather than `validate:<checkId>`'s. Which origins may
+  author a set at all is declared once, in `checkSetAuthoringIssue` (`src/validation/authoring.ts`):
+  this one and `issue:<n>:assess`, and nothing else. Classified as
   **evidence** in `src/issueOrigins.ts`: left unclassified it reads `unrecognised`, stops expanding
   under a goal's priority flag, and files its spend under "other", neither of which is red.
 - Fires for a goal **parked as delivered** that **has a plan** and whose check set is **not
@@ -1145,9 +1306,34 @@ the dispatcher's half is:
   with **no escalation**. The goal is parked either way and a bench with no checks on it already says
   what happened.
 
+## `validation-plan-approval` — putting the check set to you
+
+`validation-plan-approval` raises a proposal and dispatches nobody. The argument for the gate is
+[20](20-validation.md#the-check-set-is-proposed-before-it-is-work); the dispatcher's half is:
+
+- Emits `propose_validation_plan` for a goal **parked as delivered** whose `validation_plans` row is
+  **authored** and **not released**, unless a `validation_plan` proposal is already pending on the ref.
+  The ref is `issue:<n>:validate-plan` — the planner's own origin, because `issue:<n>:plan` belongs to
+  the code plan and two proposals on one ref would hold each other.
+- Read off the authored record and the live checks, never off a check count: an **empty** set is
+  proposed exactly as readily as a full one, because declaring nothing worth running is the verdict
+  most worth a second pair of eyes, and an unaccepted set is a sheet that waits for ever.
+- What the operator is deciding about — the planner's note, where it departed from the plan's hint, and
+  every check with its journey and who each step falls to — is **appended** to the rendered ask and
+  carried as the escalation's `detail`. An override that never learned about steps cannot drop the half
+  nobody can decide without.
+- The ask **names the checks carrying a `state` step** and says the accept does not approve their
+  queries: that consent is keyed on `(query digest, environment)` and answered on its own dry run
+  ([36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)).
+- Accepting releases the set through `ProposalDesk.accept` → `runAuthorized` → `releaseValidationPlan`,
+  audited under `human:<proposal id>`. Rejecting takes the authoring stamp off and leaves the rows to
+  amend, so rule `validation-plan` comes back for it with the operator's words.
+
 ## `validate-check` — running a handed-over check
 
-`validate-check` puts a code agent on one validation check the operator handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
+`validate-check` puts a code agent on one validation check the operator handed to the fleet, on a check
+set they have **accepted** — an authored set nobody released is not work yet
+([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
 half is:
 
 - A **code** agent — a check runs things — in a **read-only checkout** of `defaultBranch`
@@ -1180,7 +1366,7 @@ The check's own procedure, expectation and resource names are **appended** to th
 `validation-check` prompt rather than interpolated — the half the agent cannot act without, and an
 override that predates the rule would silently drop a new `{token}`.
 
-The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
+The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `blocked` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
 
@@ -1394,6 +1580,14 @@ agent; a comment inside the body is left alone. `renderTemplate` substitutes `{n
 leaves an unmatched token untouched.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
+
+A rule's prompt and the MCP tools advertised to the agent it dispatches are **two statements of the same
+intent**, and they must agree: what a template (or a note appended to it) names, the rule's row in
+`RULE_TOOLS` should advertise → [11](11-mcp-tools.md#which-tools-an-agent-is-advertised). Disagreement is
+not a broken channel — an override naming a tool the row omits is still answered, because an unadvertised
+tool is hidden from `tools/list` and never from `tools/call` — but the agent is being asked for something
+its own tool list does not show. An operator override is always free to name any tool; the agreement is
+asked of the built-in pair.
 
 ### What a CI-fix dispatch carries
 

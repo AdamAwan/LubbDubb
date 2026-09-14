@@ -131,7 +131,7 @@ provider and persisted row that predates them reads unchanged:
   with no `ci.checks` rule naming it, so rule `pr-ci-gate` sends an agent to queue the run
   ([07](07-pull-requests.md#ci-checks)).
 
-`prState(pr)` (`src/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
+`prState(pr)` (`src/pr/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
 when present and otherwise folds back onto `merged`. It **never invents `closed`** — a PR nobody told
 us was closed is open or merged, never abandoned. Inferring abandonment from a disappearance is
 exactly the bug the closed-PR list exists to fix.
@@ -203,7 +203,7 @@ cockpit's link map.
 | `pr:<n>:comments`            | A PR's unhandled review threads, together           | the PR's own `branch`      |
 | `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch`      |
 | `issue:<n>`                  | An issue, and its plan row's `origin_ref`           | `issue/<n>`                |
-| `issue:<n>:plan`             | A planning agent for that issue                     | `plan/issue/<n>`           |
+| `issue:<n>:plan`             | A planning agent for that issue                     | `plan/issue/<n>`³          |
 | `issue:<n>:part:<slug>`      | One part of a decomposed issue                      | `issue/<n>/<slug>`         |
 | `job:<id>`                   | An operator-launched job                            | `job.branch` or `job/<id>` |
 
@@ -222,8 +222,16 @@ already functions as a branch gate. Rule `manual-job` (`job:<id>`) is the one di
 does not hold by construction — the operator supplies a free-string branch — so it is enforced
 explicitly there (see [09](09-execution.md)).
 
-The `issue/<n>` vs `issue/<n>/<slug>` split is why planners live on `plan/issue/<n>`: git stores refs
-as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist.
+³ A **lease key**, not a ref: the planner reads the repository and commits nothing, so it runs in a
+read-only checkout and mints no branch ([08](08-planning.md#rule-issue-plan--the-planner),
+[09](09-execution.md#the-read-only-checkout)). The same is true of `issue:<n>:appraisal`,
+`issue:<n>:assess` and the validation origins, which is why they are not in this table's branch column
+as refs either.
+
+The `issue/<n>` vs `issue/<n>/<slug>` split is why planners are named `plan/issue/<n>`: git stores refs
+as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist — and the name has to
+stay clear of the parts even now that nothing mints it, because the lease key is what the branch gate
+reads.
 
 ## World events (the activity feed)
 

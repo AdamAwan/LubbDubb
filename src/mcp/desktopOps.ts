@@ -18,7 +18,7 @@ async function settle(deps: DesktopToolDeps): Promise<void> {
 }
 
 function describeAgent(deps: DesktopToolDeps, agent: Agent): Record<string, unknown> {
-  const task = deps.store.getTask(agent.taskId);
+  const task = deps.store.tasks.getTask(agent.taskId);
   return {
     agentId: agent.id,
     status: agent.status,
@@ -41,7 +41,9 @@ function inboxKind(
   deps: DesktopToolDeps,
   item: Escalation,
 ): { kind: 'question' | 'permission' | 'proposal' | 'orphaned'; detail: string | null } {
-  const pending = deps.store.listProposals().find((p) => p.escalationId === item.id && p.status === 'pending');
+  const pending = deps.store.escalations
+    .listProposals()
+    .find((p) => p.escalationId === item.id && p.status === 'pending');
   if (pending) return { kind: 'proposal', detail: pending.id };
   if (item.context?.permission) return { kind: 'permission', detail: null };
   const orphaned = item.agentId ? deps.recovery().pendingForAgent(item.agentId) : null;
@@ -58,10 +60,10 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
   inputSchema: toolSchema(z.object({})),
   handler: () => {
     const control = deps.runtimeControl.snapshot();
-    const live = deps.store.listAgentsByStatus('running', 'waiting');
+    const live = deps.store.agents.listAgentsByStatus('running', 'waiting');
     const upcoming = deps.harness().upcoming;
-    const limits = deps.store.readRateLimits();
-    const errors = deps.store.listErrors(10);
+    const limits = deps.store.rateLimits.readRateLimits();
+    const errors = deps.store.errors.listErrors(10);
     return toolJson({
       control: {
         cap: control.cap,
@@ -84,7 +86,7 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
                 expedited: i.expedited ?? false,
               })),
             },
-      jobs: deps.store
+      jobs: deps.store.jobs
         .listQueuedJobs()
         .map((j) => ({ id: j.id, title: j.title, kind: j.kind, createdAt: j.createdAt })),
       accountUsage:
@@ -96,8 +98,8 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
               capturedAt: limits.capturedAt,
             },
       attention: {
-        escalations: deps.store.listOpenEscalations().length,
-        proposals: deps.store.listProposals().filter((p) => p.status === 'pending').length,
+        escalations: deps.store.escalations.listOpenEscalations().length,
+        proposals: deps.store.escalations.listProposals().filter((p) => p.status === 'pending').length,
         orphanedRuns: deps.recovery().pending().length,
       },
       errors: errors.map((e) => ({ at: e.createdAt, source: e.source, message: e.message })),
@@ -161,7 +163,7 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
       cap: next.cap,
       paused: next.paused,
       pulsed: pulse,
-      running: deps.store.listAgentsByStatus('running', 'waiting').length,
+      running: deps.store.agents.listAgentsByStatus('running', 'waiting').length,
       means:
         "this is in memory only and lasts until the harness restarts, when it comes back on the deployment's " +
         'configured cap and pause. A lowered cap does not stop the agents already running; it stops the next ' +
@@ -178,7 +180,7 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
     'Each row says what kind it is and what settles it. Call this to find out whether anything is stuck.',
   inputSchema: toolSchema(z.object({})),
   handler: () => {
-    const open = deps.store.listOpenEscalations();
+    const open = deps.store.escalations.listOpenEscalations();
     return toolJson({
       inbox: open.map((item) => {
         const { kind, detail } = inboxKind(deps, item);
@@ -202,7 +204,7 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
                   : `the cockpit — the agent that asked this crashed, and its run (${detail}) needs a recovery verdict first`,
         };
       }),
-      humanTasks: deps.store
+      humanTasks: deps.store.humanTasks
         .listAllHumanTasks()
         .filter((t) => t.status === 'open')
         .map((t) => ({
@@ -226,13 +228,13 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
           waitingReason: o.waitingReason,
         })),
       heldGoals: stuckGoals({
-        delivered: deps.store.listDeliveries().map((d) => d.originRef),
-        shortfalled: new Set(deps.store.listShortfalls().map((sf) => sf.originRef)),
+        delivered: deps.store.verdicts.listDeliveries().map((d) => d.originRef),
+        shortfalled: new Set(deps.store.verdicts.listShortfalls().map((sf) => sf.originRef)),
         environments: deps.environments,
-        arrivals: deps.store.listGoalArrivals(),
-        releases: deps.store.listEnvironmentGateReleases(),
-        landings: deps.store.listGoalLandings(),
-        readings: deps.store.listEnvironmentReach(),
+        arrivals: deps.store.environments.listGoalArrivals(),
+        releases: deps.store.environments.listEnvironmentGateReleases(),
+        landings: deps.store.environments.listGoalLandings(),
+        readings: deps.store.environments.listEnvironmentReach(),
         probeIntervalMs: deps.briefConfig().environmentProbeIntervalMs,
         now: Date.parse(deps.now()),
       }).map((s) => ({
@@ -284,9 +286,9 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
-    const item = deps.store.getEscalation(id);
+    const item = deps.store.escalations.getEscalation(id);
     if (!item) {
-      const task = deps.store.getHumanTask(id);
+      const task = deps.store.humanTasks.getHumanTask(id);
       if (task)
         return toolError(
           `"${id}" is a human task ("${task.title}") — a unit of work, not a question an agent is parked on. ` +
@@ -396,16 +398,16 @@ export const agentRead: DesktopToolFactory = (deps) => ({
   handler: (args) => {
     const id = typeof args.agentId === 'string' ? args.agentId.trim() : '';
     if (!id) return toolError('agentId required — take it from fleet_status.');
-    const agent = deps.store.getAgent(id);
+    const agent = deps.store.agents.getAgent(id);
     if (!agent) return toolError(`No agent "${id}". Call fleet_status for the ones that are running.`);
     const wanted =
       typeof args.chars === 'number' && Number.isFinite(args.chars) ? Math.floor(args.chars) : TRANSCRIPT_TAIL;
     const tail = Math.min(Math.max(wanted, 200), 100_000);
-    const full = deps.store.getTranscript(id);
-    const open = deps.store.listOpenEscalations().filter((e) => e.agentId === id);
+    const full = deps.store.transcripts.getTranscript(id);
+    const open = deps.store.escalations.listOpenEscalations().filter((e) => e.agentId === id);
     return toolJson({
       ...describeAgent(deps, agent),
-      files: deps.store.listFiles(id).map((f) => f.path),
+      files: deps.store.agents.listFiles(id).map((f) => f.path),
       transcript: { totalChars: full.length, tailChars: Math.min(tail, full.length), tail: full.slice(-tail) },
       awaitingAnswer: open.map((e) => ({ id: e.id, prompt: e.prompt })),
       next:
@@ -471,7 +473,7 @@ export const queueControl: DesktopToolFactory = (deps) => ({
             ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
             : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
         );
-      deps.store.setProfileOverride(origin, wanted);
+      deps.store.profileOverrides.setProfileOverride(origin, wanted);
       priced = { origin, profile: wanted };
     }
 
@@ -481,13 +483,13 @@ export const queueControl: DesktopToolFactory = (deps) => ({
         return toolError('order must be an array of origin strings.');
       const origins = (args.order as string[]).map((o) => o.trim()).filter((o) => o !== '');
       if (new Set(origins).size !== origins.length) return toolError('order must not name the same origin twice.');
-      deps.store.setPriorityOverrides(origins);
+      deps.store.priority.setPriorityOverrides(origins);
       pinned = origins;
     }
 
     let cancelled: { id: string; title: string } | null = null;
     if (cancel) {
-      const job = deps.store.cancelJob(cancel);
+      const job = deps.store.jobs.cancelJob(cancel);
       if (!job)
         return toolError(
           `Job "${cancel}" is not queued — it has already run, been cancelled, or never existed. Nothing was ` +
@@ -571,7 +573,7 @@ export const goalControl: DesktopToolFactory = (deps) => ({
 
     let priority: boolean | null = null;
     if (wantsPriority) {
-      deps.store.setGoalPriority(issueConclusionOrigin(ref.issue), args.priority as boolean);
+      deps.store.priority.setGoalPriority(issueConclusionOrigin(ref.issue), args.priority as boolean);
       priority = args.priority as boolean;
     }
 
@@ -652,7 +654,7 @@ export const humanTaskSettle: DesktopToolFactory = (deps) => ({
     const status = args.status;
     if (status !== 'done' && status !== 'declined') return toolError('status must be "done" or "declined".');
 
-    const existing = deps.store.getHumanTask(id);
+    const existing = deps.store.humanTasks.getHumanTask(id);
     if (!existing)
       return toolError(
         `No human task "${id}". Call attention_read for what is actually open — an escalation id is answered ` +

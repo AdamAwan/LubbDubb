@@ -1,5 +1,6 @@
 import { exec } from 'node:child_process';
 import { parseHealthReport, unreadable, type EnvironmentHealthReport } from './health.js';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/24-environments.md
 
@@ -46,9 +47,4 @@ function failure(err: ExecFailure, stderr: string): string {
     return `the health check was killed after ${err.signal ?? 'timeout'}`;
   const why = firstLine(stderr);
   return `the health check exited ${String(err.code ?? 'unknown')}: ${why ?? err.message}`;
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }

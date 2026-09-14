@@ -11,8 +11,9 @@ import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
-import type { Issue, IssueDelivery, Plan, Task, ValidationCheck } from '../src/types.js';
+import { loadConfig } from '../src/config/config.js';
+import type { Issue, IssueAppraisal, IssueDelivery, Plan, Task, ValidationCheck } from '../src/types.js';
+import { goalFingerprint } from '../src/intake/appraisal.js';
 import { gitRepo } from './support/gitRepo.js';
 import { pastTheFunnel } from './support/plans.js';
 
@@ -58,6 +59,29 @@ function priorWork(): Task {
     status: 'done',
     agentId: null,
     createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function workableAppraisal(): IssueAppraisal {
+  const i = issue();
+  return {
+    originRef: 'issue:12',
+    verdict: 'workable',
+    summary: 'There is a goal here.',
+    missing: [],
+    goalRef: goalFingerprint(i.title, i.body),
+    by: 'appraiser',
+    proposedProfile: null,
+    profileAnsweredAt: null,
+    proposedParent: null,
+    parentSettledAt: null,
+    proposedAreaPath: null,
+    areaPathSettledAt: null,
+    agentId: null,
+    taskId: null,
+    commentRef: null,
+    decidedAt: NOW,
     updatedAt: NOW,
   };
 }
@@ -146,6 +170,7 @@ test('every read-only rule asks for the same shape, and none keeps a private arr
   const assess = await new RuleDispatcher().decide(
     ctx({ tasks: [priorWork()], plans: [], recentDecisions: pastTheFunnel(12) }),
   );
+  const planner = await new RuleDispatcher().decide(ctx({ appraisals: [workableAppraisal()] }));
   const validate = await new RuleDispatcher().decide(
     ctx({ plans: [plan()], deliveries: [delivered()], validationChecks: [handedOverCheck()] }),
   );
@@ -162,6 +187,7 @@ test('every read-only rule asks for the same shape, and none keeps a private arr
 
   for (const [origin, actions] of [
     ['issue:12:appraisal', appraisal.actions],
+    ['issue:12:plan', planner.actions],
     ['issue:12:assess', assess.actions],
     ['issue:12:validate:csv-opens', validate.actions],
     ['issue:12:validate-failure:csv-opens', failed.actions],
@@ -240,7 +266,7 @@ function manager(repo: string, size = 4, held: (name: string) => boolean = () =>
 
 function warmableRepo(): string {
   const repo = gitRepo('lubbdubb-readonly-repo-');
-  writeFileSync(join(repo, '.gitignore'), 'deps/\n');
+  writeFileSync(join(repo, '.gitignore'), 'deps/\n.lubbdubb/\n');
   git(repo, ['add', '.']);
   git(repo, ['commit', '-q', '-m', 'ignore deps']);
   return repo;
@@ -316,6 +342,25 @@ test('a read-only slot is warm for the next read-only checkout of the same ref',
   assert.equal(second, first, 'the same slot, rather than one more cold checkout');
   assert.ok(existsSync(join(second, 'deps', 'installed.txt')), 'the build state answers the same source');
   assert.ok(!existsSync(join(second, 'scratch.txt')), "but the last agent's scratch is not this one's");
+});
+
+test("a warm slot keeps the source's build state and never the harness's own artefacts", async () => {
+  const repo = warmableRepo();
+  const wt = manager(repo);
+
+  const first = await wt.ensureReadOnly('plan/issue/1', 'main');
+  install(first, 'from the planner');
+  mkdirSync(join(first, '.lubbdubb'), { recursive: true });
+  writeFileSync(join(first, '.lubbdubb', 'plan.json'), '{"version":1,"parts":[]}');
+  await wt.remove('plan/issue/1');
+
+  const second = await wt.ensureReadOnly('plan/issue/2', 'main');
+  assert.equal(second, first, 'the same slot, warm');
+  assert.ok(existsSync(join(second, 'deps', 'installed.txt')), 'the build state answers the same source');
+  assert.ok(
+    !existsSync(join(second, '.lubbdubb', 'plan.json')),
+    "an ignored plan.json surviving the hand-over is the previous goal's plan, in front of this one",
+  );
 });
 
 test("a branch handed a read-only slot is wiped — it is another source's output", async () => {

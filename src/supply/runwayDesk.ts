@@ -20,18 +20,18 @@ export class RunwayDesk {
    * rather than of anything passed between them.
    */
   run(input: DeskInput): RunwayReading {
-    const existing = this.store.listHumanTasksOfKind('supply');
+    const existing = this.store.humanTasks.listHumanTasksOfKind('supply');
     const reading = readRunway({
       ...input,
       policy: this.policy,
-      runs: this.store.listIssueRuns(),
-      humanTasks: this.store.listAllHumanTasks(),
-      escalations: this.store.listEscalationSpans(),
+      runs: this.store.floor.listIssueRuns(),
+      humanTasks: this.store.humanTasks.listAllHumanTasks(),
+      escalations: this.store.escalations.listEscalationSpans(),
       standing: existing.some((t) => t.status === 'open'),
     });
     for (const step of runwayPass({ reading, existing, enabled: this.policy.enabled })) {
       if (step.kind === 'file')
-        this.store.recordHumanTask({
+        this.store.humanTasks.recordHumanTask({
           title: step.title,
           detail: step.detail,
           originRef: null,
@@ -39,8 +39,8 @@ export class RunwayDesk {
           agentId: null,
           taskId: null,
         });
-      else if (step.kind === 'reopen') this.store.reopenHumanTask(step.taskId, step.detail);
-      else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
+      else if (step.kind === 'reopen') this.store.humanTasks.reopenHumanTask(step.taskId, step.detail);
+      else this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
     }
     return reading;
   }

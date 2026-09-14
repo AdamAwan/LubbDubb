@@ -21,7 +21,7 @@ import type {
   PlanStatus,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
@@ -101,8 +101,8 @@ export class PlanStore {
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO plans (id, origin_ref, title, status, diagnosis, approach, reason, risks, out_of_scope,
            alternatives, open_questions, verification, evidence, document, status_comment_ref,
            created_at, updated_at)
@@ -122,7 +122,7 @@ export class PlanStore {
 
   recordPlanRevision(planId: string, input: { narrative: PlanNarrative; parts: PlanPartInput[] }): PlanRevision {
     const at = this.ctx.now();
-    const row = this.ctx.db.prepare(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
+    const row = this.ctx.prep(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
       | { seq: number | null }
       | undefined;
     const revision: PlanRevision = {
@@ -133,8 +133,8 @@ export class PlanStore {
       parts: input.parts,
       at,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO plan_revisions (id, plan_id, seq, verdict, narrative, parts, at)
          VALUES (@id, @planId, @seq, @verdict, @narrative, @parts, @at)`,
       )
@@ -148,8 +148,8 @@ export class PlanStore {
   }
 
   listPlanRevisions(planId: string): PlanRevision[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
       .all(planId) as PlanRevisionRow[];
     return rows.map(rowToRevision);
   }
@@ -160,7 +160,7 @@ export class PlanStore {
   ): PlanCaveatAnswer[] {
     const at = this.ctx.now();
     const written = answers.map((a) => ({ id: `pca_${nanoid(10)}`, planId, ...a, at }));
-    const insert = this.ctx.db.prepare(
+    const insert = this.ctx.prep(
       `INSERT INTO plan_caveat_answers (id, plan_id, caveat_id, label, answer, at)
        VALUES (@id, @planId, @caveatId, @label, @answer, @at)`,
     );
@@ -169,15 +169,15 @@ export class PlanStore {
   }
 
   listPlanCaveatAnswers(planId: string): PlanCaveatAnswer[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_caveat_answers WHERE plan_id=? ORDER BY at ASC, id ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_caveat_answers WHERE plan_id=? ORDER BY at ASC, id ASC`)
       .all(planId) as PlanCaveatAnswerRow[];
     return rows.map(rowToCaveatAnswer);
   }
 
   listAllPlanCaveatAnswers(): PlanCaveatAnswer[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_caveat_answers ORDER BY at ASC, id ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_caveat_answers ORDER BY at ASC, id ASC`)
       .all() as PlanCaveatAnswerRow[];
     return rows.map(rowToCaveatAnswer);
   }
@@ -199,8 +199,8 @@ export class PlanStore {
       createdAt: at,
       decidedAt: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO plan_amendments (id, plan_id, origin_ref, document, note, author, author_ref, status,
            resolution, created_at, decided_at)
          VALUES (@id, @planId, @originRef, @document, @note, @author, @authorRef, @status, @resolution,
@@ -211,20 +211,27 @@ export class PlanStore {
   }
 
   getPlanAmendment(id: string): PlanAmendment | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
     return row ? rowToAmendment(row) : null;
   }
 
   listPlanAmendments(planId: string): PlanAmendment[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_amendments WHERE plan_id=? ORDER BY created_at DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_amendments WHERE plan_id=? ORDER BY created_at DESC`)
       .all(planId) as PlanAmendmentRow[];
     return rows.map(rowToAmendment);
   }
 
+  listAllPlanAmendments(): PlanAmendment[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_amendments ORDER BY plan_id ASC, created_at DESC`)
+      .all() as PlanAmendmentRow[];
+    return rows.map(rowToAmendment);
+  }
+
   listPendingPlanAmendments(): PlanAmendment[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_amendments WHERE status='pending' ORDER BY created_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_amendments WHERE status='pending' ORDER BY created_at ASC`)
       .all() as PlanAmendmentRow[];
     return rows.map(rowToAmendment);
   }
@@ -234,37 +241,31 @@ export class PlanStore {
     status: Exclude<PlanAmendmentStatus, 'pending'>,
     resolution: string,
   ): PlanAmendment | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
     if (!row || row.status !== 'pending') return null;
     const at = this.ctx.now();
-    this.ctx.db
-      .prepare(`UPDATE plan_amendments SET status=?, resolution=?, decided_at=? WHERE id=? AND status='pending'`)
+    this.ctx
+      .prep(`UPDATE plan_amendments SET status=?, resolution=?, decided_at=? WHERE id=? AND status='pending'`)
       .run(status, resolution, at, id);
     return { ...rowToAmendment(row), status, resolution, decidedAt: at };
   }
 
   getPlan(id: string): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     return row ? rowToPlan(row) : null;
   }
 
   planLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, title FROM plans WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      title: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.title]));
+    return labelsById(this.ctx, 'plans', ids);
   }
 
   getPlanByOrigin(originRef: string): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE origin_ref=?`).get(originRef) as PlanRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plans WHERE origin_ref=?`).get(originRef) as PlanRow | undefined;
     return row ? rowToPlan(row) : null;
   }
 
   listPlans(): Plan[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM plans ORDER BY created_at ASC`).all() as PlanRow[];
+    const rows = this.ctx.prep(`SELECT * FROM plans ORDER BY created_at ASC`).all() as PlanRow[];
     return rows.map(rowToPlan);
   }
 
@@ -304,7 +305,7 @@ export class PlanStore {
       };
       return part;
     });
-    const stmt = this.ctx.db.prepare(
+    const stmt = this.ctx.prep(
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, atoms, rationale, acceptance,
          acceptance_met, size, expected_kind, profile, coverage,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
@@ -336,8 +337,8 @@ export class PlanStore {
   }
 
   listPlanParts(planId: string): PlanPart[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM plan_parts WHERE plan_id=? ORDER BY seq ASC, slug ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_parts WHERE plan_id=? ORDER BY seq ASC, slug ASC`)
       .all(planId) as PlanPartRow[];
     return rows.map(rowToPlanPart);
   }
@@ -345,7 +346,7 @@ export class PlanStore {
   upsertPlanAtoms(planId: string, atoms: PlanAtomInput[]): PlanAtom[] {
     const ts = this.ctx.now();
     const rows: PlanAtom[] = atoms.map((atom) => ({ id: `${planId}:${atom.slug}`, planId, ...atom }));
-    const stmt = this.ctx.db.prepare(
+    const stmt = this.ctx.prep(
       `INSERT INTO plan_atoms (id, plan_id, slug, seq, title, intent, touches, acceptance, depends_on, rejected,
          created_at, updated_at)
        VALUES (@id, @planId, @slug, @seq, @title, @intent, @touches, @acceptance, @dependsOn, @rejected, @at, @at)
@@ -376,13 +377,20 @@ export class PlanStore {
     return rows;
   }
 
+  listPlanAtoms(planId: string): PlanAtom[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM plan_atoms WHERE plan_id=? ORDER BY seq ASC`)
+      .all(planId) as PlanAtomRow[];
+    return rows.map(rowToPlanAtom);
+  }
+
   listAllPlanAtoms(): PlanAtom[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM plan_atoms ORDER BY plan_id ASC, seq ASC`).all() as PlanAtomRow[];
+    const rows = this.ctx.prep(`SELECT * FROM plan_atoms ORDER BY plan_id ASC, seq ASC`).all() as PlanAtomRow[];
     return rows.map(rowToPlanAtom);
   }
 
   listAllPlanParts(): PlanPart[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM plan_parts ORDER BY plan_id ASC, seq ASC`).all() as PlanPartRow[];
+    const rows = this.ctx.prep(`SELECT * FROM plan_parts ORDER BY plan_id ASC, seq ASC`).all() as PlanPartRow[];
     return rows.map(rowToPlanPart);
   }
 
@@ -396,15 +404,15 @@ export class PlanStore {
       blockedReason?: string | null;
     },
   ): PlanPart | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
     const next: PlanPart = {
       ...rowToPlanPart(row),
       ...patch,
       updatedAt: this.ctx.now(),
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE plan_parts SET status=@status, branch=@branch, pr_number=@prNumber, task_id=@taskId,
            blocked_reason=@blockedReason, blocked_by=@blockedBy, updated_at=@updatedAt WHERE id=@id`,
       )
@@ -422,20 +430,20 @@ export class PlanStore {
   }
 
   setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
     const updatedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(`UPDATE plan_parts SET acceptance_met=?, updated_at=? WHERE id=?`)
+    this.ctx
+      .prep(`UPDATE plan_parts SET acceptance_met=?, updated_at=? WHERE id=?`)
       .run(JSON.stringify(criteria), updatedAt, id);
     return { ...rowToPlanPart(row), acceptanceMet: criteria, updatedAt };
   }
 
   setPartProfile(id: string, profile: string | null): PlanPart | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
     const updatedAt = this.ctx.now();
-    this.ctx.db.prepare(`UPDATE plan_parts SET profile=?, updated_at=? WHERE id=?`).run(profile, updatedAt, id);
+    this.ctx.prep(`UPDATE plan_parts SET profile=?, updated_at=? WHERE id=?`).run(profile, updatedAt, id);
     return { ...rowToPlanPart(row), profile, updatedAt };
   }
 
@@ -447,50 +455,48 @@ export class PlanStore {
     id: string,
     outcome: { kind: PartOutcomeKind; ref: string | null; summary: string },
   ): PlanPart | null {
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE plan_parts SET status='concluded', outcome_kind=?, outcome_ref=?, outcome_summary=?, updated_at=?
          WHERE id=? AND status IN ('dispatched','in_review')`,
       )
       .run(outcome.kind, outcome.ref, outcome.summary, this.ctx.now(), id);
     if (result.changes === 0) return null;
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     return row ? rowToPlanPart(row) : null;
   }
 
   concludeHumanPart(id: string, summary: string): PlanPart | null {
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE plan_parts SET status='concluded', outcome_kind='human', outcome_summary=?, blocked_reason=NULL,
            blocked_by=NULL, updated_at=? WHERE id=? AND status IN ('pending','ready','blocked')`,
       )
       .run(summary, this.ctx.now(), id);
     if (result.changes === 0) return null;
-    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     return row ? rowToPlanPart(row) : null;
   }
 
   setPlanStatus(id: string, status: PlanStatus, reason?: string): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     if (!row) return null;
     const updatedAt = this.ctx.now();
     const next = reason ?? row.reason;
-    this.ctx.db
-      .prepare(`UPDATE plans SET status=?, reason=?, updated_at=? WHERE id=?`)
-      .run(status, next, updatedAt, id);
+    this.ctx.prep(`UPDATE plans SET status=?, reason=?, updated_at=? WHERE id=?`).run(status, next, updatedAt, id);
     return { ...rowToPlan(row), status, reason: next, updatedAt };
   }
 
   setPlanStatusComment(id: string, ref: string): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     if (!row) return null;
     const updatedAt = this.ctx.now();
-    this.ctx.db.prepare(`UPDATE plans SET status_comment_ref=?, updated_at=? WHERE id=?`).run(ref, updatedAt, id);
+    this.ctx.prep(`UPDATE plans SET status_comment_ref=?, updated_at=? WHERE id=?`).run(ref, updatedAt, id);
     return { ...rowToPlan(row), statusCommentRef: ref, updatedAt };
   }
 
   rollUpPlanStatus(planId: string): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
     if (!row) return null;
     const plan = rowToPlan(row);
     if (plan.status !== 'active' && plan.status !== 'complete') return null;

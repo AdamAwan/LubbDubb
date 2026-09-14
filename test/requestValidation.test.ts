@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -170,12 +170,12 @@ test('the shortfall route keeps an absent cause and an explicit null apart', asy
   const recorded = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: {} });
   assert.equal(recorded.statusCode, 200);
   assert.equal(recorded.json().shortfall.cause, null);
-  assert.ok(system.store.getShortfall('issue:12'));
+  assert.ok(system.store.verdicts.getShortfall('issue:12'));
 
   const cleared = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: { cause: null } });
   assert.equal(cleared.statusCode, 200);
   assert.equal(cleared.json().shortfall, null);
-  assert.equal(system.store.getShortfall('issue:12'), null);
+  assert.equal(system.store.verdicts.getShortfall('issue:12'), null);
 
   const noSlug = await app.inject({ method: 'POST', url: '/api/issues/12/shortfall', payload: { cause: 'part' } });
   assert.equal(noSlug.statusCode, 400);

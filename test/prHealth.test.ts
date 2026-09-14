@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ciNeedsAttention, isStackedPr, prHealth, isConflicted, needsBaseUpdate } from '../src/prHealth.js';
+import { ciNeedsAttention, isStackedPr, prHealth, isConflicted, needsBaseUpdate } from '../src/pr/prHealth.js';
 import type { PullRequest } from '../src/types.js';
 
 function pr(over: Partial<PullRequest> = {}): PullRequest {

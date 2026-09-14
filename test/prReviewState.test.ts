@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -109,7 +109,7 @@ test('the snapshot ships the reading on the pull request’s row', async () => {
   });
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'A change', branch: 'feature-7' });
   await system.harness.runCycle('manual');
-  system.store.recordPrReview({ ...REVIEW, verdict: 'clear', findings: [] });
+  system.store.prReviews.recordPrReview({ ...REVIEW, verdict: 'clear', findings: [] });
 
   const pr = buildStateSnapshot(system).world.pullRequests.find((p) => p.number === 7);
   assert.equal(pr?.review?.status, 'clear');

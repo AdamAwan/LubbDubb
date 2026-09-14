@@ -156,7 +156,7 @@ export class LocalRunner extends EventEmitter {
   }
 
   current(): LocalRun | null {
-    return this.deps.store.currentLocalRun();
+    return this.deps.store.localRuns.currentLocalRun();
   }
 
   output(): string[] {
@@ -195,7 +195,7 @@ export class LocalRunner extends EventEmitter {
       };
     const ref = at ?? choices.target ?? this.deps.defaultBranch;
 
-    const stopped = this.deps.store.liveLocalRun() !== null;
+    const stopped = this.deps.store.localRuns.liveLocalRun() !== null;
     await this.stop('superseded by a run of another goal');
 
     let checkout: { dir: string; commit: string };
@@ -212,7 +212,7 @@ export class LocalRunner extends EventEmitter {
 
     const { dir, commit } = checkout;
     const url = this.deps.policy().url.trim();
-    const run = this.deps.store.beginLocalRun({ originRef, ref, dir, commit, url: url === '' ? null : url });
+    const run = this.deps.store.localRuns.beginLocalRun({ originRef, ref, dir, commit, url: url === '' ? null : url });
     this.runId = run.id;
     this.inFlight = 'start';
     this.tail = [];
@@ -231,17 +231,17 @@ export class LocalRunner extends EventEmitter {
       this.settle(run.id, 'failed', `Could not start a session: ${(err as Error).message}`);
       return { ok: false, error: `Could not start a session: ${(err as Error).message}` };
     }
-    this.deps.store.markLocalRunPid(run.id, session.pid);
+    this.deps.store.localRuns.markLocalRunPid(run.id, session.pid);
     session.send(`${instruction}\n\n${RUN_RULES}`);
     this.emit('changed');
-    return { ok: true, run: this.deps.store.currentLocalRun() ?? run };
+    return { ok: true, run: this.deps.store.localRuns.currentLocalRun() ?? run };
   }
 
   resumeInterrupted():
     | { outcome: 'nothing' }
     | { outcome: 'resumed'; run: LocalRun }
     | { outcome: 'settled'; run: LocalRun; reason: string } {
-    const live = this.deps.store.liveLocalRun();
+    const live = this.deps.store.localRuns.liveLocalRun();
     if (live === null) return { outcome: 'nothing' };
     const give = (reason: string): { outcome: 'settled'; run: LocalRun; reason: string } => {
       this.settle(live.id, 'stopped', `the harness restarted — ${reason}`);
@@ -265,8 +265,12 @@ export class LocalRunner extends EventEmitter {
     const stale = this.staleness(live);
     if (stale !== null) return give(stale);
 
-    this.deps.store.setLocalRunStatus(live.id, 'starting', 'the harness restarted; this run is being brought back');
-    this.deps.store.markLocalRunInterrupted(live.id, null);
+    this.deps.store.localRuns.setLocalRunStatus(
+      live.id,
+      'starting',
+      'the harness restarted; this run is being brought back',
+    );
+    this.deps.store.localRuns.markLocalRunInterrupted(live.id, null);
     this.runId = live.id;
     this.inFlight = 'start';
     this.tail = [];
@@ -285,12 +289,12 @@ export class LocalRunner extends EventEmitter {
       this.settle(live.id, 'failed', `could not start a session to bring it back: ${(err as Error).message}`);
       return { outcome: 'settled', run: live, reason: `a session could not be started: ${(err as Error).message}` };
     }
-    this.deps.store.markLocalRunPid(live.id, session.pid);
+    this.deps.store.localRuns.markLocalRunPid(live.id, session.pid);
     session.send(`${instruction}
 
 ${RESUME_RULES}`);
     this.emit('changed');
-    return { outcome: 'resumed', run: this.deps.store.currentLocalRun() ?? live };
+    return { outcome: 'resumed', run: this.deps.store.localRuns.currentLocalRun() ?? live };
   }
 
   private staleness(live: LocalRun): string | null {
@@ -319,13 +323,13 @@ ${RESUME_RULES}`);
 
   noteAlive(): void {
     if (this.runId === null) return;
-    this.deps.store.markLocalRunSeen(this.runId, new Date((this.deps.now ?? Date.now)()).toISOString());
+    this.deps.store.localRuns.markLocalRunSeen(this.runId, new Date((this.deps.now ?? Date.now)()).toISOString());
   }
 
   send(text: string): { ok: true } | { ok: false; error: string } {
     const message = text.trim();
     if (message === '') return { ok: false, error: 'Nothing to send.' };
-    const live = this.deps.store.liveLocalRun();
+    const live = this.deps.store.localRuns.liveLocalRun();
     if (live === null) return { ok: false, error: 'Nothing is running locally, so there is no session to tell.' };
     if (live.status === 'stopping' || this.stopping !== null)
       return { ok: false, error: 'It is being stopped — there is nothing to tell it now.' };
@@ -354,7 +358,7 @@ ${RESUME_RULES}`);
   async refresh(): Promise<
     { ok: true; run: LocalRun; moved: { from: string | null; to: string } } | { ok: false; error: string }
   > {
-    const live = this.deps.store.liveLocalRun();
+    const live = this.deps.store.localRuns.liveLocalRun();
     if (live === null) return { ok: false, error: 'Nothing is running locally, so there is nothing to refresh.' };
     if (live.status === 'stopping' || this.stopping !== null)
       return { ok: false, error: 'It is being stopped — there is nothing to refresh.' };
@@ -385,22 +389,22 @@ ${RESUME_RULES}`);
           'The tree may be part-reset — stop the run and start it again.',
       };
     }
-    const still = this.deps.store.liveLocalRun();
+    const still = this.deps.store.localRuns.liveLocalRun();
     if (still === null || still.id !== live.id || still.status !== 'running' || this.stopping !== null)
       return { ok: false, error: 'The run was stopped while the checkout was being moved.' };
 
-    this.deps.store.setLocalRunCommit(live.id, next);
+    this.deps.store.localRuns.setLocalRunCommit(live.id, next);
     const moved = { from: live.commit, to: next };
     const session = this.session;
     if (session === null) {
-      this.deps.store.setLocalRunStatus(
+      this.deps.store.localRuns.setLocalRunStatus(
         live.id,
         'running',
         `the checkout moved to ${next.slice(0, 7)}, but nothing holds this environment so nothing was told to ` +
           'restart — stop it and start it again to see the change',
       );
       this.emit('changed');
-      return { ok: true, run: this.deps.store.currentLocalRun() ?? live, moved };
+      return { ok: true, run: this.deps.store.localRuns.currentLocalRun() ?? live, moved };
     }
     const instruction = this.deps.policy().refreshInstruction.trim();
     this.stage = null;
@@ -409,12 +413,12 @@ ${RESUME_RULES}`);
       `${instruction}${instruction === '' ? '' : '\n\n'}${refreshRules(live.ref, live.commit, next, instruction === '')}`,
     );
     this.emit('changed');
-    return { ok: true, run: this.deps.store.currentLocalRun() ?? live, moved };
+    return { ok: true, run: this.deps.store.localRuns.currentLocalRun() ?? live, moved };
   }
 
   async stop(note = 'stopped from the cockpit'): Promise<void> {
     if (this.stopping !== null) return this.stopping;
-    const live = this.deps.store.liveLocalRun();
+    const live = this.deps.store.localRuns.liveLocalRun();
     if (live === null) {
       this.stopSession();
       return;
@@ -426,7 +430,7 @@ ${RESUME_RULES}`);
   }
 
   stopFast(note = 'the harness shut down'): void {
-    const live = this.deps.store.liveLocalRun();
+    const live = this.deps.store.localRuns.liveLocalRun();
     this.runId = null;
     this.inFlight = null;
     this.stopSession();
@@ -440,19 +444,22 @@ ${RESUME_RULES}`);
             : `${note} — the stop instruction was not run on the way down, so whatever it started may still be running.`,
         );
       else {
-        this.deps.store.setLocalRunStatus(
+        this.deps.store.localRuns.setLocalRunStatus(
           live.id,
           live.status,
           `${note} — it is left standing to be brought back on the next boot.`,
         );
-        this.deps.store.markLocalRunInterrupted(live.id, new Date((this.deps.now ?? Date.now)()).toISOString());
+        this.deps.store.localRuns.markLocalRunInterrupted(
+          live.id,
+          new Date((this.deps.now ?? Date.now)()).toISOString(),
+        );
       }
     }
     this.emit('changed');
   }
 
   private async runStop(live: LocalRun, note: string): Promise<void> {
-    this.deps.store.setLocalRunStatus(live.id, 'stopping');
+    this.deps.store.localRuns.setLocalRunStatus(live.id, 'stopping');
     this.runId = null;
     this.inFlight = 'stop';
     this.stage = null;
@@ -562,7 +569,7 @@ ${RESUME_RULES}`);
     session.on('usage', (usage: AgentUsage) => {
       const since = (now: number | null, before: number | null): number | null =>
         now === null ? null : Math.max(0, now - (before ?? 0));
-      this.deps.store.addLocalRunUsage(runId, {
+      this.deps.store.localRuns.addLocalRunUsage(runId, {
         costUsd: since(usage.costUsd, last?.costUsd ?? null),
         inputTokens: since(usage.inputTokens, last?.inputTokens ?? null),
         outputTokens: since(usage.outputTokens, last?.outputTokens ?? null),
@@ -591,7 +598,7 @@ ${RESUME_RULES}`);
     this.absorb(session, id);
     const up = (): void => {
       if (this.runId !== id) return;
-      this.deps.store.setLocalRunStatus(id, 'running');
+      this.deps.store.localRuns.setLocalRunStatus(id, 'running');
       this.stage = null;
       this.inFlight = null;
       this.emit('changed');
@@ -614,14 +621,14 @@ ${RESUME_RULES}`);
     });
     session.on('exit', (code: number) => {
       if (this.runId !== id) return;
-      const live = this.deps.store.liveLocalRun();
+      const live = this.deps.store.localRuns.liveLocalRun();
       if (!live || live.id !== id) return;
       this.settle(id, 'failed', `the session holding the environment exited (${code})`);
     });
   }
 
   private settle(id: string, status: 'stopped' | 'failed', note: string): void {
-    this.deps.store.setLocalRunStatus(id, status, note);
+    this.deps.store.localRuns.setLocalRunStatus(id, status, note);
     this.stage = null;
     this.inFlight = null;
     if (this.runId === id) this.runId = null;

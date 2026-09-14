@@ -47,7 +47,7 @@ function queued(upcoming: QueueItem[] | undefined, origin: string): QueueItem | 
 }
 
 function linksOn(): RuleDispatcher {
-  return new RuleDispatcher({ sequencing: 'links' });
+  return new RuleDispatcher({ pickup: { sequencing: 'links' } });
 }
 
 test('a provider that reports no dependencies contributes no edges', () => {

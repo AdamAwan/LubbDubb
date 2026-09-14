@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { DEEP_MERGED_BLOCKS, loadConfig, loadDeploymentConfig } from '../src/config.js';
-import { CONFIG_FIELDS } from '../src/configFields.js';
+import { DEEP_MERGED_BLOCKS, loadConfig, loadDeploymentConfig } from '../src/config/config.js';
+import { CONFIG_FIELDS } from '../src/config/configFields.js';
 import { ticketAssignee } from '../src/ticketAssignment.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
