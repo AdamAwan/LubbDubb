@@ -781,10 +781,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     if (current.some((t) => sameTag(t, tag)) === present) return;
     const kept = current.filter((t) => !sameTag(t, tag));
     const tags = present ? [...kept, tag] : kept;
-    const patch = [
-      { op: 'remove', path: '/fields/System.Tags' },
-      { op: 'add', path: '/fields/System.Tags', value: tags.join('; ') },
-    ];
+    const patch = [tagWriteOp(current, tags)];
     const updated = await this.request<{ fields?: Record<string, unknown> }>(
       this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`),
       {
@@ -900,6 +897,13 @@ function chunkIds(ids: number[], size: number): number[][] {
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
   return chunks;
+}
+
+function tagWriteOp(current: readonly string[], tags: readonly string[]): { op: string; path: string; value?: string } {
+  const path = '/fields/System.Tags';
+  if (tags.length === 0) return { op: 'remove', path };
+  if (current.length === 0) return { op: 'add', path, value: tags.join('; ') };
+  return { op: 'replace', path, value: tags.join('; ') };
 }
 
 function sameTag(a: string, b: string): boolean {
