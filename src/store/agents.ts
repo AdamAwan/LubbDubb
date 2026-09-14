@@ -31,6 +31,10 @@ export const AGENT_COLUMNS: ColumnMigrations = {
   },
 };
 
+const LIVE: Agent['status'][] = ['starting', 'running', 'waiting'];
+
+const LIVE_SQL = `(${LIVE.map((s) => `'${s}'`).join(', ')})`;
+
 export class AgentStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -62,8 +66,8 @@ export class AgentStore {
       resumedAt: null,
       resumeAttempts: 0,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO agents (id, task_id, status, cwd, pid, waiting_reason, session_id, started_at, ended_at)
          VALUES (@id, @taskId, @status, @cwd, @pid, @waitingReason, @sessionId, @startedAt, @endedAt)`,
       )
@@ -75,32 +79,30 @@ export class AgentStore {
     const existing = this.getAgent(id);
     if (!existing) throw new Error(`Agent ${id} not found`);
     const next = { ...existing, ...patch };
-    this.ctx.db
-      .prepare(
-        `UPDATE agents SET status=@status, pid=@pid, waiting_reason=@waitingReason, ended_at=@endedAt WHERE id=@id`,
-      )
+    this.ctx
+      .prep(`UPDATE agents SET status=@status, pid=@pid, waiting_reason=@waitingReason, ended_at=@endedAt WHERE id=@id`)
       .run({ id, status: next.status, pid: next.pid, waitingReason: next.waitingReason, endedAt: next.endedAt });
   }
 
   setAgentResumed(id: string, at: string | null): void {
-    this.ctx.db.prepare(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
+    this.ctx.prep(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
   }
 
   countAgentResumeAttempt(id: string): number {
-    const row = this.ctx.db
-      .prepare(`UPDATE agents SET resume_attempts=COALESCE(resume_attempts,0)+1 WHERE id=? RETURNING resume_attempts`)
+    const row = this.ctx
+      .prep(`UPDATE agents SET resume_attempts=COALESCE(resume_attempts,0)+1 WHERE id=? RETURNING resume_attempts`)
       .get(id) as { resume_attempts: number } | undefined;
     if (!row) throw new Error(`Agent ${id} not found`);
     return row.resume_attempts;
   }
 
   getAgent(id: string): Agent | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM agents WHERE id=?`).get(id) as AgentRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM agents WHERE id=?`).get(id) as AgentRow | undefined;
     return row ? rowToAgent(row) : null;
   }
 
   listAgents(): Agent[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM agents ORDER BY started_at DESC`).all() as AgentRow[];
+    const rows = this.ctx.prep(`SELECT * FROM agents ORDER BY started_at DESC, rowid ASC`).all() as AgentRow[];
     return rows.map(rowToAgent);
   }
 
@@ -115,8 +117,8 @@ export class AgentStore {
       cacheCreationTokens: usage.cacheCreationTokens ?? existing.cacheCreationTokens,
       numTurns: usage.numTurns ?? existing.numTurns,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens,
                 cache_read_tokens=@cacheReadTokens, cache_creation_tokens=@cacheCreationTokens,
                 num_turns=@numTurns WHERE id=@id`,
@@ -124,29 +126,27 @@ export class AgentStore {
       .run({ id, ...next });
     const delta = Math.max(0, (usage.costUsd ?? 0) - (existing.costUsd ?? 0));
     if (delta > 0) {
-      this.ctx.db
-        .prepare(`INSERT INTO usage_events (agent_id, cost_usd, at) VALUES (?,?,?)`)
-        .run(id, delta, this.ctx.now());
+      this.ctx.prep(`INSERT INTO usage_events (agent_id, cost_usd, at) VALUES (?,?,?)`).run(id, delta, this.ctx.now());
     }
   }
 
   recordAgentNote(id: string, note: string): string {
     const at = this.ctx.now();
-    const changed = this.ctx.db.prepare(`UPDATE agents SET note=?, noted_at=? WHERE id=?`).run(note, at, id).changes;
+    const changed = this.ctx.prep(`UPDATE agents SET note=?, noted_at=? WHERE id=?`).run(note, at, id).changes;
     if (changed === 0) throw new Error(`Agent ${id} not found`);
     return at;
   }
 
   sumUsageCostSince(sinceIso: string): number {
-    const row = this.ctx.db
-      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
+    const row = this.ctx
+      .prep(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
       .get(sinceIso) as { total: number };
     return row.total;
   }
 
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT agent_id, cost_usd, at FROM usage_events WHERE at >= ? ORDER BY at`)
+    const rows = this.ctx
+      .prep(`SELECT agent_id, cost_usd, at FROM usage_events WHERE at >= ? ORDER BY at`)
       .all(sinceIso) as { agent_id: string; cost_usd: number; at: string }[];
     return rows.map((r) => ({ agentId: r.agent_id, costUsd: r.cost_usd, at: r.at }));
   }
@@ -163,17 +163,25 @@ export class AgentStore {
   }
 
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
-    return this.listAgents().filter((a) => statuses.includes(a.status));
+    if (statuses.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM agents WHERE status IN (${statuses.map(() => '?').join(', ')})
+         ORDER BY started_at DESC, rowid ASC`,
+      )
+      .all(...statuses) as AgentRow[];
+    return rows.map(rowToAgent);
   }
 
   countLiveAgents(): number {
-    return this.listAgentsByStatus('starting', 'running', 'waiting').length;
+    const row = this.ctx.prep(`SELECT COUNT(*) AS n FROM agents WHERE status IN ${LIVE_SQL}`).get() as { n: number };
+    return row.n;
   }
 
   recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {
-    const existing = this.ctx.db
-      .prepare(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`)
-      .get(agentId, input.ref) as { id: string } | undefined;
+    const existing = this.ctx.prep(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`).get(agentId, input.ref) as
+      | { id: string }
+      | undefined;
     const flag: AgentFlag = {
       id: existing?.id ?? `flag_${nanoid(10)}`,
       agentId,
@@ -182,8 +190,8 @@ export class AgentStore {
       ref: input.ref,
       createdAt: this.ctx.now(),
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO agent_flags (id, agent_id, kind, label, ref, created_at)
          VALUES (@id, @agentId, @kind, @label, @ref, @createdAt)
          ON CONFLICT(agent_id, ref) DO UPDATE SET kind=excluded.kind, label=excluded.label, created_at=excluded.created_at`,
@@ -193,27 +201,27 @@ export class AgentStore {
   }
 
   getFlag(id: string): AgentFlag | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM agent_flags WHERE id=?`).get(id) as AgentFlagRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM agent_flags WHERE id=?`).get(id) as AgentFlagRow | undefined;
     return row ? rowToFlag(row) : null;
   }
 
   listFlags(agentId: string): AgentFlag[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM agent_flags WHERE agent_id=? ORDER BY created_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM agent_flags WHERE agent_id=? ORDER BY created_at ASC`)
       .all(agentId) as AgentFlagRow[];
     return rows.map(rowToFlag);
   }
 
   listAllFlags(): AgentFlag[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM agent_flags ORDER BY created_at DESC, rowid DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM agent_flags ORDER BY created_at DESC, rowid DESC`)
       .all() as AgentFlagRow[];
     return rows.map(rowToFlag);
   }
 
   recordFile(agentId: string, input: AgentFileInput): AgentFile {
-    const existing = this.ctx.db
-      .prepare(`SELECT id FROM agent_files WHERE agent_id=? AND path=?`)
+    const existing = this.ctx
+      .prep(`SELECT id FROM agent_files WHERE agent_id=? AND path=?`)
       .get(agentId, input.path) as { id: string } | undefined;
     const file: AgentFile = {
       id: existing?.id ?? `file_${nanoid(10)}`,
@@ -223,8 +231,8 @@ export class AgentStore {
       promoted: input.promoted,
       createdAt: this.ctx.now(),
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO agent_files (id, agent_id, path, tool, promoted, created_at)
          VALUES (@id, @agentId, @path, @tool, @promoted, @createdAt)
          ON CONFLICT(agent_id, path) DO UPDATE SET tool=excluded.tool, promoted=excluded.promoted, created_at=excluded.created_at`,
@@ -234,15 +242,15 @@ export class AgentStore {
   }
 
   listFiles(agentId: string): AgentFile[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM agent_files WHERE agent_id=? ORDER BY created_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM agent_files WHERE agent_id=? ORDER BY created_at ASC`)
       .all(agentId) as AgentFileRow[];
     return rows.map(rowToFile);
   }
 
   listGoalFiles(goalRef: string): GoalFile[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT path, origin_ref, created_at FROM (
            SELECT f.path AS path, t.origin_ref AS origin_ref, f.created_at AS created_at,
                   ROW_NUMBER() OVER (PARTITION BY f.path ORDER BY f.created_at DESC, f.rowid DESC) AS rn

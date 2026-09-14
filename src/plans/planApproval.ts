@@ -46,14 +46,14 @@ interface PlanSettlement {
 }
 
 export function releasePlan(store: Store, planId: string, originRef: string): PlanSettlement {
-  const plan = store.getPlan(planId);
+  const plan = store.plans.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing released` };
-  const parts = liveParts(store.listPlanParts(planId));
+  const parts = liveParts(store.plans.listPlanParts(planId));
   if (parts.length === 0)
     return { ok: false, detail: `plan ${planId} for ${originRef} has no live parts — nothing to release` };
-  store.setPlanStatus(planId, 'active');
+  store.plans.setPlanStatus(planId, 'active');
   return {
     ok: true,
     detail: `released the ${parts.length}-part plan for ${originRef}; its parts are now schedulable`,
@@ -61,17 +61,17 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
 }
 
 export function refusePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
-  const plan = store.getPlan(planId);
+  const plan = store.plans.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing changed` };
 
-  const parts = store.listPlanParts(planId);
+  const parts = store.plans.listPlanParts(planId);
   const retire = partsToRetire(parts, []);
-  for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  for (const part of retire) store.plans.updatePlanPart(part.id, { status: 'retired' });
   withdrawPartAsks(store, retire, REFUSED_PART_RESOLUTION);
   const surviving = survivorsOf(parts, retire);
-  store.setPlanStatus(planId, 'planning', refusedPlanReason(plan.reason, note ?? null));
+  store.plans.setPlanStatus(planId, 'planning', refusedPlanReason(plan.reason, note ?? null));
 
   const kept =
     surviving.length === 0 ? '' : `; ${surviving.length} part(s) already in flight keep running while it replans`;
@@ -82,17 +82,17 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
 }
 
 export function declinePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
-  const plan = store.getPlan(planId);
+  const plan = store.plans.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing changed` };
 
-  const parts = store.listPlanParts(planId);
+  const parts = store.plans.listPlanParts(planId);
   const retire = partsToRetire(parts, []);
-  for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  for (const part of retire) store.plans.updatePlanPart(part.id, { status: 'retired' });
   withdrawPartAsks(store, retire, REFUSED_PART_RESOLUTION);
   const surviving = survivorsOf(parts, retire);
-  store.setPlanStatus(planId, 'abandoned', declinedPlanReason(plan.reason, note ?? null));
+  store.plans.setPlanStatus(planId, 'abandoned', declinedPlanReason(plan.reason, note ?? null));
 
   const kept =
     surviving.length === 0 ? '' : `; ${surviving.length} part(s) already in flight keep running until you end the run`;
@@ -106,25 +106,25 @@ export function actOnShortfall(
   store: Store,
   act: { planId: string; originRef: string; cause: 'plan' | 'part'; partSlug: string | null; summary: string },
 ): PlanSettlement {
-  const plan = store.getPlan(act.planId);
+  const plan = store.plans.getPlan(act.planId);
   if (!plan) return { ok: false, detail: `plan ${act.planId} for ${act.originRef} no longer exists` };
   if (plan.status === 'planning' || plan.status === 'awaiting_approval')
     return { ok: false, detail: `plan ${act.planId} is "${plan.status}" — it has already moved on` };
 
   if (act.cause === 'plan') {
-    store.setPlanStatus(act.planId, 'planning', appendShortfallReason(plan.reason, act.summary));
+    store.plans.setPlanStatus(act.planId, 'planning', appendShortfallReason(plan.reason, act.summary));
     return { ok: true, detail: `sent the plan for ${act.originRef} back to a planner with what fell short` };
   }
 
-  const parts = store.listPlanParts(act.planId);
+  const parts = store.plans.listPlanParts(act.planId);
   const target = liveParts(parts).find((p) => p.slug === act.partSlug);
   if (!target)
     return { ok: false, detail: `"${act.partSlug}" is no longer a live part of the plan for ${act.originRef}` };
   const seq = Math.max(0, ...parts.map((p) => p.seq)) + 1;
   const slot = followupSlot(target, parts);
-  const [written] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq, slot.slug)]);
+  const [written] = store.plans.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq, slot.slug)]);
   if (!written) return { ok: false, detail: `could not append a follow-up part to the plan for ${act.originRef}` };
-  store.rollUpPlanStatus(act.planId);
+  store.plans.rollUpPlanStatus(act.planId);
   const what = slot.refreshing
     ? `refreshed the declaration of the unstarted follow-up part "${written.slug}"`
     : `appended part "${written.slug}"`;

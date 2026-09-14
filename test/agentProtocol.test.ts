@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildClaudeStreamArgs, buildInitialMessage, PROTOCOL_SYSTEM_PROMPT } from '../src/agents/agentProtocol.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Task } from '../src/types.js';
@@ -154,9 +154,9 @@ test('the terminal runtime still detects the protocol sentinels from real output
   failPlanningOpen(system.store, 902);
   await system.harness.runCycle('manual');
 
-  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   backend.last().emit('I need to know the target framework.\n@@LUBBDUBB_WAITING:Which framework?@@\n');
-  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.escalations.listOpenEscalations().length, 1);
   system.store.close();
 });

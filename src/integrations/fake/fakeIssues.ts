@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type {
   IssueCloseInput,
@@ -127,7 +128,7 @@ export class FakeIssuesIntegration
       const issue = world.issues.find((i) => i.number === input.number);
       if (issue) issue.state = 'closed';
     });
-    return { ok: true, ref: `issue:${input.number}` };
+    return { ok: true, ref: issueOriginRef('root', input.number) };
   }
 
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
@@ -162,7 +163,7 @@ export class FakeIssuesIntegration
         linkedPrNumber: null,
       });
     });
-    return { ok: true, ref: `issue:${number}` };
+    return { ok: true, ref: issueOriginRef('root', number) };
   }
 
   private nextIssueNumber(): number {

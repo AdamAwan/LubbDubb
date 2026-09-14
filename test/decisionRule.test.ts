@@ -59,19 +59,19 @@ test('an idle cycle records the no-op under the idle rule', async () => {
 
 test('the store lifts the rule off the action into its own column and round-trips it', () => {
   const store = new Store(':memory:');
-  store.recordDecision({
+  store.decisions.recordDecision({
     cycleId: 'c1',
     action: { type: 'dispatch_code_agent', reason: 'CI failing', rule: 'pr-ci-failing' },
     outcome: 'executed',
     detail: 'spawned',
   });
-  store.recordDecision({
+  store.decisions.recordDecision({
     cycleId: 'c1',
     action: { type: 'no_op', reason: 'cycle rationale' },
     outcome: 'skipped',
     detail: 'rationale',
   });
-  const decisions = store.listDecisions();
+  const decisions = store.decisions.listDecisions();
   assert.equal(decisions.find((d) => d.action.type === 'dispatch_code_agent')?.rule, 'pr-ci-failing');
   assert.equal(decisions.find((d) => d.action.type === 'no_op')?.rule, null);
   store.close();

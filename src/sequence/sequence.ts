@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import type { Issue, IssueRelative } from '../types.js';
 import { isContainerIssue } from '../issueRelations.js';
 import { linkEdges, type SequenceEdge } from './readiness.js';
@@ -94,16 +95,15 @@ export function sequenceableFeatures(
 }
 
 export function featureSequenceOrigin(featureNumber: number): string {
-  return `issue:${featureNumber}:sequence`;
+  return issueOriginRef('sequence', featureNumber);
 }
 
 export function featureSequenceSubmitOrigin(
   originRef: string | null,
 ): { ok: true; featureOrigin: string; featureNumber: number } | { ok: false; error: string } {
-  const match = originRef ? /^issue:(\d+):sequence$/.exec(originRef) : null;
-  if (match) {
-    const number = Number(match[1]);
-    return { ok: true, featureOrigin: `issue:${number}`, featureNumber: number };
+  const number = issueOriginNumber('sequence', originRef);
+  if (number !== null) {
+    return { ok: true, featureOrigin: issueOriginRef('root', number), featureNumber: number };
   }
   return {
     ok: false,

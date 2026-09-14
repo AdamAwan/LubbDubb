@@ -17,8 +17,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const scope = landingScope(
         ref,
         world.pullRequests,
-        store.listPlans(),
-        store.listAllPlanParts(),
+        store.plans.listPlans(),
+        store.plans.listAllPlanParts(),
         config.defaultBranch,
       );
       if (!scope.ok) return reply.code(404).send({ error: scope.error });
@@ -48,8 +48,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const scope = landingScope(
         ref,
         world.pullRequests,
-        store.listPlans(),
-        store.listAllPlanParts(),
+        store.plans.listPlans(),
+        store.plans.listAllPlanParts(),
         config.defaultBranch,
       );
       const revoked = scope.ok ? scope.rungs.map((n) => landings.revoke(n)).find((l) => l !== null) : undefined;

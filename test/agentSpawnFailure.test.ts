@@ -29,19 +29,19 @@ function manager(store: Store): AgentManager {
 test('a spawn that throws surfaces the reason and leaves no live agent', () => {
   const store = new Store(':memory:');
   const agents = manager(store);
-  const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: null });
+  const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: null });
 
   const statuses: string[] = [];
   agents.on('status', (e) => statuses.push(e.status));
 
   assert.throws(() => agents.spawn(task, '/tmp'), /was not found on PATH/);
 
-  const agent = store.listAgents()[0];
+  const agent = store.agents.listAgents()[0];
   assert.ok(agent);
   assert.equal(agent.status, 'failed');
   assert.notEqual(agent.endedAt, null);
   assert.equal(agents.isLive(agent.id), false);
-  assert.equal(store.getTask(task.id)?.status, 'failed');
-  assert.match(store.getTranscript(agent.id), /was not found on PATH/);
+  assert.equal(store.tasks.getTask(task.id)?.status, 'failed');
+  assert.match(store.transcripts.getTranscript(agent.id), /was not found on PATH/);
   assert.deepEqual(statuses, ['failed']);
 });

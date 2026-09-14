@@ -8,7 +8,7 @@ import type { Store } from '../store/store.js';
 // → docs/spec/06-issue-pickup.md
 
 interface ProfilePinContext {
-  store: Pick<Store, 'getAppraisal' | 'answerAppraisalProfile'>;
+  store: Pick<Store, 'verdicts'>;
   sink: { setIssueLabel(input: IssueLabelInput): Promise<SendResult> };
   errors?: ErrorRecorder;
   labelPrefix: string;
@@ -54,7 +54,7 @@ export async function applyProfilePin(
   }
 
   const origin = issueConclusionOrigin(issueNumber);
-  const appraisal = ctx.store.getAppraisal(origin);
-  const answered = appraisal !== null && ctx.store.answerAppraisalProfile(origin, appraisal.goalRef);
+  const appraisal = ctx.store.verdicts.getAppraisal(origin);
+  const answered = appraisal !== null && ctx.store.verdicts.answerAppraisalProfile(origin, appraisal.goalRef);
   return { ok: true, profile: wanted, answered };
 }

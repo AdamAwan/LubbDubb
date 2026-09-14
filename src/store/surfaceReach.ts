@@ -11,7 +11,7 @@ export class SurfaceReachStore {
   recordSurfaceReach(rows: readonly SurfaceReachInput[]): number {
     if (rows.length === 0) return 0;
     const at = this.ctx.now();
-    const insert = this.ctx.db.prepare(
+    const insert = this.ctx.prep(
       `INSERT INTO surface_reach (subject, verb, place, at, arrival) VALUES (@subject, @verb, @place, @at, @arrival)`,
     );
     const all = this.ctx.db.transaction((batch: readonly SurfaceReachInput[]) => {
@@ -22,14 +22,14 @@ export class SurfaceReachStore {
   }
 
   listSurfaceReachSince(since: string): SurfaceReach[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT subject, verb, place, at, arrival FROM surface_reach WHERE at >= ? ORDER BY at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT subject, verb, place, at, arrival FROM surface_reach WHERE at >= ? ORDER BY at ASC, rowid ASC`)
       .all(since) as SurfaceReachRow[];
     return rows.map(rowToReach);
   }
 
   linkedSubjectsEverReached(): Set<string> {
-    const rows = this.ctx.db.prepare(`SELECT DISTINCT subject FROM surface_reach WHERE arrival = 'linked'`).all() as {
+    const rows = this.ctx.prep(`SELECT DISTINCT subject FROM surface_reach WHERE arrival = 'linked'`).all() as {
       subject: string;
     }[];
     return new Set(rows.map((r) => r.subject));
@@ -40,7 +40,7 @@ export class SurfaceReachStore {
     if (!force && this.lastPrunedAt !== null && nowMs - this.lastPrunedAt < PRUNE_INTERVAL_MS) return 0;
     this.lastPrunedAt = nowMs;
     const cutoff = new Date(nowMs - RETENTION_DAYS * DAY_MS).toISOString();
-    return this.ctx.db.prepare(`DELETE FROM surface_reach WHERE at < ?`).run(cutoff).changes;
+    return this.ctx.prep(`DELETE FROM surface_reach WHERE at < ?`).run(cutoff).changes;
   }
 }
 

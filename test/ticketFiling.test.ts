@@ -4,7 +4,7 @@ import { ticketFiler } from '../src/tickets/filing.js';
 import { dedupeCandidates, renderCandidates } from '../src/tickets/candidates.js';
 import type { ActionSink, IssueCreateInput, SendResult } from '../src/sink/actionSink.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
-import type { Config } from '../src/config.js';
+import type { Config } from '../src/config/config.js';
 
 function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:314'): ActionSink {
   const unused = (): never => {

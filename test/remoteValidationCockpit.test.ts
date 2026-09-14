@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -94,11 +94,16 @@ function system(): System {
 /** One sheet of three rows: one read, one that learned nothing, and one nobody has run. */
 function seed(sys: System): void {
   const { store } = sys;
-  store.ingestValidation('issue:12', { checks: [CHECK], resources: [], supersededReason: '', amendNote: '' });
-  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
-  store.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
-  store.saveRemoteSheetRows('issue:12', 'acceptance', [
+  store.validation.ingestValidation('issue:12', {
+    checks: [CHECK],
+    resources: [],
+    supersededReason: '',
+    amendNote: '',
+  });
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+  store.remoteValidation.saveRemoteSheetRows('issue:12', 'acceptance', [
     {
       rowId: `check:${CHECK.id}`,
       kind: 'check',
@@ -133,13 +138,13 @@ function seed(sys: System): void {
       matched: null,
     },
   ]);
-  const { run } = store.beginRemoteRun({
+  const { run } = store.remoteValidation.beginRemoteRun({
     goalRef: 'issue:12',
     environment: 'acceptance',
     tenant: 'validation-customer-1',
     startedSha: DEPLOYED,
   });
-  store.recordRemoteReading({
+  store.remoteValidation.recordRemoteReading({
     goalRef: 'issue:12',
     environment: 'acceptance',
     rowId: `check:${CHECK.id}`,

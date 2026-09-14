@@ -21,9 +21,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/agents/:id/transcript',
     checked({ params: IdParams, query: TranscriptQuery }, async ({ params, query, reply }) => {
       const { id } = params;
-      const agent = store.getAgent(id);
+      const agent = store.agents.getAgent(id);
       if (!agent) return reply.code(404).send({ error: 'agent not found' });
-      const full = store.getTranscript(id);
+      const full = store.transcripts.getTranscript(id);
       const from = Math.min(query.from, full.length);
       const payload: AgentTranscript = { agentId: id, from, total: full.length, transcript: full.slice(from) };
       return payload;
@@ -34,8 +34,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/agents/:id/files',
     checked({ params: IdParams }, async ({ params, reply }) => {
       const { id } = params;
-      if (!store.getAgent(id)) return reply.code(404).send({ error: 'agent not found' });
-      return { agentId: id, files: store.listFiles(id) } satisfies AgentFilesPayload;
+      if (!store.agents.getAgent(id)) return reply.code(404).send({ error: 'agent not found' });
+      return { agentId: id, files: store.agents.listFiles(id) } satisfies AgentFilesPayload;
     }),
   );
 

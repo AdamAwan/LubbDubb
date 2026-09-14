@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+import type { Config } from '../config/config.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';

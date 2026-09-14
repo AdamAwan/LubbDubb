@@ -77,7 +77,7 @@ export async function restartPlanPart(
     );
   }
 
-  const updated = store.updatePlanPart(part.id, { status: 'ready', prNumber: null, branch: null });
+  const updated = store.plans.updatePlanPart(part.id, { status: 'ready', prNumber: null, branch: null });
   if (!updated) return { ok: false, error: `plan part "${part.slug}" is gone` };
   done.push('put the part back to ready, so the plan schedules it again against the current declaration');
   return { ok: true, part: updated, detail: done.join('; ') };

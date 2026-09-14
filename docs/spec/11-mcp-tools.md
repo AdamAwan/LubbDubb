@@ -29,7 +29,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `link_ticket`              | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `conclude_work`            | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `appraise_issue`           | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `assess_issue`             | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `assess_issue`             | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `conclude_part`            | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `scratch_append`           | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. An optional `decision` object `{chose, because, rejected: [{alternative, because}], paths}` marks the entry as a **fork** of the witness log ([31](31-review-packs.md#the-witness-log)); `chose` and `because` are required inside it, one line each, and a malformed one is refused by field name rather than stored as a note.                                                                                                                                                                                                                                                                                                                                                             |
 | `scratch_read`             | Read that pad — every note left by every agent on the goal, oldest first, each fork with its decision. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -38,13 +38,13 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `sequence_submit`          | Record the order the stories under a Feature should be worked in — one entry per story that waits, the stories it waits on and why, plus the `reason` for the order and the edge the agent would most like argued with. Not priority: an edge says starting early would mean throwing the work away. Fenced to `issue:<n>:sequence` origins, validated against the Feature's own open children, and it **holds nothing** — every story stays eligible until an operator accepts the proposal. → [33](33-story-sequencing.md)                                                                                                                                                                                                                                                                                                                                                                         |
 | `report_remedy`            | Account for one return to a pull request: why CI was red or why a reviewer asked for changes, what settled it, and what would have caught it earlier. Two enums and a line. Fenced to `pr:<n>:ci` and `pr:<n>:comments` origins, which are also where its `kind` comes from. The event record and nothing else — what the round taught goes through `raise`. → [18](18-observability.md#causes-why-the-fleet-came-back)                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `validation_amend`         | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the **validation planner**, which has `validation_plan` and speaks for the whole set. → [20](20-validation.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `validation_plan`          | Declare the **whole** validation check set for the delivered goal this agent was dispatched to write one for, with a note saying where it departed from the plan's hint. Omission is withdrawal, and it is refused from any other origin. Declaring no checks is a complete answer and requires `emptyReason`. → [20](20-validation.md#the-check-set)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `validation_plan`          | Declare the **whole** validation check set for a delivered goal, with a note saying where it departed from the plan's hint. Omission is withdrawal. Two dispatches may call it — the **assessor** that has just answered `delivered`, and the **validation planner** — declared once in `checkSetAuthoringIssue`, and it is refused from any other origin **and for a goal with no standing delivery**, so a set is never written against code that may still move. Declaring no checks is a complete answer and requires `emptyReason`. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `watch_declare`            | Declare, or correct, what a running system would have to show for this goal's work to have done what it claimed — a `signal` counting something that should not be happening, or a `measure` reading one number against a threshold or against what the same query read before the work arrived. **Merge-only** on the check's slug, and refused to the planner, which has `plan_submit`. Nothing it writes is live: a declaration lands on the plan sheet as a pending change with accept and decline, because the query runs inside the operator's own command with the operator's own credential. → [29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)                                                                                                                                                                                                                              |
 | `local_validation_plan`    | The test plan for a change being validated on the operator's own machine, recorded before the environment is even up so the goal's page shows it while the run is happening. → [32](32-local-validation.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `local_run_read`           | What the machine's dev environment is doing right now — status, URL, ports, freshness and the session's tail, with the caveat that none of it is the application working. `describeLocalRun`, the same answer the desktop `local_run` gives. Reports only: it cannot start, stop or message anything.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `local_validation_report`  | The reading of a local validation: `passed`, `failed` or `blocked` — could not reach or confirm the environment, which records nothing about the goal. A failure needs findings, because an agent is dispatched to fix them. Refused to every caller but that validation's own agent, by the parse of its origin. → [32](32-local-validation.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `remote_validation_report` | Settle the one remote validation run this agent was dispatched to carry out, by saying where the runner's machine-readable report landed and where the artefacts were published — or `handback`, a reason instead of a report, which records nothing and leaves every row as it was. **It has no field an agent could state an outcome in**: the report file is the only source of row outcomes and the exit code is never read, so a tool with a `result` field would be a tool through which a model's opinion becomes a reading. Refused to every caller but that run's own agent, by the parse of its origin. → [36](36-remote-validation.md#the-report-tool)                                                                                                                                                                                                                                    |
-| `validation_report`        | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `remote_validation_report` | Settle the one remote validation run this agent was dispatched to carry out, by saying where the runner's machine-readable report landed and where the artefacts were published — or `blocked`, a reason instead of a report, which records nothing and leaves every row as it was. **It has no field an agent could state an outcome in**: the report file is the only source of row outcomes and the exit code is never read, so a tool with a `result` field would be a tool through which a model's opinion becomes a reading. Refused to every caller but that run's own agent, by the parse of its origin. → [36](36-remote-validation.md#the-report-tool)                                                                                                                                                                                                                                    |
+| `validation_report`        | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `blocked` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `review_report`            | Record the fleet's review of the pull request this agent was dispatched to read: `clear`, or `findings` with what it found. **The call is the review** — the merge gate reads this row and never a comment on the provider, so a run that ends without it has reviewed nothing. Refused to any caller whose own origin is not `pr:<n>:review`. → [07](07-pull-requests.md#the-fleet-review)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `review_route`             | Choose which of the project's declared review modes a pull request gets — the triage's verdict, as a **name from an enum** rather than prose, because the reviewer's prompt, charter and model profile are all resolved from it before it runs. A name the project has not declared is refused. Where the project set `review.allowSkip`, it also carries `skip: true` — that the pull request needs no review at all — and that argument is offered **only** on those deployments: the one answer that waives the gate rather than sizing it is not left in front of a triage whose project never opened it. A skip and a mode together is refused, and the reason is required either way, because on a skip the row is the only account of why a change went in unread. Refused to any caller whose own origin is not `pr:<n>:review-triage`. → [07](07-pull-requests.md#choosing-how-to-review)   |
 | `split_assess`             | Say whether a pull request the harness measured past `planning.fileBudget` holds one concept or several — the answer a file count cannot give. `coherent` is a record and an ending: nothing happens and nothing asks again, so the reason is the whole account of why a wide pull request was left alone. `split` requires at least **two** named concepts, and its answer is an instruction to propose the plan that separates them with `plan_correct` in the same turn; the recording itself splits nothing, closes nothing and touches no branch. Refused to any caller whose own origin is not `issue:<n>:split:<pr>`, which is also where both the pull request and the issue are read from — the tool takes neither as an argument. → [07](07-pull-requests.md#how-wide-a-pull-request-is)                                                                                                   |
@@ -299,11 +299,29 @@ Three things turn on that pair of decisions:
   turning it into one would file a claim nobody wrote with the agent believing something else had
   happened. The message is the whole of the handler.
 
+`hidden` has a second user now, and the two must not be confused. A **retired** name is a name with no
+tool behind it, hidden for ever, on every dispatch, and answered with a refusal that points at what
+replaced it. A tool outside the dispatching rule's advertised set
+([below](#which-tools-an-agent-is-advertised)) is a **live** tool with a live handler, hidden from this
+agent's `tools/list` alone and fully answered if called. Same flag, opposite meanings: one is withdrawal,
+the other is economy.
+
 **A name is never removed from this list.** It costs one string; taking one out puts that deployment
 back on the silent failure the list exists to end — which is `PromptId`'s `retired: true` rule
 ([05](05-dispatcher.md#prompt-templates)), reached independently and for the same reason.
 `knowledge_ask` joined the list when the claim store went: there is no search tool now, and that is a
 decision rather than an omission → [27](27-obstacles.md#reporting-is-the-lookup).
+
+**A withdrawn word _inside_ a live tool is answered the same way, in the module that owns it rather
+than on this list.** `validation_report`'s third verdict was `handback` until the three validation
+paths were given one word for it, and `remote_validation_report` carried the same word as a field; both
+now take `blocked`, and both answer the old word with a refusal that names the new one — `validateReport`
+(`src/validation/report.ts`) on the `result`, the remote tool on the field. The reason is this section's
+reason exactly: the prompts carrying the word are operator-overridable, so the deployments that
+customised most are the ones still saying it. The difference is only that there is no `hidden` tool to
+build — the channel is fine and the schema refuses the value — so the refusal lives beside the schema
+that refuses it. Accepting both words was the option rejected, because an alias nothing ever retires is
+two vocabularies for one fact → [20](20-validation.md#validation_report).
 
 ### `request_human_task`
 
@@ -483,6 +501,13 @@ resolved from the credential.
   clears the other, in the store — and they are separate tables rather than one with a polarity
   column precisely because every reader of the first holds and the second must never be mistaken for
   one (see [`14-persistence.md`](14-persistence.md)).
+- **Its answer on `delivered` asks for the check set**, where the goal has a plan and nobody has
+  written one. The assessor writes the set in the same turn ([20](20-validation.md#one-agent-two-outputs)),
+  and the rule appends that instruction to the prompt — but a prompt is operator-overridable and this
+  answer is not, so the ask reaches an agent whose deployment rewrote `issue-assess` years ago. It is
+  the same arrangement `retro_submit`'s description has for the retrospective's three destinations,
+  and for the same reason. Silent where nothing is owed, rather than asking for a set that would
+  supersede one an operator may be halfway through.
 - **It no longer writes `issue_conclusions` at all**, and that is a bug fix independent of the
   routing. That row is keyed `origin_ref PRIMARY KEY` and is the row `conclude_work` writes, so an
   assessor writing `more_work` into it **overwrote the working agent's own declaration** — its note,
@@ -879,7 +904,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.                                                                                                               |
 | `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                                                                                                                            |
 | `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                                                       |
-| `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument.                                                                                                     |
+| `validation_report` | Record what was seen: `passed`, `failed`, or `blocked`. Reported against the claim, not an argument.                                                                                                      |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda, and — where an environment declares a browser suite — the test-part bar the planning prompts carry. Records nothing.     |
 | `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.                              |
 | `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                  |
@@ -1225,7 +1250,7 @@ client mismatch shows up as an error instead of a hang.
 | `initialize`                                           | Echoes the version, `capabilities: {tools:{}}`, `serverInfo`. |
 | `notifications/initialized`, `notifications/cancelled` | Returns nothing (notifications take no frame).                |
 | `ping`                                                 | `{}` for a request; nothing for a notification.               |
-| `tools/list`                                           | Name, description and input schema for each tool.             |
+| `tools/list`                                           | Name, description and input schema for each **advertised** tool ([below](#which-tools-an-agent-is-advertised)). |
 | `tools/call`                                           | Runs the named tool.                                          |
 
 `handleRequest` **never throws**: a handler that blows up becomes an `isError` tool result, so an agent
@@ -1276,17 +1301,22 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `raise`, `escalate`, `plan_submit`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`
+  `raise`, `escalate`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`
   and `note_progress`. Nothing else names these. `raise` is here because every agent may write to that
   store and read it in the same call, so there is no one dispatch prompt that could name it — and
   because the whole of its value is being callable the moment an agent learns something rather than at
   a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `appraise_issue`, `plan_not_needed`, `retro_submit`, `feature_summary`, `link_ticket`, `review_pack_submit`,
-  `review_pack_check`,
-  the scratch pair, the validation pair. `plan_not_needed` sits here rather than beside `plan_submit` in the addendum because only a
-  planner can cast it, and the addendum is read by every agent there is. Keeping them out
+  `appraise_issue`, `plan_submit`, `plan_not_needed`, `retro_submit`, `feature_summary`, `link_ticket`,
+  `review_pack_submit`, `review_pack_check`,
+  the scratch pair, the validation pair. The planner's **two verdicts** sit here together, and that is the
+  rule doing its work rather than an exception to it: `plan_submit` is fenced to `issue:<n>:plan` and
+  `plan_not_needed` to the same family, so the addendum — read by every agent there is — was naming a
+  pair only one rule could ever cast. Both are named at their point of use, by the `issue-plan` and
+  `issue-replan` templates, which is where a planner reads them. `plan_correct` stays in the addendum and
+  is not the same case: its fence is the whole `issue:<n>` subtree, a part worker mid-flight is a caller,
+  and no part prompt names it — the addendum is its only channel. Keeping the rest out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
@@ -1303,6 +1333,68 @@ It was written in that test, and moved when production code needed the same answ
 test owns is one the reading has to keep a second copy of, free to disagree with what is actually
 granted and silent when it does — which is the whole failure this module exists to make impossible,
 arriving through the list rather than through the names.
+
+### Which tools an agent is advertised
+
+Naming is one axis; **advertising** is a second, and they are decided separately. Every live tool is
+built for every agent and every one is granted — what changes per dispatch is which of them `tools/list`
+describes.
+
+It is a context question rather than an authority question. `tools/list` ships every tool's name,
+description and full JSON Schema, inlined per tool — MCP has no `$ref` between tools — and that payload
+is re-read on **every turn of every agent**. At the whole set it is around 86 kB, some 23k tokens, about
+12% of a 200k window, most of it describing tools the dispatch could never legitimately call:
+`split_assess` to a planner, `retro_submit` to a CI fixer.
+
+So the set is scoped by **the rule that dispatched the agent**. `Task.rule` is already on the task
+(`DispatchRuleId`, written from the action), `McpIdentity` already carries the task, and `buildTools`
+already runs per frame — no plumbing was added. `src/mcp/names.ts` declares the mapping beside the names
+it scopes, for the reason the naming classification lives there:
+
+- `UNIVERSAL_TOOLS` — the core every agent is advertised. Every `addendum` tool is in it by
+  construction: the addendum is appended to every launch, so a tool named there and advertised to nobody
+  would be a contradiction the agent reads in one window. Plus `request_permission`, because it is the
+  `--permission-prompt-tool` value and Claude Code invokes it whatever the rule; plus the scratch pair,
+  which is cross-agent memory on any dispatch; plus `validation_amend`, which is open to every agent on
+  the goal.
+- `RULE_TOOLS` — a `Record<DispatchRuleId, …>` of the **extras** each rule adds, so a new rule does not
+  compile until it has been placed and a new tool has somewhere to be placed. `manual-job` maps to the
+  whole set: its prompt is written by an operator and may name anything.
+- `toolsForRule(rule)` — the core plus the extras, and **the whole set for `null`, or for a rule string
+  no release ever had**.
+
+**The fail-open default is the load-bearing half.** A task carries no rule when nothing in the pipeline
+dispatched it — the review-pack author and checker are asked for from a cockpit row, and rows from before
+the column existed are backfilled from `dispatchReason` and may stay null. Folding null into "core only"
+would advertise a review-pack author no `review_pack_submit`, and the run would end having answered
+nothing, with nothing red anywhere.
+
+**Unadvertised is not withdrawn.** A tool outside the dispatch's set is built with `hidden: true`, the
+same flag [retired names](#retired-tools) use, and `handleRequest` filters `hidden` out of `tools/list`
+while resolving `tools/call` against the **unfiltered** array. An agent that calls one anyway — an
+operator override that names it, a model that remembers it from another dispatch — is answered exactly
+as before. Visibility is advice; authority stays where it already was, in each tool's own origin fence,
+which is what refuses a worker calling `plan_submit` whether or not the tool was advertised to it.
+Nothing here goes to `RETIRED_TOOL_NAMES`: that list is for names with no tool behind them, and these are
+live tools with a quiet frame.
+
+The **grants stay whole** on purpose. `--allowedTools` carries every `mcp__lubbdubb__*` name on every
+launch: it is argv, it costs no context, it is additive rather than restrictive, and narrowing it to the
+rule's subset would make the hidden-but-callable guarantee above a lie while reintroducing the drift this
+module exists to refuse → [10](10-agent-runtimes.md).
+
+Two things must therefore agree, and nothing red says so if they do not: a rule's **prompt template** —
+or a note appended to it — and its **`RULE_TOOLS` row**. A template that names a tool the row omits still
+works, because the call is answered; but the agent is being asked to reach for something its own tool list
+does not show, which is a prompt and a table disagreeing rather than a broken channel.
+→ [05](05-dispatcher.md#prompt-templates)
+
+One reading changed meaning rather than breaking. The Insights MCP tab's `toolsAdvertised` for the fleet
+channel is the whole granted set, not what any one agent saw, and a `point-of-use` tool's silence now has
+a third cause beside "no such work ran" and "the prompt stopped naming it": no dispatch in the window was
+advertised it. The verdicts themselves are unaffected — every `addendum` tool is universal, so the one
+verdict that means _broken channel_ still does — and the tab was left alone deliberately rather than
+taught a per-rule expectation it has no per-agent record to check against. → [17](17-cockpit.md#mcp)
 
 The classification has a second reader now, and it is the one that gives it teeth: the Insights MCP tab
 reads it to say what a tool's **silence means**. An `addendum` tool nothing called is a broken channel

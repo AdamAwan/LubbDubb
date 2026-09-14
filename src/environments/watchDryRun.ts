@@ -23,11 +23,11 @@ export class WatchDryRun implements WatchDryRunner {
   async run(originRef: string): Promise<string[]> {
     const environment = dryRunEnvironment(this.deps.environments);
     if (environment === null) return [];
-    const checks = this.deps.store.listGoalWatches().filter((c) => c.originRef === originRef);
+    const checks = this.deps.store.watches.listGoalWatches().filter((c) => c.originRef === originRef);
     const refusals: string[] = [];
     for (const check of checks) {
       const reading = await this.read(environment, check);
-      this.deps.store.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
+      this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
       if (reading.detail !== null) refusals.push(`${check.id}: ${reading.detail}`);
     }
     return refusals;

@@ -1,3 +1,5 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+
 // → docs/spec/05-dispatcher.md
 
 export const MAX_RETRO_DOCUMENT = 20_000;
@@ -5,14 +7,14 @@ export const MAX_RETRO_DOCUMENT = 20_000;
 const MAX_RETRO_SUMMARY = 400;
 
 export function retroOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}:retro`;
+  return issueOriginRef('retro', issueNumber);
 }
 
 export function retroSubmitOrigin(
   originRef: string | null,
 ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
-  const match = originRef ? /^issue:(\d+):retro$/.exec(originRef) : null;
-  if (match) return { ok: true, issueOrigin: `issue:${match[1]}` };
+  const number = issueOriginNumber('retro', originRef);
+  if (number !== null) return { ok: true, issueOrigin: issueOriginRef('root', number) };
   return {
     ok: false,
     error:

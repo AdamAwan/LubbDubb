@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { FeatureBoardPayload } from '../../wire.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
-import { buildSpendGoals } from '../../spendInsights.js';
+import { buildSpendGoals } from '../../insights/spendInsights.js';
 import { featureRecords } from '../../summaries/featureRecord.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
@@ -27,19 +28,22 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
 
-      const runs = store.listIssueRuns();
+      const runs = store.floor.listIssueRuns();
+      const plans = store.plans.listPlans();
+      const planParts = store.plans.listAllPlanParts();
+      const goalLandings = store.environments.listGoalLandings();
       const { goals } = buildSpendGoals({
-        agents: store.listAgents(),
-        localRuns: store.listLocalRuns(),
-        tasks: store.listTasks(),
-        nodes: store.listWorkNodes(),
-        issues: store.getWorldBaseline()?.issues ?? [],
+        agents: store.agents.listAgents(),
+        localRuns: store.localRuns.listLocalRuns(),
+        tasks: store.tasks.listTasks(),
+        nodes: store.graph.listWorkNodes(),
+        issues: store.world.getWorldBaseline()?.issues ?? [],
         runs,
       });
-      const deliveries = store.listDeliveries();
-      const shortfalls = store.listShortfalls();
-      const items = store.listTrackerItems();
-      const featureSlots = store.ensureFeatureColors(items.flatMap((i) => (i.parent ? [i.parent.number] : [])));
+      const deliveries = store.verdicts.listDeliveries();
+      const shortfalls = store.verdicts.listShortfalls();
+      const items = store.tickets.listTrackerItems();
+      const featureSlots = store.tickets.ensureFeatureColors(items.flatMap((i) => (i.parent ? [i.parent.number] : [])));
 
       const standingKeys = new Map(
         featureRecords(store, {
@@ -54,36 +58,36 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         standingKeys,
         outcomes: ticketOutcomes({
           runs,
-          conclusions: store.listIssueConclusions(),
+          conclusions: store.verdicts.listIssueConclusions(),
           deliveries,
           shortfalls,
-          plans: store.listPlans(),
-          planParts: store.listAllPlanParts(),
+          plans,
+          planParts,
         }),
         deliveries,
         shortfalls,
-        summaries: new Map(store.listFeatureSummaries().map((f) => [f.originRef, f])),
-        sequences: new Map(store.listFeatureSequences().map((s) => [s.originRef, s])),
-        escalations: store.listEscalations(),
+        summaries: new Map(store.tickets.listFeatureSummaries().map((f) => [f.originRef, f])),
+        sequences: new Map(store.sequences.listFeatureSequences().map((s) => [s.originRef, s])),
+        escalations: store.escalations.listEscalations(),
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         featureSlots,
         running: new Map(
           runs.filter((r) => r.completedAt === null && r.dismissedAt === null).map((r) => [r.issueNumber, r.startedAt]),
         ),
         reach: allGoalReach({
-          landings: store.listGoalLandings(),
-          readings: store.listEnvironmentReach(),
-          nodes: store.listWorkNodes(),
-          landed: store.landedPrs(),
-          plans: store.listPlans(),
-          parts: store.listAllPlanParts(),
+          landings: goalLandings,
+          readings: store.environments.listEnvironmentReach(),
+          nodes: store.graph.listWorkNodes(),
+          landed: store.environments.landedPrs(),
+          plans,
+          parts: planParts,
           environments: config.environments,
         }),
-        landings: store.listGoalLandings(),
+        landings: goalLandings,
         environments: config.environments.map((e) => e.name),
         containerTypes: config.issueContainerTypes,
         watchLabel: watchLabelFor(config.labelPrefix),
-        pauses: new Map(store.listGoalPauses().map((p) => [p.originRef, p])),
+        pauses: new Map(store.pauses.listGoalPauses().map((p) => [p.originRef, p])),
       });
 
       const refUrls: Record<string, string> = {};
@@ -93,8 +97,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         ...(board.orphans?.children ?? []).map((c) => c.number),
       ];
       for (const number of refs) {
-        const url = connector.resolveRefUrl(`issue:${number}`);
-        if (url) refUrls[`issue:${number}`] = url;
+        const url = connector.resolveRefUrl(issueOriginRef('root', number));
+        if (url) refUrls[issueOriginRef('root', number)] = url;
       }
 
       return {
@@ -112,7 +116,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!featureBoardOn(config, connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
-      const answered = store.answerFeatureSequence(`issue:${params.number}`, body.answer, body.by);
+      const answered = store.sequences.answerFeatureSequence(
+        issueOriginRef('root', params.number),
+        body.answer,
+        body.by,
+      );
       if (!answered) {
         return reply
           .code(404)
@@ -130,7 +138,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!featureBoardOn(config, connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
-      store.setGoalPause(goalPauseOrigin(params.number), body.paused);
+      store.pauses.setGoalPause(goalPauseOrigin(params.number), body.paused);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, paused: body.paused };
     }),

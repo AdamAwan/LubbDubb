@@ -51,7 +51,7 @@ export class ReviewPackChecker extends EventEmitter {
   }
 
   checking(prNumber: number): boolean {
-    return this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(checkOrigin(prNumber)) !== null;
+    return this.composing.has(prNumber) || this.deps.store.tasks.findActiveTaskByOrigin(checkOrigin(prNumber)) !== null;
   }
 
   submit(
@@ -78,17 +78,17 @@ export class ReviewPackChecker extends EventEmitter {
     }
     const applied = applyCheck({ pack: current, readRegion: (range) => readRegion(agent.cwd, range) }, args);
     if (!applied.ok) return applied;
-    const record = this.deps.store.recordReviewPack(applied.pack);
+    const record = this.deps.store.reviewPacks.recordReviewPack(applied.pack);
     this.emit('checked', { record });
     return { ok: true, record };
   }
 
   private packAt(prNumber: number, headSha: string): ReviewPack | null {
-    return this.deps.store.listReviewPacks(prNumber).find((r) => r.pack.headSha === headSha)?.pack ?? null;
+    return this.deps.store.reviewPacks.listReviewPacks(prNumber).find((r) => r.pack.headSha === headSha)?.pack ?? null;
   }
 
   private follow(taskId: string): void {
-    const task = this.deps.store.getTask(taskId);
+    const task = this.deps.store.tasks.getTask(taskId);
     const prNumber = packTargetPr(task?.originRef ?? null);
     const headSha = packLeaseHead(task?.branch ?? null);
     if (prNumber === null || headSha === null) return;
@@ -111,7 +111,7 @@ export class ReviewPackChecker extends EventEmitter {
   }
 
   private prOf(prNumber: number): PullRequest | null {
-    const world = this.deps.store.getWorldBaseline();
+    const world = this.deps.store.world.getWorldBaseline();
     return (
       world?.pullRequests.find((p) => p.number === prNumber) ??
       world?.closedPullRequests?.find((p) => p.number === prNumber) ??
@@ -128,7 +128,7 @@ export class ReviewPackChecker extends EventEmitter {
       const diff = await this.deps.git.diff(base, headSha);
       if (diff === null) throw new Error(`the clone cannot diff ${headSha} against ${base}`);
       const key = checkLeaseKey(prNumber, headSha);
-      task = store.createTask({
+      task = store.tasks.createTask({
         kind: 'code',
         title: `Check the review pack for PR #${prNumber}`,
         prompt: this.prompt(prNumber, pr, base, headSha, pack, parseDiffHunks(diff)),
@@ -141,9 +141,9 @@ export class ReviewPackChecker extends EventEmitter {
       this.deps.agents.spawn(task, cwd);
     } catch (err) {
       if (task) {
-        const current = store.getTask(task.id);
+        const current = store.tasks.getTask(task.id);
         if (current && (current.status === 'queued' || current.status === 'running'))
-          store.updateTask(task.id, { status: 'interrupted' });
+          store.tasks.updateTask(task.id, { status: 'interrupted' });
         void this.deps.worktrees.remove(task.branch!).catch(() => {});
       }
       errors.record({

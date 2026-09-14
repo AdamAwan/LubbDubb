@@ -8,12 +8,12 @@ export class ProfileOverrideStore {
 
   setProfileOverride(origin: string, profile: string | null): void {
     if (profile === null) {
-      this.ctx.db.prepare(`DELETE FROM profile_overrides WHERE origin=?`).run(origin);
+      this.ctx.prep(`DELETE FROM profile_overrides WHERE origin=?`).run(origin);
       return;
     }
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO profile_overrides (origin, profile, updated_at, last_seen_at) VALUES (?, ?, ?, ?)
          ON CONFLICT(origin) DO UPDATE SET profile=excluded.profile, updated_at=excluded.updated_at`,
       )
@@ -21,8 +21,8 @@ export class ProfileOverrideStore {
   }
 
   listProfileOverrides(): ProfileOverride[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT origin, profile FROM profile_overrides ORDER BY updated_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT origin, profile FROM profile_overrides ORDER BY updated_at ASC`)
       .all() as ProfileOverride[];
     return rows.map((r) => ({ origin: r.origin, profile: r.profile }));
   }
@@ -38,7 +38,7 @@ export class ProfileOverrideStore {
       }
       if (ttlMs > 0) {
         const cutoff = new Date(Date.parse(now) - ttlMs).toISOString();
-        this.ctx.db.prepare(`DELETE FROM profile_overrides WHERE last_seen_at < ?`).run(cutoff);
+        this.ctx.prep(`DELETE FROM profile_overrides WHERE last_seen_at < ?`).run(cutoff);
       }
     });
     tx();

@@ -4,6 +4,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { ButtonRow } from './button.js';
 import { proposedParentTitle } from '../view/orphanGoal.js';
 
 // → docs/spec/17-cockpit.md
@@ -23,7 +24,7 @@ export function ParentPicker({
   const options = view.state.world.parentCandidates.filter((c) => c.number !== issue.number);
   const proposedTitle = proposedParentTitle(view.state, proposed);
   return (
-    <div className="cn-acts">
+    <ButtonRow>
       {proposed !== null && (
         <AsyncButton
           tone="primary"
@@ -67,6 +68,6 @@ export function ParentPicker({
       >
         Not applicable
       </AsyncButton>
-    </div>
+    </ButtonRow>
   );
 }

@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Config } from '../config.js';
-import { configField, suggestedValue } from '../configFields.js';
-import type { ConfigChange } from '../configApply.js';
+import type { Config } from '../config/config.js';
+import { configField, suggestedValue } from '../config/configFields.js';
+import type { ConfigChange } from '../config/configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
@@ -335,7 +335,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
       },
     ];
   }
-  const world = store.getWorldBaseline();
+  const world = store.world.getWorldBaseline();
   if (world === null) {
     return [
       {
@@ -375,7 +375,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
 
   if (tagged > 0) return [];
 
-  if (store.listIssueRuns().length > 0) return [];
+  if (store.floor.listIssueRuns().length > 0) return [];
   const open = world.issues.length + world.pullRequests.length;
   return [
     {

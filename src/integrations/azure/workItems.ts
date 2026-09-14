@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   IssueCommentInput,
@@ -218,7 +219,7 @@ export class AzureDevOpsWorkItemsIntegration
       tags: input.labels,
       assignedTo: input.assignee,
     });
-    const ref = `issue:${created.id}`;
+    const ref = issueOriginRef('root', created.id);
     if (input.relatedTo !== null) {
       try {
         await this.opts.api.relateWorkItem(created.id, input.relatedTo);

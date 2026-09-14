@@ -7,25 +7,25 @@ const WITHDRAWN_RESOURCE_RESOLUTION = 'The validation plan no longer needs this.
 const PRECONDITION_KIND = 'access';
 
 export function fileResourceAsks(store: Store, originRef: string): void {
-  for (const resource of store.listValidationResources(originRef)) {
+  for (const resource of store.validation.listValidationResources(originRef)) {
     if (resource.provided || resource.kind === PRECONDITION_KIND) continue;
-    const { task } = store.recordHumanTask({
+    const { task } = store.humanTasks.recordHumanTask({
       title: `Provide "${resource.name}" for validating ${originRef}`,
       detail: resourceAskDetail(resource.name, resource.note),
       originRef,
       agentId: null,
       taskId: null,
     });
-    store.linkValidationResourceTask(originRef, resource.name, task.id);
+    store.validation.linkValidationResourceTask(originRef, resource.name, task.id);
   }
 }
 
 export function withdrawResourceAsks(store: Store, originRef: string, stillNeeded: readonly string[]): void {
   const needed = new Set(stillNeeded);
-  for (const resource of store.listValidationResources(originRef)) {
+  for (const resource of store.validation.listValidationResources(originRef)) {
     if (resource.humanTaskId === null || needed.has(resource.name)) continue;
-    const task = store.getHumanTask(resource.humanTaskId);
-    if (task?.status === 'open') store.settleHumanTask(task.id, 'declined', WITHDRAWN_RESOURCE_RESOLUTION);
+    const task = store.humanTasks.getHumanTask(resource.humanTaskId);
+    if (task?.status === 'open') store.humanTasks.settleHumanTask(task.id, 'declined', WITHDRAWN_RESOURCE_RESOLUTION);
   }
 }
 

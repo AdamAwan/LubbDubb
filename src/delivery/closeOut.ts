@@ -1,3 +1,4 @@
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { DELIVERY_AUTHOR } from './delivery.js';
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict } from '../types.js';
@@ -24,7 +25,7 @@ interface CloseOutInput {
 
 export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
   const byOrigin = new Map(input.existing.map((t) => [t.originRef ?? '', t]));
-  const inWorld = new Map(input.issues.map((i) => [`issue:${i.number}`, i]));
+  const inWorld = new Map(input.issues.map((i) => [issueOriginRef('root', i.number), i]));
   const shortfalls = new Set(input.shortfalls.map((s) => s.originRef));
   const delivered = new Set(input.deliveries.map((d) => d.originRef));
   const steps: CloseOutStep[] = [];
@@ -145,7 +146,5 @@ export function validationHeadline(verdict: ValidationVerdict): string {
 }
 
 export function closeOutIssueNumber(originRef: string | null): number | null {
-  if (originRef === null) return null;
-  const m = /^issue:(\d+)$/.exec(originRef);
-  return m ? Number(m[1]) : null;
+  return issueOriginNumber('root', originRef);
 }

@@ -69,16 +69,16 @@ export class RemoteReadingDesk {
   }
 
   /**
-   * A handback writes **no readings**, leaves every row exactly as it was, and carries the agent's
+   * A blocked run writes **no readings**, leaves every row exactly as it was, and carries the agent's
    * reason to the operator. An agent that could not reach the environment has learned nothing about
    * the goal, and with only a report available its options would be a lie and silence.
    *
    * @public the seam `remote_validation_report` settles a run it could not carry out through
    */
-  handback(runId: string, reason: string): { ok: true; run: RemoteRun } | Refused {
+  blocked(runId: string, reason: string): { ok: true; run: RemoteRun } | Refused {
     const live = this.live(runId);
     if ('error' in live) return live;
-    const ended = this.deps.store.endRemoteRun(live.run.id, {
+    const ended = this.deps.store.remoteValidation.endRemoteRun(live.run.id, {
       status: 'abandoned',
       note: `The agent could not carry this run out: ${reason}`,
     });
@@ -107,8 +107,8 @@ export class RemoteReadingDesk {
     // is a run that started against one build and finished against another, whichever way it went.
     const moved = run.startedSha !== null && endedSha !== null && endedSha !== run.startedSha;
 
-    const rows = confirmedCheckRows(store.listRemoteSheetRows(), run);
-    const checks = new Map(store.listValidationChecks(run.goalRef).map((check) => [check.id, check]));
+    const rows = confirmedCheckRows(store.remoteValidation.listRemoteSheetRows(), run);
+    const checks = new Map(store.validation.listValidationChecks(run.goalRef).map((check) => [check.id, check]));
 
     let read = 0;
     let blocked = 0;
@@ -154,7 +154,7 @@ export class RemoteReadingDesk {
       if (settling?.wrote === true) wrote += 1;
       if (settling?.wrote === true && folded.outcome === 'captured') captured += 1;
 
-      store.recordRemoteReading({
+      store.remoteValidation.recordRemoteReading({
         goalRef: run.goalRef,
         environment: run.environment,
         rowId: row.rowId,
@@ -177,8 +177,8 @@ export class RemoteReadingDesk {
     // Every reading this run took, the press's deterministic ones included, is attributed to the
     // commits it straddled: a reading with no commit beside it is a reading of a product nobody can
     // name, and only the end of the run knows what the second one was.
-    store.attributeRemoteReadings(run.id, endedSha);
-    const ended = store.endRemoteRun(run.id, {
+    store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
+    const ended = store.remoteValidation.endRemoteRun(run.id, {
       status: 'ended',
       endedSha,
       reportPath: input.reportPath,
@@ -316,7 +316,7 @@ export class RemoteReadingDesk {
           `This is not written onto the goal's own check: it already reads \`${check.state}\`, recorded by ` +
           `${whose(check)}, and a reading somebody took is theirs. The sheet keeps this one instead.`,
       };
-    this.deps.store.recordValidationResult(run.goalRef, check.id, {
+    this.deps.store.validation.recordValidationResult(run.goalRef, check.id, {
       state: folded.outcome === 'passed' ? 'passed' : folded.outcome === 'captured' ? 'captured' : 'failed',
       note: `${folded.detail ?? 'the run reported it.'} → the validation sheet for \`${run.environment}\`.`,
       by: took,
@@ -347,7 +347,7 @@ export class RemoteReadingDesk {
   }
 
   private live(runId: string): { run: RemoteRun } | Refused {
-    const run = this.deps.store.getRemoteRun(runId);
+    const run = this.deps.store.remoteValidation.getRemoteRun(runId);
     if (run === null)
       return {
         ok: false,

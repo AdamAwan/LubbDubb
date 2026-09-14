@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSpendTrend } from '../src/spendTrend.js';
-import { zeroPhases, type SpendGoal, type SpendPhase } from '../src/spendInsights.js';
-import { loadConfig } from '../src/config.js';
+import { buildSpendTrend } from '../src/insights/spendTrend.js';
+import { zeroPhases, type SpendGoal, type SpendPhase } from '../src/insights/spendInsights.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -13,7 +13,7 @@ import { gitRepo } from './support/gitRepo.js';
 import type { Agent, Issue, TrackerItem, WorldEvent } from '../src/types.js';
 import type { TicketClosure } from '../src/store/tickets.js';
 import type { SpendTrendPayload } from '../src/wire.js';
-import { resolveWindow } from '../src/insightsWindow.js';
+import { resolveWindow } from '../src/insights/insightsWindow.js';
 
 const NOW = Date.parse('2026-08-16T12:00:00.000Z');
 const WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -364,9 +364,15 @@ test('the cohort comes from the ticket mirror, with no issue_closed events anywh
   const { store } = system;
   const ago = (weeks: number): string => new Date(Date.now() - weeks * WEEK).toISOString();
 
-  const task = store.createTask({ kind: 'code', title: 'Goal 7', prompt: 'p', branch: null, originRef: 'issue:7' });
-  const worked = store.createAgent({ taskId: task.id, cwd: '/wt/7', pid: null });
-  store.recordAgentUsage(worked.id, {
+  const task = store.tasks.createTask({
+    kind: 'code',
+    title: 'Goal 7',
+    prompt: 'p',
+    branch: null,
+    originRef: 'issue:7',
+  });
+  const worked = store.agents.createAgent({ taskId: task.id, cwd: '/wt/7', pid: null });
+  store.agents.recordAgentUsage(worked.id, {
     costUsd: 8,
     inputTokens: 8000,
     outputTokens: 80,
@@ -385,9 +391,9 @@ test('the cohort comes from the ticket mirror, with no issue_closed events anywh
     createdAt: ago(9),
     changedAt,
   });
-  store.recordSweep(ago(8), [mirrored(7, ago(3)), mirrored(8, ago(3)), mirrored(9, ago(20))]);
+  store.tickets.recordSweep(ago(8), [mirrored(7, ago(3)), mirrored(8, ago(3)), mirrored(9, ago(20))]);
 
-  assert.equal(store.listWorldEventsOfKindsSince(ago(8), ['issue_closed']).length, 0);
+  assert.equal(store.world.listWorldEventsOfKindsSince(ago(8), ['issue_closed']).length, 0);
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/spend/trend' });

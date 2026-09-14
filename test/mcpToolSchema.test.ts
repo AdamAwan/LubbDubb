@@ -60,8 +60,15 @@ test('validation_report advertises exactly what validateReport enforces', () => 
   assert.equal(prop(json, 'note').minLength, 1);
   assert.equal(validateReport({ result: 'passed', note: '' }).ok, false, 'an empty note is refused');
 
-  assert.deepEqual(prop(json, 'result').enum, ['passed', 'failed', 'handback', 'captured']);
+  assert.deepEqual(prop(json, 'result').enum, ['passed', 'failed', 'blocked', 'captured']);
   assert.equal(validateReport({ result: 'maybe', note: 'saw it' }).ok, false);
+  const retired = validateReport({ result: 'handback', note: 'no login' });
+  assert.equal(retired.ok, false, 'the word the verdict used to have is not quietly accepted');
+  assert.match(
+    retired.ok ? '' : retired.error,
+    /"blocked"/,
+    'and the refusal names what replaced it, rather than listing four words and leaving the agent to guess',
+  );
   assert.equal(validateReport({ result: 'passed', note: 'saw it' }).ok, true);
 
   // A capture asserts nothing, so it rides the one result that asserts nothing either — and the

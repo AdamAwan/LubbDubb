@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import { nextCheckLetter } from '../validation/checkDocument.js';
 import type {
   ValidationAmendment,
@@ -47,7 +48,11 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
   // it exempt, and `validation_checks` collected that debt one change later.
-  validation_plans: {},
+  // `released_at` arrived with the acceptance gate. Null on a row written before it means "authored
+  // and never proposed", which the gate would read as a set still waiting on an operator — every
+  // deployment's live sets held at once. `releaseValidationPlansFromBeforeTheGate` is the backfill,
+  // gated on this report. → docs/spec/14-persistence.md#when-a-null-means-something
+  validation_plans: { released_at: 'TEXT' },
 };
 
 export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
@@ -105,8 +110,8 @@ export class ValidationStore {
       for (const row of all) this.writeCheck(row);
       for (const check of existing) {
         if (declared.has(check.id) || check.supersededReason !== null) continue;
-        this.ctx.db
-          .prepare(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE origin_ref=? AND id=?`)
+        this.ctx
+          .prep(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE origin_ref=? AND id=?`)
           .run(input.supersededReason, ts, originRef, check.id);
       }
     });
@@ -151,8 +156,8 @@ export class ValidationStore {
           result.unknown.push(id);
           continue;
         }
-        this.ctx.db
-          .prepare(
+        this.ctx
+          .prep(
             `UPDATE validation_checks SET superseded_reason=?, amend_note=?, amended_at=?, updated_at=?
              WHERE origin_ref=? AND id=?`,
           )
@@ -223,7 +228,7 @@ export class ValidationStore {
   private replaceValidationResources(originRef: string, resources: ValidationResourceInput[]): void {
     const existing = new Map(this.listValidationResources(originRef).map((r) => [r.name, r]));
     const write = this.ctx.db.transaction(() => {
-      this.ctx.db.prepare(`DELETE FROM validation_resources WHERE origin_ref=?`).run(originRef);
+      this.ctx.prep(`DELETE FROM validation_resources WHERE origin_ref=?`).run(originRef);
       for (const resource of resources) {
         this.writeResource(originRef, resource, existing.get(resource.name)?.humanTaskId ?? null);
       }
@@ -243,8 +248,8 @@ export class ValidationStore {
   }
 
   private writeResource(originRef: string, resource: ValidationResourceInput, humanTaskId: string | null): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO validation_resources (origin_ref, name, kind, note, provided, human_task_id)
          VALUES (@originRef, @name, @kind, @note, @provided, @humanTaskId)
          ON CONFLICT(origin_ref, name) DO UPDATE SET kind=excluded.kind, note=excluded.note,
@@ -261,8 +266,8 @@ export class ValidationStore {
   }
 
   linkValidationResourceTask(originRef: string, name: string, humanTaskId: string): void {
-    this.ctx.db
-      .prepare(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
+    this.ctx
+      .prep(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
       .run(humanTaskId, originRef, name);
   }
 
@@ -274,10 +279,10 @@ export class ValidationStore {
    */
   recordValidationHint(originRef: string, hint: string | null): ValidationPlanRecord {
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
-        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
-         VALUES (?, ?, NULL, NULL, NULL, ?)
+    this.ctx
+      .prep(
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, released_at, updated_at)
+         VALUES (?, ?, NULL, NULL, NULL, NULL, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET hint=excluded.hint, updated_at=excluded.updated_at`,
       )
       .run(originRef, hint, ts);
@@ -296,48 +301,81 @@ export class ValidationStore {
     input: { note: string; emptyReason: string | null },
   ): ValidationPlanRecord {
     const ts = this.ctx.now();
-    this.ctx.db
-      .prepare(
-        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, updated_at)
-         VALUES (?, NULL, ?, ?, ?, ?)
+    this.ctx
+      .prep(
+        `INSERT INTO validation_plans (origin_ref, hint, note, empty_reason, authored_at, released_at, updated_at)
+         VALUES (?, NULL, ?, ?, ?, NULL, ?)
          ON CONFLICT(origin_ref) DO UPDATE SET note=excluded.note, empty_reason=excluded.empty_reason,
-           authored_at=excluded.authored_at, updated_at=excluded.updated_at`,
+           authored_at=excluded.authored_at, released_at=NULL, updated_at=excluded.updated_at`,
       )
       .run(originRef, input.note, input.emptyReason, ts, ts);
     return this.getValidationPlanRecord(originRef) as ValidationPlanRecord;
   }
 
+  /**
+   * The operator's accept on the authored set: the release stamp, and nothing else. Authoring wrote
+   * the rows and the note; this is the press that lets anything read them as work — sheet assembly,
+   * and rule `validate-check`. A set that is not authored cannot be released, so a call on one
+   * answers null rather than stamping a release over nothing.
+   * → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
+   */
+  releaseValidationPlan(originRef: string): ValidationPlanRecord | null {
+    const record = this.getValidationPlanRecord(originRef);
+    if (record === null || record.authoredAt === null) return null;
+    if (record.releasedAt !== null) return record;
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE validation_plans SET released_at=?, updated_at=? WHERE origin_ref=?`)
+      .run(ts, ts, originRef);
+    return this.getValidationPlanRecord(originRef);
+  }
+
+  /**
+   * The operator's reject: the stamp comes off, and the rows the planner wrote stay where they are.
+   * They are the account of what was refused and the next planner's starting point — `ingestValidation`
+   * merges on `id`, so a re-authored set amends them rather than doubling them. Nothing was ever
+   * released, so nobody is halfway through the set this clears the stamp on.
+   * → docs/spec/20-validation.md#when-an-operator-sends-a-check-set-back
+   */
+  withdrawValidationAuthoring(originRef: string): ValidationPlanRecord | null {
+    const record = this.getValidationPlanRecord(originRef);
+    if (record === null || record.authoredAt === null) return null;
+    const ts = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE validation_plans SET authored_at=NULL, released_at=NULL, updated_at=? WHERE origin_ref=?`)
+      .run(ts, originRef);
+    return this.getValidationPlanRecord(originRef);
+  }
+
   listValidationPlanRecords(): ValidationPlanRecord[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_plans ORDER BY origin_ref ASC`)
-      .all() as ValidationPlanRow[];
+    const rows = this.ctx.prep(`SELECT * FROM validation_plans ORDER BY origin_ref ASC`).all() as ValidationPlanRow[];
     return rows.map(rowToPlanRecord);
   }
 
   getValidationPlanRecord(originRef: string): ValidationPlanRecord | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
       | ValidationPlanRow
       | undefined;
     return row ? rowToPlanRecord(row) : null;
   }
 
   listValidationChecks(originRef: string): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? ORDER BY seq ASC, letter ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_checks WHERE origin_ref=? ORDER BY seq ASC, letter ASC`)
       .all(originRef) as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
 
   listAllValidationChecks(): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks ORDER BY origin_ref ASC, seq ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_checks ORDER BY origin_ref ASC, seq ASC`)
       .all() as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
 
   getValidationCheck(originRef: string, checkId: string): ValidationCheck | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? AND id=? AND superseded_reason IS NULL`)
+    const row = this.ctx
+      .prep(`SELECT * FROM validation_checks WHERE origin_ref=? AND id=? AND superseded_reason IS NULL`)
       .get(originRef, checkId) as ValidationCheckRow | undefined;
     return row ? rowToCheck(row) : null;
   }
@@ -400,8 +438,8 @@ export class ValidationStore {
   }
 
   liveClaims(staleBefore: string): ValidationCheck[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM validation_checks
          WHERE claimed_by IS NOT NULL AND claimed_at > ? AND superseded_reason IS NULL
          ORDER BY claimed_at ASC`,
@@ -411,15 +449,15 @@ export class ValidationStore {
   }
 
   listValidationResources(originRef: string): ValidationResource[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources WHERE origin_ref=? ORDER BY name ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_resources WHERE origin_ref=? ORDER BY name ASC`)
       .all(originRef) as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
 
   listAllValidationResources(): ValidationResource[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources ORDER BY origin_ref ASC, name ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM validation_resources ORDER BY origin_ref ASC, name ASC`)
       .all() as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
@@ -473,14 +511,14 @@ export class ValidationStore {
    * @public the seam `RemoteValidationDesk`'s script grace sweep writes through
    */
   sweepValidationScripts(originRef: string, checkId: string, steps: readonly ValidationStep[]): void {
-    this.ctx.db
-      .prepare(`UPDATE validation_checks SET steps=?, updated_at=? WHERE origin_ref=? AND id=?`)
+    this.ctx
+      .prep(`UPDATE validation_checks SET steps=?, updated_at=? WHERE origin_ref=? AND id=?`)
       .run(JSON.stringify(steps), this.ctx.now(), originRef, checkId);
   }
 
   private writeCheck(check: ValidationCheck): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         // TECHDEBT: `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
@@ -696,6 +734,7 @@ interface ValidationPlanRow {
   note: string | null;
   empty_reason: string | null;
   authored_at: string | null;
+  released_at: string | null;
 }
 
 function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
@@ -705,5 +744,20 @@ function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
     note: r.note ?? null,
     emptyReason: r.empty_reason ?? null,
     authoredAt: r.authored_at ?? null,
+    releasedAt: r.released_at ?? null,
   };
+}
+
+/**
+ * Every check set authored before the acceptance gate existed is a set an operator has been running
+ * for weeks. Null `released_at` means "still a proposal", so without this the gate holds all of them
+ * at once — sheets stop assembling and `validate-check` stops dispatching, with nothing red. Gated on
+ * `ensureColumns`' report of having just added the column, because a pass on every boot would release
+ * the set an operator is being asked about right now.
+ * → docs/spec/14-persistence.md#when-a-null-means-something
+ */
+export function releaseValidationPlansFromBeforeTheGate(db: Database.Database): void {
+  db.prepare(
+    `UPDATE validation_plans SET released_at=authored_at WHERE authored_at IS NOT NULL AND released_at IS NULL`,
+  ).run();
 }

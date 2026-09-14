@@ -110,48 +110,48 @@ test('an override prices and never un-holds: a held row keeps its hold', async (
 
 test('setProfileOverride writes one row per origin and clears with null', () => {
   const store = new Store(':memory:');
-  store.setProfileOverride('issue:1', 'fast');
-  store.setProfileOverride('pr:2:ci', 'deep');
-  assert.deepEqual(store.listProfileOverrides(), [
+  store.profileOverrides.setProfileOverride('issue:1', 'fast');
+  store.profileOverrides.setProfileOverride('pr:2:ci', 'deep');
+  assert.deepEqual(store.profileOverrides.listProfileOverrides(), [
     { origin: 'issue:1', profile: 'fast' },
     { origin: 'pr:2:ci', profile: 'deep' },
   ]);
-  store.setProfileOverride('issue:1', 'deep');
+  store.profileOverrides.setProfileOverride('issue:1', 'deep');
   assert.deepEqual(
-    store.listProfileOverrides().find((o) => o.origin === 'issue:1'),
+    store.profileOverrides.listProfileOverrides().find((o) => o.origin === 'issue:1'),
     { origin: 'issue:1', profile: 'deep' },
   );
-  store.setProfileOverride('issue:1', null);
-  assert.deepEqual(store.listProfileOverrides(), [{ origin: 'pr:2:ci', profile: 'deep' }]);
+  store.profileOverrides.setProfileOverride('issue:1', null);
+  assert.deepEqual(store.profileOverrides.listProfileOverrides(), [{ origin: 'pr:2:ci', profile: 'deep' }]);
   store.close();
 });
 
 test('a stale profile override is pruned once its origin stops being tracked', () => {
   let t = Date.parse('2026-07-01T00:00:00Z');
   const store = new Store(':memory:', () => new Date(t).toISOString());
-  store.setProfileOverride('issue:1', 'fast');
-  store.setProfileOverride('issue:2', 'fast');
+  store.profileOverrides.setProfileOverride('issue:1', 'fast');
+  store.profileOverrides.setProfileOverride('issue:2', 'fast');
 
-  store.reconcileProfileOverrides(['issue:1', 'issue:2'], 1000);
+  store.profileOverrides.reconcileProfileOverrides(['issue:1', 'issue:2'], 1000);
   t += 500;
-  store.reconcileProfileOverrides(['issue:2'], 1000);
+  store.profileOverrides.reconcileProfileOverrides(['issue:2'], 1000);
   assert.deepEqual(
-    store.listProfileOverrides().map((o) => o.origin),
+    store.profileOverrides.listProfileOverrides().map((o) => o.origin),
     ['issue:1', 'issue:2'],
     'under the TTL it survives a pulse that did not queue it',
   );
 
   t += 2000;
-  store.reconcileProfileOverrides(['issue:2'], 1000);
+  store.profileOverrides.reconcileProfileOverrides(['issue:2'], 1000);
   assert.deepEqual(
-    store.listProfileOverrides().map((o) => o.origin),
+    store.profileOverrides.listProfileOverrides().map((o) => o.origin),
     ['issue:2'],
   );
 
   t += 10_000_000;
-  store.reconcileProfileOverrides([], 0);
+  store.profileOverrides.reconcileProfileOverrides([], 0);
   assert.deepEqual(
-    store.listProfileOverrides().map((o) => o.origin),
+    store.profileOverrides.listProfileOverrides().map((o) => o.origin),
     ['issue:2'],
   );
   store.close();

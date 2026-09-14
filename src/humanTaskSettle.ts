@@ -19,7 +19,7 @@ export function settleHumanTask(store: Store, input: HumanTaskSettleInput): Huma
   const note = typeof input.note === 'string' ? input.note.trim() : input.note;
   if (input.status === 'declined') {
     if (!note) return { ok: false, code: 400, error: 'note is required — say why, so a replan has something to go on' };
-    const task = store.settleHumanTask(input.id, 'declined', note);
+    const task = store.humanTasks.settleHumanTask(input.id, 'declined', note);
     if (!task) return { ok: false, code: 409, error: 'human task not found or already settled' };
     return { ok: true, task, part: null, runCycle: task.partId !== null };
   }
@@ -31,14 +31,14 @@ export function settleHumanTask(store: Store, input: HumanTaskSettleInput): Huma
       code: 400,
       error: `note is required — ${owed.headline} Say what you are doing about them, or waive them first.`,
     };
-  const task = store.settleHumanTask(input.id, 'done', note ?? null);
+  const task = store.humanTasks.settleHumanTask(input.id, 'done', note ?? null);
   if (!task) return { ok: false, code: 409, error: 'human task not found or already settled' };
-  const part = task.partId ? store.concludeHumanPart(task.partId, humanPartSummary(task)) : null;
+  const part = task.partId ? store.plans.concludeHumanPart(task.partId, humanPartSummary(task)) : null;
   return { ok: true, task, part, runCycle: part !== null };
 }
 
 export function closeOutValidation(store: Store, taskId: string): { headline: string } | null {
-  const task = store.getHumanTask(taskId);
+  const task = store.humanTasks.getHumanTask(taskId);
   if (!task || task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
   const validation = goalValidation(store, task.originRef);
   if (!validation || validation.verdict.state === 'clear') return null;

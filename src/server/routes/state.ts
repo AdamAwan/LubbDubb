@@ -11,10 +11,10 @@ import type {
   RunningConfigPayload,
 } from '../../wire.js';
 import { describeCiPolicy } from '../../ci/describeCiPolicy.js';
-import { loadConfigFromText, projectConfigLayer, type Config } from '../../config.js';
-import { diffConfig } from '../../configApply.js';
-import { configField, envOverride, fieldValueRefusal } from '../../configFields.js';
-import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
+import { loadConfigFromText, projectConfigLayer, type Config } from '../../config/config.js';
+import { diffConfig } from '../../config/configApply.js';
+import { configField, envOverride, fieldValueRefusal } from '../../config/configFields.js';
+import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../config/configFile.js';
 import { MCP_SERVER_ID } from '../../mcp/names.js';
 import { describeRunningConfig } from '../runningConfig.js';
 import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../stateSnapshot.js';
@@ -256,7 +256,7 @@ export function register(
             'Restart it the way you started it — the pending changes are what it will come back on.',
         });
       }
-      const live = store.countLiveAgents();
+      const live = store.agents.countLiveAgents();
       if (live > 0 && !body.interrupt) {
         return reply.code(409).send({
           error: `${live} agent(s) are still running — wait for the fleet to drain, or restart with interrupt to stop them now (they come back on the next boot).`,

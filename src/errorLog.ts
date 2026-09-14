@@ -24,7 +24,7 @@ export class ErrorLog extends EventEmitter implements ErrorRecorder {
   }
 
   record(input: ErrorLogInput): ErrorLogEntry {
-    const entry = this.store.recordError(input);
+    const entry = this.store.errors.recordError(input);
     this.mirror(entry);
     this.emit('logged', entry);
     return entry;

@@ -50,7 +50,27 @@ export interface Place {
   featureCard: number | null;
   featureSort: FeatureSort;
   featurePrs: FeaturePrFilter;
+  /** Which shape the overview draws in. */
+  overview: OverviewShape;
+  /** Whether the feature board is read as a board or worked one Feature at a time. */
+  featureMode: FeatureMode;
 }
+
+/**
+ * The overview's shape. `cards` is what the deployment has always drawn — fleet,
+ * goals, pull requests. The other three lead with what the operator must answer
+ * rather than what the harness is doing.
+ */
+export type OverviewShape = 'cards' | 'next';
+export const OVERVIEW_SHAPES: readonly OverviewShape[] = ['cards', 'next'];
+
+/**
+ * How the feature board is read. `board` is every Feature at once, which answers
+ * "how is the work going". `focus` is one Feature with its asks in front, which
+ * answers "what do I do about it".
+ */
+export type FeatureMode = 'board' | 'focus';
+export const FEATURE_MODES: readonly FeatureMode[] = ['board', 'focus'];
 
 export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
 export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
@@ -121,6 +141,8 @@ export const NOWHERE: Place = {
   featureCard: null,
   featureSort: 'wants-you',
   featurePrs: 'open',
+  overview: 'cards',
+  featureMode: 'board',
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -208,6 +230,8 @@ export function readPlace(search: string): Place {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
+    overview: OVERVIEW_SHAPES.find((o) => o === param(query, 'overview')) ?? 'cards',
+    featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
 }
 
@@ -350,6 +374,8 @@ export function placeQuery(place: Place): string {
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
+  if (place.overview !== 'cards') query.set('overview', place.overview);
+  if (place.featureMode !== 'board') query.set('fmode', place.featureMode);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

@@ -1,5 +1,5 @@
 import type { PullRequest, WorldSnapshot } from '../types.js';
-import { basePrOf, inheritedCiFailure, prHealth, prState } from '../prHealth.js';
+import { basePrOf, inheritedCiFailure, prHealth, prState } from '../pr/prHealth.js';
 
 // → docs/spec/11-mcp-tools.md
 

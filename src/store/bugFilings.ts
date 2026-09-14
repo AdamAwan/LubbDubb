@@ -36,8 +36,8 @@ export class BugFilingStore {
       createdAt: ts,
       updatedAt: ts,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO issue_bug_filings (job_id, origin_ref, status, ticket_ref, created_at, updated_at)
          VALUES (@jobId, @originRef, @status, @ticketRef, @createdAt, @updatedAt)`,
       )
@@ -46,21 +46,19 @@ export class BugFilingStore {
   }
 
   listBugFilings(): BugFiling[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_bug_filings ORDER BY created_at ASC`).all() as BugFilingRow[];
+    const rows = this.ctx.prep(`SELECT * FROM issue_bug_filings ORDER BY created_at ASC`).all() as BugFilingRow[];
     return rows.map(rowToBugFiling);
   }
 
   findBugFilingByJobId(jobId: string): BugFiling | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_bug_filings WHERE job_id=?`).get(jobId) as
-      | BugFilingRow
-      | undefined;
+    const row = this.ctx.prep(`SELECT * FROM issue_bug_filings WHERE job_id=?`).get(jobId) as BugFilingRow | undefined;
     return row ? rowToBugFiling(row) : null;
   }
 
   linkBugFiling(jobId: string, ticketRef: string): BugFiling | null {
     const updatedAt = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
+    const result = this.ctx
+      .prep(
         `UPDATE issue_bug_filings SET status='filed', ticket_ref=?, updated_at=? WHERE job_id=? AND status='filing'`,
       )
       .run(ticketRef, updatedAt, jobId);

@@ -1,10 +1,11 @@
 import type { GoalPause, Issue } from './types.js';
+import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
 import { watchCascadeTargets } from './issueRelations.js';
 
 // → docs/spec/06-issue-pickup.md
 
 export function goalPauseOrigin(issueNumber: number): string {
-  return `issue:${issueNumber}`;
+  return issueOriginRef('root', issueNumber);
 }
 
 export function pausedIssueNumbers(
@@ -16,9 +17,8 @@ export function pausedIssueNumbers(
   if (pauses.length === 0) return out;
   const byNumber = new Map(issues.map((i) => [i.number, i]));
   for (const pause of pauses) {
-    const match = /^issue:(\d+)$/.exec(pause.originRef);
-    if (match === null) continue;
-    const number = Number(match[1]);
+    const number = issueOriginNumber('root', pause.originRef);
+    if (number === null) continue;
     const issue = byNumber.get(number);
     if (issue === undefined) {
       out.add(number);

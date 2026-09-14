@@ -51,7 +51,7 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
         watch: args.watch,
         state: args.state,
       },
-      deps.store.listOfferedAreas(),
+      deps.store.remoteValidation.listOfferedAreas(),
     );
     if (!parsed.ok) {
       return toolError(`Plan rejected: ${parsed.error}`);

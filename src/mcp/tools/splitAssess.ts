@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { originIssueNumber } from '../../plans/planning.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { toolSchema } from '../schema.js';
-import { splitTargetPr } from '../../prSplit.js';
+import { splitTargetPr } from '../../pr/prSplit.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -44,7 +44,7 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
   ),
   handler: (args) => {
     const prNumber = splitTargetPr(task.originRef);
-    const issueNumber = originIssueNumber(task.originRef);
+    const issueNumber = issueSubtreeNumber(task.originRef);
     if (prNumber === null || issueNumber === null) {
       return toolError(
         'split_assess is for an agent dispatched to size up a pull request, and this run was dispatched for ' +
@@ -73,7 +73,7 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
       );
     }
 
-    const recorded = deps.store.recordPrSplitVerdict({
+    const recorded = deps.store.prSplits.recordPrSplitVerdict({
       prNumber,
       issueNumber,
       verdict,

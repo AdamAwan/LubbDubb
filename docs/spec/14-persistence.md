@@ -8,9 +8,24 @@
 The rule above is about **SQLite access, not about one class** (issue #221). `store.ts` was a
 2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
 depended on the surface of all of them. It is now a **composition root**: one domain module per
-group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
-thin `Store` that instantiates them and delegates. Every public method name and signature is
-unchanged, so no call site anywhere knows.
+group of related tables, each a class taking nothing but a `StoreContext` (`{db, now, prep}`), and a
+`Store` that instantiates them, holds the database handle, and runs the schema and migration pass.
+
+**`Store` forwards nothing.** Each domain module hangs off it as a public named member and callers
+reach the method on the module that owns it — `store.tasks.getTask(id)`, `store.jobs.createJob(…)`,
+`store.pool.replaceFleetDigest(…)`. For a while the split kept a flat façade over the top: 434
+hand-written one-line forwarders, so that no call site had to know the split had happened. They are
+gone. A forwarder is a second copy of a signature that nothing keeps true — every new store method
+had to be written twice, five of the pool ones had already drifted to a different name at the
+façade, and the only thing that caught a forgotten one was the call site failing. Adding a method to
+a domain module is now the whole change.
+
+What stays on `Store` is what is not a forward: `close()` (it asks `TranscriptStore` to flush before
+the handle goes), and the three reads that genuinely span two modules —
+`sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's, and
+`writeUpObstacle`, which opens a job and records the write-up against the obstacle in one
+transaction. A composite belongs here because it is the caller that holds both modules; a method
+that only names one belongs on that one.
 
 | Module                | Tables                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |
@@ -40,9 +55,9 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 - **Only `src/store/` imports `better-sqlite3`.** The constraint the split was careful to preserve,
   and now the one that fails a test when broken. (Matched on the _import_ — two modules elsewhere
   mention the driver in prose to explain why a synchronous write makes a read-then-write race-free.)
-- **A module is handed the database and nothing else.** `StoreContext` is `{db, now}` and no module
-  imports a sibling. That is not a rule imposed on the split so much as a fact discovered by it:
-  every method in the old class was `this.db.prepare(...)` plus `this.now()`, with no domain
+- **A module is handed the database and nothing else.** `StoreContext` is `{db, now, prep}` and no
+  module imports a sibling. That is not a rule imposed on the split so much as a fact discovered by
+  it: every method in the old class was a prepared statement plus `this.now()`, with no domain
   reaching another through class state, which is what made the move mechanical. A genuinely
   cross-domain read belongs _above_ the persistence layer, in the caller that already holds both.
 - **Each table is named by exactly one module.** Two writers to one table is how the invariants
@@ -57,6 +72,15 @@ assertions above: `verdicts.ts`, the issue-verdict exclusion matrix (#222). It i
 declaration — no SQLite, no `Store` — naming the four verdict tables so a test can walk it, and
 `issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` and
 `store.ts` itself are excluded for the same kind of reason: none of them owns a table.
+
+`context.ts` carries one read that crosses that line and is bounded on purpose: `labelsById`, the
+`id → label` lookup behind `escalationLabels`, `humanTaskLabels`, `jobLabels`, `landingLabels` and
+`planLabels` — one shape written five times, over five tables, differing only in which column is
+the label. It is a **read only**, and the table and column come from `LABEL_SOURCES`, a closed
+`as const` map in that file which the five public methods index by key; nothing caller-supplied
+reaches the SQL. Each of those tables is still written by exactly one module, which is the property
+that matters — but a search for who names `escalations.prompt` or `stack_landings.ref` has a second
+place to look.
 
 **Membership is settled by which invariants must be readable together, not by table count.**
 `issueVerdicts.ts` is the point of the exercise: the four verdict writers clear each other under
@@ -82,6 +106,42 @@ are one module rather than scattered through 2,500 lines.
 Writes are **synchronous**, which is what keeps the harness logic race-free. Lean on that.
 
 The clock is injectable (`Clock`), so tests get deterministic timestamps.
+
+### Compiled statements are memoised per connection
+
+better-sqlite3 does **not** cache prepared statements: every `db.prepare(sql)` re-parses and re-plans
+the SQL. A point lookup like `getTask` is called inside loops — the end-of-run pass, the obstacle and
+recovery desks, the escalation inbox — so preparing it afresh each call dominated the call. Measured
+on this repo's driver, 20k point lookups cost 156 ms preparing each time against 38 ms re-using the
+compiled statement.
+
+So `StoreContext` carries a third member, `prep` (`createPrepare` in `context.ts`): a
+`Map<string, Statement>` keyed on the exact SQL text, compiled on first ask and handed back after.
+Domain modules read `this.ctx.prep(sql)` where they used to read `this.ctx.db.prepare(sql)`.
+
+Three things make that safe, and a new call site has to keep them true:
+
+- **The cache belongs to one connection.** It is built in the `Store` constructor over that store's
+  own handle and lives on that store's `StoreContext`, so nothing is shared between stores — which is
+  what tests need, since they build many `Store`s over `:memory:` and close them independently. A
+  statement compiled against a closed database is a statement nothing can run.
+- **It is built _after_ the migration pass**, and is lazy besides, so nothing is compiled against a
+  pre-migration schema. (better-sqlite3 recompiles on a schema change anyway; the ordering is belt as
+  well as braces.)
+- **Only constant SQL is memoised.** A cached statement is keyed on its text, so SQL assembled per
+  call — a variable-length `IN (?,?,?)` list, most of all — would grow the map without bound. Those
+  sites keep `this.ctx.db.prepare(...)` deliberately, `labelsById` and `listFilesForAgents` included:
+  the `db.prepare` there is the rule being followed, not a cache that was forgotten. Interpolating a
+  _module-level_ constant (`ACTIVE_TASK_STATUS_SQL`, `LIVE_SQL`, `OPEN_SQL`, `SUMMARY_COLUMNS`) still
+  yields constant text and is memoised; so does a column or table name chosen from a closed set, which
+  is bounded by that set — which is why `labelsById` may interpolate its table and column but not its
+  hole list.
+
+A cached statement is also **stateful**, which is why none of this reaches `iterate`, `pluck`, `raw`,
+`expand` or `bind`: `iterate` leaves a statement busy while its consumer runs, and the other four
+mutate the statement permanently, so a later caller of the same SQL would get someone else's shape.
+`src/store/` uses none of them today, and a site that needs one must not go through `prep` — or must
+apply the modifier once, under a cache key of its own.
 
 ## Migrations
 
@@ -143,7 +203,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 ### When a null means something
 
 `ensureColumns` returns the columns it **actually added**, as `table.column`, and the composition
-root gates a backfill on that list. Two columns need it so far, and the shape is the same each time. `pets.opened_at` is null on every row
+root gates a backfill on that list. Three columns need it so far, and the shape is the same each time. `pets.opened_at` is null on every row
 that predates it, and null there spells _still an egg_ — so the `ALTER TABLE` alone would turn every
 existing vivarium back into a crate of anonymous shells, with nothing red and no way out but clicking
 through the lot. `openPetsFromBeforeEggs` stamps them with their own `hatched_at`, and runs **only on
@@ -199,6 +259,20 @@ resume judges `interruptedAt ?? lastSeenAt` — and the one live row a database 
 hold is dated by the gated backfill above. Every row written since is stamped by the pulse that holds
 it. Backfilling it as well would be inventing a beat that never happened, on rows nothing will ever
 read it for. → [23](23-local-runs.md#coming-back-after-a-restart)
+
+`validation_plans.released_at` is the newest, and it is `pets.opened_at`'s shape with the sign reversed.
+Null means _authored and still a proposal_, which the running code acts on twice: no sheet assembles off
+the set and rule `validate-check` dispatches nothing for it
+([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Every row written before the gate
+existed is a set an operator has been running for weeks, so the `ALTER TABLE` alone holds all of them at
+once — a bench that stops, dispatches that stop, and nothing red.
+`releaseValidationPlansFromBeforeTheGate` sets `released_at` from each row's own `authored_at`, on the
+boot the column arrives and never again: unconditionally, the same statement would release the set an
+operator is being asked about right now, which is the one thing the column exists to hold. The second
+reader needs no backfill for the reason `goal_watches.baseline_value` did not — `checkSetReleased` treats
+a goal with live checks and _no_ authoring stamp as released, so a set a plan document ingested is
+outside the gate by construction rather than by repair.
+→ [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)
 
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.
@@ -399,8 +473,16 @@ lacked the index.
 ### Tasks
 
 `createTask`, `updateTask` (status / agentId / branch only), `getTask`, `listTasks`,
-`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`.
-"Active" is `queued`, `running` or `waiting`.
+`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
+`hasActiveTaskOnBranch(branch, exceptTaskId)`. "Active" is `queued`, `running` or `waiting`, spelled
+once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask`.
+
+`hasActiveTaskOnBranch` is the existence question `findActiveTaskByBranch` cannot ask: whether any
+task **other than** the one being asked about still holds the branch. The reaped-agent handler in
+`src/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
+and filtering in JS until it was an index-shaped `SELECT 1 … LIMIT 1`. There is no index on
+`tasks(branch)` — `idx_tasks_status` and `idx_tasks_origin` are the only two — so the query is a scan
+of `tasks` with an early exit, still strictly cheaper than hydrating every row.
 
 **`listTasks` returns `TaskSummary`, not `Task`: every column except `prompt`.** It is the only
 all-time reading of the table, and it names its columns rather than starring. A rendered agent prompt
@@ -513,7 +595,17 @@ provider.
 
 `countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use: it
 counts `starting` / `running` / `waiting`. `crashed` is deliberately outside it — a row stamped by boot
-detection has no process behind it, so counting it would let dead agents eat the concurrency cap.
+detection has no process behind it, so counting it would let dead agents eat the concurrency cap. The
+three statuses are declared once in `LIVE` and the SQL derives its `IN` clause from it, as
+`local_runs` does; the reading is a `COUNT(*)` over that clause, because it sits on the dispatcher's
+headroom path and on every snapshot, where hydrating the whole table to take its length was the cost.
+`listAgentsByStatus` selects on the same column rather than filtering a full listing, and is one of
+the variable-length `IN` sites that keep `db.prepare`.
+
+Both listings, and `listAgents`, order `started_at DESC, rowid ASC`: the tie-break is explicit because
+agents started inside the same millisecond are ordinary — a fake clock in a test makes them the rule —
+and SQLite's sorter promises nothing about equal keys, so two readings of the same rows could disagree
+on which agent is "the live one" a caller takes first.
 
 `recordAgentUsage` writes the cumulative values onto the row **and** the cost delta into
 `usage_events`. It is the shape for a row with **one** session behind it; a local run's
@@ -708,11 +800,20 @@ have cost that discipline its meaning.
 (merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
 
-`upsertPlanAtoms(planId, atoms)` and `listAllPlanAtoms()` are the atom side. Unlike
+`upsertPlanAtoms(planId, atoms)`, `listPlanAtoms(planId)` (ordered `seq ASC`, over
+`idx_plan_atoms_plan`) and `listAllPlanAtoms()` are the atom side. A reader that wants one plan's
+atoms asks for that plan's — filtering the whole table down to one plan reads every atom in the
+deployment to keep a handful. Unlike
 `upsertPlanParts`, `upsertPlanAtoms` **does delete**: an atom carries no progress — no branch, no
 pull request, no task — so the document it came from is the whole record of it, and an amendment
 that drops an atom drops its row. Retiring it instead would leave a declaration on the sheet that
 the current plan no longer makes.
+
+`listPlanAmendments(planId)` (`created_at DESC`) is the read beside one plan; `listAllPlanAmendments()`
+(`plan_id ASC, created_at DESC`, so the rows arrive grouped per plan exactly as a read per plan left
+them) is the one read `/api/usage` takes, because the insights row counts every amendment the
+deployment ever held and a read per plan scales that poll with the number of plans. Rows are never
+deleted and a plan is never deleted, so the two carry the same set.
 
 `recordPlanCaveatAnswers(planId, answers)`, `listPlanCaveatAnswers(planId)` and
 `listAllPlanCaveatAnswers()` are the operator's words beside a plan's caveats — appended at the accept,
@@ -991,7 +1092,8 @@ handed origins and digests only, `retrospectives`' rule, and for its reason.
 
 `recordWorkGraph(observations)`, `listWorkRoots()` (nodes with no parent, most recently seen first),
 `listWorkSubtree(rootRef)` (one recursive CTE bounded to the requested root, `UNION` rather than
-`UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat).
+`UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat),
+`getWorkNode(ref)` (one row by primary key, or null).
 
 `mergedPrs()` and `settledPrs()` read the terminal PR rows — the first as a set of merged numbers, the
 second as a map of merged **and** closed. Both exist because the table is upsert-only and the world's
@@ -1005,6 +1107,11 @@ beside it is what ran underneath — rebuilding the table from roots plus a subt
 for something one `SELECT` answers. Note what it is deliberately **not** wired into: the recorder still
 builds its `existing` set the roots-then-subtrees way, so the backfill-reach limitation below stands
 unchanged. Closing that is a separate decision, not a side effect of this method existing.
+
+`getWorkNode` is the same read narrowed to one ref, for the callers that only want to know whether a
+node exists or want that node alone — `POST /api/work/:ref/ignore` and `POST /api/work/:ref/file`.
+`ref` is the table's primary key, so it is an index lookup where the list read hydrated every row to
+discard all but one.
 
 A node is keyed on the ref vocabulary that already exists — `issue:12`, `issue:12:plan`,
 `issue:12:part:schema`, `pr:41`, `pr:41:ci`, `job:7` — so it joins to every gate, override and proposal

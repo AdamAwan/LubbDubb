@@ -1,3 +1,4 @@
+import { issueOriginRef } from '../issueOrigins.js';
 import type { TaskSummary, WorldEvent, WorldSnapshot } from '../types.js';
 import { isActiveTask } from '../tasks.js';
 
@@ -22,7 +23,7 @@ export function prReadRef(number: number): string {
 }
 
 export function issueReadRef(number: number): string {
-  return `issue:${number}`;
+  return issueOriginRef('root', number);
 }
 
 interface ReadPlanInputs {

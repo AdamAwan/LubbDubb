@@ -41,8 +41,8 @@ export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
   recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO goal_landings (pr_number, goal_ref, sha, recorded_at)
          VALUES (@prNumber, @goalRef, @sha, @recordedAt)`,
       )
@@ -50,8 +50,8 @@ export class EnvironmentStore {
   }
 
   listGoalLandings(): GoalLanding[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM goal_landings ORDER BY recorded_at ASC, pr_number ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM goal_landings ORDER BY recorded_at ASC, pr_number ASC`)
       .all() as LandingRow[];
     return rows.map((r) => ({
       prNumber: r.pr_number,
@@ -63,13 +63,13 @@ export class EnvironmentStore {
   }
 
   markLandingIntegration(prNumber: number, onIntegration: boolean): void {
-    this.ctx.db
-      .prepare(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`)
+    this.ctx
+      .prep(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`)
       .run(onIntegration ? 'yes' : 'no', prNumber);
   }
 
   landedPrs(): ReadonlySet<number> {
-    const rows = this.ctx.db.prepare(`SELECT pr_number FROM goal_landings`).all() as { pr_number: number }[];
+    const rows = this.ctx.prep(`SELECT pr_number FROM goal_landings`).all() as { pr_number: number }[];
     return new Set(rows.map((r) => r.pr_number));
   }
 
@@ -79,8 +79,8 @@ export class EnvironmentStore {
     status: EnvironmentReachStatus;
     detail: string | null;
   }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR REPLACE INTO environment_reach (sha, environment, status, detail, observed_at)
          VALUES (@sha, @environment, @status, @detail, @observedAt)`,
       )
@@ -88,8 +88,8 @@ export class EnvironmentStore {
   }
 
   recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR IGNORE INTO goal_arrivals (goal_ref, environment, arrived_at, recorded_at, announced_at)
          VALUES (@goalRef, @environment, @arrivedAt, @recordedAt, NULL)`,
       )
@@ -97,8 +97,8 @@ export class EnvironmentStore {
   }
 
   listGoalArrivals(): GoalArrival[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM goal_arrivals ORDER BY arrived_at DESC, environment ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM goal_arrivals ORDER BY arrived_at DESC, environment ASC`)
       .all() as ArrivalRow[];
     return rows.map((r) => ({
       goalRef: r.goal_ref,
@@ -111,8 +111,8 @@ export class EnvironmentStore {
   }
 
   markArrivalWatched(goalRef: string, environment: string): void {
-    this.ctx.db
-      .prepare(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
+    this.ctx
+      .prep(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
@@ -122,21 +122,21 @@ export class EnvironmentStore {
    * rather than sheeting every goal that ever arrived. → docs/spec/36-remote-validation.md
    */
   markArrivalSheeted(goalRef: string, environment: string): void {
-    this.ctx.db
-      .prepare(`UPDATE goal_arrivals SET sheeted_at=? WHERE goal_ref=? AND environment=?`)
+    this.ctx
+      .prep(`UPDATE goal_arrivals SET sheeted_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
   markArrivalAnnounced(goalRef: string, environment: string): void {
-    this.ctx.db
-      .prepare(`UPDATE goal_arrivals SET announced_at=? WHERE goal_ref=? AND environment=?`)
+    this.ctx
+      .prep(`UPDATE goal_arrivals SET announced_at=? WHERE goal_ref=? AND environment=?`)
       .run(this.ctx.now(), goalRef, environment);
   }
 
   releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
     const release: EnvironmentGateRelease = { goalRef, note, releasedAt: this.ctx.now() };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT OR REPLACE INTO environment_gate_releases (goal_ref, note, released_at)
          VALUES (@goalRef, @note, @releasedAt)`,
       )
@@ -145,12 +145,12 @@ export class EnvironmentStore {
   }
 
   clearEnvironmentGateRelease(goalRef: string): void {
-    this.ctx.db.prepare(`DELETE FROM environment_gate_releases WHERE goal_ref=?`).run(goalRef);
+    this.ctx.prep(`DELETE FROM environment_gate_releases WHERE goal_ref=?`).run(goalRef);
   }
 
   listEnvironmentGateReleases(): EnvironmentGateRelease[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM environment_gate_releases ORDER BY released_at DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM environment_gate_releases ORDER BY released_at DESC`)
       .all() as ReleaseRow[];
     return rows.map((r) => ({ goalRef: r.goal_ref, note: r.note, releasedAt: r.released_at }));
   }
@@ -162,8 +162,8 @@ export class EnvironmentStore {
     reasons: string[];
     detail: string | null;
   }): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO environment_health (environment, state, tier, reasons, detail, observed_at, changed_at)
          VALUES (@environment, @state, @tier, @reasons, @detail, @at, @at)
          ON CONFLICT(environment) DO UPDATE SET
@@ -185,7 +185,7 @@ export class EnvironmentStore {
   }
 
   listEnvironmentHealth(): EnvironmentHealthReading[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM environment_health`).all() as HealthRow[];
+    const rows = this.ctx.prep(`SELECT * FROM environment_health`).all() as HealthRow[];
     return rows.map((r) => ({
       environment: r.environment,
       state: r.state as EnvironmentHealthState,
@@ -198,7 +198,7 @@ export class EnvironmentStore {
   }
 
   listEnvironmentReach(): EnvironmentReading[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM environment_reach`).all() as ReachRow[];
+    const rows = this.ctx.prep(`SELECT * FROM environment_reach`).all() as ReachRow[];
     return rows.map((r) => ({
       sha: r.sha,
       environment: r.environment,

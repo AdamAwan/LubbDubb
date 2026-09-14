@@ -20,17 +20,17 @@ export class StackLandingDesk {
   ) {}
 
   land(ref: string, rungs: number[]): StackLanding {
-    return this.store.recordStackLanding(ref, rungs);
+    return this.store.landings.recordStackLanding(ref, rungs);
   }
 
   revoke(prNumber: number): StackLanding | null {
-    const standing = this.store.standingLandingForPr(prNumber);
+    const standing = this.store.landings.standingLandingForPr(prNumber);
     if (!standing) return null;
-    return this.store.settleStackLanding(standing.id, 'revoked', 'you called it off');
+    return this.store.landings.settleStackLanding(standing.id, 'revoked', 'you called it off');
   }
 
   stopForFailedMerge(prNumber: number, message: string): void {
-    const standing = this.store.standingLandingForPr(prNumber);
+    const standing = this.store.landings.standingLandingForPr(prNumber);
     if (!standing) return;
     this.stop(standing, `merging #${prNumber} failed: ${message}`);
   }
@@ -38,10 +38,10 @@ export class StackLandingDesk {
   settle(world: SettleWorld): void {
     try {
       if ((world.staleSources ?? []).length > 0) return;
-      const merged = this.store.mergedPrs();
-      for (const settlement of settleLandings(this.store.listStandingLandings(), { ...world, merged })) {
+      const merged = this.store.graph.mergedPrs();
+      for (const settlement of settleLandings(this.store.landings.listStandingLandings(), { ...world, merged })) {
         if (settlement.status === 'landed') {
-          this.store.settleStackLanding(settlement.landing.id, 'landed', null);
+          this.store.landings.settleStackLanding(settlement.landing.id, 'landed', null);
           continue;
         }
         this.stop(settlement.landing, settlement.reason ?? 'a rung is no longer ready');
@@ -56,7 +56,7 @@ export class StackLandingDesk {
   }
 
   private stop(landing: StackLanding, reason: string): void {
-    const stopped = this.store.settleStackLanding(landing.id, 'stopped', reason);
+    const stopped = this.store.landings.settleStackLanding(landing.id, 'stopped', reason);
     if (!stopped) return;
     this.escalations.create({
       type: 'approve_change',

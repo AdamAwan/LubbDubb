@@ -19,7 +19,7 @@ reason, so "why did (or didn't) this happen" is always answerable.
 
 1. **Rejected items first.** Everything `parseActions` refused is audited as `rejected` with the zod
    error and the raw JSON, and never run.
-2. `liveCount` is read once from `store.countLiveAgents()` and incremented locally as agents spawn, so
+2. `liveCount` is read once from `store.agents.countLiveAgents()` and incremented locally as agents spawn, so
    the cap holds within a single cycle's plan.
 3. Each validated action is handled by type.
 
@@ -52,6 +52,19 @@ authorization read holds its dispatches exactly as a handover does. The step say
 | `slot-handover` | `workingDirectory` → `WorktreeManager.ensure`. The minutes-long one. |
 | `authorizing`   | `authorize`: whether the outbound act is already authorized. A read. |
 
+**Each step carries its own duration.** A row has `stepStartedAt` for the wait it is in and `elapsed`
+for the ones behind it, so the reading answers _which_ wait rather than only _that_ there is one — the
+two are different questions, and the step name alone never distinguished a two-minute handover from a
+two-minute authorization read that preceded it. The Fleet row draws both.
+
+**And the audit keeps the breakdown after the row is gone.** The board is in memory and a row leaves
+the moment the agent starts, so a finished wait would be unreadable ten seconds later — the reason
+nobody could say where a slow dispatch spent its time. `readyingBreakdown` renders the steps onto the
+decision the executor already writes (`Spawned code agent … Readied in 2m 3s (slot-handover 2m 1s).`),
+on the rejected path as well as the executed one, since a handover that took two minutes and _then_
+threw is the reading that matters most. Steps under 100ms are left out: a dispatch that waited on
+nothing should audit as it always did.
+
 The synchronous steps between them are deliberately unnamed: nothing yields there, so no reader can
 observe one. An action whose whole body is synchronous therefore goes on and off the board inside a
 single tick and is never drawn — which is correct, since nothing was waiting for it.
@@ -77,12 +90,12 @@ For `dispatch_code_agent` and `dispatch_desk_agent`, in this exact order:
 
 ### 1. Origin gate — `skipped`
 
-`store.findActiveTaskByOrigin(originRef)`. If an active task already holds the origin, the action is
+`store.tasks.findActiveTaskByOrigin(originRef)`. If an active task already holds the origin, the action is
 skipped: _this work is already being done._
 
 ### 2. Branch gate — `deferred` (code dispatches only)
 
-`store.findActiveTaskByBranch(action.branch)`. If a live task holds the branch, the dispatch is
+`store.tasks.findActiveTaskByBranch(action.branch)`. If a live task holds the branch, the dispatch is
 deferred with the holding task's id and origin in the detail.
 
 For every world-driven rule origin and branch are 1:1, so the origin check above already **is** a
@@ -121,8 +134,8 @@ with the readying board moved to `ci-evidence` and then `slot-handover` as the t
 entered, so the wait is visible while it is happening. On success:
 
 - `liveCount` increments.
-- `if (action.jobId) store.markJobDispatched(jobId, task.id)`.
-- `if (action.partId) store.markPartDispatched(partId, task.id, branch)`.
+- `if (action.jobId) store.jobs.markJobDispatched(jobId, task.id)`.
+- `if (action.partId) store.plans.markPartDispatched(partId, task.id, branch)`.
 
 Both marks happen **only after the agent actually spawns**, so a dispatch the cap or pause gate held
 leaves the job `queued` and the part `ready` for a later cycle.
@@ -198,10 +211,10 @@ hundred rows an hour of one fact, in the one place shape means "something threw 
 The row and the directory are separate steps, so the executor holds the created task when the
 directory step throws and can settle it:
 
-- **Code** — `store.createTask({kind:'code', …, branch})`, then
+- **Code** — `store.tasks.createTask({kind:'code', …, branch})`, then
   `worktrees.ensure(action.branch, action.base ?? defaultBranch)`. A stacked plan part names the branch
   it forks from; everything else takes the configured integration branch.
-- **Desk** — `store.createTask({kind:'desk', branch:null})`, then `mkdirSync(resolve(deskRoot, task.id))`.
+- **Desk** — `store.tasks.createTask({kind:'desk', branch:null})`, then `mkdirSync(resolve(deskRoot, task.id))`.
 
 The task carries `originTitle`, `originSummary` and `dispatchReason` from the action, so the cockpit
 can explain a running agent without re-fetching from the provider. Its **prompt** is the action's plus
@@ -299,7 +312,7 @@ pending proposal already says.
 
 ### 3. Either the standing authority or an ask
 
-- **Covered by a standing authority** → `store.createProposal(…)`, then
+- **Covered by a standing authority** → `store.escalations.createProposal(…)`, then
   `decideProposal(id, 'accepted', note, 'stack_landing' | 'auto_send')`, then
   `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of anyone. One appears only
   if the act then fails. The proposal row is written **either way** — it is the audit trail, and a send
@@ -546,9 +559,22 @@ prompt.
 - **Scoped by `goalOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
-  widening rule at the level of a whole goal. The **retro origin is excluded** though `goalOriginFor`
-  accepts it: `retroBriefing` already hands it the pad and the whole dossier, both bounded on their own
-  terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
+  widening rule at the level of a whole goal.
+- **Four families under a goal are excluded though `goalOriginFor` accepts them**, declared as one set
+  (`WITHOUT_PRIOR_WORK` in `src/executor/actionExecutor.ts`, keyed on `parseIssueOrigin`'s family so a
+  hand-rolled origin match can never drift from the vocabulary — [05](05-dispatcher.md#the-issue-origin-vocabulary)).
+  Each is an agent that does none of the goal's work and reads none of its pad, and for each the briefing
+  is either a second copy or a briefing about the wrong ticket:
+  - **`retro`** — `retroBriefing` already hands it the pad and the whole dossier, both bounded on their
+    own terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
+  - **`split`** — rule `pr-split` already interpolates the plan as `{plan}`, rendered for a corrector by
+    `currentPlanSummary`, so the briefing's plan section is the same document twice. The agent reads a
+    diff to say whether a pull request holds one concept; the pad is not its input.
+  - **`summary`** and **`sequence`** — the origin's issue number is a **Feature's**, not a goal's, so
+    `goalOriginFor` resolves to the Feature ticket. Their real input is appended separately
+    (`renderFeatureDossier`, and `sequenceBriefing` — [33](33-story-sequencing.md)); what the briefing
+    would add is whatever happens to be stored against the Feature ticket, which is not the work being
+    summarised or ordered.
 - **A part agent gets no parts section**, because `plan-part` renders every sibling through
   `siblingContext`; and the conclusion is omitted when the outstanding-work note already carries it, so
   one fact is never rendered twice in one prompt.
@@ -628,7 +654,7 @@ merge commit and the branch.
   pull request wins — the cockpit's ordering in `closedPrs`, for its reason. Open pull requests are
   not unioned in: the rule fires only for a goal that has none, and one appearing between the decision
   and the read is work in flight rather than something that landed.
-- **Which pull requests are the goal's is `issueForPr`** (`src/prIssue.ts`), the harness's one answer
+- **Which pull requests are the goal's is `issueForPr`** (`src/pr/prIssue.ts`), the harness's one answer
   to that question, plus the plan's part rows — the arm `issueForPr` cannot supply, for a part whose
   branch follows no convention or whose pull request the provider never linked. The parts are read for
   their numbers and nothing else.
@@ -998,13 +1024,25 @@ else left to give ([below](#reclaiming-a-stranded-slot)).
 
 ### The read-only checkout
 
-Four dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
-assessment, a handed-over validation check ([20](20-validation.md)), and a local validation
-([32](32-local-validation.md)) — which is the one of them cut from a **commit** rather than a branch,
-because the branch it is about moves while it runs and a plan written against a different tree from
-the one being driven is the failure that feature's whole pin exists to prevent. Each is told in its prompt not
-to commit or push anything, and each is cut from the default branch for the reason it says out loud —
-the state it is asked about is _on_ it.
+Five dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
+**planner** ([08](08-planning.md)), the assessment, a handed-over validation check
+([20](20-validation.md)), and a local validation ([32](32-local-validation.md)) — which is the one of
+them cut from a **commit** rather than a branch, because the branch it is about moves while it runs
+and a plan written against a different tree from the one being driven is the failure that feature's
+whole pin exists to prevent. Each is told not to commit or push anything, and each is cut from the
+default branch for the reason it says out loud — the state it is asked about is _on_ it.
+
+The planner was the late one, and it had **never** been anything else. It reads the repository and
+decides a decomposition; what leaves the turn is `plan_submit`, or `.lubbdubb/plan.json` read off
+disk by the file-event ingestion ([08](08-planning.md)) — which is **gitignored**, so it is not a
+commit either. `plan/issue/<n>` was therefore a ref minted once per goal that never got a pull
+request, was never merged, and so was never reaped: #396's own accumulation, in the one rule #396
+did not look at. It is now a lease key like the other four.
+
+Its prompt says so through an **appended** `readOnlyNote`, not through the template body, for
+[the prompt templates' reason](05-dispatcher.md#prompt-templates) — the other four carry the
+instruction in a template, and a deployment that overrode `issue-plan` before this change would
+otherwise have a planner that still believes it is on a branch.
 
 Each used to mint a branch anyway, and **nothing ever reaped it**: `reapableBranches` deletes the
 branch of a **merged** pull request and refuses everything else, deliberately, so a ref that never
@@ -1035,6 +1073,13 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   what stops a queue of appraisals and checks paying for a cold install each, which the pool could never
   give work that warms nothing of its own. The mark is the whole of the evidence: it is written only by
   a read-only hand-over and cleared by every other, so a tree the harness cannot vouch for is wiped.
+- **What a warm tree keeps is the _source's_ build state, and never the _harness's_ own artefacts.**
+  `clean -ffd` spares ignored files, which is the whole point for `node_modules/` and `dist/` — and is
+  exactly wrong for `.lubbdubb/`, which is gitignored in every target repository and is where an agent
+  leaves what the harness reads back. So the hand-over removes that directory outright, ahead of the
+  clean. Without it the planner's read-only slot hands the **previous goal's** `plan.json` to the next
+  planner, sitting in its checkout as though it wrote it: ingestion fires on a write event and so never
+  looks at it, nothing is red, and the only reader is the agent it misleads.
 - **Reuse follows the ref, not the tree.** A key coming back to its own slot after the default branch
   has moved is re-pointed at the new commit. An assessor judging "was this delivered" against
   yesterday's tip answers the wrong question — where a branch's slot going stale is just its own
@@ -1054,6 +1099,20 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   follows it onto the same head under `review-pack-check/pr-<n>/<headSha>`, one slot for all the
   claims. The key carries the head because the task row has nowhere else to keep it.
   → [31](31-review-packs.md#when-a-pack-is-made), [the check](31-review-packs.md#the-check)
+
+### Handing a conversation on
+
+A read-only slot warm for the next checkout of the same ref is also the slot the **transcript** is
+keyed to, and that is what makes the appraisal → planner handover possible at all: the planner is
+launched into the appraiser's conversation instead of re-reading the ticket and the repository from
+cold. The mechanics, the declaration of which pairs may do it, and the list of things that start the
+planner cold instead are [10](10-agent-runtimes.md#handing-a-conversation-to-the-next-stage).
+
+What belongs here is the one coupling: `claude --resume` finds a transcript only in the directory it
+was written in, so the handover lands **only** when the planner is given the appraiser's own slot.
+The warm arm is what usually gives it — same ref, free slot, preferred over minting — and the cwd
+check is what makes the times it does not a cold start rather than an agent that dies reporting
+nothing.
 
 ### The checkout a local run uses
 
@@ -1196,6 +1255,54 @@ from the survey, so the retry terminates at the pool's size with no counter to t
 Tests: `test/slotProcessSweep.test.ts`. Its acceptance case is Windows-only — a real binary copied
 into the slot's `node_modules` and run, the wipe watched to fail while it lives, and the next
 hand-over watched to succeed with no manual cleanup. POSIX has nothing there to reproduce.
+
+### Warming a slot ahead of the dispatch
+
+[Handing a slot over](#handing-a-slot-over) is the executor's long pole, and the loop it runs on is
+serial: three dispatches pay for three wipes and three cold checkouts one after another, which is what
+[the readying board](#what-is-being-readied) exists to make visible. Making it visible does not make it
+shorter. `PrewarmDesk` (`src/worktree/prewarmDesk.ts`) does that, by moving the work to where nothing
+is queued behind it.
+
+It runs on `cycle:end` and **is never awaited by a cycle** — a pulse that waited for the warming would
+have put the wait back exactly where it was taken from. One pass at a time (`inFlight`), and a pass
+that throws is recorded through `errors.record` and nothing else: a slot that could not be warmed is
+not a dispatch that failed, it is a dispatch that pays what it always paid.
+
+It reads the **Up next** queue — `harness.upcoming` — and passes `Worktrees.prewarm` the branches of
+the code items that are neither `unapproved` nor `superseded`, deduped and in queue order. `prewarm`
+readies **at most one slot per pass**, taking the first branch that qualifies, and is `acquire` with
+three things removed:
+
+- **No lease.** Nothing is in flight on the slot, so a dispatch that wants it for another branch must
+  still be able to take it first. What comes back is an unleased slot checked out on the branch, which
+  `ensure`'s reuse arm hands back at once and which `survey` otherwise reads as merely `evictable` —
+  behind every spare. Warming is never in the way of the work it guessed wrong about.
+- **No eviction and no salvage.** Both cost another branch something, and this is a guess about what
+  dispatches next. Only a `spare` is taken; with none, the pass ends having done nothing.
+- **No second slot after a refused wipe.** A hand-over whose wipe fails
+  [condemns the slot](#a-slot-that-cannot-be-emptied) here exactly as it does under `ensure` — that
+  is real state and belongs out of the pool either way — but the pass then ends having warmed
+  nothing, rather than trying the next spare. There is no dispatch waiting on this to send elsewhere,
+  and a guess is not worth a second wipe.
+- **No branch is created.** A branch that does not already exist locally is skipped, because
+  `ensure` is reuse-first and **ignores `base` once the branch exists** — warming a name the dispatch
+  would have cut from its own base would hand the agent a branch rooted at HEAD instead, with nothing
+  red. The queue does not carry the base, so the only safe answer is not to guess one. A fresh issue's
+  first dispatch therefore warms nothing; a re-dispatch, a retry, a CI fix and a review round — every
+  repeat onto a branch that exists — is warmed.
+
+**Minting still follows work, not the cap.** A slot is created only for a branch the queue actually
+named, so [Growing the ceiling mints nothing](#exhaustion) holds exactly as before: warming brings the
+slot forward in time, never into existence on a deployment that was not going to run that wide.
+
+`prewarm`, `ensure`, `ensureReadOnly` and `deleteBranch` are **serialised on `worktreeRoot`**
+(`runSerial`), which they did not need to be while the executor's serial loop was the only caller.
+Warming runs between cycles and a manual cycle can start under it, so two `git worktree` mutations on
+one repository are now reachable; the queue is what keeps them from being concurrent.
+
+`prewarmWorktrees` ([02](02-configuration.md#repository)) turns it off, and warming is skipped while
+dispatch is paused — there is nothing to be early for.
 
 ### Exhaustion
 

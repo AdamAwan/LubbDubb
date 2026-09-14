@@ -6,6 +6,7 @@ import {
   type WatchQueryKind,
   type WatchResult,
 } from '../environments/watchResult.js';
+import { firstLine } from '../primitives.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -74,9 +75,4 @@ function failure(err: ExecFailure, stderr: string): WatchResult {
     return unanswered(`the query was killed after ${err.signal ?? 'timeout'}`);
   const why = firstLine(stderr);
   return unanswered(`the query exited ${String(err.code ?? 'unknown')}: ${why ?? err.message}`);
-}
-
-function firstLine(text: string): string | null {
-  const line = text.split('\n').find((l) => l.trim() !== '');
-  return line === undefined ? null : line.trim().slice(0, 200);
 }

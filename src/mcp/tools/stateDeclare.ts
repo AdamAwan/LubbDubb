@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { issueOriginHead, issueOriginNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { StateSchema, stateQueryInputs } from '../../validation/stateDocument.js';
@@ -54,15 +55,15 @@ export const stateDeclare: ToolFactory = ({ deps, task, ok }) => ({
   ),
   handler: async (args) => {
     const ref = task.originRef ?? '';
-    const match = /^issue:(\d+)(?::(.+))?$/.exec(ref);
-    if (!match)
+    const head = issueOriginHead(ref);
+    if (head === null)
       return toolError(
         `state_declare declares the state queries of the goal you are working on, and this task's origin is ` +
           `${ref || '(none)'}, which names no issue.`,
       );
-    if (match[2] === 'plan')
+    if (issueOriginNumber('plan', ref) !== null)
       return toolError(
-        `You are planning issue #${match[1]}, so the state queries are yours to *write*, not to amend. ` +
+        `You are planning issue #${head.issueNumber}, so the state queries are yours to *write*, not to amend. ` +
           `Declare the whole thing in plan_submit's "state" block — that transport speaks for the entire set, ` +
           'which is what a planner is entitled to do and an agent halfway through a part is not. Two ways to ' +
           'say one thing that disagree about what an omission means is the drift the split exists to prevent.',
@@ -74,7 +75,7 @@ export const stateDeclare: ToolFactory = ({ deps, task, ok }) => ({
       return toolError(`Declaration rejected: ${parsed.error.issues.map((i) => i.message).join('; ')}`);
     const queries = stateQueryInputs(parsed.data);
     if (queries.length === 0) return toolError('Nothing was declared. Give at least one query, or do not call this.');
-    const origin = issueOrigin(Number(match[1]));
+    const origin = issueOrigin(head.issueNumber);
     const { declared, refusals } = await state.declare(origin, queries, 'agent');
     return ok({
       declared,

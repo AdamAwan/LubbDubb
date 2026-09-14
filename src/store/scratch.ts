@@ -23,8 +23,8 @@ export class ScratchStore {
     decision: PadDecision | null;
   }): ScratchEntry {
     const row: ScratchEntry = { id: `scr_${nanoid(10)}`, ...input, createdAt: this.ctx.now() };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO scratch_entries (id, pad_ref, author_origin_ref, agent_id, task_id, topic, note, decision, created_at)
          VALUES (@id, @padRef, @authorOriginRef, @agentId, @taskId, @topic, @note, @decision, @createdAt)`,
       )
@@ -33,15 +33,15 @@ export class ScratchStore {
   }
 
   listScratchEntries(padRef: string): ScratchEntry[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, rowid ASC`)
       .all(padRef) as ScratchEntryRow[];
     return rows.map(rowToScratchEntry);
   }
 
   listScratchPadSummaries(): ScratchPadSummary[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT pad_ref, COUNT(*) AS entries, MAX(created_at) AS updated_at
            FROM scratch_entries GROUP BY pad_ref`,
       )
@@ -59,8 +59,8 @@ export class ScratchStore {
     const ts = this.ctx.now();
     const prev = this.getRetrospective(input.originRef);
     const row: Retrospective = { ...input, createdAt: prev?.createdAt ?? ts, updatedAt: ts };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO retrospectives (origin_ref, summary, document, agent_id, task_id, created_at, updated_at)
          VALUES (@originRef, @summary, @document, @agentId, @taskId, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET
@@ -72,14 +72,14 @@ export class ScratchStore {
   }
 
   getRetrospective(originRef: string): Retrospective | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM retrospectives WHERE origin_ref=?`).get(originRef) as
+    const row = this.ctx.prep(`SELECT * FROM retrospectives WHERE origin_ref=?`).get(originRef) as
       | RetrospectiveRow
       | undefined;
     return row ? rowToRetrospective(row) : null;
   }
 
   listRetrospectiveOrigins(): string[] {
-    const rows = this.ctx.db.prepare(`SELECT origin_ref FROM retrospectives`).all() as { origin_ref: string }[];
+    const rows = this.ctx.prep(`SELECT origin_ref FROM retrospectives`).all() as { origin_ref: string }[];
     return rows.map((r) => r.origin_ref);
   }
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig, type Config } from '../src/config.js';
-import { LiveConfig } from '../src/configApply.js';
+import { loadConfig, type Config } from '../src/config/config.js';
+import { LiveConfig } from '../src/config/configApply.js';
 import { RuntimeControl } from '../src/runtimeControl.js';
 import type { CiPolicy } from '../src/ci/ciPolicy.js';
 

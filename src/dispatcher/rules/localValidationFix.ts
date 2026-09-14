@@ -1,3 +1,4 @@
+import { issueOriginNumber } from '../../issueOrigins.js';
 import { localValidationFixBriefing } from '../../localValidation/briefing.js';
 import { localValidationFixOrigin } from '../../localValidation/origin.js';
 import { issueWatchGateReason } from '../issuePickup.js';
@@ -11,9 +12,8 @@ export function localValidationFix(s: StageContext): void {
 
     if (row.ref === s.defaultBranch) continue;
 
-    const parts = /^issue:(\d+)$/.exec(row.originRef);
-    if (parts === null) continue;
-    const issueNumber = Number(parts[1]);
+    const issueNumber = issueOriginNumber('root', row.originRef);
+    if (issueNumber === null) continue;
     const issue = s.liveIssue(issueNumber);
     if (issue === null) continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;

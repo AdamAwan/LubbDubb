@@ -12,7 +12,7 @@ import {
 } from '../src/dispatcher/promptTemplates.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { overridePath } from '../web/src/components/PromptsTab.js';
@@ -211,7 +211,7 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
   const dir = tmpDir();
   try {
     writeFileSync(join(dir, 'issue-pickup.md'), 'Handle #{number} on {branch}.');
-    const d = new RuleDispatcher({}, {}, loadPromptTemplates(dir));
+    const d = new RuleDispatcher({ templates: loadPromptTemplates(dir) });
     const { actions } = await d.decide(
       ctx(
         { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },

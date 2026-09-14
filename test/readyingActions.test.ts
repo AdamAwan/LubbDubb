@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -60,7 +60,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
   const worktrees = new ParkedWorktrees();
   const system = buildSystem(testConfig(), { worktrees, backend: new FakePtyBackend() });
 
-  const job = system.store.createJob({
+  const job = system.store.jobs.createJob({
     title: 'Remove the scan-check pollers',
     prompt: 'Remove them.',
     kind: 'code',
@@ -80,7 +80,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
   assert.ok(Date.parse(row.startedAt) > 0, 'with something to measure the wait from');
 
   assert.equal(waiting.agents.filter((a) => a.status !== 'done').length, 0, 'no agent row yet');
-  assert.equal(system.store.countLiveAgents(), 0, 'and nothing counted against the cap');
+  assert.equal(system.store.agents.countLiveAgents(), 0, 'and nothing counted against the cap');
 
   worktrees.letThrough();
   await cycle;
@@ -95,7 +95,7 @@ test('a dispatch waiting on the worktree pool is on the wire, as a row that is n
 test('a dispatch that throws takes its readying row with it', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FailingWorktrees(), backend: new FakePtyBackend() });
 
-  system.store.createJob({
+  system.store.jobs.createJob({
     title: 'Remove the scan-check pollers',
     prompt: 'Remove them.',
     kind: 'code',
@@ -104,7 +104,7 @@ test('a dispatch that throws takes its readying row with it', async () => {
   await system.harness.runCycle('manual');
 
   assert.match(
-    system.store.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
+    system.store.decisions.listDecisions().find((d) => d.outcome === 'rejected')!.detail,
     /Failed to start agent: EBUSY/,
   );
   assert.deepEqual(buildStateSnapshot(system).readying, []);
@@ -119,13 +119,51 @@ test('the board announces itself, so a cockpit sees the row without waiting for 
   const steps: string[] = [];
   system.readying.on('changed', () => steps.push(system.readying.list()[0]?.step ?? 'none'));
 
-  system.store.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
+  system.store.jobs.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
   const cycle = system.harness.runCycle('manual');
   await worktrees.reached;
   worktrees.letThrough();
   await cycle;
 
   assert.deepEqual(steps, ['picked-up', 'ci-evidence', 'slot-handover', 'none']);
+
+  system.store.close();
+});
+
+const REPORTABLE_WAIT_MS = 150;
+
+test('the row says how long each step took, and the decision keeps the breakdown after the row is gone', async () => {
+  const worktrees = new ParkedWorktrees();
+  const system = buildSystem(testConfig(), { worktrees, backend: new FakePtyBackend() });
+
+  system.store.jobs.createJob({ title: 'Look into it', prompt: 'Look into it.', kind: 'code', branch: 'issue/1/look' });
+  const cycle = system.harness.runCycle('manual');
+  await worktrees.reached;
+
+  const row = buildStateSnapshot(system).readying[0]!;
+  assert.equal(row.step, 'slot-handover');
+  assert.ok(Date.parse(row.stepStartedAt) > 0, 'the current step is measured from its own start');
+  assert.deepEqual(
+    row.elapsed.map((e) => e.step),
+    ['picked-up', 'ci-evidence'],
+    'and the steps behind it carry what they cost',
+  );
+  assert.ok(
+    row.elapsed.every((e) => e.ms >= 0),
+    'each as a duration',
+  );
+
+  await new Promise((done) => setTimeout(done, REPORTABLE_WAIT_MS));
+  worktrees.letThrough();
+  await cycle;
+
+  assert.deepEqual(buildStateSnapshot(system).readying, [], 'the board keeps nothing');
+  const executed = system.store.decisions.listDecisions().find((d) => d.outcome === 'executed')!;
+  assert.match(
+    executed.detail,
+    /Readied in [\d.ms ]+\(slot-handover /,
+    'so the audit is where a wait the board no longer holds can be read back',
+  );
 
   system.store.close();
 });

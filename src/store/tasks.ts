@@ -84,8 +84,8 @@ export class TaskStore {
       profile: input.profile ?? null,
       profileSource: input.profileSource ?? null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, permission_mode, profile, profile_source, status, agent_id, created_at, updated_at)
          VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
@@ -101,19 +101,19 @@ export class TaskStore {
     const existing = this.getTask(id);
     if (!existing) throw new Error(`Task ${id} not found`);
     const next = { ...existing, ...patch, updatedAt: this.ctx.now() };
-    this.ctx.db
-      .prepare(`UPDATE tasks SET status=@status, agent_id=@agentId, branch=@branch, updated_at=@updatedAt WHERE id=@id`)
+    this.ctx
+      .prep(`UPDATE tasks SET status=@status, agent_id=@agentId, branch=@branch, updated_at=@updatedAt WHERE id=@id`)
       .run({ id, status: next.status, agentId: next.agentId, branch: next.branch, updatedAt: next.updatedAt });
   }
 
   getTask(id: string): Task | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM tasks WHERE id=?`).get(id) as TaskRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM tasks WHERE id=?`).get(id) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
 
   listTasks(): TaskSummary[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT ${SUMMARY_COLUMNS} FROM tasks ORDER BY created_at DESC`)
+    const rows = this.ctx
+      .prep(`SELECT ${SUMMARY_COLUMNS} FROM tasks ORDER BY created_at DESC`)
       .all() as TaskSummaryRow[];
     return rows.map(rowToSummary);
   }
@@ -141,24 +141,31 @@ export class TaskStore {
   }
 
   listOutstandingTasks(): Task[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM tasks WHERE status IN ${ACTIVE_TASK_STATUS_SQL} ORDER BY created_at ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM tasks WHERE status IN ${ACTIVE_TASK_STATUS_SQL} ORDER BY created_at ASC`)
       .all() as TaskRow[];
     return rows.map(rowToTask);
   }
 
   findActiveTaskByOrigin(originRef: string): Task | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM tasks WHERE origin_ref=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
+    const row = this.ctx
+      .prep(`SELECT * FROM tasks WHERE origin_ref=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
       .get(originRef) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
 
   findActiveTaskByBranch(branch: string): Task | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM tasks WHERE branch=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
+    const row = this.ctx
+      .prep(`SELECT * FROM tasks WHERE branch=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
       .get(branch) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
+  }
+
+  hasActiveTaskOnBranch(branch: string, exceptTaskId: string): boolean {
+    const row = this.ctx
+      .prep(`SELECT 1 FROM tasks WHERE branch=? AND id<>? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
+      .get(branch, exceptTaskId);
+    return row !== undefined;
   }
 }
 

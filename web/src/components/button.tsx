@@ -46,21 +46,28 @@ export function buttonClass({ tone, ghost, size, className }: ButtonLook, ...ext
 }
 
 /**
- * The same look with a surface's own shape classes added.
+ * The verb a row expects, and the one that refuses — the two readings a station
+ * composes on top of whatever tone its caller passed.
  *
- * A station that embeds a shared control — `HumanTaskActions`, `ValidationSection`
- * — is handed the look by whoever placed it, and adds the geometry of its own row
- * on top: the `go` on the verb a row expects, the `no` on the one that refuses.
- * Those two halves used to be one interpolated string, which is how
- * `HumanTaskActions` came to prefix `btn` on three lines and not on three others.
+ * They were `withShape(look, 'go')` and `'no'`, class names on the markup with
+ * **no rule behind either of them** in any sheet. So the one thing the design
+ * system had for saying "this is the act" rendered as nothing, and `Done` drew
+ * identically to `Decline` on every surface that embeds the row: the operator
+ * was given two grey buttons and no way to tell which one the row was asking
+ * for. They were spelled as shape, which is why nobody noticed the rule was
+ * missing — shape is the station's geometry and is allowed to be a class, and
+ * these were never geometry.
  *
- * @public — the seam between a station's shape and its caller's tone.
+ * Tone is a prop, never a class string, so they are tones now — and the rule
+ * they resolve to is already written, once, in the `.btn` block.
+ * → docs/spec/17-cockpit.md#the-button
  */
-export function withShape(look: ButtonLook, ...shape: (string | false | null | undefined)[]): ButtonLook {
-  const classes = [look.className, ...shape].filter(
-    (part): part is string => typeof part === 'string' && part.length > 0,
-  );
-  return classes.length === 0 ? look : { ...look, className: classes.join(' ') };
+export function expected(look: ButtonLook): ButtonLook {
+  return { ...look, tone: 'primary' };
+}
+
+export function refusing(look: ButtonLook): ButtonLook {
+  return { ...look, tone: 'danger' };
 }
 
 export function Button({
@@ -79,4 +86,34 @@ export function Button({
       {children}
     </button>
   );
+}
+
+/**
+ * A row of buttons, which is a thing rather than a `div` each surface arranges
+ * for itself.
+ *
+ * The cockpit had at least three spellings of it — `.cn-acts` in the console,
+ * the feature board's own, and a bare flex row wherever somebody needed two
+ * controls side by side — which is the same drift `.cn-btn` was, one level up:
+ * the button was settled and the group it sits in was not, so the gap between
+ * two controls depended on which surface you were looking at.
+ *
+ * `bar` is the group at the foot of something it settles — an ask, a form. It
+ * takes a rule above it and the room to go with it, so the controls read as the
+ * end of that thing rather than as the last paragraph of it. It is a property of
+ * the group, not of the surface: the row that answers an ask wants the same
+ * treatment on the rail, in the ask panel and on the overview, and a selector
+ * scoped to one of those three is how the other two drift.
+ */
+export function ButtonRow({
+  bar,
+  className,
+  children,
+}: {
+  bar?: boolean;
+  className?: string;
+  children: ReactNode;
+}): JSX.Element {
+  const parts = ['btn-row', ...(bar === true ? ['bar'] : []), ...(className === undefined ? [] : [className])];
+  return <div className={parts.join(' ')}>{children}</div>;
 }

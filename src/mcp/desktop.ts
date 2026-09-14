@@ -168,7 +168,7 @@ export class McpDesktopServer {
     this.sessions.delete(connectionId);
     if (!session?.held) return;
     try {
-      this.opts.store.releaseValidationClaim(session.held.originRef, session.held.checkId);
+      this.opts.store.validation.releaseValidationClaim(session.held.originRef, session.held.checkId);
     } catch (err) {
       this.opts.errors?.record({
         source: 'agent',

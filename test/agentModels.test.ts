@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { resolveAgentProfile } from '../src/agents/modelPolicy.js';
@@ -191,7 +191,7 @@ async function dispatch(agentModels: Config['agentModels'], n: number) {
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
   failPlanningOpen(system.store, n);
   await system.harness.runCycle('manual');
-  const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
+  const task = system.store.tasks.getTask(system.store.agents.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   system.store.close();
   return { args: launches[0]!, task };
 }

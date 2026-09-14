@@ -41,8 +41,8 @@ export class LocalValidationStore {
       screenshots: [],
       note: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO local_validations (id, origin_ref, run_id, ref, commit_sha, status, requested_at,
            dispatched_at, ended_at, task_id, fix_task_id, plan, summary, findings, visited, screenshots, note)
          VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, NULL, NULL, NULL, NULL, '[]', '[]', '[]', NULL)`,
@@ -52,20 +52,20 @@ export class LocalValidationStore {
   }
 
   getLocalValidation(id: string): LocalValidation | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM local_validations WHERE id = ?`).get(id) as Row | undefined;
+    const row = this.ctx.prep(`SELECT * FROM local_validations WHERE id = ?`).get(id) as Row | undefined;
     return row ? toLocalValidation(row) : null;
   }
 
   latestLocalValidation(originRef: string): LocalValidation | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC LIMIT 1`)
+    const row = this.ctx
+      .prep(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC LIMIT 1`)
       .get(originRef) as Row | undefined;
     return row ? toLocalValidation(row) : null;
   }
 
   listLatestLocalValidations(): LocalValidation[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM local_validations WHERE id IN (
            SELECT id FROM local_validations lv
              WHERE lv.requested_at = (SELECT MAX(requested_at) FROM local_validations
@@ -77,15 +77,15 @@ export class LocalValidationStore {
   }
 
   listOpenLocalValidations(): LocalValidation[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM local_validations WHERE status IN ${OPEN_SQL} ORDER BY requested_at`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM local_validations WHERE status IN ${OPEN_SQL} ORDER BY requested_at`)
       .all() as Row[];
     return rows.map(toLocalValidation);
   }
 
   listLocalValidationsAwaitingFix(): LocalValidation[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM local_validations WHERE status = 'failed' AND fix_task_id IS NULL AND findings != '[]'
            ORDER BY ended_at`,
       )
@@ -94,21 +94,19 @@ export class LocalValidationStore {
   }
 
   markLocalValidationDispatched(id: string, taskId: string): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `UPDATE local_validations SET status = 'dispatched', dispatched_at = ?, task_id = ? WHERE id = ? AND status = 'pending'`,
       )
       .run(this.ctx.now(), taskId, id);
   }
 
   markLocalValidationFix(id: string, taskId: string): void {
-    this.ctx.db
-      .prepare(`UPDATE local_validations SET fix_task_id = ? WHERE id = ? AND fix_task_id IS NULL`)
-      .run(taskId, id);
+    this.ctx.prep(`UPDATE local_validations SET fix_task_id = ? WHERE id = ? AND fix_task_id IS NULL`).run(taskId, id);
   }
 
   setLocalValidationPlan(id: string, plan: string): void {
-    this.ctx.db.prepare(`UPDATE local_validations SET plan = ? WHERE id = ? AND status IN ${OPEN_SQL}`).run(plan, id);
+    this.ctx.prep(`UPDATE local_validations SET plan = ? WHERE id = ? AND status IN ${OPEN_SQL}`).run(plan, id);
   }
 
   recordLocalValidationReport(
@@ -122,8 +120,8 @@ export class LocalValidationStore {
       note: string | null;
     },
   ): LocalValidation | null {
-    const info = this.ctx.db
-      .prepare(
+    const info = this.ctx
+      .prep(
         `UPDATE local_validations SET status = ?, summary = ?, findings = ?, visited = ?, screenshots = ?,
            note = ?, ended_at = ? WHERE id = ? AND status IN ${OPEN_SQL}`,
       )
@@ -141,8 +139,8 @@ export class LocalValidationStore {
   }
 
   abandonLocalValidation(id: string, note: string): LocalValidation | null {
-    const info = this.ctx.db
-      .prepare(
+    const info = this.ctx
+      .prep(
         `UPDATE local_validations SET status = 'abandoned', note = ?, ended_at = ? WHERE id = ? AND status IN ${OPEN_SQL}`,
       )
       .run(note, this.ctx.now(), id);

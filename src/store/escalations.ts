@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Escalation, EscalationContext, EscalationSpan, Proposal } from '../types.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
@@ -20,8 +20,8 @@ export class EscalationStore {
       agentId: input.agentId,
       taskId: input.taskId,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO escalations (id, type, status, prompt, context, agent_id, task_id, response, created_at, answered_at)
          VALUES (@id, @type, @status, @prompt, @context, @agentId, @taskId, @response, @createdAt, @answeredAt)`,
       )
@@ -33,8 +33,8 @@ export class EscalationStore {
     const existing = this.getEscalation(id);
     if (!existing) throw new Error(`Escalation ${id} not found`);
     const answeredAt = this.ctx.now();
-    this.ctx.db
-      .prepare(`UPDATE escalations SET status='answered', response=?, answered_at=? WHERE id=?`)
+    this.ctx
+      .prep(`UPDATE escalations SET status='answered', response=?, answered_at=? WHERE id=?`)
       .run(response, answeredAt, id);
     return { ...existing, status: 'answered', response, answeredAt };
   }
@@ -42,44 +42,36 @@ export class EscalationStore {
   dismissEscalation(id: string, context: Record<string, unknown>): Escalation {
     const existing = this.getEscalation(id);
     if (!existing) throw new Error(`Escalation ${id} not found`);
-    this.ctx.db
-      .prepare(`UPDATE escalations SET status='dismissed', context=? WHERE id=?`)
-      .run(JSON.stringify(context), id);
+    this.ctx.prep(`UPDATE escalations SET status='dismissed', context=? WHERE id=?`).run(JSON.stringify(context), id);
     return { ...existing, status: 'dismissed', context };
   }
 
   getEscalation(id: string): Escalation | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
     return row ? rowToEscalation(row) : null;
   }
 
   escalationLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, prompt FROM escalations WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      prompt: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.prompt]));
+    return labelsById(this.ctx, 'escalations', ids);
   }
 
   listEscalations(): Escalation[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM escalations ORDER BY created_at DESC, rowid DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM escalations ORDER BY created_at DESC, rowid DESC`)
       .all() as EscalationRow[];
     return rows.map(rowToEscalation);
   }
 
   listOpenEscalations(): Escalation[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM escalations WHERE status='open' ORDER BY created_at DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM escalations WHERE status='open' ORDER BY created_at DESC`)
       .all() as EscalationRow[];
     return rows.map(rowToEscalation);
   }
 
   listEscalationSpans(): EscalationSpan[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT created_at, answered_at, status,
                 json_extract(context, '$.originRef') AS origin_ref,
                 json_extract(context, '$.prNumber')  AS pr_number
@@ -108,8 +100,8 @@ export class EscalationStore {
       action: input.action,
       escalationId: input.escalationId,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO proposals (id, kind, ref, status, action, note, decided_by, decided_at, escalation_id, created_at)
          VALUES (@id, @kind, @ref, @status, @action, @note, @decidedBy, @decidedAt, @escalationId, @createdAt)`,
       )
@@ -124,8 +116,8 @@ export class EscalationStore {
     decidedBy: NonNullable<Proposal['decidedBy']>,
   ): Proposal | null {
     const decidedAt = this.ctx.now();
-    const res = this.ctx.db
-      .prepare(`UPDATE proposals SET status=?, note=?, decided_by=?, decided_at=? WHERE id=? AND status='pending'`)
+    const res = this.ctx
+      .prep(`UPDATE proposals SET status=?, note=?, decided_by=?, decided_at=? WHERE id=? AND status='pending'`)
       .run(status, note, decidedBy, decidedAt, id);
     if (res.changes === 0) return null;
     const existing = this.getProposal(id);
@@ -133,22 +125,20 @@ export class EscalationStore {
   }
 
   withdrawProposal(id: string, note: string): Proposal | null {
-    const res = this.ctx.db
-      .prepare(`UPDATE proposals SET status='withdrawn', note=?, decided_at=? WHERE id=? AND status='pending'`)
+    const res = this.ctx
+      .prep(`UPDATE proposals SET status='withdrawn', note=?, decided_at=? WHERE id=? AND status='pending'`)
       .run(note, this.ctx.now(), id);
     if (res.changes === 0) return null;
     return this.getProposal(id);
   }
 
   getProposal(id: string): Proposal | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM proposals WHERE id=?`).get(id) as ProposalRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM proposals WHERE id=?`).get(id) as ProposalRow | undefined;
     return row ? rowToProposal(row) : null;
   }
 
   listProposals(): Proposal[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM proposals ORDER BY created_at DESC, rowid DESC`)
-      .all() as ProposalRow[];
+    const rows = this.ctx.prep(`SELECT * FROM proposals ORDER BY created_at DESC, rowid DESC`).all() as ProposalRow[];
     return rows.map(rowToProposal);
   }
 }

@@ -4,7 +4,7 @@ import { EtagCache, installConditionalRequests } from '../src/integrations/githu
 import { waitOutRateLimit } from '../src/integrations/github/octokitGitHubApi.js';
 import { Store } from '../src/store/store.js';
 import { buildIntegrations } from '../src/integrations/registry.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';
 

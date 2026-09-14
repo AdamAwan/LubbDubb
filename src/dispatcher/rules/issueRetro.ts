@@ -1,4 +1,3 @@
-import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { retroOrigin } from '../../retro/retro.js';
 import { issueOrigin } from '../../plans/planning.js';
@@ -17,19 +16,16 @@ export function issueRetro(s: StageContext): void {
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
     const origin = retroOrigin(issue.number);
-    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     const title = `Write up issue #${issue.number}`;
     const reason = `Issue #${issue.number} is delivered and has no retrospective; write the run up.`;
-    s.candidates.push({
+    s.consider({
       origin,
       rule: 'issue-retro',
       title,
       kind: 'desk',
       branch: null,
       reason,
-      held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_desk_agent',
         title,

@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -152,7 +152,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function runner(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, '/srv/validation');
+  return new RuleDispatcher({ defaultBranch: 'main', validationRoot: '/srv/validation' });
 }
 
 function diagnoses(actions: { type: string }[]): string[] {
@@ -257,7 +257,7 @@ test('the agent it sends may not record a reading on the check', async () => {
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
 
-  const task = system.store.createTask({
+  const task = system.store.tasks.createTask({
     kind: 'code',
     title: 'Look into check A',
     prompt: 'diagnose it',
@@ -275,6 +275,6 @@ test('the agent it sends may not record a reading on the check', async () => {
 
   assert.equal(result.isError, true);
   assert.match(result.content[0]?.text ?? '', /validation_amend/);
-  const after = system.store.listValidationChecks('issue:12').find((c) => c.id === 'csv-opens');
+  const after = system.store.validation.listValidationChecks('issue:12').find((c) => c.id === 'csv-opens');
   assert.equal(after?.state, 'unrun', 'nothing was recorded');
 });

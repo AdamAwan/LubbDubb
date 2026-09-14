@@ -38,7 +38,7 @@ export class PoolDesk {
   }
 
   private async carryPacks(): Promise<void> {
-    for (const share of this.deps.store.listReviewPackShares()) {
+    for (const share of this.deps.store.reviewPacks.listReviewPackShares()) {
       if (share.withdrawnAt !== null || this.dead(share)) {
         await this.prune(share);
         continue;
@@ -49,9 +49,9 @@ export class PoolDesk {
   }
 
   private async publishPack(share: ReviewPackShare): Promise<void> {
-    const record = this.deps.store.getReviewPackAt(share.prNumber, share.headSha);
+    const record = this.deps.store.reviewPacks.getReviewPackAt(share.prNumber, share.headSha);
     if (record === null) {
-      this.deps.store.recordReviewPackShareRefusal(
+      this.deps.store.reviewPacks.recordReviewPackShareRefusal(
         share.prNumber,
         `the pack for #${share.prNumber} at ${share.headSha} is no longer in the store, so there was nothing to share`,
       );
@@ -59,7 +59,7 @@ export class PoolDesk {
     }
     const refusal = packSecretRefusal(record.pack);
     if (refusal !== null) {
-      this.deps.store.recordReviewPackShareRefusal(share.prNumber, refusal);
+      this.deps.store.reviewPacks.recordReviewPackShareRefusal(share.prNumber, refusal);
       return;
     }
     const document: PoolPackDocument = {
@@ -76,7 +76,7 @@ export class PoolDesk {
     };
     try {
       await this.deps.transport.publish(document);
-      this.deps.store.recordReviewPackShared(share.prNumber);
+      this.deps.store.reviewPacks.recordReviewPackShared(share.prNumber);
     } catch (error) {
       this.record(`Could not publish the review pack for #${share.prNumber} to the pool`, error);
     }
@@ -84,19 +84,19 @@ export class PoolDesk {
 
   private async prune(share: ReviewPackShare): Promise<void> {
     if (share.publishedAt === null) {
-      this.deps.store.deleteReviewPackShare(share.prNumber);
+      this.deps.store.reviewPacks.deleteReviewPackShare(share.prNumber);
       return;
     }
     try {
       await this.deps.transport.unpublish({ fleetId: this.deps.fleetId, prNumber: share.prNumber });
-      this.deps.store.deleteReviewPackShare(share.prNumber);
+      this.deps.store.reviewPacks.deleteReviewPackShare(share.prNumber);
     } catch (error) {
       this.record(`Could not prune the shared review pack for #${share.prNumber}`, error);
     }
   }
 
   private dead(share: ReviewPackShare): boolean {
-    const world = this.deps.store.getWorldBaseline();
+    const world = this.deps.store.world.getWorldBaseline();
     if (!world) return false;
     if (world.pullRequests.some((pr) => pr.number === share.prNumber)) return false;
     const closed = world.closedPullRequests?.find((pr) => pr.number === share.prNumber);
@@ -106,11 +106,11 @@ export class PoolDesk {
   }
 
   unshareReviewPack(prNumber: number): { share: ReviewPackShare | null } {
-    return { share: this.deps.store.withdrawReviewPackShare(prNumber) };
+    return { share: this.deps.store.reviewPacks.withdrawReviewPackShare(prNumber) };
   }
 
   shareReviewPack(prNumber: number): { ok: true; share: ReviewPackShare } | { ok: false; status: 409; error: string } {
-    const record = this.deps.store.getCurrentReviewPack(prNumber);
+    const record = this.deps.store.reviewPacks.getCurrentReviewPack(prNumber);
     if (record === null) {
       return { ok: false, status: 409, error: `there is no review pack for #${prNumber} to share` };
     }
@@ -126,7 +126,7 @@ export class PoolDesk {
     }
     return {
       ok: true,
-      share: this.deps.store.recordReviewPackShare({ prNumber, headSha: record.pack.headSha }),
+      share: this.deps.store.reviewPacks.recordReviewPackShare({ prNumber, headSha: record.pack.headSha }),
     };
   }
 
@@ -137,7 +137,7 @@ export class PoolDesk {
       project: this.deps.project,
       canRead: this.deps.transport.canRead,
       polledAt: this.polledAt,
-      digest: this.deps.store.getPoolPublication('digest'),
+      digest: this.deps.store.pool.getPublication('digest'),
     };
   }
 
@@ -156,7 +156,7 @@ export class PoolDesk {
       if (!parsed.ok) {
         if (parsed.reason === 'ahead') {
           if (parsed.fleetId !== null) {
-            this.deps.store.recordPoolFleetReading({
+            this.deps.store.pool.recordFleetReading({
               fleetId: parsed.fleetId,
               project: null,
               digestAt: null,
@@ -177,7 +177,7 @@ export class PoolDesk {
   private land(document: PoolClockDocument, staleBefore: string): void {
     try {
       if (document.fleetId === this.deps.fleetId) {
-        this.deps.store.recordPoolFleetReading({
+        this.deps.store.pool.recordFleetReading({
           fleetId: document.fleetId,
           project: document.project,
           digestAt: null,
@@ -186,9 +186,9 @@ export class PoolDesk {
         return;
       }
       if (document.publishedAt >= staleBefore) {
-        this.deps.store.replacePoolFleetDigest(document.fleetId, document.project, document);
+        this.deps.store.pool.replaceFleetDigest(document.fleetId, document.project, document);
       }
-      this.deps.store.recordPoolFleetReading({
+      this.deps.store.pool.recordFleetReading({
         fleetId: document.fleetId,
         project: document.project,
         digestAt: document.publishedAt,
@@ -201,14 +201,14 @@ export class PoolDesk {
 
   private expire(): void {
     try {
-      this.deps.store.expireStalePoolDigests();
+      this.deps.store.pool.expireStaleDigests();
     } catch (error) {
       this.record('Could not expire the stale fleets in the pool mirror', error);
     }
   }
 
   private async publishKind(kind: PoolClockKind, boot: boolean): Promise<void> {
-    const publication = this.deps.store.getPoolPublication(kind);
+    const publication = this.deps.store.pool.getPublication(kind);
     const now = this.deps.now();
     const slowClockDue =
       boot ||
@@ -225,14 +225,14 @@ export class PoolDesk {
     }
     const hash = poolContentHash(document);
     if (hash === publication.contentHash) {
-      this.deps.store.recordPoolChecked(kind);
+      this.deps.store.pool.recordPoolChecked(kind);
       return;
     }
     try {
       await this.deps.transport.publish(document);
-      this.deps.store.recordPoolPublish(kind, hash);
+      this.deps.store.pool.recordPoolPublish(kind, hash);
     } catch (error) {
-      this.deps.store.markPoolDirty(kind);
+      this.deps.store.pool.markPoolDirty(kind);
       this.record(`Could not publish this fleet's ${kind} document to the pool`, error);
     }
   }

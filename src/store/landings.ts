@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { StackLanding, StackLandingStatus } from '../types.js';
-import type { StoreContext } from './context.js';
+import { labelsById, type StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
@@ -23,8 +23,8 @@ export class StackLandingStore {
       createdAt: ts,
       updatedAt: ts,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO stack_landings (id, ref, rungs, status, reason, created_at, updated_at)
          VALUES (@id, @ref, @rungs, @status, @reason, @createdAt, @updatedAt)`,
       )
@@ -33,30 +33,24 @@ export class StackLandingStore {
   }
 
   getStackLanding(id: string): StackLanding | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM stack_landings WHERE id=?`).get(id) as LandingRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM stack_landings WHERE id=?`).get(id) as LandingRow | undefined;
     return row ? rowToLanding(row) : null;
   }
 
   landingLabels(ids: string[]): Map<string, string> {
-    if (ids.length === 0) return new Map();
-    const holes = ids.map(() => '?').join(',');
-    const rows = this.ctx.db.prepare(`SELECT id, ref FROM stack_landings WHERE id IN (${holes})`).all(...ids) as {
-      id: string;
-      ref: string;
-    }[];
-    return new Map(rows.map((r) => [r.id, r.ref]));
+    return labelsById(this.ctx, 'stack_landings', ids);
   }
 
   listStackLandings(limit = 50): StackLanding[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM stack_landings ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM stack_landings ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as LandingRow[];
     return rows.map(rowToLanding);
   }
 
   listStandingLandings(): StackLanding[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM stack_landings WHERE status='standing' ORDER BY created_at DESC, rowid DESC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM stack_landings WHERE status='standing' ORDER BY created_at DESC, rowid DESC`)
       .all() as LandingRow[];
     return rows.map(rowToLanding);
   }
@@ -71,8 +65,8 @@ export class StackLandingStore {
     reason: string | null,
   ): StackLanding | null {
     const updatedAt = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(`UPDATE stack_landings SET status=?, reason=?, updated_at=? WHERE id=? AND status='standing'`)
+    const result = this.ctx
+      .prep(`UPDATE stack_landings SET status=?, reason=?, updated_at=? WHERE id=? AND status='standing'`)
       .run(status, reason, updatedAt, id);
     if (result.changes === 0) return null;
     return this.getStackLanding(id);

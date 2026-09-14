@@ -8,8 +8,8 @@ export class RateLimitStore {
 
   recordRateLimits(limits: AccountRateLimits): void {
     this.appendReading(limits);
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO account_rate_limits (
            id, five_hour_used_percentage, five_hour_resets_at,
            seven_day_used_percentage, seven_day_resets_at, captured_at)
@@ -32,8 +32,8 @@ export class RateLimitStore {
   }
 
   private appendReading(limits: AccountRateLimits): void {
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO rate_limit_readings (
            captured_at, five_hour_used_percentage, five_hour_resets_at,
            seven_day_used_percentage, seven_day_resets_at)
@@ -50,8 +50,8 @@ export class RateLimitStore {
   }
 
   listRateLimitReadingsSince(since: string): AccountRateLimits[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM rate_limit_readings
          WHERE captured_at >= ?
          ORDER BY captured_at ASC`,
@@ -65,7 +65,7 @@ export class RateLimitStore {
   }
 
   readRateLimits(): AccountRateLimits | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM account_rate_limits WHERE id=1`).get() as RateLimitRow | undefined;
+    const row = this.ctx.prep(`SELECT * FROM account_rate_limits WHERE id=1`).get() as RateLimitRow | undefined;
     if (!row) return null;
     return {
       fiveHour: window(row.five_hour_used_percentage, row.five_hour_resets_at),

@@ -14,8 +14,8 @@ export class InstructionStore {
       createdAt: this.ctx.now(),
       settledAt: null,
     };
-    this.ctx.db
-      .prepare(
+    this.ctx
+      .prep(
         `INSERT INTO issue_instructions (id, origin_ref, text, created_at, settled_at)
          VALUES (@id, @originRef, @text, @createdAt, @settledAt)`,
       )
@@ -24,8 +24,8 @@ export class InstructionStore {
   }
 
   listStandingInstructions(originRef: string): IssueInstruction[] {
-    const rows = this.ctx.db
-      .prepare(
+    const rows = this.ctx
+      .prep(
         `SELECT * FROM issue_instructions WHERE origin_ref=? AND settled_at IS NULL
          ORDER BY created_at ASC, rowid ASC`,
       )
@@ -34,23 +34,23 @@ export class InstructionStore {
   }
 
   listAllStandingInstructions(): IssueInstruction[] {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM issue_instructions WHERE settled_at IS NULL ORDER BY created_at ASC, rowid ASC`)
+    const rows = this.ctx
+      .prep(`SELECT * FROM issue_instructions WHERE settled_at IS NULL ORDER BY created_at ASC, rowid ASC`)
       .all() as InstructionRow[];
     return rows.map(toInstruction);
   }
 
   settleInstructions(originRef: string): number {
     const at = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(`UPDATE issue_instructions SET settled_at=? WHERE origin_ref=? AND settled_at IS NULL`)
+    const result = this.ctx
+      .prep(`UPDATE issue_instructions SET settled_at=? WHERE origin_ref=? AND settled_at IS NULL`)
       .run(at, originRef);
     return result.changes;
   }
 
   withdrawInstruction(id: string): boolean {
-    const result = this.ctx.db
-      .prepare(`UPDATE issue_instructions SET settled_at=? WHERE id=? AND settled_at IS NULL`)
+    const result = this.ctx
+      .prep(`UPDATE issue_instructions SET settled_at=? WHERE id=? AND settled_at IS NULL`)
       .run(this.ctx.now(), id);
     return result.changes > 0;
   }

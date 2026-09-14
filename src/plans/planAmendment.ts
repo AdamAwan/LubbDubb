@@ -28,11 +28,11 @@ export function amendPlanInPlace(
   doc: PlanDocument,
   supersedes: string,
 ): { status: string; retired: string[] } {
-  const pending = deps.store
+  const pending = deps.store.escalations
     .listProposals()
     .find((p) => p.kind === 'plan' && p.ref === planProposalRef(plan.originRef) && p.status === 'pending');
   if (pending) {
-    deps.store.setPlanStatus(plan.id, 'planning');
+    deps.store.plans.setPlanStatus(plan.id, 'planning');
     deps.proposals.reject(pending.id, supersedes);
   }
   const result = ingestPlanDocument(deps.store, { doc, originRef: plan.originRef, title: plan.title });
@@ -64,7 +64,7 @@ export function proposePlanAmendment(
     };
   }
 
-  const parsed = validatePlanDocument(input.document, store.listOfferedAreas());
+  const parsed = validatePlanDocument(input.document, store.remoteValidation.listOfferedAreas());
   if (!parsed.ok) return { ok: false, error: `Amendment rejected: ${parsed.error}` };
 
   const note = input.note.trim();
@@ -76,9 +76,9 @@ export function proposePlanAmendment(
         'to a plan agents are working with no reason on it is one they cannot answer.',
     };
 
-  const parts = store.listPlanParts(plan.id);
+  const parts = store.plans.listPlanParts(plan.id);
   const declared = planPartInputs(parsed.document);
-  const amendment = store.recordPlanAmendment({
+  const amendment = store.plans.recordPlanAmendment({
     planId: plan.id,
     originRef: plan.originRef,
     document: JSON.stringify(parsed.document),
@@ -90,7 +90,7 @@ export function proposePlanAmendment(
     ok: true,
     proposed: {
       amendment,
-      diff: proposedPlanDiff(store.listPlanRevisions(plan.id), {
+      diff: proposedPlanDiff(store.plans.listPlanRevisions(plan.id), {
         narrative: planNarrative(parsed.document),
         parts: declared,
       }),
@@ -100,19 +100,19 @@ export function proposePlanAmendment(
 }
 
 function pendingAmendmentFor(store: Store, planId: string): PlanAmendment | null {
-  return store.listPlanAmendments(planId).find((a) => a.status === 'pending') ?? null;
+  return store.plans.listPlanAmendments(planId).find((a) => a.status === 'pending') ?? null;
 }
 
 export function applyPlanAmendment(store: Store, amendmentId: string): AmendmentResult {
-  const amendment = store.getPlanAmendment(amendmentId);
+  const amendment = store.plans.getPlanAmendment(amendmentId);
   if (!amendment) return { ok: false, detail: `amendment ${amendmentId} no longer exists` };
   if (amendment.status !== 'pending')
     return { ok: false, detail: `amendment ${amendmentId} is "${amendment.status}" — it has already been settled` };
 
-  const plan = store.getPlan(amendment.planId);
+  const plan = store.plans.getPlan(amendment.planId);
   if (!plan) return { ok: false, detail: `the plan for ${amendment.originRef} no longer exists` };
   if (plan.status !== 'active') {
-    store.settlePlanAmendment(
+    store.plans.settlePlanAmendment(
       amendmentId,
       'superseded',
       `The plan moved to "${plan.status}" before this amendment was applied.`,
@@ -125,7 +125,7 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
 
   const parsed = validatePlanDocument(JSON.parse(amendment.document) as unknown);
   if (!parsed.ok) {
-    store.settlePlanAmendment(amendmentId, 'superseded', `The amended plan no longer validates: ${parsed.error}`);
+    store.plans.settlePlanAmendment(amendmentId, 'superseded', `The amended plan no longer validates: ${parsed.error}`);
     return { ok: false, detail: `the amended plan for ${amendment.originRef} no longer validates: ${parsed.error}` };
   }
 
@@ -135,8 +135,8 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
     title: plan.title,
     approved: true,
   });
-  store.settlePlanAmendment(amendmentId, 'applied', amendment.note);
-  const live = liveParts(store.listPlanParts(plan.id));
+  store.plans.settlePlanAmendment(amendmentId, 'applied', amendment.note);
+  const live = liveParts(store.plans.listPlanParts(plan.id));
   const retired = result.retired.length === 0 ? '' : `; retired ${result.retired.length} unstarted part(s)`;
   return {
     ok: true,
@@ -147,7 +147,7 @@ export function applyPlanAmendment(store: Store, amendmentId: string): Amendment
 }
 
 export function declinePlanAmendment(store: Store, amendmentId: string, note?: string | null): AmendmentResult {
-  const settled = store.settlePlanAmendment(
+  const settled = store.plans.settlePlanAmendment(
     amendmentId,
     'declined',
     note?.trim() ? note.trim() : 'An operator declined this amendment; the plan is unchanged.',
@@ -158,9 +158,9 @@ export function declinePlanAmendment(store: Store, amendmentId: string, note?: s
 
 export function supersedePlanAmendments(store: Store, planId: string, reason: string): PlanAmendment[] {
   const settled: PlanAmendment[] = [];
-  for (const amendment of store.listPlanAmendments(planId)) {
+  for (const amendment of store.plans.listPlanAmendments(planId)) {
     if (amendment.status !== 'pending') continue;
-    const row = store.settlePlanAmendment(amendment.id, 'superseded', reason);
+    const row = store.plans.settlePlanAmendment(amendment.id, 'superseded', reason);
     if (row) settled.push(row);
   }
   return settled;

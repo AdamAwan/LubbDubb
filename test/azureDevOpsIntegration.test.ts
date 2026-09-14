@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { threadComments } from '../src/prThreads.js';
+import { threadComments } from '../src/pr/prThreads.js';
 import type { PrComment } from '../src/types.js';
 import { Store } from '../src/store/store.js';
 import {

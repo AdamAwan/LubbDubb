@@ -69,6 +69,65 @@ const ValidationStepSchema = z
       );
   });
 
+/**
+ * The same test plan as the agent is shown it: the tool-facing shape both transports that author a
+ * check set advertise. `validation_plan` and `validation_amend` differ deliberately in the prose on
+ * every other field — one speaks for a whole set, the other for the checks it names — but a step
+ * kind means the same thing in both, so the vocabulary and its gloss are declared once here and the
+ * enum is read off `STEP_KINDS` rather than restated.
+ * → docs/spec/11-mcp-tools.md, docs/spec/20-validation.md#the-test-plan
+ */
+export const validationStepsSchema = z
+  .array(
+    z.object({
+      kind: z
+        .enum(STEP_KINDS as unknown as [ValidationStepKind, ...ValidationStepKind[]])
+        .describe(
+          '"browser" drives the application; "suite" runs a named area of the project’s own browser ' +
+            'suite; "screenshot" captures the screen; "state" reads the deployed store; "signal" reads ' +
+            'logs and error records; "measure" reads a metric; "manual" is something only a person can do.',
+        ),
+      do: z.string().describe('What this step does, concretely.'),
+      area: z
+        .string()
+        .describe(
+          'A "suite" step only, and required on one: the area to run, copied **exactly** from what the ' +
+            'runner was listed as offering. It is compared character for character, so an area the ' +
+            'suite does not offer can never run. It is also what gives the check its area.',
+        )
+        .optional(),
+      when: z
+        .enum(['inline', 'deferred'])
+        .describe(
+          'A "manual" step only. "deferred" is *somebody looks at this afterwards* and costs the run ' +
+            'nothing. "inline" stops the run where it sits — no agent holds a session across a ' +
+            'person’s day — so an inline step in an otherwise automated plan splits the check into two ' +
+            'runs with a wait between them. Default is "inline"; say "deferred" when you mean it.',
+        )
+        .optional(),
+      script: z
+        .string()
+        .describe(
+          'A "browser" step only: a **one-off script** — the source of a small program that drives ' +
+            'this one journey and asserts on it. It is run as it stands, inside the run’s tenant, and ' +
+            'it is never committed, never reviewed and never in a pull request: it exists to answer ' +
+            'this check and is deleted with the goal. So write it self-contained, keep it short enough ' +
+            'that a person reads it in a minute — its source is drawn on the sheet beside its reading, ' +
+            'because reading it is cheaper than trusting it — and have it emit the harness’s report ' +
+            'shape with `selector` set to this check’s own id. A reading it produces is attributed ' +
+            '"script" and never "spec": nothing reviewed it. Omit it for a browser step a person drives.',
+        )
+        .optional(),
+    }),
+  )
+  .describe(
+    'The test plan: one ordered journey through the delivered goal, in order. The ordering is the ' +
+      'point — a store or log reading whose subject is what the browser steps just did is meaningless ' +
+      'taken before them. Who carries each step is **not yours to say**: it is read off what the ' +
+      'deployment declares it can drive. Omit it to leave the check as prose.',
+  )
+  .optional();
+
 export const ValidationCheckSchema = z
   .object({
     id: z

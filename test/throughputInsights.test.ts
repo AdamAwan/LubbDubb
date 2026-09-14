@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../src/throughputInsights.js';
+import { buildThroughputInsights, THROUGHPUT_EVENT_KINDS } from '../src/insights/throughputInsights.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import type { PrReplySent, WorldEvent, WorldEventKind, WorldSnapshot } from '../src/types.js';
-import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
+import { resolveWindow, type InsightsWindow } from '../src/insights/insightsWindow.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ThroughputPayload } from '../src/wire.js';
@@ -217,14 +217,14 @@ test('the route counts the rows the store actually holds, replies included', asy
     }),
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
-  system.store.recordWorldEvents([
+  system.store.world.recordWorldEvents([
     { kind: 'pr_opened', ref: 'pr:5', summary: 'PR #5 opened: a change' },
     { kind: 'pr_comment', ref: 'pr:5', summary: 'PR #5: someone commented' },
     { kind: 'pr_merged', ref: 'pr:5', summary: 'PR #5 merged' },
     { kind: 'issue_closed', ref: 'issue:5', summary: 'Issue #5 closed' },
     { kind: 'pr_mergeable', ref: 'pr:5', summary: 'PR #5 is mergeable' },
   ]);
-  system.store.recordPrReplySent(5, 'thread-1', 'comment-1');
+  system.store.prReplies.recordPrReplySent(5, 'thread-1', 'comment-1');
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/throughput?window=24h' });
